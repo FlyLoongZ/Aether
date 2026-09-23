@@ -34,7 +34,8 @@ pub(crate) use crate::ai_serving::{
 };
 pub(crate) use crate::ai_serving::{
     maybe_bridge_standard_sync_json_to_stream, maybe_build_provider_private_stream_normalizer,
-    maybe_build_stream_response_rewriter, maybe_build_sync_finalize_outcome,
+    maybe_build_provider_private_stream_normalizer_shared, maybe_build_stream_response_rewriter,
+    maybe_build_stream_response_rewriter_shared, maybe_build_sync_finalize_outcome,
     maybe_compile_sync_finalize_response, LocalCoreSyncFinalizeOutcome,
 };
 pub(crate) use crate::ai_serving::{

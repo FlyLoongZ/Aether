@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use serde_json::{json, Map, Value};
 
@@ -225,17 +226,27 @@ enum AiSurfaceStreamRewriteState {
     },
 }
 
-pub struct AiSurfaceStreamRewriter<'a> {
-    report_context: &'a Value,
+/// Owns its report context so a built rewriter can outlive the borrow that
+/// created it and be moved across tasks (for example from an execution-runtime
+/// prefetch into the background forwarding task). Callers that already hold a
+/// shared context should use [`maybe_build_ai_surface_stream_rewriter_shared`].
+pub struct AiSurfaceStreamRewriter {
+    report_context: Arc<Value>,
     buffered: Vec<u8>,
     state: AiSurfaceStreamRewriteState,
 }
 
-pub fn maybe_build_ai_surface_stream_rewriter<'a>(
-    report_context: Option<&'a Value>,
-) -> Option<AiSurfaceStreamRewriter<'a>> {
-    let report_context = report_context?;
-    let state = match resolve_finalize_stream_rewrite_mode(report_context)? {
+pub fn maybe_build_ai_surface_stream_rewriter(
+    report_context: Option<&Value>,
+) -> Option<AiSurfaceStreamRewriter> {
+    let report_context = Arc::new(report_context?.clone());
+    maybe_build_ai_surface_stream_rewriter_shared(report_context)
+}
+
+pub fn maybe_build_ai_surface_stream_rewriter_shared(
+    report_context: Arc<Value>,
+) -> Option<AiSurfaceStreamRewriter> {
+    let state = match resolve_finalize_stream_rewrite_mode(&report_context)? {
         FinalizeStreamRewriteMode::EnvelopeUnwrap => AiSurfaceStreamRewriteState::EnvelopeUnwrap,
         FinalizeStreamRewriteMode::ModelDirectiveDisplay => {
             AiSurfaceStreamRewriteState::ModelDirectiveDisplay
@@ -260,11 +271,11 @@ pub fn maybe_build_ai_surface_stream_rewriter<'a>(
             AiSurfaceStreamRewriteState::Standard(Box::<StreamingStandardFormatMatrix>::default())
         }
         FinalizeStreamRewriteMode::KiroToClaudeCli => AiSurfaceStreamRewriteState::KiroToClaudeCli(
-            Box::new(KiroToClaudeCliStreamState::new(report_context)),
+            Box::new(KiroToClaudeCliStreamState::new(&report_context)),
         ),
         FinalizeStreamRewriteMode::KiroToClaudeCliThenStandard => {
             AiSurfaceStreamRewriteState::KiroToClaudeCliThenStandard {
-                kiro: Box::new(KiroToClaudeCliStreamState::new(report_context)),
+                kiro: Box::new(KiroToClaudeCliStreamState::new(&report_context)),
                 standard: Box::<StreamingStandardFormatMatrix>::default(),
             }
         }
@@ -277,24 +288,24 @@ pub fn maybe_build_ai_surface_stream_rewriter<'a>(
     })
 }
 
-impl AiSurfaceStreamRewriter<'_> {
+impl AiSurfaceStreamRewriter {
     pub fn push_chunk(&mut self, chunk: &[u8]) -> Result<Vec<u8>, AiSurfaceFinalizeError> {
         match &mut self.state {
             AiSurfaceStreamRewriteState::OpenAiImage(state) => {
-                state.push_chunk(self.report_context, chunk)
+                state.push_chunk(self.report_context.as_ref(), chunk)
             }
             AiSurfaceStreamRewriteState::OpenAiImageToOpenAiChat(state) => {
-                state.push_chunk(self.report_context, chunk)
+                state.push_chunk(self.report_context.as_ref(), chunk)
             }
             AiSurfaceStreamRewriteState::ClaudeReadToolSanitize(state) => {
-                state.push_chunk(self.report_context, chunk)
+                state.push_chunk(self.report_context.as_ref(), chunk)
             }
             AiSurfaceStreamRewriteState::KiroToClaudeCli(state) => {
-                state.push_chunk(self.report_context, chunk)
+                state.push_chunk(self.report_context.as_ref(), chunk)
             }
             AiSurfaceStreamRewriteState::KiroToClaudeCliThenStandard { kiro, standard } => {
-                let claude_bytes = kiro.push_chunk(self.report_context, chunk)?;
-                transform_standard_bytes(standard, self.report_context, claude_bytes)
+                let claude_bytes = kiro.push_chunk(self.report_context.as_ref(), chunk)?;
+                transform_standard_bytes(standard, self.report_context.as_ref(), claude_bytes)
             }
             AiSurfaceStreamRewriteState::EnvelopeUnwrap
             | AiSurfaceStreamRewriteState::ModelDirectiveDisplay
@@ -313,23 +324,25 @@ impl AiSurfaceStreamRewriter<'_> {
 
     pub fn finish(&mut self) -> Result<Vec<u8>, AiSurfaceFinalizeError> {
         match &mut self.state {
-            AiSurfaceStreamRewriteState::OpenAiImage(state) => state.finish(self.report_context),
+            AiSurfaceStreamRewriteState::OpenAiImage(state) => {
+                state.finish(self.report_context.as_ref())
+            }
             AiSurfaceStreamRewriteState::OpenAiImageToOpenAiChat(state) => {
-                state.finish(self.report_context)
+                state.finish(self.report_context.as_ref())
             }
             AiSurfaceStreamRewriteState::ClaudeReadToolSanitize(state) => {
-                state.finish(self.report_context)
+                state.finish(self.report_context.as_ref())
             }
             AiSurfaceStreamRewriteState::KiroToClaudeCli(state) => {
-                state.finish(self.report_context)
+                state.finish(self.report_context.as_ref())
             }
             AiSurfaceStreamRewriteState::KiroToClaudeCliThenStandard { kiro, standard } => {
                 let mut output = transform_standard_bytes(
                     standard,
-                    self.report_context,
-                    kiro.finish(self.report_context)?,
+                    self.report_context.as_ref(),
+                    kiro.finish(self.report_context.as_ref())?,
                 )?;
-                output.extend(standard.finish(self.report_context)?);
+                output.extend(standard.finish(self.report_context.as_ref())?);
                 Ok(output)
             }
             AiSurfaceStreamRewriteState::EnvelopeUnwrap
@@ -338,14 +351,14 @@ impl AiSurfaceStreamRewriter<'_> {
             | AiSurfaceStreamRewriteState::Standard(_) => {
                 if self.buffered.is_empty() {
                     if let AiSurfaceStreamRewriteState::Standard(state) = &mut self.state {
-                        return state.finish(self.report_context);
+                        return state.finish(self.report_context.as_ref());
                     }
                     return Ok(Vec::new());
                 }
                 let line = std::mem::take(&mut self.buffered);
                 let mut output = self.transform_line(line)?;
                 if let AiSurfaceStreamRewriteState::Standard(state) = &mut self.state {
-                    output.extend(state.finish(self.report_context)?);
+                    output.extend(state.finish(self.report_context.as_ref())?);
                 }
                 Ok(output)
             }
@@ -365,18 +378,19 @@ impl AiSurfaceStreamRewriter<'_> {
     fn transform_line(&mut self, line: Vec<u8>) -> Result<Vec<u8>, AiSurfaceFinalizeError> {
         match &mut self.state {
             AiSurfaceStreamRewriteState::EnvelopeUnwrap => {
-                let output = transform_provider_private_stream_line(self.report_context, line)
-                    .map_err(AiSurfaceFinalizeError::from)?;
-                rewrite_model_directive_stream_line(self.report_context, output)
+                let output =
+                    transform_provider_private_stream_line(self.report_context.as_ref(), line)
+                        .map_err(AiSurfaceFinalizeError::from)?;
+                rewrite_model_directive_stream_line(self.report_context.as_ref(), output)
             }
             AiSurfaceStreamRewriteState::ModelDirectiveDisplay => {
-                rewrite_model_directive_stream_line(self.report_context, line)
+                rewrite_model_directive_stream_line(self.report_context.as_ref(), line)
             }
             AiSurfaceStreamRewriteState::OpenAiResponsesCompat => {
-                rewrite_openai_responses_compat_stream_line(self.report_context, line)
+                rewrite_openai_responses_compat_stream_line(self.report_context.as_ref(), line)
             }
             AiSurfaceStreamRewriteState::Standard(state) => {
-                transform_standard_line(state, self.report_context, line)
+                transform_standard_line(state, self.report_context.as_ref(), line)
             }
             AiSurfaceStreamRewriteState::OpenAiImage(_)
             | AiSurfaceStreamRewriteState::OpenAiImageToOpenAiChat(_)

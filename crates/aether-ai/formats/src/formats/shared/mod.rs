@@ -57,8 +57,8 @@ pub(crate) fn decode_sync_report_body_base64(
 pub use self::sse::{encode_done_sse, encode_json_sse, map_claude_stop_reason};
 pub use self::stream_core::{CanonicalStreamEvent, CanonicalStreamFrame};
 pub use self::stream_rewrite::{
-    maybe_build_ai_surface_stream_rewriter, resolve_finalize_stream_rewrite_mode,
-    AiSurfaceStreamRewriter, FinalizeStreamRewriteMode,
+    maybe_build_ai_surface_stream_rewriter, maybe_build_ai_surface_stream_rewriter_shared,
+    resolve_finalize_stream_rewrite_mode, AiSurfaceStreamRewriter, FinalizeStreamRewriteMode,
 };
 
 #[derive(Debug)]

@@ -13,6 +13,9 @@ pub(crate) mod sync;
 pub(crate) mod sync_to_stream;
 
 pub(crate) use stream::LocalStreamRewriter;
+pub(crate) use stream::{
+    maybe_build_local_stream_rewriter, maybe_build_local_stream_rewriter_shared,
+};
 pub(crate) use sync::LocalCoreSyncFinalizeOutcome;
 pub(crate) use sync_to_stream::{
     maybe_bridge_standard_sync_json_to_stream, SyncToStreamBridgeOutcome,
@@ -39,6 +42,12 @@ pub(crate) fn maybe_compile_sync_finalize_response(
 
 pub(crate) fn maybe_build_stream_response_rewriter(
     report_context: Option<&Value>,
-) -> Option<LocalStreamRewriter<'_>> {
+) -> Option<LocalStreamRewriter> {
     stream::maybe_build_local_stream_rewriter(report_context)
+}
+
+pub(crate) fn maybe_build_stream_response_rewriter_shared(
+    report_context: std::sync::Arc<Value>,
+) -> Option<LocalStreamRewriter> {
+    stream::maybe_build_local_stream_rewriter_shared(report_context)
 }
