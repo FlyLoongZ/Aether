@@ -129,14 +129,7 @@ fn realtime_query_is_codex_live(query: Option<&str>, headers: &HeaderMap) -> boo
     let Some(originator) = crate::headers::header_value_str(headers, "originator") else {
         return false;
     };
-    has_model
-        && originator.split_whitespace().next().is_some_and(|value| {
-            value.eq_ignore_ascii_case("codex_cli_rs")
-                || value.to_ascii_lowercase().starts_with("codex_cli_rs/")
-                || value.eq_ignore_ascii_case("codex_work_desktop")
-                || value.eq_ignore_ascii_case("codex_work_web")
-                || value.eq_ignore_ascii_case("codex_work_mobile")
-        })
+    has_model && aether_ai_formats::is_codex_client_originator(originator.as_str())
 }
 
 async fn claude_method_not_allowed(request: Request) -> Result<Response<Body>, GatewayError> {
@@ -252,6 +245,12 @@ mod tests {
         assert!(!realtime_query_is_codex_live(
             Some("call_id=rtc_one&call_id=rtc_two"),
             &codex_v2_headers
+        ));
+        let mut codex_tui_headers = HeaderMap::new();
+        codex_tui_headers.insert("originator", HeaderValue::from_static("codex-tui/0.156.1"));
+        assert!(realtime_query_is_codex_live(
+            Some("model=gpt-live-1-codex"),
+            &codex_tui_headers
         ));
         let mut ordinary_headers = HeaderMap::new();
         ordinary_headers.insert("originator", HeaderValue::from_static("openai-python"));

@@ -377,10 +377,13 @@ pub(super) fn direct_realtime_v2_model_from_query(
 
 /// Return whether the request carries a first-party Codex originator.
 ///
-/// The default Codex CLI sends `codex_cli_rs` (optionally with a version),
-/// while Desktop/Web/Mobile use their stable `codex_work_*` values.  Keep the
-/// allowlist narrow so a normal OpenAI Realtime v2 socket is not routed into
-/// the Codex Live planner merely because it has a `model` query parameter.
+/// Codex derives its originator from the app-server client name, so the
+/// interactive TUI sends `codex-tui`, `codex exec` sends `codex_exec`, the
+/// VS Code extension sends `codex_vscode`, and Desktop/Web/Mobile use their
+/// stable `codex_work_*` values. `codex_cli_rs` is the fallback default. Keep
+/// the check shared with the other Codex routers so a normal OpenAI Realtime v2
+/// socket is not routed into the Codex Live planner merely because it has a
+/// `model` query parameter.
 pub(super) fn is_codex_realtime_originator(headers: &HeaderMap) -> bool {
     let Some(originator) = headers
         .get("originator")
@@ -388,13 +391,7 @@ pub(super) fn is_codex_realtime_originator(headers: &HeaderMap) -> bool {
     else {
         return false;
     };
-    originator.split_whitespace().next().is_some_and(|value| {
-        value.eq_ignore_ascii_case("codex_cli_rs")
-            || value.to_ascii_lowercase().starts_with("codex_cli_rs/")
-            || value.eq_ignore_ascii_case("codex_work_desktop")
-            || value.eq_ignore_ascii_case("codex_work_web")
-            || value.eq_ignore_ascii_case("codex_work_mobile")
-    })
+    aether_ai_formats::is_codex_client_originator(originator)
 }
 
 /// Query + header discriminator for a Codex Realtime v2 direct socket.
@@ -918,6 +915,16 @@ mod tests {
             &codex
         ));
         codex.insert("originator", "codex_cli_rs/0.145.2".parse().unwrap());
+        assert!(realtime_v2_request_is_codex(
+            Some("model=gpt-realtime-1.5"),
+            &codex
+        ));
+        codex.insert("originator", "codex-tui/0.156.1".parse().unwrap());
+        assert!(realtime_v2_request_is_codex(
+            Some("model=gpt-realtime-1.5"),
+            &codex
+        ));
+        codex.insert("originator", "codex_exec".parse().unwrap());
         assert!(realtime_v2_request_is_codex(
             Some("model=gpt-realtime-1.5"),
             &codex

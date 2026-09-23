@@ -263,13 +263,7 @@ fn realtime_query_is_codex_v2(query: Option<&str>, headers: &http::HeaderMap) ->
     let Some(originator) = crate::headers::header_value_str(headers, "originator") else {
         return false;
     };
-    originator.split_whitespace().next().is_some_and(|value| {
-        value.eq_ignore_ascii_case("codex_cli_rs")
-            || value.to_ascii_lowercase().starts_with("codex_cli_rs/")
-            || value.eq_ignore_ascii_case("codex_work_desktop")
-            || value.eq_ignore_ascii_case("codex_work_web")
-            || value.eq_ignore_ascii_case("codex_work_mobile")
-    })
+    aether_ai_formats::is_codex_client_originator(originator.as_str())
 }
 
 fn claude_request_auth_channel(headers: &http::HeaderMap) -> &'static str {
@@ -418,6 +412,17 @@ mod tests {
         )
         .expect("Codex CLI realtime v2 should use the Live route");
         assert_eq!(codex_cli_v2.auth_endpoint_signature, "codex:live");
+
+        let mut codex_tui_headers = headers.clone();
+        codex_tui_headers.insert("originator", HeaderValue::from_static("codex-tui/0.156.1"));
+        let codex_tui_v2 = classify_ai_public_route(
+            &Method::GET,
+            "/v1/realtime",
+            Some("model=gpt-live-1-codex"),
+            &codex_tui_headers,
+        )
+        .expect("Codex TUI realtime v2 should use the Live route");
+        assert_eq!(codex_tui_v2.auth_endpoint_signature, "codex:live");
 
         let mut ordinary_headers = headers.clone();
         ordinary_headers.insert("originator", HeaderValue::from_static("openai-python"));

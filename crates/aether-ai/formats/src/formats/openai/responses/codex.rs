@@ -38,6 +38,36 @@ const CODEX_OPENAI_RESPONSES_COMPACT_BODY_FIELDS: &[&str] = &[
     "text",
 ];
 
+/// Whether an `originator` header value belongs to a first-party Codex client.
+///
+/// Codex overrides its process originator from the app-server `clientInfo.name`,
+/// so real clients report `codex-tui` (interactive TUI), `codex_exec`, `codex_vscode`,
+/// the `codex_work_*` Desktop/Web/Mobile hosts, or another `Codex ...` product name.
+/// The active client profile itself sends `codex-tui`; `codex_cli_rs` remains the
+/// historical fallback default and is still accepted. A `name/version` suffix and
+/// trailing whitespace are tolerated.
+pub fn is_codex_client_originator(value: &str) -> bool {
+    let value = value.trim();
+    if value.starts_with("Codex ") {
+        return true;
+    }
+    let first = value.split_whitespace().next().unwrap_or_default();
+    let name = first.split_once('/').map_or(first, |(name, _)| name);
+    [
+        "codex-tui",
+        "codex_cli_rs",
+        "codex_exec",
+        "codex_vscode",
+        "codex_atlas",
+        "codex_chatgpt_desktop",
+        "codex_work_desktop",
+        "codex_work_web",
+        "codex_work_mobile",
+    ]
+    .iter()
+    .any(|candidate| name.eq_ignore_ascii_case(candidate))
+}
+
 /// Formats the Codex TUI user agent for an explicit client version so the model
 /// catalog fetch carries the same identity as inference requests.
 pub fn codex_client_user_agent_for_version(version: &str) -> String {
@@ -2391,13 +2421,43 @@ mod tests {
         apply_codex_openai_special_headers, apply_openai_responses_compact_special_body_edits,
         build_codex_model_catalog_metadata, bundled_codex_model_cards,
         codex_client_user_agent_for_version, effective_codex_model_cards,
-        parse_codex_auth_identity, project_codex_catalog_model_card,
+        is_codex_client_originator, parse_codex_auth_identity, project_codex_catalog_model_card,
         resolve_codex_responses_model_capabilities,
         validate_codex_openai_responses_compact_request_contract,
         CODEX_OPENAI_IMAGE_INTERNAL_MODEL, CODEX_OPENAI_RESPONSES_UNSUPPORTED_BODY_FIELDS,
         CODEX_RESPONSES_LITE_HEADER,
     };
     use serde_json::{json, Value};
+
+    #[test]
+    fn codex_client_originator_recognizes_real_client_names() {
+        for originator in [
+            "codex-tui",
+            "codex-tui/0.156.1",
+            " codex-tui/0.156.1 ",
+            "codex_cli_rs",
+            "codex_cli_rs/0.145.2",
+            "codex_exec",
+            "codex_vscode",
+            "codex_atlas",
+            "codex_chatgpt_desktop",
+            "codex_work_desktop",
+            "codex_work_web",
+            "codex_work_mobile",
+            "Codex Desktop",
+        ] {
+            assert!(
+                is_codex_client_originator(originator),
+                "originator={originator}"
+            );
+        }
+        for originator in ["openai-python", "roo-code", "codex", "codex-other", ""] {
+            assert!(
+                !is_codex_client_originator(originator),
+                "originator={originator}"
+            );
+        }
+    }
 
     #[test]
     fn codex_client_user_agent_matches_the_pinned_tui_identity() {
