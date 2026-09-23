@@ -338,11 +338,9 @@ fn apply_converged_headers(
     headers: &mut BTreeMap<String, String>,
     fingerprint: &CodexConvergedFingerprint,
 ) {
-    set_header(
-        headers,
-        "x-codex-installation-id",
-        fingerprint.installation_id.clone(),
-    );
+    // Codex no longer sends `x-codex-installation-id` as an HTTP header; it
+    // travels in `client_metadata` only. Keep the value out of the header set so
+    // the outbound fingerprint matches the pinned client version.
     set_header(headers, "x-codex-window-id", fingerprint.window_id.clone());
     set_header(
         headers,
@@ -624,9 +622,7 @@ mod tests {
 
         let session_id = headers.get("session-id").expect("session header");
         let thread_id = headers.get("thread-id").expect("thread header");
-        let installation_id = headers
-            .get("x-codex-installation-id")
-            .expect("installation header");
+        assert!(!headers.contains_key("x-codex-installation-id"));
         assert_eq!(
             Uuid::parse_str(session_id)
                 .expect("session UUID")
@@ -639,6 +635,9 @@ mod tests {
                 .get_version_num(),
             4
         );
+        let installation_id = body["client_metadata"]["x-codex-installation-id"]
+            .as_str()
+            .expect("installation id");
         assert_eq!(
             Uuid::parse_str(installation_id)
                 .expect("installation UUID")
@@ -658,10 +657,6 @@ mod tests {
         );
         assert_eq!(body["client_metadata"]["session_id"], *session_id);
         assert_eq!(body["client_metadata"]["thread_id"], *thread_id);
-        assert_eq!(
-            body["client_metadata"]["x-codex-installation-id"],
-            *installation_id
-        );
 
         let header_metadata: Value =
             serde_json::from_str(&headers["x-codex-turn-metadata"]).expect("header metadata");
@@ -1020,7 +1015,7 @@ mod tests {
 
         assert_eq!(body, original_body);
         assert_eq!(headers.get("x-session-id"), headers.get("thread-id"));
-        assert!(headers.contains_key("x-codex-installation-id"));
+        assert!(!headers.contains_key("x-codex-installation-id"));
         assert!(headers.contains_key("x-codex-window-id"));
     }
 
@@ -1102,7 +1097,8 @@ mod tests {
             ));
             assert_ne!(headers, original_headers, "auth_type={auth_type}");
             assert_ne!(body, original_body, "auth_type={auth_type}");
-            assert!(headers.contains_key("x-codex-installation-id"));
+            assert!(!headers.contains_key("x-codex-installation-id"));
+            assert!(body["client_metadata"]["x-codex-installation-id"].is_string());
             assert_eq!(body["client_metadata"]["session_id"], headers["session-id"]);
         }
     }
@@ -1187,8 +1183,8 @@ mod tests {
                 &mut other_key_body,
             ));
             assert_ne!(
-                first_headers["x-codex-installation-id"],
-                other_key_headers["x-codex-installation-id"],
+                first_body["client_metadata"]["x-codex-installation-id"],
+                other_key_body["client_metadata"]["x-codex-installation-id"],
                 "auth_type={auth_type}"
             );
             assert_ne!(

@@ -1875,9 +1875,10 @@ mod tests {
 
             let session_id = decision.provider_request_headers["session-id"].clone();
             let thread_id = decision.provider_request_headers["thread-id"].clone();
-            let installation_id =
-                decision.provider_request_headers["x-codex-installation-id"].clone();
             let window_id = decision.provider_request_headers["x-codex-window-id"].clone();
+            assert!(!decision
+                .provider_request_headers
+                .contains_key("x-codex-installation-id"));
             assert_eq!(decision.provider_request_headers["session_id"], session_id);
             assert_eq!(
                 decision.provider_request_headers["x-client-request-id"],
@@ -1901,6 +1902,17 @@ mod tests {
                 .provider_request_body
                 .as_ref()
                 .expect("request body");
+            let installation_id = body["client_metadata"]["x-codex-installation-id"].clone();
+            assert_eq!(
+                uuid::Uuid::parse_str(
+                    installation_id
+                        .as_str()
+                        .expect("installation id should be a string")
+                )
+                .expect("installation UUID")
+                .get_version_num(),
+                4
+            );
             assert_eq!(
                 decision.prompt_cache_key.as_deref(),
                 body.get("prompt_cache_key").and_then(Value::as_str)
@@ -1912,10 +1924,6 @@ mod tests {
             assert_eq!(body["client_metadata"]["session_id"], session_id);
             assert_eq!(body["client_metadata"]["thread_id"], thread_id);
             assert_eq!(body["client_metadata"]["caller"], "sdk");
-            assert_eq!(
-                body["client_metadata"]["x-codex-installation-id"],
-                installation_id
-            );
             assert_eq!(body["client_metadata"]["x-codex-window-id"], window_id);
 
             let policy_results = decision
