@@ -37,6 +37,12 @@ const CODEX_OPENAI_RESPONSES_COMPACT_BODY_FIELDS: &[&str] = &[
     "prompt_cache_key",
     "text",
 ];
+
+/// Formats the Codex TUI user agent for an explicit client version so the model
+/// catalog fetch carries the same identity as inference requests.
+pub fn codex_client_user_agent_for_version(version: &str) -> String {
+    crate::codex_profile::codex_tui_user_agent(version)
+}
 pub const CODEX_OPENAI_IMAGE_INTERNAL_MODEL: &str = "gpt-5.4-mini";
 pub const CODEX_OPENAI_IMAGE_DEFAULT_MODEL: &str = "gpt-image-2";
 pub const CODEX_OPENAI_IMAGE_DEFAULT_VARIATION_MODEL: &str = "dall-e-2";
@@ -2383,7 +2389,8 @@ mod tests {
         apply_codex_openai_responses_special_body_edits_with_source_model_and_capabilities,
         apply_codex_openai_responses_websocket_continuation_body_edits_with_source_model_and_capabilities,
         apply_codex_openai_special_headers, apply_openai_responses_compact_special_body_edits,
-        build_codex_model_catalog_metadata, bundled_codex_model_cards, effective_codex_model_cards,
+        build_codex_model_catalog_metadata, bundled_codex_model_cards,
+        codex_client_user_agent_for_version, effective_codex_model_cards,
         parse_codex_auth_identity, project_codex_catalog_model_card,
         resolve_codex_responses_model_capabilities,
         validate_codex_openai_responses_compact_request_contract,
@@ -2393,12 +2400,17 @@ mod tests {
     use serde_json::{json, Value};
 
     #[test]
-    fn codex_client_user_agent_matches_originator_and_version() {
+    fn codex_client_user_agent_matches_the_pinned_tui_identity() {
         let profile = crate::codex_client_profile();
         assert_eq!(
             profile.user_agent,
-            format!("{}/{}", profile.originator, profile.codex_version)
+            codex_client_user_agent_for_version(&profile.codex_version)
         );
+        assert!(profile.user_agent.starts_with("codex-tui/"));
+        assert!(profile.user_agent.contains(&profile.codex_version));
+        assert!(profile
+            .user_agent
+            .ends_with(&format!("(codex-tui; {})", profile.codex_version)));
     }
 
     #[test]

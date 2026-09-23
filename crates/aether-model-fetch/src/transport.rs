@@ -636,10 +636,7 @@ fn standard_models_fetch_headers(
         return BTreeMap::from([
             (
                 "user-agent".to_string(),
-                format!(
-                    "{}/{client_version}",
-                    aether_ai_formats::codex_client_originator()
-                ),
+                aether_ai_formats::codex_client_user_agent_for_version(client_version),
             ),
             (
                 "originator".to_string(),
@@ -1059,7 +1056,7 @@ mod tests {
         );
         assert_eq!(
             plan.headers.get("user-agent").map(String::as_str),
-            Some("codex_cli_rs/0.145.2")
+            Some(aether_ai_formats::codex_client_user_agent_for_version("0.145.2").as_str())
         );
         assert_eq!(
             plan.headers.get("originator").map(String::as_str),

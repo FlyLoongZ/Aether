@@ -1272,7 +1272,7 @@ async fn run_versioned_codex_model_cards_frontdoor_scenario() {
     );
     assert_eq!(
         captured_catalog_plan.1.as_deref(),
-        Some("codex_cli_rs/0.145.2")
+        Some(aether_ai_formats::codex_client_user_agent_for_version("0.145.2").as_str())
     );
 
     let fresh_response = client

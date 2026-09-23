@@ -450,7 +450,7 @@ async fn gateway_executes_codex_search_with_responses_permission_and_search_cont
     assert_eq!(plan["headers"]["originator"], "codex_cli_rs");
     assert!(plan["headers"]["user-agent"]
         .as_str()
-        .is_some_and(|value| value.starts_with("codex_cli_rs/")));
+        .is_some_and(|value| value.starts_with("codex-tui/")));
     assert!(plan["headers"].get("openai-beta").is_none());
     assert!(plan["headers"]
         .get("x-openai-internal-codex-responses-lite")

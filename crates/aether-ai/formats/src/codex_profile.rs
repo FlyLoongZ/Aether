@@ -1,5 +1,14 @@
 use std::sync::{OnceLock, RwLock};
 
+/// Codex TUI user agent, mirrored verbatim from a real `codex-tui` process:
+/// `{originator}/{version} ({os_type} {os_version}; {arch}) {terminal} ({originator}; {version})`.
+pub fn codex_tui_user_agent(version: &str) -> String {
+    let version = version.trim();
+    format!(
+        "codex-tui/{version} (Arch Linux Rolling Release; x86_64) Konsole/260801 (codex-tui; {version})"
+    )
+}
+
 /// 当前支持的 Codex 客户端类型。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CodexClientKind {
@@ -32,7 +41,7 @@ impl CodexClientProfile {
         Ok(Self {
             client_kind: CodexClientKind::Cli,
             codex_version: version.to_owned(),
-            user_agent: format!("{}/{}", originator, version),
+            user_agent: codex_tui_user_agent(version),
             originator,
         })
     }
@@ -90,14 +99,15 @@ pub fn codex_client_originator() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{CodexClientKind, CodexClientProfile};
+    use super::{codex_tui_user_agent, CodexClientKind, CodexClientProfile};
 
     #[test]
     fn cli_profile_derives_wire_identity_from_version() {
         let profile = CodexClientProfile::cli("0.200.1").expect("valid version");
         assert_eq!(profile.client_kind, CodexClientKind::Cli);
         assert_eq!(profile.originator, "codex_cli_rs");
-        assert_eq!(profile.user_agent, "codex_cli_rs/0.200.1");
+        assert_eq!(profile.user_agent, codex_tui_user_agent("0.200.1"));
+        assert_eq!(profile.user_agent, "codex-tui/0.200.1 (Arch Linux Rolling Release; x86_64) Konsole/260801 (codex-tui; 0.200.1)");
     }
 
     #[test]

@@ -2663,7 +2663,7 @@ async fn gateway_executes_codex_search_admin_pool_model_test_with_search_contrac
             assert!(plan
                 .headers
                 .get("user-agent")
-                .is_some_and(|value| value.starts_with("codex_cli_rs/")));
+                .is_some_and(|value| value.starts_with("codex-tui/")));
             assert!(!plan.headers.contains_key("openai-beta"));
             assert!(!plan
                 .headers
