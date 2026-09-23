@@ -58,7 +58,7 @@ pub use formats::openai::responses::codex::{
     effective_codex_model_cards, is_codex_client_originator, parse_codex_auth_identity,
     project_codex_catalog_model_card, resolve_codex_responses_model_capabilities,
     CodexAuthIdentity, CodexResponsesModelCapabilities, CODEX_MODEL_CATALOG_METADATA_FIELD,
-    CODEX_RESPONSES_LITE_HEADER,
+    CODEX_RESPONSES_LITE_HEADER, CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE,
 };
 pub use formats::openai::responses::request::{
     validate_openai_responses_request_contract, OpenAiResponsesRequestContractViolation,

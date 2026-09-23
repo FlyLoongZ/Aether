@@ -90,6 +90,21 @@ impl UpstreamBindingIdentity {
         let credential_fingerprint =
             credential_binding_fingerprint(decision, &authentication_headers);
 
+        // Codex stamps `OpenAI-Beta: responses_websockets=2026-02-06` on every
+        // Responses WebSocket handshake. Preserve an explicit client value and
+        // only fill the gap so the upstream sees the same protocol marker the
+        // real CLI sends.
+        if adapter_kind == ResponsesWebSocketAdapter::Codex
+            && !handshake_headers
+                .keys()
+                .any(|name| name.eq_ignore_ascii_case("openai-beta"))
+        {
+            handshake_headers.insert(
+                "openai-beta".to_string(),
+                aether_ai_formats::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE.to_string(),
+            );
+        }
+
         Ok(Self {
             adapter_kind,
             provider_id: decision.provider_id.clone(),
@@ -529,6 +544,40 @@ mod tests {
             identity.handshake_headers,
             BTreeMap::from([("x-client".to_string(), "aether".to_string())])
         );
+    }
+
+    #[test]
+    fn codex_binding_fills_the_responses_websocket_beta_header() {
+        let codex = resolve_responses_websocket_adapter(ResponsesWebSocketAdapter::Codex);
+        let mut codex_decision = decision();
+        codex_decision.provider_type = Some("codex".to_string());
+        codex_decision.report_context = Some(json!({
+            "codex_credential_generation": "credential-generation-1"
+        }));
+        let identity = UpstreamBindingIdentity::from_decision(codex, &codex_decision).unwrap();
+        assert_eq!(
+            identity
+                .handshake_headers
+                .get("openai-beta")
+                .map(String::as_str),
+            Some(aether_ai_formats::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE)
+        );
+
+        codex_decision
+            .provider_request_headers
+            .insert("OpenAI-Beta".to_string(), "responses=v1".to_string());
+        let identity = UpstreamBindingIdentity::from_decision(codex, &codex_decision).unwrap();
+        assert_eq!(
+            identity
+                .handshake_headers
+                .get("openai-beta")
+                .map(String::as_str),
+            Some("responses=v1")
+        );
+
+        let standard = resolve_responses_websocket_adapter(ResponsesWebSocketAdapter::Standard);
+        let identity = UpstreamBindingIdentity::from_decision(standard, &decision()).unwrap();
+        assert!(!identity.handshake_headers.contains_key("openai-beta"));
     }
 
     #[test]

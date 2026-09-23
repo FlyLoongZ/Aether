@@ -68,6 +68,7 @@ impl ResponsesWebSocketProbeProfile for CodexResponsesProbeProfile {
             "chatgpt-account-id",
             "user-agent",
             "originator",
+            "openai-beta",
         ]
     }
 }
@@ -84,6 +85,10 @@ fn handshake_headers(access_token: &str, account_id: &str) -> Result<HeaderMap, 
     let originator = HeaderValue::from_str(&codex_client_originator())
         .map_err(|_| ProbeFailure::MissingConfiguration)?;
     headers.insert(HeaderName::from_static("originator"), originator);
+    headers.insert(
+        HeaderName::from_static("openai-beta"),
+        HeaderValue::from_static(aether_gateway::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE),
+    );
     Ok(headers)
 }
 
@@ -122,12 +127,19 @@ mod tests {
             Some(aether_gateway::codex_client_originator().as_str())
         );
         assert_eq!(
+            headers
+                .get("openai-beta")
+                .map(|value| value.to_str().unwrap()),
+            Some(aether_gateway::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE)
+        );
+        assert_eq!(
             CodexResponsesProbeProfile::sent_header_names(),
             vec![
                 "authorization",
                 "chatgpt-account-id",
                 "user-agent",
                 "originator",
+                "openai-beta",
             ]
         );
     }

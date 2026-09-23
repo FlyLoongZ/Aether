@@ -91,7 +91,9 @@ mod usage;
 mod video_tasks;
 mod wallet_runtime;
 
-pub use self::ai_serving::api::{codex_client_originator, codex_client_user_agent};
+pub use self::ai_serving::api::{
+    codex_client_originator, codex_client_user_agent, CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE,
+};
 pub(crate) use self::ai_serving::api::{
     AiControlPlanRequest, EXECUTION_RUNTIME_STREAM_DECISION_ACTION,
     EXECUTION_RUNTIME_SYNC_DECISION_ACTION, GEMINI_FILES_DOWNLOAD_PLAN_KIND,

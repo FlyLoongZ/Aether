@@ -11,6 +11,8 @@ const CODEX_REASONING_ENCRYPTED_CONTENT_INCLUDE: &str = "reasoning.encrypted_con
 const CODEX_PROMPT_CACHE_IDENTITY_NAMESPACE: &str =
     "https://github.com/fawney19/Aether/codex/prompt-cache-identity/v1/";
 pub const CODEX_RESPONSES_LITE_HEADER: &str = "x-openai-internal-codex-responses-lite";
+/// `OpenAI-Beta` value Codex stamps on the Responses WebSocket handshake.
+pub const CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE: &str = "responses_websockets=2026-02-06";
 pub const CODEX_MODEL_CATALOG_METADATA_FIELD: &str = "codex_models";
 const CODEX_OPENAI_RESPONSES_UNSUPPORTED_BODY_FIELDS: &[&str] = &[
     "max_output_tokens",
