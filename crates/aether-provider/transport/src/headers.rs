@@ -56,6 +56,19 @@ pub(crate) fn is_aether_internal_header(name: &str) -> bool {
     name.trim().to_ascii_lowercase().starts_with("x-aether-")
 }
 
+/// Aether's access-log trace id.
+///
+/// The frontdoor middleware stamps it on every inbound request for gateway
+/// observability, so it is request metadata rather than a provider input and
+/// must not be forwarded to an upstream. It is deliberately kept out of
+/// [`should_skip_request_header`]: the tunnel relay re-uses that predicate to
+/// forward its own trace id across hops.
+const LOCAL_TRACE_ID_HEADER: &str = "x-trace-id";
+
+fn is_local_trace_header(normalized_name: &str) -> bool {
+    normalized_name == LOCAL_TRACE_ID_HEADER
+}
+
 pub fn should_skip_request_header(name: &str) -> bool {
     let normalized = name.to_ascii_lowercase();
     if is_aether_internal_header(&normalized)
@@ -112,7 +125,8 @@ pub fn should_skip_upstream_passthrough_header(name: &str) -> bool {
     if lower.starts_with("x-stainless-") || lower.starts_with("anthropic-") {
         return true;
     }
-    is_upstream_credential_header(&lower)
+    is_local_trace_header(&lower)
+        || is_upstream_credential_header(&lower)
         || matches!(
             lower.as_str(),
             "host"
@@ -144,7 +158,8 @@ pub(crate) fn should_skip_upstream_passthrough_header_with_connection(
 
 pub(crate) fn should_skip_upstream_complete_passthrough_header(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    is_upstream_credential_header(&lower)
+    is_local_trace_header(&lower)
+        || is_upstream_credential_header(&lower)
         || matches!(
             lower.as_str(),
             "host"
@@ -407,6 +422,26 @@ mod tests {
                 "complete passthrough should strip {header}"
             );
         }
+    }
+
+    #[test]
+    fn strips_gateway_trace_id_from_upstream_passthrough() {
+        // The frontdoor access-log middleware injects `x-trace-id` on every
+        // inbound request. It is gateway observability metadata, not a provider
+        // input, so both upstream passthrough filters must drop it. The shared
+        // `should_skip_request_header` predicate is intentionally untouched so
+        // the tunnel relay keeps forwarding its own trace id.
+        for h in ["x-trace-id", "X-Trace-Id", "X-TRACE-ID"] {
+            assert!(
+                should_skip_upstream_passthrough_header(h),
+                "should skip passthrough {h}"
+            );
+            assert!(
+                should_skip_upstream_complete_passthrough_header(h),
+                "should skip complete passthrough {h}"
+            );
+        }
+        assert!(!should_skip_request_header("x-trace-id"));
     }
 
     #[test]

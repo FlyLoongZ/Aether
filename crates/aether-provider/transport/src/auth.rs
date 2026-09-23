@@ -531,6 +531,33 @@ mod tests {
     }
 
     #[test]
+    fn passthrough_headers_drop_gateway_trace_id() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert("x-trace-id", http::HeaderValue::from_static("trace-abc"));
+        headers.insert("x-public", http::HeaderValue::from_static("ok"));
+        let extra = BTreeMap::from([("X-Trace-Id".to_string(), "trace-from-extra".to_string())]);
+
+        for built in [
+            build_openai_passthrough_headers(
+                &headers,
+                "authorization",
+                "Bearer upstream",
+                &extra,
+                Some("application/json"),
+            ),
+            build_complete_passthrough_headers(&headers, &extra, Some("application/json")),
+        ] {
+            assert_eq!(built.get("x-public").map(String::as_str), Some("ok"));
+            assert!(
+                built
+                    .keys()
+                    .all(|name| !name.eq_ignore_ascii_case("x-trace-id")),
+                "trace id must not reach the upstream: {built:?}"
+            );
+        }
+    }
+
+    #[test]
     fn passthrough_headers_strip_connection_declared_fields() {
         let mut headers = http::HeaderMap::new();
         headers.append(
