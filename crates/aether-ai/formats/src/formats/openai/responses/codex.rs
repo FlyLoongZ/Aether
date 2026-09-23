@@ -2402,6 +2402,39 @@ mod tests {
     }
 
     #[test]
+    fn bundled_catalog_never_requires_a_newer_client_than_the_pinned_fingerprint() {
+        fn version_triple(version: &str) -> (u64, u64, u64) {
+            let mut parts = version.trim().split('.');
+            let major = parts.next().unwrap_or_default().parse().unwrap_or(0);
+            let minor = parts.next().unwrap_or_default().parse().unwrap_or(0);
+            let patch = parts.next().unwrap_or_default().parse().unwrap_or(0);
+            (major, minor, patch)
+        }
+
+        // The built-in profile is the version floor the bundled catalog must
+        // stay compatible with; the runtime profile may be newer.
+        let pinned_client_version =
+            crate::codex_profile::CodexClientProfile::default().codex_version;
+        let pinned = version_triple(&pinned_client_version);
+        for card in bundled_codex_model_cards() {
+            let minimal = card
+                .get("minimal_client_version")
+                .and_then(Value::as_str)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "bundled card {} must pin minimal_client_version",
+                        card["slug"]
+                    )
+                });
+            assert!(
+                version_triple(minimal) <= pinned,
+                "bundled card {} requires Codex >= {minimal} but the pinned client version is {pinned_client_version}",
+                card["slug"]
+            );
+        }
+    }
+
+    #[test]
     fn model_card_drives_unknown_codex_model_body_and_header_contracts() {
         let card = json!({
             "id": "gpt-future-agent",
