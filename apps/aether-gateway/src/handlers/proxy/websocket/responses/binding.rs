@@ -101,7 +101,7 @@ impl UpstreamBindingIdentity {
         {
             handshake_headers.insert(
                 "openai-beta".to_string(),
-                aether_ai_formats::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE.to_string(),
+                crate::ai_serving::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE.to_string(),
             );
         }
 
@@ -560,7 +560,7 @@ mod tests {
                 .handshake_headers
                 .get("openai-beta")
                 .map(String::as_str),
-            Some(aether_ai_formats::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE)
+            Some(crate::ai_serving::CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE)
         );
 
         codex_decision

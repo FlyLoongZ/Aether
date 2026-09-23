@@ -2665,11 +2665,11 @@ mod tests {
         assert!(plans[1].url.ends_with("/models?client_version=0.146.0"));
         assert_eq!(
             plans[0].headers.get("user-agent").map(String::as_str),
-            Some(aether_ai_formats::codex_client_user_agent_for_version("0.145.2").as_str())
+            Some(crate::ai_serving::codex_client_user_agent_for_version("0.145.2").as_str())
         );
         assert_eq!(
             plans[1].headers.get("user-agent").map(String::as_str),
-            Some(aether_ai_formats::codex_client_user_agent_for_version("0.146.0").as_str())
+            Some(crate::ai_serving::codex_client_user_agent_for_version("0.146.0").as_str())
         );
 
         let target = target();

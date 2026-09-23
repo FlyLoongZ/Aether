@@ -391,7 +391,7 @@ pub(super) fn is_codex_realtime_originator(headers: &HeaderMap) -> bool {
     else {
         return false;
     };
-    aether_ai_formats::is_codex_client_originator(originator)
+    crate::ai_serving::is_codex_client_originator(originator)
 }
 
 /// Query + header discriminator for a Codex Realtime v2 direct socket.

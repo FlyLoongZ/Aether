@@ -1879,7 +1879,10 @@ mod tests {
             assert!(!decision
                 .provider_request_headers
                 .contains_key("x-codex-installation-id"));
-            assert_eq!(decision.provider_request_headers["session_id"], session_id);
+            assert!(!decision.provider_request_headers.contains_key("session_id"));
+            assert!(!decision
+                .provider_request_headers
+                .contains_key("x-session-id"));
             assert_eq!(
                 decision.provider_request_headers["x-client-request-id"],
                 thread_id

@@ -129,7 +129,7 @@ fn realtime_query_is_codex_live(query: Option<&str>, headers: &HeaderMap) -> boo
     let Some(originator) = crate::headers::header_value_str(headers, "originator") else {
         return false;
     };
-    has_model && aether_ai_formats::is_codex_client_originator(originator.as_str())
+    has_model && crate::ai_serving::is_codex_client_originator(originator.as_str())
 }
 
 async fn claude_method_not_allowed(request: Request) -> Result<Response<Body>, GatewayError> {

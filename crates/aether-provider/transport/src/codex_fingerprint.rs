@@ -162,12 +162,15 @@ pub(crate) fn apply_codex_fingerprint_convergence_policy(
         effective_prompt_cache_key,
     );
 
-    apply_converged_headers(provider_request_headers, &fingerprint);
-    // Live uses the converged identity on the WebSocket/call-control headers.
-    // Its event/session payload is an independent opaque protocol and must not
-    // receive Responses-only `client_metadata` fields.
     if is_responses {
+        apply_converged_response_headers(provider_request_headers, &fingerprint);
+        // Responses carries the full converged identity in `client_metadata`.
         apply_converged_client_metadata(provider_request_body, &fingerprint);
+    } else {
+        // Live keeps the converged identity on the WebSocket/call-control
+        // headers. Its event/session payload is an independent opaque protocol
+        // and must not receive Responses-only `client_metadata` fields.
+        apply_converged_live_headers(provider_request_headers, &fingerprint);
     }
     ProviderOutboundRequestPolicyResult::applied(
         policy,
@@ -334,13 +337,27 @@ fn derive_stable_uuid_v7(timestamp_ms: u64, seed: &str) -> String {
     Uuid::from_bytes(bytes).to_string()
 }
 
-fn apply_converged_headers(
+fn remove_header(headers: &mut BTreeMap<String, String>, name: &str) {
+    let matching_names = headers
+        .keys()
+        .filter(|candidate| candidate.eq_ignore_ascii_case(name))
+        .cloned()
+        .collect::<Vec<_>>();
+    for matching_name in matching_names {
+        headers.remove(&matching_name);
+    }
+}
+
+/// Identity headers Codex stamps on Responses requests (HTTP and WebSocket).
+///
+/// Mirrors `session-id`/`thread-id`/`x-client-request-id` plus the Responses
+/// compatibility headers. `x-codex-installation-id` is intentionally absent:
+/// Codex carries it in `client_metadata` only. `x-session-id` is Live-only and
+/// `session_id` is never an HTTP header, so both are dropped here.
+fn apply_converged_response_headers(
     headers: &mut BTreeMap<String, String>,
     fingerprint: &CodexConvergedFingerprint,
 ) {
-    // Codex no longer sends `x-codex-installation-id` as an HTTP header; it
-    // travels in `client_metadata` only. Keep the value out of the header set so
-    // the outbound fingerprint matches the pinned client version.
     set_header(headers, "x-codex-window-id", fingerprint.window_id.clone());
     set_header(
         headers,
@@ -348,12 +365,26 @@ fn apply_converged_headers(
         fingerprint.thread_id.clone(),
     );
     set_header(headers, "session-id", fingerprint.session_id.clone());
-    set_header(headers, "session_id", fingerprint.session_id.clone());
     set_header(headers, "thread-id", fingerprint.thread_id.clone());
-    // Codex Live/Realtime uses `x-session-id` for the thread-scoped session
-    // identity on the WebSocket upgrade request. Keep it aligned with the
-    // converged thread identity instead of the account-scoped session value.
+    remove_header(headers, "x-session-id");
+    remove_header(headers, "session_id");
+    rewrite_header_turn_metadata(headers, fingerprint);
+}
+
+/// Identity headers Codex stamps on Live/Realtime requests.
+///
+/// Live sends `session-id`/`thread-id` plus `x-session-id`; the Responses-only
+/// `x-client-request-id` and `x-codex-window-id` are explicitly dropped.
+fn apply_converged_live_headers(
+    headers: &mut BTreeMap<String, String>,
+    fingerprint: &CodexConvergedFingerprint,
+) {
+    set_header(headers, "session-id", fingerprint.session_id.clone());
+    set_header(headers, "thread-id", fingerprint.thread_id.clone());
     set_header(headers, "x-session-id", fingerprint.thread_id.clone());
+    remove_header(headers, "x-client-request-id");
+    remove_header(headers, "x-codex-window-id");
+    remove_header(headers, "session_id");
     rewrite_header_turn_metadata(headers, fingerprint);
 }
 
@@ -644,16 +675,16 @@ mod tests {
                 .get_version_num(),
             4
         );
-        assert_eq!(headers["session_id"], *session_id);
+        assert!(!headers.contains_key("session_id"));
         assert_eq!(headers["x-client-request-id"], *thread_id);
-        assert_eq!(headers["x-session-id"], *thread_id);
+        assert!(!headers.contains_key("x-session-id"));
         assert_eq!(headers["x-codex-window-id"], format!("{thread_id}:0"));
         assert_eq!(
             headers
                 .keys()
                 .filter(|name| name.eq_ignore_ascii_case("x-session-id"))
                 .count(),
-            1
+            0
         );
         assert_eq!(body["client_metadata"]["session_id"], *session_id);
         assert_eq!(body["client_metadata"]["thread_id"], *thread_id);
@@ -1016,7 +1047,8 @@ mod tests {
         assert_eq!(body, original_body);
         assert_eq!(headers.get("x-session-id"), headers.get("thread-id"));
         assert!(!headers.contains_key("x-codex-installation-id"));
-        assert!(headers.contains_key("x-codex-window-id"));
+        assert!(!headers.contains_key("x-codex-window-id"));
+        assert!(!headers.contains_key("x-client-request-id"));
     }
 
     #[test]

@@ -263,7 +263,7 @@ fn realtime_query_is_codex_v2(query: Option<&str>, headers: &http::HeaderMap) ->
     let Some(originator) = crate::headers::header_value_str(headers, "originator") else {
         return false;
     };
-    aether_ai_formats::is_codex_client_originator(originator.as_str())
+    crate::ai_serving::is_codex_client_originator(originator.as_str())
 }
 
 fn claude_request_auth_channel(headers: &http::HeaderMap) -> &'static str {

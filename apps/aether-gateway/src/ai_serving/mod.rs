@@ -17,7 +17,8 @@ pub(crate) use self::adaptation::{
     maybe_build_provider_private_stream_normalizer_shared, ProviderPrivateStreamNormalizer,
 };
 pub(crate) use self::api::{
-    gemini_generate_content_response_has_visible_output, CODEX_RESPONSES_LITE_HEADER,
+    codex_client_user_agent_for_version, gemini_generate_content_response_has_visible_output,
+    is_codex_client_originator, CODEX_RESPONSES_LITE_HEADER, CODEX_RESPONSES_WEBSOCKETS_BETA_VALUE,
 };
 pub(crate) use self::finalize::common::LocalCoreSyncFinalizeOutcome;
 pub(crate) use self::finalize::internal::{
