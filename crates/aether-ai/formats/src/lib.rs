@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 extern crate self as aether_ai_formats;
 
 pub mod api;

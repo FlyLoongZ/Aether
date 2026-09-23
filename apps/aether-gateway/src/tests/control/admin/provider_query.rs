@@ -852,13 +852,17 @@ async fn gateway_handles_admin_provider_query_models_falls_back_to_codex_preset_
         model_ids,
         vec![
             "codex-auto-review",
-            "gpt-5.2",
             "gpt-5.4",
             "gpt-5.4-mini",
             "gpt-5.5",
             "gpt-5.6-luna",
             "gpt-5.6-sol",
             "gpt-5.6-terra",
+            "gpt-6-astra",
+            "gpt-6-luna",
+            "gpt-6-sol",
+            "gpt-daybreak-blue-latest",
+            "gpt-daybreak-red-latest",
         ]
     );
     assert_eq!(
