@@ -2020,7 +2020,7 @@ async fn run_codex_live_oauth_frontdoor_scenario(dialect: CodexLiveWebRtcTestDia
     );
     assert_eq!(
         plan.headers.get("originator").map(String::as_str),
-        Some("codex_cli_rs")
+        Some("codex-tui")
     );
     assert_eq!(
         plan.headers.get("chatgpt-account-id").map(String::as_str),

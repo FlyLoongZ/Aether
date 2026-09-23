@@ -37,7 +37,7 @@ impl CodexClientProfile {
         {
             return Err("invalid Codex CLI version");
         }
-        let originator = "codex_cli_rs".to_owned();
+        let originator = "codex-tui".to_owned();
         Ok(Self {
             client_kind: CodexClientKind::Cli,
             codex_version: version.to_owned(),
@@ -105,7 +105,7 @@ mod tests {
     fn cli_profile_derives_wire_identity_from_version() {
         let profile = CodexClientProfile::cli("0.200.1").expect("valid version");
         assert_eq!(profile.client_kind, CodexClientKind::Cli);
-        assert_eq!(profile.originator, "codex_cli_rs");
+        assert_eq!(profile.originator, "codex-tui");
         assert_eq!(profile.user_agent, codex_tui_user_agent("0.200.1"));
         assert_eq!(profile.user_agent, "codex-tui/0.200.1 (Arch Linux Rolling Release; x86_64) Konsole/260801 (codex-tui; 0.200.1)");
     }

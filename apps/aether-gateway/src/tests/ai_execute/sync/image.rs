@@ -1123,7 +1123,7 @@ async fn gateway_executes_codex_image_sync_via_local_decision_gate_after_oauth_r
     );
     assert_eq!(
         seen_execution_runtime_request.headers["originator"],
-        "codex_cli_rs"
+        "codex-tui"
     );
     for header in ["x-client-request-id", "session-id", "thread-id"] {
         assert!(seen_execution_runtime_request.headers.get(header).is_none());

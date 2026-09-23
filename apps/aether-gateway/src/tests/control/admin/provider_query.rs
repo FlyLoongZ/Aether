@@ -2658,7 +2658,7 @@ async fn gateway_executes_codex_search_admin_pool_model_test_with_search_contrac
             );
             assert_eq!(
                 plan.headers.get("originator").map(String::as_str),
-                Some("codex_cli_rs")
+                Some("codex-tui")
             );
             assert!(plan
                 .headers

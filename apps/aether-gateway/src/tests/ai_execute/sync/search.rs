@@ -447,7 +447,7 @@ async fn gateway_executes_codex_search_with_responses_permission_and_search_cont
     );
     assert_eq!(plan["headers"]["chatgpt-account-id"], "account-search-1");
     assert_eq!(plan["headers"]["x-openai-fedramp"], "true");
-    assert_eq!(plan["headers"]["originator"], "codex_cli_rs");
+    assert_eq!(plan["headers"]["originator"], "codex-tui");
     assert!(plan["headers"]["user-agent"]
         .as_str()
         .is_some_and(|value| value.starts_with("codex-tui/")));

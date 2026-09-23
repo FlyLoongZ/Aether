@@ -1013,7 +1013,7 @@ mod tests {
         );
         assert_eq!(
             plan.headers.get("originator").map(String::as_str),
-            Some("codex_cli_rs")
+            Some("codex-tui")
         );
         assert_eq!(
             plan.headers.get("user-agent").map(String::as_str),
@@ -1060,7 +1060,7 @@ mod tests {
         );
         assert_eq!(
             plan.headers.get("originator").map(String::as_str),
-            Some("codex_cli_rs")
+            Some("codex-tui")
         );
         assert_eq!(
             plan.headers.get("chatgpt-account-id").map(String::as_str),
