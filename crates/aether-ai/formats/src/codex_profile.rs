@@ -41,7 +41,7 @@ impl CodexClientProfile {
 impl Default for CodexClientProfile {
     fn default() -> Self {
         // 远程发布检查不可用时仍保持现有线上行为，避免启动或请求被版本服务拖住。
-        Self::cli("0.153.4").expect("built-in Codex CLI profile must be valid")
+        Self::cli("0.156.1").expect("built-in Codex CLI profile must be valid")
     }
 }
 
