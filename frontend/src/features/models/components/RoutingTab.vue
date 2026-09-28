@@ -21,6 +21,7 @@
               <span
                 class="text-xs text-muted-foreground/60 cursor-help"
                 :title="routingData.effective_policy.note"
+                data-testid="routing-preview-note"
               >静态基线</span>
             </template>
           </template>
@@ -84,6 +85,8 @@
           <!-- 格式标题栏 -->
           <div
             class="px-4 py-3 bg-muted/30 flex items-center justify-between cursor-pointer hover:bg-muted/50 transition-colors"
+            data-testid="routing-format"
+            :data-api-format="formatGroup.api_format"
             @click="toggleFormat(formatGroup.api_format)"
           >
             <div class="flex items-center gap-3">
@@ -130,6 +133,9 @@
                       v-for="(keyEntry, keyIndex) in keyGroup.keys"
                       :key="keyEntry.key.id"
                       class="flex py-1"
+                      data-testid="routing-key"
+                      :data-key-id="keyEntry.key.id"
+                      :data-effective-priority="keyEntry.key.effective_internal_priority ?? keyEntry.key.internal_priority"
                     >
                       <!-- 左侧：节点 + 连线 -->
                       <div class="w-6 flex flex-col items-center shrink-0">
@@ -280,6 +286,9 @@
                   <div
                     v-for="(providerEntry, providerIndex) in formatGroup.providers"
                     :key="`${providerEntry.provider.id}-${providerEntry.endpoint?.id || providerIndex}`"
+                    data-testid="routing-provider"
+                    :data-provider-id="providerEntry.provider.id"
+                    :data-effective-priority="providerEntry.provider.effective_provider_priority ?? providerEntry.provider.provider_priority"
                   >
                     <!-- 提供商行 -->
                     <div class="flex py-1">
@@ -314,6 +323,7 @@
                           <!-- 卡片头部 -->
                           <div
                             class="p-2.5 cursor-pointer"
+                            data-testid="routing-provider-toggle"
                             @click="toggleProviderInFormat(formatGroup.api_format, providerEntry.provider.id, providerEntry.endpoint?.id)"
                           >
                             <div class="flex items-center gap-2">
@@ -432,6 +442,9 @@
                                       v-for="(key, keyIndex) in group.keys"
                                       :key="key.id"
                                       class="relative flex items-center gap-2"
+                                      data-testid="routing-provider-key"
+                                      :data-key-id="key.id"
+                                      :data-effective-priority="key.effective_internal_priority ?? key.internal_priority"
                                     >
                                       <!-- 第一列：节点（与优先级标签对齐，min-w-8） -->
                                       <div class="min-w-8 flex items-center justify-center shrink-0">

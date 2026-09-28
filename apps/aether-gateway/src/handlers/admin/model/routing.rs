@@ -22,7 +22,9 @@ use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-const ROUTING_PREVIEW_POLICY_NOTE: &str = "Static baseline: effective priorities are resolved from the enabled system-default routing group for this model without live request context; runtime rules, affinity, health and load balancing can still change the real order.";
+const ROUTING_PREVIEW_POLICY_NOTE: &str = "Static baseline: model-scoped default/model policies and model-only rules (including generated per-model scheduling rules) are applied for this model, while client-request rules that need live context (headers/body/principal/api format) are excluded; runtime can still reorder by those rules, affinity, health and load balancing.";
+const ROUTING_PREVIEW_NO_POLICY_NOTE: &str = "No enabled system-default routing group is available; showing raw catalog priorities with no routing policy overlay.";
+const ROUTING_PREVIEW_UNRESOLVED_NOTE: &str = "The enabled system-default routing group could not be fully resolved; falling back to its default ordering (when readable) and raw catalog priorities.";
 
 /// Effective system-default routing policy applied to the admin chain preview.
 #[derive(Debug, Clone, Default)]
@@ -32,19 +34,31 @@ struct PreviewRoutingPolicy {
     source: &'static str,
     group_id: Option<String>,
     group_name: Option<String>,
+    /// Client-request rules excluded because they need live request context.
+    rules_excluded: usize,
     note: &'static str,
 }
 
 /// Resolve the system-default routing group for `requested_model` using the
 /// same resolver/merge path as the runtime so the preview can report effective
 /// provider/key/pool ranking overlays instead of raw catalog priorities.
+///
+/// Rules whose conditions reference only the requested model are kept and
+/// evaluated by the shared resolver, which preserves generated per-model
+/// scheduling rules (`ui_scheduling_policy:` / `ui_model_scheduling:`) and any
+/// custom model-only rule. Rules that need request context (headers, body,
+/// principal, api format) are dropped instead of being evaluated against a
+/// fictional empty request, which would both apply false positives (e.g. a
+/// missing header satisfying a `ne` predicate) and false negatives. The
+/// excluded rule count is disclosed to callers instead of pretending the result
+/// is the full live runtime policy.
 async fn resolve_preview_routing_policy(
     state: &AdminAppState<'_>,
     requested_model: &str,
 ) -> PreviewRoutingPolicy {
     let mut resolved = PreviewRoutingPolicy {
         source: "none",
-        note: ROUTING_PREVIEW_POLICY_NOTE,
+        note: ROUTING_PREVIEW_NO_POLICY_NOTE,
         ..PreviewRoutingPolicy::default()
     };
     if !state.has_routing_group_data_reader() {
@@ -64,9 +78,39 @@ async fn resolve_preview_routing_policy(
         Ok(config) => config,
         Err(_) => {
             resolved.source = "system_default_unresolved";
+            resolved.note = ROUTING_PREVIEW_UNRESOLVED_NOTE;
             return resolved;
         }
     };
+    let mut preview_config = config;
+    // Match the resolver's processing order so a dropped `stop_processing` rule
+    // can invalidate only the rules that would actually run after it.
+    preview_config.rules.sort_by(|left, right| {
+        left.priority
+            .cmp(&right.priority)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    let mut rules_excluded = 0usize;
+    let mut blocked_by_excluded_stop = false;
+    preview_config.rules.retain(|rule| {
+        if rule.phase != RoutingRulePhase::ClientRequest || !rule.enabled {
+            return true;
+        }
+        if blocked_by_excluded_stop {
+            rules_excluded += 1;
+            return false;
+        }
+        if rule.conditions.is_model_scoped() {
+            return true;
+        }
+        rules_excluded += 1;
+        if rule.stop_processing {
+            blocked_by_excluded_stop = true;
+        }
+        false
+    });
+    resolved.rules_excluded = rules_excluded;
+
     let headers = json!({});
     let body = json!({});
     let input = RoutingPolicyInput {
@@ -82,16 +126,18 @@ async fn resolve_preview_routing_policy(
         body: &body,
         phase: RoutingRulePhase::ClientRequest,
     };
-    let policy = match resolve_routing_policy(&config, input) {
+    let policy = match resolve_routing_policy(&preview_config, input) {
         Ok(policy) => policy,
         Err(_) => {
             resolved.source = "system_default_unresolved";
+            resolved.note = ROUTING_PREVIEW_UNRESOLVED_NOTE;
             return resolved;
         }
     };
     resolved.overlay = policy.ranking_overlay.clone();
     resolved.policy = Some(policy);
     resolved.source = "system_default";
+    resolved.note = ROUTING_PREVIEW_POLICY_NOTE;
     resolved
 }
 
@@ -477,6 +523,7 @@ pub(crate) async fn build_admin_global_model_routing_payload(
             "group_id": preview_policy.group_id,
             "group_name": preview_policy.group_name,
             "requested_model": &global_model.name,
+            "rules_excluded": preview_policy.rules_excluded,
             "note": preview_policy.note,
         },
         "all_keys_whitelist": all_keys_whitelist,

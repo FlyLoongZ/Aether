@@ -63,6 +63,22 @@ impl RoutingCondition {
             Self::Empty {} => true,
         }
     }
+
+    /// True when the condition can be evaluated from the requested model alone.
+    ///
+    /// Request-scoped predicates (`api_format`/`client_api_format`, `user_id`,
+    /// `api_key_id`, `headers.*`, `body.*`) make this return false, which lets
+    /// callers evaluate deterministic model-only rules without inventing a
+    /// fictional request context.
+    pub fn is_model_scoped(&self) -> bool {
+        match self {
+            Self::All { all } => all.iter().all(Self::is_model_scoped),
+            Self::Any { any } => any.iter().all(Self::is_model_scoped),
+            Self::Not { not } => not.is_model_scoped(),
+            Self::Predicate { field, .. } => field.trim() == "model",
+            Self::Empty {} => true,
+        }
+    }
 }
 
 fn resolve_field(context: &RoutingConditionContext<'_>, field: &str) -> Option<Value> {
@@ -201,6 +217,46 @@ mod tests {
             headers,
             body,
         }
+    }
+
+    #[test]
+    fn is_model_scoped_only_accepts_model_predicates() {
+        let model = RoutingCondition::Predicate {
+            field: "model".to_string(),
+            op: RoutingConditionOp::Eq,
+            value: Some(json!("gpt-5")),
+        };
+        let header = RoutingCondition::Predicate {
+            field: "headers.x-app".to_string(),
+            op: RoutingConditionOp::Eq,
+            value: Some(json!("coding")),
+        };
+        let api_format = RoutingCondition::Predicate {
+            field: "api_format".to_string(),
+            op: RoutingConditionOp::Eq,
+            value: Some(json!("openai:chat")),
+        };
+
+        assert!(RoutingCondition::Empty {}.is_model_scoped());
+        assert!(model.is_model_scoped());
+        assert!(RoutingCondition::Any {
+            any: vec![model.clone(), model.clone()]
+        }
+        .is_model_scoped());
+        assert!(RoutingCondition::All {
+            all: vec![model.clone()]
+        }
+        .is_model_scoped());
+        assert!(!header.is_model_scoped());
+        assert!(!api_format.is_model_scoped());
+        assert!(!RoutingCondition::All {
+            all: vec![model.clone(), api_format]
+        }
+        .is_model_scoped());
+        assert!(!RoutingCondition::Not {
+            not: Box::new(header)
+        }
+        .is_model_scoped());
     }
 
     #[test]

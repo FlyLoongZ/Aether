@@ -106,6 +106,8 @@ export interface RoutingEffectivePolicy {
   group_id?: string | null
   group_name?: string | null
   requested_model?: string
+  /** 静态预览中因需要请求上下文（header/body/用户/API格式）而被排除的客户端请求规则数量 */
+  rules_excluded?: number
   note?: string
 }
 

@@ -1148,6 +1148,237 @@ async fn gateway_global_model_routing_preview_respects_model_policy_precedence()
 }
 
 #[tokio::test]
+async fn gateway_global_model_routing_preview_applies_model_rules_and_excludes_request_rules() {
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_provider_catalog_reader_for_tests(
+                    routing_preview_provider_catalog(10, 20),
+                )
+                .with_global_model_repository_for_tests(routing_preview_global_model_repository())
+                .with_routing_group_repository_for_tests(Arc::new(system_default_routing_group(
+                    json!({
+                        "default_policy": {
+                            "priority_mode": "provider",
+                            "scheduling_mode": "cache_affinity"
+                        },
+                        "model_policies": [],
+                        "rules": [
+                            // Generated per-model scheduling rule: carries the
+                            // model-specific mode and must survive the filter.
+                            {
+                                "id": "ui_scheduling_policy:shared",
+                                "priority": 10000,
+                                "enabled": true,
+                                "phase": "client_request",
+                                "conditions": {
+                                    "any": [{
+                                        "field": "model",
+                                        "op": "eq",
+                                        "value": "gpt-5"
+                                    }]
+                                },
+                                "actions": [{
+                                    "type": "set_scheduling",
+                                    "priority_mode": "global_key",
+                                    "scheduling_mode": "fixed_order"
+                                }]
+                            },
+                            // Custom model-only priority rule: also evaluable
+                            // from the requested model alone.
+                            {
+                                "id": "custom-model-priority",
+                                "priority": 20000,
+                                "enabled": true,
+                                "phase": "client_request",
+                                "conditions": {
+                                    "field": "model",
+                                    "op": "eq",
+                                    "value": "gpt-5"
+                                },
+                                "actions": [{
+                                    "type": "set_provider_priority",
+                                    "provider_id": "provider-first",
+                                    "priority": 1
+                                }]
+                            },
+                            // Request-context rule: cannot be evaluated statically.
+                            {
+                                "id": "request-rule",
+                                "priority": 30000,
+                                "enabled": true,
+                                "phase": "client_request",
+                                "conditions": {
+                                    "any": [{
+                                        "field": "headers.x-tier",
+                                        "op": "eq",
+                                        "value": "gold"
+                                    }]
+                                },
+                                "actions": [{
+                                    "type": "set_provider_priority",
+                                    "provider_id": "provider-second",
+                                    "priority": 1
+                                }]
+                            }
+                        ]
+                    }),
+                ))),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let payload = fetch_routing_preview(&gateway_url).await;
+    assert_eq!(payload["effective_policy"]["source"], "system_default");
+    assert_eq!(
+        payload["effective_policy"]["rules_excluded"], 1,
+        "only the context-dependent rule should be excluded"
+    );
+    assert!(
+        payload["effective_policy"]["note"]
+            .as_str()
+            .expect("note should be present")
+            .contains("context"),
+        "the note must disclose that request-context rules were excluded"
+    );
+
+    // The generated model-conditioned scheduling rule is still applied.
+    assert_eq!(payload["priority_mode"], "global_key");
+    assert_eq!(payload["scheduling_mode"], "fixed_order");
+
+    // The custom model-only priority rule is applied...
+    let first = routing_preview_provider(&payload, "provider-first");
+    assert_eq!(first["effective_provider_priority"], 1);
+    assert_eq!(first["provider_priority_source"], "policy_override");
+
+    // ...while the header rule is not, because that context is unknown.
+    let second = routing_preview_provider(&payload, "provider-second");
+    assert_eq!(second["effective_provider_priority"], 20);
+    assert_eq!(second["provider_priority_source"], "catalog");
+
+    gateway_handle.abort();
+}
+
+#[tokio::test]
+async fn gateway_global_model_routing_preview_evaluates_model_only_rules_for_requested_model() {
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_provider_catalog_reader_for_tests(
+                    routing_preview_provider_catalog(10, 20),
+                )
+                .with_global_model_repository_for_tests(routing_preview_global_model_repository())
+                .with_routing_group_repository_for_tests(Arc::new(system_default_routing_group(
+                    json!({
+                        "default_policy": {
+                            "priority_mode": "provider",
+                            "scheduling_mode": "cache_affinity"
+                        },
+                        "model_policies": [],
+                        "rules": [
+                            // Model-scoped, but for another model: retained for
+                            // static evaluation yet must not match gpt-5.
+                            {
+                                "id": "other-model-priority",
+                                "priority": 1,
+                                "enabled": true,
+                                "phase": "client_request",
+                                "conditions": {
+                                    "field": "model",
+                                    "op": "eq",
+                                    "value": "gpt-4o"
+                                },
+                                "actions": [{
+                                    "type": "set_provider_priority",
+                                    "provider_id": "provider-first",
+                                    "priority": 1
+                                }]
+                            },
+                            // Model-scoped and matching: must apply.
+                            {
+                                "id": "matching-model-priority",
+                                "priority": 2,
+                                "enabled": true,
+                                "phase": "client_request",
+                                "conditions": {
+                                    "field": "model",
+                                    "op": "eq",
+                                    "value": "gpt-5"
+                                },
+                                "actions": [{
+                                    "type": "set_provider_priority",
+                                    "provider_id": "provider-second",
+                                    "priority": 1
+                                }]
+                            },
+                            // Context-dependent stop rule: dropped, and the model
+                            // rule after it becomes ambiguous so it is excluded too.
+                            {
+                                "id": "context-stop",
+                                "priority": 3,
+                                "enabled": true,
+                                "phase": "client_request",
+                                "conditions": {
+                                    "any": [{
+                                        "field": "headers.x-tier",
+                                        "op": "eq",
+                                        "value": "gold"
+                                    }]
+                                },
+                                "actions": [{
+                                    "type": "set_provider_priority",
+                                    "provider_id": "provider-first",
+                                    "priority": 9
+                                }],
+                                "stop_processing": true
+                            },
+                            {
+                                "id": "after-context-stop",
+                                "priority": 4,
+                                "enabled": true,
+                                "phase": "client_request",
+                                "conditions": {
+                                    "field": "model",
+                                    "op": "eq",
+                                    "value": "gpt-5"
+                                },
+                                "actions": [{
+                                    "type": "set_provider_priority",
+                                    "provider_id": "provider-first",
+                                    "priority": 7
+                                }]
+                            }
+                        ]
+                    }),
+                ))),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let payload = fetch_routing_preview(&gateway_url).await;
+    assert_eq!(payload["effective_policy"]["source"], "system_default");
+    assert_eq!(
+        payload["effective_policy"]["rules_excluded"], 2,
+        "the context rule and the ambiguous later rule are excluded"
+    );
+
+    // The matching model rule applies...
+    let second = routing_preview_provider(&payload, "provider-second");
+    assert_eq!(second["effective_provider_priority"], 1);
+    assert_eq!(second["provider_priority_source"], "policy_override");
+
+    // ...the other-model rule does not, and the ambiguous rule after the
+    // excluded stop rule is not applied.
+    let first = routing_preview_provider(&payload, "provider-first");
+    assert_eq!(first["effective_provider_priority"], 10);
+    assert_eq!(first["provider_priority_source"], "catalog");
+
+    gateway_handle.abort();
+}
+
+#[tokio::test]
 async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_model_name() {
     let upstream_hits = Arc::new(Mutex::new(0usize));
     let upstream_hits_clone = Arc::clone(&upstream_hits);
