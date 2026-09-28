@@ -122,7 +122,15 @@
                     'conversion-boundary': groupIndex + 1 === conversionBoundaryIndex,
                     'unstarted-boundary': groupIndex + 1 === unstartedBoundaryIndex
                   }"
+                  :data-timeline-unstarted-boundary="groupIndex + 1 === unstartedBoundaryIndex ? 'true' : undefined"
                 />
+                <!-- 未执行块标记：区分真实执行序列与从未发起请求的候选 -->
+                <span
+                  v-if="groupIndex + 1 === unstartedBoundaryIndex"
+                  class="unstarted-boundary-label"
+                  data-timeline-unstarted-label
+                  title="本次未执行或未启动的候选（跳过、可用、未使用）"
+                >未执行</span>
               </div>
             </div>
           </div>
@@ -2825,6 +2833,23 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
   background: none;
   height: 0;
   border-top: 2px dotted hsl(var(--muted-foreground) / 0.4);
+}
+
+/* 未执行块标记 */
+.unstarted-boundary-label {
+  position: absolute;
+  top: -1.15rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 0.35rem;
+  border: 1px dashed hsl(var(--muted-foreground) / 0.35);
+  border-radius: 9999px;
+  background: hsl(var(--background));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.6rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  z-index: 2;
 }
 
 /* 详情面板 */

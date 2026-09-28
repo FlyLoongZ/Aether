@@ -429,6 +429,9 @@ describe('HorizontalRequestTimeline', () => {
     // 执行 / 未执行之间用虚线分界，避免未启动候选被误读成执行序列的一部分。
     const boundaryLines = [...root.querySelectorAll<HTMLElement>('.node-line.unstarted-boundary')]
     expect(boundaryLines).toHaveLength(1)
+    expect(boundaryLines[0].dataset.timelineUnstartedBoundary).toBe('true')
+    // 分界处有明确的“未执行”块标记，而不是只能靠颜色猜测。
+    expect(root.querySelector('[data-timeline-unstarted-label]')?.textContent?.trim()).toBe('未执行')
   })
 
   it('orders nodes by actual started_at when rank 0 starts later than rank 1', async () => {
@@ -655,6 +658,94 @@ describe('HorizontalRequestTimeline', () => {
     expect(nodeDots[0].classList.contains('status-failed')).toBe(true)
     expect(nodeDots[1].classList.contains('status-success')).toBe(true)
     expect(nodeDots[2].classList.contains('status-failed')).toBe(true)
+  })
+
+  it('orders a pool A -> B -> A by execution while keeping each pool as one group', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'pool-a-first',
+        provider_id: 'provider-pool-a',
+        provider_name: 'Provider A',
+        key_name: 'A Scheduled First',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:03.000Z',
+        finished_at: '2026-05-06T12:00:04.000Z',
+        extra_data: { pool_group_id: 'pool-a', execution_index: 2 },
+      }),
+      buildCandidate({
+        id: 'plain-b',
+        provider_id: 'provider-b',
+        provider_name: 'Provider B',
+        key_name: 'B Key',
+        candidate_index: 1,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+        extra_data: { execution_index: 0 },
+      }),
+      buildCandidate({
+        id: 'pool-a-last',
+        provider_id: 'provider-pool-a',
+        provider_name: 'Provider A',
+        key_name: 'A Executed First',
+        candidate_index: 2,
+        status: 'success',
+        started_at: '2026-05-06T12:00:02.000Z',
+        finished_at: '2026-05-06T12:00:03.000Z',
+        extra_data: { pool_group_id: 'pool-a', execution_index: 1 },
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    const groups = [...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
+    // 同一 pool 的两个尝试合成一个节点（子节点保留），不会拆成两个倒置的 A。
+    expect(groups).toHaveLength(2)
+    expect(groups.map(group => group.dataset.groupId)).toEqual(['Provider B', 'pool:pool-a'])
+    expect(groups.map(group => group.dataset.groupStartIndex)).toEqual(['1', '0'])
+
+    const nodeDots = [...root.querySelectorAll<HTMLElement>('.node-dot')]
+    expect(nodeDots[0].classList.contains('status-failed')).toBe(true)
+    expect(nodeDots[1].classList.contains('status-success')).toBe(true)
+    // 执行更晚的 pool 尝试退为子节点，维持 pool 内的实际执行顺序。
+    expect([...root.querySelectorAll<HTMLButtonElement>('.sub-dot')]
+      .map(dot => dot.getAttribute('title')))
+      .toEqual(['#0 · A Scheduled First · 失败'])
+  })
+
+  it('marks the unattempted block after pool execution groups as well', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'pool-attempted',
+        provider_id: 'provider-pool-attempted',
+        provider_name: 'Pool Attempted',
+        candidate_index: 0,
+        status: 'success',
+        started_at: '2026-05-06T12:00:00.000Z',
+        finished_at: '2026-05-06T12:00:01.000Z',
+        extra_data: { pool_group_id: 'pool-attempted' },
+      }),
+      buildCandidate({
+        id: 'never-started',
+        provider_id: 'provider-never-started',
+        provider_name: 'Never Started',
+        candidate_index: 1,
+        status: 'available',
+        started_at: undefined,
+        finished_at: undefined,
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Pool Attempted', 'Never Started'])
+    expect(root.querySelectorAll('.node-line.unstarted-boundary')).toHaveLength(1)
+    expect(root.querySelector('[data-timeline-unstarted-label]')?.textContent?.trim()).toBe('未执行')
   })
 
   it('falls back to stable scheduling order for historical attempts without started_at', async () => {
