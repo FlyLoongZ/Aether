@@ -2,8 +2,12 @@ use std::sync::{Arc, Mutex};
 
 use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::global_models::{
     AdminProviderModelListQuery, GlobalModelReadRepository,
+};
+use aether_data_contracts::repository::routing_profiles::{
+    StoredRoutingGroup, StoredRoutingGroupBinding, StoredRoutingGroupVersion,
 };
 use axum::body::Body;
 use axum::routing::any;
@@ -931,6 +935,216 @@ async fn gateway_handles_admin_global_model_routing_locally_with_trusted_admin_p
 
     gateway_handle.abort();
     upstream_handle.abort();
+}
+
+fn system_default_routing_group(config_json: serde_json::Value) -> InMemoryRoutingGroupRepository {
+    InMemoryRoutingGroupRepository::seed(
+        [StoredRoutingGroup {
+            id: "system-default".to_string(),
+            name: "system-default".to_string(),
+            description: None,
+            enabled: true,
+            is_system_default: true,
+            sort_order: 0,
+            config_json,
+            version: 1,
+            created_at: 1,
+            updated_at: 1,
+            published_at: Some(1),
+        }],
+        std::iter::empty::<StoredRoutingGroupBinding>(),
+        std::iter::empty::<StoredRoutingGroupVersion>(),
+    )
+}
+
+fn routing_preview_provider_catalog(
+    first_priority: i32,
+    second_priority: i32,
+) -> Arc<InMemoryProviderCatalogReadRepository> {
+    Arc::new(InMemoryProviderCatalogReadRepository::seed(
+        vec![
+            sample_provider("provider-first", "first", first_priority),
+            sample_provider("provider-second", "second", second_priority),
+        ],
+        vec![
+            sample_endpoint(
+                "endpoint-first-chat",
+                "provider-first",
+                "openai:chat",
+                "https://api.first.example",
+            ),
+            sample_endpoint(
+                "endpoint-second-chat",
+                "provider-second",
+                "openai:chat",
+                "https://api.second.example",
+            ),
+        ],
+        vec![
+            sample_bound_key(
+                "key-first-routing",
+                "provider-first",
+                "openai:chat",
+                "sk-first-routing-1234",
+            ),
+            sample_bound_key(
+                "key-second-routing",
+                "provider-second",
+                "openai:chat",
+                "sk-second-routing-5678",
+            ),
+        ],
+    ))
+}
+
+fn routing_preview_global_model_repository() -> Arc<InMemoryGlobalModelReadRepository> {
+    Arc::new(
+        InMemoryGlobalModelReadRepository::seed(Vec::new())
+            .with_admin_global_models(vec![sample_admin_global_model(
+                "global-gpt-5",
+                "gpt-5",
+                "GPT 5",
+            )])
+            .with_admin_provider_models(vec![
+                sample_admin_provider_model(
+                    "model-first-gpt5",
+                    "provider-first",
+                    "global-gpt-5",
+                    "gpt-5-first",
+                ),
+                sample_admin_provider_model(
+                    "model-second-gpt5",
+                    "provider-second",
+                    "global-gpt-5",
+                    "gpt-5-second",
+                ),
+            ]),
+    )
+}
+
+async fn fetch_routing_preview(gateway_url: &str) -> serde_json::Value {
+    let response = reqwest::Client::new()
+        .get(format!(
+            "{gateway_url}/api/admin/models/global/global-gpt-5/routing"
+        ))
+        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
+        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
+        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
+        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .send()
+        .await
+        .expect("request should succeed");
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json().await.expect("json body should parse")
+}
+
+fn routing_preview_provider<'a>(
+    payload: &'a serde_json::Value,
+    provider_id: &str,
+) -> &'a serde_json::Value {
+    payload["providers"]
+        .as_array()
+        .expect("providers array")
+        .iter()
+        .find(|provider| provider["id"] == provider_id)
+        .expect("provider should be present")
+}
+
+#[tokio::test]
+async fn gateway_global_model_routing_preview_overrides_catalog_priority() {
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_provider_catalog_reader_for_tests(
+                    routing_preview_provider_catalog(999, 10),
+                )
+                .with_global_model_repository_for_tests(routing_preview_global_model_repository())
+                .with_routing_group_repository_for_tests(Arc::new(system_default_routing_group(
+                    json!({
+                        "default_policy": {
+                            "priority_mode": "provider",
+                            "scheduling_mode": "cache_affinity"
+                        },
+                        "model_policies": [{
+                            "model": "gpt-5",
+                            "provider_priority_overrides": { "provider-first": 1 }
+                        }]
+                    }),
+                ))),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let payload = fetch_routing_preview(&gateway_url).await;
+    assert_eq!(payload["effective_policy"]["source"], "system_default");
+    assert_eq!(payload["effective_policy"]["requested_model"], "gpt-5");
+
+    let first = routing_preview_provider(&payload, "provider-first");
+    assert_eq!(first["provider_priority"], 999);
+    assert_eq!(first["effective_provider_priority"], 1);
+    assert_eq!(first["provider_priority_source"], "policy_override");
+
+    let second = routing_preview_provider(&payload, "provider-second");
+    assert_eq!(second["provider_priority"], 10);
+    assert_eq!(second["effective_provider_priority"], 10);
+    assert_eq!(second["provider_priority_source"], "catalog");
+
+    // The effective priority drives the preview order, so the catalog-lowest
+    // provider is promoted to the front by the routing override.
+    assert_eq!(payload["providers"][0]["id"], "provider-first");
+
+    gateway_handle.abort();
+}
+
+#[tokio::test]
+async fn gateway_global_model_routing_preview_respects_model_policy_precedence() {
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_provider_catalog_reader_for_tests(
+                    routing_preview_provider_catalog(999, 999),
+                )
+                .with_global_model_repository_for_tests(routing_preview_global_model_repository())
+                .with_routing_group_repository_for_tests(Arc::new(system_default_routing_group(
+                    json!({
+                        "default_policy": {
+                            "priority_mode": "provider",
+                            "scheduling_mode": "cache_affinity"
+                        },
+                        "model_policies": [
+                            {
+                                "model": "*",
+                                "provider_priority_overrides": {
+                                    "provider-first": 5,
+                                    "provider-second": 5
+                                }
+                            },
+                            {
+                                "model": "gpt-5",
+                                "provider_priority_overrides": { "provider-first": 1 }
+                            }
+                        ]
+                    }),
+                ))),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let payload = fetch_routing_preview(&gateway_url).await;
+
+    // The later, model-specific policy wins over the wildcard policy while the
+    // wildcard override still applies to the untouched provider.
+    let first = routing_preview_provider(&payload, "provider-first");
+    assert_eq!(first["effective_provider_priority"], 1);
+    assert_eq!(first["provider_priority_source"], "policy_override");
+
+    let second = routing_preview_provider(&payload, "provider-second");
+    assert_eq!(second["effective_provider_priority"], 5);
+    assert_eq!(second["provider_priority_source"], "policy_override");
+
+    gateway_handle.abort();
 }
 
 #[tokio::test]

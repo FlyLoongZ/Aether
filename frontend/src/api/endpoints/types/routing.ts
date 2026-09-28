@@ -9,6 +9,12 @@ export interface RoutingKeyInfo {
   masked_key: string
   internal_priority: number
   global_priority_by_format?: Record<string, number> | null  // 按 API 格式的全局优先级
+  /** 应用系统默认路由策略后的有效内部优先级 */
+  effective_internal_priority?: number | null
+  /** 应用系统默认路由策略后的有效全局优先级（当前 endpoint 格式） */
+  effective_global_priority?: number | null
+  /** 优先级来源：catalog（目录原值）或 policy_override（策略覆盖） */
+  priority_source?: string
   rpm_limit?: number | null
   is_adaptive: boolean
   effective_rpm?: number | null
@@ -58,6 +64,14 @@ export interface RoutingProviderInfo {
   name: string
   model_id: string
   provider_priority: number
+  /** 应用系统默认路由策略后的有效提供商优先级 */
+  effective_provider_priority?: number | null
+  /** 优先级来源：catalog（目录原值）或 policy_override（策略覆盖） */
+  provider_priority_source?: string
+  /** 该提供商是否使用号池调度（号池候选按池优先级排名） */
+  is_pool_provider?: boolean
+  /** 策略中的号池优先级覆盖（如有） */
+  effective_pool_priority?: number | null
   enable_format_conversion?: boolean
   keep_priority_on_conversion?: boolean
   billing_type?: string | null
@@ -85,6 +99,17 @@ export interface GlobalKeyWhitelistItem {
 }
 
 /**
+ * 链路预览应用的有效路由策略元数据
+ */
+export interface RoutingEffectivePolicy {
+  source: string  // system_default | system_default_unresolved | none
+  group_id?: string | null
+  group_name?: string | null
+  requested_model?: string
+  note?: string
+}
+
+/**
  * 模型请求链路预览响应
  */
 export interface ModelRoutingPreviewResponse {
@@ -99,5 +124,6 @@ export interface ModelRoutingPreviewResponse {
   scheduling_mode: string
   priority_mode: string
   keep_priority_on_conversion?: boolean
+  effective_policy?: RoutingEffectivePolicy | null
   all_keys_whitelist: GlobalKeyWhitelistItem[]
 }

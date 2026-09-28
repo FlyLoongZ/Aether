@@ -16,6 +16,13 @@
             <span class="text-xs text-muted-foreground">
               {{ getPriorityModeLabel(routingData.priority_mode) }}
             </span>
+            <template v-if="routingData.effective_policy?.note">
+              <span class="text-xs text-muted-foreground">·</span>
+              <span
+                class="text-xs text-muted-foreground/60 cursor-help"
+                :title="routingData.effective_policy.note"
+              >静态基线</span>
+            </template>
           </template>
         </div>
         <div class="flex items-center gap-2">
@@ -319,7 +326,7 @@
                                   : 'bg-muted-foreground/20 text-muted-foreground'"
                               >
                                 <span v-if="providerIndex === 0">首选</span>
-                                <span v-else>P{{ providerEntry.provider.provider_priority }}</span>
+                                <span v-else>P{{ providerEntry.provider.effective_provider_priority ?? providerEntry.provider.provider_priority }}</span>
                               </div>
 
                               <!-- 第二列：状态指示灯 -->
@@ -804,6 +811,8 @@ function shouldDemoteCrossFormat(
 }
 
 function resolvedGlobalKeyPriority(keyEntry: GlobalKeyEntry): number {
+  const effective = keyEntry.key.effective_global_priority
+  if (typeof effective === 'number') return effective
   const priorityByFormat = keyEntry.key.global_priority_by_format
   if (!priorityByFormat) return 999
   const value = priorityByFormat[keyEntry.priority_api_format]
@@ -863,7 +872,7 @@ const apiFormatGroups = computed<ApiFormatGroup[]>(() => {
       const aDemoted = shouldDemoteCrossFormat(format, a.priority_api_format, a.provider)
       const bDemoted = shouldDemoteCrossFormat(format, b.priority_api_format, b.provider)
       if (aDemoted !== bDemoted) return aDemoted ? 1 : -1
-      return a.provider.provider_priority - b.provider.provider_priority
+      return (a.provider.effective_provider_priority ?? a.provider.provider_priority) - (b.provider.effective_provider_priority ?? b.provider.provider_priority)
     })
 
     // Key 按全局优先级分组排序（全局 Key 优先模式）
@@ -1113,8 +1122,8 @@ function getKeyPriorityGroups(keys: RoutingKeyInfo[]): KeyPriorityGroup[] {
   const groups = new Map<number, KeyPriorityGroup>()
 
   for (const key of keys) {
-    // 提供商优先模式：按 internal_priority 分组
-    const priority = key.internal_priority ?? 999
+    // 提供商优先模式：按有效内部优先级分组（策略覆盖优先于目录原值）
+    const priority = key.effective_internal_priority ?? key.internal_priority ?? 999
 
     if (!groups.has(priority)) {
       groups.set(priority, {

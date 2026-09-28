@@ -1,20 +1,99 @@
 use super::resolve_admin_global_model_by_id_or_err;
 use crate::handlers::admin::request::AdminAppState;
 use crate::handlers::admin::shared::{json_string_list, provider_catalog_key_supports_format};
+use crate::handlers::shared::provider_pool::admin_provider_pool_config_from_config_value;
 use aether_data_contracts::repository::global_models::{
     AdminProviderModelListQuery, UpsertAdminProviderModelRecord,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
 };
+use aether_data_contracts::repository::routing_profiles::RoutingGroupLookupKey;
+use aether_routing_core::{
+    resolve_routing_policy, RankingOverlay, ResolvedRoutingPolicy, RoutingGroupConfig,
+    RoutingPolicyInput, RoutingRulePhase,
+};
 use aether_scheduler_core::{
-    is_provider_key_circuit_open_at, matches_model_mapping,
+    extract_global_priority_for_format, is_provider_key_circuit_open_at, matches_model_mapping,
     provider_key_circuit_payload_is_active_open_at, provider_key_health_score,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
+
+const ROUTING_PREVIEW_POLICY_NOTE: &str = "Static baseline: effective priorities are resolved from the enabled system-default routing group for this model without live request context; runtime rules, affinity, health and load balancing can still change the real order.";
+
+/// Effective system-default routing policy applied to the admin chain preview.
+#[derive(Debug, Clone, Default)]
+struct PreviewRoutingPolicy {
+    policy: Option<ResolvedRoutingPolicy>,
+    overlay: RankingOverlay,
+    source: &'static str,
+    group_id: Option<String>,
+    group_name: Option<String>,
+    note: &'static str,
+}
+
+/// Resolve the system-default routing group for `requested_model` using the
+/// same resolver/merge path as the runtime so the preview can report effective
+/// provider/key/pool ranking overlays instead of raw catalog priorities.
+async fn resolve_preview_routing_policy(
+    state: &AdminAppState<'_>,
+    requested_model: &str,
+) -> PreviewRoutingPolicy {
+    let mut resolved = PreviewRoutingPolicy {
+        source: "none",
+        note: ROUTING_PREVIEW_POLICY_NOTE,
+        ..PreviewRoutingPolicy::default()
+    };
+    if !state.has_routing_group_data_reader() {
+        return resolved;
+    }
+    let group = match state
+        .find_routing_group(RoutingGroupLookupKey::SystemDefault)
+        .await
+    {
+        Ok(Some(group)) if group.enabled => group,
+        _ => return resolved,
+    };
+    resolved.group_id = Some(group.id.clone());
+    resolved.group_name = Some(group.name.clone());
+
+    let config = match serde_json::from_value::<RoutingGroupConfig>(group.config_json.clone()) {
+        Ok(config) => config,
+        Err(_) => {
+            resolved.source = "system_default_unresolved";
+            return resolved;
+        }
+    };
+    let headers = json!({});
+    let body = json!({});
+    let input = RoutingPolicyInput {
+        group_id: resolved.group_id.as_deref(),
+        group_version: Some(group.version),
+        selection_source: "system_default",
+        requested_model,
+        resolved_model: requested_model,
+        api_format: "",
+        user_id: None,
+        api_key_id: None,
+        headers: &headers,
+        body: &body,
+        phase: RoutingRulePhase::ClientRequest,
+    };
+    let policy = match resolve_routing_policy(&config, input) {
+        Ok(policy) => policy,
+        Err(_) => {
+            resolved.source = "system_default_unresolved";
+            return resolved;
+        }
+    };
+    resolved.overlay = policy.ranking_overlay.clone();
+    resolved.policy = Some(policy);
+    resolved.source = "system_default";
+    resolved
+}
 
 pub(crate) async fn build_admin_global_model_routing_payload(
     state: &AdminAppState<'_>,
@@ -67,14 +146,23 @@ pub(crate) async fn build_admin_global_model_routing_payload(
             .push(key);
     }
 
-    // The admin view reports the system-default routing strategy.
-    let ordering_config =
-        match crate::scheduler::config::read_system_default_routing_ordering_config(state.app())
-            .await
-        {
-            Ok(Some(config)) => config,
-            Ok(None) | Err(_) => crate::scheduler::config::SchedulerOrderingConfig::default(),
-        };
+    // The admin view reports the effective system-default routing strategy for
+    // this model. Reuse the runtime resolver/merge so the preview reflects
+    // provider/key/pool ranking overlays rather than raw catalog priorities.
+    let preview_policy = resolve_preview_routing_policy(state, &global_model.name).await;
+    let ordering_config = match preview_policy.policy.as_ref() {
+        Some(policy) => {
+            crate::scheduler::config::SchedulerOrderingConfig::from_routing_policy(policy)
+        }
+        None => {
+            match crate::scheduler::config::read_system_default_routing_ordering_config(state.app())
+                .await
+            {
+                Ok(Some(config)) => config,
+                Ok(None) | Err(_) => crate::scheduler::config::SchedulerOrderingConfig::default(),
+            }
+        }
+    };
     let scheduling_mode = ordering_config.scheduling_mode_str().to_string();
     let priority_mode = ordering_config.priority_mode_str().to_string();
     let keep_priority_on_conversion = ordering_config.keep_priority_on_conversion;
@@ -110,6 +198,8 @@ pub(crate) async fn build_admin_global_model_routing_payload(
             &model.provider_model_name,
             &provider_model_mapping_names,
         );
+        let is_pool_provider =
+            admin_provider_pool_config_from_config_value(provider.config.as_ref()).is_some();
         let mut endpoint_payloads = Vec::new();
         let mut active_endpoints = 0usize;
         for endpoint in endpoints_by_provider
@@ -151,6 +241,47 @@ pub(crate) async fn build_admin_global_model_routing_payload(
                     let effective_rpm = key.learned_rpm_limit.or(key.rpm_limit);
                     let is_adaptive = key.rpm_limit.is_none();
                     let allowed_models = json_string_list(key.allowed_models.as_ref());
+                    let format_priority_override = preview_policy
+                        .overlay
+                        .key_priority_override_matching_format(&key.id, |format| {
+                            crate::ai_serving::api_format_alias_matches(
+                                format,
+                                &endpoint.api_format,
+                            )
+                        });
+                    let generic_priority_override = preview_policy
+                        .overlay
+                        .key_priority_overrides
+                        .get(&key.id)
+                        .copied();
+                    // Match runtime `routing_overlaid_candidate`: a pool provider is
+                    // ranked as one pool-group candidate whose key slot is ranked by
+                    // `pool_priority_overrides`; single keys use format-aware key
+                    // overrides and fall back to the catalog priority.
+                    let overlaid_key_priority = if is_pool_provider {
+                        preview_policy
+                            .overlay
+                            .pool_priority_overrides
+                            .get(&provider.id)
+                            .copied()
+                    } else {
+                        format_priority_override.or(generic_priority_override)
+                    };
+                    let effective_internal_priority = overlaid_key_priority
+                        .unwrap_or(key.internal_priority);
+                    let effective_global_priority = overlaid_key_priority.or_else(|| {
+                        extract_global_priority_for_format(
+                            key.global_priority_by_format.as_ref(),
+                            &endpoint.api_format,
+                        )
+                        .ok()
+                        .flatten()
+                    });
+                    let priority_source = if overlaid_key_priority.is_some() {
+                        "policy_override"
+                    } else {
+                        "catalog"
+                    };
                     let circuit_breaker_formats = key
                         .circuit_breaker_by_format
                         .as_ref()
@@ -187,6 +318,11 @@ pub(crate) async fn build_admin_global_model_routing_payload(
                         "is_active": key.is_active,
                         "is_adaptive": is_adaptive,
                         "effective_rpm": effective_rpm,
+                        "internal_priority": key.internal_priority,
+                        "global_priority_by_format": key.global_priority_by_format,
+                        "effective_internal_priority": effective_internal_priority,
+                        "effective_global_priority": effective_global_priority,
+                        "priority_source": priority_source,
                         "allowed_models": allowed_models,
                         "health_score": provider_key_health_score(key, &endpoint.api_format),
                         "circuit_breaker_open": is_provider_key_circuit_open_at(key, &endpoint.api_format, now_unix_secs),
@@ -214,11 +350,32 @@ pub(crate) async fn build_admin_global_model_routing_payload(
             .and_then(serde_json::Value::as_array)
             .cloned()
             .unwrap_or_default();
+        let effective_provider_priority = preview_policy
+            .overlay
+            .provider_priority(&provider.id, provider.provider_priority);
+        let provider_priority_source = if preview_policy
+            .overlay
+            .provider_priority_overrides
+            .contains_key(&provider.id)
+        {
+            "policy_override"
+        } else {
+            "catalog"
+        };
+        let effective_pool_priority = preview_policy
+            .overlay
+            .pool_priority_overrides
+            .get(&provider.id)
+            .copied();
         providers_payload.push(json!({
             "id": &provider.id,
             "name": &provider.name,
             "model_id": &model.id,
             "provider_priority": provider.provider_priority,
+            "effective_provider_priority": effective_provider_priority,
+            "provider_priority_source": provider_priority_source,
+            "is_pool_provider": is_pool_provider,
+            "effective_pool_priority": effective_pool_priority,
             "enable_format_conversion": provider.enable_format_conversion,
             "keep_priority_on_conversion": provider.keep_priority_on_conversion,
             "billing_type": provider.billing_type.clone(),
@@ -281,11 +438,11 @@ pub(crate) async fn build_admin_global_model_routing_payload(
     }
 
     providers_payload.sort_by(|left, right| {
-        left.get("provider_priority")
+        left.get("effective_provider_priority")
             .and_then(serde_json::Value::as_i64)
             .cmp(
                 &right
-                    .get("provider_priority")
+                    .get("effective_provider_priority")
                     .and_then(serde_json::Value::as_i64),
             )
             .then_with(|| {
@@ -315,6 +472,13 @@ pub(crate) async fn build_admin_global_model_routing_payload(
         "scheduling_mode": scheduling_mode,
         "priority_mode": priority_mode,
         "keep_priority_on_conversion": keep_priority_on_conversion,
+        "effective_policy": {
+            "source": preview_policy.source,
+            "group_id": preview_policy.group_id,
+            "group_name": preview_policy.group_name,
+            "requested_model": &global_model.name,
+            "note": preview_policy.note,
+        },
         "all_keys_whitelist": all_keys_whitelist,
     }))
 }
