@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-const ROUTING_PREVIEW_POLICY_NOTE: &str = "Static baseline: model-scoped default/model policies and model-only rules (including generated per-model scheduling rules) are applied for this model, while client-request rules that need live context (headers/body/principal/api format) are excluded; runtime can still reorder by those rules, affinity, health and load balancing.";
+const ROUTING_PREVIEW_POLICY_NOTE: &str = "Static baseline: model-scoped default/model policies and model-only rules (including generated per-model scheduling rules) are applied for the canonical global model name (requested and resolved both equal the global model name; user aliases and model directives are not applied), while client-request rules that need live context (headers/body/principal/api format) are excluded; runtime can still reorder by those rules, affinity, health and load balancing.";
 const ROUTING_PREVIEW_NO_POLICY_NOTE: &str = "No enabled system-default routing group is available; showing raw catalog priorities with no routing policy overlay.";
 const ROUTING_PREVIEW_UNRESOLVED_NOTE: &str = "The enabled system-default routing group could not be fully resolved; falling back to its default ordering (when readable) and raw catalog priorities.";
 
@@ -237,6 +237,11 @@ pub(crate) async fn build_admin_global_model_routing_payload(
         let Some(provider) = providers.get(&model.provider_id) else {
             continue;
         };
+        // Match runtime candidate resolution: a resolved `allowed_providers`
+        // restriction removes every candidate from other providers.
+        if !preview_policy.overlay.provider_allowed(&provider.id) {
+            continue;
+        }
         let provider_model_mapping_names =
             provider_model_mapping_names_for_routing(model.provider_model_mappings.as_ref());
         let key_match_model_names = key_match_model_names_for_routing(
@@ -275,6 +280,10 @@ pub(crate) async fn build_admin_global_model_routing_payload(
                         &global_model_mappings,
                     )
                 })
+                // Match runtime candidate resolution: `allowed_keys` filters
+                // single-key candidates, but pool providers are ranked as one
+                // pool-group candidate and skip the per-key filter.
+                .filter(|key| is_pool_provider || preview_policy.overlay.key_allowed(&key.id))
                 .collect::<Vec<_>>();
             endpoint_keys.sort_by(|left, right| {
                 left.internal_priority
@@ -523,6 +532,7 @@ pub(crate) async fn build_admin_global_model_routing_payload(
             "group_id": preview_policy.group_id,
             "group_name": preview_policy.group_name,
             "requested_model": &global_model.name,
+            "resolved_model": &global_model.name,
             "rules_excluded": preview_policy.rules_excluded,
             "note": preview_policy.note,
         },

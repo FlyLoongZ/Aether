@@ -1379,6 +1379,148 @@ async fn gateway_global_model_routing_preview_evaluates_model_only_rules_for_req
 }
 
 #[tokio::test]
+async fn gateway_global_model_routing_preview_applies_allowed_provider_and_key_restrictions() {
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_provider_catalog_reader_for_tests(
+                    routing_preview_provider_catalog(10, 20),
+                )
+                .with_global_model_repository_for_tests(routing_preview_global_model_repository())
+                .with_routing_group_repository_for_tests(Arc::new(system_default_routing_group(
+                    json!({
+                        "default_policy": {
+                            "priority_mode": "provider",
+                            "scheduling_mode": "cache_affinity"
+                        },
+                        "model_policies": [{
+                            "model": "gpt-5",
+                            "allowed_providers": ["provider-first"],
+                            "allowed_keys": ["key-first-routing"]
+                        }]
+                    }),
+                ))),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let payload = fetch_routing_preview(&gateway_url).await;
+    // The static baseline resolves the canonical global model name, not a user alias.
+    assert_eq!(payload["effective_policy"]["requested_model"], "gpt-5");
+    assert_eq!(payload["effective_policy"]["resolved_model"], "gpt-5");
+
+    let providers = payload["providers"].as_array().expect("providers array");
+    assert_eq!(providers.len(), 1, "disallowed providers must be removed");
+    assert_eq!(providers[0]["id"], "provider-first");
+
+    let keys = providers[0]["endpoints"][0]["keys"]
+        .as_array()
+        .expect("keys array");
+    assert_eq!(keys.len(), 1, "disallowed keys must be removed");
+    assert_eq!(keys[0]["id"], "key-first-routing");
+
+    gateway_handle.abort();
+}
+
+#[tokio::test]
+async fn gateway_global_model_routing_preview_skips_key_restriction_for_pool_providers() {
+    let mut pool_provider = sample_provider("provider-pool", "pool", 10);
+    pool_provider.config = Some(json!({"pool_advanced": {}}));
+    let plain_provider = sample_provider("provider-plain", "plain", 20);
+    let provider_catalog = Arc::new(InMemoryProviderCatalogReadRepository::seed(
+        vec![pool_provider, plain_provider],
+        vec![
+            sample_endpoint(
+                "endpoint-pool",
+                "provider-pool",
+                "openai:chat",
+                "https://pool.example",
+            ),
+            sample_endpoint(
+                "endpoint-plain",
+                "provider-plain",
+                "openai:chat",
+                "https://plain.example",
+            ),
+        ],
+        vec![
+            sample_bound_key("key-pool", "provider-pool", "openai:chat", "sk-pool-1234"),
+            sample_bound_key(
+                "key-plain",
+                "provider-plain",
+                "openai:chat",
+                "sk-plain-5678",
+            ),
+        ],
+    ));
+    let global_model_repository = Arc::new(
+        InMemoryGlobalModelReadRepository::seed(Vec::new())
+            .with_admin_global_models(vec![sample_admin_global_model(
+                "global-gpt-5",
+                "gpt-5",
+                "GPT 5",
+            )])
+            .with_admin_provider_models(vec![
+                sample_admin_provider_model(
+                    "model-pool-gpt5",
+                    "provider-pool",
+                    "global-gpt-5",
+                    "gpt-5-pool",
+                ),
+                sample_admin_provider_model(
+                    "model-plain-gpt5",
+                    "provider-plain",
+                    "global-gpt-5",
+                    "gpt-5-plain",
+                ),
+            ]),
+    );
+
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_provider_catalog_reader_for_tests(provider_catalog)
+                    .with_global_model_repository_for_tests(global_model_repository)
+                    .with_routing_group_repository_for_tests(Arc::new(
+                        system_default_routing_group(json!({
+                            "default_policy": {
+                                "priority_mode": "provider",
+                                "scheduling_mode": "cache_affinity"
+                            },
+                            "model_policies": [{
+                                "model": "gpt-5",
+                                "allowed_providers": ["provider-pool", "provider-plain"],
+                                "allowed_keys": ["key-plain"]
+                            }]
+                        })),
+                    )),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let payload = fetch_routing_preview(&gateway_url).await;
+
+    // A pool provider is a single pool-group candidate: `allowed_keys` does not
+    // remove its individual pool member keys.
+    let pool = routing_preview_provider(&payload, "provider-pool");
+    let pool_keys = pool["endpoints"][0]["keys"].as_array().expect("keys array");
+    assert_eq!(pool_keys.len(), 1);
+    assert_eq!(pool_keys[0]["id"], "key-pool");
+
+    // A plain provider still honours `allowed_keys`.
+    let plain = routing_preview_provider(&payload, "provider-plain");
+    let plain_keys = plain["endpoints"][0]["keys"]
+        .as_array()
+        .expect("keys array");
+    assert_eq!(plain_keys.len(), 1);
+    assert_eq!(plain_keys[0]["id"], "key-plain");
+
+    gateway_handle.abort();
+}
+
+#[tokio::test]
 async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_model_name() {
     let upstream_hits = Arc::new(Mutex::new(0usize));
     let upstream_hits_clone = Arc::clone(&upstream_hits);
