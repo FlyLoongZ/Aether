@@ -968,6 +968,10 @@ fn sanitize_candidate_extra_data_object(
     }
     insert_candidate_i64(object, &mut sanitized, "priority_slot");
     insert_candidate_u64(object, &mut sanitized, "ranking_index");
+    // Request-scoped monotonic index of the attempt that actually reached the
+    // upstream. Persisted through `extra_data` because there is no dedicated
+    // column, so the allowlist must carry it alongside the planning indices.
+    insert_candidate_u64(object, &mut sanitized, "execution_index");
 
     insert_candidate_known_string(object, &mut sanitized, "phase", sanitize_candidate_phase);
     for field in [
@@ -1940,11 +1944,13 @@ mod tests {
 
     use super::{
         derive_request_candidate_final_status, request_candidate_lifecycle_would_regress,
-        sanitize_request_candidate_error_type, sanitize_request_candidate_skip_reason,
-        RequestCandidateFinalStatus, RequestCandidateStatus, StoredRequestCandidate,
-        UpsertRequestCandidateRecord, REQUEST_CANDIDATE_ERROR_TYPES,
-        REQUEST_CANDIDATE_ERROR_TYPE_ALIASES, REQUEST_CANDIDATE_SKIP_REASONS,
-        UNCLASSIFIED_CANDIDATE_ERROR_TYPE, UNCLASSIFIED_CANDIDATE_SKIP_REASON,
+        sanitize_request_candidate_error_type,
+        sanitize_request_candidate_extra_data_for_persistence,
+        sanitize_request_candidate_skip_reason, RequestCandidateFinalStatus,
+        RequestCandidateStatus, StoredRequestCandidate, UpsertRequestCandidateRecord,
+        REQUEST_CANDIDATE_ERROR_TYPES, REQUEST_CANDIDATE_ERROR_TYPE_ALIASES,
+        REQUEST_CANDIDATE_SKIP_REASONS, UNCLASSIFIED_CANDIDATE_ERROR_TYPE,
+        UNCLASSIFIED_CANDIDATE_SKIP_REASON,
     };
 
     fn candidate(
@@ -2610,5 +2616,22 @@ mod tests {
         assert!(!serialized.contains("candidate-secret"));
         assert!(!serialized.contains("tenant-secret"));
         assert!(!serialized.contains("user:pass"));
+    }
+
+    #[test]
+    fn persistence_sanitizer_keeps_the_actual_attempt_execution_index() {
+        let sanitized = sanitize_request_candidate_extra_data_for_persistence(Some(json!({
+            "gateway_execution_runtime": true,
+            "candidate_index": 1,
+            "ranking_index": 3,
+            "execution_index": 7,
+            "unknown": "drop-me",
+        })))
+        .expect("safe candidate data should remain");
+
+        assert_eq!(sanitized["execution_index"], json!(7));
+        assert_eq!(sanitized["ranking_index"], json!(3));
+        assert!(sanitized.get("candidate_index").is_none());
+        assert!(sanitized.get("unknown").is_none());
     }
 }

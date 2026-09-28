@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use aether_ai_serving::{
     run_ai_attempt_loop, AiAttemptExecutionOutcome, AiAttemptLoopOutcome, AiAttemptLoopPort,
@@ -309,6 +309,13 @@ where
         let report_context = attach_plan_usage_reservation_token(
             attempt.report_context(),
             self.transfer_tracker.usage_policy_reservation_token(),
+        );
+        // `execute_attempt` only runs after the loop's skip check, so an index
+        // is consumed strictly for attempts that reach the upstream; same-key
+        // retries and dynamic fallback attempts each take their own value.
+        let report_context = attach_execution_index_to_report_context(
+            report_context,
+            self.transfer_tracker.next_execution_index(),
         );
         let balance_response = execution_plan_balance_capacity_response(
             self.state,
@@ -727,6 +734,16 @@ impl GlobalTransferState {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ProviderTransferTracker {
     state: std::sync::Arc<tokio::sync::Mutex<ProviderTransferStateTracker>>,
+    /// Request-scoped monotonic index of attempts that actually reached the
+    /// upstream. Shared across every candidate loop of one request (sync or
+    /// stream, static or dynamic) so the reported order is the real execution
+    /// order rather than the planning order. Allocated only when an attempt is
+    /// dispatched, so skipped and unused candidates never consume a value.
+    ///
+    /// Documented fallback: the Responses WebSocket turn bypasses this HTTP
+    /// candidate loop entirely, so its records carry no `execution_index` and
+    /// consumers fall back to `candidate_index`/`retry_index` plus `started_at`.
+    execution_index: std::sync::Arc<AtomicU32>,
     usage_policy_reservation: Option<crate::plan_usage_policy::PlanUsageReservationContext>,
     usage_policy_reservation_plan:
         std::sync::Arc<std::sync::Mutex<Option<aether_contracts::ExecutionPlan>>>,
@@ -744,11 +761,20 @@ impl ProviderTransferTracker {
             .cloned();
         Self {
             state: Default::default(),
+            execution_index: Default::default(),
             usage_policy_reservation,
             usage_policy_reservation_plan: Default::default(),
             usage_policy_cost_reserved: Default::default(),
             _background_admission_permit: background_admission_permit,
         }
+    }
+
+    /// Allocate the next request-scoped actual-attempt index. The captured
+    /// value is attempt-local: callers must thread it into this attempt's own
+    /// report context and never re-read it from the tracker, so cloning the
+    /// tracker or a report context cannot leak a previous attempt's index.
+    fn next_execution_index(&self) -> u32 {
+        self.execution_index.fetch_add(1, Ordering::AcqRel)
     }
 
     fn usage_policy_reservation_token(&self) -> Option<&str> {
@@ -1269,6 +1295,13 @@ where
             attempt.report_context(),
             self.transfer_tracker.usage_policy_reservation_token(),
         );
+        // `execute_attempt` only runs after the loop's skip check, so an index
+        // is consumed strictly for attempts that reach the upstream; same-key
+        // retries and dynamic fallback attempts each take their own value.
+        let report_context = attach_execution_index_to_report_context(
+            report_context,
+            self.transfer_tracker.next_execution_index(),
+        );
         let candidate_index = parse_request_candidate_report_context(report_context.as_ref())
             .and_then(|context| context.candidate_index)
             .map(|value| value.to_string())
@@ -1510,6 +1543,26 @@ fn attach_plan_usage_reservation_token(
         }
         (report_context, None) => report_context,
     }
+}
+
+/// Stamp the attempt-local actual-attempt index onto this attempt's report
+/// context. The index is written into a locally-owned clone so the attempt's
+/// stored context (and any same-key retry derived from it) never inherits a
+/// previous attempt's value.
+fn attach_execution_index_to_report_context(
+    report_context: Option<serde_json::Value>,
+    execution_index: u32,
+) -> Option<serde_json::Value> {
+    let mut context = match report_context {
+        Some(serde_json::Value::Object(context)) => context,
+        Some(other) => return Some(other),
+        None => serde_json::Map::new(),
+    };
+    context.insert(
+        "execution_index".to_string(),
+        serde_json::Value::Number(execution_index.into()),
+    );
+    Some(serde_json::Value::Object(context))
 }
 
 async fn execution_plan_balance_capacity_response(
@@ -2369,6 +2422,7 @@ mod tests {
         tracker: ProviderTransferTracker,
         retry_scope: AiAttemptRetryScope,
         executed: StdMutex<Vec<&'static str>>,
+        executed_indices: StdMutex<Vec<u32>>,
         unused: StdMutex<Vec<&'static str>>,
     }
 
@@ -2383,6 +2437,7 @@ mod tests {
                 tracker,
                 retry_scope: AiAttemptRetryScope::Candidate,
                 executed: StdMutex::new(Vec::new()),
+                executed_indices: StdMutex::new(Vec::new()),
                 unused: StdMutex::new(Vec::new()),
             }
         }
@@ -2393,6 +2448,7 @@ mod tests {
                 tracker: ProviderTransferTracker::default(),
                 retry_scope,
                 executed: StdMutex::new(Vec::new()),
+                executed_indices: StdMutex::new(Vec::new()),
                 unused: StdMutex::new(Vec::new()),
             }
         }
@@ -2444,7 +2500,11 @@ mod tests {
             &self,
             attempt: &TransferTestAttempt,
         ) -> Result<AiAttemptExecutionOutcome<Self::Response>, Self::Error> {
+            // Mirror the real ports: capture an attempt-local index from the
+            // request-scoped tracker when the attempt is actually executed.
+            let execution_index = self.tracker.next_execution_index();
             self.executed.lock().unwrap().push(attempt.label);
+            self.executed_indices.lock().unwrap().push(execution_index);
             Ok(if attempt.plan.provider_id == "provider-b" {
                 AiAttemptExecutionOutcome::Responded(Response::new(Body::from("ok")))
             } else {
@@ -2562,6 +2622,56 @@ mod tests {
             ]
         );
         assert_eq!(port.unused.lock().unwrap().as_slice(), ["a-key3-retry0"]);
+    }
+
+    #[tokio::test]
+    async fn static_loop_allocates_request_scoped_monotonic_execution_indices() {
+        let state = AppState::new().expect("state should build");
+        let port = TransferTestPort::new(&state);
+
+        let outcome = run_ai_attempt_loop(&port, transfer_test_attempts())
+            .await
+            .expect("attempt loop should succeed");
+
+        assert!(matches!(outcome, AiAttemptLoopOutcome::Responded(_)));
+        // Same order as the executed attempts, and the skipped/unused
+        // candidate never reached execute_attempt so it consumed no index.
+        assert_eq!(
+            port.executed_indices.lock().unwrap().as_slice(),
+            [0, 1, 2, 3]
+        );
+        assert_eq!(port.unused.lock().unwrap().as_slice(), ["a-key3-retry0"]);
+        assert_eq!(
+            port.executed_indices.lock().unwrap().len(),
+            port.executed.lock().unwrap().len()
+        );
+    }
+
+    #[test]
+    fn execution_index_counter_is_monotonic_and_shared_across_tracker_clones() {
+        let tracker = ProviderTransferTracker::default();
+        assert_eq!(tracker.next_execution_index(), 0);
+        assert_eq!(tracker.next_execution_index(), 1);
+        let clone = tracker.clone();
+        assert_eq!(clone.next_execution_index(), 2);
+        assert_eq!(tracker.next_execution_index(), 3);
+    }
+
+    #[test]
+    fn attach_execution_index_overwrites_without_mutating_the_source_context() {
+        let source = json!({"candidate_index": 1, "retry_index": 2, "execution_index": 99});
+        let stamped = attach_execution_index_to_report_context(Some(source.clone()), 4)
+            .expect("context should be stamped");
+        assert_eq!(stamped["execution_index"], json!(4));
+        assert_eq!(stamped["candidate_index"], json!(1));
+        assert_eq!(stamped["retry_index"], json!(2));
+        // The attempt's stored context is untouched, so a same-key retry
+        // derived from it cannot inherit the previous attempt's index.
+        assert_eq!(source["execution_index"], json!(99));
+
+        let empty = attach_execution_index_to_report_context(None, 0)
+            .expect("a missing context still records the attempt");
+        assert_eq!(empty["execution_index"], json!(0));
     }
 
     #[tokio::test]

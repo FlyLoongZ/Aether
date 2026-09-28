@@ -11,6 +11,7 @@ pub struct SchedulerRequestCandidateReportContext {
     pub user_id: Option<String>,
     pub api_key_id: Option<String>,
     pub candidate_index: Option<u32>,
+    pub execution_index: Option<u32>,
     pub retry_index: u32,
     pub provider_id: Option<String>,
     pub endpoint_id: Option<String>,
@@ -81,6 +82,7 @@ struct ReportCandidateExtraDataInput {
     ranking_mode: Option<String>,
     priority_mode: Option<String>,
     ranking_index: Option<u32>,
+    execution_index: Option<u32>,
     priority_slot: Option<i32>,
     promoted_by: Option<String>,
     demoted_by: Option<String>,
@@ -142,6 +144,7 @@ pub fn parse_request_candidate_report_context(
         user_id: string_field(report_context, "user_id"),
         api_key_id: string_field(report_context, "api_key_id"),
         candidate_index: u32_field(report_context, "candidate_index"),
+        execution_index: u32_field(report_context, "execution_index"),
         retry_index: u32_field(report_context, "retry_index").unwrap_or_default(),
         provider_id: string_field(report_context, "provider_id"),
         endpoint_id: string_field(report_context, "endpoint_id"),
@@ -202,6 +205,7 @@ pub fn resolve_report_request_candidate_slot(
         user_id,
         api_key_id,
         candidate_index: metadata_candidate_index,
+        execution_index,
         retry_index,
         provider_id,
         endpoint_id,
@@ -249,6 +253,7 @@ pub fn resolve_report_request_candidate_slot(
         ranking_mode,
         priority_mode,
         ranking_index,
+        execution_index,
         priority_slot,
         promoted_by,
         demoted_by,
@@ -373,6 +378,7 @@ pub fn build_execution_request_candidate_seed(
             ranking_mode: metadata.ranking_mode,
             priority_mode: metadata.priority_mode,
             ranking_index: metadata.ranking_index,
+            execution_index: metadata.execution_index,
             priority_slot: metadata.priority_slot,
             promoted_by: metadata.promoted_by,
             demoted_by: metadata.demoted_by,
@@ -539,6 +545,7 @@ fn build_local_request_candidate_extra_data(
         ranking_mode: metadata.and_then(|metadata| metadata.ranking_mode.clone()),
         priority_mode: metadata.and_then(|metadata| metadata.priority_mode.clone()),
         ranking_index: metadata.and_then(|metadata| metadata.ranking_index),
+        execution_index: metadata.and_then(|metadata| metadata.execution_index),
         priority_slot: metadata.and_then(|metadata| metadata.priority_slot),
         promoted_by: metadata.and_then(|metadata| metadata.promoted_by.clone()),
         demoted_by: metadata.and_then(|metadata| metadata.demoted_by.clone()),
@@ -757,6 +764,7 @@ fn build_report_candidate_extra_data(input: ReportCandidateExtraDataInput) -> Op
         ranking_mode,
         priority_mode,
         ranking_index,
+        execution_index,
         priority_slot,
         promoted_by,
         demoted_by,
@@ -842,6 +850,12 @@ fn build_report_candidate_extra_data(input: ReportCandidateExtraDataInput) -> Op
         extra_data.insert(
             "ranking_index".to_string(),
             Value::Number(ranking_index.into()),
+        );
+    }
+    if let Some(execution_index) = execution_index {
+        extra_data.insert(
+            "execution_index".to_string(),
+            Value::Number(execution_index.into()),
         );
     }
     if let Some(priority_slot) = priority_slot {
@@ -996,6 +1010,57 @@ mod tests {
         assert_eq!(slot.candidate_index, 1);
         assert_eq!(slot.retry_index, 2);
         assert_eq!(slot.request_id, "req-1");
+    }
+
+    #[test]
+    fn report_roundtrip_threads_the_optional_execution_index_into_extra_data() {
+        let metadata = parse_request_candidate_report_context(Some(&json!({
+            "request_id": "req-1",
+            "candidate_index": 1,
+            "retry_index": 0,
+            "execution_index": 5,
+            "provider_id": "provider-1",
+            "endpoint_id": "endpoint-1",
+            "key_id": "catalog-key-1",
+            "client_api_format": "openai:chat"
+        })))
+        .expect("metadata");
+        assert_eq!(metadata.execution_index, Some(5));
+
+        let slot =
+            resolve_report_request_candidate_slot(&[], metadata, 123, "generated-1".to_string())
+                .expect("slot");
+        assert_eq!(
+            slot.extra_data
+                .as_ref()
+                .and_then(|value| value.get("execution_index")),
+            Some(&json!(5))
+        );
+
+        // A report without an execution index stays index-free rather than
+        // inheriting a stale value from a prior attempt.
+        let without_index = parse_request_candidate_report_context(Some(&json!({
+            "request_id": "req-1",
+            "candidate_index": 1,
+            "retry_index": 0,
+            "provider_id": "provider-1",
+            "endpoint_id": "endpoint-1",
+            "key_id": "catalog-key-1"
+        })))
+        .expect("metadata");
+        assert_eq!(without_index.execution_index, None);
+        let slot = resolve_report_request_candidate_slot(
+            &[],
+            without_index,
+            123,
+            "generated-2".to_string(),
+        )
+        .expect("slot");
+        assert!(slot
+            .extra_data
+            .as_ref()
+            .and_then(|value| value.get("execution_index"))
+            .is_none());
     }
 
     #[test]
