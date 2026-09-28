@@ -310,13 +310,6 @@ where
             attempt.report_context(),
             self.transfer_tracker.usage_policy_reservation_token(),
         );
-        // `execute_attempt` only runs after the loop's skip check, so an index
-        // is consumed strictly for attempts that reach the upstream; same-key
-        // retries and dynamic fallback attempts each take their own value.
-        let report_context = attach_execution_index_to_report_context(
-            report_context,
-            self.transfer_tracker.next_execution_index(),
-        );
         let balance_response = execution_plan_balance_capacity_response(
             self.state,
             self.trace_id,
@@ -377,6 +370,16 @@ where
         {
             return Ok(AiAttemptExecutionOutcome::Responded(response));
         }
+        // Both local capacity gates have passed, so this attempt is committed
+        // to the upstream dispatch chain. Allocate the request-scoped ordinal
+        // only now so a capacity rejection never claims an execution index;
+        // same-key retries and dynamic fallback attempts each take their own
+        // value. `report_context` stays local to this attempt, so a later
+        // `attempt.report_context()` clone cannot inherit the index.
+        let report_context = attach_execution_index_to_report_context(
+            report_context,
+            self.transfer_tracker.next_execution_index(),
+        );
         let upstream_execution_gate_held_started_at = std::time::Instant::now();
         let deferred_report_context = report_context.clone();
         let execution = execute_execution_runtime_sync_with_retry_scope(
@@ -734,11 +737,13 @@ impl GlobalTransferState {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ProviderTransferTracker {
     state: std::sync::Arc<tokio::sync::Mutex<ProviderTransferStateTracker>>,
-    /// Request-scoped monotonic index of attempts that actually reached the
-    /// upstream. Shared across every candidate loop of one request (sync or
-    /// stream, static or dynamic) so the reported order is the real execution
-    /// order rather than the planning order. Allocated only when an attempt is
-    /// dispatched, so skipped and unused candidates never consume a value.
+    /// Request-scoped monotonic index of attempts that entered the upstream
+    /// dispatch sequence (after the local capacity gates passed). Shared across
+    /// every candidate loop of one request (sync or stream, static or dynamic)
+    /// so the reported order is the real execution order rather than the
+    /// planning order. Capacity rejections, skipped and unused candidates never
+    /// consume a value; each same-key retry and dynamic fallback attempt takes
+    /// its own.
     ///
     /// Documented fallback: the Responses WebSocket turn bypasses this HTTP
     /// candidate loop entirely, so its records carry no `execution_index` and
@@ -769,10 +774,12 @@ impl ProviderTransferTracker {
         }
     }
 
-    /// Allocate the next request-scoped actual-attempt index. The captured
-    /// value is attempt-local: callers must thread it into this attempt's own
-    /// report context and never re-read it from the tracker, so cloning the
-    /// tracker or a report context cannot leak a previous attempt's index.
+    /// Allocate the next request-scoped execution-attempt ordinal. This marks
+    /// entry into the upstream dispatch sequence, not a confirmed network
+    /// dispatch. The captured value is attempt-local: callers must thread it
+    /// into this attempt's own report context and never re-read it from the
+    /// tracker, so cloning the tracker or a report context cannot leak a
+    /// previous attempt's index.
     fn next_execution_index(&self) -> u32 {
         self.execution_index.fetch_add(1, Ordering::AcqRel)
     }
@@ -1295,13 +1302,6 @@ where
             attempt.report_context(),
             self.transfer_tracker.usage_policy_reservation_token(),
         );
-        // `execute_attempt` only runs after the loop's skip check, so an index
-        // is consumed strictly for attempts that reach the upstream; same-key
-        // retries and dynamic fallback attempts each take their own value.
-        let report_context = attach_execution_index_to_report_context(
-            report_context,
-            self.transfer_tracker.next_execution_index(),
-        );
         let candidate_index = parse_request_candidate_report_context(report_context.as_ref())
             .and_then(|context| context.candidate_index)
             .map(|value| value.to_string())
@@ -1354,7 +1354,19 @@ where
             return Ok(AiAttemptExecutionOutcome::Responded(response));
         }
         prewarm_direct_reqwest_candidate_client(plan);
-        let watchdog_report_context_owned = report_context.clone();
+        // The balance gate has passed, so this attempt enters the upstream
+        // dispatch sequence (admission gate -> local cost reservation ->
+        // dispatch). Allocate its request-scoped ordinal now so a balance
+        // rejection never claims one, and use the stamped context for the
+        // watchdog, admission and dispatch paths. The local cost reservation is
+        // not a dispatch, so it keeps the unstamped context and stays
+        // index-free when it rejects and records the candidate as unused.
+        let execution_report_context = attach_execution_index_to_report_context(
+            report_context.clone(),
+            self.transfer_tracker.next_execution_index(),
+        );
+        let cost_report_context = report_context;
+        let watchdog_report_context_owned = execution_report_context.clone();
         let watchdog_report_context = watchdog_report_context_owned.as_ref();
         let execution_state = self.state.clone();
         let execution_trace_id = self.trace_id.to_string();
@@ -1387,7 +1399,7 @@ where
                     execution_trace_id.as_str(),
                     &execution_decision,
                     &execution_plan,
-                    report_context.as_ref(),
+                    cost_report_context.as_ref(),
                     &execution_transfer_tracker,
                 )
                 .await?
@@ -1401,7 +1413,7 @@ where
                     &execution_decision,
                     execution_plan_kind.as_str(),
                     execution_report_kind,
-                    report_context,
+                    execution_report_context,
                 )
                 .await
             },
@@ -2672,6 +2684,163 @@ mod tests {
         let empty = attach_execution_index_to_report_context(None, 0)
             .expect("a missing context still records the attempt");
         assert_eq!(empty["execution_index"], json!(0));
+    }
+
+    #[tokio::test]
+    async fn dynamic_loop_allocates_request_scoped_execution_indices() {
+        let state = AppState::new().expect("state should build");
+        let port = TransferTestPort::new(&state);
+        let mut source = TransferTestAttemptSource {
+            attempts: transfer_test_attempts().into(),
+            skipped_providers: Vec::new(),
+        };
+
+        let outcome = run_dynamic_attempt_loop(
+            &port,
+            &mut source,
+            "exec-index-dynamic",
+            "test",
+            Duration::from_secs(1),
+        )
+        .await
+        .expect("dynamic loop should succeed");
+
+        assert!(matches!(
+            outcome,
+            LocalExecutionRequestOutcome::Responded(_)
+        ));
+        assert_eq!(
+            port.executed_indices.lock().unwrap().as_slice(),
+            [0, 1, 2, 3]
+        );
+        assert_eq!(port.unused.lock().unwrap().as_slice(), ["a-key3-retry0"]);
+    }
+
+    #[derive(Clone)]
+    struct RetryContinuationAttempt {
+        plan: ExecutionPlan,
+        report_context: serde_json::Value,
+        attempt_no: u32,
+    }
+
+    impl AiExecutionAttempt for RetryContinuationAttempt {
+        fn execution_plan(&self) -> &ExecutionPlan {
+            &self.plan
+        }
+
+        fn report_kind(&self) -> Option<String> {
+            None
+        }
+
+        fn report_context(&self) -> Option<serde_json::Value> {
+            Some(self.report_context.clone())
+        }
+
+        fn report_context_ref(&self) -> Option<&serde_json::Value> {
+            Some(&self.report_context)
+        }
+
+        fn with_same_key_retry(&self, retry_index: u32, candidate_id: String) -> Option<Self> {
+            let mut plan = self.plan.clone();
+            plan.candidate_id = Some(candidate_id.clone());
+            let mut report_context = self.report_context.clone();
+            if let Some(object) = report_context.as_object_mut() {
+                object.insert("candidate_id".to_string(), json!(candidate_id));
+                object.insert("retry_index".to_string(), json!(retry_index));
+            }
+            Some(Self {
+                plan,
+                report_context,
+                attempt_no: self.attempt_no + 1,
+            })
+        }
+    }
+
+    struct RetryContinuationPort {
+        tracker: ProviderTransferTracker,
+        observed_indices: StdMutex<Vec<u32>>,
+        unused: StdMutex<Vec<u32>>,
+    }
+
+    #[async_trait]
+    impl AiAttemptLoopPort<RetryContinuationAttempt> for RetryContinuationPort {
+        type Response = &'static str;
+        type Exhaustion = ();
+        type Error = GatewayError;
+
+        async fn next_same_key_retry(
+            &self,
+            attempt: &RetryContinuationAttempt,
+        ) -> Result<Option<RetryContinuationAttempt>, Self::Error> {
+            Ok(crate::orchestration::next_same_key_retry_attempt(attempt))
+        }
+
+        async fn execute_attempt(
+            &self,
+            attempt: &RetryContinuationAttempt,
+        ) -> Result<AiAttemptExecutionOutcome<Self::Response>, Self::Error> {
+            self.observed_indices
+                .lock()
+                .unwrap()
+                .push(self.tracker.next_execution_index());
+            Ok(if attempt.attempt_no == 0 {
+                AiAttemptExecutionOutcome::retry(AiAttemptRetryScope::Candidate)
+            } else {
+                AiAttemptExecutionOutcome::Responded("retry-ok")
+            })
+        }
+
+        async fn mark_unused_attempts(
+            &self,
+            attempts: Vec<RetryContinuationAttempt>,
+        ) -> Result<(), Self::Error> {
+            self.unused
+                .lock()
+                .unwrap()
+                .extend(attempts.into_iter().map(|attempt| attempt.attempt_no));
+            Ok(())
+        }
+
+        async fn build_exhaustion(
+            &self,
+            _last_plan: ExecutionPlan,
+            _last_report_context: Option<serde_json::Value>,
+        ) -> Result<Self::Exhaustion, Self::Error> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn same_key_retry_continuation_takes_a_fresh_execution_index() {
+        let port = RetryContinuationPort {
+            tracker: ProviderTransferTracker::default(),
+            observed_indices: StdMutex::new(Vec::new()),
+            unused: StdMutex::new(Vec::new()),
+        };
+        let mut plan = test_plan(None);
+        plan.candidate_id = Some("cand-0".to_string());
+        let attempt = RetryContinuationAttempt {
+            plan,
+            report_context: json!({
+                "candidate_index": 0,
+                "retry_index": 0,
+                "sticky_key_attempts": 2,
+            }),
+            attempt_no: 0,
+        };
+
+        let outcome = run_ai_attempt_loop(&port, vec![attempt])
+            .await
+            .expect("same-key retry continuation should succeed");
+
+        assert!(matches!(
+            outcome,
+            AiAttemptLoopOutcome::Responded("retry-ok")
+        ));
+        // The derived retry is a distinct execution attempt and must not reuse
+        // the first attempt's ordinal.
+        assert_eq!(*port.observed_indices.lock().unwrap(), vec![0, 1]);
+        assert!(port.unused.lock().unwrap().is_empty());
     }
 
     #[tokio::test]
