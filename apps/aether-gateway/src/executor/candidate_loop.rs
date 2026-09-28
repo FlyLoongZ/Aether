@@ -1354,20 +1354,15 @@ where
             return Ok(AiAttemptExecutionOutcome::Responded(response));
         }
         prewarm_direct_reqwest_candidate_client(plan);
-        // The balance gate has passed, so this attempt enters the upstream
-        // dispatch sequence (admission gate -> local cost reservation ->
-        // dispatch). Allocate its request-scoped ordinal now so a balance
-        // rejection never claims one, and use the stamped context for the
-        // watchdog, admission and dispatch paths. The local cost reservation is
-        // not a dispatch, so it keeps the unstamped context and stays
-        // index-free when it rejects and records the candidate as unused.
-        let execution_report_context = attach_execution_index_to_report_context(
-            report_context.clone(),
-            self.transfer_tracker.next_execution_index(),
-        );
-        let cost_report_context = report_context;
-        let watchdog_report_context_owned = execution_report_context.clone();
-        let watchdog_report_context = watchdog_report_context_owned.as_ref();
+        // The balance gate has passed. The local cost gate still runs inside
+        // the dispatch closure, so no ordinal is allocated yet: a cost
+        // rejection records the candidate as unused without consuming one. The
+        // lazy cell hands the same ordinal to the dispatch closure, the
+        // watchdog timeout and any admission failure for this attempt.
+        let execution_index_cell = ExecutionIndexCell::new(self.transfer_tracker);
+        let dispatch_execution_index_cell = execution_index_cell.clone();
+        let cost_report_context = report_context.clone();
+        let watchdog_report_context = report_context.as_ref();
         let execution_state = self.state.clone();
         let execution_trace_id = self.trace_id.to_string();
         let execution_plan_kind = self.plan_kind.to_string();
@@ -1393,6 +1388,7 @@ where
             plan,
             watchdog_report_context,
             stop_on_transport_errors,
+            &execution_index_cell,
             move || async move {
                 if let Some(response) = execution_plan_cost_capacity_response(
                     &execution_state,
@@ -1406,6 +1402,11 @@ where
                 {
                     return Ok(AiAttemptExecutionOutcome::Responded(response));
                 }
+                // The cost gate passed, so this attempt really dispatches:
+                // stamp the attempt-local ordinal now. Cost-rejected attempts
+                // returned above without consuming a value.
+                let execution_report_context =
+                    dispatch_execution_index_cell.stamp(cost_report_context.as_ref());
                 execute_execution_runtime_stream_with_retry_scope(
                     &execution_state,
                     execution_plan,
@@ -1435,11 +1436,14 @@ where
         };
         let mut execution = match execution {
             StreamCandidateWatchdogOutcome::TransportTimeout => {
+                // The watchdog only fires for an attempt that entered dispatch,
+                // so reuse its ordinal for the failure report.
+                let timeout_report_context = execution_index_cell.stamp(watchdog_report_context);
                 AiAttemptExecutionOutcome::Responded(
                     build_transport_error_stop_response(
                         self.state,
                         plan,
-                        watchdog_report_context,
+                        timeout_report_context.as_ref(),
                         self.trace_id,
                         self.decision,
                         http::StatusCode::GATEWAY_TIMEOUT.as_u16(),
@@ -1461,7 +1465,8 @@ where
                 ..
             } => {
                 attach_redaction_execution_candidate(response, plan.candidate_id.as_deref());
-                attach_deferred_usage_context(response, plan, watchdog_report_context);
+                let deferred_report_context = execution_index_cell.stamp(watchdog_report_context);
+                attach_deferred_usage_context(response, plan, deferred_report_context.as_ref());
             }
             AiAttemptExecutionOutcome::Retry {
                 fallback_response: None,
@@ -1575,6 +1580,39 @@ fn attach_execution_index_to_report_context(
         serde_json::Value::Number(execution_index.into()),
     );
     Some(serde_json::Value::Object(context))
+}
+
+/// Lazily assigns one request-scoped execution ordinal to a single attempt.
+///
+/// The ordinal is allocated on first use and memoized, so the dispatch closure,
+/// the watchdog timeout and the admission failure all report the same value for
+/// the same attempt. A candidate rejected by the local cost gate never reaches
+/// [`ExecutionIndexCell::get_or_assign`], so it consumes no ordinal. This keeps
+/// the request-scoped counter aligned with attempts that actually entered the
+/// dispatch sequence without ever decrementing the shared counter.
+#[derive(Clone, Debug)]
+struct ExecutionIndexCell {
+    tracker: ProviderTransferTracker,
+    ordinal: std::sync::Arc<std::sync::OnceLock<u32>>,
+}
+
+impl ExecutionIndexCell {
+    fn new(tracker: &ProviderTransferTracker) -> Self {
+        Self {
+            tracker: tracker.clone(),
+            ordinal: std::sync::Arc::new(std::sync::OnceLock::new()),
+        }
+    }
+
+    fn get_or_assign(&self) -> u32 {
+        *self
+            .ordinal
+            .get_or_init(|| self.tracker.next_execution_index())
+    }
+
+    fn stamp(&self, report_context: Option<&serde_json::Value>) -> Option<serde_json::Value> {
+        attach_execution_index_to_report_context(report_context.cloned(), self.get_or_assign())
+    }
 }
 
 async fn execution_plan_balance_capacity_response(
@@ -1916,6 +1954,7 @@ async fn execute_stream_candidate_with_watchdog<Fut>(
     plan: &aether_contracts::ExecutionPlan,
     report_context: Option<&serde_json::Value>,
     stop_on_transport_errors: bool,
+    execution_index_cell: &ExecutionIndexCell,
     execute: impl FnOnce() -> Fut,
 ) -> Result<StreamCandidateWatchdogOutcome, GatewayError>
 where
@@ -1929,10 +1968,13 @@ where
     let permit = match acquire_upstream_execution_gate(state, trace_id).await {
         Ok(permit) => permit,
         Err(err) if is_candidate_level_admission_timeout(&err) => {
+            // The attempt failed at the admission gate, so give it its own
+            // ordinal only now, while reporting the attempted failure.
+            let stamped_report_context = execution_index_cell.stamp(report_context);
             record_stream_candidate_admission_timeout(
                 state,
                 plan,
-                report_context,
+                stamped_report_context.as_ref(),
                 candidate_started_unix_ms,
                 &err,
             )
@@ -1978,10 +2020,14 @@ where
                 .map(|value| value.to_string())
                 .unwrap_or_else(|| "-".to_string());
             let timeout_ms = u64::try_from(timeout_duration.as_millis()).unwrap_or(u64::MAX);
+            // The closure may already have stamped the dispatch ordinal; if it
+            // has not (for example it stalled before dispatching), this
+            // allocates the attempt's single ordinal here.
+            let stamped_report_context = execution_index_cell.stamp(report_context);
             record_local_request_candidate_status(
                 state,
                 plan,
-                report_context,
+                stamped_report_context.as_ref(),
                 SchedulerRequestCandidateStatusUpdate {
                     status: RequestCandidateStatus::Failed,
                     status_code: None,
@@ -2050,10 +2096,11 @@ where
         Err(err) if is_candidate_level_admission_timeout(&err) => {
             drop(permit_hold);
             if should_record_candidate_admission_timeout(&err) {
+                let stamped_report_context = execution_index_cell.stamp(report_context);
                 record_stream_candidate_admission_timeout(
                     state,
                     plan,
-                    report_context,
+                    stamped_report_context.as_ref(),
                     candidate_started_unix_ms,
                     &err,
                 )
@@ -2684,6 +2731,122 @@ mod tests {
         let empty = attach_execution_index_to_report_context(None, 0)
             .expect("a missing context still records the attempt");
         assert_eq!(empty["execution_index"], json!(0));
+    }
+
+    #[test]
+    fn execution_index_cell_allocates_once_on_first_use() {
+        let tracker = ProviderTransferTracker::default();
+        let untouched = ExecutionIndexCell::new(&tracker);
+        let dispatched = ExecutionIndexCell::new(&tracker);
+
+        assert_eq!(
+            dispatched.get_or_assign(),
+            0,
+            "constructing a cell must not consume an ordinal"
+        );
+        assert_eq!(
+            dispatched.get_or_assign(),
+            0,
+            "the same attempt reuses its assigned ordinal"
+        );
+        assert_eq!(
+            untouched.get_or_assign(),
+            1,
+            "an attempt that never dispatched consumed exactly zero ordinals"
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_gate_cost_rejection_does_not_consume_execution_index() {
+        let writer = TestRequestCandidateWriter::default();
+        let tracker = ProviderTransferTracker::default();
+        let cell = ExecutionIndexCell::new(&tracker);
+        let plan = test_plan(None);
+        let report_context = test_report_context();
+
+        // A local cost rejection returns a response before the dispatch closure
+        // ever stamps, exactly like the real stream port's cost gate.
+        let rejected = execute_stream_candidate_with_watchdog(
+            &writer,
+            "trace_cost_reject",
+            "claude_cli_stream",
+            &plan,
+            Some(&report_context),
+            false,
+            &cell,
+            || async {
+                Ok(AiAttemptExecutionOutcome::Responded(Response::new(
+                    Body::from("cost rejected"),
+                )))
+            },
+        )
+        .await
+        .expect("watchdog should return the cost rejection");
+
+        assert!(matches!(
+            rejected,
+            StreamCandidateWatchdogOutcome::Executed(AiAttemptExecutionOutcome::Responded(_))
+        ));
+        assert!(writer.records.lock().await.is_empty());
+        assert_eq!(
+            ExecutionIndexCell::new(&tracker).get_or_assign(),
+            0,
+            "a cost-rejected attempt must not advance the request ordinal"
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_gate_watchdog_timeout_shares_the_dispatched_execution_index() {
+        let writer = TestRequestCandidateWriter::default();
+        let tracker = ProviderTransferTracker::default();
+        let cell = ExecutionIndexCell::new(&tracker);
+        let plan = test_plan(Some(ExecutionTimeouts {
+            first_byte_ms: Some(20),
+            ..ExecutionTimeouts::default()
+        }));
+        let report_context = test_report_context();
+
+        let result = execute_stream_candidate_with_watchdog(
+            &writer,
+            "trace_shared_execution_index",
+            "claude_cli_stream",
+            &plan,
+            Some(&report_context),
+            false,
+            &cell,
+            || async {
+                // Simulate the dispatch closure stamping the ordinal after the
+                // local cost gate, then stalling until the watchdog fires.
+                let _ = cell.stamp(Some(&report_context));
+                std::future::pending::<
+                    Result<AiAttemptExecutionOutcome<Response<Body>>, GatewayError>,
+                >()
+                .await
+            },
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Ok(StreamCandidateWatchdogOutcome::Executed(
+                AiAttemptExecutionOutcome::Retry {
+                    scope: AiAttemptRetryScope::Candidate,
+                    fallback_response: None,
+                }
+            ))
+        ));
+        let records = writer.records.lock().await;
+        assert_eq!(records.len(), 1);
+        // The watchdog failure reuses the dispatch ordinal instead of consuming
+        // a fresh one.
+        assert_eq!(cell.get_or_assign(), 0);
+        assert_eq!(
+            records[0]
+                .extra_data
+                .as_ref()
+                .and_then(|value| value.get("execution_index")),
+            Some(&json!(0))
+        );
     }
 
     #[tokio::test]
@@ -3401,6 +3564,12 @@ mod tests {
         })
     }
 
+    /// Fresh per-attempt ordinal cell backed by its own request-scoped tracker,
+    /// mirroring what the real stream port hands to the watchdog gate.
+    fn test_execution_index_cell() -> ExecutionIndexCell {
+        ExecutionIndexCell::new(&ProviderTransferTracker::default())
+    }
+
     #[test]
     fn request_tracker_preserves_server_reservation_identity_across_clones() {
         let mut request = http::Request::new(());
@@ -3631,6 +3800,7 @@ mod tests {
                 &plan,
                 Some(&report_context),
                 false,
+                &test_execution_index_cell(),
                 || {
                     std::future::pending::<
                         Result<AiAttemptExecutionOutcome<Response<Body>>, GatewayError>,
@@ -3687,6 +3857,7 @@ mod tests {
             &plan,
             Some(&report_context),
             false,
+            &test_execution_index_cell(),
             || {
                 std::future::pending::<
                     Result<AiAttemptExecutionOutcome<Response<Body>>, GatewayError>,
@@ -3723,6 +3894,7 @@ mod tests {
             &next_plan,
             Some(&next_report_context),
             false,
+            &test_execution_index_cell(),
             || async {
                 tokio::time::sleep(Duration::from_millis(60)).await;
                 Ok(AiAttemptExecutionOutcome::Responded(Response::new(
@@ -3785,6 +3957,7 @@ mod tests {
             ..ExecutionTimeouts::default()
         }));
         let report_context = test_report_context();
+        let execution_index_cell = test_execution_index_cell();
 
         let (result, ()) = tokio::join!(
             execute_stream_candidate_with_watchdog(
@@ -3794,6 +3967,7 @@ mod tests {
                 &plan,
                 Some(&report_context),
                 false,
+                &execution_index_cell,
                 || async {
                     tokio::time::sleep(Duration::from_millis(20)).await;
                     Ok(AiAttemptExecutionOutcome::Responded(Response::new(
@@ -3832,6 +4006,7 @@ mod tests {
             &plan,
             Some(&report_context),
             true,
+            &test_execution_index_cell(),
             || {
                 std::future::pending::<
                     Result<AiAttemptExecutionOutcome<Response<Body>>, GatewayError>,
@@ -3869,6 +4044,7 @@ mod tests {
             &plan,
             Some(&report_context),
             true,
+            &test_execution_index_cell(),
             || async {
                 mark_stream_candidate_watchdog_terminal_started();
                 tokio::time::sleep(Duration::from_millis(20)).await;
@@ -3901,6 +4077,7 @@ mod tests {
             &plan,
             Some(&report_context),
             true,
+            &test_execution_index_cell(),
             || async {
                 Err(GatewayError::UpstreamUnavailable {
                     trace_id: "trace_execution_error".to_string(),
@@ -3940,6 +4117,7 @@ mod tests {
             &plan,
             Some(&report_context),
             false,
+            &test_execution_index_cell(),
             || async {
                 panic!("execute future should not run while upstream execution gate is saturated")
             },
@@ -3987,6 +4165,7 @@ mod tests {
             &plan,
             Some(&report_context),
             false,
+            &test_execution_index_cell(),
             || async {
                 Err(GatewayError::AdmissionTimeout {
                     trace_id: "trace_target_admission".to_string(),
