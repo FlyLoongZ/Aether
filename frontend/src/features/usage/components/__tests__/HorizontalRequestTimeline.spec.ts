@@ -348,7 +348,7 @@ describe('HorizontalRequestTimeline', () => {
     ])
   })
 
-  it('orders visible candidates by scheduling index and includes unattempted candidates', async () => {
+  it('orders started candidates by actual execution time and keeps unattempted candidates after the execution boundary', async () => {
     const trace = buildTrace([
       buildCandidate({
         id: 'cand-success',
@@ -412,17 +412,276 @@ describe('HorizontalRequestTimeline', () => {
 
     const labels = [...root.querySelectorAll<HTMLElement>('.node-label')]
       .map(label => label.textContent?.trim())
+    // 已启动的按 started_at 升序在前，未启动／被跳过的候选单独排在执行序列之后。
     expect(labels).toEqual([
+      'Provider Failed',
+      'Provider Success',
       'Provider Available',
       'Provider Skipped',
       'Provider Pending',
-      'Provider Failed',
-      'Provider Success',
     ])
 
     const nodeDots = [...root.querySelectorAll<HTMLElement>('.node-dot')]
-    expect(nodeDots[0].classList.contains('status-available')).toBe(true)
-    expect(nodeDots[2].classList.contains('status-pending')).toBe(true)
+    expect(nodeDots[0].classList.contains('status-failed')).toBe(true)
+    expect(nodeDots[2].classList.contains('status-available')).toBe(true)
+    expect(nodeDots[4].classList.contains('status-pending')).toBe(true)
+
+    // 执行 / 未执行之间用虚线分界，避免未启动候选被误读成执行序列的一部分。
+    const boundaryLines = [...root.querySelectorAll<HTMLElement>('.node-line.unstarted-boundary')]
+    expect(boundaryLines).toHaveLength(1)
+  })
+
+  it('orders nodes by actual started_at when rank 0 starts later than rank 1', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'rank-0-late',
+        provider_id: 'provider-rank-0',
+        provider_name: 'Provider Rank 0',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:05.000Z',
+        finished_at: '2026-05-06T12:00:06.000Z',
+      }),
+      buildCandidate({
+        id: 'rank-1-early',
+        provider_id: 'provider-rank-1',
+        provider_name: 'Provider Rank 1',
+        candidate_index: 1,
+        status: 'success',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    // 实际执行先发生的是 rank 1，不能按 candidate_index 把 rank 0 排在前面。
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Provider Rank 1', 'Provider Rank 0'])
+    // 调度元数据（candidate_index）仍然保留在节点上。
+    expect([...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
+      .map(group => group.dataset.groupStartIndex))
+      .toEqual(['1', '0'])
+  })
+
+  it('prefers the persisted execution_index over started_at for node order', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'execution-index-1',
+        provider_id: 'provider-started-earlier',
+        provider_name: 'Provider Started Earlier',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:00.000Z',
+        finished_at: '2026-05-06T12:00:01.000Z',
+        extra_data: { execution_index: 1 },
+      }),
+      buildCandidate({
+        id: 'execution-index-0',
+        provider_id: 'provider-executed-first',
+        provider_name: 'Provider Executed First',
+        candidate_index: 1,
+        status: 'success',
+        started_at: '2026-05-06T12:00:09.000Z',
+        finished_at: '2026-05-06T12:00:10.000Z',
+        extra_data: { execution_index: 0 },
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    // 后端记录的 execution_index 是真实执行顺序，优先于时钟上的 started_at。
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Provider Executed First', 'Provider Started Earlier'])
+  })
+
+  it('orders same-provider retries by actual execution time and keeps scheduling indices in titles', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'retry-0',
+        provider_id: 'provider-retry',
+        provider_name: 'Provider Retry',
+        key_id: 'key-retry-0',
+        key_name: 'Key Scheduled',
+        candidate_index: 0,
+        retry_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:02.000Z',
+        finished_at: '2026-05-06T12:00:03.000Z',
+      }),
+      buildCandidate({
+        id: 'retry-1',
+        provider_id: 'provider-retry',
+        provider_name: 'Provider Retry',
+        key_id: 'key-retry-1',
+        key_name: 'Key Retry',
+        candidate_index: 0,
+        retry_index: 1,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Provider Retry'])
+    // retry_index=1 先执行，所以它成为主节点，retry_index=0 退为子节点，
+    // 标题里仍带原来的 candidate_index / retry_index 调度信息。
+    expect([...root.querySelectorAll<HTMLButtonElement>('.sub-dot')]
+      .map(dot => dot.getAttribute('title')))
+      .toEqual(['#0 · Key Scheduled · 失败'])
+  })
+
+  it('orders pool attempts by actual execution time', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'pool-attempt-scheduled-first',
+        provider_id: 'provider-pool-order',
+        provider_name: 'Pool Provider',
+        key_id: 'key-pool-a',
+        key_name: 'Scheduled First',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:04.000Z',
+        finished_at: '2026-05-06T12:00:05.000Z',
+        extra_data: { pool_group_id: 'provider-pool-order' },
+      }),
+      buildCandidate({
+        id: 'pool-attempt-executed-first',
+        provider_id: 'provider-pool-order',
+        provider_name: 'Pool Provider',
+        key_id: 'key-pool-b',
+        key_name: 'Executed First',
+        candidate_index: 1,
+        status: 'success',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+        extra_data: { pool_group_id: 'provider-pool-order' },
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Pool Provider'])
+    expect([...root.querySelectorAll<HTMLButtonElement>('.sub-dot')]
+      .map(dot => dot.getAttribute('title')))
+      .toEqual(['#0 · Scheduled First · 失败'])
+  })
+
+  it('keeps A -> B -> A as separate groups ordered by actual execution without regrouping', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'a-first',
+        provider_id: 'provider-a',
+        provider_name: 'Provider A',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:03.000Z',
+        finished_at: '2026-05-06T12:00:04.000Z',
+      }),
+      buildCandidate({
+        id: 'b-middle',
+        provider_id: 'provider-b',
+        provider_name: 'Provider B',
+        candidate_index: 1,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+      }),
+      buildCandidate({
+        id: 'a-last',
+        provider_id: 'provider-a',
+        provider_name: 'Provider A',
+        candidate_index: 2,
+        status: 'success',
+        started_at: '2026-05-06T12:00:02.000Z',
+        finished_at: '2026-05-06T12:00:03.000Z',
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    const groups = [...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
+    // 三个组仍然独立，没有把两个 A 合并后倒置。
+    expect(groups).toHaveLength(3)
+    expect(groups.map(group => group.dataset.groupStartIndex)).toEqual(['1', '2', '0'])
+
+    const nodeDots = [...root.querySelectorAll<HTMLElement>('.node-dot')]
+    expect(nodeDots[0].classList.contains('status-failed')).toBe(true)
+    expect(nodeDots[1].classList.contains('status-success')).toBe(true)
+    expect(nodeDots[2].classList.contains('status-failed')).toBe(true)
+  })
+
+  it('falls back to stable scheduling order for historical attempts without started_at', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'historical-first',
+        provider_id: 'provider-historical-first',
+        provider_name: 'Provider Historical First',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: undefined,
+        finished_at: undefined,
+      }),
+      buildCandidate({
+        id: 'historical-second',
+        provider_id: 'provider-historical-second',
+        provider_name: 'Provider Historical Second',
+        candidate_index: 1,
+        status: 'failed',
+        started_at: undefined,
+        finished_at: undefined,
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    expect([...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
+      .map(group => group.dataset.groupStartIndex))
+      .toEqual(['0', '1'])
+  })
+
+  it('keeps timed attempts ahead of historical attempts that never recorded started_at', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'untimed',
+        provider_id: 'provider-untimed',
+        provider_name: 'Provider Untimed',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: undefined,
+        finished_at: undefined,
+      }),
+      buildCandidate({
+        id: 'timed',
+        provider_id: 'provider-timed',
+        provider_name: 'Provider Timed',
+        candidate_index: 1,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:00.000Z',
+        finished_at: '2026-05-06T12:00:01.000Z',
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Provider Timed', 'Provider Untimed'])
   })
 
   it('shows a skipped candidate with a Chinese reason and can collapse it', async () => {
@@ -453,13 +712,14 @@ describe('HorizontalRequestTimeline', () => {
     const root = mountTimeline(trace)
     await nextTick()
 
-    // 被跳过的候选默认可见：它是"为什么没用这个提供商"的答案
+    // 被跳过的候选默认可见：它是"为什么没用这个提供商"的答案，
+    // 但排在真正执行过的候选之后，并带有执行／未执行分界。
     expect([...root.querySelectorAll<HTMLElement>('.node-label')]
       .map(label => label.textContent?.trim()))
-      .toEqual(['Provider 1', 'Provider 2'])
+      .toEqual(['Provider 2', 'Provider 1'])
 
-    // 点击第一个节点查看详情，应看到中文跳过原因
-    root.querySelector<HTMLElement>('.minimal-node-group')?.click()
+    // 点击被跳过的节点查看详情，应看到中文跳过原因
+    root.querySelector<HTMLElement>('[data-group-start-index="0"]')?.click()
     await nextTick()
     expect(root.textContent).toContain('密钥本分钟请求数已达上限')
     // 必须点明"没有向上游发起请求"，否则会被误读成上游报错
@@ -507,11 +767,13 @@ describe('HorizontalRequestTimeline', () => {
     const labels = [...root.querySelectorAll<HTMLElement>('.node-label')]
       .map(label => label.textContent?.trim())
     expect(labels).toEqual(['CodexFree2'])
+    // 成功的运行时候选是真正执行过的尝试，因此成为主节点；
+    // 被跳过的候选作为未执行的子节点保留在它之后。
     expect(root.querySelector<HTMLElement>('.node-dot')?.classList.contains('status-success'))
       .toBe(true)
     expect([...root.querySelectorAll<HTMLButtonElement>('.sub-dot')]
       .map(dot => dot.getAttribute('title'))).toEqual([
-      '#1 · Success Key · 成功',
+      '#0 · CodexFree2 · 跳过',
     ])
   })
 

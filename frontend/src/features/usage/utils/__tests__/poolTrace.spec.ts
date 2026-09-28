@@ -5,7 +5,11 @@ import {
   buildPoolAttemptCandidatesFromAudit,
   buildPoolGroupVisibleAttempts,
   buildPoolParticipatedCandidates,
+  compareCandidatesByExecutionOrder,
+  compareCandidateExecutionGroupKeys,
   isAttemptedCandidate,
+  resolveCandidateExecutionGroupKey,
+  sortCandidatesByExecutionOrder,
 } from '@/features/usage/utils/poolTrace'
 
 function buildCandidate(
@@ -217,6 +221,127 @@ describe('poolTrace', () => {
     expect(isAttemptedCandidate(buildCandidate({ status: 'skipped' }))).toBe(false)
     expect(isAttemptedCandidate(buildCandidate({ status: 'available' }))).toBe(false)
     expect(isAttemptedCandidate(buildCandidate({ status: 'unused' }))).toBe(false)
+  })
+
+  it('orders attempted candidates by started_at regardless of scheduling rank', () => {
+    const rank0Late = buildCandidate({
+      id: 'rank-0',
+      candidate_index: 0,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:05.000Z',
+    })
+    const rank1Early = buildCandidate({
+      id: 'rank-1',
+      candidate_index: 1,
+      status: 'success',
+      started_at: '2026-05-06T12:00:01.000Z',
+    })
+
+    expect(compareCandidatesByExecutionOrder(rank0Late, rank1Early)).toBeGreaterThan(0)
+    expect(sortCandidatesByExecutionOrder([rank0Late, rank1Early]).map(item => item.id))
+      .toEqual(['rank-1', 'rank-0'])
+  })
+
+  it('prefers the persisted execution_index over started_at when both are present', () => {
+    const startedEarlierButExecutedSecond = buildCandidate({
+      id: 'started-earlier',
+      candidate_index: 0,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:00.000Z',
+      extra_data: { execution_index: 1 },
+    })
+    const startedLaterButExecutedFirst = buildCandidate({
+      id: 'started-later',
+      candidate_index: 1,
+      status: 'success',
+      started_at: '2026-05-06T12:00:09.000Z',
+      extra_data: { execution_index: 0 },
+    })
+
+    expect(sortCandidatesByExecutionOrder([
+      startedEarlierButExecutedSecond,
+      startedLaterButExecutedFirst,
+    ]).map(item => item.id)).toEqual(['started-later', 'started-earlier'])
+  })
+
+  it('falls back to started_at when execution_index is absent', () => {
+    const noIndexLate = buildCandidate({
+      id: 'no-index-late',
+      candidate_index: 0,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:05.000Z',
+    })
+    const noIndexEarly = buildCandidate({
+      id: 'no-index-early',
+      candidate_index: 1,
+      status: 'success',
+      started_at: '2026-05-06T12:00:01.000Z',
+    })
+
+    expect(sortCandidatesByExecutionOrder([noIndexLate, noIndexEarly]).map(item => item.id))
+      .toEqual(['no-index-early', 'no-index-late'])
+  })
+
+  it('keeps unstarted candidates after attempted ones in scheduling order', () => {
+    const attempted = buildCandidate({
+      id: 'attempted',
+      candidate_index: 3,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:00.000Z',
+    })
+    const skipped = buildCandidate({ id: 'skipped', candidate_index: 0, status: 'skipped' })
+    const available = buildCandidate({ id: 'available', candidate_index: 1, status: 'available' })
+    const pending = buildCandidate({ id: 'pending', candidate_index: 2, status: 'pending' })
+
+    expect(sortCandidatesByExecutionOrder([skipped, pending, available, attempted]).map(item => item.id))
+      .toEqual(['attempted', 'skipped', 'available', 'pending'])
+  })
+
+  it('falls back to scheduling order when every attempted candidate is missing started_at', () => {
+    const second = buildCandidate({ id: 'second', candidate_index: 1, status: 'failed', started_at: undefined })
+    const first = buildCandidate({ id: 'first', candidate_index: 0, status: 'failed', started_at: undefined })
+
+    expect(sortCandidatesByExecutionOrder([second, first]).map(item => item.id))
+      .toEqual(['first', 'second'])
+  })
+
+  it('sorts execution group keys by earliest started_at and puts fully unstarted groups last', () => {
+    const earlier = buildCandidate({
+      id: 'earlier',
+      candidate_index: 7,
+      status: 'success',
+      started_at: '2026-05-06T12:00:01.000Z',
+    })
+    const later = buildCandidate({
+      id: 'later',
+      candidate_index: 5,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:05.000Z',
+    })
+    const unstarted = buildCandidate({ id: 'unstarted', candidate_index: 1, status: 'skipped' })
+
+    const groups = [
+      { id: 'unstarted', key: resolveCandidateExecutionGroupKey([unstarted], 1, 1) },
+      { id: 'later', key: resolveCandidateExecutionGroupKey([later], 5, 5) },
+      { id: 'earlier', key: resolveCandidateExecutionGroupKey([earlier], 7, 7) },
+    ]
+    groups.sort((a, b) => compareCandidateExecutionGroupKeys(a.key, b.key))
+
+    expect(groups.map(group => group.id)).toEqual(['earlier', 'later', 'unstarted'])
+  })
+
+  it('treats a mixed group as attempted using its earliest started_at', () => {
+    const skipped = buildCandidate({ id: 'skipped', candidate_index: 0, status: 'skipped' })
+    const success = buildCandidate({
+      id: 'success',
+      candidate_index: 1,
+      status: 'success',
+      started_at: '2026-05-06T12:00:02.000Z',
+    })
+
+    const key = resolveCandidateExecutionGroupKey([skipped, success], 0, 1)
+    expect(key.hasAttempted).toBe(true)
+    expect(key.startedAtMs).toBe(new Date('2026-05-06T12:00:02.000Z').getTime())
   })
 
   it('keeps skipped pool children visible when attempted nodes exist', () => {

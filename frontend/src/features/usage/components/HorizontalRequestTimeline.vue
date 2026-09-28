@@ -61,8 +61,10 @@
           <div class="minimal-track">
             <div
               v-for="(group, groupIndex) in groupedTimeline"
-              :key="group.id"
+              :key="group.id + ':' + group.startIndex"
               class="minimal-node-group"
+              :data-group-id="group.id"
+              :data-group-start-index="group.startIndex"
               :class="{
                 selected: isGroupSelected(group),
                 hovered: isGroupHovered(groupIndex) && !isGroupSelected(group)
@@ -116,7 +118,10 @@
               >
                 <div
                   class="node-line"
-                  :class="{ 'conversion-boundary': groupIndex + 1 === conversionBoundaryIndex }"
+                  :class="{
+                    'conversion-boundary': groupIndex + 1 === conversionBoundaryIndex,
+                    'unstarted-boundary': groupIndex + 1 === unstartedBoundaryIndex
+                  }"
                 />
               </div>
             </div>
@@ -605,8 +610,13 @@ import { formatCandidateSkipReason } from '../utils/skipReason'
 import {
   buildPoolGroupVisibleAttempts,
   buildPoolParticipatedCandidates,
+  compareCandidatesByExecutionOrder,
+  compareCandidatesBySchedulingOrder,
+  compareCandidateExecutionGroupKeys,
   extractPoolGroupId,
+  isAttemptedCandidate,
   makeAttemptKey,
+  resolveCandidateExecutionGroupKey,
   TIMELINE_STATUS,
 } from '../utils/poolTrace'
 
@@ -846,15 +856,7 @@ const computedFinalStatus = computed(() => {
   })
 })
 
-const compareBySchedulingOrder = (a: CandidateRecord, b: CandidateRecord): number => {
-  if (a.candidate_index !== b.candidate_index) {
-    return a.candidate_index - b.candidate_index
-  }
-  if (a.retry_index !== b.retry_index) {
-    return a.retry_index - b.retry_index
-  }
-  return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-}
+const compareBySchedulingOrder = compareCandidatesBySchedulingOrder
 
 // 候选时间线（按调度顺序排序；lazy 加载的跳过候选通常没有 started_at）
 const allTraceCandidates = computed<CandidateRecord[]>(() => {
@@ -863,6 +865,11 @@ const allTraceCandidates = computed<CandidateRecord[]>(() => {
     .filter(c => TIMELINE_STATUS.includes(c.status))
     .sort(compareBySchedulingOrder)
 })
+
+// 组内尝试按实际执行顺序排列：已启动的在前（started_at 升序），
+// 未启动／被跳过的尝试跟随其后，避免把没有执行时间的候选混入执行序列。
+const orderGroupAttempts = (attempts: CandidateRecord[]): CandidateRecord[] =>
+  [...attempts].sort(compareCandidatesByExecutionOrder)
 
 /**
  * 被跳过的候选：调度阶段就判定"这次不能用"，从未真正向上游发起请求。
@@ -999,14 +1006,34 @@ const buildProviderGroups = (items: CandidateRecord[]): NodeGroup[] => {
     groups.push(currentGroup)
   })
 
-  return groups
+  // 组合成员保持不变（连续同 Provider 合并），仅把组内尝试重排为实际执行顺序，
+  // 这样 A -> B -> A 不会被重新分组／倒置。
+  return groups.map((group) => {
+    const orderedAttempts = orderGroupAttempts(group.allAttempts)
+    return {
+      ...group,
+      allAttempts: orderedAttempts,
+      primary: orderedAttempts[0] || group.primary,
+    }
+  })
+}
+
+// 按实际执行顺序排列分组：有已启动尝试的组在前（按最早 started_at），
+// 完全未启动的组（skipped/available 等）在后（按调度顺序）。
+const sortGroupsByExecution = (groups: NodeGroup[]): NodeGroup[] => {
+  return [...groups].sort((a, b) =>
+    compareCandidateExecutionGroupKeys(
+      resolveCandidateExecutionGroupKey(a.allAttempts, a.startIndex, a.endIndex),
+      resolveCandidateExecutionGroupKey(b.allAttempts, b.startIndex, b.endIndex),
+    ),
+  )
 }
 
 // 将相同 Provider 的所有请求合并为组（同提供商的 Key 放在子节点）
 const groupedTimeline = computed<NodeGroup[]>(() => {
   const providerGroups = buildProviderGroups(timeline.value.filter(isParticipatedCandidate))
   if (poolAttemptsByGroup.value.size === 0) {
-    return providerGroups
+    return sortGroupsByExecution(providerGroups)
   }
 
   const poolProviderIds = new Set<string>()
@@ -1014,7 +1041,7 @@ const groupedTimeline = computed<NodeGroup[]>(() => {
   const poolGroups: NodeGroup[] = []
 
   for (const [groupId, attemptsRaw] of poolAttemptsByGroup.value.entries()) {
-    const attempts = [...attemptsRaw].sort(compareBySchedulingOrder)
+    const attempts = orderGroupAttempts(attemptsRaw)
     if (attempts.length === 0) continue
 
     const visibleAttempts = buildPoolGroupVisibleAttempts(attempts)
@@ -1070,8 +1097,7 @@ const groupedTimeline = computed<NodeGroup[]>(() => {
   })
 
   const allGroups = [...poolGroups, ...dedupedProviderGroups]
-  allGroups.sort((a, b) => a.startIndex - b.startIndex)
-  return allGroups
+  return sortGroupsByExecution(allGroups)
 })
 
 // 格式转换分界点索引（首个 hasConversion=true 的 group index）
@@ -1080,6 +1106,16 @@ const conversionBoundaryIndex = computed(() => {
   if (!groups || groups.length === 0) return -1
   const idx = groups.findIndex(g => g.hasConversion)
   // 只有当分界点不在最开头时才有意义（前面有 exact 候选）
+  if (idx <= 0) return -1
+  return idx
+})
+
+// 执行／未执行分界点索引：第一个完全未启动的组（skipped/available 等）。
+// 该组之前都是真正执行过的尝试，之后是调度阶段被跳过或尚未执行的候选。
+const unstartedBoundaryIndex = computed(() => {
+  const groups = groupedTimeline.value
+  if (!groups || groups.length === 0) return -1
+  const idx = groups.findIndex(group => !group.allAttempts.some(isAttemptedCandidate))
   if (idx <= 0) return -1
   return idx
 })
@@ -2758,6 +2794,13 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
   background: none;
   height: 0;
   border-top: 2px dashed hsl(var(--muted-foreground) / 0.4);
+}
+
+/* 执行 / 未执行（跳过、未启动）分界线 */
+.node-line.unstarted-boundary {
+  background: none;
+  height: 0;
+  border-top: 2px dotted hsl(var(--muted-foreground) / 0.4);
 }
 
 /* 详情面板 */
