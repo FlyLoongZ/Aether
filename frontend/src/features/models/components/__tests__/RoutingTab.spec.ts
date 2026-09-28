@@ -154,14 +154,6 @@ function makeRoutingData(): ModelRoutingPreviewResponse {
     active_providers: 2,
     scheduling_mode: 'cache_affinity',
     priority_mode: 'provider',
-    effective_policy: {
-      source: 'system_default',
-      group_id: 'system-default',
-      group_name: 'system-default',
-      requested_model: 'gpt-5',
-      rules_excluded: 2,
-      note: 'Static baseline: model-only rules applied; request-context rules excluded.',
-    },
     all_keys_whitelist: [],
   }
 }
@@ -176,7 +168,10 @@ const mountedTabs: MountedTab[] = []
 function mountTab(routingData: ModelRoutingPreviewResponse): MountedTab {
   const root = document.createElement('div')
   document.body.appendChild(root)
-  const app = createApp(RoutingTab as never, { routingData })
+  const app = createApp(RoutingTab as never, {
+    routingData,
+    globalModelId: routingData.global_model_id,
+  })
   app.mount(root)
   const mounted = { app, root }
   mountedTabs.push(mounted)
@@ -200,26 +195,6 @@ afterEach(() => {
 })
 
 describe('RoutingTab effective routing policy', () => {
-  it('renders the effective policy static baseline note with its tooltip', async () => {
-    const routingData = makeRoutingData()
-    const { root } = mountTab(routingData)
-    await nextTick()
-
-    const note = root.querySelector('[data-testid="routing-preview-note"]') as HTMLElement | null
-    expect(note).not.toBeNull()
-    expect(note?.textContent).toContain('静态基线')
-    expect(note?.getAttribute('title')).toBe(routingData.effective_policy?.note)
-  })
-
-  it('omits the note when no effective policy metadata is present', async () => {
-    const routingData = makeRoutingData()
-    routingData.effective_policy = null
-    const { root } = mountTab(routingData)
-    await nextTick()
-
-    expect(root.querySelector('[data-testid="routing-preview-note"]')).toBeNull()
-  })
-
   it('sorts providers and labels them by effective provider priority', async () => {
     const { root } = mountTab(makeRoutingData())
     await nextTick()
@@ -236,11 +211,39 @@ describe('RoutingTab effective routing policy', () => {
       '1',
       '20',
     ])
-    expect(providers[0]?.textContent).toContain('首选')
+    expect(providers[0]?.textContent).toContain('P1')
     // The second provider keeps catalog priority 5 but must render the
     // effective priority 20.
     expect(providers[1]?.textContent).toContain('P20')
     expect(providers[1]?.textContent).not.toContain('P5')
+  })
+
+  it.each(['cache_affinity', 'fixed_order', 'load_balance'])(
+    'shows the effective priority for the first provider in %s mode', async (mode) => {
+      const data = makeRoutingData()
+      data.scheduling_mode = mode
+      data.providers[0]!.effective_provider_priority = 7
+      const { root } = mountTab(data)
+      await nextTick()
+      await expandOnlyFormat(root)
+      const first = root.querySelector('[data-testid="routing-provider"]')
+      expect(first?.textContent).toContain('P7')
+    },
+  )
+
+  it('shows effective priorities for every global key including the first', async () => {
+    const data = makeRoutingData()
+    data.priority_mode = 'global_key'
+    const { root } = mountTab(data)
+    await nextTick()
+    await expandOnlyFormat(root)
+    const keys = Array.from(root.querySelectorAll('[data-testid="routing-key"]'))
+    expect(keys.map(key => key.getAttribute('data-key-id'))).toEqual(['key-c', 'key-a', 'key-b'])
+    expect(keys.map(key => key.textContent)).toEqual([
+      expect.stringContaining('P1'),
+      expect.stringContaining('P2'),
+      expect.stringContaining('P5'),
+    ])
   })
 
   it('groups provider keys by effective internal priority', async () => {

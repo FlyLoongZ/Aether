@@ -97,19 +97,19 @@ const resolveExecutionStartedAtMs = (candidate: CandidateRecord): number | null 
 }
 
 const toNonNegativeInt = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-    return Math.trunc(value)
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+    return value
   }
   if (typeof value === 'string' && value.trim()) {
     const parsed = Number(value)
-    if (Number.isFinite(parsed) && parsed >= 0) return Math.trunc(parsed)
+    if (Number.isSafeInteger(parsed) && parsed >= 0) return parsed
   }
   return null
 }
 
 /**
- * Request-scoped monotonic index of an attempt that actually reached the
- * upstream, persisted by the gateway inside `extra_data`. It only exists for
+ * Request-scoped monotonic index at entry into upstream dispatch (not proof
+ * of an upstream connection), persisted inside `extra_data`. It only exists for
  * HTTP candidate-loop attempts; WebSocket turns and historical records omit
  * it, so callers must always keep a started_at / scheduling fallback.
  */

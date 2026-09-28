@@ -355,6 +355,10 @@ describe('poolTrace', () => {
     ])).toBe('started_at')
     // Duplicate ordinals are not consistent enough to sort by.
     expect(resolveCandidateExecutionOrderMode([indexed('a', 0), indexed('b', 0)])).toBe('started_at')
+    // Invalid ordinals must not be silently rounded into valid execution indices.
+    for (const invalid of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(resolveCandidateExecutionOrderMode([indexed('a', 0), indexed('invalid', invalid)])).toBe('started_at')
+    }
     // Untried candidates do not affect the decision.
     expect(resolveCandidateExecutionOrderMode([
       indexed('a', 0),

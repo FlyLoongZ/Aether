@@ -57,6 +57,13 @@
             </div>
           </div>
 
+          <p
+            class="mb-3 text-xs text-muted-foreground"
+            data-timeline-ordering-note
+          >
+            {{ executionOrderingNote }}
+          </p>
+
           <!-- 极简时间线轨道（按组显示） -->
           <div class="minimal-track">
             <div
@@ -209,6 +216,14 @@
               <div class="panel-body">
                 <!-- 核心信息网格 -->
                 <div class="info-grid">
+                  <div v-if="currentExecutionIndex != null" class="info-item">
+                    <span class="info-label">执行序号</span>
+                    <span class="info-value" data-attempt-execution-index>{{ currentExecutionIndex + 1 }}</span>
+                  </div>
+                  <div v-if="currentRankingIndex != null" class="info-item">
+                    <span class="info-label" title="本轮候选的调度排名，不代表实际执行顺序">调度排名</span>
+                    <span class="info-value" data-attempt-ranking-index>{{ currentRankingIndex + 1 }}</span>
+                  </div>
                   <div
                     v-if="currentAttemptTimeRange"
                     class="info-item"
@@ -620,6 +635,7 @@ import {
   compareCandidatesBySchedulingOrder,
   groupCandidatesByExecutionContiguity,
   isAttemptedCandidate,
+  candidateExecutionIndex,
   makeAttemptKey,
   resolveCandidateExecutionOrderMode,
   TIMELINE_STATUS,
@@ -939,6 +955,18 @@ const executionOrderMode = computed<CandidateExecutionOrderMode>(() =>
   resolveCandidateExecutionOrderMode(combinedTimelineCandidates.value),
 )
 
+const executionOrderingNote = computed(() => {
+  const attempted = combinedTimelineCandidates.value.filter(isAttemptedCandidate)
+  if (attempted.length === 0) return '暂无已执行尝试；其他候选按调度顺序展示。'
+  if (executionOrderMode.value === 'execution_index') {
+    return '按实际执行序号展示；调度排名保留在尝试详情中。'
+  }
+  if (attempted.some(candidate => !candidate.started_at || !Number.isFinite(Date.parse(candidate.started_at)))) {
+    return '执行顺序信息不完整：已知开始时间的尝试优先展示，缺少时间的记录按候选顺序补列。'
+  }
+  return '按实际开始时间展示；同一时刻的尝试按候选顺序排列。'
+})
+
 const AUTH_TYPE_PROVIDER_LABEL_MAP: Record<string, string> = {
   codex: 'Codex',
   kiro: 'Kiro',
@@ -1011,6 +1039,14 @@ const groupedTimeline = computed<NodeGroup[]>(() => {
       isPoolGroup: partition.isPool,
     }
   })
+})
+
+const currentExecutionIndex = computed(() =>
+  currentAttempt.value ? candidateExecutionIndex(currentAttempt.value) : null
+)
+const currentRankingIndex = computed(() => {
+  const value = currentAttempt.value?.ranking?.index ?? currentAttempt.value?.extra_data?.ranking_index
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
 })
 
 // 格式转换分界点索引（首个 hasConversion=true 的 group index）

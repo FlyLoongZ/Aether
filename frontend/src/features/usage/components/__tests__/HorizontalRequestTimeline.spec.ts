@@ -489,12 +489,18 @@ describe('HorizontalRequestTimeline', () => {
         status: 'success',
         started_at: '2026-05-06T12:00:09.000Z',
         finished_at: '2026-05-06T12:00:10.000Z',
-        extra_data: { execution_index: 0 },
+        extra_data: { execution_index: 0, ranking_index: 1 },
       }),
     ])
 
     const root = mountTimeline(trace)
     await nextTick()
+
+    expect(root.querySelector('[data-timeline-ordering-note]')?.textContent).toContain('按实际执行序号')
+    root.querySelector<HTMLElement>('.minimal-node-group')?.click()
+    await nextTick()
+    expect(root.querySelector('[data-attempt-execution-index]')?.textContent).toBe('1')
+    expect(root.querySelector('[data-attempt-ranking-index]')?.textContent).toBe('2')
 
     // 后端记录的 execution_index 是真实执行顺序，优先于时钟上的 started_at。
     expect([...root.querySelectorAll<HTMLElement>('.node-label')]
@@ -528,6 +534,7 @@ describe('HorizontalRequestTimeline', () => {
     const root = mountTimeline(trace)
     await nextTick()
 
+    expect(root.querySelector('[data-timeline-ordering-note]')?.textContent).toContain('按实际开始时间')
     // 集合不完整（WebSocket 轮次没有 execution_index）时整条时间线统一回退
     // 到 started_at，而不是混用两种键。
     expect([...root.querySelectorAll<HTMLElement>('.node-label')]
@@ -859,6 +866,7 @@ describe('HorizontalRequestTimeline', () => {
     expect([...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
       .map(group => group.dataset.groupStartIndex))
       .toEqual(['0', '1'])
+    expect(root.querySelector('[data-timeline-ordering-note]')?.textContent).toContain('执行顺序信息不完整')
   })
 
   it('keeps timed attempts ahead of historical attempts that never recorded started_at', async () => {

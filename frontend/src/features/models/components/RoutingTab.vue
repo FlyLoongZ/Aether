@@ -16,14 +16,6 @@
             <span class="text-xs text-muted-foreground">
               {{ getPriorityModeLabel(routingData.priority_mode) }}
             </span>
-            <template v-if="routingData.effective_policy?.note">
-              <span class="text-xs text-muted-foreground">·</span>
-              <span
-                class="text-xs text-muted-foreground/60 cursor-help"
-                :title="routingData.effective_policy.note"
-                data-testid="routing-preview-note"
-              >静态基线</span>
-            </template>
           </template>
         </div>
         <div class="flex items-center gap-2">
@@ -174,8 +166,7 @@
                                 ? 'bg-primary text-primary-foreground'
                                 : 'bg-muted-foreground/20 text-muted-foreground'"
                             >
-                              <span v-if="groupIndex === 0 && keyIndex === 0">首选</span>
-                              <span v-else>P{{ keyGroup.priority ?? '?' }}</span>
+                              <span>P{{ resolvedGlobalKeyPriority(keyEntry) }}</span>
                             </div>
 
                             <!-- Key 信息：两行 -->
@@ -335,8 +326,7 @@
                                   ? 'bg-primary text-primary-foreground'
                                   : 'bg-muted-foreground/20 text-muted-foreground'"
                               >
-                                <span v-if="providerIndex === 0">首选</span>
-                                <span v-else>P{{ providerEntry.provider.effective_provider_priority ?? providerEntry.provider.provider_priority }}</span>
+                                <span>P{{ providerEntry.provider.effective_provider_priority ?? providerEntry.provider.provider_priority }}</span>
                               </div>
 
                               <!-- 第二列：状态指示灯 -->
@@ -568,7 +558,7 @@
                       </div>
                       <div class="flex items-center gap-1 text-[10px] text-muted-foreground/50">
                         <ArrowDown class="w-3 h-3" />
-                        <span>降级</span>
+                        <span>{{ previewNextLabel }}</span>
                       </div>
                     </div>
                   </div>
@@ -1051,12 +1041,15 @@ const samePriorityLabel = computed(() =>
   getSchedulingModeLabel(routingData.value?.scheduling_mode || 'cache_affinity')
 )
 
-// 获取降级标签（含同优先级调度行为）
+const previewNextLabel = computed(() =>
+  routingData.value?.scheduling_mode === 'fixed_order' ? '后续候选' : '候选优先级'
+)
+
 function getDemoteLabel(nextGroupKeyCount: number): string {
   if (nextGroupKeyCount > 1) {
-    return `降级 · ${samePriorityLabel.value}`
+    return `${previewNextLabel.value} · ${samePriorityLabel.value}`
   }
-  return '降级'
+  return previewNextLabel.value
 }
 
 // 获取优先级模式标签

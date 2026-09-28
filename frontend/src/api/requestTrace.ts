@@ -100,8 +100,8 @@ export interface CandidateRecord {
     needs_conversion?: boolean
     provider_api_format?: string | null
     /**
-     * Request-scoped monotonic ordinal of the attempt that actually reached
-     * the upstream (HTTP candidate loop only). WebSocket turns and historical
+     * Request-scoped monotonic ordinal at entry into upstream dispatch
+     * (HTTP candidate loop only, not a connection confirmation). WebSocket turns and historical
      * records may omit it.
      */
     execution_index?: number | null
