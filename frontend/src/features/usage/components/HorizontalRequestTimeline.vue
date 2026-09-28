@@ -610,14 +610,16 @@ import { formatCandidateSkipReason } from '../utils/skipReason'
 import {
   buildPoolGroupVisibleAttempts,
   buildPoolParticipatedCandidates,
-  compareCandidatesByExecutionOrder,
-  compareCandidatesBySchedulingOrder,
   compareCandidateExecutionGroupKeys,
+  compareCandidatesBySchedulingOrder,
   extractPoolGroupId,
   isAttemptedCandidate,
   makeAttemptKey,
   resolveCandidateExecutionGroupKey,
+  resolveCandidateExecutionOrderMode,
+  sortCandidatesByExecutionOrder,
   TIMELINE_STATUS,
+  type CandidateExecutionOrderMode,
 } from '../utils/poolTrace'
 
 // 节点组类型
@@ -866,10 +868,12 @@ const allTraceCandidates = computed<CandidateRecord[]>(() => {
     .sort(compareBySchedulingOrder)
 })
 
-// 组内尝试按实际执行顺序排列：已启动的在前（started_at 升序），
+// 组内尝试按实际执行顺序排列：已启动的在前（execution_index 或 started_at 升序），
 // 未启动／被跳过的尝试跟随其后，避免把没有执行时间的候选混入执行序列。
-const orderGroupAttempts = (attempts: CandidateRecord[]): CandidateRecord[] =>
-  [...attempts].sort(compareCandidatesByExecutionOrder)
+const orderGroupAttempts = (
+  attempts: CandidateRecord[],
+  mode: CandidateExecutionOrderMode,
+): CandidateRecord[] => sortCandidatesByExecutionOrder(attempts, mode)
 
 /**
  * 被跳过的候选：调度阶段就判定"这次不能用"，从未真正向上游发起请求。
@@ -936,6 +940,21 @@ const timeline = computed<CandidateRecord[]>(() => {
   )
 })
 
+// 全量时间线统一选用一种执行排序键：只有所有已启动候选都带有唯一
+// execution_index 时才按它排序（HTTP 候选循环的新记录）；WebSocket 轮次或
+// 历史记录缺字段时整条时间线回退到 started_at，避免在同一比较器里混用两种
+// 键造成不满足传递性的排序。
+const executionOrderMode = computed<CandidateExecutionOrderMode>(() => {
+  const byId = new Map<string, CandidateRecord>()
+  for (const candidate of rawTimeline.value) {
+    byId.set(candidate.id, candidate)
+  }
+  for (const candidate of poolAttemptCandidates.value) {
+    if (!byId.has(candidate.id)) byId.set(candidate.id, candidate)
+  }
+  return resolveCandidateExecutionOrderMode([...byId.values()])
+})
+
 const AUTH_TYPE_PROVIDER_LABEL_MAP: Record<string, string> = {
   codex: 'Codex',
   kiro: 'Kiro',
@@ -966,7 +985,7 @@ const normalizeProviderIdentity = (value: unknown): string => {
   return value.trim().toLowerCase()
 }
 
-const buildProviderGroups = (items: CandidateRecord[]): NodeGroup[] => {
+const buildProviderGroups = (items: CandidateRecord[], mode: CandidateExecutionOrderMode): NodeGroup[] => {
   const groups: NodeGroup[] = []
   let currentGroup: NodeGroup | null = null
 
@@ -1009,7 +1028,7 @@ const buildProviderGroups = (items: CandidateRecord[]): NodeGroup[] => {
   // 组合成员保持不变（连续同 Provider 合并），仅把组内尝试重排为实际执行顺序，
   // 这样 A -> B -> A 不会被重新分组／倒置。
   return groups.map((group) => {
-    const orderedAttempts = orderGroupAttempts(group.allAttempts)
+    const orderedAttempts = orderGroupAttempts(group.allAttempts, mode)
     return {
       ...group,
       allAttempts: orderedAttempts,
@@ -1018,22 +1037,27 @@ const buildProviderGroups = (items: CandidateRecord[]): NodeGroup[] => {
   })
 }
 
-// 按实际执行顺序排列分组：有已启动尝试的组在前（按最早 started_at），
+// 按实际执行顺序排列分组：有已启动尝试的组在前（按最早执行键），
 // 完全未启动的组（skipped/available 等）在后（按调度顺序）。
-const sortGroupsByExecution = (groups: NodeGroup[]): NodeGroup[] => {
+const sortGroupsByExecution = (
+  groups: NodeGroup[],
+  mode: CandidateExecutionOrderMode,
+): NodeGroup[] => {
   return [...groups].sort((a, b) =>
     compareCandidateExecutionGroupKeys(
       resolveCandidateExecutionGroupKey(a.allAttempts, a.startIndex, a.endIndex),
       resolveCandidateExecutionGroupKey(b.allAttempts, b.startIndex, b.endIndex),
+      mode,
     ),
   )
 }
 
 // 将相同 Provider 的所有请求合并为组（同提供商的 Key 放在子节点）
 const groupedTimeline = computed<NodeGroup[]>(() => {
-  const providerGroups = buildProviderGroups(timeline.value.filter(isParticipatedCandidate))
+  const mode = executionOrderMode.value
+  const providerGroups = buildProviderGroups(timeline.value.filter(isParticipatedCandidate), mode)
   if (poolAttemptsByGroup.value.size === 0) {
-    return sortGroupsByExecution(providerGroups)
+    return sortGroupsByExecution(providerGroups, mode)
   }
 
   const poolProviderIds = new Set<string>()
@@ -1041,7 +1065,7 @@ const groupedTimeline = computed<NodeGroup[]>(() => {
   const poolGroups: NodeGroup[] = []
 
   for (const [groupId, attemptsRaw] of poolAttemptsByGroup.value.entries()) {
-    const attempts = orderGroupAttempts(attemptsRaw)
+    const attempts = orderGroupAttempts(attemptsRaw, mode)
     if (attempts.length === 0) continue
 
     const visibleAttempts = buildPoolGroupVisibleAttempts(attempts)
@@ -1097,7 +1121,7 @@ const groupedTimeline = computed<NodeGroup[]>(() => {
   })
 
   const allGroups = [...poolGroups, ...dedupedProviderGroups]
-  return sortGroupsByExecution(allGroups)
+  return sortGroupsByExecution(allGroups, mode)
 })
 
 // 格式转换分界点索引（首个 hasConversion=true 的 group index）

@@ -90,10 +90,10 @@ export const compareCandidatesBySchedulingOrder = (
   return aCreatedAt - bCreatedAt
 }
 
-const resolveExecutionSortMs = (candidate: CandidateRecord): number | null => {
-  // Actual execution time first; created_at is only a stable fallback for
-  // historical records written before started_at was captured.
-  return toTimestampMs(candidate.started_at) ?? toTimestampMs(candidate.created_at)
+const resolveExecutionStartedAtMs = (candidate: CandidateRecord): number | null => {
+  // Real execution wall-clock only; created_at is a scheduling-order fallback
+  // and is applied later by compareCandidatesBySchedulingOrder.
+  return toTimestampMs(candidate.started_at)
 }
 
 const toNonNegativeInt = (value: unknown): number | null => {
@@ -121,18 +121,45 @@ export const candidateExecutionIndex = (
   return toNonNegativeInt((extra as Record<string, unknown>).execution_index)
 }
 
+export type CandidateExecutionOrderMode = 'execution_index' | 'started_at'
+
 /**
- * Execution order: attempts that actually reached a provider come first, in
- * ascending started_at order. When the gateway recorded a real
- * `execution_index` it wins over wall-clock started_at; otherwise we fall back
- * to started_at and finally to scheduling metadata. Candidates that were never
- * attempted (skipped/available/unused/pending without a start) stay in a
- * separate trailing block so they cannot be falsely interleaved into the
- * execution sequence.
+ * Pick one sort key for the whole candidate set so every pair is compared with
+ * the same key. `execution_index` is only safe when every attempted record
+ * carries a unique non-negative ordinal (the gateway guarantees this per
+ * request); as soon as one is missing or duplicated (WebSocket turns,
+ * historical rows) the set is incomplete and we fall back to started_at.
+ * Mixing the two keys inside one pairwise comparator would be nontransitive.
+ */
+export const resolveCandidateExecutionOrderMode = (
+  candidates: CandidateRecord[],
+): CandidateExecutionOrderMode => {
+  const seen = new Set<number>()
+  let hasAttempted = false
+
+  for (const candidate of candidates) {
+    if (!isAttemptedCandidate(candidate)) continue
+    hasAttempted = true
+    const index = candidateExecutionIndex(candidate)
+    if (index == null || seen.has(index)) return 'started_at'
+    seen.add(index)
+  }
+
+  return hasAttempted ? 'execution_index' : 'started_at'
+}
+
+/**
+ * Execution order for one fixed mode (lexicographic key, so it is a total
+ * order). Attempts that actually reached a provider come first; within them the
+ * mode's key wins (execution_index, else started_at), then scheduling metadata.
+ * Candidates that were never attempted (skipped/available/unused/pending
+ * without a start) stay in a separate trailing block so they cannot be falsely
+ * interleaved into the execution sequence.
  */
 export const compareCandidatesByExecutionOrder = (
   a: CandidateRecord,
   b: CandidateRecord,
+  mode: CandidateExecutionOrderMode,
 ): number => {
   const aAttempted = isAttemptedCandidate(a)
   const bAttempted = isAttemptedCandidate(b)
@@ -140,26 +167,31 @@ export const compareCandidatesByExecutionOrder = (
     return aAttempted ? -1 : 1
   }
   if (aAttempted) {
-    const aIndex = candidateExecutionIndex(a)
-    const bIndex = candidateExecutionIndex(b)
-    if (aIndex != null && bIndex != null && aIndex !== bIndex) {
-      return aIndex - bIndex
+    if (mode === 'execution_index') {
+      const aIndex = candidateExecutionIndex(a)
+      const bIndex = candidateExecutionIndex(b)
+      if (aIndex !== bIndex) {
+        if (aIndex == null) return 1
+        if (bIndex == null) return -1
+        return aIndex - bIndex
+      }
     }
-    const aMs = resolveExecutionSortMs(a)
-    const bMs = resolveExecutionSortMs(b)
-    if (aMs != null && bMs != null && aMs !== bMs) {
+    const aMs = resolveExecutionStartedAtMs(a)
+    const bMs = resolveExecutionStartedAtMs(b)
+    if (aMs !== bMs) {
+      if (aMs == null) return 1
+      if (bMs == null) return -1
       return aMs - bMs
     }
-    if (aMs != null && bMs == null) return -1
-    if (aMs == null && bMs != null) return 1
   }
   return compareCandidatesBySchedulingOrder(a, b)
 }
 
 export const sortCandidatesByExecutionOrder = (
   candidates: CandidateRecord[],
+  mode: CandidateExecutionOrderMode = resolveCandidateExecutionOrderMode(candidates),
 ): CandidateRecord[] => {
-  return [...candidates].sort(compareCandidatesByExecutionOrder)
+  return [...candidates].sort((a, b) => compareCandidatesByExecutionOrder(a, b, mode))
 }
 
 export interface CandidateExecutionGroupKey {
@@ -173,7 +205,7 @@ export interface CandidateExecutionGroupKey {
 /**
  * Groups are still assembled from scheduling order (consecutive same-provider
  * runs), but their placement on the track follows the earliest real execution
- * time of any attempted member. Fully unstarted groups sort after every
+ * key of any attempted member. Fully unstarted groups sort after every
  * attempted group and fall back to their scheduling position.
  */
 export const resolveCandidateExecutionGroupKey = (
@@ -202,21 +234,28 @@ export const resolveCandidateExecutionGroupKey = (
   return { hasAttempted, executionIndex, startedAtMs, startIndex, endIndex }
 }
 
+/**
+ * Same fixed mode as compareCandidatesByExecutionOrder, so group order stays
+ * consistent with the attempt order inside each group.
+ */
 export const compareCandidateExecutionGroupKeys = (
   a: CandidateExecutionGroupKey,
   b: CandidateExecutionGroupKey,
+  mode: CandidateExecutionOrderMode,
 ): number => {
   if (a.hasAttempted !== b.hasAttempted) {
     return a.hasAttempted ? -1 : 1
   }
-  if (a.executionIndex != null && b.executionIndex != null && a.executionIndex !== b.executionIndex) {
+  if (mode === 'execution_index' && a.executionIndex !== b.executionIndex) {
+    if (a.executionIndex == null) return 1
+    if (b.executionIndex == null) return -1
     return a.executionIndex - b.executionIndex
   }
-  if (a.startedAtMs != null && b.startedAtMs != null && a.startedAtMs !== b.startedAtMs) {
+  if (a.startedAtMs != b.startedAtMs) {
+    if (a.startedAtMs == null) return 1
+    if (b.startedAtMs == null) return -1
     return a.startedAtMs - b.startedAtMs
   }
-  if (a.startedAtMs != null && b.startedAtMs == null) return -1
-  if (a.startedAtMs == null && b.startedAtMs != null) return 1
   if (a.startIndex !== b.startIndex) return a.startIndex - b.startIndex
   return a.endIndex - b.endIndex
 }

@@ -9,6 +9,7 @@ import {
   compareCandidateExecutionGroupKeys,
   isAttemptedCandidate,
   resolveCandidateExecutionGroupKey,
+  resolveCandidateExecutionOrderMode,
   sortCandidatesByExecutionOrder,
 } from '@/features/usage/utils/poolTrace'
 
@@ -237,8 +238,8 @@ describe('poolTrace', () => {
       started_at: '2026-05-06T12:00:01.000Z',
     })
 
-    expect(compareCandidatesByExecutionOrder(rank0Late, rank1Early)).toBeGreaterThan(0)
-    expect(sortCandidatesByExecutionOrder([rank0Late, rank1Early]).map(item => item.id))
+    expect(compareCandidatesByExecutionOrder(rank0Late, rank1Early, 'started_at')).toBeGreaterThan(0)
+    expect(sortCandidatesByExecutionOrder([rank0Late, rank1Early], 'started_at').map(item => item.id))
       .toEqual(['rank-1', 'rank-0'])
   })
 
@@ -325,9 +326,84 @@ describe('poolTrace', () => {
       { id: 'later', key: resolveCandidateExecutionGroupKey([later], 5, 5) },
       { id: 'earlier', key: resolveCandidateExecutionGroupKey([earlier], 7, 7) },
     ]
-    groups.sort((a, b) => compareCandidateExecutionGroupKeys(a.key, b.key))
+    groups.sort((a, b) => compareCandidateExecutionGroupKeys(a.key, b.key, 'started_at'))
 
     expect(groups.map(group => group.id)).toEqual(['earlier', 'later', 'unstarted'])
+  })
+
+  it('selects execution_index only when every attempted record has a unique index', () => {
+    const indexed = (id: string, executionIndex: number) => buildCandidate({
+      id,
+      candidate_index: executionIndex,
+      status: 'failed',
+      extra_data: { execution_index: executionIndex },
+    })
+
+    expect(resolveCandidateExecutionOrderMode([indexed('a', 0), indexed('b', 1)])).toBe('execution_index')
+    // A missing WebSocket/historical index makes the whole set incomplete.
+    expect(resolveCandidateExecutionOrderMode([
+      indexed('a', 0),
+      buildCandidate({ id: 'ws', candidate_index: 1, status: 'failed' }),
+    ])).toBe('started_at')
+    // Duplicate ordinals are not consistent enough to sort by.
+    expect(resolveCandidateExecutionOrderMode([indexed('a', 0), indexed('b', 0)])).toBe('started_at')
+    // Untried candidates do not affect the decision.
+    expect(resolveCandidateExecutionOrderMode([
+      indexed('a', 0),
+      buildCandidate({ id: 'available', candidate_index: 1, status: 'available' }),
+    ])).toBe('execution_index')
+  })
+
+  it('avoids a nontransitive mixed sort by falling back to started_at for an incomplete set', () => {
+    // Naively mixing keys gives A < B < C but C < A, which corrupts Array.sort.
+    const a = buildCandidate({
+      id: 'a',
+      candidate_index: 0,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:10.000Z',
+      extra_data: { execution_index: 5 },
+    })
+    const b = buildCandidate({
+      id: 'b',
+      candidate_index: 1,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:50.000Z',
+    })
+    const c = buildCandidate({
+      id: 'c',
+      candidate_index: 2,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:90.000Z',
+      extra_data: { execution_index: 2 },
+    })
+
+    expect(resolveCandidateExecutionOrderMode([a, b, c])).toBe('started_at')
+    expect(sortCandidatesByExecutionOrder([c, a, b]).map(item => item.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('orders execution-indexed groups by ordinal even when started_at disagrees', () => {
+    const laterStartEarlierOrdinal = buildCandidate({
+      id: 'ordinal-0',
+      candidate_index: 1,
+      status: 'success',
+      started_at: '2026-05-06T12:00:09.000Z',
+      extra_data: { execution_index: 0 },
+    })
+    const earlierStartLaterOrdinal = buildCandidate({
+      id: 'ordinal-1',
+      candidate_index: 0,
+      status: 'failed',
+      started_at: '2026-05-06T12:00:00.000Z',
+      extra_data: { execution_index: 1 },
+    })
+
+    const groups = [
+      { id: 'later-ordinal', key: resolveCandidateExecutionGroupKey([earlierStartLaterOrdinal], 0, 0) },
+      { id: 'earlier-ordinal', key: resolveCandidateExecutionGroupKey([laterStartEarlierOrdinal], 1, 1) },
+    ]
+    groups.sort((x, y) => compareCandidateExecutionGroupKeys(x.key, y.key, 'execution_index'))
+
+    expect(groups.map(group => group.id)).toEqual(['earlier-ordinal', 'later-ordinal'])
   })
 
   it('treats a mixed group as attempted using its earliest started_at', () => {

@@ -99,6 +99,12 @@ export interface CandidateRecord {
     first_byte_time_ms?: number | null
     needs_conversion?: boolean
     provider_api_format?: string | null
+    /**
+     * Request-scoped monotonic ordinal of the attempt that actually reached
+     * the upstream (HTTP candidate loop only). WebSocket turns and historical
+     * records may omit it.
+     */
+    execution_index?: number | null
     proxy?: CandidateProxy | null
     pool_selection?: {
       reason: string

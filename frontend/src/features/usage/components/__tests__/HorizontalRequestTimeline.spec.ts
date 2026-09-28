@@ -499,6 +499,39 @@ describe('HorizontalRequestTimeline', () => {
       .toEqual(['Provider Executed First', 'Provider Started Earlier'])
   })
 
+  it('falls back to started_at when an attempt is missing execution_index', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'http-indexed',
+        provider_id: 'provider-http',
+        provider_name: 'Provider HTTP',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:09.000Z',
+        finished_at: '2026-05-06T12:00:10.000Z',
+        extra_data: { execution_index: 0 },
+      }),
+      buildCandidate({
+        id: 'websocket-without-index',
+        provider_id: 'provider-ws',
+        provider_name: 'Provider WS',
+        candidate_index: 1,
+        status: 'success',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    // 集合不完整（WebSocket 轮次没有 execution_index）时整条时间线统一回退
+    // 到 started_at，而不是混用两种键。
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Provider WS', 'Provider HTTP'])
+  })
+
   it('orders same-provider retries by actual execution time and keeps scheduling indices in titles', async () => {
     const trace = buildTrace([
       buildCandidate({
