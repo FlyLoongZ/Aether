@@ -195,6 +195,24 @@ afterEach(() => {
 })
 
 describe('RoutingTab effective routing policy', () => {
+  it('shows the selected group name after the priority mode', async () => {
+    const data = makeRoutingData()
+    data.effective_policy = { source: 'system_default', group_name: '通用翻译策略' }
+    const { root } = mountTab(data)
+    await nextTick()
+
+    const groupName = root.querySelector('[data-testid="routing-group-name"]')
+    expect(groupName?.textContent).toBe('通用翻译策略')
+    const header = groupName?.parentElement?.textContent || ''
+    expect(header.indexOf('通用翻译策略')).toBeGreaterThan(header.indexOf('提供商优先'))
+  })
+
+  it('omits the group label when its name is unavailable', async () => {
+    const { root } = mountTab(makeRoutingData())
+    await nextTick()
+    expect(root.querySelector('[data-testid="routing-group-name"]')).toBeNull()
+  })
+
   it('sorts providers and labels them by effective provider priority', async () => {
     const { root } = mountTab(makeRoutingData())
     await nextTick()

@@ -16,6 +16,13 @@
             <span class="text-xs text-muted-foreground">
               {{ getPriorityModeLabel(routingData.priority_mode) }}
             </span>
+            <template v-if="routingData.effective_policy?.group_name?.trim()">
+              <span class="text-xs text-muted-foreground">·</span>
+              <span
+                class="text-xs text-muted-foreground break-all"
+                data-testid="routing-group-name"
+              >{{ routingData.effective_policy.group_name }}</span>
+            </template>
           </template>
         </div>
         <div class="flex items-center gap-2">
