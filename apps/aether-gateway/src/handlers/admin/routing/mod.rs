@@ -412,6 +412,7 @@ async fn dry_run_routing_group(
     let mut body = payload.body.unwrap_or_else(|| json!({}));
     let policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
         group_id: Some(group.id.as_str()),
+        group_name: Some(group.name.as_str()),
         group_version: Some(group.version),
         group_config_json: &group.config_json,
         selection_source: "admin_dry_run",

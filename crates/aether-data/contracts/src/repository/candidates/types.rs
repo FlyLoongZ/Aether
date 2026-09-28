@@ -1446,6 +1446,7 @@ fn sanitize_candidate_error_propagation(value: &str) -> Option<&'static str> {
 fn sanitize_candidate_routing_trace(value: &serde_json::Value) -> Option<serde_json::Value> {
     let object = value.as_object()?;
     let mut summary = serde_json::Map::new();
+    insert_candidate_routing_free_string(object, &mut summary, "group_name");
     insert_candidate_i64(object, &mut summary, "group_version");
     insert_candidate_known_string(
         object,
@@ -1611,6 +1612,28 @@ fn insert_candidate_known_string(
         target.insert(
             field.to_string(),
             serde_json::Value::String(value.to_string()),
+        );
+    }
+}
+
+// The selected routing group name is request-scoped display metadata (a
+// snapshot of the group selected for this request), not free-form diagnostics,
+// so it is preserved verbatim apart from trimming and the shared diagnostic
+// size cap. The opaque `group_id` stays redacted as before.
+fn insert_candidate_routing_free_string(
+    source: &serde_json::Map<String, serde_json::Value>,
+    target: &mut serde_json::Map<String, serde_json::Value>,
+    field: &str,
+) {
+    if let Some(value) = source
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        target.insert(
+            field.to_string(),
+            serde_json::Value::String(limit_candidate_diagnostic_text(value.to_string())),
         );
     }
 }
@@ -2160,6 +2183,8 @@ mod tests {
                     "ttfb_ms": 17
                 },
                 "routing_trace": {
+                    "group_id": "group-1",
+                    "group_name": "Tenant Group",
                     "selection_source": "system_default",
                     "selected_rules": ["tenant-secret"],
                     "global_candidates": [{"key_id": "secret-key"}],
@@ -2264,6 +2289,11 @@ mod tests {
         assert_eq!(extra["proxy"]["url"], "https://proxy.example/");
         assert_eq!(extra["proxy"]["ttfb_ms"], 17);
         assert_eq!(extra["routing_trace"]["selection_source"], "system_default");
+        assert!(
+            extra["routing_trace"].get("group_id").is_none(),
+            "group_id must stay redacted from persisted candidate extra_data"
+        );
+        assert_eq!(extra["routing_trace"]["group_name"], "Tenant Group");
         assert_eq!(extra["routing_trace"]["selected_rule_count"], 1);
         assert_eq!(extra["routing_trace"]["global_candidate_count"], 1);
         assert_eq!(

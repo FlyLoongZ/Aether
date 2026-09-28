@@ -60,6 +60,8 @@ pub struct RoutingDecisionTrace {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_version: Option<i64>,
     pub selection_source: String,
     #[serde(default)]

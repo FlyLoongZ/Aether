@@ -5523,6 +5523,7 @@ mod tests {
     ) -> ResolvedRoutingPolicy {
         ResolvedRoutingPolicy {
             group_id: Some("routing-group-1".to_string()),
+            group_name: None,
             group_version: Some(1),
             selection_source: "test".to_string(),
             requested_model: "gpt-5".to_string(),

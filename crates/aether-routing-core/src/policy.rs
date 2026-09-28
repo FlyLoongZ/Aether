@@ -52,6 +52,8 @@ pub struct ResolvedRoutingPolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_version: Option<i64>,
     pub selection_source: String,
     pub requested_model: String,
@@ -81,6 +83,7 @@ pub fn resolve_routing_policy(
 
     let mut policy = ResolvedRoutingPolicy {
         group_id: input.group_id.map(str::to_string),
+        group_name: None,
         group_version: input.group_version,
         selection_source: input.selection_source.to_string(),
         requested_model: input.requested_model.to_string(),

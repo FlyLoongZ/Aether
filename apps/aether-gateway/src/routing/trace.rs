@@ -6,6 +6,7 @@ pub(crate) fn build_routing_trace_seed(
 ) -> RoutingDecisionTrace {
     RoutingDecisionTrace {
         group_id: policy.group_id.clone(),
+        group_name: policy.group_name.clone(),
         group_version: policy.group_version,
         selection_source: policy.selection_source.clone(),
         selected_rules: policy

@@ -363,6 +363,7 @@ mod tests {
         candidate.key_global_priority_for_format = Some(2);
         let policy = aether_routing_core::ResolvedRoutingPolicy {
             group_id: Some("group-1".to_string()),
+            group_name: None,
             group_version: Some(1),
             selection_source: "system_default".to_string(),
             requested_model: "gpt-5".to_string(),
@@ -400,6 +401,7 @@ mod tests {
             .with_data_state_for_tests(data_state);
         let policy = aether_routing_core::ResolvedRoutingPolicy {
             group_id: Some("group-1".to_string()),
+            group_name: None,
             group_version: Some(1),
             selection_source: "system_default".to_string(),
             requested_model: "gpt-5.4-mini".to_string(),
@@ -435,6 +437,7 @@ mod tests {
         candidate.key_global_priority_for_format = Some(2);
         let policy = aether_routing_core::ResolvedRoutingPolicy {
             group_id: Some("group-1".to_string()),
+            group_name: None,
             group_version: Some(1),
             selection_source: "system_default".to_string(),
             requested_model: "gpt-5".to_string(),

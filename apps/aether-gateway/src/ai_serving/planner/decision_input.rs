@@ -78,6 +78,7 @@ pub(crate) struct LocalAuthenticatedDecisionInput {
 #[derive(Debug, Clone)]
 pub(crate) struct LocalRoutingRequestContext {
     pub(crate) group_id: Option<String>,
+    pub(crate) group_name: Option<String>,
     pub(crate) group_version: Option<i64>,
     pub(crate) group_config_json: Value,
     pub(crate) selection_source: String,
@@ -213,6 +214,7 @@ pub(crate) fn apply_provider_request_routing_policy_to_decision_with_websocket_m
     let provider_headers_json = headers_to_routing_value(&provider_headers);
     let policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
         group_id: context.group_id.as_deref(),
+        group_name: context.group_name.as_deref(),
         group_version: context.group_version,
         group_config_json: &context.group_config_json,
         selection_source: context.selection_source.as_str(),
@@ -635,6 +637,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
             selection.group.map(|group| {
                 (
                     Some(group.id),
+                    Some(group.name),
                     Some(group.version),
                     group.config_json,
                     selection.source,
@@ -657,7 +660,8 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
         }
     };
 
-    let Some((group_id, group_version, group_config_json, selection_source)) = selected_group
+    let Some((group_id, group_name, group_version, group_config_json, selection_source)) =
+        selected_group
     else {
         return Err(routing_selection_error(
             GatewayRoutingSelectionError::NoDefault,
@@ -670,6 +674,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
         body_json,
         client_api_format,
         group_id.as_deref(),
+        group_name.as_deref(),
         group_version,
         &group_config_json,
         selection_source.as_str(),
@@ -681,6 +686,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
     let policy_resolve_started_at = std::time::Instant::now();
     let policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
         group_id: group_id.as_deref(),
+        group_name: group_name.as_deref(),
         group_version,
         group_config_json: &group_config_json,
         selection_source: selection_source.as_str(),
@@ -742,6 +748,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
     let final_policy_resolve_started_at = std::time::Instant::now();
     let mut final_policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
         group_id: group_id.as_deref(),
+        group_name: group_name.as_deref(),
         group_version,
         group_config_json: &group_config_json,
         selection_source: selection_source.as_str(),
@@ -763,6 +770,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
     input.routing_policy = Some(final_policy);
     input.routing_context = Some(LocalRoutingRequestContext {
         group_id,
+        group_name,
         group_version,
         group_config_json,
         selection_source,
@@ -779,6 +787,7 @@ fn try_attach_static_default_routing_policy_to_input(
     body_json: &Value,
     client_api_format: &str,
     group_id: Option<&str>,
+    group_name: Option<&str>,
     group_version: Option<i64>,
     group_config_json: &Value,
     selection_source: &str,
@@ -787,6 +796,7 @@ fn try_attach_static_default_routing_policy_to_input(
     let Some(policy) =
         resolve_gateway_static_default_routing_policy(GatewayStaticRoutingPolicyInput {
             group_id,
+            group_name,
             group_version,
             group_config_json,
             selection_source,
@@ -1421,6 +1431,7 @@ mod tests {
             model_directive_policy: Default::default(),
             routing_context: Some(LocalRoutingRequestContext {
                 group_id: Some("group-1".to_string()),
+                group_name: Some("Group One".to_string()),
                 group_version: Some(3),
                 selection_source: "explicit_header".to_string(),
                 client_api_format: "openai:chat".to_string(),
@@ -1670,6 +1681,7 @@ mod tests {
             model_directive_policy: Default::default(),
             routing_context: Some(LocalRoutingRequestContext {
                 group_id: Some("stale".to_string()),
+                group_name: Some("Stale Group".to_string()),
                 group_version: Some(1),
                 group_config_json: json!({}),
                 selection_source: "stale".to_string(),
@@ -1695,6 +1707,7 @@ mod tests {
             &json!({"model": "mock-model"}),
             "openai:chat",
             Some("group-1"),
+            Some("Group One"),
             Some(4),
             &group_config_json,
             "system_default",
@@ -1705,6 +1718,7 @@ mod tests {
         assert!(input.routing_context.is_none());
         let policy = input.routing_policy.as_ref().expect("policy should be set");
         assert_eq!(policy.group_id.as_deref(), Some("group-1"));
+        assert_eq!(policy.group_name.as_deref(), Some("Group One"));
         assert_eq!(policy.group_version, Some(4));
         assert_eq!(
             policy.priority_mode,
@@ -1757,6 +1771,7 @@ mod tests {
             &json!({"model": "mock-model"}),
             "openai:chat",
             Some("group-1"),
+            Some("Group One"),
             Some(4),
             &group_config_json,
             "system_default",
@@ -2418,5 +2433,18 @@ mod tests {
             routing_trace["pool_expansion"][0]["selected_order"],
             json!(1)
         );
+    }
+
+    #[test]
+    fn provider_request_routing_trace_records_selected_group_name() {
+        let input = sample_decision_input();
+        let mut decision = sample_decision();
+
+        apply_provider_request_routing_policy_to_decision(&input, &mut decision, None)
+            .expect("provider routing mutation should seed group snapshot");
+
+        let routing_trace = &decision.report_context.as_ref().unwrap()["routing_trace"];
+        assert_eq!(routing_trace["group_id"], json!("group-1"));
+        assert_eq!(routing_trace["group_name"], json!("Group One"));
     }
 }

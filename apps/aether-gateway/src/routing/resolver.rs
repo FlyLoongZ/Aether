@@ -16,6 +16,7 @@ const ROUTING_MODEL_NOT_ALLOWED_MESSAGE: &str = "requested model is not allowed 
 #[derive(Debug, Clone)]
 pub(crate) struct GatewayRoutingPolicyInput<'a> {
     pub group_id: Option<&'a str>,
+    pub group_name: Option<&'a str>,
     pub group_version: Option<i64>,
     pub group_config_json: &'a Value,
     pub selection_source: &'a str,
@@ -32,6 +33,7 @@ pub(crate) struct GatewayRoutingPolicyInput<'a> {
 #[derive(Debug, Clone)]
 pub(crate) struct GatewayStaticRoutingPolicyInput<'a> {
     pub group_id: Option<&'a str>,
+    pub group_name: Option<&'a str>,
     pub group_version: Option<i64>,
     pub group_config_json: &'a Value,
     pub selection_source: &'a str,
@@ -45,6 +47,7 @@ pub(crate) fn resolve_gateway_routing_policy(
     if let Some(policy) =
         resolve_gateway_static_default_routing_policy(GatewayStaticRoutingPolicyInput {
             group_id: input.group_id,
+            group_name: input.group_name,
             group_version: input.group_version,
             group_config_json: input.group_config_json,
             selection_source: input.selection_source,
@@ -57,7 +60,7 @@ pub(crate) fn resolve_gateway_routing_policy(
 
     let config = serde_json::from_value::<RoutingGroupConfig>(input.group_config_json.clone())
         .map_err(|_| invalid_routing_group_config())?;
-    let policy = resolve_routing_policy(
+    let mut policy = resolve_routing_policy(
         &config,
         RoutingPolicyInput {
             group_id: input.group_id,
@@ -74,6 +77,7 @@ pub(crate) fn resolve_gateway_routing_policy(
         },
     )
     .map_err(routing_policy_error)?;
+    policy.group_name = input.group_name.map(str::to_string);
     crate::request_lifecycle::configure_client_disconnect(policy.execution_policy.clone());
     Ok(policy)
 }
@@ -88,6 +92,7 @@ pub(crate) fn resolve_gateway_static_default_routing_policy(
 
     Ok(Some(ResolvedRoutingPolicy {
         group_id: input.group_id.map(str::to_string),
+        group_name: input.group_name.map(str::to_string),
         group_version: input.group_version,
         selection_source: input.selection_source.to_string(),
         requested_model: input.requested_model.to_string(),
@@ -234,6 +239,7 @@ mod tests {
         let static_policy =
             resolve_gateway_static_default_routing_policy(GatewayStaticRoutingPolicyInput {
                 group_id: Some("group-1"),
+                group_name: Some("Group One"),
                 group_version: Some(7),
                 group_config_json: &config,
                 selection_source: "system_default",
@@ -245,6 +251,7 @@ mod tests {
 
         let full_policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
             group_id: Some("group-1"),
+            group_name: Some("Group One"),
             group_version: Some(7),
             group_config_json: &config,
             selection_source: "system_default",
@@ -260,6 +267,7 @@ mod tests {
         .expect("full policy should resolve");
 
         assert_eq!(static_policy, full_policy);
+        assert_eq!(static_policy.group_name.as_deref(), Some("Group One"));
         assert_eq!(static_policy.execution_policy.max_transfer_count, 3);
         assert_eq!(
             static_policy.execution_policy.max_transfer_timeout_seconds,
@@ -302,6 +310,7 @@ mod tests {
         let policy =
             resolve_gateway_static_default_routing_policy(GatewayStaticRoutingPolicyInput {
                 group_id: Some("group-1"),
+                group_name: Some("Group One"),
                 group_version: Some(1),
                 group_config_json: &config,
                 selection_source: "system_default",
@@ -311,6 +320,41 @@ mod tests {
             .expect("dynamic config should not fail static detection");
 
         assert!(policy.is_none());
+    }
+
+    #[test]
+    fn dynamic_policy_records_explicit_nondefault_group_name() {
+        let config = json!({
+            "rules": [{
+                "id": "rule-1",
+                "conditions": {},
+                "actions": [{
+                    "type": "restrict_providers",
+                    "provider_ids": ["provider-1"]
+                }]
+            }]
+        });
+
+        let policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
+            group_id: Some("private-group"),
+            group_name: Some("Private Group"),
+            group_version: Some(2),
+            group_config_json: &config,
+            selection_source: "explicit_header",
+            requested_model: "mock-model",
+            resolved_model: "mock-model",
+            api_format: "openai:chat",
+            user_id: Some("user-1"),
+            api_key_id: Some("key-1"),
+            headers: &json!({}),
+            body: &json!({"model": "mock-model"}),
+            phase: RoutingRulePhase::ClientRequest,
+        })
+        .expect("dynamic policy should resolve through the full resolver");
+
+        assert_eq!(policy.group_id.as_deref(), Some("private-group"));
+        assert_eq!(policy.group_name.as_deref(), Some("Private Group"));
+        assert_eq!(policy.selection_source, "explicit_header");
     }
 
     #[test]
@@ -325,6 +369,7 @@ mod tests {
         let error =
             resolve_gateway_static_default_routing_policy(GatewayStaticRoutingPolicyInput {
                 group_id: Some("group-1"),
+                group_name: Some("Group One"),
                 group_version: Some(1),
                 group_config_json: &config,
                 selection_source: "system_default",
@@ -358,6 +403,7 @@ mod tests {
 
         let error = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
             group_id: Some("group-1"),
+            group_name: Some("Group One"),
             group_version: Some(1),
             group_config_json: &config,
             selection_source: "system_default",
