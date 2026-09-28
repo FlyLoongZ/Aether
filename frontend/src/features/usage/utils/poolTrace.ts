@@ -194,72 +194,6 @@ export const sortCandidatesByExecutionOrder = (
   return [...candidates].sort((a, b) => compareCandidatesByExecutionOrder(a, b, mode))
 }
 
-export interface CandidateExecutionGroupKey {
-  hasAttempted: boolean
-  executionIndex: number | null
-  startedAtMs: number | null
-  startIndex: number
-  endIndex: number
-}
-
-/**
- * Groups are still assembled from scheduling order (consecutive same-provider
- * runs), but their placement on the track follows the earliest real execution
- * key of any attempted member. Fully unstarted groups sort after every
- * attempted group and fall back to their scheduling position.
- */
-export const resolveCandidateExecutionGroupKey = (
-  candidates: CandidateRecord[],
-  startIndex: number,
-  endIndex: number,
-): CandidateExecutionGroupKey => {
-  let hasAttempted = false
-  let executionIndex: number | null = null
-  let startedAtMs: number | null = null
-
-  for (const candidate of candidates) {
-    if (!isAttemptedCandidate(candidate)) continue
-    hasAttempted = true
-    const index = candidateExecutionIndex(candidate)
-    if (index != null && (executionIndex == null || index < executionIndex)) {
-      executionIndex = index
-    }
-    const ms = toTimestampMs(candidate.started_at)
-    if (ms == null) continue
-    if (startedAtMs == null || ms < startedAtMs) {
-      startedAtMs = ms
-    }
-  }
-
-  return { hasAttempted, executionIndex, startedAtMs, startIndex, endIndex }
-}
-
-/**
- * Same fixed mode as compareCandidatesByExecutionOrder, so group order stays
- * consistent with the attempt order inside each group.
- */
-export const compareCandidateExecutionGroupKeys = (
-  a: CandidateExecutionGroupKey,
-  b: CandidateExecutionGroupKey,
-  mode: CandidateExecutionOrderMode,
-): number => {
-  if (a.hasAttempted !== b.hasAttempted) {
-    return a.hasAttempted ? -1 : 1
-  }
-  if (mode === 'execution_index' && a.executionIndex !== b.executionIndex) {
-    if (a.executionIndex == null) return 1
-    if (b.executionIndex == null) return -1
-    return a.executionIndex - b.executionIndex
-  }
-  if (a.startedAtMs != b.startedAtMs) {
-    if (a.startedAtMs == null) return 1
-    if (b.startedAtMs == null) return -1
-    return a.startedAtMs - b.startedAtMs
-  }
-  if (a.startIndex !== b.startIndex) return a.startIndex - b.startIndex
-  return a.endIndex - b.endIndex
-}
-
 export const parseTimelineStatus = (value: unknown): CandidateRecord['status'] | null => {
   if (typeof value !== 'string') return null
   const normalized = value.trim().toLowerCase()
@@ -429,4 +363,55 @@ export function buildPoolAttemptCandidatesFromAudit(
       return isPoolParticipatedCandidate(merged) ? merged : null
     })
     .filter((item): item is CandidateRecord => item !== null)
+}
+
+export interface CandidateExecutionPartition {
+  partition: 'executed' | 'unattempted'
+  identity: string
+  isPool: boolean
+  candidates: CandidateRecord[]
+}
+
+const providerIdentityOf = (
+  candidate: Pick<CandidateRecord, 'provider_id' | 'provider_name'>,
+): string => {
+  const providerId = String(candidate.provider_id || '').trim()
+  if (providerId) return `provider_id:${providerId}`
+  const providerName = String(candidate.provider_name || '').trim().toLowerCase()
+  return `provider_name:${providerName || '未知'}`
+}
+
+/**
+ * Build CONTIGUOUS groups from the executed order itself, not from scheduling
+ * order. The whole combined attempt list is sorted once (single mode), then two
+ * neighbours merge only when they share the same partition (executed vs
+ * unattempted) and the same identity (pool id when present, otherwise provider
+ * identity). Because grouping walks the executed list, a re-attempted provider
+ * that is interrupted by another provider/pool stays a separate node instead of
+ * collapsing across the gap and inverting the real execution order.
+ */
+export const groupCandidatesByExecutionContiguity = (
+  candidates: CandidateRecord[],
+  mode: CandidateExecutionOrderMode = resolveCandidateExecutionOrderMode(candidates),
+): CandidateExecutionPartition[] => {
+  const ordered = sortCandidatesByExecutionOrder(candidates, mode)
+  const groups: CandidateExecutionPartition[] = []
+  let current: CandidateExecutionPartition | null = null
+
+  for (const candidate of ordered) {
+    const partition = isAttemptedCandidate(candidate) ? 'executed' : 'unattempted'
+    const poolId = extractPoolGroupId(candidate)
+    const isPool = poolId != null
+    const identity = isPool ? `pool:${poolId}` : providerIdentityOf(candidate)
+
+    if (current && current.partition === partition && current.identity === identity) {
+      current.candidates.push(candidate)
+      continue
+    }
+
+    current = { partition, identity, isPool, candidates: [candidate] }
+    groups.push(current)
+  }
+
+  return groups
 }

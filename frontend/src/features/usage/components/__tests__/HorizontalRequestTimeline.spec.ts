@@ -615,7 +615,7 @@ describe('HorizontalRequestTimeline', () => {
       .toEqual(['#0 · Scheduled First · 失败'])
   })
 
-  it('keeps A -> B -> A as separate groups ordered by actual execution without regrouping', async () => {
+  it('keeps A,A,B scheduling ordered as A,B,A execution with three separate nodes', async () => {
     const trace = buildTrace([
       buildCandidate({
         id: 'a-first',
@@ -623,6 +623,15 @@ describe('HorizontalRequestTimeline', () => {
         provider_name: 'Provider A',
         candidate_index: 0,
         status: 'failed',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+      }),
+      buildCandidate({
+        id: 'a-second',
+        provider_id: 'provider-a',
+        provider_name: 'Provider A',
+        candidate_index: 1,
+        status: 'success',
         started_at: '2026-05-06T12:00:03.000Z',
         finished_at: '2026-05-06T12:00:04.000Z',
       }),
@@ -630,17 +639,8 @@ describe('HorizontalRequestTimeline', () => {
         id: 'b-middle',
         provider_id: 'provider-b',
         provider_name: 'Provider B',
-        candidate_index: 1,
-        status: 'failed',
-        started_at: '2026-05-06T12:00:01.000Z',
-        finished_at: '2026-05-06T12:00:02.000Z',
-      }),
-      buildCandidate({
-        id: 'a-last',
-        provider_id: 'provider-a',
-        provider_name: 'Provider A',
         candidate_index: 2,
-        status: 'success',
+        status: 'failed',
         started_at: '2026-05-06T12:00:02.000Z',
         finished_at: '2026-05-06T12:00:03.000Z',
       }),
@@ -650,28 +650,34 @@ describe('HorizontalRequestTimeline', () => {
     await nextTick()
 
     const groups = [...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
-    // 三个组仍然独立，没有把两个 A 合并后倒置。
+    // 调度是 A,A,B，但真实执行是 A,B,A；两个 A 被 B 隔开，必须保持三个节点，
+    // 不能在调度顺序里把两个 A 合并后让 A 的成功排到 B 之前。
     expect(groups).toHaveLength(3)
-    expect(groups.map(group => group.dataset.groupStartIndex)).toEqual(['1', '2', '0'])
+    expect(groups.map(group => group.dataset.groupId)).toEqual([
+      'provider_id:provider-a',
+      'provider_id:provider-b',
+      'provider_id:provider-a',
+    ])
+    expect(groups.map(group => group.dataset.groupStartIndex)).toEqual(['0', '2', '1'])
 
     const nodeDots = [...root.querySelectorAll<HTMLElement>('.node-dot')]
     expect(nodeDots[0].classList.contains('status-failed')).toBe(true)
-    expect(nodeDots[1].classList.contains('status-success')).toBe(true)
-    expect(nodeDots[2].classList.contains('status-failed')).toBe(true)
+    expect(nodeDots[1].classList.contains('status-failed')).toBe(true)
+    expect(nodeDots[2].classList.contains('status-success')).toBe(true)
   })
 
-  it('orders a pool A -> B -> A by execution while keeping each pool as one group', async () => {
+  it('keeps a repeated pool interrupted by another provider as three nodes in execution order', async () => {
     const trace = buildTrace([
       buildCandidate({
         id: 'pool-a-first',
         provider_id: 'provider-pool-a',
-        provider_name: 'Provider A',
-        key_name: 'A Scheduled First',
+        provider_name: 'Pool A',
+        key_name: 'A First',
         candidate_index: 0,
         status: 'failed',
-        started_at: '2026-05-06T12:00:03.000Z',
-        finished_at: '2026-05-06T12:00:04.000Z',
-        extra_data: { pool_group_id: 'pool-a', execution_index: 2 },
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+        extra_data: { pool_group_id: 'pool-a' },
       }),
       buildCandidate({
         id: 'plain-b',
@@ -680,20 +686,19 @@ describe('HorizontalRequestTimeline', () => {
         key_name: 'B Key',
         candidate_index: 1,
         status: 'failed',
-        started_at: '2026-05-06T12:00:01.000Z',
-        finished_at: '2026-05-06T12:00:02.000Z',
-        extra_data: { execution_index: 0 },
+        started_at: '2026-05-06T12:00:02.000Z',
+        finished_at: '2026-05-06T12:00:03.000Z',
       }),
       buildCandidate({
         id: 'pool-a-last',
         provider_id: 'provider-pool-a',
-        provider_name: 'Provider A',
-        key_name: 'A Executed First',
+        provider_name: 'Pool A',
+        key_name: 'A Last',
         candidate_index: 2,
         status: 'success',
-        started_at: '2026-05-06T12:00:02.000Z',
-        finished_at: '2026-05-06T12:00:03.000Z',
-        extra_data: { pool_group_id: 'pool-a', execution_index: 1 },
+        started_at: '2026-05-06T12:00:03.000Z',
+        finished_at: '2026-05-06T12:00:04.000Z',
+        extra_data: { pool_group_id: 'pool-a' },
       }),
     ])
 
@@ -701,18 +706,96 @@ describe('HorizontalRequestTimeline', () => {
     await nextTick()
 
     const groups = [...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
-    // 同一 pool 的两个尝试合成一个节点（子节点保留），不会拆成两个倒置的 A。
-    expect(groups).toHaveLength(2)
-    expect(groups.map(group => group.dataset.groupId)).toEqual(['Provider B', 'pool:pool-a'])
-    expect(groups.map(group => group.dataset.groupStartIndex)).toEqual(['1', '0'])
+    // 同一个 pool 的两个尝试被别的 provider 隔开，必须保持三个节点，
+    // 只有相邻的 pool 尝试才会合并成子节点。
+    expect(groups).toHaveLength(3)
+    expect(groups.map(group => group.dataset.groupId)).toEqual([
+      'pool:pool-a',
+      'provider_id:provider-b',
+      'pool:pool-a',
+    ])
+    expect(groups.map(group => group.dataset.groupStartIndex)).toEqual(['0', '1', '2'])
+    expect(root.querySelectorAll('.sub-dot')).toHaveLength(0)
 
     const nodeDots = [...root.querySelectorAll<HTMLElement>('.node-dot')]
     expect(nodeDots[0].classList.contains('status-failed')).toBe(true)
-    expect(nodeDots[1].classList.contains('status-success')).toBe(true)
-    // 执行更晚的 pool 尝试退为子节点，维持 pool 内的实际执行顺序。
-    expect([...root.querySelectorAll<HTMLButtonElement>('.sub-dot')]
-      .map(dot => dot.getAttribute('title')))
-      .toEqual(['#0 · A Scheduled First · 失败'])
+    expect(nodeDots[1].classList.contains('status-failed')).toBe(true)
+    expect(nodeDots[2].classList.contains('status-success')).toBe(true)
+  })
+
+  it('splits executed and skipped attempts of the same provider into separate blocks', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'a-executed',
+        provider_id: 'provider-a',
+        provider_name: 'Provider A',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+      }),
+      buildCandidate({
+        id: 'a-skipped',
+        provider_id: 'provider-a',
+        provider_name: 'Provider A',
+        candidate_index: 1,
+        status: 'skipped',
+        skip_reason: 'key_rpm_exhausted',
+        started_at: undefined,
+        finished_at: undefined,
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    // 同一个 provider 的执行尝试与被跳过尝试属于不同分区，必须拆成两个节点，
+    // 被跳过的进入未执行块。
+    expect([...root.querySelectorAll<HTMLElement>('.node-label')]
+      .map(label => label.textContent?.trim()))
+      .toEqual(['Provider A', 'Provider A'])
+    const nodeDots = [...root.querySelectorAll<HTMLElement>('.node-dot')]
+    expect(nodeDots[0].classList.contains('status-failed')).toBe(true)
+    expect(nodeDots[1].classList.contains('status-skipped')).toBe(true)
+    expect(root.querySelectorAll('.node-line.unstarted-boundary')).toHaveLength(1)
+    expect(root.querySelector('[data-timeline-unstarted-label]')?.textContent?.trim()).toBe('未执行')
+  })
+
+  it('merges consecutive pool attempts into one node while preserving subdots', async () => {
+    const trace = buildTrace([
+      buildCandidate({
+        id: 'pool-adjacent-0',
+        provider_id: 'provider-pool-adjacent',
+        provider_name: 'Pool Adjacent',
+        key_name: 'Attempt 0',
+        candidate_index: 0,
+        status: 'failed',
+        started_at: '2026-05-06T12:00:01.000Z',
+        finished_at: '2026-05-06T12:00:02.000Z',
+        extra_data: { pool_group_id: 'pool-adjacent' },
+      }),
+      buildCandidate({
+        id: 'pool-adjacent-1',
+        provider_id: 'provider-pool-adjacent',
+        provider_name: 'Pool Adjacent',
+        key_name: 'Attempt 1',
+        candidate_index: 1,
+        status: 'success',
+        started_at: '2026-05-06T12:00:02.000Z',
+        finished_at: '2026-05-06T12:00:03.000Z',
+        extra_data: { pool_group_id: 'pool-adjacent' },
+      }),
+    ])
+
+    const root = mountTimeline(trace)
+    await nextTick()
+
+    const groups = [...root.querySelectorAll<HTMLElement>('.minimal-node-group')]
+    expect(groups).toHaveLength(1)
+    expect(groups[0].dataset.groupId).toBe('pool:pool-adjacent')
+    expect(root.querySelectorAll('.sub-dot')).toHaveLength(1)
+    expect(root.querySelector<HTMLButtonElement>('.sub-dot')?.getAttribute('title'))
+      .toBe('#1 · Attempt 1 · 成功')
   })
 
   it('marks the unattempted block after pool execution groups as well', async () => {
@@ -888,17 +971,16 @@ describe('HorizontalRequestTimeline', () => {
     const root = mountTimeline(trace)
     await nextTick()
 
+    // 同一 pool 的成功尝试（已执行）与被跳过尝试（未执行）分区不同，必须拆成
+    // 两个节点：成功节点留在执行区，跳过节点进入未执行区。
     const labels = [...root.querySelectorAll<HTMLElement>('.node-label')]
       .map(label => label.textContent?.trim())
-    expect(labels).toEqual(['CodexFree2'])
-    // 成功的运行时候选是真正执行过的尝试，因此成为主节点；
-    // 被跳过的候选作为未执行的子节点保留在它之后。
-    expect(root.querySelector<HTMLElement>('.node-dot')?.classList.contains('status-success'))
-      .toBe(true)
-    expect([...root.querySelectorAll<HTMLButtonElement>('.sub-dot')]
-      .map(dot => dot.getAttribute('title'))).toEqual([
-      '#0 · CodexFree2 · 跳过',
-    ])
+    expect(labels).toEqual(['CodexFree2', 'CodexFree2'])
+    const nodeDots = [...root.querySelectorAll<HTMLElement>('.node-dot')]
+    expect(nodeDots[0].classList.contains('status-success')).toBe(true)
+    expect(nodeDots[1].classList.contains('status-skipped')).toBe(true)
+    expect(root.querySelectorAll('.sub-dot')).toHaveLength(0)
+    expect(root.querySelectorAll('.node-line.unstarted-boundary')).toHaveLength(1)
   })
 
   it('uses candidate terminal status for node colors instead of overriding with HTTP code', async () => {

@@ -61,7 +61,7 @@
           <div class="minimal-track">
             <div
               v-for="(group, groupIndex) in groupedTimeline"
-              :key="group.id + ':' + group.startIndex"
+              :key="group.key"
               class="minimal-node-group"
               :data-group-id="group.id"
               :data-group-start-index="group.startIndex"
@@ -616,16 +616,12 @@ import { buildFailureDiagnosticBundle, diagnosticPathFromMessage, visibleFailure
 import { prepareDiagnosticExport, sanitizeDiagnostic } from '../utils/diagnosticExport'
 import { formatCandidateSkipReason } from '../utils/skipReason'
 import {
-  buildPoolGroupVisibleAttempts,
   buildPoolParticipatedCandidates,
-  compareCandidateExecutionGroupKeys,
   compareCandidatesBySchedulingOrder,
-  extractPoolGroupId,
+  groupCandidatesByExecutionContiguity,
   isAttemptedCandidate,
   makeAttemptKey,
-  resolveCandidateExecutionGroupKey,
   resolveCandidateExecutionOrderMode,
-  sortCandidatesByExecutionOrder,
   TIMELINE_STATUS,
   type CandidateExecutionOrderMode,
 } from '../utils/poolTrace'
@@ -633,6 +629,7 @@ import {
 // 节点组类型
 interface NodeGroup {
   id: string
+  key: string
   providerName: string
   primary: CandidateRecord
   primaryStatus: string
@@ -846,10 +843,6 @@ const STATUS_PRIORITY: Record<string, number> = {
   success: 4,
 }
 
-const isParticipatedCandidate = (candidate: CandidateRecord): boolean => {
-  return TIMELINE_STATUS.includes(candidate.status)
-}
-
 const isLiveCandidate = (candidate: CandidateRecord): boolean => {
   if (candidate.status === 'streaming') return true
   return candidate.status === 'pending' && Boolean(candidate.started_at)
@@ -875,13 +868,6 @@ const allTraceCandidates = computed<CandidateRecord[]>(() => {
     .filter(c => TIMELINE_STATUS.includes(c.status))
     .sort(compareBySchedulingOrder)
 })
-
-// 组内尝试按实际执行顺序排列：已启动的在前（execution_index 或 started_at 升序），
-// 未启动／被跳过的尝试跟随其后，避免把没有执行时间的候选混入执行序列。
-const orderGroupAttempts = (
-  attempts: CandidateRecord[],
-  mode: CandidateExecutionOrderMode,
-): CandidateRecord[] => sortCandidatesByExecutionOrder(attempts, mode)
 
 /**
  * 被跳过的候选：调度阶段就判定"这次不能用"，从未真正向上游发起请求。
@@ -918,23 +904,6 @@ const poolAttemptCandidates = computed<CandidateRecord[]>(() => {
   )
 })
 
-const poolAttemptsByGroup = computed<Map<string, CandidateRecord[]>>(() => {
-  const grouped = new Map<string, CandidateRecord[]>()
-  for (const attempt of poolAttemptCandidates.value) {
-    const groupId =
-      extractPoolGroupId(attempt)
-      || String(attempt.provider_id || '').trim()
-      || '__pool_group__'
-    const existing = grouped.get(groupId)
-    if (existing) {
-      existing.push(attempt)
-    } else {
-      grouped.set(groupId, [attempt])
-    }
-  }
-  return grouped
-})
-
 const poolAttemptKeySet = computed<Set<string>>(() => {
   return new Set(
     poolAttemptCandidates.value.map((item) => makeAttemptKey(item.candidate_index, item.retry_index)),
@@ -948,20 +917,27 @@ const timeline = computed<CandidateRecord[]>(() => {
   )
 })
 
+// 合并普通候选与号池候选，仅按尝试身份（candidate_index + retry_index）去重，
+// 不会因为 provider id/name 相同就丢掉不同的尝试记录。
+const combinedTimelineCandidates = computed<CandidateRecord[]>(() => {
+  const byAttempt = new Map<string, CandidateRecord>()
+  for (const candidate of timeline.value) {
+    byAttempt.set(makeAttemptKey(candidate.candidate_index, candidate.retry_index), candidate)
+  }
+  for (const candidate of poolAttemptCandidates.value) {
+    const key = makeAttemptKey(candidate.candidate_index, candidate.retry_index)
+    if (!byAttempt.has(key)) byAttempt.set(key, candidate)
+  }
+  return [...byAttempt.values()]
+})
+
 // 全量时间线统一选用一种执行排序键：只有所有已启动候选都带有唯一
 // execution_index 时才按它排序（HTTP 候选循环的新记录）；WebSocket 轮次或
 // 历史记录缺字段时整条时间线回退到 started_at，避免在同一比较器里混用两种
 // 键造成不满足传递性的排序。
-const executionOrderMode = computed<CandidateExecutionOrderMode>(() => {
-  const byId = new Map<string, CandidateRecord>()
-  for (const candidate of rawTimeline.value) {
-    byId.set(candidate.id, candidate)
-  }
-  for (const candidate of poolAttemptCandidates.value) {
-    if (!byId.has(candidate.id)) byId.set(candidate.id, candidate)
-  }
-  return resolveCandidateExecutionOrderMode([...byId.values()])
-})
+const executionOrderMode = computed<CandidateExecutionOrderMode>(() =>
+  resolveCandidateExecutionOrderMode(combinedTimelineCandidates.value),
+)
 
 const AUTH_TYPE_PROVIDER_LABEL_MAP: Record<string, string> = {
   codex: 'Codex',
@@ -988,148 +964,53 @@ const getProviderDisplayName = (
   return '未知'
 }
 
-const normalizeProviderIdentity = (value: unknown): string => {
-  if (typeof value !== 'string') return ''
-  return value.trim().toLowerCase()
-}
-
-const buildProviderGroups = (items: CandidateRecord[], mode: CandidateExecutionOrderMode): NodeGroup[] => {
-  const groups: NodeGroup[] = []
-  let currentGroup: NodeGroup | null = null
-
-  items.forEach((candidate) => {
-    const providerKey = candidate.provider_name || '未知'
-
-    if (currentGroup && currentGroup.id === providerKey) {
-      currentGroup.allAttempts.push(candidate)
-      currentGroup.retryCount++
-      currentGroup.endIndex = candidate.candidate_index
-      currentGroup.totalLatency += candidate.latency_ms || 0
-      if (candidate.extra_data?.needs_conversion) {
-        currentGroup.hasConversion = true
-      }
-      const currentPriority = STATUS_PRIORITY[currentGroup.primaryStatus] ?? 0
-      const newPriority = STATUS_PRIORITY[getDisplayStatus(candidate)] ?? 0
-      if (newPriority > currentPriority) {
-        currentGroup.primaryStatus = getDisplayStatus(candidate)
-      }
-      return
-    }
-
-    currentGroup = {
-      id: providerKey,
-      providerName: getProviderDisplayName(candidate),
-      primary: candidate,
-      primaryStatus: getDisplayStatus(candidate),
-      allAttempts: [candidate],
-      retryCount: 0,
-      totalLatency: candidate.latency_ms || 0,
-      startIndex: candidate.candidate_index,
-      endIndex: candidate.candidate_index,
-      hasConversion: candidate.extra_data?.needs_conversion === true,
-      providerApiFormat: candidate.extra_data?.provider_api_format || null,
-      isPoolGroup: false,
-    }
-    groups.push(currentGroup)
-  })
-
-  // 组合成员保持不变（连续同 Provider 合并），仅把组内尝试重排为实际执行顺序，
-  // 这样 A -> B -> A 不会被重新分组／倒置。
-  return groups.map((group) => {
-    const orderedAttempts = orderGroupAttempts(group.allAttempts, mode)
-    return {
-      ...group,
-      allAttempts: orderedAttempts,
-      primary: orderedAttempts[0] || group.primary,
-    }
-  })
-}
-
-// 按实际执行顺序排列分组：有已启动尝试的组在前（按最早执行键），
-// 完全未启动的组（skipped/available 等）在后（按调度顺序）。
-const sortGroupsByExecution = (
-  groups: NodeGroup[],
-  mode: CandidateExecutionOrderMode,
-): NodeGroup[] => {
-  return [...groups].sort((a, b) =>
-    compareCandidateExecutionGroupKeys(
-      resolveCandidateExecutionGroupKey(a.allAttempts, a.startIndex, a.endIndex),
-      resolveCandidateExecutionGroupKey(b.allAttempts, b.startIndex, b.endIndex),
-      mode,
-    ),
-  )
-}
-
-// 将相同 Provider 的所有请求合并为组（同提供商的 Key 放在子节点）
-const groupedTimeline = computed<NodeGroup[]>(() => {
-  const mode = executionOrderMode.value
-  const providerGroups = buildProviderGroups(timeline.value.filter(isParticipatedCandidate), mode)
-  if (poolAttemptsByGroup.value.size === 0) {
-    return sortGroupsByExecution(providerGroups, mode)
+const resolveGroupIndexRange = (attempts: CandidateRecord[]): { startIndex: number, endIndex: number } => {
+  let startIndex = attempts[0].candidate_index
+  let endIndex = attempts[0].candidate_index
+  for (const attempt of attempts) {
+    if (attempt.candidate_index < startIndex) startIndex = attempt.candidate_index
+    if (attempt.candidate_index > endIndex) endIndex = attempt.candidate_index
   }
+  return { startIndex, endIndex }
+}
 
-  const poolProviderIds = new Set<string>()
-  const poolProviderNames = new Set<string>()
-  const poolGroups: NodeGroup[] = []
+// 先在“执行顺序”里排好全部尝试（普通 + 号池），再按相邻关系切分连续分组：
+// 只有分区（已执行 / 未执行）与身份（号池 id 或 provider 身份）都相同的相邻尝试
+// 才合并。A -> B -> A 即使同名也保持独立节点，不会被跨过中间的 provider 重新
+// 分组后倒置真实执行顺序。
+const groupedTimeline = computed<NodeGroup[]>(() => {
+  const partitions = groupCandidatesByExecutionContiguity(
+    combinedTimelineCandidates.value,
+    executionOrderMode.value,
+  )
 
-  for (const [groupId, attemptsRaw] of poolAttemptsByGroup.value.entries()) {
-    const attempts = orderGroupAttempts(attemptsRaw, mode)
-    if (attempts.length === 0) continue
-
-    const visibleAttempts = buildPoolGroupVisibleAttempts(attempts)
-    if (visibleAttempts.length === 0) continue
-
-    const poolPrimaryStatus = visibleAttempts.reduce((best, current) => {
+  return partitions.map((partition) => {
+    const attempts = partition.candidates
+    const primary = attempts[0]
+    const { startIndex, endIndex } = resolveGroupIndexRange(attempts)
+    const primaryStatus = attempts.reduce((best, current) => {
       const bestPriority = STATUS_PRIORITY[best] ?? 0
       const currentStatus = getDisplayStatus(current)
       const currentPriority = STATUS_PRIORITY[currentStatus] ?? 0
       return currentPriority > bestPriority ? currentStatus : best
-    }, getDisplayStatus(visibleAttempts[0]))
+    }, getDisplayStatus(primary))
 
-    const successAttempt = visibleAttempts.find((item) => item.status === 'success')
-    const poolPrimary =
-      successAttempt || visibleAttempts[visibleAttempts.length - 1] || visibleAttempts[0]
-    const startIndex = Math.min(...attempts.map(item => item.candidate_index))
-    const endIndex = Math.max(...attempts.map(item => item.candidate_index))
-
-    poolGroups.push({
-      id: `pool:${groupId}`,
-      providerName: getProviderDisplayName(poolPrimary, { allowAuthTypeFallback: false }),
-      primary: poolPrimary,
-      primaryStatus: poolPrimaryStatus,
-      allAttempts: visibleAttempts,
-      retryCount: Math.max(0, visibleAttempts.length - 1),
-      totalLatency: visibleAttempts.reduce((sum, item) => sum + (item.latency_ms || 0), 0),
+    return {
+      id: partition.identity,
+      key: `${partition.identity}:${primary.candidate_index}:${primary.retry_index}`,
+      providerName: getProviderDisplayName(primary, { allowAuthTypeFallback: !partition.isPool }),
+      primary,
+      primaryStatus,
+      allAttempts: attempts,
+      retryCount: Math.max(0, attempts.length - 1),
+      totalLatency: attempts.reduce((sum, item) => sum + (item.latency_ms || 0), 0),
       startIndex,
       endIndex,
-      hasConversion: visibleAttempts.some((item) => item.extra_data?.needs_conversion === true),
-      providerApiFormat: null,
-      isPoolGroup: true,
-    })
-
-    for (const attempt of attempts) {
-      const providerId = String(attempt.provider_id || '').trim()
-      if (providerId) poolProviderIds.add(providerId)
-      const providerName = normalizeProviderIdentity(attempt.provider_name)
-      if (providerName) poolProviderNames.add(providerName)
+      hasConversion: attempts.some((item) => item.extra_data?.needs_conversion === true),
+      providerApiFormat: primary.extra_data?.provider_api_format || null,
+      isPoolGroup: partition.isPool,
     }
-  }
-
-  const dedupedProviderGroups = providerGroups.filter((group) => {
-    const sameProviderById = group.allAttempts.some((attempt) => {
-      const providerId = String(attempt.provider_id || '').trim()
-      return providerId !== '' && poolProviderIds.has(providerId)
-    })
-    if (sameProviderById) return false
-
-    const groupName = normalizeProviderIdentity(group.primary.provider_name || group.providerName)
-    if (groupName && poolProviderNames.has(groupName)) return false
-
-    return true
   })
-
-  const allGroups = [...poolGroups, ...dedupedProviderGroups]
-  return sortGroupsByExecution(allGroups, mode)
 })
 
 // 格式转换分界点索引（首个 hasConversion=true 的 group index）
@@ -2121,11 +2002,11 @@ const isGroupHovered = (groupIndex: number) => {
 
 // 检查组是否被选中
 const isGroupSelected = (group: NodeGroup) => {
-  return selectedGroupIndex.value === groupedTimeline.value.findIndex(g => g.id === group.id && g.startIndex === group.startIndex)
+  return selectedGroupIndex.value === groupedTimeline.value.findIndex(g => g.key === group.key)
 }
 
 const findGroupIndex = (groups: NodeGroup[], group: NodeGroup): number => {
-  return groups.findIndex(g => g.id === group.id && g.startIndex === group.startIndex)
+  return groups.findIndex(g => g.key === group.key)
 }
 
 const selectedAttemptFromGroups = (groups: NodeGroup[]): CandidateRecord | null => {

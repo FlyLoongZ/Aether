@@ -6,9 +6,8 @@ import {
   buildPoolGroupVisibleAttempts,
   buildPoolParticipatedCandidates,
   compareCandidatesByExecutionOrder,
-  compareCandidateExecutionGroupKeys,
+  groupCandidatesByExecutionContiguity,
   isAttemptedCandidate,
-  resolveCandidateExecutionGroupKey,
   resolveCandidateExecutionOrderMode,
   sortCandidatesByExecutionOrder,
 } from '@/features/usage/utils/poolTrace'
@@ -306,29 +305,38 @@ describe('poolTrace', () => {
       .toEqual(['first', 'second'])
   })
 
-  it('sorts execution group keys by earliest started_at and puts fully unstarted groups last', () => {
+  it('builds contiguous execution groups and puts fully unstarted providers after executed ones', () => {
     const earlier = buildCandidate({
       id: 'earlier',
       candidate_index: 7,
+      provider_id: 'p-earlier',
+      provider_name: 'Earlier',
       status: 'success',
       started_at: '2026-05-06T12:00:01.000Z',
     })
     const later = buildCandidate({
       id: 'later',
       candidate_index: 5,
+      provider_id: 'p-later',
+      provider_name: 'Later',
       status: 'failed',
       started_at: '2026-05-06T12:00:05.000Z',
     })
-    const unstarted = buildCandidate({ id: 'unstarted', candidate_index: 1, status: 'skipped' })
+    const unstarted = buildCandidate({
+      id: 'unstarted',
+      candidate_index: 1,
+      provider_id: 'p-unstarted',
+      provider_name: 'Unstarted',
+      status: 'skipped',
+    })
 
-    const groups = [
-      { id: 'unstarted', key: resolveCandidateExecutionGroupKey([unstarted], 1, 1) },
-      { id: 'later', key: resolveCandidateExecutionGroupKey([later], 5, 5) },
-      { id: 'earlier', key: resolveCandidateExecutionGroupKey([earlier], 7, 7) },
-    ]
-    groups.sort((a, b) => compareCandidateExecutionGroupKeys(a.key, b.key, 'started_at'))
-
-    expect(groups.map(group => group.id)).toEqual(['earlier', 'later', 'unstarted'])
+    const groups = groupCandidatesByExecutionContiguity([unstarted, later, earlier], 'started_at')
+    expect(groups.map(group => group.identity)).toEqual([
+      'provider_id:p-earlier',
+      'provider_id:p-later',
+      'provider_id:p-unstarted',
+    ])
+    expect(groups.map(group => group.partition)).toEqual(['executed', 'executed', 'unattempted'])
   })
 
   it('selects execution_index only when every attempted record has a unique index', () => {
@@ -381,10 +389,130 @@ describe('poolTrace', () => {
     expect(sortCandidatesByExecutionOrder([c, a, b]).map(item => item.id)).toEqual(['a', 'b', 'c'])
   })
 
-  it('orders execution-indexed groups by ordinal even when started_at disagrees', () => {
+  it('does not merge non-adjacent same-provider attempts when execution reorders them', () => {
+    // Scheduling A, A, B but actual execution A, B, A must stay three nodes.
+    const a0 = buildCandidate({
+      id: 'a-0',
+      candidate_index: 0,
+      provider_id: 'p-a',
+      provider_name: 'A',
+      status: 'failed',
+      started_at: '2026-05-06T12:00:01.000Z',
+    })
+    const a1 = buildCandidate({
+      id: 'a-1',
+      candidate_index: 1,
+      provider_id: 'p-a',
+      provider_name: 'A',
+      status: 'success',
+      started_at: '2026-05-06T12:00:03.000Z',
+    })
+    const b2 = buildCandidate({
+      id: 'b-2',
+      candidate_index: 2,
+      provider_id: 'p-b',
+      provider_name: 'B',
+      status: 'failed',
+      started_at: '2026-05-06T12:00:02.000Z',
+    })
+
+    const groups = groupCandidatesByExecutionContiguity([a0, a1, b2], 'started_at')
+    expect(groups).toHaveLength(3)
+    expect(groups.map(group => group.identity)).toEqual([
+      'provider_id:p-a',
+      'provider_id:p-b',
+      'provider_id:p-a',
+    ])
+    expect(groups.map(group => group.candidates.map(item => item.id))).toEqual([['a-0'], ['b-2'], ['a-1']])
+  })
+
+  it('keeps a repeated pool as three groups when another pool interrupts it', () => {
+    const buildPoolCandidate = (id: string, index: number, poolId: string, status: string, startedAt: string) =>
+      buildCandidate({
+        id,
+        candidate_index: index,
+        provider_id: `p-${poolId}`,
+        provider_name: poolId,
+        status: status as CandidateRecord['status'],
+        started_at: startedAt,
+        extra_data: { pool_group_id: poolId },
+      })
+
+    const poolA0 = buildPoolCandidate('pool-a-0', 0, 'pool-a', 'failed', '2026-05-06T12:00:01.000Z')
+    const poolB = buildPoolCandidate('pool-b-0', 1, 'pool-b', 'failed', '2026-05-06T12:00:02.000Z')
+    const poolA1 = buildPoolCandidate('pool-a-1', 2, 'pool-a', 'success', '2026-05-06T12:00:03.000Z')
+
+    const groups = groupCandidatesByExecutionContiguity([poolA0, poolB, poolA1], 'started_at')
+    expect(groups).toHaveLength(3)
+    expect(groups.map(group => group.identity)).toEqual(['pool:pool-a', 'pool:pool-b', 'pool:pool-a'])
+    expect(groups.every(group => group.isPool)).toBe(true)
+  })
+
+  it('merges adjacent same-provider attempts but splits executed from unattempted', () => {
+    const executedA = buildCandidate({
+      id: 'a-executed',
+      candidate_index: 0,
+      provider_id: 'p-a',
+      provider_name: 'A',
+      status: 'failed',
+      started_at: '2026-05-06T12:00:01.000Z',
+    })
+    const adjacentExecutedA = buildCandidate({
+      id: 'a-executed-2',
+      candidate_index: 1,
+      provider_id: 'p-a',
+      provider_name: 'A',
+      status: 'success',
+      started_at: '2026-05-06T12:00:02.000Z',
+    })
+    const skippedA = buildCandidate({
+      id: 'a-skipped',
+      candidate_index: 2,
+      provider_id: 'p-a',
+      provider_name: 'A',
+      status: 'skipped',
+    })
+
+    const groups = groupCandidatesByExecutionContiguity([executedA, adjacentExecutedA, skippedA], 'started_at')
+    expect(groups).toHaveLength(2)
+    expect(groups[0].partition).toBe('executed')
+    expect(groups[0].candidates.map(item => item.id)).toEqual(['a-executed', 'a-executed-2'])
+    expect(groups[1].partition).toBe('unattempted')
+    expect(groups[1].candidates.map(item => item.id)).toEqual(['a-skipped'])
+  })
+
+  it('merges adjacent same-pool attempts into one group with subdots', () => {
+    const poolA0 = buildCandidate({
+      id: 'pool-a-0',
+      candidate_index: 0,
+      provider_id: 'p-pool-a',
+      provider_name: 'Pool A',
+      status: 'failed',
+      started_at: '2026-05-06T12:00:01.000Z',
+      extra_data: { pool_group_id: 'pool-a' },
+    })
+    const poolA1 = buildCandidate({
+      id: 'pool-a-1',
+      candidate_index: 1,
+      provider_id: 'p-pool-a',
+      provider_name: 'Pool A',
+      status: 'success',
+      started_at: '2026-05-06T12:00:02.000Z',
+      extra_data: { pool_group_id: 'pool-a' },
+    })
+
+    const groups = groupCandidatesByExecutionContiguity([poolA0, poolA1], 'started_at')
+    expect(groups).toHaveLength(1)
+    expect(groups[0].identity).toBe('pool:pool-a')
+    expect(groups[0].candidates.map(item => item.id)).toEqual(['pool-a-0', 'pool-a-1'])
+  })
+
+  it('orders contiguous groups by execution_index when the set is complete', () => {
     const laterStartEarlierOrdinal = buildCandidate({
       id: 'ordinal-0',
       candidate_index: 1,
+      provider_id: 'p-0',
+      provider_name: 'Zero',
       status: 'success',
       started_at: '2026-05-06T12:00:09.000Z',
       extra_data: { execution_index: 0 },
@@ -392,32 +520,18 @@ describe('poolTrace', () => {
     const earlierStartLaterOrdinal = buildCandidate({
       id: 'ordinal-1',
       candidate_index: 0,
+      provider_id: 'p-1',
+      provider_name: 'One',
       status: 'failed',
       started_at: '2026-05-06T12:00:00.000Z',
       extra_data: { execution_index: 1 },
     })
 
-    const groups = [
-      { id: 'later-ordinal', key: resolveCandidateExecutionGroupKey([earlierStartLaterOrdinal], 0, 0) },
-      { id: 'earlier-ordinal', key: resolveCandidateExecutionGroupKey([laterStartEarlierOrdinal], 1, 1) },
-    ]
-    groups.sort((x, y) => compareCandidateExecutionGroupKeys(x.key, y.key, 'execution_index'))
-
-    expect(groups.map(group => group.id)).toEqual(['earlier-ordinal', 'later-ordinal'])
-  })
-
-  it('treats a mixed group as attempted using its earliest started_at', () => {
-    const skipped = buildCandidate({ id: 'skipped', candidate_index: 0, status: 'skipped' })
-    const success = buildCandidate({
-      id: 'success',
-      candidate_index: 1,
-      status: 'success',
-      started_at: '2026-05-06T12:00:02.000Z',
-    })
-
-    const key = resolveCandidateExecutionGroupKey([skipped, success], 0, 1)
-    expect(key.hasAttempted).toBe(true)
-    expect(key.startedAtMs).toBe(new Date('2026-05-06T12:00:02.000Z').getTime())
+    const groups = groupCandidatesByExecutionContiguity(
+      [earlierStartLaterOrdinal, laterStartEarlierOrdinal],
+      'execution_index',
+    )
+    expect(groups.map(group => group.identity)).toEqual(['provider_id:p-0', 'provider_id:p-1'])
   })
 
   it('keeps skipped pool children visible when attempted nodes exist', () => {
