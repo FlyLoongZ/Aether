@@ -197,7 +197,7 @@ afterEach(() => {
 })
 
 describe('HorizontalRequestTimeline', () => {
-  it('keeps complete timestamps and the end arrow together for narrow layouts', async () => {
+  it('keeps the arrow with the start timestamp when only the end time wraps', async () => {
     const root = mountTimeline(buildTrace([
       buildCandidate({
         status: 'success',
@@ -212,20 +212,20 @@ describe('HorizontalRequestTimeline', () => {
       expect.stringMatching(/\d{2}:\d{2}:21\.149$/),
       expect.stringMatching(/\d{2}:\d{2}:30\.499$/),
     ])
-    const end = range!.querySelector('.time-range-end')!
-    expect(end.querySelector('.time-arrow')?.textContent).toBe('→')
-    expect(end.querySelector('.time-stamp')?.textContent).toMatch(/30\.499$/)
-    expect(range!.querySelector('.time-range-value > .time-duration')?.textContent).toBe('+9.35s')
-    expect(end.querySelector('.time-duration')).toBeNull()
+    const start = range!.querySelector('.time-range-start')!
+    expect(start.querySelector('.time-arrow')?.textContent).toBe('→')
+    expect(start.querySelector('.time-stamp')?.textContent).toMatch(/21\.149$/)
+    expect(start.querySelector('.time-duration')?.textContent).toBe('+9.35s')
+    expect(range!.querySelector('.time-range-value > .time-stamp')?.textContent).toMatch(/30\.499$/)
   })
 
-  it('keeps the live end marker with its arrow', async () => {
+  it('keeps the live end marker separate from the start and arrow', async () => {
     const root = mountTimeline(buildTrace([
       buildCandidate({ status: 'streaming', finished_at: undefined }),
     ]))
     await nextTick()
-    const end = root.querySelector('.time-range-end')!
-    expect(end.querySelector('.time-stamp')?.textContent).toBe('进行中')
+    expect(root.querySelector('.time-range-value > .time-stamp')?.textContent).toBe('进行中')
+    expect(root.querySelector('.time-range-start .time-arrow')?.textContent).toBe('→')
     expect(root.querySelector('.time-duration')).toBeNull()
   })
 

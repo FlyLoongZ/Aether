@@ -222,15 +222,17 @@
                   >
                     <span class="info-label">时间范围</span>
                     <span class="info-value mono time-range-value">
-                      <span
-                        v-if="currentAttemptTimeRange.endIso"
-                        class="time-duration"
-                      >+{{ currentAttemptTimeRange.durationLabel }}</span>
-                      <span class="time-stamp">{{ formatTime(currentAttemptTimeRange.startIso) }}</span>
-                      <span class="time-range-end">
-                        <span class="time-arrow">→</span>
-                        <span class="time-stamp">{{ currentAttemptTimeRange.endIso ? formatTime(currentAttemptTimeRange.endIso) : '进行中' }}</span>
+                      <span class="time-range-start">
+                        <span class="time-stamp">{{ formatTime(currentAttemptTimeRange.startIso) }}</span>
+                        <span class="time-arrow-container">
+                          <span
+                            v-if="currentAttemptTimeRange.endIso"
+                            class="time-duration"
+                          >+{{ currentAttemptTimeRange.durationLabel }}</span>
+                          <span class="time-arrow">→</span>
+                        </span>
                       </span>
+                      <span class="time-stamp">{{ currentAttemptTimeRange.endIso ? formatTime(currentAttemptTimeRange.endIso) : '进行中' }}</span>
                     </span>
                   </div>
                   <div
@@ -3271,9 +3273,6 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
 
 /* 时间范围值 - 紧凑布局 */
 .time-range-value {
-  position: relative;
-  width: fit-content;
-  max-width: 100%;
   flex-wrap: wrap;
   gap: 0.25rem;
 }
@@ -3282,7 +3281,7 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
   white-space: nowrap;
 }
 
-.time-range-end {
+.time-range-start {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -3295,7 +3294,15 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
   }
 }
 
-/* 持续时间相对整个时间范围居中，不随结束时间换行而左移。 */
+/* 箭头容器 - 用于定位持续时间 */
+.time-arrow-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 持续时间 - 显示在箭头上方 */
 .time-duration {
   position: absolute;
   top: -1.1rem;
