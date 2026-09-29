@@ -197,6 +197,37 @@ afterEach(() => {
 })
 
 describe('HorizontalRequestTimeline', () => {
+  it('keeps complete timestamps and the end arrow together for narrow layouts', async () => {
+    const root = mountTimeline(buildTrace([
+      buildCandidate({
+        status: 'success',
+        started_at: '2026-09-29T12:15:21.149Z',
+        finished_at: '2026-09-29T12:15:30.499Z',
+      }),
+    ]))
+    await nextTick()
+    const range = root.querySelector('.time-range-item')
+    expect(range).not.toBeNull()
+    expect(Array.from(range!.querySelectorAll('.time-stamp'), item => item.textContent)).toEqual([
+      expect.stringMatching(/\d{2}:\d{2}:21\.149$/),
+      expect.stringMatching(/\d{2}:\d{2}:30\.499$/),
+    ])
+    const end = range!.querySelector('.time-range-end')!
+    expect(end.querySelector('.time-arrow')?.textContent).toBe('→')
+    expect(end.querySelector('.time-stamp')?.textContent).toMatch(/30\.499$/)
+    expect(end.querySelector('.time-duration')?.textContent).toBe('+9.35s')
+  })
+
+  it('keeps the live end marker with its arrow', async () => {
+    const root = mountTimeline(buildTrace([
+      buildCandidate({ status: 'streaming', finished_at: undefined }),
+    ]))
+    await nextTick()
+    const end = root.querySelector('.time-range-end')!
+    expect(end.querySelector('.time-stamp')?.textContent).toBe('进行中')
+    expect(end.querySelector('.time-duration')).toBeNull()
+  })
+
   it('exports a skipped conversion failure with context only after clicking copy', async () => {
     diagnosticCopyMock.prepare.mockImplementation(async bundle => ({ ...bundle, reproduction: { status: 'sanitized_context' } }))
     diagnosticCopyMock.copy.mockResolvedValue(true)

@@ -218,19 +218,21 @@
                   </div>
                   <div
                     v-if="currentAttemptTimeRange"
-                    class="info-item"
+                    class="info-item time-range-item"
                   >
                     <span class="info-label">时间范围</span>
                     <span class="info-value mono time-range-value">
-                      {{ formatTime(currentAttemptTimeRange.startIso) }}
-                      <span class="time-arrow-container">
-                        <span
-                          v-if="currentAttemptTimeRange.endIso"
-                          class="time-duration"
-                        >+{{ currentAttemptTimeRange.durationLabel }}</span>
-                        <span class="time-arrow">→</span>
+                      <span class="time-stamp">{{ formatTime(currentAttemptTimeRange.startIso) }}</span>
+                      <span class="time-range-end">
+                        <span class="time-arrow-container">
+                          <span
+                            v-if="currentAttemptTimeRange.endIso"
+                            class="time-duration"
+                          >+{{ currentAttemptTimeRange.durationLabel }}</span>
+                          <span class="time-arrow">→</span>
+                        </span>
+                        <span class="time-stamp">{{ currentAttemptTimeRange.endIso ? formatTime(currentAttemptTimeRange.endIso) : '进行中' }}</span>
                       </span>
-                      {{ currentAttemptTimeRange.endIso ? formatTime(currentAttemptTimeRange.endIso) : '进行中' }}
                     </span>
                   </div>
                   <div
@@ -2855,6 +2857,7 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
 
 .panel-body {
   padding: 0.75rem 0rem;
+  container: request-trace-details / inline-size;
 }
 
 /* 头部分隔符 */
@@ -2966,7 +2969,7 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.625rem 1.25rem;
 }
 
@@ -2974,6 +2977,7 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .info-item.full-width {
@@ -3269,7 +3273,25 @@ function getDisplayStatus(attempt: CandidateRecord | null | undefined): string {
 
 /* 时间范围值 - 紧凑布局 */
 .time-range-value {
-  gap: 0.25rem !important;
+  flex-wrap: wrap;
+  gap: 1.25rem 0.25rem;
+}
+
+.time-stamp {
+  white-space: nowrap;
+}
+
+.time-range-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+@container request-trace-details (max-width: 540px) {
+  .time-range-item {
+    grid-column: 1 / -1;
+  }
 }
 
 /* 箭头容器 - 用于定位持续时间 */
