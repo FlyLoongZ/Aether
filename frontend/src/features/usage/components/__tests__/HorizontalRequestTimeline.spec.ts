@@ -215,7 +215,8 @@ describe('HorizontalRequestTimeline', () => {
     const end = range!.querySelector('.time-range-end')!
     expect(end.querySelector('.time-arrow')?.textContent).toBe('→')
     expect(end.querySelector('.time-stamp')?.textContent).toMatch(/30\.499$/)
-    expect(end.querySelector('.time-duration')?.textContent).toBe('+9.35s')
+    expect(range!.querySelector('.time-range-value > .time-duration')?.textContent).toBe('+9.35s')
+    expect(end.querySelector('.time-duration')).toBeNull()
   })
 
   it('keeps the live end marker with its arrow', async () => {
@@ -225,7 +226,7 @@ describe('HorizontalRequestTimeline', () => {
     await nextTick()
     const end = root.querySelector('.time-range-end')!
     expect(end.querySelector('.time-stamp')?.textContent).toBe('进行中')
-    expect(end.querySelector('.time-duration')).toBeNull()
+    expect(root.querySelector('.time-duration')).toBeNull()
   })
 
   it('exports a skipped conversion failure with context only after clicking copy', async () => {
