@@ -16,33 +16,34 @@ pub use presets::{
 pub use provider::{ProviderPoolAdapter, ProviderPoolMemberInput};
 pub use providers::{
     build_antigravity_pool_quota_request, build_antigravity_pool_quota_summary_request,
-    build_chatgpt_web_pool_quota_request, build_codex_pool_quota_request,
-    build_codex_pool_reset_credit_consume_request, build_codex_pool_reset_credits_request,
-    build_gemini_cli_pool_quota_request, build_kiro_pool_quota_request,
-    build_windsurf_pool_model_configs_request,
+    build_chatgpt_web_pool_quota_request, build_claude_code_pool_quota_request,
+    build_codex_pool_quota_request, build_codex_pool_reset_credit_consume_request,
+    build_codex_pool_reset_credits_request, build_gemini_cli_pool_quota_request,
+    build_kiro_pool_quota_request, build_windsurf_pool_model_configs_request,
     build_windsurf_pool_model_configs_request_with_base_url, build_windsurf_pool_quota_request,
     build_windsurf_pool_quota_request_with_base_url, build_windsurf_pool_rate_limit_request,
     build_windsurf_pool_rate_limit_request_with_base_url, build_xai_pool_billing_request,
     build_xai_pool_user_request, enrich_chatgpt_web_quota_metadata, grok_mode_id_for_model,
     grok_pool_tier_from_quota_bucket, grok_quota_window_key_for_model,
     grok_supported_quota_windows_for_tier, normalize_chatgpt_web_image_quota_limit,
-    AntigravityProviderPoolAdapter, ChatGptWebProviderPoolAdapter, CodexProviderPoolAdapter,
-    DefaultProviderPoolAdapter, GeminiCliProviderPoolAdapter, GrokProviderPoolAdapter,
-    KiroPoolQuotaAuthInput, KiroProviderPoolAdapter, UnsupportedQuotaProviderPoolAdapter,
-    XaiProviderPoolAdapter, ANTIGRAVITY_FETCH_AVAILABLE_MODELS_PATH,
-    ANTIGRAVITY_RETRIEVE_USER_QUOTA_SUMMARY_PATH, CHATGPT_WEB_CONVERSATION_INIT_PATH,
-    CHATGPT_WEB_DEFAULT_BASE_URL, CODEX_WHAM_RESET_CREDITS_CONSUME_URL,
-    CODEX_WHAM_RESET_CREDITS_URL, CODEX_WHAM_USAGE_URL, GEMINI_CLI_RETRIEVE_USER_QUOTA_PATH,
-    GEMINI_CLI_USER_AGENT, KIRO_USAGE_LIMITS_PATH, KIRO_USAGE_SDK_VERSION,
-    WINDSURF_MODEL_CONFIGS_PATH, WINDSURF_RATE_LIMIT_PATH, WINDSURF_USER_STATUS_PATH,
-    XAI_BILLING_PATH, XAI_USER_PATH,
+    AntigravityProviderPoolAdapter, ChatGptWebProviderPoolAdapter, ClaudeCodeProviderPoolAdapter,
+    CodexProviderPoolAdapter, DefaultProviderPoolAdapter, GeminiCliProviderPoolAdapter,
+    GrokProviderPoolAdapter, KiroPoolQuotaAuthInput, KiroProviderPoolAdapter,
+    UnsupportedQuotaProviderPoolAdapter, XaiProviderPoolAdapter,
+    ANTIGRAVITY_FETCH_AVAILABLE_MODELS_PATH, ANTIGRAVITY_RETRIEVE_USER_QUOTA_SUMMARY_PATH,
+    CHATGPT_WEB_CONVERSATION_INIT_PATH, CHATGPT_WEB_DEFAULT_BASE_URL,
+    CODEX_WHAM_RESET_CREDITS_CONSUME_URL, CODEX_WHAM_RESET_CREDITS_URL, CODEX_WHAM_USAGE_URL,
+    GEMINI_CLI_RETRIEVE_USER_QUOTA_PATH, GEMINI_CLI_USER_AGENT, KIRO_USAGE_LIMITS_PATH,
+    KIRO_USAGE_SDK_VERSION, WINDSURF_MODEL_CONFIGS_PATH, WINDSURF_RATE_LIMIT_PATH,
+    WINDSURF_USER_STATUS_PATH, XAI_BILLING_PATH, XAI_USER_PATH,
 };
 pub use quota::{
-    provider_pool_key_account_quota_exhausted, provider_pool_key_minimum_quota_reached,
-    provider_pool_key_model_quota_exhausted, provider_pool_key_model_quota_hard_blocked,
-    provider_pool_key_quota_hard_blocked, provider_pool_key_scheduling_label,
-    provider_pool_member_quota_snapshot, provider_pool_quota_metadata_provider_type,
-    provider_pool_quota_metadata_updated_at, provider_pool_quota_snapshot_updated_at,
+    provider_pool_codex_metadata_has_account_quota, provider_pool_key_account_quota_exhausted,
+    provider_pool_key_minimum_quota_reached, provider_pool_key_model_quota_exhausted,
+    provider_pool_key_model_quota_hard_blocked, provider_pool_key_quota_hard_blocked,
+    provider_pool_key_scheduling_label, provider_pool_member_quota_snapshot,
+    provider_pool_quota_metadata_provider_type, provider_pool_quota_metadata_updated_at,
+    provider_pool_quota_snapshot_updated_at,
 };
 pub use quota_refresh::ProviderPoolQuotaRequestSpec;
 pub use service::ProviderPoolService;
@@ -103,6 +104,7 @@ mod tests {
             [
                 "antigravity",
                 "chatgpt_web",
+                "claude_code",
                 "codex",
                 "gemini_cli",
                 "grok",
@@ -111,15 +113,28 @@ mod tests {
                 "xai"
             ]
         );
+        assert!(service.supports_quota_refresh("claude_code"));
         assert!(service.supports_quota_refresh("codex"));
         assert!(service.supports_quota_refresh("antigravity"));
         assert!(service.supports_quota_refresh("grok"));
         assert!(service.supports_quota_refresh("gemini_cli"));
         assert!(service.supports_quota_refresh("windsurf"));
         assert!(service.supports_quota_refresh("xai"));
+        let claude_spec = build_claude_code_pool_quota_request(
+            "key-1",
+            ("authorization".to_string(), "Bearer access".to_string()),
+        );
+        assert_eq!(claude_spec.method, "GET");
         assert_eq!(
-            service.quota_refresh_unsupported_message("claude_code"),
-            "Claude Code 暂不支持自动刷新额度：上游没有稳定可用的账号额度查询接口"
+            claude_spec.url,
+            "https://api.anthropic.com/api/oauth/usage?cedar_ember=1&skip_spend=1"
+        );
+        assert_eq!(
+            claude_spec
+                .headers
+                .get("anthropic-beta")
+                .map(String::as_str),
+            Some("oauth-2025-04-20")
         );
         assert_eq!(
             service.quota_refresh_unsupported_message("vertex_ai"),
@@ -1598,6 +1613,245 @@ mod tests {
 
         let signals = service.member_signals("codex", &key, None, Some("future-model"));
         assert!(!signals.quota_exhausted);
+    }
+
+    #[test]
+    fn codex_newer_flat_quota_metadata_clears_stale_exhausted_snapshot() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_secs();
+        let service = ProviderPoolService::with_builtin_adapters();
+        // Headers and quota refreshes persist the flat metadata shape while the
+        // derived snapshot may still describe the previous quota observation.
+        for used_percent in [83.0, 99.0, 100.0] {
+            let mut key = sample_key(Some(json!({
+                "codex": {
+                    "updated_at": now,
+                    "primary_used_percent": used_percent,
+                    "primary_reset_at": now + 3600
+                }
+            })));
+            key.status_snapshot = Some(json!({
+                "quota": {
+                    "provider_type": "codex",
+                    "observed_at": now - 60,
+                    "updated_at": now - 60,
+                    "code": "exhausted",
+                    "exhausted": true,
+                    "allowed": false,
+                    "limit_reached": true,
+                    "reset_at": now + 3600,
+                    "windows": [{
+                        "code": "weekly",
+                        "scope": "account",
+                        "used_ratio": 1.0,
+                        "remaining_ratio": 0.0,
+                        "is_exhausted": true,
+                        "reset_at": now + 3600
+                    }]
+                }
+            }));
+            for model in [None, Some("gpt-5.4"), Some("o3")] {
+                let signals = service.member_signals("codex", &key, None, model);
+                assert_eq!(signals.quota_exhausted, used_percent >= 100.0);
+                assert!(!signals.quota_hard_blocked);
+                assert_eq!(
+                    provider_pool_key_minimum_quota_reached(&key, "codex", model),
+                    used_percent >= 99.0
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn codex_account_and_model_quota_agree_on_explicit_allow_and_deny_flags() {
+        let service = ProviderPoolService::with_builtin_adapters();
+        for (flags, exhausted) in [
+            (json!({ "allowed": true }), false),
+            (json!({ "limit_reached": false }), false),
+            (json!({ "allowed": true, "limit_reached": true }), true),
+            (json!({ "allowed": false, "limit_reached": false }), true),
+        ] {
+            for use_windows in [false, true] {
+                let mut metadata = flags.clone();
+                metadata["updated_at"] = json!(300);
+                if use_windows {
+                    metadata["windows"] = json!([{ "code": "weekly", "used_ratio": 1.0 }]);
+                } else {
+                    metadata["primary_used_percent"] = json!(100.0);
+                }
+                let key = sample_key(Some(json!({ "codex": metadata })));
+                for model in [None, Some("gpt-5.4"), Some("o3")] {
+                    assert_eq!(
+                        service
+                            .member_signals("codex", &key, None, model)
+                            .quota_exhausted,
+                        exhausted,
+                        "flags={flags}, use_windows={use_windows}, model={model:?}"
+                    );
+                    // The opt-in reserve still protects a numerically full
+                    // window even when the upstream reports it as allowed.
+                    assert!(provider_pool_key_minimum_quota_reached(
+                        &key, "codex", model
+                    ));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn codex_model_quota_honors_latest_account_refusal_without_blocking_spark() {
+        let service = ProviderPoolService::with_builtin_adapters();
+        for include_window in [false, true] {
+            let mut metadata = json!({
+                "updated_at": 300,
+                "allowed": false,
+                "limit_reached": true,
+                "spark_primary_used_percent": 17.0
+            });
+            if include_window {
+                metadata["primary_used_percent"] = json!(83.0);
+            }
+            let mut key = sample_key(Some(json!({ "codex": metadata })));
+            for include_snapshot in [false, true] {
+                if include_snapshot {
+                    key.status_snapshot = Some(json!({
+                        "quota": {
+                            "provider_type": "codex",
+                            "observed_at": 200,
+                            "exhausted": false,
+                            "windows": [{ "code": "weekly", "used_ratio": 0.83 }]
+                        }
+                    }));
+                }
+                assert!(
+                    service
+                        .member_signals("codex", &key, None, Some("gpt-5.4"))
+                        .quota_exhausted
+                );
+                assert!(
+                    !service
+                        .member_signals("codex", &key, None, Some("gpt-5.3-codex-spark"))
+                        .quota_exhausted
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn codex_quota_source_freshness_supports_all_timestamp_formats() {
+        let service = ProviderPoolService::with_builtin_adapters();
+        for observed_at in [
+            json!(1_700_000_200_u64),
+            json!(1_700_000_200_000_u64),
+            json!("1700000200000"),
+            json!("2023-11-14T22:16:40Z"),
+        ] {
+            for use_windows in [false, true] {
+                let metadata = if use_windows {
+                    json!({
+                        "updated_at": observed_at,
+                        "windows": [{ "code": "weekly", "used_ratio": 0.83 }]
+                    })
+                } else {
+                    json!({ "updated_at": observed_at, "primary_used_percent": 83.0 })
+                };
+                let mut key = sample_key(Some(json!({ "codex": metadata })));
+                key.status_snapshot = Some(json!({
+                    "quota": {
+                        "provider_type": "codex",
+                        "observed_at": "2023-11-14T22:15:00Z",
+                        "exhausted": true,
+                        "allowed": false,
+                        "windows": [{ "code": "weekly", "used_ratio": 1.0 }]
+                    }
+                }));
+                for model in [None, Some("gpt-5.4")] {
+                    let signals = service.member_signals("codex", &key, None, model);
+                    assert!(!signals.quota_exhausted, "timestamp={observed_at}");
+                    assert!(!signals.quota_hard_blocked, "timestamp={observed_at}");
+                    assert!(!provider_pool_key_minimum_quota_reached(
+                        &key, "codex", model
+                    ));
+                }
+
+                // Swap freshness while retaining the same observations. An
+                // older usable bucket cannot erase a later exhausted snapshot.
+                key.status_snapshot.as_mut().unwrap()["quota"]["observed_at"] =
+                    json!("2023-11-14T22:18:20Z");
+                assert!(provider_pool_key_account_quota_exhausted(&key, "codex"));
+                assert!(provider_pool_key_quota_hard_blocked(&key, "codex"));
+                assert_eq!(
+                    provider_pool_key_model_quota_exhausted(&key, "codex", "gpt-5.4"),
+                    Some(true)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn codex_account_quota_recovery_requires_new_account_observation() {
+        for metadata in [
+            json!({ "updated_at": 100, "primary_used_percent": 83.0 }),
+            json!({ "primary_used_percent": 83.0 }),
+            json!({ "updated_at": 300, "plan_type": "plus" }),
+            json!({ "updated_at": 300, "credits_unlimited": false }),
+            json!({ "updated_at": 300, "spark_primary_used_percent": 83.0 }),
+            json!({ "updated_at": 300, "windows": [{ "code": "weekly" }] }),
+        ] {
+            let mut key = sample_key(Some(json!({ "codex": metadata })));
+            key.status_snapshot = Some(json!({
+                "quota": {
+                    "provider_type": "codex",
+                    "observed_at": 200,
+                    "exhausted": true,
+                    "allowed": false,
+                    "limit_reached": true,
+                    "windows": [{ "code": "weekly", "used_ratio": 1.0 }]
+                }
+            }));
+            assert!(provider_pool_key_account_quota_exhausted(&key, "codex"));
+            assert!(provider_pool_key_quota_hard_blocked(&key, "codex"));
+            assert_eq!(
+                provider_pool_key_model_quota_exhausted(&key, "codex", "gpt-5.4"),
+                Some(true)
+            );
+        }
+
+        let mut key = sample_key(Some(json!({
+            "codex": {
+                "updated_at": 300,
+                "primary_used_percent": 83.0,
+                "allowed": false,
+                "limit_reached": true
+            }
+        })));
+        key.status_snapshot = Some(json!({
+            "quota": { "provider_type": "codex", "updated_at": 200, "exhausted": false }
+        }));
+        assert!(provider_pool_key_account_quota_exhausted(&key, "codex"));
+        assert!(provider_pool_key_quota_hard_blocked(&key, "codex"));
+    }
+
+    #[test]
+    fn codex_account_updates_do_not_override_independent_model_quota() {
+        for (spark_ratio, account_percent) in [(0.83, 100.0), (1.0, 83.0)] {
+            let mut key = sample_key(Some(json!({
+                "codex": { "updated_at": 300, "primary_used_percent": account_percent }
+            })));
+            key.status_snapshot = Some(json!({
+                "quota": {
+                    "provider_type": "codex",
+                    "updated_at": 200,
+                    "windows": [{ "code": "spark_5h", "used_ratio": spark_ratio }]
+                }
+            }));
+            assert_eq!(
+                provider_pool_key_model_quota_exhausted(&key, "codex", "gpt-5.3-codex-spark"),
+                Some(spark_ratio >= 1.0)
+            );
+        }
     }
 
     #[test]
