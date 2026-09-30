@@ -13,8 +13,7 @@ use axum::http::{Response, Uri};
 use crate::{usage::GatewaySyncReportRequest, AppState, GatewayError};
 
 pub(crate) use self::adaptation::{
-    maybe_build_provider_private_stream_normalizer,
-    maybe_build_provider_private_stream_normalizer_shared, ProviderPrivateStreamNormalizer,
+    maybe_build_provider_private_stream_normalizer, ProviderPrivateStreamNormalizer,
 };
 pub(crate) use self::api::{
     codex_client_user_agent_for_version, gemini_generate_content_response_has_visible_output,
@@ -23,8 +22,8 @@ pub(crate) use self::api::{
 pub(crate) use self::finalize::common::LocalCoreSyncFinalizeOutcome;
 pub(crate) use self::finalize::internal::{
     maybe_bridge_standard_sync_json_to_stream, maybe_build_stream_response_rewriter,
-    maybe_build_stream_response_rewriter_shared, maybe_build_sync_finalize_outcome,
-    maybe_compile_sync_finalize_response, SyncToStreamBridgeOutcome,
+    maybe_build_sync_finalize_outcome, maybe_compile_sync_finalize_response,
+    SyncToStreamBridgeOutcome,
 };
 pub(crate) use self::planner::openai_responses_reasoning_replay_policy;
 pub(crate) use self::planner::{

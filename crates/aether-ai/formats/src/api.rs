@@ -167,9 +167,8 @@ pub use crate::formats::shared::sync_to_stream::{
     maybe_bridge_standard_sync_json_to_stream, SyncToStreamBridgeOutcome,
 };
 pub use crate::formats::shared::{
-    maybe_build_ai_surface_stream_rewriter, maybe_build_ai_surface_stream_rewriter_shared,
-    resolve_finalize_stream_rewrite_mode, AiSurfaceFinalizeError, AiSurfaceStreamRewriter,
-    FinalizeStreamRewriteMode,
+    maybe_build_ai_surface_stream_rewriter, resolve_finalize_stream_rewrite_mode,
+    AiSurfaceFinalizeError, AiSurfaceStreamRewriter, FinalizeStreamRewriteMode,
 };
 pub use crate::formats::{
     claude::messages::{
@@ -275,7 +274,6 @@ pub use crate::provider_compat::kiro_stream::{
 };
 pub use crate::provider_compat::private_envelope::{
     extract_provider_private_stream_error_body, maybe_build_provider_private_stream_normalizer,
-    maybe_build_provider_private_stream_normalizer_shared,
     normalize_provider_private_report_context, normalize_provider_private_response_value,
     provider_private_response_allows_sync_finalize, stream_body_contains_error_event,
     transform_provider_private_stream_line, ProviderPrivateStreamNormalizer,

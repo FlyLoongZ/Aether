@@ -767,7 +767,7 @@ fn response_body_is_json(headers: &BTreeMap<String, String>, body_bytes: &[u8]) 
 fn observe_stream_chunk(
     observer: &mut StreamingStandardTerminalObserver,
     report_context: &Value,
-    private_stream_normalizer: Option<&mut crate::ai_serving::ProviderPrivateStreamNormalizer>,
+    private_stream_normalizer: Option<&mut crate::ai_serving::ProviderPrivateStreamNormalizer<'_>>,
     observer_buffered: &mut Vec<u8>,
     chunk: &[u8],
 ) {
@@ -789,7 +789,7 @@ fn observe_stream_chunk(
 fn finalize_stream_terminal_summary(
     observer: &mut StreamingStandardTerminalObserver,
     report_context: &Value,
-    private_stream_normalizer: Option<&mut crate::ai_serving::ProviderPrivateStreamNormalizer>,
+    private_stream_normalizer: Option<&mut crate::ai_serving::ProviderPrivateStreamNormalizer<'_>>,
     observer_buffered: &mut Vec<u8>,
 ) -> Option<ExecutionStreamTerminalSummary> {
     if let Some(normalizer) = private_stream_normalizer {

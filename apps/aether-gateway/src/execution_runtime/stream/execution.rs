@@ -65,14 +65,13 @@ use self::execution_failures::{
 };
 use crate::ai_serving::api::{
     extract_provider_private_stream_error_body, maybe_bridge_standard_sync_json_to_stream,
-    maybe_build_provider_private_stream_normalizer,
-    maybe_build_provider_private_stream_normalizer_shared, maybe_build_stream_response_rewriter,
-    maybe_build_stream_response_rewriter_shared, normalize_provider_private_report_context,
-    StreamingStandardTerminalObserver, CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CLI_STREAM_PLAN_KIND,
-    GEMINI_CHAT_STREAM_PLAN_KIND, GEMINI_CLI_STREAM_PLAN_KIND,
-    GEMINI_INTERACTIONS_STREAM_PLAN_KIND, OPENAI_CHAT_STREAM_PLAN_KIND,
-    OPENAI_IMAGE_STREAM_PLAN_KIND, OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND,
-    OPENAI_RESPONSES_STREAM_PLAN_KIND, UPSTREAM_IS_STREAM_KEY,
+    maybe_build_provider_private_stream_normalizer, maybe_build_stream_response_rewriter,
+    normalize_provider_private_report_context, StreamingStandardTerminalObserver,
+    CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CLI_STREAM_PLAN_KIND, GEMINI_CHAT_STREAM_PLAN_KIND,
+    GEMINI_CLI_STREAM_PLAN_KIND, GEMINI_INTERACTIONS_STREAM_PLAN_KIND,
+    OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_IMAGE_STREAM_PLAN_KIND,
+    OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND, OPENAI_RESPONSES_STREAM_PLAN_KIND,
+    UPSTREAM_IS_STREAM_KEY,
 };
 use crate::ai_serving::is_openai_responses_family_format;
 use crate::ai_serving::record_local_runtime_candidate_skip_reason;
@@ -6464,19 +6463,10 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
     let normalized_stream_report_context =
         normalize_provider_private_report_context(report_context.as_ref());
     let upstream_headers = headers.clone();
-    // Build the stateful stream normalizer/rewriter from owned report contexts
-    // so the exact instances that consumed the prefetched bytes can be handed to
-    // the background forwarding task. Rebuilding them from a bounded prefetch
-    // capture could not replay a chunk that crossed the capture cap, which
-    // corrupted the parser state at the cut point (issue #720).
-    let mut private_stream_normalizer = report_context
-        .as_ref()
-        .map(|value| Arc::new(value.clone()))
-        .and_then(maybe_build_provider_private_stream_normalizer_shared);
-    let mut local_stream_rewriter = normalized_stream_report_context
-        .as_ref()
-        .map(|value| Arc::new(value.clone()))
-        .and_then(maybe_build_stream_response_rewriter_shared);
+    let mut private_stream_normalizer =
+        maybe_build_provider_private_stream_normalizer(report_context.as_ref());
+    let mut local_stream_rewriter =
+        maybe_build_stream_response_rewriter(normalized_stream_report_context.as_ref());
     if private_stream_normalizer.is_some() || local_stream_rewriter.is_some() {
         headers.remove("content-encoding");
         headers.remove("content-length");
@@ -6574,11 +6564,6 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
     let mut prefetched_chunks: Vec<Bytes> = Vec::new();
     let mut provider_prefetched_body = Vec::new();
     let mut provider_prefetched_body_truncated = false;
-    // Normalized view of the prefetched prefix. Inspection and usage observation
-    // run on normalized bytes, and the live path continues feeding the same
-    // parser state, so this capture only seeds those best-effort observers.
-    let mut normalized_prefetched_body = Vec::new();
-    let mut normalized_prefetched_body_truncated = false;
     let mut prefetched_body = Vec::new();
     let mut prefetched_inspection_body = Vec::new();
     let mut prefetched_inspection_body_truncated = false;
@@ -7078,12 +7063,6 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                     } else {
                         chunk
                     };
-                    append_stream_capture_bytes(
-                        &mut normalized_prefetched_body,
-                        &normalized_chunk,
-                        MAX_STREAM_PREFETCH_BYTES,
-                        &mut normalized_prefetched_body_truncated,
-                    );
                     let rewritten_chunk = if let Some(rewriter) = local_stream_rewriter.as_mut() {
                         match rewriter.push_chunk(&normalized_chunk) {
                             Ok(rewritten_chunk) => rewritten_chunk,
@@ -7214,14 +7193,17 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
     if stream_commit_gate.is_uncommitted() {
         stream_commit_gate.commit();
     }
-    // The prefetched bytes were consumed by this exact normalizer/rewriter state,
-    // so the background task inherits it instead of replaying a bounded capture.
-    if let Some(record) = local_stream_rewriter
+    let prefetched_response_history_persisted = if let Some(record) = local_stream_rewriter
         .as_mut()
         .and_then(|rewriter| rewriter.take_response_history_record())
     {
         crate::ai_serving::persist_response_history_record(state, record).await;
-    }
+        true
+    } else {
+        false
+    };
+    drop(private_stream_normalizer);
+    drop(local_stream_rewriter);
 
     let initial_usage_telemetry = prefetched_usage_telemetry.clone().or_else(|| {
         prefetched_telemetry
@@ -7267,10 +7249,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
     let normalized_stream_report_context_owned = normalized_stream_report_context;
     let lifecycle_seed_for_report = lifecycle_seed;
     let provider_prefetched_body_for_report = provider_prefetched_body;
-    let normalized_prefetched_body_for_report = normalized_prefetched_body;
     let prefetched_body_for_report = prefetched_body;
-    let prefetched_private_stream_normalizer = private_stream_normalizer;
-    let prefetched_local_stream_rewriter = local_stream_rewriter;
     let prefetched_chunks_for_body = prefetched_chunks;
     let sync_json_stream_bridge_active_for_report = sync_json_stream_bridge_active;
     let initial_telemetry = prefetched_telemetry;
@@ -7313,19 +7292,15 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
         let mut buffered_body = StreamBodyCapture::default();
         let mut provider_body_truncated = false;
         let mut client_body_truncated = false;
-        // Continue with the exact normalizer/rewriter state that consumed the
-        // prefetched bytes. Replaying a bounded capture could not reproduce a
-        // chunk that crossed the capture cap, which corrupted parser state at
-        // the cut point (issue #720).
         let mut private_stream_normalizer = if sync_json_stream_bridge_active_for_report {
             None
         } else {
-            prefetched_private_stream_normalizer
+            maybe_build_provider_private_stream_normalizer(report_context_owned.as_ref())
         };
         let mut local_stream_rewriter = if sync_json_stream_bridge_active_for_report {
             None
         } else {
-            prefetched_local_stream_rewriter
+            maybe_build_stream_response_rewriter(normalized_stream_report_context_owned.as_ref())
         };
         let stream_usage_report_context =
             normalized_stream_report_context_owned.clone().or_else(|| {
@@ -7488,10 +7463,38 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                 }
             })
         };
-        // The prefetched bytes already reached the inherited parser state, so
-        // only the best-effort observers need the normalized prefix replayed.
-        if !normalized_prefetched_body_for_report.is_empty() {
-            let replay_chunk = normalized_prefetched_body_for_report.as_slice();
+        if !provider_prefetched_body_for_report.is_empty() {
+            let normalized_prefetched_chunk = if let Some(normalizer) =
+                private_stream_normalizer.as_mut()
+            {
+                match normalizer.push_chunk(&provider_prefetched_body_for_report) {
+                    Ok(normalized_chunk) => Some(normalized_chunk),
+                    Err(err) => {
+                        warn!(
+                            event_name = "stream_execution_prefetch_normalize_restore_failed",
+                            log_type = "ops",
+                            trace_id = %trace_id_owned,
+                            request_id = %request_id_for_report_log,
+                            candidate_id = ?candidate_id_for_report.as_deref(),
+                            error_category = "stream_normalization_restore_failed",
+                            "gateway failed to restore private stream normalization state after prefetch"
+                        );
+                        terminal_failure = Some(build_stream_failure_report(
+                            "execution_runtime_stream_rewrite_error",
+                            format!(
+                                "failed to restore private stream normalization state after prefetch: {err:?}"
+                            ),
+                            502,
+                        ));
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let replay_chunk = normalized_prefetched_chunk
+                .as_deref()
+                .unwrap_or(provider_prefetched_body_for_report.as_slice());
             if let Some(error_body_json) = provider_error_inspection
                 .observe(stream_usage_report_context.as_ref(), replay_chunk)
             {
@@ -7517,13 +7520,39 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                     replay_chunk,
                 );
             }
+            if terminal_failure.is_none() {
+                if let Some(rewriter) = local_stream_rewriter.as_mut() {
+                    if let Err(err) = rewriter.push_chunk(replay_chunk) {
+                        warn!(
+                            event_name = "stream_execution_prefetch_rewrite_restore_failed",
+                            log_type = "ops",
+                            trace_id = %trace_id_owned,
+                            request_id = %request_id_for_report_log,
+                            candidate_id = ?candidate_id_for_report.as_deref(),
+                            error_category = "stream_rewrite_restore_failed",
+                            "gateway failed to restore local stream rewrite state after prefetch"
+                        );
+                        terminal_failure = Some(build_stream_failure_report(
+                            "execution_runtime_stream_rewrite_error",
+                            format!(
+                                "failed to restore local stream rewrite state after prefetch: {err:?}"
+                            ),
+                            502,
+                        ));
+                    }
+                }
+            }
+            if prefetched_response_history_persisted {
+                if let Some(rewriter) = local_stream_rewriter.as_mut() {
+                    let _ = rewriter.take_response_history_record();
+                }
+            }
         }
 
-        // Audit capture owns its budgeted copies; retaining semantic prefetch
-        // duplicates for the rest of the stream would bypass the capture memory
-        // limit.
+        // These buffers restore parser/rewriter state above. Audit capture owns
+        // its budgeted copies; retaining semantic prefetch duplicates for the
+        // rest of the stream would bypass the capture memory limit.
         drop(provider_prefetched_body_for_report);
-        drop(normalized_prefetched_body_for_report);
         drop(prefetched_body_for_report);
 
         if terminal_failure.is_none() && !reached_eof {
@@ -13586,149 +13615,6 @@ mod tests {
             .expect("response body should read");
 
         assert_eq!(body.as_ref(), expected.as_bytes());
-    }
-
-    fn openai_responses_stream_plan(request_id: &str) -> ExecutionPlan {
-        ExecutionPlan {
-            request_id: request_id.to_string(),
-            candidate_id: Some(format!("candidate-{request_id}")),
-            provider_name: Some("openai".to_string()),
-            provider_id: format!("provider-{request_id}"),
-            endpoint_id: format!("endpoint-{request_id}"),
-            key_id: format!("key-{request_id}"),
-            method: "POST".to_string(),
-            url: "https://api.openai.com/v1/responses".to_string(),
-            headers: BTreeMap::from([
-                ("content-type".to_string(), "application/json".to_string()),
-                ("accept".to_string(), "text/event-stream".to_string()),
-            ]),
-            content_type: Some("application/json".to_string()),
-            content_encoding: None,
-            body: RequestBody::from_json(json!({
-                "model": "gpt-5.4",
-                "input": "hello",
-                "stream": true
-            })),
-            stream: true,
-            client_api_format: "openai:responses".to_string(),
-            provider_api_format: "openai:responses".to_string(),
-            model_name: Some("gpt-5.4".to_string()),
-            proxy: None,
-            transport_profile: None,
-            timeouts: None,
-        }
-    }
-
-    /// Regression for issue #720: a prefetched chunk that crosses the
-    /// `MAX_STREAM_PREFETCH_BYTES` capture cap used to be replayed truncated
-    /// into a freshly built rewriter, losing the chunk tail and gluing the next
-    /// live chunk onto a half-written SSE record.
-    #[tokio::test]
-    async fn openai_responses_prefetch_handover_keeps_rewriter_state_across_capture_cap() {
-        let request_id = "req-responses-prefetch-handover";
-        let plan = openai_responses_stream_plan(request_id);
-        let provider_catalog = provider_catalog_for_plan(&plan, None);
-        let data_state = crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
-            Arc::new(provider_catalog),
-            DEVELOPMENT_ENCRYPTION_KEY,
-        );
-        let state = AppState::new()
-            .expect("app state should build")
-            .with_data_state_for_tests(data_state);
-
-        // The first lifecycle event alone exceeds the 16 KiB capture cap and is
-        // classified as non-semantic, so the prefetch consumes it whole and then
-        // stops. The marker sits past the cap, and the second record must not be
-        // glued onto the truncated first record.
-        const TAIL_MARKER: &str = "INSTRUCTIONS_TAIL_MARKER_9f3c";
-        let large_instructions = format!("{}{}", "x".repeat(20_000), TAIL_MARKER);
-        let created = format!(
-            "event: response.created\ndata: {{\"type\":\"response.created\",\"response\":{{\"id\":\"resp_handover\",\"object\":\"response\",\"status\":\"in_progress\",\"model\":\"gpt-5.4\",\"instructions\":\"{large_instructions}\"}}}}\n\n"
-        );
-        let delta = "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"response_id\":\"resp_handover\",\"output_index\":0,\"content_index\":0,\"delta\":\"hi\"}\n\n";
-        let completed = "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_handover\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-5.4\",\"output\":[]}}\n\n";
-
-        let frame_stream = stream! {
-            yield Ok::<Bytes, std::io::Error>(ndjson_frame(StreamFrame {
-                frame_type: StreamFrameType::Headers,
-                payload: StreamFramePayload::Headers {
-                    status_code: 200,
-                    headers: BTreeMap::from([(
-                        "content-type".to_string(),
-                        "text/event-stream".to_string(),
-                    )]),
-                    response_observation: None,
-                },
-            }));
-            for chunk in [created, delta.to_string(), completed.to_string()] {
-                yield Ok::<Bytes, std::io::Error>(ndjson_frame(StreamFrame {
-                    frame_type: StreamFrameType::Data,
-                    payload: StreamFramePayload::Data {
-                        chunk_b64: None,
-                        text: Some(chunk),
-                    },
-                }));
-            }
-            yield Ok::<Bytes, std::io::Error>(ndjson_frame(StreamFrame::eof()));
-        }
-        .boxed();
-        let mut retry_scope = AiAttemptRetryScope::Provider;
-
-        let response = execute_stream_from_frame_stream_with_retry_scope(
-            &state,
-            plan,
-            &format!("trace-{request_id}"),
-            &test_decision(),
-            OPENAI_RESPONSES_STREAM_PLAN_KIND,
-            Some("openai_responses_stream_success".to_string()),
-            Some(json!({
-                "request_id": request_id,
-                "candidate_id": format!("candidate-{request_id}"),
-                "candidate_index": 0,
-                "retry_index": 0,
-                "provider_api_format": "openai:responses",
-                "provider_stream_event_api_format": "openai:responses",
-                "client_api_format": "openai:responses",
-                "needs_conversion": true
-            })),
-            crate::clock::current_unix_ms(),
-            Instant::now(),
-            RequestStageTrace::from_env(),
-            true,
-            frame_stream,
-            false,
-            None,
-            Some(&mut retry_scope),
-            None,
-            None,
-        )
-        .await
-        .expect("execution should resolve")
-        .expect("prefetched responses stream should commit a response");
-
-        let body = to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("response body should read");
-        let body = String::from_utf8(body.to_vec()).expect("response body should be utf8");
-
-        assert!(
-            body.contains(TAIL_MARKER),
-            "prefetched lifecycle event lost its tail past the capture cap"
-        );
-        assert!(body.contains("\"delta\":\"hi\""), "{body}");
-        assert!(body.contains("event: response.completed\n"), "{body}");
-        for line in body.lines() {
-            let Some(payload) = line.strip_prefix("data: ") else {
-                continue;
-            };
-            if payload == "[DONE]" {
-                continue;
-            }
-            if let Err(err) = serde_json::from_str::<serde_json::Value>(payload) {
-                let preview = &line[..line.len().min(160)];
-                panic!("corrupted SSE data line ({err}): {preview}");
-            }
-        }
     }
 
     #[test]

@@ -103,7 +103,7 @@ fn normalize_provider_private_stream_bytes(
     report_context: &Value,
     body: &[u8],
 ) -> Result<Option<Vec<u8>>, GatewayError> {
-    let Some(mut normalizer): Option<ProviderPrivateStreamNormalizer> =
+    let Some(mut normalizer): Option<ProviderPrivateStreamNormalizer<'_>> =
         maybe_build_provider_private_stream_normalizer(Some(report_context))
     else {
         return Ok(Some(body.to_vec()));

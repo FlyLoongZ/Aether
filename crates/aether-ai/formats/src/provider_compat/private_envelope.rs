@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use serde_json::Value;
 
@@ -354,28 +353,17 @@ enum ProviderPrivateStreamNormalizeMode {
     KiroToClaudeCli(Box<KiroToClaudeCliStreamState>),
 }
 
-/// Owns its report context so a built normalizer can outlive the borrow that
-/// created it and be moved across tasks (for example from an execution-runtime
-/// prefetch into the background forwarding task). Callers that already hold a
-/// shared context should use
-/// [`maybe_build_provider_private_stream_normalizer_shared`].
-pub struct ProviderPrivateStreamNormalizer {
-    report_context: Arc<Value>,
+pub struct ProviderPrivateStreamNormalizer<'a> {
+    report_context: &'a Value,
     buffered: Vec<u8>,
     current_event_type: Option<String>,
     mode: ProviderPrivateStreamNormalizeMode,
 }
 
-pub fn maybe_build_provider_private_stream_normalizer(
-    report_context: Option<&Value>,
-) -> Option<ProviderPrivateStreamNormalizer> {
-    let report_context = Arc::new(report_context?.clone());
-    maybe_build_provider_private_stream_normalizer_shared(report_context)
-}
-
-pub fn maybe_build_provider_private_stream_normalizer_shared(
-    report_context: Arc<Value>,
-) -> Option<ProviderPrivateStreamNormalizer> {
+pub fn maybe_build_provider_private_stream_normalizer<'a>(
+    report_context: Option<&'a Value>,
+) -> Option<ProviderPrivateStreamNormalizer<'a>> {
+    let report_context = report_context?;
     if !report_context
         .get("has_envelope")
         .and_then(Value::as_bool)
@@ -394,7 +382,7 @@ pub fn maybe_build_provider_private_stream_normalizer_shared(
     let descriptor =
         provider_adaptation_descriptor_for_envelope(envelope_name, provider_api_format)?;
     if report_context_preserves_private_client_envelope(
-        &report_context,
+        report_context,
         envelope_name,
         provider_api_format,
     ) {
@@ -405,7 +393,7 @@ pub fn maybe_build_provider_private_stream_normalizer_shared(
         .eq_ignore_ascii_case(KIRO_ENVELOPE_NAME)
     {
         ProviderPrivateStreamNormalizeMode::KiroToClaudeCli(Box::new(
-            KiroToClaudeCliStreamState::new(&report_context),
+            KiroToClaudeCliStreamState::new(report_context),
         ))
     } else if descriptor.unwraps_response_envelope {
         ProviderPrivateStreamNormalizeMode::EnvelopeUnwrap
@@ -433,11 +421,11 @@ pub fn extract_provider_private_stream_error_body(
     extract_stream_error_event_body(body)
 }
 
-impl ProviderPrivateStreamNormalizer {
+impl ProviderPrivateStreamNormalizer<'_> {
     pub fn push_chunk(&mut self, chunk: &[u8]) -> Result<Vec<u8>, AiSurfaceFinalizeError> {
         match &mut self.mode {
             ProviderPrivateStreamNormalizeMode::KiroToClaudeCli(state) => {
-                state.push_chunk(self.report_context.as_ref(), chunk)
+                state.push_chunk(self.report_context, chunk)
             }
             ProviderPrivateStreamNormalizeMode::EnvelopeUnwrap => {
                 let next_len = self
@@ -453,7 +441,7 @@ impl ProviderPrivateStreamNormalizer {
                     )));
                 }
                 self.buffered.extend_from_slice(chunk);
-                if report_context_is_windsurf_envelope(self.report_context.as_ref())
+                if report_context_is_windsurf_envelope(self.report_context)
                     && buffer_looks_like_connect_frame(&self.buffered)
                 {
                     return drain_windsurf_connect_json_frames(&mut self.buffered);
@@ -463,7 +451,7 @@ impl ProviderPrivateStreamNormalizer {
                     let line = self.buffered.drain(..=line_end).collect::<Vec<_>>();
                     output.extend(
                         transform_provider_private_stream_line_with_event_state(
-                            self.report_context.as_ref(),
+                            self.report_context,
                             line,
                             &mut self.current_event_type,
                         )
@@ -478,20 +466,20 @@ impl ProviderPrivateStreamNormalizer {
     pub fn finish(&mut self) -> Result<Vec<u8>, AiSurfaceFinalizeError> {
         match &mut self.mode {
             ProviderPrivateStreamNormalizeMode::KiroToClaudeCli(state) => {
-                state.finish(self.report_context.as_ref())
+                state.finish(self.report_context)
             }
             ProviderPrivateStreamNormalizeMode::EnvelopeUnwrap => {
                 if self.buffered.is_empty() {
                     return Ok(Vec::new());
                 }
-                if report_context_is_windsurf_envelope(self.report_context.as_ref())
+                if report_context_is_windsurf_envelope(self.report_context)
                     && buffer_looks_like_connect_frame(&self.buffered)
                 {
                     return drain_windsurf_connect_json_frames(&mut self.buffered);
                 }
                 let line = std::mem::take(&mut self.buffered);
                 transform_provider_private_stream_line_with_event_state(
-                    self.report_context.as_ref(),
+                    self.report_context,
                     line,
                     &mut self.current_event_type,
                 )
