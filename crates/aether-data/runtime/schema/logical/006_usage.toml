@@ -575,7 +575,7 @@ type = "text"
 length = 50
 
 [[table.usage_body_blobs.columns]]
-name = "payload_gzip"
+name = "payload"
 type = "bytes"
 
 [[table.usage_body_blobs.columns]]
