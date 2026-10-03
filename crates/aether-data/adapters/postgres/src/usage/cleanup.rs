@@ -1,11 +1,8 @@
-use std::io::Write;
-
 use aether_data_contracts::repository::usage::{
     parse_usage_body_ref, usage_body_ref, UsageBodyField, UsageCleanupExecutionMode,
     UsageCleanupPreviewCounts, UsageCleanupSummary, UsageCleanupTargets, UsageCleanupWindow,
 };
 use chrono::{DateTime, Utc};
-use flate2::{write::GzEncoder, Compression};
 use futures_util::TryStreamExt;
 use serde_json::Value;
 use sqlx::Row;
@@ -279,7 +276,7 @@ WHERE id = $1
 pub struct UsageDetachedBodyBlobWrite {
     pub body_ref: String,
     pub body_field: &'static str,
-    pub payload_gzip: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -344,16 +341,9 @@ struct ExpiredApiKeyRow<'a> {
     auto_delete_on_expiry: Option<bool>,
 }
 
-pub fn compress_usage_json_value(value: &Value) -> Result<Vec<u8>, DataLayerError> {
-    let bytes = serde_json::to_vec(value).map_err(|err| {
-        DataLayerError::UnexpectedValue(format!("failed to serialize usage json for gzip: {err}"))
-    })?;
-    let mut encoder = GzEncoder::new(Vec::new(), Compression::new(6));
-    encoder.write_all(&bytes).map_err(|err| {
-        DataLayerError::UnexpectedValue(format!("failed to gzip usage json: {err}"))
-    })?;
-    encoder.finish().map_err(|err| {
-        DataLayerError::UnexpectedValue(format!("failed to finish gzipped usage json: {err}"))
+pub fn serialize_usage_json_value(value: &Value) -> Result<Vec<u8>, DataLayerError> {
+    serde_json::to_vec(value).map_err(|err| {
+        DataLayerError::UnexpectedValue(format!("failed to serialize usage json: {err}"))
     })
 }
 
@@ -1324,7 +1314,7 @@ async fn compress_usage_body_fields(
                         .bind(&blob.body_ref)
                         .bind(&row.request_id)
                         .bind(blob.body_field)
-                        .bind(&blob.payload_gzip)
+                        .bind(&blob.payload)
                         .execute(&mut *tx)
                         .await
                         .map_err(postgres_error)?;
@@ -1433,19 +1423,17 @@ fn maybe_externalize_usage_body_field(
     request_id: &str,
     field: UsageBodyField,
     inline_body: Option<&Value>,
-    compressed_body: Option<&[u8]>,
+    _compressed_body: Option<&[u8]>,
 ) -> Result<(), DataLayerError> {
-    let Some(payload_gzip) = (match inline_body {
-        Some(value) => Some(compress_usage_json_value(value)?),
-        None => compressed_body.map(|value| value.to_vec()),
-    }) else {
+    // Deprecated compressed mirrors are no longer decoded; only inline JSON is externalized.
+    let Some(payload) = inline_body.map(serialize_usage_json_value).transpose()? else {
         return Ok(());
     };
     let body_ref = usage_body_ref(request_id, field);
     plan.blobs.push(UsageDetachedBodyBlobWrite {
         body_ref: body_ref.clone(),
         body_field: field.as_storage_field(),
-        payload_gzip,
+        payload,
     });
     match field {
         UsageBodyField::RequestBody => plan.refs.request_body_ref = Some(body_ref),
@@ -1517,14 +1505,11 @@ WHERE id = $1
 
 #[cfg(test)]
 mod tests {
-    use std::io::Read;
-
-    use flate2::read::GzDecoder;
     use serde_json::json;
 
     use super::{
-        build_usage_body_externalization, compress_usage_json_value,
-        migrate_legacy_body_ref_metadata_plan, UsageBodyCompressionRow,
+        build_usage_body_externalization, migrate_legacy_body_ref_metadata_plan,
+        serialize_usage_json_value, UsageBodyCompressionRow,
         SELECT_USAGE_LEGACY_BODY_REF_METADATA_BATCH_SQL,
     };
 
@@ -1597,7 +1582,7 @@ mod tests {
                         sqlx::query(&format!(
                             "UPDATE usage SET {column}_compressed = $1 WHERE request_id = $2"
                         ))
-                        .bind(compress_usage_json_value(&payload).unwrap())
+                        .bind(serialize_usage_json_value(&payload).unwrap())
                         .bind(request_id)
                         .execute(&pool)
                         .await
@@ -1617,7 +1602,7 @@ mod tests {
                         .bind(usage_body_ref(request_id, field))
                         .bind(request_id)
                         .bind(field.as_storage_field())
-                        .bind(compress_usage_json_value(&payload).unwrap())
+                        .bind(serialize_usage_json_value(&payload).unwrap())
                         .execute(&pool)
                         .await
                         .expect("detached body should be seeded");
@@ -1720,12 +1705,7 @@ mod tests {
         assert_eq!(summary.body_cleaned, 2);
         assert_eq!(summary.records_deleted, 0);
 
-        for request_id in [
-            "legacy-inline",
-            "legacy-gzip",
-            "detached-full",
-            "legacy-ref",
-        ] {
+        for request_id in ["legacy-inline", "detached-full", "legacy-ref"] {
             let audit = sqlx::query("SELECT * FROM usage_http_audits WHERE request_id = $1")
                 .bind(request_id)
                 .fetch_one(&pool)
@@ -1801,12 +1781,7 @@ mod tests {
     }
 
     fn inflate_json(bytes: &[u8]) -> serde_json::Value {
-        let mut decoder = GzDecoder::new(bytes);
-        let mut decoded = Vec::new();
-        decoder
-            .read_to_end(&mut decoded)
-            .expect("gzip should decode");
-        serde_json::from_slice(&decoded).expect("json should decode")
+        serde_json::from_slice(bytes).expect("json should decode")
     }
 
     #[test]
@@ -1883,39 +1858,12 @@ mod tests {
             Some("usage://request/req-1/provider_request_body")
         );
         assert_eq!(
-            inflate_json(&plan.blobs[0].payload_gzip),
+            inflate_json(&plan.blobs[0].payload),
             json!({"hello": "world"})
         );
         assert_eq!(
-            inflate_json(&plan.blobs[1].payload_gzip),
+            inflate_json(&plan.blobs[1].payload),
             json!({"provider": true})
-        );
-    }
-
-    #[test]
-    fn usage_body_externalization_reuses_existing_compressed_payloads() {
-        let compressed = compress_usage_json_value(&json!({"legacy": true}))
-            .expect("compressed payload should build");
-        let row = UsageBodyCompressionRow {
-            id: "usage-1".to_string(),
-            request_id: "req-legacy".to_string(),
-            request_body: None,
-            request_body_compressed: Some(compressed.clone()),
-            response_body: None,
-            response_body_compressed: None,
-            provider_request_body: None,
-            provider_request_body_compressed: None,
-            client_response_body: None,
-            client_response_body_compressed: None,
-        };
-
-        let plan = build_usage_body_externalization(&row).expect("plan should build");
-
-        assert_eq!(plan.blobs.len(), 1);
-        assert_eq!(plan.blobs[0].payload_gzip, compressed);
-        assert_eq!(
-            plan.refs.request_body_ref.as_deref(),
-            Some("usage://request/req-legacy/request_body")
         );
     }
 

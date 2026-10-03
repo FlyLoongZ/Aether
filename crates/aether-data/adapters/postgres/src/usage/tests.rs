@@ -4,9 +4,9 @@ use sqlx::{Postgres, QueryBuilder, Row};
 use std::sync::Arc;
 
 use super::{
-    attach_compressed_body_refs, attach_usage_http_audit_body_refs,
+    attach_usage_http_audit_body_refs,
     attach_usage_routing_snapshot_metadata, attach_usage_settlement_pricing_snapshot_metadata,
-    clear_previous_request_body_facts, inflate_usage_json_value,
+    clear_previous_request_body_facts,
     prepare_request_metadata_for_body_storage, prepare_usage_body_storage,
     prepare_usage_for_persistence, push_postgres_usage_websocket_filter,
     request_body_capture_replaces_derived_facts, resolved_read_usage_body_ref,
@@ -4316,7 +4316,7 @@ fn prepare_usage_body_storage_detaches_small_payloads_into_blob_storage() {
         .as_deref()
         .expect("small payload should now be ref-backed");
     assert_eq!(
-        inflate_usage_json_value(compressed).expect("payload should inflate"),
+        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
         payload
     );
 }
@@ -4325,14 +4325,20 @@ fn prepare_usage_body_storage_detaches_small_payloads_into_blob_storage() {
 async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
     let runtime_thread = std::thread::current().id();
     let payload = json!({"message": "background decoding"});
-    let compressed = prepare_usage_body_storage(Some(&payload))
-        .expect("body should compress")
+    let bytes = prepare_usage_body_storage(Some(&payload))
+        .expect("body should serialize")
         .detached_blob_bytes
         .expect("body should be detached");
 
     let decoded = super::decode_usage_body_in_background(move || {
         assert_ne!(std::thread::current().id(), runtime_thread);
-        inflate_usage_json_value(&compressed).map(Some)
+        serde_json::from_slice::<serde_json::Value>(&bytes)
+            .map(Some)
+            .map_err(|error| {
+                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
+                    "failed to parse usage json: {error}"
+                ))
+            })
     })
     .await
     .expect("body should decode");
@@ -4343,18 +4349,22 @@ async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
 #[tokio::test]
 async fn usage_body_decode_preserves_storage_decode_errors() {
     let error = super::decode_usage_body_in_background(|| {
-        inflate_usage_json_value(b"invalid gzip").map(Some)
+        serde_json::from_slice::<serde_json::Value>(b"not json")
+            .map(Some)
+            .map_err(|error| {
+                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
+                    "failed to parse usage json: {error}"
+                ))
+            })
     })
     .await
     .expect_err("corrupt bodies should fail");
 
-    assert!(error
-        .to_string()
-        .contains("failed to decompress usage json:"));
+    assert!(error.to_string().contains("failed to parse usage json:"));
 }
 
 #[test]
-fn prepare_usage_body_storage_compresses_large_payloads() {
+fn prepare_usage_body_storage_detaches_large_payloads() {
     let payload = json!({
         "content": "x".repeat(MAX_INLINE_USAGE_BODY_BYTES + 128)
     });
@@ -4366,13 +4376,13 @@ fn prepare_usage_body_storage_compresses_large_payloads() {
         .as_deref()
         .expect("large payload should be compressed");
     assert_eq!(
-        inflate_usage_json_value(compressed).expect("payload should inflate"),
+        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
         payload
     );
 }
 
 #[test]
-fn prepare_usage_body_storage_streams_json_shapes_into_compatible_gzip() {
+fn prepare_usage_body_storage_streams_json_shapes_into_raw_payloads() {
     for payload in [
         serde_json::Value::Null,
         json!(false),
@@ -4389,7 +4399,7 @@ fn prepare_usage_body_storage_streams_json_shapes_into_compatible_gzip() {
             .detached_blob_bytes
             .expect("body should be detached");
         assert_eq!(
-            inflate_usage_json_value(&compressed).expect("body should remain readable"),
+            serde_json::from_slice::<serde_json::Value>(&compressed).expect("body should remain readable"),
             payload
         );
     }
@@ -4455,7 +4465,7 @@ fn managed_capture_preparation_moves_bodies_without_a_second_reservation() {
     .zip(bodies)
     {
         assert_eq!(
-            inflate_usage_json_value(storage.detached_blob_bytes.as_deref().unwrap()).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(storage.detached_blob_bytes.as_deref().unwrap()).unwrap(),
             expected
         );
     }
@@ -4654,32 +4664,6 @@ fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys(
         metadata,
         json!({
             "trace_id": "trace-1"
-        })
-    );
-}
-
-#[test]
-fn attach_compressed_body_refs_adds_missing_ref_metadata() {
-    let metadata = attach_compressed_body_refs(
-        "req-123",
-        Some(json!({
-            "candidate_id": "cand-1",
-            "provider_request_body_ref": "blob://existing"
-        })),
-        true,
-        true,
-        true,
-        false,
-    )
-    .expect("metadata should remain");
-
-    assert_eq!(
-        metadata,
-        json!({
-            "candidate_id": "cand-1",
-            "request_body_ref": usage_body_ref("req-123", UsageBodyField::RequestBody),
-            "provider_request_body_ref": "blob://existing",
-            "response_body_ref": usage_body_ref("req-123", UsageBodyField::ResponseBody)
         })
     );
 }

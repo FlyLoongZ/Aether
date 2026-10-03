@@ -1,5 +1,4 @@
 mod capture_memory;
-mod compression;
 mod metadata_policy;
 mod policy;
 mod types;
@@ -9,7 +8,6 @@ pub use capture_memory::{
     mark_usage_capture_memory_omitted, usage_json_heap_estimate, UsageCaptureMemoryBudget,
     UsageCaptureRetention,
 };
-pub use compression::{read_decompressed_usage_json, MAX_DECOMPRESSED_USAGE_JSON_BYTES};
 pub use metadata_policy::*;
 pub use policy::*;
 pub use types::{
@@ -19,7 +17,8 @@ pub use types::{
     normalize_provider_response_model, normalize_provider_service_tier, parse_usage_body_ref,
     resolve_provider_cache_ttl_minutes, resolve_provider_service_tier_from_request_capture,
     usage_body_capture_is_authoritative, usage_body_ref, usage_request_metadata_client_family,
-    ApiKeyLastUsedDelta, ManagementTokenCounterDelta, PendingUsageCleanupSummary,
+    ApiKeyLastUsedDelta, ManagementTokenCounterDelta, MAX_USAGE_BODY_BYTES,
+    PendingUsageCleanupSummary,
     ProviderApiKeyWindowUsageRequest, ProxyNodeCounterDelta, StoredProviderApiKeyUsageSummary,
     StoredProviderApiKeyWindowUsageSummary, StoredProviderUsageSummary, StoredProviderUsageWindow,
     StoredRequestUsageAudit, StoredUsageAuditAggregation, StoredUsageAuditSummary,

@@ -1892,11 +1892,10 @@ pub fn canonical_usage_body_ref_for(
         .map(|(request_id, field)| usage_body_ref(&request_id, field))
 }
 
+pub const MAX_USAGE_BODY_BYTES: usize = 64 * 1024 * 1024;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StoredUsageBodyPayload {
-    Gzip(Vec<u8>),
-    Json(Vec<u8>),
-}
+pub struct StoredUsageBodyPayload(pub Vec<u8>);
 
 #[async_trait]
 pub trait UsageReadRepository: Send + Sync {
@@ -1935,7 +1934,7 @@ pub trait UsageReadRepository: Send + Sync {
             .await?
             .map(|value| {
                 serde_json::to_vec(&value)
-                    .map(StoredUsageBodyPayload::Json)
+                    .map(StoredUsageBodyPayload)
                     .map_err(|error| crate::DataLayerError::UnexpectedValue(error.to_string()))
             })
             .transpose()

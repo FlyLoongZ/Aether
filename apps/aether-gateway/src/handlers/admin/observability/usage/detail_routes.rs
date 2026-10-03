@@ -19,7 +19,7 @@ use aether_admin::observability::usage::{
 };
 use aether_data_contracts::repository::usage::{
     canonical_usage_body_ref_for, StoredRequestUsageAudit, StoredUsageBodyPayload,
-    UsageBodyCaptureState, UsageBodyField, MAX_DECOMPRESSED_USAGE_JSON_BYTES,
+    UsageBodyCaptureState, UsageBodyField, MAX_USAGE_BODY_BYTES,
 };
 use axum::{
     body::Body,
@@ -61,7 +61,8 @@ fn admin_usage_body_load_error_code(error: &GatewayError) -> &'static str {
         {
             return "too_large";
         }
-        if message.contains("failed to decompress usage json:")
+        if message.contains("failed to parse usage json:")
+            || message.contains("failed to decompress usage json:")
             || message.contains("failed to parse decompressed usage json:")
         {
             return "decode_failed";
@@ -176,7 +177,7 @@ async fn read_admin_usage_raw_body(
     fallback
         .map(|value| {
             serde_json::to_vec(&value)
-                .map(StoredUsageBodyPayload::Json)
+                .map(StoredUsageBodyPayload)
                 .map_err(|error| GatewayError::Internal(error.to_string()))
         })
         .transpose()
@@ -230,22 +231,15 @@ async fn build_admin_usage_raw_body_response(
 }
 
 fn admin_usage_raw_payload_response(payload: StoredUsageBodyPayload) -> Response<Body> {
-    let (encoding, bytes, limit) = match payload {
-        StoredUsageBodyPayload::Gzip(bytes) => (
-            "gzip",
-            bytes,
-            MAX_DECOMPRESSED_USAGE_JSON_BYTES + 1024 * 1024,
-        ),
-        StoredUsageBodyPayload::Json(bytes) => ("json", bytes, MAX_DECOMPRESSED_USAGE_JSON_BYTES),
-    };
-    if bytes.len() > limit {
+    let StoredUsageBodyPayload(bytes) = payload;
+    if bytes.len() > MAX_USAGE_BODY_BYTES {
         admin_usage_raw_body_error(http::StatusCode::PAYLOAD_TOO_LARGE, "too_large")
     } else {
         (
             [
                 ("content-type", "application/octet-stream"),
                 ("content-encoding", "identity"),
-                ("x-aether-body-encoding", encoding),
+                ("x-aether-body-encoding", "json"),
             ],
             bytes,
         )
@@ -576,41 +570,26 @@ mod tests {
     #[tokio::test]
     async fn admin_usage_raw_body_does_not_decode_or_reencode_stored_bytes() {
         use super::{admin_usage_raw_payload_response, StoredUsageBodyPayload};
-        for (payload, encoding, expected) in [
-            (
-                StoredUsageBodyPayload::Gzip(vec![31, 139, 8, 0, 1]),
-                "gzip",
-                vec![31, 139, 8, 0, 1],
-            ),
-            (
-                StoredUsageBodyPayload::Json(b"{ \"untouched\" : true }".to_vec()),
-                "json",
-                b"{ \"untouched\" : true }".to_vec(),
-            ),
-        ] {
-            let response = admin_usage_raw_payload_response(payload);
-            assert_eq!(response.headers()["content-encoding"], "identity");
-            assert_eq!(response.headers()["x-aether-body-encoding"], encoding);
-            let bytes = axum::body::to_bytes(response.into_body(), 1024)
-                .await
-                .unwrap();
-            assert_eq!(bytes.as_ref(), expected.as_slice());
-        }
+        let response = admin_usage_raw_payload_response(StoredUsageBodyPayload(
+            b"{ \"untouched\" : true }".to_vec(),
+        ));
+        assert_eq!(response.headers()["content-encoding"], "identity");
+        assert_eq!(response.headers()["x-aether-body-encoding"], "json");
+        let bytes = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), b"{ \"untouched\" : true }".as_slice());
     }
 
     #[test]
     fn body_load_errors_expose_safe_codes_instead_of_internal_messages() {
         for (message, expected) in [
             (
-                "unexpected database value: decompressed usage json exceeds 67108864 bytes",
+                "unexpected database value: encoded usage json exceeds 67108864 bytes",
                 "too_large",
             ),
             (
-                "failed to decompress usage json: invalid gzip header",
-                "decode_failed",
-            ),
-            (
-                "failed to parse decompressed usage json: invalid JSON",
+                "failed to parse usage json: invalid JSON",
                 "decode_failed",
             ),
             (

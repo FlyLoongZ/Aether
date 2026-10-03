@@ -262,18 +262,18 @@ fn cross_driver_timestamp_normalization_preserves_usage_second_contract() {
 #[test]
 fn cross_driver_binary_normalization_preserves_raw_bytes() {
     assert_eq!(
-        normalize_imported_binary("postgres", "payload_gzip", &json!([0, 1, 127, 255]))
+        normalize_imported_binary("postgres", "payload", &json!([0, 1, 127, 255]))
             .expect("byte array should normalize"),
         Some(vec![0, 1, 127, 255]),
     );
     assert_eq!(
-        normalize_imported_binary("postgres", "payload_gzip", &json!("\\x00017fff"))
+        normalize_imported_binary("postgres", "payload", &json!("\\x00017fff"))
             .expect("postgres hex should normalize"),
         Some(vec![0, 1, 127, 255]),
     );
-    assert!(normalize_imported_binary("postgres", "payload_gzip", &json!([256])).is_err());
+    assert!(normalize_imported_binary("postgres", "payload", &json!([256])).is_err());
     assert_eq!(
-        postgres_bytea_json_value("payload_gzip", &json!([0, 1, 127, 255]))
+        postgres_bytea_json_value("payload", &json!([0, 1, 127, 255]))
             .expect("postgres bytea should normalize"),
         json!("\\x00017fff"),
     );
