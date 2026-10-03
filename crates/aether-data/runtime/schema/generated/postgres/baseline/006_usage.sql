@@ -75,10 +75,6 @@ CREATE TABLE IF NOT EXISTS public.usage (
     response_body jsonb,
     client_response_headers jsonb,
     client_response_body jsonb,
-    request_body_compressed bytea,
-    provider_request_body_compressed bytea,
-    response_body_compressed bytea,
-    client_response_body_compressed bytea,
     request_metadata jsonb,
     created_at bigint,
     candidate_id character varying(128),
@@ -120,7 +116,7 @@ CREATE TABLE IF NOT EXISTS public.usage_body_blobs (
     body_ref character varying(160) NOT NULL,
     request_id character varying(128) NOT NULL,
     body_field character varying(50) NOT NULL,
-    payload_gzip bytea NOT NULL,
+    payload bytea NOT NULL,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL
 );

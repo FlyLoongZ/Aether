@@ -612,19 +612,11 @@ UPDATE public.usage
 SET request_body = NULL,
     response_body = NULL,
     provider_request_body = NULL,
-    client_response_body = NULL,
-    request_body_compressed = NULL,
-    response_body_compressed = NULL,
-    provider_request_body_compressed = NULL,
-    client_response_body_compressed = NULL
+    client_response_body = NULL
 WHERE request_body IS NOT NULL
    OR response_body IS NOT NULL
    OR provider_request_body IS NOT NULL
    OR client_response_body IS NOT NULL
-   OR request_body_compressed IS NOT NULL
-   OR response_body_compressed IS NOT NULL
-   OR provider_request_body_compressed IS NOT NULL
-   OR client_response_body_compressed IS NOT NULL
 "#,
                 summary,
             )
@@ -879,10 +871,6 @@ WITH batch AS (
        OR response_body IS NOT NULL
        OR provider_request_body IS NOT NULL
        OR client_response_body IS NOT NULL
-       OR request_body_compressed IS NOT NULL
-       OR response_body_compressed IS NOT NULL
-       OR provider_request_body_compressed IS NOT NULL
-       OR client_response_body_compressed IS NOT NULL
     ORDER BY created_at_unix_ms ASC, request_id ASC
     LIMIT $1
 )
@@ -890,11 +878,7 @@ UPDATE public.usage AS usage_rows
 SET request_body = NULL,
     response_body = NULL,
     provider_request_body = NULL,
-    client_response_body = NULL,
-    request_body_compressed = NULL,
-    response_body_compressed = NULL,
-    provider_request_body_compressed = NULL,
-    client_response_body_compressed = NULL
+    client_response_body = NULL
 FROM batch
 WHERE usage_rows.request_id = batch.request_id
 "#,

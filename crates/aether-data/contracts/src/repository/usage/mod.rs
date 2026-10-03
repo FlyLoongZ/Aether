@@ -4,7 +4,6 @@ mod analytics_tests;
 mod attribution;
 mod billing_multiplier;
 mod capture_memory;
-mod compression;
 mod dashboard_summary;
 mod health;
 mod metadata_policy;
@@ -19,7 +18,6 @@ pub use capture_memory::{
     mark_usage_capture_memory_omitted, usage_json_heap_estimate, UsageCaptureMemoryBudget,
     UsageCaptureRetention,
 };
-pub use compression::{read_decompressed_usage_json, MAX_DECOMPRESSED_USAGE_JSON_BYTES};
 pub use dashboard_summary::*;
 pub use health::*;
 pub use metadata_policy::*;
@@ -59,7 +57,7 @@ pub use types::{
     UsagePerformancePercentilesQuery, UsageProviderPerformanceQuery, UsageReadRepository,
     UsageRepository, UsageSettledCostSummaryQuery, UsageTimeSeriesGranularity,
     UsageTimeSeriesQuery, UsageWriteRepository, CHAT_PII_REDACTION_METADATA_KEY,
-    LIVE_SESSION_METADATA_KEY, PLAN_USAGE_RESERVATION_DEFERRED_METADATA_KEY,
+    LIVE_SESSION_METADATA_KEY, MAX_USAGE_BODY_BYTES, PLAN_USAGE_RESERVATION_DEFERRED_METADATA_KEY,
     PROVIDER_ACTUAL_SERVICE_TIER_METADATA_KEY, PROVIDER_CACHE_TTL_MINUTES_METADATA_KEY,
     PROVIDER_REASONING_EFFORT_METADATA_KEY, PROVIDER_RESPONSE_MODEL_METADATA_KEY,
     PROVIDER_SERVICE_TIER_METADATA_KEY, REALTIME_SESSION_METADATA_KEY,

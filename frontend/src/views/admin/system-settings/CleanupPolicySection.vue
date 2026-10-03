@@ -58,26 +58,6 @@
           @update:model-value="$emit('update:detailLogRetentionDays', Number($event))"
         />
         <p class="mt-1 text-xs text-muted-foreground">
-          超过后压缩 body 字段
-        </p>
-      </div>
-
-      <div>
-        <Label
-          for="compressed-log-retention-days"
-          class="block text-sm font-medium"
-        >
-          压缩记录保留天数
-        </Label>
-        <Input
-          id="compressed-log-retention-days"
-          :model-value="compressedLogRetentionDays"
-          type="number"
-          placeholder="30"
-          class="mt-1"
-          @update:model-value="$emit('update:compressedLogRetentionDays', Number($event))"
-        />
-        <p class="mt-1 text-xs text-muted-foreground">
           超过后删除 body 字段
         </p>
       </div>
@@ -211,12 +191,11 @@
       </h4>
       <div class="text-xs text-muted-foreground space-y-1">
         <p>1. <strong>详细日志阶段</strong>: 保留完整的 request_body 和 response_body</p>
-        <p>2. <strong>压缩日志阶段</strong>: body 字段被压缩存储，节省空间</p>
-        <p>3. <strong>统计阶段</strong>: 仅保留 tokens、成本等统计信息</p>
-        <p>4. <strong>归档删除</strong>: 超过保留期限后完全删除记录</p>
-        <p>5. <strong>候选记录</strong>: 独立按保留天数清理 request_candidates 审计记录，不再跟随 Key 删除联动</p>
-        <p>6. <strong>审计日志</strong>: 独立清理，记录用户登录、操作等安全事件</p>
-        <p>7. <strong>代理指标</strong>: 仅保留 1m/1h 聚合桶，清理任务按批次删除过期桶</p>
+        <p>2. <strong>统计阶段</strong>: 超过详细记录保留期后删除 body 字段，仅保留 tokens、成本等统计信息</p>
+        <p>3. <strong>归档删除</strong>: 超过保留期限后完全删除记录</p>
+        <p>4. <strong>候选记录</strong>: 独立按保留天数清理 request_candidates 审计记录，不再跟随 Key 删除联动</p>
+        <p>5. <strong>审计日志</strong>: 独立清理，记录用户登录、操作等安全事件</p>
+        <p>6. <strong>代理指标</strong>: 仅保留 1m/1h 聚合桶，清理任务按批次删除过期桶</p>
       </div>
     </div>
 
@@ -351,7 +330,6 @@ import { useToast } from '@/composables/useToast'
 defineProps<{
   enableAutoCleanup: boolean
   detailLogRetentionDays: number
-  compressedLogRetentionDays: number
   headerRetentionDays: number
   logRetentionDays: number
   cleanupBatchSize: number
@@ -366,7 +344,6 @@ defineEmits<{
   save: []
   toggleAutoCleanup: [enabled: boolean]
   'update:detailLogRetentionDays': [value: number]
-  'update:compressedLogRetentionDays': [value: number]
   'update:headerRetentionDays': [value: number]
   'update:logRetentionDays': [value: number]
   'update:cleanupBatchSize': [value: number]
@@ -464,8 +441,6 @@ function cleanupSummaryText(summary: Record<string, unknown>): string {
 
 function summaryLabel(key: string): string {
   const labels: Record<string, string> = {
-    body_externalized: '详细体',
-    legacy_body_refs_migrated: '迁移',
     body_cleaned: '清体',
     header_cleaned: '清头',
     keys_cleaned: 'Key',

@@ -75,7 +75,7 @@ export const legacyGuideEnglishMessages: Record<string, string> = {
   '固定顺序：': 'Fixed order:',
   '故障转移：': 'Failover:',
   '3. 访问限制': '3. Access restrictions',
-  '4. 请求体压缩清理': '4. Request body compression and cleanup',
+  '4. 请求体清理': '4. Request body cleanup',
   '5. 定时任务': '5. Scheduled tasks',
   '跨平台格式转换': 'Cross-platform format conversion',
   '上游提供商': 'Upstream providers',

@@ -1,9 +1,9 @@
 use aether_data_contracts::repository::usage::{
-    canonical_usage_body_ref_for, parse_usage_body_ref, read_decompressed_usage_json,
-    usage_body_ref, ApiKeyLastUsedDelta, ManagementTokenCounterDelta, ProxyNodeCounterDelta,
-    StoredUsageAuditAggregation, StoredUsageAuditSummary, StoredUsageBodyPayload,
-    StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
-    StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
+    canonical_usage_body_ref_for, parse_usage_body_ref, usage_body_ref, ApiKeyLastUsedDelta,
+    ManagementTokenCounterDelta, ProxyNodeCounterDelta, StoredUsageAuditAggregation,
+    StoredUsageAuditSummary, StoredUsageBodyPayload, StoredUsageBreakdownSummaryRow,
+    StoredUsageCacheAffinityHitSummary, StoredUsageCacheAffinityIntervalRow,
+    StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
     StoredUsageDashboardStatsSummary, StoredUsageDashboardSummary, StoredUsageErrorDistributionRow,
     StoredUsageHealthTimelineRow, StoredUsageLeaderboardSummary,
@@ -21,11 +21,10 @@ use aether_data_contracts::repository::usage::{
     UsageHealthTimelineQuery, UsageLeaderboardGroupBy, UsageLeaderboardQuery,
     UsageMonitoringErrorCountQuery, UsageMonitoringErrorListQuery,
     UsagePerformancePercentilesQuery, UsageProviderPerformanceQuery, UsageSettledCostSummaryQuery,
-    UsageTimeSeriesGranularity, UsageTimeSeriesQuery,
+    UsageTimeSeriesGranularity, UsageTimeSeriesQuery, MAX_USAGE_BODY_BYTES,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use futures_util::future::{try_join, BoxFuture};
 use futures_util::TryStreamExt;
 use serde_json::Map;
@@ -36,7 +35,6 @@ use sqlx::{
     PgPool, Postgres, QueryBuilder, Row,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{BufWriter, Write};
 use uuid::Uuid;
 
 use crate::{
@@ -83,11 +81,8 @@ mod projection_reader;
 
 use preparation::prepare_usage_in_background;
 
-// Legacy inline body columns on public.usage are deprecated. Keep the threshold at zero so
-// newly captured bodies always spill to usage_body_blobs and resolve through usage_http_audits.
-const MAX_INLINE_USAGE_BODY_BYTES: usize = 0;
 const MAX_SUPPORTED_UNIX_SECS: u64 = 253_402_300_799;
-const FIND_USAGE_BODY_BLOB_BY_REF_SQL: &str = r#"SELECT CASE WHEN octet_length(payload_gzip) <= $4 THEN payload_gzip END AS payload_gzip FROM usage_body_blobs WHERE body_ref = $1 AND request_id = $2 AND body_field = $3 LIMIT 1"#;
+const FIND_USAGE_BODY_BLOB_BY_REF_SQL: &str = r#"SELECT payload FROM usage_body_blobs WHERE body_ref = $1 AND request_id = $2 AND body_field = $3 LIMIT 1"#;
 const DELETE_USAGE_BODY_BLOB_SQL: &str = include_str!("queries/delete_usage_body_blob_sql.sql");
 static USAGE_BODY_DECODE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
 
@@ -2144,16 +2139,12 @@ INSERT INTO "usage" (
   billing_status,
   request_headers,
   request_body,
-  request_body_compressed,
   provider_request_headers,
   provider_request_body,
-  provider_request_body_compressed,
   response_headers,
   response_body,
-  response_body_compressed,
   client_response_headers,
   client_response_body,
-  client_response_body_compressed,
   request_metadata,
   finalized_at,
   created_at,
@@ -3071,10 +3062,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?;
-        let usage = row
-            .as_ref()
-            .map(|row| map_usage_row(row, true))
-            .transpose()?;
+        let usage = row.as_ref().map(map_usage_row).transpose()?;
         match usage {
             Some(usage) => self.hydrate_usage_body_refs(usage).await.map(Some),
             None => Ok(None),
@@ -3091,9 +3079,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?;
-        row.as_ref()
-            .map(|row| map_usage_row(row, false))
-            .transpose()
+        row.as_ref().map(map_usage_row).transpose()
     }
 
     pub async fn find_by_id(
@@ -3105,9 +3091,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?;
-        row.as_ref()
-            .map(|row| map_usage_row(row, false))
-            .transpose()
+        row.as_ref().map(map_usage_row).transpose()
     }
 
     pub async fn list_by_ids(
@@ -3125,7 +3109,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
         let mut rows = sqlx::query(&sql).bind(ids.to_vec()).fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
-            items.push(map_usage_row(&row, false)?);
+            items.push(map_usage_row(&row)?);
         }
         Ok(items)
     }
@@ -3134,9 +3118,6 @@ ORDER BY request_count DESC, "usage".provider_name ASC
         &self,
         body_ref: &str,
     ) -> Result<Option<StoredUsageBodyPayload>, DataLayerError> {
-        let json_limit =
-            aether_data_contracts::repository::usage::MAX_DECOMPRESSED_USAGE_JSON_BYTES as i64;
-        let encoded_limit = json_limit + 1024 * 1024;
         let Some((request_id, field)) = parse_usage_body_ref(body_ref) else {
             return Ok(None);
         };
@@ -3145,65 +3126,48 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .bind(&canonical_ref)
             .bind(&request_id)
             .bind(field.as_storage_field())
-            .bind(encoded_limit)
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?;
         if let Some(row) = row {
-            return row
-                .try_get::<Option<Vec<u8>>, _>("payload_gzip")
+            let Some(bytes) = row
+                .try_get::<Option<Vec<u8>>, _>("payload")
                 .map_postgres_err()?
-                .map(|bytes| Some(StoredUsageBodyPayload::Gzip(bytes)))
-                .ok_or_else(|| {
-                    DataLayerError::UnexpectedValue(format!(
-                        "encoded usage json exceeds {encoded_limit} bytes"
-                    ))
-                });
+            else {
+                return Ok(None);
+            };
+            if bytes.len() > MAX_USAGE_BODY_BYTES {
+                return Err(DataLayerError::UnexpectedValue(format!(
+                    "encoded usage json exceeds {MAX_USAGE_BODY_BYTES} bytes"
+                )));
+            }
+            return Ok(Some(StoredUsageBodyPayload(bytes)));
         }
-        let (inline_column, compressed_column) = usage_body_sql_columns(field);
+        let inline_column = usage_body_inline_column(field);
         let row = sqlx::query(&format!(
-            "SELECT CASE WHEN octet_length({inline_column}::text) <= $2 THEN {inline_column}::text END AS inline_body, CASE WHEN octet_length({compressed_column}) <= $3 THEN {compressed_column} END AS compressed_body, (COALESCE(octet_length({inline_column}::text) > $2, false) OR ({inline_column} IS NULL AND COALESCE(octet_length({compressed_column}) > $3, false))) AS too_large FROM \"usage\" WHERE request_id = $1 LIMIT 1"
+            "SELECT {inline_column}::text AS inline_body FROM \"usage\" WHERE request_id = $1 LIMIT 1"
         ))
         .bind(request_id)
-        .bind(json_limit)
-        .bind(encoded_limit)
         .fetch_optional(&self.pool)
         .await
         .map_postgres_err()?;
         let Some(row) = row else {
             return Ok(None);
         };
-        if row.try_get::<bool, _>("too_large").map_postgres_err()? {
-            return Err(DataLayerError::UnexpectedValue(
-                "encoded usage json exceeds preview limit".to_string(),
-            ));
-        }
-        if let Some(body) = row
+        Ok(row
             .try_get::<Option<String>, _>("inline_body")
             .map_postgres_err()?
-        {
-            return Ok(Some(StoredUsageBodyPayload::Json(body.into_bytes())));
-        }
-        Ok(row
-            .try_get::<Option<Vec<u8>>, _>("compressed_body")
-            .map_postgres_err()?
-            .map(StoredUsageBodyPayload::Gzip))
+            .map(|body| StoredUsageBodyPayload(body.into_bytes())))
     }
 
     pub async fn resolve_body_ref(&self, body_ref: &str) -> Result<Option<Value>, DataLayerError> {
-        let Some(payload) = self.read_body_payload(body_ref).await? else {
+        let Some(StoredUsageBodyPayload(bytes)) = self.read_body_payload(body_ref).await? else {
             return Ok(None);
         };
-        decode_usage_body_in_background(move || match payload {
-            StoredUsageBodyPayload::Gzip(bytes) => inflate_usage_json_value(&bytes).map(Some),
-            StoredUsageBodyPayload::Json(bytes) => {
-                let bytes = read_decompressed_usage_json(std::io::Cursor::new(bytes))?;
-                serde_json::from_slice(&bytes).map(Some).map_err(|error| {
-                    DataLayerError::UnexpectedValue(format!(
-                        "failed to parse decompressed usage json: {error}"
-                    ))
-                })
-            }
+        decode_usage_body_in_background(move || {
+            serde_json::from_slice(&bytes).map(Some).map_err(|error| {
+                DataLayerError::UnexpectedValue(format!("failed to parse usage json: {error}"))
+            })
         })
         .await
     }
@@ -3404,7 +3368,7 @@ OR (\"usage\".error_message IS NOT NULL AND BTRIM(\"usage\".error_message) <> ''
         let mut rows = query.fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
-            items.push(map_usage_row(&row, false)?);
+            items.push(map_usage_row(&row)?);
         }
         Ok(items)
     }
@@ -3612,7 +3576,7 @@ OR (\"usage\".error_message IS NOT NULL AND BTRIM(\"usage\".error_message) <> ''
         let mut rows = builder.build().fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
-            items.push(map_usage_row(&row, false)?);
+            items.push(map_usage_row(&row)?);
         }
         Ok(items)
     }
@@ -5949,7 +5913,7 @@ ORDER BY "usage".created_at DESC, "usage".id ASC
         let mut rows = builder.build().fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
-            items.push(map_usage_row(&row, false)?);
+            items.push(map_usage_row(&row)?);
         }
         Ok(items)
     }
@@ -8406,7 +8370,7 @@ ORDER BY date ASC
         let mut rows = query.fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
-            items.push(map_usage_row(&row, false)?);
+            items.push(map_usage_row(&row)?);
         }
         Ok(items)
     }
@@ -9002,17 +8966,13 @@ ORDER BY "usage".user_id ASC
                         .bind(&usage.status)
                         .bind(&usage.billing_status)
                         .bind(None::<String>)
-                        .bind(&request_body_storage.inline_json)
-                        .bind(None::<Vec<u8>>)
                         .bind(None::<String>)
-                        .bind(&provider_request_body_storage.inline_json)
-                        .bind(None::<Vec<u8>>)
                         .bind(None::<String>)
-                        .bind(&response_body_storage.inline_json)
-                        .bind(None::<Vec<u8>>)
                         .bind(None::<String>)
-                        .bind(&client_response_body_storage.inline_json)
-                        .bind(None::<Vec<u8>>)
+                        .bind(None::<String>)
+                        .bind(None::<String>)
+                        .bind(None::<String>)
+                        .bind(None::<String>)
                         .bind(&request_metadata_json)
                         .bind(usage.finalized_at_unix_secs.map(|value| value as f64))
                         .bind(usage.created_at_unix_ms.map(|value| value as f64))
@@ -9473,35 +9433,13 @@ ORDER BY "usage".user_id ASC
                 .push_bind(row.usage.status.clone())
                 .push_bind(row.usage.billing_status.clone())
                 .push("CAST(NULL AS json)")
-                .push("CAST(")
-                .push_bind_unseparated(row.prepared.request_body_storage.inline_json.clone())
-                .push_unseparated(" AS json)")
-                .push_bind(None::<Vec<u8>>)
                 .push("CAST(NULL AS json)")
-                .push("CAST(")
-                .push_bind_unseparated(
-                    row.prepared
-                        .provider_request_body_storage
-                        .inline_json
-                        .clone(),
-                )
-                .push_unseparated(" AS json)")
-                .push_bind(None::<Vec<u8>>)
                 .push("CAST(NULL AS json)")
-                .push("CAST(")
-                .push_bind_unseparated(row.prepared.response_body_storage.inline_json.clone())
-                .push_unseparated(" AS json)")
-                .push_bind(None::<Vec<u8>>)
                 .push("CAST(NULL AS json)")
-                .push("CAST(")
-                .push_bind_unseparated(
-                    row.prepared
-                        .client_response_body_storage
-                        .inline_json
-                        .clone(),
-                )
-                .push_unseparated(" AS json)")
-                .push_bind(None::<Vec<u8>>)
+                .push("CAST(NULL AS json)")
+                .push("CAST(NULL AS json)")
+                .push("CAST(NULL AS json)")
+                .push("CAST(NULL AS json)")
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.request_metadata_json.clone())
                 .push_unseparated(" AS json)")
@@ -9591,7 +9529,7 @@ RETURNING
         }
 
         let mut builder = QueryBuilder::<Postgres>::new(
-            "INSERT INTO usage_body_blobs (body_ref, request_id, body_field, payload_gzip) ",
+            "INSERT INTO usage_body_blobs (body_ref, request_id, body_field, payload) ",
         );
         builder.push_values(&blobs, |mut values, row| {
             values
@@ -9601,7 +9539,7 @@ RETURNING
                 .push_bind(row.3.clone());
         });
         builder.push(
-            " ON CONFLICT (body_ref) DO UPDATE SET payload_gzip = EXCLUDED.payload_gzip, updated_at = NOW()",
+            " ON CONFLICT (body_ref) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()",
         );
         builder
             .build()
@@ -11185,7 +11123,7 @@ async fn find_usage_by_request_id_in_tx(
         .fetch_optional(&mut **tx)
         .await
         .map_postgres_err()?
-        .map(|row| map_usage_row(&row, false))
+        .map(|row| map_usage_row(&row))
         .transpose()
 }
 
@@ -12250,10 +12188,7 @@ where
     }
 }
 
-fn map_usage_row(
-    row: &sqlx::postgres::PgRow,
-    resolve_compressed_bodies: bool,
-) -> Result<StoredRequestUsageAudit, DataLayerError> {
+fn map_usage_row(row: &sqlx::postgres::PgRow) -> Result<StoredRequestUsageAudit, DataLayerError> {
     let mut usage = StoredRequestUsageAudit::new(
         row.try_get("id").map_postgres_err()?,
         row.try_get("request_id").map_postgres_err()?,
@@ -12327,33 +12262,13 @@ fn map_usage_row(
         .try_get::<Option<String>, _>("client_family")
         .map_postgres_err()?;
     usage.request_headers = row.try_get("request_headers").map_postgres_err()?;
-    let request_body = usage_json_column(
-        row,
-        "request_body",
-        "request_body_compressed",
-        resolve_compressed_bodies,
-    )?;
+    let request_body = usage_json_column(row, "request_body")?;
     usage.provider_request_headers = row.try_get("provider_request_headers").map_postgres_err()?;
-    let provider_request_body = usage_json_column(
-        row,
-        "provider_request_body",
-        "provider_request_body_compressed",
-        resolve_compressed_bodies,
-    )?;
+    let provider_request_body = usage_json_column(row, "provider_request_body")?;
     usage.response_headers = row.try_get("response_headers").map_postgres_err()?;
-    let response_body = usage_json_column(
-        row,
-        "response_body",
-        "response_body_compressed",
-        resolve_compressed_bodies,
-    )?;
+    let response_body = usage_json_column(row, "response_body")?;
     usage.client_response_headers = row.try_get("client_response_headers").map_postgres_err()?;
-    let client_response_body = usage_json_column(
-        row,
-        "client_response_body",
-        "client_response_body_compressed",
-        resolve_compressed_bodies,
-    )?;
+    let client_response_body = usage_json_column(row, "client_response_body")?;
     let request_metadata: Option<Value> = row.try_get("request_metadata").map_postgres_err()?;
     let http_audit_refs = UsageHttpAuditRefs {
         request_body_ref: row_try_get_optional(row, "http_request_body_ref")?,
@@ -12383,17 +12298,16 @@ fn map_usage_row(
     };
     let routing_snapshot = usage_routing_snapshot_from_row(row)?;
     let settlement_pricing_snapshot = usage_settlement_pricing_snapshot_from_row(row)?;
-    usage.request_body = request_body.value;
-    usage.provider_request_body = provider_request_body.value;
-    usage.response_body = response_body.value;
-    usage.client_response_body = client_response_body.value;
+    usage.request_body = request_body;
+    usage.provider_request_body = provider_request_body;
+    usage.response_body = response_body;
+    usage.client_response_body = client_response_body;
     let request_metadata_object = request_metadata.as_ref().and_then(Value::as_object);
     usage.request_body_ref = resolved_read_usage_body_ref(
         None,
         request_metadata_object,
         &usage.request_id,
         UsageBodyField::RequestBody,
-        request_body.has_compressed_storage,
         http_audit_refs.request_body_ref.as_deref(),
     );
     usage.provider_request_body_ref = resolved_read_usage_body_ref(
@@ -12401,7 +12315,6 @@ fn map_usage_row(
         request_metadata_object,
         &usage.request_id,
         UsageBodyField::ProviderRequestBody,
-        provider_request_body.has_compressed_storage,
         http_audit_refs.provider_request_body_ref.as_deref(),
     );
     usage.response_body_ref = resolved_read_usage_body_ref(
@@ -12409,7 +12322,6 @@ fn map_usage_row(
         request_metadata_object,
         &usage.request_id,
         UsageBodyField::ResponseBody,
-        response_body.has_compressed_storage,
         http_audit_refs.response_body_ref.as_deref(),
     );
     usage.client_response_body_ref = resolved_read_usage_body_ref(
@@ -12417,7 +12329,6 @@ fn map_usage_row(
         request_metadata_object,
         &usage.request_id,
         UsageBodyField::ClientResponseBody,
-        client_response_body.has_compressed_storage,
         http_audit_refs.client_response_body_ref.as_deref(),
     );
     usage.request_body_state = http_audit_states.request_body_state;
@@ -12444,29 +12355,13 @@ fn shallow_usage_body_projection_sql(sql: &str) -> String {
     let replacements = [
         ("\"usage\".request_body,", "NULL::json AS request_body,"),
         (
-            "\"usage\".request_body_compressed,",
-            "CASE WHEN \"usage\".request_body_compressed IS NULL THEN NULL ELSE ''::bytea END AS request_body_compressed,",
-        ),
-        (
             "\"usage\".provider_request_body,",
             "NULL::json AS provider_request_body,",
         ),
-        (
-            "\"usage\".provider_request_body_compressed,",
-            "CASE WHEN \"usage\".provider_request_body_compressed IS NULL THEN NULL ELSE ''::bytea END AS provider_request_body_compressed,",
-        ),
         ("\"usage\".response_body,", "NULL::json AS response_body,"),
-        (
-            "\"usage\".response_body_compressed,",
-            "CASE WHEN \"usage\".response_body_compressed IS NULL THEN NULL ELSE ''::bytea END AS response_body_compressed,",
-        ),
         (
             "\"usage\".client_response_body,",
             "NULL::json AS client_response_body,",
-        ),
-        (
-            "\"usage\".client_response_body_compressed,",
-            "CASE WHEN \"usage\".client_response_body_compressed IS NULL THEN NULL ELSE ''::bytea END AS client_response_body_compressed,",
         ),
     ];
 
@@ -12490,7 +12385,6 @@ fn to_u64(value: i32, field_name: &str) -> Result<u64, DataLayerError> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UsageBodyStorage {
-    inline_json: Option<String>,
     detached_blob_bytes: Option<Vec<u8>>,
 }
 
@@ -12498,12 +12392,6 @@ impl UsageBodyStorage {
     fn has_detached_blob(&self) -> bool {
         self.detached_blob_bytes.is_some()
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct UsageBodyColumn {
-    value: Option<Value>,
-    has_compressed_storage: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -12791,45 +12679,14 @@ fn usage_capture_update_allowed(
 fn prepare_usage_body_storage(value: Option<&Value>) -> Result<UsageBodyStorage, DataLayerError> {
     let Some(value) = value else {
         return Ok(UsageBodyStorage {
-            inline_json: None,
             detached_blob_bytes: None,
         });
     };
-    let mut encoder = GzEncoder::new(Vec::new(), Compression::new(6));
-    if MAX_INLINE_USAGE_BODY_BYTES == 0 {
-        // Coalesce serde's punctuation/escape writes without allocating a full JSON buffer.
-        let mut writer = BufWriter::with_capacity(8 * 1024, &mut encoder);
-        serde_json::to_writer(&mut writer, value).map_err(|err| {
-            let operation = if err.is_io() { "compress" } else { "serialize" };
-            DataLayerError::UnexpectedValue(format!("failed to {operation} usage json: {err}"))
-        })?;
-        writer.into_inner().map_err(|err| {
-            DataLayerError::UnexpectedValue(format!("failed to compress usage json: {err}"))
-        })?;
-    } else {
-        let bytes = serde_json::to_vec(value).map_err(|err| {
-            DataLayerError::UnexpectedValue(format!("failed to serialize usage json: {err}"))
-        })?;
-        if bytes.len() == MAX_INLINE_USAGE_BODY_BYTES {
-            return Ok(UsageBodyStorage {
-                inline_json: Some(String::from_utf8(bytes).map_err(|err| {
-                    DataLayerError::UnexpectedValue(format!(
-                        "failed to encode inline usage body as utf-8: {err}"
-                    ))
-                })?),
-                detached_blob_bytes: None,
-            });
-        }
-        encoder.write_all(&bytes).map_err(|err| {
-            DataLayerError::UnexpectedValue(format!("failed to compress usage json: {err}"))
-        })?;
-    }
-    let detached_blob_bytes = encoder.finish().map_err(|err| {
-        DataLayerError::UnexpectedValue(format!("failed to finish usage json compression: {err}"))
+    let bytes = serde_json::to_vec(value).map_err(|err| {
+        DataLayerError::UnexpectedValue(format!("failed to serialize usage json: {err}"))
     })?;
     Ok(UsageBodyStorage {
-        inline_json: None,
-        detached_blob_bytes: Some(detached_blob_bytes),
+        detached_blob_bytes: Some(bytes),
     })
 }
 
@@ -13128,7 +12985,6 @@ fn resolved_read_usage_body_ref(
     metadata: Option<&serde_json::Map<String, Value>>,
     request_id: &str,
     field: UsageBodyField,
-    has_compressed_storage: bool,
     http_audit_ref: Option<&str>,
 ) -> Option<String> {
     explicit_ref
@@ -13137,7 +12993,6 @@ fn resolved_read_usage_body_ref(
             http_audit_ref
                 .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
         })
-        .or_else(|| has_compressed_storage.then(|| usage_body_ref(request_id, field)))
         .or_else(|| metadata_usage_body_ref_value(metadata, request_id, field))
 }
 
@@ -13145,12 +13000,12 @@ fn resolved_write_usage_body_ref(
     explicit_ref: Option<&str>,
     request_id: &str,
     field: UsageBodyField,
-    has_compressed_storage: bool,
+    has_detached_blob: bool,
     http_audit_ref: Option<&str>,
 ) -> Option<String> {
     explicit_ref
         .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
-        .or_else(|| has_compressed_storage.then(|| usage_body_ref(request_id, field)))
+        .or_else(|| has_detached_blob.then(|| usage_body_ref(request_id, field)))
         .or_else(|| {
             http_audit_ref
                 .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
@@ -13699,92 +13554,12 @@ fn usage_settlement_pricing_snapshot_from_usage(
     })
 }
 
-// Decode deprecated inline/compressed body columns from `public.usage`.
-//
-// New writes keep these columns empty by forcing body storage through `usage_body_blobs` and
-// `usage_http_audits`; this helper exists only so older rows remain readable without backfill.
 fn usage_json_column(
     row: &sqlx::postgres::PgRow,
     inline_column: &str,
-    compressed_column: &str,
-    resolve_compressed: bool,
-) -> Result<UsageBodyColumn, DataLayerError> {
-    let inline = row
-        .try_get::<Option<Value>, _>(inline_column)
-        .map_postgres_err()?;
-    if inline.is_some() {
-        return Ok(UsageBodyColumn {
-            value: inline,
-            has_compressed_storage: false,
-        });
-    }
-    let compressed = row
-        .try_get::<Option<Vec<u8>>, _>(compressed_column)
-        .map_postgres_err()?;
-    let has_compressed_storage = compressed.is_some();
-    let value = if resolve_compressed {
-        compressed
-            .map(|bytes| inflate_usage_json_value(&bytes))
-            .transpose()?
-    } else {
-        None
-    };
-    Ok(UsageBodyColumn {
-        value,
-        has_compressed_storage,
-    })
-}
-
-fn inflate_usage_json_value(bytes: &[u8]) -> Result<Value, DataLayerError> {
-    let json_bytes = read_decompressed_usage_json(GzDecoder::new(bytes))?;
-    serde_json::from_slice(&json_bytes).map_err(|err| {
-        DataLayerError::UnexpectedValue(format!("failed to parse decompressed usage json: {err}"))
-    })
-}
-
-#[cfg(test)]
-fn attach_compressed_body_refs(
-    request_id: &str,
-    metadata: Option<Value>,
-    has_request_body_compressed: bool,
-    has_provider_request_body_compressed: bool,
-    has_response_body_compressed: bool,
-    has_client_response_body_compressed: bool,
-) -> Option<Value> {
-    let mut metadata = match metadata {
-        Some(Value::Object(object)) => object,
-        Some(value) => return Some(value),
-        None => Map::new(),
-    };
-    maybe_insert_usage_body_ref(
-        &mut metadata,
-        "request_body_ref",
-        request_id,
-        "request_body",
-        has_request_body_compressed,
-    );
-    maybe_insert_usage_body_ref(
-        &mut metadata,
-        "provider_request_body_ref",
-        request_id,
-        "provider_request_body",
-        has_provider_request_body_compressed,
-    );
-    maybe_insert_usage_body_ref(
-        &mut metadata,
-        "response_body_ref",
-        request_id,
-        "response_body",
-        has_response_body_compressed,
-    );
-    maybe_insert_usage_body_ref(
-        &mut metadata,
-        "client_response_body_ref",
-        request_id,
-        "client_response_body",
-        has_client_response_body_compressed,
-    );
-    (!metadata.is_empty()).then_some(Value::Object(metadata))
+) -> Result<Option<Value>, DataLayerError> {
+    row.try_get::<Option<Value>, _>(inline_column)
+        .map_postgres_err()
 }
 
 #[cfg(test)]
@@ -13922,12 +13697,12 @@ where
             .execute(executor)
             .await
             .map_postgres_err()?;
-    } else if let Some(payload_gzip) = storage.detached_blob_bytes.as_ref() {
+    } else if let Some(payload) = storage.detached_blob_bytes.as_ref() {
         sqlx::query(UPSERT_USAGE_BODY_BLOB_SQL)
             .bind(&body_ref)
             .bind(request_id)
             .bind(field.as_storage_field())
-            .bind(payload_gzip)
+            .bind(payload)
             .execute(executor)
             .await
             .map_postgres_err()?;
@@ -14074,26 +13849,6 @@ where
         .map_postgres_err()?;
 
     Ok(())
-}
-
-#[cfg(test)]
-fn maybe_insert_usage_body_ref(
-    metadata: &mut Map<String, Value>,
-    key: &str,
-    request_id: &str,
-    field: &str,
-    should_insert: bool,
-) {
-    if !should_insert || metadata.contains_key(key) {
-        return;
-    }
-    metadata.insert(
-        key.to_string(),
-        Value::String(usage_body_ref(
-            request_id,
-            UsageBodyField::from_storage_field(field).expect("known usage body field"),
-        )),
-    );
 }
 
 fn maybe_insert_string_value(metadata: &mut Map<String, Value>, key: &str, value: Option<&str>) {
@@ -14292,16 +14047,12 @@ fn attach_usage_settlement_pricing_snapshot_metadata(
     (!metadata.is_empty()).then_some(Value::Object(metadata))
 }
 
-fn usage_body_sql_columns(field: UsageBodyField) -> (&'static str, &'static str) {
+fn usage_body_inline_column(field: UsageBodyField) -> &'static str {
     match field {
-        UsageBodyField::RequestBody => ("request_body", "request_body_compressed"),
-        UsageBodyField::ProviderRequestBody => {
-            ("provider_request_body", "provider_request_body_compressed")
-        }
-        UsageBodyField::ResponseBody => ("response_body", "response_body_compressed"),
-        UsageBodyField::ClientResponseBody => {
-            ("client_response_body", "client_response_body_compressed")
-        }
+        UsageBodyField::RequestBody => "request_body",
+        UsageBodyField::ProviderRequestBody => "provider_request_body",
+        UsageBodyField::ResponseBody => "response_body",
+        UsageBodyField::ClientResponseBody => "client_response_body",
     }
 }
 

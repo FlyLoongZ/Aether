@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS public.usage_body_blobs (
     body_ref character varying(160) NOT NULL,
     request_id character varying(100) NOT NULL,
     body_field character varying(50) NOT NULL,
-    payload_gzip bytea NOT NULL,
+    payload bytea NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT usage_body_blobs_pkey PRIMARY KEY (body_ref),
@@ -688,17 +688,9 @@ COMMENT ON COLUMN public.usage.client_response_headers IS
   'DEPRECATED: HTTP audit owner moved to public.usage_http_audits.client_response_headers. Legacy compatibility only; do not write new values.';
 COMMENT ON COLUMN public.usage.request_body IS
   'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.request_body_ref. Legacy compatibility only; do not write new values.';
-COMMENT ON COLUMN public.usage.request_body_compressed IS
-  'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.request_body_ref. Legacy compatibility only; do not write new values.';
 COMMENT ON COLUMN public.usage.provider_request_body IS
-  'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.provider_request_body_ref. Legacy compatibility only; do not write new values.';
-COMMENT ON COLUMN public.usage.provider_request_body_compressed IS
   'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.provider_request_body_ref. Legacy compatibility only; do not write new values.';
 COMMENT ON COLUMN public.usage.response_body IS
   'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.response_body_ref. Legacy compatibility only; do not write new values.';
-COMMENT ON COLUMN public.usage.response_body_compressed IS
-  'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.response_body_ref. Legacy compatibility only; do not write new values.';
 COMMENT ON COLUMN public.usage.client_response_body IS
-  'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.client_response_body_ref. Legacy compatibility only; do not write new values.';
-COMMENT ON COLUMN public.usage.client_response_body_compressed IS
   'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.client_response_body_ref. Legacy compatibility only; do not write new values.';

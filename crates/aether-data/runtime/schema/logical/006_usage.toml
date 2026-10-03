@@ -389,26 +389,6 @@ type = "json"
 nullable = true
 
 [[table.usage.columns]]
-name = "request_body_compressed"
-type = "bytes"
-nullable = true
-
-[[table.usage.columns]]
-name = "provider_request_body_compressed"
-type = "bytes"
-nullable = true
-
-[[table.usage.columns]]
-name = "response_body_compressed"
-type = "bytes"
-nullable = true
-
-[[table.usage.columns]]
-name = "client_response_body_compressed"
-type = "bytes"
-nullable = true
-
-[[table.usage.columns]]
 name = "request_metadata"
 type = "json"
 nullable = true
@@ -575,7 +555,7 @@ type = "text"
 length = 50
 
 [[table.usage_body_blobs.columns]]
-name = "payload_gzip"
+name = "payload"
 type = "bytes"
 
 [[table.usage_body_blobs.columns]]

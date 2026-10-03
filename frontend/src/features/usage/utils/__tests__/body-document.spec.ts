@@ -19,15 +19,15 @@ function start() {
   vi.stubGlobal('Worker', FakeWorker)
   const bytes = new ArrayBuffer(16)
   const controller = new AbortController()
-  const loading = BodyDocument.load(bytes, 'gzip', controller.signal)
+  const loading = BodyDocument.load(bytes, controller.signal)
   const worker = FakeWorker.instances[FakeWorker.instances.length - 1]
   return { bytes, controller, loading, worker }
 }
 
 describe('body worker lifecycle', () => {
-  it('transfers compressed bytes and receives only a summary before requesting pages', async () => {
+  it('transfers raw bytes and receives only a summary before requesting pages', async () => {
     const { bytes, loading, worker } = start()
-    expect(worker.postMessage).toHaveBeenCalledWith({ id: 1, action: 'load', bytes, encoding: 'gzip' }, [bytes])
+    expect(worker.postMessage).toHaveBeenCalledWith({ id: 1, action: 'load', bytes }, [bytes])
     worker.reply({ id: 1, ok: true, result: { byteLength: 100_000 } })
     const document = await loading
     expect(document.byteLength).toBe(100_000)
@@ -71,6 +71,6 @@ describe('body worker lifecycle', () => {
 
   it('does not silently fall back to parsing on the main thread', async () => {
     vi.stubGlobal('Worker', undefined)
-    await expect(BodyDocument.load(new ArrayBuffer(1), 'json')).rejects.toHaveProperty('code', 'unsupported')
+    await expect(BodyDocument.load(new ArrayBuffer(1))).rejects.toHaveProperty('code', 'unsupported')
   })
 })
