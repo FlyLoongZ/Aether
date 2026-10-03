@@ -39,7 +39,6 @@ export interface SystemConfig {
   // 请求记录清理
   enable_auto_cleanup: boolean
   detail_log_retention_days: number
-  compressed_log_retention_days: number
   header_retention_days: number
   log_retention_days: number
   cleanup_batch_size: number
@@ -89,7 +88,6 @@ const CONFIG_KEYS = [
   // 请求记录清理
   'enable_auto_cleanup',
   'detail_log_retention_days',
-  'compressed_log_retention_days',
   'header_retention_days',
   'log_retention_days',
   'cleanup_batch_size',
@@ -141,7 +139,6 @@ function createDefaultConfig(): SystemConfig {
     // 请求记录清理
     enable_auto_cleanup: true,
     detail_log_retention_days: 7,
-    compressed_log_retention_days: 30,
     header_retention_days: 90,
     log_retention_days: 365,
     cleanup_batch_size: 1000,
@@ -237,8 +234,6 @@ export function useSystemConfig() {
     return (
       systemConfig.value.detail_log_retention_days !==
       originalConfig.value.detail_log_retention_days ||
-      systemConfig.value.compressed_log_retention_days !==
-      originalConfig.value.compressed_log_retention_days ||
       systemConfig.value.header_retention_days !== originalConfig.value.header_retention_days ||
       systemConfig.value.log_retention_days !== originalConfig.value.log_retention_days ||
       systemConfig.value.cleanup_batch_size !== originalConfig.value.cleanup_batch_size ||
@@ -593,11 +588,6 @@ export function useSystemConfig() {
           description: '详细记录保留天数',
         },
         {
-          key: 'compressed_log_retention_days',
-          value: systemConfig.value.compressed_log_retention_days,
-          description: '压缩记录保留天数',
-        },
-        {
           key: 'header_retention_days',
           value: systemConfig.value.header_retention_days,
           description: '请求头保留天数',
@@ -652,8 +642,6 @@ export function useSystemConfig() {
       if (originalConfig.value) {
         originalConfig.value.detail_log_retention_days =
           systemConfig.value.detail_log_retention_days
-        originalConfig.value.compressed_log_retention_days =
-          systemConfig.value.compressed_log_retention_days
         originalConfig.value.header_retention_days = systemConfig.value.header_retention_days
         originalConfig.value.log_retention_days = systemConfig.value.log_retention_days
         originalConfig.value.cleanup_batch_size = systemConfig.value.cleanup_batch_size

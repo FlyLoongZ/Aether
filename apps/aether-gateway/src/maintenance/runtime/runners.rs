@@ -266,8 +266,6 @@ pub(super) async fn run_usage_cleanup_once(data: &GatewayDataState) -> Result<()
         started_at_unix_secs,
         started_at,
         json!({
-            "body_externalized": summary.body_externalized,
-            "legacy_body_refs_migrated": summary.legacy_body_refs_migrated,
             "body_cleaned": summary.body_cleaned,
             "header_cleaned": summary.header_cleaned,
             "keys_cleaned": summary.keys_cleaned,
@@ -278,9 +276,7 @@ pub(super) async fn run_usage_cleanup_once(data: &GatewayDataState) -> Result<()
         format!(
             "请求记录自动清理完成，影响 {} 项",
             summary
-                .body_externalized
-                .saturating_add(summary.legacy_body_refs_migrated)
-                .saturating_add(summary.body_cleaned)
+                .body_cleaned
                 .saturating_add(summary.header_cleaned)
                 .saturating_add(summary.keys_cleaned)
                 .saturating_add(summary.records_deleted)
@@ -289,9 +285,7 @@ pub(super) async fn run_usage_cleanup_once(data: &GatewayDataState) -> Result<()
         ),
     )
     .await;
-    if summary.body_externalized > 0
-        || summary.legacy_body_refs_migrated > 0
-        || summary.body_cleaned > 0
+    if summary.body_cleaned > 0
         || summary.header_cleaned > 0
         || summary.keys_cleaned > 0
         || summary.records_deleted > 0
@@ -302,8 +296,6 @@ pub(super) async fn run_usage_cleanup_once(data: &GatewayDataState) -> Result<()
             event_name = "usage_cleanup_completed",
             log_type = "ops",
             worker = "usage_cleanup",
-            body_externalized = summary.body_externalized,
-            legacy_body_refs_migrated = summary.legacy_body_refs_migrated,
             body_cleaned = summary.body_cleaned,
             header_cleaned = summary.header_cleaned,
             keys_cleaned = summary.keys_cleaned,
@@ -393,8 +385,6 @@ pub(crate) async fn run_manual_usage_cleanup_once(
         started_at_unix_secs,
         started_at,
         json!({
-            "body_externalized": summary.body_externalized,
-            "legacy_body_refs_migrated": summary.legacy_body_refs_migrated,
             "body_cleaned": summary.body_cleaned,
             "header_cleaned": summary.header_cleaned,
             "keys_cleaned": summary.keys_cleaned,
@@ -509,9 +499,7 @@ fn usage_cleanup_total(
     summary: aether_data_contracts::repository::usage::UsageCleanupSummary,
 ) -> usize {
     summary
-        .body_externalized
-        .saturating_add(summary.legacy_body_refs_migrated)
-        .saturating_add(summary.body_cleaned)
+        .body_cleaned
         .saturating_add(summary.header_cleaned)
         .saturating_add(summary.keys_cleaned)
         .saturating_add(summary.records_deleted)
@@ -564,8 +552,6 @@ fn manual_usage_cleanup_progress_summary(
         "requested_older_than_days": options.requested_older_than_days,
         "targets": options.targets,
         "progress_percent": progress_percent,
-        "body_externalized": summary.body_externalized,
-        "legacy_body_refs_migrated": summary.legacy_body_refs_migrated,
         "body_cleaned": summary.body_cleaned,
         "header_cleaned": summary.header_cleaned,
         "keys_cleaned": summary.keys_cleaned,

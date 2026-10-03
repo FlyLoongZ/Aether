@@ -58,26 +58,6 @@
           @update:model-value="$emit('update:detailLogRetentionDays', Number($event))"
         />
         <p class="mt-1 text-xs text-muted-foreground">
-          超过后压缩 body 字段
-        </p>
-      </div>
-
-      <div>
-        <Label
-          for="compressed-log-retention-days"
-          class="block text-sm font-medium"
-        >
-          压缩记录保留天数
-        </Label>
-        <Input
-          id="compressed-log-retention-days"
-          :model-value="compressedLogRetentionDays"
-          type="number"
-          placeholder="30"
-          class="mt-1"
-          @update:model-value="$emit('update:compressedLogRetentionDays', Number($event))"
-        />
-        <p class="mt-1 text-xs text-muted-foreground">
           超过后删除 body 字段
         </p>
       </div>
@@ -416,7 +396,6 @@ import { useToast } from '@/composables/useToast'
 defineProps<{
   enableAutoCleanup: boolean
   detailLogRetentionDays: number
-  compressedLogRetentionDays: number
   headerRetentionDays: number
   logRetentionDays: number
   cleanupBatchSize: number
@@ -434,7 +413,6 @@ defineEmits<{
   save: []
   toggleAutoCleanup: [enabled: boolean]
   'update:detailLogRetentionDays': [value: number]
-  'update:compressedLogRetentionDays': [value: number]
   'update:headerRetentionDays': [value: number]
   'update:logRetentionDays': [value: number]
   'update:cleanupBatchSize': [value: number]
@@ -535,8 +513,6 @@ function cleanupSummaryText(summary: Record<string, unknown>): string {
 
 function summaryLabel(key: string): string {
   const labels: Record<string, string> = {
-    body_externalized: '详细体',
-    legacy_body_refs_migrated: '迁移',
     body_cleaned: '清体',
     header_cleaned: '清头',
     keys_cleaned: 'Key',

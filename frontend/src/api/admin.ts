@@ -407,8 +407,6 @@ export interface CleanupTaskResponse {
 }
 
 export interface ManualUsageCleanupSummary {
-  body_externalized: number
-  legacy_body_refs_migrated: number
   body_cleaned: number
   header_cleaned: number
   keys_cleaned: number
@@ -416,11 +414,10 @@ export interface ManualUsageCleanupSummary {
 }
 
 export type ManualUsageCleanupMode = 'policy' | 'older_than_days' | 'before_now'
-export type ManualUsageCleanupTarget = 'detail_body' | 'compressed_body' | 'headers' | 'records'
+export type ManualUsageCleanupTarget = 'body' | 'headers' | 'records'
 
 export interface ManualUsageCleanupTargets {
-  detail_body: boolean
-  compressed_body: boolean
+  body: boolean
   headers: boolean
   records: boolean
   expired_keys: boolean
@@ -445,14 +442,12 @@ export interface ManualUsageCleanupPreview {
   requested_older_than_days: number | null
   targets: ManualUsageCleanupTargets
   effective_cutoffs: {
-    detail: string
-    compressed: string
+    body: string
     header: string
     log: string
   }
   counts: {
-    detail: number
-    compressed: number
+    body: number
     header: number
     log: number
   }

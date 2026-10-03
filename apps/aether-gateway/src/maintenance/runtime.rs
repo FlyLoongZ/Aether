@@ -169,7 +169,6 @@ const MAX_ADMIN_STATS_REBUILD_BUCKETS: usize = 100_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct UsageCleanupSettings {
     detail_retention_days: u64,
-    compressed_retention_days: u64,
     header_retention_days: u64,
     log_retention_days: u64,
     batch_size: usize,

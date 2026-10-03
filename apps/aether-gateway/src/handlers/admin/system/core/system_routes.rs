@@ -814,8 +814,6 @@ async fn build_admin_system_cleanup_payload(
         "proxy_node_metrics_1h": summary.proxy_node_metrics.deleted_1h_rows,
         "pending_failed": summary.pending_failed,
         "pending_recovered": summary.pending_recovered,
-        "usage_body_externalized": summary.usage.body_externalized,
-        "usage_legacy_body_refs_migrated": summary.usage.legacy_body_refs_migrated,
         "usage_body_cleaned": summary.usage.body_cleaned,
         "usage_header_cleaned": summary.usage.header_cleaned,
         "usage_keys_cleaned": summary.usage.keys_cleaned,
@@ -828,8 +826,6 @@ async fn build_admin_system_cleanup_payload(
         .saturating_add(summary.proxy_node_metrics.deleted_1h_rows)
         .saturating_add(summary.pending_failed)
         .saturating_add(summary.pending_recovered)
-        .saturating_add(summary.usage.body_externalized)
-        .saturating_add(summary.usage.legacy_body_refs_migrated)
         .saturating_add(summary.usage.body_cleaned)
         .saturating_add(summary.usage.header_cleaned)
         .saturating_add(summary.usage.keys_cleaned)
@@ -926,14 +922,12 @@ async fn build_manual_usage_cleanup_preview_response(
         "requested_older_than_days": preview.requested_older_than_days,
         "targets": preview.targets,
         "effective_cutoffs": {
-            "detail": preview.detail_cutoff,
-            "compressed": preview.compressed_cutoff,
+            "body": preview.body_cutoff,
             "header": preview.header_cutoff,
             "log": preview.log_cutoff,
         },
         "counts": {
-            "detail": preview.detail_count,
-            "compressed": preview.compressed_count,
+            "body": preview.body_count,
             "header": preview.header_count,
             "log": preview.log_count,
         },
@@ -1119,23 +1113,21 @@ fn parse_manual_cleanup_targets(
     };
 
     let mut targets = UsageCleanupTargets {
-        detail_body: false,
-        compressed_body: false,
+        body: false,
         headers: false,
         records: false,
         expired_keys: false,
     };
     for raw in raw_targets {
         match raw.as_str() {
-            "detail_body" | "detail" | "raw_body" => targets.detail_body = true,
-            "compressed_body" | "compressed" => targets.compressed_body = true,
+            "body" => targets.body = true,
             "headers" | "header" => targets.headers = true,
             "records" | "log" | "logs" => targets.records = true,
             "expired_keys" => targets.expired_keys = true,
             "all" => targets = UsageCleanupTargets::all_policy_targets(),
             _ => {
                 return Err(bad_manual_cleanup_request(
-                    "targets 只能包含 detail_body、compressed_body、headers、records",
+                    "targets 只能包含 body、headers、records",
                 ))
             }
         }
@@ -1297,7 +1289,7 @@ mod tests {
     #[test]
     fn manual_cleanup_preview_query_decodes_comma_separated_targets() {
         let options = parse_manual_usage_cleanup_query_options(
-            Some("mode=before_now&targets=detail_body%2Ccompressed_body"),
+            Some("mode=before_now&targets=body"),
             None,
         )
         .expect("encoded targets query is valid");

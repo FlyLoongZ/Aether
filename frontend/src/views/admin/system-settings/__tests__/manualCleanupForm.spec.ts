@@ -68,14 +68,12 @@ describe('manualCleanupForm', () => {
   describe('cleanup targets', () => {
     it('keeps all ranges available for policy cleanup', () => {
       expect(allowedTargetsForMode('policy')).toEqual([
-        'detail_body',
-        'compressed_body',
+        'body',
         'headers',
         'records',
       ])
       expect(defaultManualCleanupTargets('older_than_days')).toEqual([
-        'detail_body',
-        'compressed_body',
+        'body',
         'headers',
         'records',
       ])
@@ -83,15 +81,13 @@ describe('manualCleanupForm', () => {
 
     it('limits before-now cleanup to body targets', () => {
       expect(allowedTargetsForMode('before_now')).toEqual([
-        'detail_body',
-        'compressed_body',
+        'body',
       ])
       expect(normalizeManualCleanupTargets('before_now', [
-        'detail_body',
+        'body',
         'headers',
-        'compressed_body',
         'records',
-      ])).toEqual(['detail_body', 'compressed_body'])
+      ])).toEqual(['body'])
     })
   })
 })

@@ -2237,16 +2237,14 @@ INSERT INTO public.request_candidates (
         .usage_write_repository()
         .cleanup_usage(
             &UsageCleanupWindow {
-                detail_cutoff: now,
-                compressed_cutoff: now,
+                body_cutoff: now,
                 header_cutoff: now,
                 log_cutoff: now,
             },
             100,
             false,
             UsageCleanupTargets {
-                detail_body: false,
-                compressed_body: false,
+                body: false,
                 headers: false,
                 records: false,
                 expired_keys: true,

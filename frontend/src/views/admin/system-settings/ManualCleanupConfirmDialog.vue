@@ -117,13 +117,9 @@
           v-else-if="preview"
           class="mt-2 grid grid-cols-2 gap-y-1 gap-x-4 text-xs text-muted-foreground"
         >
-          <div>详细记录待压缩</div>
+          <div>正文待删除</div>
           <div class="text-right text-foreground">
-            {{ formatCount(preview.counts.detail) }}
-          </div>
-          <div>压缩记录待清体</div>
-          <div class="text-right text-foreground">
-            {{ formatCount(preview.counts.compressed) }}
+            {{ formatCount(preview.counts.body) }}
           </div>
           <div>请求头待清空</div>
           <div class="text-right text-foreground">
@@ -284,8 +280,7 @@ const modeOptions: Array<{ value: ManualCleanupMode; label: string; description:
 ]
 
 const targetLabels: Record<ManualCleanupTarget, { label: string; description: string }> = {
-  detail_body: { label: '详细请求体', description: '把详细 body 移入压缩/外置存储' },
-  compressed_body: { label: '压缩请求体', description: '删除已压缩或外置的 body 内容' },
+  body: { label: '请求体', description: '删除已保存的 body 内容' },
   headers: { label: '请求头', description: '清空请求/响应 headers 字段' },
   records: { label: '整条记录', description: '删除超过记录保留期的 usage 行' },
 }
@@ -541,8 +536,6 @@ function cleanupSummaryText(summary: Record<string, unknown>): string {
 
 function summaryLabel(key: string): string {
   const labels: Record<string, string> = {
-    body_externalized: '详细体',
-    legacy_body_refs_migrated: '迁移',
     body_cleaned: '清体',
     header_cleaned: '清头',
     keys_cleaned: 'Key',

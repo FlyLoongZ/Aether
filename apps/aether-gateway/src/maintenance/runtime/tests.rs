@@ -892,7 +892,6 @@ fn pending_cleanup_plan_recovers_completed_requests_and_voids_failed_pending_bil
 async fn usage_cleanup_settings_resolve_batch_and_delete_toggle() {
     let data = GatewayDataState::disabled().with_system_config_values_for_tests([
         ("detail_log_retention_days".to_string(), json!(7)),
-        ("compressed_log_retention_days".to_string(), json!(30)),
         ("header_retention_days".to_string(), json!(90)),
         ("log_retention_days".to_string(), json!(365)),
         ("cleanup_batch_size".to_string(), json!(0)),
@@ -907,7 +906,6 @@ async fn usage_cleanup_settings_resolve_batch_and_delete_toggle() {
         settings,
         UsageCleanupSettings {
             detail_retention_days: 7,
-            compressed_retention_days: 30,
             header_retention_days: 90,
             log_retention_days: 365,
             batch_size: 1,
@@ -1097,7 +1095,6 @@ fn usage_cleanup_window_uses_non_overlapping_ranges() {
         now_utc,
         UsageCleanupSettings {
             detail_retention_days: 7,
-            compressed_retention_days: 30,
             header_retention_days: 90,
             log_retention_days: 365,
             batch_size: 123,
@@ -1106,20 +1103,15 @@ fn usage_cleanup_window_uses_non_overlapping_ranges() {
     );
 
     assert_eq!(
-        window.detail_cutoff.to_rfc3339(),
+        window.body_cutoff.to_rfc3339(),
         "2026-03-11T03:00:00+00:00"
-    );
-    assert_eq!(
-        window.compressed_cutoff.to_rfc3339(),
-        "2026-02-16T03:00:00+00:00"
     );
     assert_eq!(
         window.header_cutoff.to_rfc3339(),
         "2025-12-18T03:00:00+00:00"
     );
     assert_eq!(window.log_cutoff.to_rfc3339(), "2025-03-18T03:00:00+00:00");
-    assert!(window.detail_cutoff > window.compressed_cutoff);
-    assert!(window.compressed_cutoff > window.log_cutoff);
+    assert!(window.body_cutoff > window.log_cutoff);
 }
 
 #[test]
@@ -1129,7 +1121,6 @@ fn usage_cleanup_window_with_override_is_always_non_aggressive() {
         .expect("timestamp should parse");
     let settings = UsageCleanupSettings {
         detail_retention_days: 7,
-        compressed_retention_days: 30,
         header_retention_days: 90,
         log_retention_days: 365,
         batch_size: 123,
@@ -1140,8 +1131,7 @@ fn usage_cleanup_window_with_override_is_always_non_aggressive() {
     let override_duration = chrono::Duration::days(180);
     let clamped = usage_cleanup_window_with_override(now_utc, settings, Some(override_duration));
 
-    assert_eq!(clamped.detail_cutoff, now_utc - override_duration);
-    assert_eq!(clamped.compressed_cutoff, now_utc - override_duration);
+    assert_eq!(clamped.body_cutoff, now_utc - override_duration);
     assert_eq!(clamped.header_cutoff, now_utc - override_duration);
     assert_eq!(clamped.log_cutoff, policy.log_cutoff);
     assert!(clamped.log_cutoff <= policy.log_cutoff);
@@ -1158,8 +1148,7 @@ fn usage_cleanup_window_with_override_is_always_non_aggressive() {
             Some(chrono::Duration::days(days)),
         );
         for (actual, configured) in [
-            (window.detail_cutoff, policy.detail_cutoff),
-            (window.compressed_cutoff, policy.compressed_cutoff),
+            (window.body_cutoff, policy.body_cutoff),
             (window.header_cutoff, policy.header_cutoff),
             (window.log_cutoff, policy.log_cutoff),
         ] {
@@ -1186,7 +1175,6 @@ fn usage_cleanup_before_now_window_uses_current_timestamp_only() {
         .expect("timestamp should parse");
     let settings = UsageCleanupSettings {
         detail_retention_days: 7,
-        compressed_retention_days: 30,
         header_retention_days: 90,
         log_retention_days: 365,
         batch_size: 123,
@@ -1196,8 +1184,7 @@ fn usage_cleanup_before_now_window_uses_current_timestamp_only() {
     let window =
         usage_cleanup_window_for_mode(now_utc, settings, ManualUsageCleanupMode::BeforeNow, None);
 
-    assert_eq!(window.detail_cutoff, now_utc);
-    assert_eq!(window.compressed_cutoff, now_utc);
+    assert_eq!(window.body_cutoff, now_utc);
     assert_eq!(window.header_cutoff, now_utc);
     assert_eq!(window.log_cutoff, now_utc);
 }

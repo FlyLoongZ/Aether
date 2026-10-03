@@ -1,18 +1,16 @@
 export const MANUAL_USAGE_CLEANUP_CONFIRM_PHRASE = '确认清理'
 
 export type ManualCleanupMode = 'policy' | 'older_than_days' | 'before_now'
-export type ManualCleanupTarget = 'detail_body' | 'compressed_body' | 'headers' | 'records'
+export type ManualCleanupTarget = 'body' | 'headers' | 'records'
 
 export const MANUAL_CLEANUP_TARGETS: ManualCleanupTarget[] = [
-  'detail_body',
-  'compressed_body',
+  'body',
   'headers',
   'records',
 ]
 
 export const BEFORE_NOW_ALLOWED_TARGETS: ManualCleanupTarget[] = [
-  'detail_body',
-  'compressed_body',
+  'body',
 ]
 
 export function normalizeConfirmPhraseInput(raw: string): string {
