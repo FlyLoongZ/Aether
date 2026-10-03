@@ -74,10 +74,6 @@ const USAGE_BODY_FIELD_COLUMNS: &[&str] = &[
     "response_body",
     "provider_request_body",
     "client_response_body",
-    "request_body_compressed",
-    "response_body_compressed",
-    "provider_request_body_compressed",
-    "client_response_body_compressed",
 ];
 
 const ADMIN_USER_SCOPED_TABLES: &[&str] = &[

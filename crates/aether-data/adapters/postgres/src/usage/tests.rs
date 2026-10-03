@@ -4,20 +4,18 @@ use sqlx::{Execute, Postgres, QueryBuilder, Row};
 use std::sync::Arc;
 
 use super::{
-    attach_compressed_body_refs, attach_usage_http_audit_body_refs,
-    attach_usage_routing_snapshot_metadata, attach_usage_settlement_pricing_snapshot_metadata,
-    build_usage_health_timeline_query, clear_previous_request_body_facts, inflate_usage_json_value,
-    prepare_request_metadata_for_body_storage, prepare_usage_body_storage,
-    prepare_usage_for_persistence, push_postgres_usage_websocket_filter,
-    request_body_capture_replaces_derived_facts, resolved_read_usage_body_ref,
-    resolved_write_usage_body_ref, split_dashboard_daily_aggregate_range,
-    split_dashboard_hourly_aggregate_range, usage_body_capture_state_for_storage, usage_body_ref,
-    usage_capture_update_allowed, usage_effective_input_tokens, usage_http_audit_body_refs,
-    usage_http_audit_capture_mode, usage_routing_snapshot_from_usage,
-    usage_settlement_pricing_snapshot_from_usage, usage_total_input_context, AggregateRangeSplit,
-    SqlxUsageReadRepository, UsageHttpAuditRefs, UsageRoutingSnapshot,
-    UsageSettlementPricingSnapshot, MAX_INLINE_USAGE_BODY_BYTES,
-    SELECT_STALE_PENDING_USAGE_BATCH_SQL,
+    attach_usage_http_audit_body_refs, attach_usage_routing_snapshot_metadata,
+    attach_usage_settlement_pricing_snapshot_metadata, build_usage_health_timeline_query,
+    clear_previous_request_body_facts, prepare_request_metadata_for_body_storage,
+    prepare_usage_body_storage, prepare_usage_for_persistence,
+    push_postgres_usage_websocket_filter, request_body_capture_replaces_derived_facts,
+    resolved_read_usage_body_ref, resolved_write_usage_body_ref,
+    split_dashboard_daily_aggregate_range, split_dashboard_hourly_aggregate_range,
+    usage_body_capture_state_for_storage, usage_body_ref, usage_capture_update_allowed,
+    usage_effective_input_tokens, usage_http_audit_body_refs, usage_http_audit_capture_mode,
+    usage_routing_snapshot_from_usage, usage_settlement_pricing_snapshot_from_usage,
+    usage_total_input_context, AggregateRangeSplit, SqlxUsageReadRepository, UsageHttpAuditRefs,
+    UsageRoutingSnapshot, UsageSettlementPricingSnapshot, SELECT_STALE_PENDING_USAGE_BATCH_SQL,
 };
 use crate::{PostgresPoolConfig, PostgresPoolFactory};
 use aether_data_contracts::repository::usage::{
@@ -1784,20 +1782,15 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
     .expect("clear tombstone should be stored");
     assert!(physical_metadata.get("provider_service_tier").is_none());
 
-    let physical_body = sqlx::query(
-        "SELECT provider_request_body, provider_request_body_compressed FROM \"usage\" WHERE request_id = $1",
-    )
-    .bind(&request_id)
-    .fetch_one(repository.pool())
-    .await
-    .expect("physical body columns should be readable");
+    let physical_body =
+        sqlx::query("SELECT provider_request_body FROM \"usage\" WHERE request_id = $1")
+            .bind(&request_id)
+            .fetch_one(repository.pool())
+            .await
+            .expect("physical body columns should be readable");
     assert!(physical_body
         .try_get::<Option<serde_json::Value>, _>("provider_request_body")
         .expect("provider body column should decode")
-        .is_none());
-    assert!(physical_body
-        .try_get::<Option<Vec<u8>>, _>("provider_request_body_compressed")
-        .expect("compressed provider body column should decode")
         .is_none());
 
     let physical_http = sqlx::query(
@@ -3565,7 +3558,6 @@ fn usage_sql_qualifies_shared_usage_columns_for_single_record_fetches() {
 fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::json AS request_headers"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::json AS provider_request_body"));
-    assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::bytea AS request_body_compressed"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_ref"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_state"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX
@@ -3578,8 +3570,6 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("settlement_billing_snapshot_schema_version"));
     assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::json AS request_headers"));
     assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::json AS provider_request_body"));
-    assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX
-        .contains("NULL::bytea AS client_response_body_compressed"));
     assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX
         .contains("NULL::varchar AS http_client_response_body_ref"));
     assert!(
@@ -3720,7 +3710,7 @@ async fn live_usage_list_metadata_preserves_boolean_chat_pii_redaction() {
         // Extract the entire outer CASE, including its gate, instead of duplicating the
         // production expression. Omitting the marker from either branch must fail.
         let projection = prefix
-            .split_once("NULL::bytea AS client_response_body_compressed,\n")
+            .split_once("NULL::json AS client_response_body,\n")
             .and_then(|(_, tail)| tail.split_once("  END AS request_metadata,"))
             .map(|(projection, _)| projection)
             .expect("list metadata projection should be present");
@@ -3838,7 +3828,7 @@ fn usage_sql_reads_list_output_price_from_settlement_snapshots_before_legacy_usa
 
 #[test]
 fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
-    for placeholder in [41, 42, 44, 45, 47, 48, 50, 51, 53] {
+    for placeholder in [41, 42, 43, 44, 45, 46, 47, 48, 49] {
         assert!(
             super::UPSERT_SQL.contains(format!("${placeholder}::json").as_str()),
             "missing ::json cast for placeholder ${placeholder}"
@@ -3849,15 +3839,15 @@ fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
 #[test]
 fn usage_sql_insert_values_aligns_request_metadata_and_timestamps() {
     let sql = normalize_newlines(super::UPSERT_SQL);
-    assert!(sql.contains("\n  $51::json,\n  $52,\n  $53::json,\n  CASE"));
-    assert!(sql.contains("WHEN $54 IS NULL THEN NULL"));
-    assert!(sql.contains("TO_TIMESTAMP($55::double precision)"));
+    assert!(sql.contains("\n  $48::json,\n  $49::json,\n  CASE"));
+    assert!(sql.contains("WHEN $50 IS NULL THEN NULL"));
+    assert!(sql.contains("TO_TIMESTAMP($51::double precision)"));
 }
 
 #[test]
 fn usage_sql_upsert_materializes_upstream_stream_mode() {
     assert!(super::UPSERT_SQL.contains("upstream_is_stream,"));
-    assert!(super::UPSERT_SQL.contains("$53::json->>'upstream_is_stream'"));
+    assert!(super::UPSERT_SQL.contains("$49::json->>'upstream_is_stream'"));
     assert!(super::UPSERT_SQL.contains("COALESCE($21, FALSE)"));
     assert!(super::UPSERT_SQL.contains("upstream_is_stream = CASE"));
 }
@@ -3920,9 +3910,9 @@ fn usage_sql_settlement_pricing_snapshot_billing_values_use_authoritative_incomi
 #[test]
 fn usage_sql_upsert_recovers_missing_provider_links_after_billing_finalizes() {
     for assignment in [
-        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $61) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
-        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $61) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
-        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $61) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
+        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
+        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
+        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
     ] {
         assert!(
             super::UPSERT_SQL.contains(assignment),
@@ -3998,25 +3988,23 @@ fn usage_sql_clears_legacy_header_columns_on_upsert() {
 }
 
 #[test]
-fn usage_sql_detached_body_flags_clear_inline_and_compressed_columns() {
-    assert!(super::UPSERT_SQL
-        .contains("WHEN EXCLUDED.request_body_compressed IS NOT NULL OR $57 THEN NULL"));
-    assert!(super::UPSERT_SQL
-        .contains("WHEN EXCLUDED.provider_request_body_compressed IS NOT NULL OR $58 THEN NULL"));
-    assert!(super::UPSERT_SQL
-        .contains("WHEN EXCLUDED.response_body_compressed IS NOT NULL OR $59 THEN NULL"));
-    assert!(super::UPSERT_SQL
-        .contains("WHEN EXCLUDED.client_response_body_compressed IS NOT NULL OR $60 THEN NULL"));
+fn usage_sql_detached_body_flags_clear_body_columns() {
+    for flag in ["$53", "$54", "$55", "$56"] {
+        assert!(
+            super::UPSERT_SQL.contains(format!("WHEN {flag} THEN NULL").as_str()),
+            "missing detached body clear flag: {flag}"
+        );
+    }
 }
 
 #[test]
 fn usage_sql_capture_guard_covers_bodies_metadata_and_http_ref_tombstones() {
     for assignment in [
-        "request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $61",
-        "provider_request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $61",
-        "response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $61",
-        "client_response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $61",
-        "request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $61",
+        "request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
+        "provider_request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
+        "response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
+        "client_response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
+        "request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
     ] {
         assert!(
             super::UPSERT_SQL.contains(assignment),
@@ -4042,7 +4030,7 @@ fn usage_sql_capture_guard_covers_bodies_metadata_and_http_ref_tombstones() {
 #[test]
 fn usage_sql_terminal_snapshots_replace_sparse_routing_and_settlement_facts() {
     assert!(super::UPSERT_SQL.contains(
-        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $61 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
+        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $57 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
     ));
     let routing = super::UPSERT_USAGE_ROUTING_SNAPSHOT_SQL;
     assert!(routing.contains("candidate_id = CASE WHEN $14 THEN EXCLUDED.candidate_id"));
@@ -4424,13 +4412,12 @@ fn prepare_usage_body_storage_detaches_small_payloads_into_blob_storage() {
     let payload = json!({"message": "hello"});
     let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
 
-    assert!(storage.inline_json.is_none());
     let compressed = storage
         .detached_blob_bytes
         .as_deref()
         .expect("small payload should now be ref-backed");
     assert_eq!(
-        inflate_usage_json_value(compressed).expect("payload should inflate"),
+        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
         payload
     );
 }
@@ -4439,14 +4426,20 @@ fn prepare_usage_body_storage_detaches_small_payloads_into_blob_storage() {
 async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
     let runtime_thread = std::thread::current().id();
     let payload = json!({"message": "background decoding"});
-    let compressed = prepare_usage_body_storage(Some(&payload))
-        .expect("body should compress")
+    let bytes = prepare_usage_body_storage(Some(&payload))
+        .expect("body should serialize")
         .detached_blob_bytes
         .expect("body should be detached");
 
     let decoded = super::decode_usage_body_in_background(move || {
         assert_ne!(std::thread::current().id(), runtime_thread);
-        inflate_usage_json_value(&compressed).map(Some)
+        serde_json::from_slice::<serde_json::Value>(&bytes)
+            .map(Some)
+            .map_err(|error| {
+                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
+                    "failed to parse usage json: {error}"
+                ))
+            })
     })
     .await
     .expect("body should decode");
@@ -4457,36 +4450,39 @@ async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
 #[tokio::test]
 async fn usage_body_decode_preserves_storage_decode_errors() {
     let error = super::decode_usage_body_in_background(|| {
-        inflate_usage_json_value(b"invalid gzip").map(Some)
+        serde_json::from_slice::<serde_json::Value>(b"not json")
+            .map(Some)
+            .map_err(|error| {
+                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
+                    "failed to parse usage json: {error}"
+                ))
+            })
     })
     .await
     .expect_err("corrupt bodies should fail");
 
-    assert!(error
-        .to_string()
-        .contains("failed to decompress usage json:"));
+    assert!(error.to_string().contains("failed to parse usage json:"));
 }
 
 #[test]
-fn prepare_usage_body_storage_compresses_large_payloads() {
+fn prepare_usage_body_storage_detaches_large_payloads() {
     let payload = json!({
-        "content": "x".repeat(MAX_INLINE_USAGE_BODY_BYTES + 128)
+        "content": "x".repeat(64 * 1024)
     });
     let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
 
-    assert!(storage.inline_json.is_none());
     let compressed = storage
         .detached_blob_bytes
         .as_deref()
-        .expect("large payload should be compressed");
+        .expect("large payload should be detached");
     assert_eq!(
-        inflate_usage_json_value(compressed).expect("payload should inflate"),
+        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
         payload
     );
 }
 
 #[test]
-fn prepare_usage_body_storage_streams_json_shapes_into_compatible_gzip() {
+fn prepare_usage_body_storage_streams_json_shapes_into_raw_payloads() {
     for payload in [
         serde_json::Value::Null,
         json!(false),
@@ -4497,13 +4493,13 @@ fn prepare_usage_body_storage_streams_json_shapes_into_compatible_gzip() {
             "nested": {"values": [true, null, 1.25, -7]}
         }),
     ] {
-        let storage = prepare_usage_body_storage(Some(&payload)).expect("body should compress");
-        assert!(storage.inline_json.is_none());
+        let storage = prepare_usage_body_storage(Some(&payload)).expect("body should serialize");
         let compressed = storage
             .detached_blob_bytes
             .expect("body should be detached");
         assert_eq!(
-            inflate_usage_json_value(&compressed).expect("body should remain readable"),
+            serde_json::from_slice::<serde_json::Value>(&compressed)
+                .expect("body should remain readable"),
             payload
         );
     }
@@ -4569,7 +4565,10 @@ fn managed_capture_preparation_moves_bodies_without_a_second_reservation() {
     .zip(bodies)
     {
         assert_eq!(
-            inflate_usage_json_value(storage.detached_blob_bytes.as_deref().unwrap()).unwrap(),
+            serde_json::from_slice::<serde_json::Value>(
+                storage.detached_blob_bytes.as_deref().unwrap()
+            )
+            .unwrap(),
             expected
         );
     }
@@ -4735,7 +4734,7 @@ fn terminal_capture_rejects_late_non_terminal_updates() {
 #[test]
 fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys() {
     let detached = prepare_usage_body_storage(Some(&json!({
-        "content": "x".repeat(MAX_INLINE_USAGE_BODY_BYTES + 32)
+        "content": "x".repeat(64 * 1024)
     })))
     .expect("detached storage should build");
     let inline =
@@ -4773,32 +4772,6 @@ fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys(
 }
 
 #[test]
-fn attach_compressed_body_refs_adds_missing_ref_metadata() {
-    let metadata = attach_compressed_body_refs(
-        "req-123",
-        Some(json!({
-            "candidate_id": "cand-1",
-            "provider_request_body_ref": "blob://existing"
-        })),
-        true,
-        true,
-        true,
-        false,
-    )
-    .expect("metadata should remain");
-
-    assert_eq!(
-        metadata,
-        json!({
-            "candidate_id": "cand-1",
-            "request_body_ref": usage_body_ref("req-123", UsageBodyField::RequestBody),
-            "provider_request_body_ref": "blob://existing",
-            "response_body_ref": usage_body_ref("req-123", UsageBodyField::ResponseBody)
-        })
-    );
-}
-
-#[test]
 fn usage_http_audit_body_refs_extracts_only_non_empty_values() {
     let refs = usage_http_audit_body_refs(Some(&json!({
         "request_body_ref": "usage://request/req-123/request_body",
@@ -4818,7 +4791,7 @@ fn usage_http_audit_body_refs_extracts_only_non_empty_values() {
 }
 
 #[test]
-fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_then_metadata() {
+fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_metadata() {
     let metadata = json!({
         "request_body_ref": "usage://request/req-123/request_body"
     });
@@ -4835,7 +4808,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             metadata.as_object(),
             "req-123",
             UsageBodyField::RequestBody,
-            true,
             Some("usage://request/req-123/request_body"),
         ),
         Some("usage://request/req-123/request_body".to_string())
@@ -4846,7 +4818,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             metadata.as_object(),
             "req-123",
             UsageBodyField::RequestBody,
-            false,
             Some("usage://request/req-123/request_body"),
         ),
         Some("usage://request/req-123/request_body".to_string())
@@ -4857,7 +4828,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             metadata.as_object(),
             "req-123",
             UsageBodyField::RequestBody,
-            true,
             None,
         ),
         Some(usage_body_ref("req-123", UsageBodyField::RequestBody))
@@ -4868,7 +4838,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             invalid_metadata.as_object(),
             "req-123",
             UsageBodyField::RequestBody,
-            false,
             None,
         ),
         None
@@ -4879,7 +4848,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             mismatched_metadata.as_object(),
             "req-123",
             UsageBodyField::RequestBody,
-            false,
             None,
         ),
         None
@@ -4890,7 +4858,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             None,
             "req-123",
             UsageBodyField::ResponseBody,
-            true,
             Some("usage://request/req-123/response_body"),
         ),
         Some(usage_body_ref("req-123", UsageBodyField::ResponseBody))
@@ -4901,7 +4868,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             None,
             "req-123",
             UsageBodyField::ClientResponseBody,
-            false,
             Some("usage://request/req-123/client_response_body"),
         ),
         Some("usage://request/req-123/client_response_body".to_string())
@@ -4912,7 +4878,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             None,
             "req-123",
             UsageBodyField::RequestBody,
-            false,
             Some("usage://request/req-123/request_body"),
         ),
         Some(usage_body_ref("req-123", UsageBodyField::RequestBody))
@@ -4923,7 +4888,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             None,
             "req-123",
             UsageBodyField::RequestBody,
-            false,
             Some("usage://request/req-other/request_body"),
         ),
         None
@@ -4934,7 +4898,6 @@ fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_compressed_th
             None,
             "req-123",
             UsageBodyField::RequestBody,
-            false,
             Some("usage://request/req-123/response_body"),
         ),
         None

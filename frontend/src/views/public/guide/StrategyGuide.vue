@@ -111,9 +111,9 @@ import { Target } from 'lucide-vue-next'
       id="payload-cleanup"
       class="scroll-mt-24 lg:scroll-mt-20"
     >
-      <h2>4. 请求体压缩清理</h2>
+      <h2>4. 请求体清理</h2>
       <p class="text-sm text-[#666663] dark:text-[#a3a094] mb-4">
-        为节省数据库空间与提高查询性能，系统提供自动请求体清理与压缩策略，将历史请求详情定期冷热分离并清理。
+        为节省数据库空间与提高查询性能，系统提供自动请求体清理策略，将历史请求详情定期清理。
       </p>
     </section>
 

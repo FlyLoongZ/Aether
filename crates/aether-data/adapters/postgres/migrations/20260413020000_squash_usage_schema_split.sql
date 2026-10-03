@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.usage_body_blobs (
     body_ref character varying(160) NOT NULL,
     request_id character varying(100) NOT NULL,
     body_field character varying(50) NOT NULL,
-    payload_gzip bytea NOT NULL,
+    payload bytea NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT usage_body_blobs_pkey PRIMARY KEY (body_ref),

@@ -2,7 +2,7 @@ INSERT INTO usage_body_blobs (
   body_ref,
   request_id,
   body_field,
-  payload_gzip
+  payload
 ) VALUES (
   $1,
   $2,
@@ -11,5 +11,5 @@ INSERT INTO usage_body_blobs (
 )
 ON CONFLICT (body_ref)
 DO UPDATE SET
-  payload_gzip = EXCLUDED.payload_gzip,
+  payload = EXCLUDED.payload,
   updated_at = NOW()

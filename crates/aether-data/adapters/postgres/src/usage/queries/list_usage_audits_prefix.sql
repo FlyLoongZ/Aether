@@ -164,16 +164,12 @@ SELECT
   ) AS client_family,
   NULL::json AS request_headers,
   NULL::json AS request_body,
-  NULL::bytea AS request_body_compressed,
   NULL::json AS provider_request_headers,
   NULL::json AS provider_request_body,
-  NULL::bytea AS provider_request_body_compressed,
   NULL::json AS response_headers,
   NULL::json AS response_body,
-  NULL::bytea AS response_body_compressed,
   NULL::json AS client_response_headers,
   NULL::json AS client_response_body,
-  NULL::bytea AS client_response_body_compressed,
   CASE
     WHEN NULLIF(BTRIM("usage".request_metadata->>'client_ip'), '') IS NOT NULL
       OR NULLIF(BTRIM("usage".request_metadata->>'routing_group_id'), '') IS NOT NULL

@@ -11,7 +11,7 @@ scope.onmessage = async ({ data: request }) => {
   try {
     let result: BodyWorkerResult
     if (request.action === 'load') {
-      const decoded = await decodeBody(request.bytes, request.encoding)
+      const decoded = await decodeBody(request.bytes)
       document = new BodyDocumentEngine(decoded.value)
       result = { byteLength: decoded.byteLength }
     } else {

@@ -2097,11 +2097,10 @@ pub fn canonical_usage_body_ref_for(
         .map(|(request_id, field)| usage_body_ref(&request_id, field))
 }
 
+pub const MAX_USAGE_BODY_BYTES: usize = 64 * 1024 * 1024;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StoredUsageBodyPayload {
-    Gzip(Vec<u8>),
-    Json(Vec<u8>),
-}
+pub struct StoredUsageBodyPayload(pub Vec<u8>);
 
 #[async_trait]
 pub trait UsageReadRepository: Send + Sync {
@@ -2176,7 +2175,7 @@ pub trait UsageReadRepository: Send + Sync {
             .await?
             .map(|value| {
                 serde_json::to_vec(&value)
-                    .map(StoredUsageBodyPayload::Json)
+                    .map(StoredUsageBodyPayload)
                     .map_err(|error| crate::DataLayerError::UnexpectedValue(error.to_string()))
             })
             .transpose()
@@ -2921,8 +2920,6 @@ impl ApiKeyLastUsedDelta {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct UsageCleanupSummary {
-    pub body_externalized: usize,
-    pub legacy_body_refs_migrated: usize,
     pub body_cleaned: usize,
     pub header_cleaned: usize,
     pub keys_cleaned: usize,
@@ -2933,16 +2930,14 @@ pub struct UsageCleanupSummary {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct UsageCleanupWindow {
-    pub detail_cutoff: DateTime<Utc>,
-    pub compressed_cutoff: DateTime<Utc>,
+    pub body_cutoff: DateTime<Utc>,
     pub header_cutoff: DateTime<Utc>,
     pub log_cutoff: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct UsageCleanupTargets {
-    pub detail_body: bool,
-    pub compressed_body: bool,
+    pub body: bool,
     pub headers: bool,
     pub records: bool,
     pub expired_keys: bool,
@@ -2951,8 +2946,7 @@ pub struct UsageCleanupTargets {
 impl UsageCleanupTargets {
     pub const fn all_policy_targets() -> Self {
         Self {
-            detail_body: true,
-            compressed_body: true,
+            body: true,
             headers: true,
             records: true,
             expired_keys: true,
@@ -2961,8 +2955,7 @@ impl UsageCleanupTargets {
 
     pub const fn body_targets() -> Self {
         Self {
-            detail_body: true,
-            compressed_body: true,
+            body: true,
             headers: false,
             records: false,
             expired_keys: false,
@@ -2970,11 +2963,7 @@ impl UsageCleanupTargets {
     }
 
     pub const fn any_selected(self) -> bool {
-        self.detail_body
-            || self.compressed_body
-            || self.headers
-            || self.records
-            || self.expired_keys
+        self.body || self.headers || self.records || self.expired_keys
     }
 }
 
@@ -2993,8 +2982,7 @@ pub enum UsageCleanupExecutionMode {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct UsageCleanupPreviewCounts {
-    pub detail: u64,
-    pub compressed: u64,
+    pub body: u64,
     pub header: u64,
     pub log: u64,
 }

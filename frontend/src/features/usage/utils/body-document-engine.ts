@@ -2,23 +2,19 @@ import { renderRequest, renderResponse, type RenderBlock, type RenderResult } fr
 import { getRawTextChunk, JsonPageReader, JSON_PAGE_SIZE, JSON_TEXT_CHUNK_SIZE } from './json-viewer'
 import {
   BodyDocumentError, MAX_BODY_BYTES, MAX_ENCODED_BODY_BYTES,
-  type BodyConversationOptions, type BodyConversationPage, type BodyEncoding,
+  type BodyConversationOptions, type BodyConversationPage,
   type BodyJsonOptions, type BodyJsonPage,
 } from './body-document-protocol'
 
-export async function decodeBody(bytes: ArrayBuffer, encoding: BodyEncoding, limit = MAX_BODY_BYTES) {
+export async function decodeBody(bytes: ArrayBuffer, limit = MAX_BODY_BYTES) {
   if (bytes.byteLength > MAX_ENCODED_BODY_BYTES) throw new BodyDocumentError('too_large')
-  if (encoding === 'gzip' && typeof globalThis.DecompressionStream === 'undefined') {
-    throw new BodyDocumentError('unsupported')
-  }
   const source = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new Uint8Array(bytes))
       controller.close()
     },
   })
-  const stream = encoding === 'gzip' ? source.pipeThrough(new DecompressionStream('gzip')) : source
-  const reader = stream.getReader()
+  const reader = source.getReader()
   const decoder = new TextDecoder('utf-8', { fatal: true })
   const parts: string[] = []
   let byteLength = 0

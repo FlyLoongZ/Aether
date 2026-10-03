@@ -13,15 +13,13 @@ use super::{
 
 #[derive(Debug, Clone, Copy, serde::Serialize)]
 pub(crate) struct ManualUsageCleanupPreview {
-    pub detail_cutoff: chrono::DateTime<Utc>,
-    pub compressed_cutoff: chrono::DateTime<Utc>,
+    pub body_cutoff: chrono::DateTime<Utc>,
     pub header_cutoff: chrono::DateTime<Utc>,
     pub log_cutoff: chrono::DateTime<Utc>,
     pub mode: ManualUsageCleanupMode,
     pub targets: UsageCleanupTargets,
     pub requested_older_than_days: Option<u32>,
-    pub detail_count: u64,
-    pub compressed_count: u64,
+    pub body_count: u64,
     pub header_count: u64,
     pub log_count: u64,
 }
@@ -187,15 +185,13 @@ pub(crate) async fn preview_manual_usage_cleanup(
         )
         .await?;
     Ok(ManualUsageCleanupPreview {
-        detail_cutoff: window.detail_cutoff,
-        compressed_cutoff: window.compressed_cutoff,
+        body_cutoff: window.body_cutoff,
         header_cutoff: window.header_cutoff,
         log_cutoff: window.log_cutoff,
         mode: options.mode,
         targets: options.targets,
         requested_older_than_days: options.requested_older_than_days,
-        detail_count: counts.detail,
-        compressed_count: counts.compressed,
+        body_count: counts.body,
         header_count: counts.header,
         log_count: counts.log,
     })
@@ -227,8 +223,7 @@ pub(super) fn usage_cleanup_window_for_mode(
             usage_cleanup_window_with_override(now_utc, settings, override_older_than)
         }
         ManualUsageCleanupMode::BeforeNow => UsageCleanupWindow {
-            detail_cutoff: now_utc,
-            compressed_cutoff: now_utc,
+            body_cutoff: now_utc,
             header_cutoff: now_utc,
             log_cutoff: now_utc,
         },

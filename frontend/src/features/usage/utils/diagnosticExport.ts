@@ -166,7 +166,7 @@ async function loadBody(usageId: string, field: RequestBodyField, signal: AbortS
       }
     })
     if (response.bytes.byteLength > MAX_SOURCE_BYTES) throw new Error('too_large')
-    return (await decodeBody(response.bytes, response.encoding, MAX_SOURCE_BYTES)).value
+    return (await decodeBody(response.bytes, MAX_SOURCE_BYTES)).value
   } catch (error) {
     if (tooLarge) throw new Error('too_large')
     if (controller.signal.aborted && !signal.aborted) throw new Error('timeout')
