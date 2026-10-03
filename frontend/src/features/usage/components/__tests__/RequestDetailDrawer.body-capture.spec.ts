@@ -23,13 +23,13 @@ vi.mock('../RequestDetailDrawer/JsonContent.vue', async () => {
 
 const mountedApps: Array<{ app: App, root: HTMLElement }> = []
 const documents: Array<{ display: unknown, byteLength: number, dispose: ReturnType<typeof vi.fn>, copy: ReturnType<typeof vi.fn> }> = []
-function body(value: unknown) { return { bytes: new TextEncoder().encode(JSON.stringify(value)).buffer, encoding: 'json' as const } }
+function body(value: unknown) { return { bytes: new TextEncoder().encode(JSON.stringify(value)).buffer } }
 
 beforeEach(() => {
   mocks.getRequestDetail.mockImplementation(async id => ({ ...buildDetail(true), id, request_id: `req-${id}` }))
   mocks.getRequestBody.mockImplementation(async (_id, field) => body({ text: field }))
   mocks.copyToClipboard.mockResolvedValue(true)
-  mocks.load.mockImplementation(async (bytes: ArrayBuffer, _encoding, signal: AbortSignal) => {
+  mocks.load.mockImplementation(async (bytes: ArrayBuffer, signal: AbortSignal) => {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
     const display = JSON.parse(new TextDecoder().decode(bytes))
     const document = { display, byteLength: bytes.byteLength, dispose: vi.fn(), copy: vi.fn(async () => JSON.stringify(display, null, 2)) }

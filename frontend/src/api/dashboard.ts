@@ -490,10 +490,10 @@ export const dashboardApi = {
       ...(onProgress ? { onDownloadProgress: (event: { loaded: number }) => onProgress(event.loaded) } : {}),
     })
     const encoding = response.headers['x-aether-body-encoding']
-    if ((encoding !== 'gzip' && encoding !== 'json') || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
+    if (encoding !== 'json' || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
       throw new RequestBodyProtocolError()
     }
-    return { bytes: response.data, encoding: encoding as 'gzip' | 'json' }
+    return { bytes: response.data }
   },
 
   async prefetchRequestDetail(requestId: string): Promise<void> {

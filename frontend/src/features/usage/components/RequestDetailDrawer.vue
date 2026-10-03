@@ -2647,7 +2647,7 @@ async function ensureBodyContentLoaded() {
   bodyLoadError.value = null
   try {
     const response = await dashboardApi.getRequestBody(detail.value.id, field, controller.signal)
-    const document = await BodyDocument.load(response.bytes, response.encoding, controller.signal)
+    const document = await BodyDocument.load(response.bytes, controller.signal)
     if (requestId !== bodyLoadRequestId || controller.signal.aborted || !detail.value ||
       !props.isOpen || !detailMatchesRequestId(detail.value, usageId)) {
       document.dispose()

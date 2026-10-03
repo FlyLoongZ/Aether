@@ -4,7 +4,6 @@ import type { JsonDisplayLine, JsonPageOptions } from './json-viewer'
 export const MAX_BODY_BYTES = 64 * 1024 * 1024
 export const MAX_ENCODED_BODY_BYTES = MAX_BODY_BYTES + 1024 * 1024
 export const BODY_WORKER_TIMEOUT = 30_000
-export type BodyEncoding = 'gzip' | 'json'
 export type BodyDocumentErrorCode = 'too_large' | 'decode_failed' | 'unsupported' | 'worker_failed' | 'timeout'
 
 export class BodyDocumentError extends Error {
@@ -41,7 +40,7 @@ export interface BodyDocumentSummary {
 }
 
 export type BodyWorkerCommand =
-  | { action: 'load', bytes: ArrayBuffer, encoding: BodyEncoding }
+  | { action: 'load', bytes: ArrayBuffer }
   | { action: 'json', options: BodyJsonOptions }
   | { action: 'conversation', options: BodyConversationOptions }
   | { action: 'copy', conversation?: BodyConversationOptions }

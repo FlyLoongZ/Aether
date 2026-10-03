@@ -1,11 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { gzipSync } from 'node:zlib'
 import { BodyDocumentEngine, decodeBody } from '../body-document-engine'
 import { JSON_PAGE_SIZE, JSON_TEXT_CHUNK_SIZE } from '../json-viewer'
 import type { BodyWorkerRequest } from '../body-document-protocol'
 
 function bytes(value: string) { return new TextEncoder().encode(value).buffer }
-function gzip(value: string) { return Uint8Array.from(gzipSync(value)).buffer }
 
 describe('body document decoding', () => {
   it('loads and copies complete captured bodies through the worker entry point', async () => {
@@ -17,7 +15,7 @@ describe('body document decoding', () => {
       const dispatch = globalThis.onmessage as unknown as (event: { data: BodyWorkerRequest }) => Promise<void>
       const value = { messages: [{ role: 'user', content: `${'x'.repeat(100_000)}BODY-END` }] }
       const text = JSON.stringify(value)
-      await dispatch({ data: { id: 1, action: 'load', bytes: gzip(text), encoding: 'gzip' } })
+      await dispatch({ data: { id: 1, action: 'load', bytes: bytes(text) } })
       expect(postMessage).toHaveBeenLastCalledWith({ id: 1, ok: true, result: { byteLength: bytes(text).byteLength } })
       await dispatch({ data: { id: 2, action: 'copy' } })
       expect(postMessage).toHaveBeenLastCalledWith({ id: 2, ok: true, result: JSON.stringify(value, null, 2) })
@@ -26,24 +24,22 @@ describe('body document decoding', () => {
     }
   })
 
-  it.each(['gzip', 'json'] as const)('decodes %s off the UI protocol with a byte count', async encoding => {
+  it('decodes raw json off the UI protocol with a byte count', async () => {
     const text = JSON.stringify({ text: '你好🙂', count: 0, enabled: false })
-    const decoded = await decodeBody(encoding === 'gzip' ? gzip(text) : bytes(text), encoding)
+    const decoded = await decodeBody(bytes(text))
     expect(decoded.value).toEqual(JSON.parse(text))
     expect(decoded.byteLength).toBe(bytes(text).byteLength)
   })
 
-  it('enforces decompressed size while streaming, including exact boundaries', async () => {
+  it('enforces body size while streaming, including exact boundaries', async () => {
     const text = JSON.stringify('x'.repeat(100_000))
-    await expect(decodeBody(gzip(text), 'gzip', text.length)).resolves.toHaveProperty('byteLength', text.length)
-    await expect(decodeBody(gzip(text), 'gzip', text.length - 1)).rejects.toHaveProperty('code', 'too_large')
-    await expect(decodeBody(bytes(text), 'json', text.length - 1)).rejects.toHaveProperty('code', 'too_large')
+    await expect(decodeBody(bytes(text), text.length)).resolves.toHaveProperty('byteLength', text.length)
+    await expect(decodeBody(bytes(text), text.length - 1)).rejects.toHaveProperty('code', 'too_large')
   })
 
-  it('rejects corrupt gzip, invalid JSON and invalid UTF-8 with safe codes', async () => {
-    await expect(decodeBody(bytes('not gzip'), 'gzip')).rejects.toHaveProperty('code', 'decode_failed')
-    await expect(decodeBody(gzip('not json'), 'gzip')).rejects.toHaveProperty('code', 'decode_failed')
-    await expect(decodeBody(new Uint8Array([34, 255, 34]).buffer, 'json')).rejects.toHaveProperty('code', 'decode_failed')
+  it('rejects invalid JSON and invalid UTF-8 with safe codes', async () => {
+    await expect(decodeBody(bytes('not json'))).rejects.toHaveProperty('code', 'decode_failed')
+    await expect(decodeBody(new Uint8Array([34, 255, 34]).buffer)).rejects.toHaveProperty('code', 'decode_failed')
   })
 })
 

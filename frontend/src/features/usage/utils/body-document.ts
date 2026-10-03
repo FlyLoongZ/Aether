@@ -1,7 +1,7 @@
 import {
   BODY_WORKER_TIMEOUT, BodyDocumentError,
   type BodyConversationOptions, type BodyConversationPage, type BodyDocumentSummary,
-  type BodyEncoding, type BodyJsonOptions, type BodyJsonPage,
+  type BodyJsonOptions, type BodyJsonPage,
   type BodyWorkerCommand, type BodyWorkerResponse, type BodyWorkerResult,
 } from './body-document-protocol'
 
@@ -25,7 +25,7 @@ export class BodyDocument {
     worker.onmessageerror = () => this.dispose(new BodyDocumentError('worker_failed'))
   }
 
-  static async load(bytes: ArrayBuffer, encoding: BodyEncoding, signal?: AbortSignal): Promise<BodyDocument> {
+  static async load(bytes: ArrayBuffer, signal?: AbortSignal): Promise<BodyDocument> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
     if (typeof Worker === 'undefined') throw new BodyDocumentError('unsupported')
     let document: BodyDocument
@@ -37,7 +37,7 @@ export class BodyDocument {
     const abort = () => document.dispose()
     signal?.addEventListener('abort', abort, { once: true })
     try {
-      const result = await document.request<BodyDocumentSummary>({ action: 'load', bytes, encoding }, [bytes])
+      const result = await document.request<BodyDocumentSummary>({ action: 'load', bytes }, [bytes])
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       document.byteLength = result.byteLength
       return document
