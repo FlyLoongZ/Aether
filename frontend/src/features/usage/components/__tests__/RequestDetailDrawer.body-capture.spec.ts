@@ -88,7 +88,7 @@ async function expectBody(text: string) {
 function lastSignal() { return mocks.getRequestBody.mock.calls[mocks.getRequestBody.mock.calls.length - 1][2] as AbortSignal }
 
 describe('RequestDetailDrawer body capture', () => {
-  it('displays original values for all four captured header directions and copies the selected headers', async () => {
+  it('masks sensitive values across all four captured header directions and reveals them on click', async () => {
     const detail = {
       ...buildDetail(false),
       request_headers: {
@@ -104,12 +104,16 @@ describe('RequestDetailDrawer body capture', () => {
     mocks.getRequestDetail.mockResolvedValue(detail)
     await openDrawer()
 
-    for (const [tab, dataSource, expected] of [
+    for (const [tab, dataSource, expectedRaw] of [
       ['请求头', '客户端', detail.request_headers],
       ['请求头', '提供商', detail.provider_request_headers],
       ['响应头', '提供商', detail.response_headers],
       ['响应头', '客户端', detail.client_response_headers],
     ] as const) {
+      const expected = Object.fromEntries(Object.entries(expectedRaw).map(([key, value]) => [
+        key,
+        ['authorization', 'x-api-key', 'set-cookie'].includes(key.toLowerCase()) ? '****' : value,
+      ]))
       findButton(tab)!.click()
       await source(dataSource)
       await vi.waitFor(() => {
@@ -117,8 +121,21 @@ describe('RequestDetailDrawer body capture', () => {
         expect(JSON.parse(text ?? 'null')).toEqual(expected)
       })
     }
+    // 回到客户端请求头后，点击掩码本身即显示原文（无额外按钮）。
+    findButton('请求头')!.click()
+    await source('客户端')
+    const mask = document.body.querySelector<HTMLElement>('[data-testid="masked-header-value"]')
+    expect(mask?.textContent).toBe('****')
+    mask!.click()
+    await vi.waitFor(() => expect(document.body.querySelector('[data-testid="captured-body"]')?.textContent)
+      .toContain('Bearer original-client-token'))
+
+    // 复制不受展示层遮蔽影响，仍写入接口返回的原值。
     document.body.querySelector<HTMLButtonElement>('button[title="复制"]')!.click()
-    await vi.waitFor(() => expect(mocks.copyToClipboard).toHaveBeenCalledWith(JSON.stringify(detail.client_response_headers, null, 2), false))
+    await vi.waitFor(() => expect(mocks.copyToClipboard).toHaveBeenCalledWith(
+      JSON.stringify(detail.request_headers, null, 2),
+      false,
+    ))
     expect(mocks.getRequestBody).not.toHaveBeenCalled()
   })
 

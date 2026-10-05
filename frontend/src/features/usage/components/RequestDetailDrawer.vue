@@ -793,7 +793,6 @@
                         value="response-headers"
                       >
                         <RequestHeadersContent
-                          v-if="viewMode === 'compare'"
                           :detail="detail"
                           :view-mode="viewMode"
                           :data-source="dataSource"
@@ -806,14 +805,6 @@
                           :provider-headers="detail.response_headers"
                           client-label="客户端响应头"
                           provider-label="提供商响应头"
-                          empty-message="无响应头信息"
-                        />
-                        <JsonContent
-                          v-else
-                          :data="currentResponseHeaderData"
-                          :view-mode="viewMode"
-                          :expand-depth="currentExpandDepth"
-                          :is-dark="isDark"
                           empty-message="无响应头信息"
                         />
                       </TabsContent>

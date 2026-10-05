@@ -81,7 +81,7 @@
                   <span
                     class="line-content"
                     :class="{ 'clickable-collapsed': line.canFold && line.collapsed }"
-                    @click="line.canFold && line.collapsed && toggleFold(line, index)"
+                    @click="onLineClick($event, line, index)"
                     v-html="getDisplayHtml(line)"
                   />
                 <!-- eslint-enable vue/no-v-html -->
@@ -96,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ChevronRight, ChevronDown } from 'lucide-vue-next'
 import Card from '@/components/ui/card.vue'
 import VirtualBodyContent from './VirtualBodyContent.vue'
@@ -111,9 +111,16 @@ const props = defineProps<{
   expandDepth: number
   isDark: boolean
   emptyMessage: string
+  /** Lowercased header names whose values are masked; each mask becomes clickable. */
+  maskedKeys?: string[]
 }>()
 
-const emit = defineEmits<{ 'load-error': [error: unknown] }>()
+const emit = defineEmits<{
+  'load-error': [error: unknown]
+  'reveal-mask': [key: string]
+}>()
+
+const maskedKeySet = computed(() => new Set(props.maskedKeys ?? []))
 const viewer = ref<{ refresh: (index: number, resetTail?: boolean) => void } | null>(null)
 const viewRevision = ref(0)
 const foldOverrides = ref(new Map<string, boolean>())
@@ -143,9 +150,30 @@ function token(value: string, type: string): string {
   return `<span class="token-${type}">${escapeHtml(value)}</span>`
 }
 
+function isMaskedKey(line: JsonDisplayLine): boolean {
+  return line.key !== undefined && maskedKeySet.value.has(line.key.trim().toLowerCase())
+}
+
+function maskedToken(line: JsonDisplayLine): string {
+  return `<span class="reveal-mask" data-mask-key="${escapeHtml(line.key ?? '')}">${escapeHtml(String(line.value))}</span>`
+}
+
+function onLineClick(event: MouseEvent, line: JsonDisplayLine, index: number) {
+  const target = event.target as HTMLElement | null
+  const maskKey = target?.dataset?.maskKey
+  if (maskKey) {
+    emit('reveal-mask', maskKey)
+    return
+  }
+  if (line.canFold && line.collapsed) toggleFold(line, index)
+}
+
 function getDisplayHtml(line: JsonDisplayLine): string {
   if (line.tokens) return line.tokens.map(part => part.type === 'info'
     ? `<span class="collapsed-info">${escapeHtml(part.text)}</span>` : token(part.text, part.type)).join('')
+  if (isMaskedKey(line)) {
+    return token(JSON.stringify(line.key), 'key') + token(': ', 'punctuation') + maskedToken(line) + line.comma
+  }
   const key = line.key === undefined ? ''
     : token(JSON.stringify(line.key), 'key') + token(': ', 'punctuation')
   if (line.bracket) {
@@ -258,6 +286,20 @@ watch([() => props.data, () => props.bodyDocument, () => props.expandDepth], () 
 
 .line-content.clickable-collapsed {
   cursor: pointer;
+}
+
+/* 敏感值掩码：点击自身即显示原文 */
+:deep(.reveal-mask) {
+  cursor: pointer;
+  border-radius: 3px;
+  background: hsl(var(--muted-foreground) / 0.15);
+  padding: 0 2px;
+  letter-spacing: 1px;
+}
+
+:deep(.reveal-mask:hover) {
+  background: hsl(var(--primary) / 0.2);
+  color: hsl(var(--primary));
 }
 
 .line-content.clickable-collapsed:hover :deep(.token-ellipsis) {
