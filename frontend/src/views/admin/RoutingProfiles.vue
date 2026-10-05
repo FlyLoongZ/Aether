@@ -685,7 +685,6 @@ function normalizeRecord(group: RoutingGroupRecord): RoutingGroupRecord {
 
 function sortGroupsForDisplay(items: RoutingGroupRecord[]): RoutingGroupRecord[] {
   return [...items].sort((left, right) => {
-    if (left.enabled !== right.enabled) return left.enabled ? -1 : 1
     if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order
     return left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
   })
@@ -978,13 +977,33 @@ function handleGroupDragLeave(): void {
   dragOverGroupId.value = null
 }
 
+async function persistGroupOrder(ordered: RoutingGroupRecord[]): Promise<boolean> {
+  const next = ordered.map((group, index) => ({ ...group, sort_order: index }))
+  const changed = next.filter((group, index) => ordered[index]?.sort_order !== group.sort_order)
+  groups.value = sortGroupsForDisplay(next)
+  if (changed.length === 0) return true
+  groupActionId.value = '__reorder__'
+  try {
+    const updates = await Promise.all(
+      changed.map(group => updateRoutingGroup(group.id, { sort_order: group.sort_order })),
+    )
+    const updatedById = new Map(updates.map(group => [group.id, normalizeRecord(group)]))
+    groups.value = sortGroupsForDisplay(groups.value.map(group => updatedById.get(group.id) ?? group))
+    return true
+  } catch (err) {
+    showError(parseApiError(err, '保存调度策略顺序失败'))
+    log.error('保存调度策略顺序失败:', err)
+    await fetchGroups()
+    return false
+  } finally {
+    groupActionId.value = null
+  }
+}
+
 async function handleGroupDrop(targetId: string): Promise<void> {
   const sourceId = draggedGroupId.value
   handleGroupDragEnd()
   if (!sourceId || sourceId === targetId || groupActionId.value) return
-  const source = groups.value.find(group => group.id === sourceId)
-  const target = groups.value.find(group => group.id === targetId)
-  if (!source || !target || source.enabled !== target.enabled) return
 
   const reordered = [...groups.value]
   const sourceIndex = reordered.findIndex(group => group.id === sourceId)
@@ -992,24 +1011,8 @@ async function handleGroupDrop(targetId: string): Promise<void> {
   if (sourceIndex < 0 || targetIndex < 0) return
   const [moved] = reordered.splice(sourceIndex, 1)
   reordered.splice(targetIndex, 0, moved)
-  groups.value = reordered.map((group, index) => ({ ...group, sort_order: index }))
 
-  const orderSnapshot = groups.value.map(group => ({ id: group.id, sort_order: group.sort_order }))
-  groupActionId.value = '__reorder__'
-  try {
-    const updates = await Promise.all(
-      orderSnapshot.map(({ id, sort_order }) => updateRoutingGroup(id, { sort_order })),
-    )
-    const updatedById = new Map(updates.map(group => [group.id, normalizeRecord(group)]))
-    groups.value = sortGroupsForDisplay(groups.value.map(group => updatedById.get(group.id) ?? group))
-    success('调度策略顺序已更新')
-  } catch (err) {
-    showError(parseApiError(err, '保存调度策略顺序失败'))
-    log.error('保存调度策略顺序失败:', err)
-    await fetchGroups()
-  } finally {
-    groupActionId.value = null
-  }
+  if (await persistGroupOrder(reordered)) success('调度策略顺序已更新')
 }
 
 async function fetchGroups(): Promise<void> {
@@ -1074,9 +1077,7 @@ async function saveDraft(): Promise<void> {
       description: draft.value.description.trim() || null,
       enabled: draft.value.enabled,
       is_system_default: draft.value.is_system_default,
-      sort_order: wasCreating
-        ? groups.value.filter(group => group.enabled === draft.value?.enabled).length
-        : undefined,
+      sort_order: wasCreating ? 0 : undefined,
       config_json: config,
     }
     const saved = wasCreating || !targetGroupId
@@ -1100,6 +1101,12 @@ async function saveDraft(): Promise<void> {
       isCreating.value = false
     }
     replaceGroup(saved, stillEditingSubmittedDraft)
+    if (wasCreating) {
+      await persistGroupOrder([
+        groups.value.find(group => group.id === saved.id) ?? normalizeRecord(saved),
+        ...groups.value.filter(group => group.id !== saved.id),
+      ])
+    }
     if (wasCreating && stillEditingSubmittedDraft) {
       await router.replace({ name: 'RoutingProfileDetail', params: { groupId: saved.id } })
     }
