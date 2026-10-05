@@ -69,6 +69,16 @@ function element<T extends HTMLElement>(root: HTMLElement, selector: string): T 
   return found
 }
 
+function renderedOrder(root: HTMLElement): number[] {
+  return Array.from(root.querySelectorAll<HTMLInputElement>('tbody input[type="number"]'))
+    .map(input => Number(input.value))
+}
+
+function renderedNames(root: HTMLElement): string[] {
+  return Array.from(root.querySelectorAll<HTMLElement>('tbody tr'))
+    .map(row => row.querySelector('span.truncate')?.textContent?.trim() ?? '')
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('ResizeObserver', class {
@@ -89,8 +99,31 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe('RoutingProfiles display order', () => {
+  it('numbers every strategy by order and keeps disabled rows numbered in place', async () => {
+    route.name = 'RoutingProfiles'
+    const root = await mountPage([
+      group('system-default', 0),
+      group('model-scoped', 1, false),
+      group('third', 2),
+    ])
 
-describe('RoutingProfiles create order', () => {
+    expect(renderedNames(root)).toEqual(['system-default', 'model-scoped', 'third'])
+    expect(renderedOrder(root)).toEqual([0, 1, 2])
+  })
+
+  it('orders rows by sort_order instead of enabled state', async () => {
+    route.name = 'RoutingProfiles'
+    const root = await mountPage([
+      group('enabled-late', 2),
+      group('disabled-first', 0, false),
+      group('enabled-mid', 1),
+    ])
+
+    expect(renderedNames(root)).toEqual(['disabled-first', 'enabled-mid', 'enabled-late'])
+    expect(renderedOrder(root)).toEqual([0, 1, 2])
+  })
+
   it('inserts a strategy enabled before saving at the front and renumbers the rest', async () => {
     route.name = 'RoutingProfileCreate'
     route.params = { groupId: '' }
@@ -130,5 +163,35 @@ describe('RoutingProfiles create order', () => {
 
     const renumbered = routingApi.updateRoutingGroup.mock.calls.map(call => call[1].sort_order)
     expect(renumbered).toEqual([1, 2])
+  })
+
+  it('moves a strategy with the arrow buttons and renumbers the list', async () => {
+    route.name = 'RoutingProfiles'
+    const root = await mountPage([group('first', 0), group('second', 1), group('third', 2)])
+
+    const down = root.querySelector<HTMLButtonElement>('tbody [aria-label="下移策略"]')
+    expect(down).not.toBeNull()
+    down?.click()
+    await flush()
+
+    expect(renderedNames(root)).toEqual(['second', 'first', 'third'])
+    expect(renderedOrder(root)).toEqual([0, 1, 2])
+    expect(routingApi.updateRoutingGroup.mock.calls.map(call => [call[0], call[1].sort_order]))
+      .toEqual([['second', 0], ['first', 1]])
+  })
+
+  it('moves a strategy to the index typed into the order input', async () => {
+    route.name = 'RoutingProfiles'
+    const root = await mountPage([group('first', 0), group('second', 1), group('third', 2)])
+
+    const inputs = root.querySelectorAll<HTMLInputElement>('tbody input[type="number"]')
+    const last = inputs[2]
+    expect(last).not.toBeUndefined()
+    last.value = '0'
+    last.dispatchEvent(new Event('change', { bubbles: true }))
+    await flush()
+
+    expect(renderedNames(root)).toEqual(['third', 'first', 'second'])
+    expect(renderedOrder(root)).toEqual([0, 1, 2])
   })
 })

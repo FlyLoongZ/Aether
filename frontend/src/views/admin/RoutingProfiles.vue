@@ -34,11 +34,10 @@
           <Table class="hidden lg:table">
             <TableHeader>
               <TableRow>
-                <TableHead
-                  class="w-10"
-                  aria-label="拖动调整顺序"
-                />
-                <TableHead class="w-[28%]">
+                <TableHead class="w-0">
+                  调度顺序
+                </TableHead>
+                <TableHead class="px-2">
                   策略分组
                 </TableHead>
                 <TableHead class="w-[120px]">
@@ -91,14 +90,46 @@
                 @dragleave="handleGroupDragLeave"
                 @drop.prevent="handleGroupDrop(group.id)"
               >
-                <TableCell class="w-10 px-2">
-                  <GripVertical
-                    class="h-4 w-4 cursor-grab text-muted-foreground/60"
-                    title="拖动调整顺序"
-                    aria-hidden="true"
-                  />
+                <TableCell class="px-2">
+                  <div class="flex items-center gap-1">
+                    <GripVertical
+                      class="h-4 cursor-grab text-muted-foreground/60"
+                      title="拖动调整顺序"
+                      aria-hidden="true"
+                    />
+                    <button
+                      type="button"
+                      class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                      :disabled="groupActionId !== null || groupOrderIndex(groups, group.id) === 0"
+                      aria-label="上移策略"
+                      title="上移"
+                      @click.stop="moveGroup(group.id, -1)"
+                    >
+                      <ArrowUp class="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                      :disabled="groupActionId !== null || groupOrderIndex(groups, group.id) === groups.length - 1"
+                      aria-label="下移策略"
+                      title="下移"
+                      @click.stop="moveGroup(group.id, 1)"
+                    >
+                      <ArrowDown class="h-4 w-4" />
+                    </button>
+                    <input
+                      :value="groupOrderIndex(groups, group.id)"
+                      type="number"
+                      min="0"
+                      class="order-input h-8 w-14 rounded-md border border-border bg-background px-2 text-center text-sm"
+                      :aria-label="`调度顺序 ${group.name}`"
+                      :disabled="groupActionId !== null"
+                      @click.stop
+                      @change.stop="setGroupOrder(group.id, ($event.target as HTMLInputElement).value)"
+                    >
+                  </div>
                 </TableCell>
-                <TableCell>
+                <TableCell class="px-2">
                   <div class="min-w-0">
                     <div class="flex items-center gap-2">
                       <span class="truncate font-medium">{{ group.name }}</span>
@@ -219,6 +250,38 @@
               />
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
+                  <div class="flex items-center gap-1">
+                    <button
+                      type="button"
+                      class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                      :disabled="groupActionId !== null || groupOrderIndex(groups, group.id) === 0"
+                      aria-label="上移策略"
+                      title="上移"
+                      @click.stop="moveGroup(group.id, -1)"
+                    >
+                      <ArrowUp class="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30"
+                      :disabled="groupActionId !== null || groupOrderIndex(groups, group.id) === groups.length - 1"
+                      aria-label="下移策略"
+                      title="下移"
+                      @click.stop="moveGroup(group.id, 1)"
+                    >
+                      <ArrowDown class="h-4 w-4" />
+                    </button>
+                  </div>
+                  <input
+                    :value="groupOrderIndex(groups, group.id)"
+                    type="number"
+                    min="0"
+                    class="order-input h-8 w-14 rounded-md border border-border bg-background px-2 text-center text-sm"
+                    :aria-label="`调度顺序 ${group.name}`"
+                    :disabled="groupActionId !== null"
+                    @click.stop
+                    @change.stop="setGroupOrder(group.id, ($event.target as HTMLInputElement).value)"
+                  >
                   <span class="truncate text-sm font-medium">{{ group.name }}</span>
                   <Badge :variant="group.enabled ? 'default' : 'secondary'">
                     {{ group.enabled ? '启用' : '停用' }}
@@ -561,6 +624,8 @@ import { getI18nLocale } from '@/i18n'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  ArrowDown,
+  ArrowUp,
   ChevronRight,
   GripVertical,
   Plus,
@@ -688,6 +753,10 @@ function sortGroupsForDisplay(items: RoutingGroupRecord[]): RoutingGroupRecord[]
     if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order
     return left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
   })
+}
+
+function groupOrderIndex(items: RoutingGroupRecord[], groupId: string): number {
+  return items.findIndex(group => group.id === groupId)
 }
 
 function cloneConfig(config: RoutingGroupConfig): RoutingGroupConfig {
@@ -977,6 +1046,28 @@ function handleGroupDragLeave(): void {
   dragOverGroupId.value = null
 }
 
+function moveGroup(groupId: string, delta: number): void {
+  const ordered = [...groups.value]
+  const index = ordered.findIndex(group => group.id === groupId)
+  const target = index + delta
+  if (index < 0 || target < 0 || target >= ordered.length) return
+  const [moved] = ordered.splice(index, 1)
+  ordered.splice(target, 0, moved)
+  void persistGroupOrder(ordered)
+}
+
+function setGroupOrder(groupId: string, value: string): void {
+  const parsed = Number.parseInt(value, 10)
+  const ordered = [...groups.value]
+  const index = ordered.findIndex(group => group.id === groupId)
+  if (index < 0 || !Number.isFinite(parsed)) return
+  const target = Math.min(Math.max(parsed, 0), ordered.length - 1)
+  if (target === index) return
+  const [moved] = ordered.splice(index, 1)
+  ordered.splice(target, 0, moved)
+  void persistGroupOrder(ordered)
+}
+
 async function persistGroupOrder(ordered: RoutingGroupRecord[]): Promise<boolean> {
   const next = ordered.map((group, index) => ({ ...group, sort_order: index }))
   const changed = next.filter((group, index) => ordered[index]?.sort_order !== group.sort_order)
@@ -1171,3 +1262,15 @@ watch(
   () => syncRouteState(),
 )
 </script>
+
+<style scoped>
+.order-input::-webkit-outer-spin-button,
+.order-input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.order-input[type='number'] {
+  appearance: textfield;
+}
+</style>
