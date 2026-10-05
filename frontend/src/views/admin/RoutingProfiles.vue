@@ -1176,11 +1176,13 @@ async function saveDraft(): Promise<void> {
       : await updateRoutingGroup(targetGroupId, payload)
 
     const sameDraftGeneration = draftGeneration.value === submittedGeneration
+    const createResponseStillApplies = wasCreating
+      && sameDraftGeneration
+      && isCreateRoute.value
+      && isCreating.value
+      && draft.value != null
     const stillEditingSubmittedDraft = wasCreating
-      ? sameDraftGeneration
-        && isCreateRoute.value
-        && isCreating.value
-        && draft.value != null
+      ? createResponseStillApplies
         && draftSnapshotValue(draft.value) === submittedSnapshot
       : routeGroupId.value === targetGroupId
         && draft.value?.id === targetGroupId
@@ -1192,14 +1194,14 @@ async function saveDraft(): Promise<void> {
       isCreating.value = false
     }
     replaceGroup(saved, stillEditingSubmittedDraft)
+    if (createResponseStillApplies) {
+      await router.replace({ name: 'RoutingProfileDetail', params: { groupId: saved.id } })
+    }
     if (wasCreating) {
       await persistGroupOrder([
         groups.value.find(group => group.id === saved.id) ?? normalizeRecord(saved),
         ...groups.value.filter(group => group.id !== saved.id),
       ])
-    }
-    if (wasCreating && stillEditingSubmittedDraft) {
-      await router.replace({ name: 'RoutingProfileDetail', params: { groupId: saved.id } })
     }
     success('调度策略已保存')
   } catch (err) {
