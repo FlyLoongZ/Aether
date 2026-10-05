@@ -144,7 +144,7 @@ impl AppState {
             .data
             .create_routing_group(record)
             .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))?;
+            .map_err(routing_group_write_error)?;
         if created.is_some() {
             self.invalidate_provider_routing_caches();
         }
@@ -160,7 +160,7 @@ impl AppState {
             .data
             .update_routing_group(id, patch)
             .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))?;
+            .map_err(routing_group_write_error)?;
         if updated.is_some() {
             self.invalidate_provider_routing_caches();
         }
@@ -233,5 +233,43 @@ impl AppState {
             .create_routing_group_version(record)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
+    }
+}
+
+/// The unique-name constraint still guards against concurrent writes that pass
+/// the admin-side pre-check, so report that conflict instead of a generic 500.
+fn routing_group_write_error(error: aether_data_contracts::DataLayerError) -> GatewayError {
+    if error.to_string().contains("routing_groups_name_key") {
+        return GatewayError::Client {
+            status: http::StatusCode::BAD_REQUEST,
+            message: "调度策略名称已存在，请换一个名称".to_string(),
+        };
+    }
+    GatewayError::Internal(error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::routing_group_write_error;
+    use aether_data_contracts::DataLayerError;
+
+    #[test]
+    fn duplicate_name_writes_surface_as_a_client_error() {
+        let error = routing_group_write_error(DataLayerError::Postgres(
+            "duplicate key value violates unique constraint \"routing_groups_name_key\""
+                .to_string(),
+        ));
+        assert_eq!(error.into_message(), "调度策略名称已存在，请换一个名称");
+    }
+
+    #[test]
+    fn unrelated_write_failures_stay_internal() {
+        let error = routing_group_write_error(DataLayerError::Postgres(
+            "connection reset by peer".to_string(),
+        ));
+        assert_eq!(
+            error.into_message(),
+            "postgres error: connection reset by peer"
+        );
     }
 }

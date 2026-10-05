@@ -130,6 +130,11 @@ async fn maybe_build_routing_groups_response(
                 return Ok(Some(data_unavailable_response()));
             }
             let payload = parse_json_body::<AdminRoutingGroupCreateRequest>(request_body)?;
+            if let Some(conflict) =
+                routing_group_name_conflict_response(state, &payload.name, None).await?
+            {
+                return Ok(Some(conflict));
+            }
             let config_json = payload.config_json.unwrap_or_else(|| json!({}));
             validate_config_json(&config_json)?;
             let now = current_unix_secs() as i64;
@@ -178,6 +183,14 @@ async fn maybe_build_routing_groups_response(
                         return Ok(Some(data_unavailable_response()));
                     }
                     let patch = build_routing_group_update_patch(request_body)?;
+                    if let Some(name) = patch.name.as_deref() {
+                        if let Some(conflict) =
+                            routing_group_name_conflict_response(state, name, Some(&group_id))
+                                .await?
+                        {
+                            return Ok(Some(conflict));
+                        }
+                    }
                     let Some(updated) = state.update_routing_group(&group_id, patch).await? else {
                         return Ok(Some(not_found_response(format!(
                             "routing group {group_id} not found"
@@ -741,6 +754,25 @@ fn bad_request_error(detail: impl Into<String>) -> GatewayError {
         status: http::StatusCode::BAD_REQUEST,
         message: detail.into(),
     }
+}
+
+/// Reject a strategy name that another strategy already uses, so the admin sees
+/// the real reason instead of a generic 500 from the unique-name constraint.
+async fn routing_group_name_conflict_response(
+    state: &AdminAppState<'_>,
+    name: &str,
+    exclude_group_id: Option<&str>,
+) -> Result<Option<Response<Body>>, GatewayError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let taken =
+        state.list_routing_groups().await?.iter().any(|group| {
+            group.name.trim() == trimmed && exclude_group_id != Some(group.id.as_str())
+        });
+    Ok(taken
+        .then(|| bad_request_response(format!("调度策略名称「{trimmed}」已存在，请换一个名称"))))
 }
 
 fn bad_request_response(detail: impl Into<String>) -> Response<Body> {
