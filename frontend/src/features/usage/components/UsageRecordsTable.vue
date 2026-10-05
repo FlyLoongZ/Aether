@@ -713,7 +713,7 @@
         >
           <TableCell
             v-if="isColumnVisible('time')"
-            class="py-4 w-[8%] align-top"
+            class="py-4 w-[8%]"
           >
             <div class="flex flex-col gap-0.5 leading-tight">
               <span class="text-xs text-foreground tabular-nums whitespace-nowrap">
