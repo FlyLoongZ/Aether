@@ -36,8 +36,6 @@ pub(crate) struct UpstreamTargetAdmissionPermit {
 #[derive(Debug)]
 struct UpstreamTargetGate {
     gate: ConcurrencyGate,
-    raw_seen_total: AtomicU64,
-    preselect_total: AtomicU64,
     selected_total: AtomicU64,
     saturated_total: AtomicU64,
 }
@@ -46,19 +44,9 @@ impl UpstreamTargetGate {
     fn new(limit: usize) -> Self {
         Self {
             gate: ConcurrencyGate::new(GATE_NAME, limit),
-            raw_seen_total: AtomicU64::new(0),
-            preselect_total: AtomicU64::new(0),
             selected_total: AtomicU64::new(0),
             saturated_total: AtomicU64::new(0),
         }
-    }
-
-    fn raw_seen(&self) {
-        self.raw_seen_total.fetch_add(1, Ordering::Relaxed);
-    }
-
-    fn preselected(&self) {
-        self.preselect_total.fetch_add(1, Ordering::Relaxed);
     }
 
     fn selected(&self) {
@@ -77,10 +65,7 @@ pub(crate) struct UpstreamTargetAdmissionSnapshot {
     pub(crate) available_permits: usize,
     pub(crate) high_watermark: usize,
     pub(crate) rejected: u64,
-    pub(crate) raw_seen_total: u64,
-    pub(crate) preselect_total: u64,
     pub(crate) selected_total: u64,
-    pub(crate) selection_pressure_total: u64,
     pub(crate) saturated_total: u64,
 }
 
@@ -177,28 +162,6 @@ impl UpstreamTargetAdmission {
         Some(snapshot_for_gate(target.to_string(), entry.value()))
     }
 
-    pub(crate) fn record_preselect_for_target_key(&self, target: &str) {
-        let Some(limit) = self.limit else {
-            return;
-        };
-        let gate = self
-            .gates
-            .entry(target.to_string())
-            .or_insert_with(|| Arc::new(UpstreamTargetGate::new(limit)));
-        gate.preselected();
-    }
-
-    pub(crate) fn record_raw_seen_for_target_key(&self, target: &str) {
-        let Some(limit) = self.limit else {
-            return;
-        };
-        let gate = self
-            .gates
-            .entry(target.to_string())
-            .or_insert_with(|| Arc::new(UpstreamTargetGate::new(limit)));
-        gate.raw_seen();
-    }
-
     pub(crate) fn limit(&self) -> Option<usize> {
         self.limit
     }
@@ -285,24 +248,6 @@ impl UpstreamTargetAdmission {
             );
             samples.push(
                 MetricSample::new(
-                    "upstream_target_raw_seen_total",
-                    "Number of lightweight target-selection windows where an upstream target appeared.",
-                    MetricKind::Counter,
-                    snapshot.raw_seen_total,
-                )
-                .with_labels(labels.clone()),
-            );
-            samples.push(
-                MetricSample::new(
-                    "upstream_target_preselect_total",
-                    "Number of lightweight pre-first-byte selections for an upstream target.",
-                    MetricKind::Counter,
-                    snapshot.preselect_total,
-                )
-                .with_labels(labels.clone()),
-            );
-            samples.push(
-                MetricSample::new(
                     "upstream_target_in_flight",
                     "Current number of pre-first-byte in-flight operations for an upstream target.",
                     MetricKind::Gauge,
@@ -336,8 +281,6 @@ impl UpstreamTargetAdmission {
 
 fn snapshot_for_gate(target: String, gate: &UpstreamTargetGate) -> UpstreamTargetAdmissionSnapshot {
     let snapshot = gate.gate.snapshot();
-    let raw_seen_total = gate.raw_seen_total.load(Ordering::Relaxed);
-    let preselect_total = gate.preselect_total.load(Ordering::Relaxed);
     let selected_total = gate.selected_total.load(Ordering::Relaxed);
     UpstreamTargetAdmissionSnapshot {
         target,
@@ -345,10 +288,7 @@ fn snapshot_for_gate(target: String, gate: &UpstreamTargetGate) -> UpstreamTarge
         available_permits: snapshot.available_permits,
         high_watermark: snapshot.high_watermark,
         rejected: snapshot.rejected,
-        raw_seen_total,
-        preselect_total,
         selected_total,
-        selection_pressure_total: preselect_total.saturating_add(selected_total),
         saturated_total: gate.saturated_total.load(Ordering::Relaxed),
     }
 }
@@ -628,39 +568,5 @@ mod tests {
         assert!(samples
             .iter()
             .any(|sample| sample.name == "upstream_target_saturated_total"));
-    }
-
-    #[test]
-    fn preselect_records_selection_pressure_before_acquire() {
-        let admission = UpstreamTargetAdmission::new(Some(10), Duration::from_millis(1));
-        let target = "http://127.0.0.1:18181|proxy=-";
-
-        admission.record_preselect_for_target_key(target);
-        admission.record_preselect_for_target_key(target);
-
-        let snapshot = admission
-            .snapshot_for_target_key(target)
-            .expect("target snapshot should exist");
-        assert_eq!(snapshot.in_flight, 0);
-        assert_eq!(snapshot.raw_seen_total, 0);
-        assert_eq!(snapshot.preselect_total, 2);
-        assert_eq!(snapshot.selected_total, 0);
-        assert_eq!(snapshot.selection_pressure_total, 2);
-    }
-
-    #[test]
-    fn raw_seen_records_target_without_acquire() {
-        let admission = UpstreamTargetAdmission::new(Some(10), Duration::from_millis(1));
-        let target = "http://127.0.0.1:18182|proxy=-";
-
-        admission.record_raw_seen_for_target_key(target);
-
-        let snapshot = admission
-            .snapshot_for_target_key(target)
-            .expect("target snapshot should exist");
-        assert_eq!(snapshot.in_flight, 0);
-        assert_eq!(snapshot.raw_seen_total, 1);
-        assert_eq!(snapshot.preselect_total, 0);
-        assert_eq!(snapshot.selected_total, 0);
     }
 }

@@ -57,7 +57,6 @@ const STAGES: &[&str] = &[
     "routing_policy_resolve",
     "routing_mutation_apply",
     "openai_chat_attempt_source_build",
-    "openai_chat_stream_target_select",
     "openai_chat_payload_parts_prepare",
     "openai_chat_payload_model_directives",
     "openai_chat_payload_redaction",
@@ -158,10 +157,6 @@ static STAGE_TRACE_CONFIG: LazyLock<RequestStageTraceConfig> =
     LazyLock::new(read_stage_trace_config);
 static STAGE_TRACE_SAMPLE_COUNTER: AtomicU64 = AtomicU64::new(0);
 static STREAM_PRE_FIRST_BYTE_SPAWN_TOTAL: AtomicU64 = AtomicU64::new(0);
-static OPENAI_CHAT_STREAM_RAW_TARGET_SELECT_SCANNED_TOTAL: AtomicU64 = AtomicU64::new(0);
-static OPENAI_CHAT_STREAM_PAYLOAD_BUILD_SELECTED_TOTAL: AtomicU64 = AtomicU64::new(0);
-static OPENAI_CHAT_STREAM_PAYLOAD_BUILD_PREFETCH_AVOIDED_TOTAL: AtomicU64 = AtomicU64::new(0);
-static OPENAI_CHAT_STREAM_TARGET_SELECT_SELECTED_RANK_SUM: AtomicU64 = AtomicU64::new(0);
 static OPENAI_CHAT_MODEL_DIRECTIVE_CACHE_HIT_TOTAL: AtomicU64 = AtomicU64::new(0);
 static OPENAI_CHAT_MODEL_DIRECTIVE_CACHE_MISS_TOTAL: AtomicU64 = AtomicU64::new(0);
 static CHAT_PII_REDACTION_REQUEST_CACHE_HIT_TOTAL: AtomicU64 = AtomicU64::new(0);
@@ -267,7 +262,7 @@ fn gateway_stage_metric_samples_for_enabled(enabled: bool) -> Vec<MetricSample> 
     let mut samples: Vec<MetricSample> = if enabled {
         METRICS.iter().flat_map(StageMetric::samples).collect()
     } else {
-        Vec::with_capacity(10)
+        Vec::with_capacity(6)
     };
     samples.push(MetricSample::new(
         "gateway_stage_metrics_enabled",
@@ -280,30 +275,6 @@ fn gateway_stage_metric_samples_for_enabled(enabled: bool) -> Vec<MetricSample> 
         "Number of per-request tasks spawned before the first client-visible stream byte.",
         MetricKind::Counter,
         STREAM_PRE_FIRST_BYTE_SPAWN_TOTAL.load(Ordering::Relaxed),
-    ));
-    samples.push(MetricSample::new(
-        "openai_chat_stream_target_select_raw_candidates_scanned_total",
-        "Number of raw OpenAI chat stream candidates inspected by lightweight target selection.",
-        MetricKind::Counter,
-        OPENAI_CHAT_STREAM_RAW_TARGET_SELECT_SCANNED_TOTAL.load(Ordering::Relaxed),
-    ));
-    samples.push(MetricSample::new(
-        "openai_chat_stream_payload_build_selected_total",
-        "Number of selected OpenAI chat stream raw candidates that entered full payload build.",
-        MetricKind::Counter,
-        OPENAI_CHAT_STREAM_PAYLOAD_BUILD_SELECTED_TOTAL.load(Ordering::Relaxed),
-    ));
-    samples.push(MetricSample::new(
-        "openai_chat_stream_payload_build_prefetch_avoided_total",
-        "Number of OpenAI chat stream candidate payload builds avoided during target-selection prefetch.",
-        MetricKind::Counter,
-        OPENAI_CHAT_STREAM_PAYLOAD_BUILD_PREFETCH_AVOIDED_TOTAL.load(Ordering::Relaxed),
-    ));
-    samples.push(MetricSample::new(
-        "openai_chat_stream_target_select_selected_rank_sum",
-        "Sum of zero-based selected candidate ranks within OpenAI chat stream target-selection windows.",
-        MetricKind::Counter,
-        OPENAI_CHAT_STREAM_TARGET_SELECT_SELECTED_RANK_SUM.load(Ordering::Relaxed),
     ));
     samples.push(MetricSample::new(
         "openai_chat_model_directive_cache_hit_total",
@@ -334,23 +305,6 @@ fn gateway_stage_metric_samples_for_enabled(enabled: bool) -> Vec<MetricSample> 
 
 pub(crate) fn record_stream_pre_first_byte_spawn() {
     STREAM_PRE_FIRST_BYTE_SPAWN_TOTAL.fetch_add(1, Ordering::Relaxed);
-}
-
-pub(crate) fn record_openai_chat_stream_raw_candidates_scanned(count: usize) {
-    OPENAI_CHAT_STREAM_RAW_TARGET_SELECT_SCANNED_TOTAL.fetch_add(count as u64, Ordering::Relaxed);
-}
-
-pub(crate) fn record_openai_chat_stream_payload_build_selected() {
-    OPENAI_CHAT_STREAM_PAYLOAD_BUILD_SELECTED_TOTAL.fetch_add(1, Ordering::Relaxed);
-}
-
-pub(crate) fn record_openai_chat_stream_payload_build_prefetch_avoided(count: usize) {
-    OPENAI_CHAT_STREAM_PAYLOAD_BUILD_PREFETCH_AVOIDED_TOTAL
-        .fetch_add(count as u64, Ordering::Relaxed);
-}
-
-pub(crate) fn record_openai_chat_stream_target_select_selected_rank(rank: usize) {
-    OPENAI_CHAT_STREAM_TARGET_SELECT_SELECTED_RANK_SUM.fetch_add(rank as u64, Ordering::Relaxed);
 }
 
 pub(crate) fn record_openai_chat_model_directive_cache_hit() {
@@ -602,7 +556,7 @@ mod tests {
         let samples = gateway_stage_metric_samples_for_enabled(false);
         let names = samples.iter().map(|sample| sample.name).collect::<Vec<_>>();
 
-        assert_eq!(samples.len(), 10);
+        assert_eq!(samples.len(), 6);
         assert!(!names
             .iter()
             .any(|name| name.starts_with("gateway_stage_latency_")));
@@ -611,10 +565,6 @@ mod tests {
             .any(|sample| { sample.name == "gateway_stage_metrics_enabled" && sample.value == 0 }));
         for counter in [
             "stream_pre_first_byte_spawn_total",
-            "openai_chat_stream_target_select_raw_candidates_scanned_total",
-            "openai_chat_stream_payload_build_selected_total",
-            "openai_chat_stream_payload_build_prefetch_avoided_total",
-            "openai_chat_stream_target_select_selected_rank_sum",
             "openai_chat_model_directive_cache_hit_total",
             "openai_chat_model_directive_cache_miss_total",
             "chat_pii_redaction_request_cache_hit_total",
