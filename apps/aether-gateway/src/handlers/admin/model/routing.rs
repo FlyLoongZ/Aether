@@ -64,12 +64,19 @@ async fn resolve_preview_routing_policy(
     if !state.has_routing_group_data_reader() {
         return resolved;
     }
-    let group = match state
-        .find_routing_group(RoutingGroupLookupKey::SystemDefault)
-        .await
-    {
-        Ok(Some(group)) if group.enabled => group,
-        _ => return resolved,
+    let model_scoped_group = match state.list_routing_groups().await {
+        Ok(groups) => crate::routing::model_scoped_group_from(&groups, requested_model),
+        Err(_) => None,
+    };
+    let (group, selection_source) = match model_scoped_group {
+        Some(group) => (group, "model_chain"),
+        None => match state
+            .find_routing_group(RoutingGroupLookupKey::SystemDefault)
+            .await
+        {
+            Ok(Some(group)) if group.enabled => (group, "system_default"),
+            _ => return resolved,
+        },
     };
     resolved.group_id = Some(group.id.clone());
     resolved.group_name = Some(group.name.clone());
@@ -116,7 +123,7 @@ async fn resolve_preview_routing_policy(
     let input = RoutingPolicyInput {
         group_id: resolved.group_id.as_deref(),
         group_version: Some(group.version),
-        selection_source: "system_default",
+        selection_source,
         requested_model,
         resolved_model: requested_model,
         api_format: "",
@@ -136,7 +143,7 @@ async fn resolve_preview_routing_policy(
     };
     resolved.overlay = policy.ranking_overlay.clone();
     resolved.policy = Some(policy);
-    resolved.source = "system_default";
+    resolved.source = selection_source;
     resolved.note = ROUTING_PREVIEW_POLICY_NOTE;
     resolved
 }

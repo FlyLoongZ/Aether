@@ -573,6 +573,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
                 selection_user_id.as_deref(),
                 selection_api_key_id.as_deref(),
                 &user_group_ids,
+                input.requested_model.as_str(),
             );
             let group_selection_started_at = std::time::Instant::now();
             let selection = state
@@ -590,6 +591,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
                                 user_id: selection_user_id.as_deref(),
                                 api_key_id: selection_api_key_id.as_deref(),
                                 user_group_ids: &user_group_ids,
+                                requested_model: Some(input.requested_model.as_str()),
                             },
                         )
                         .await
@@ -606,6 +608,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
                         let user_id = selection_user_id.clone();
                         let api_key_id = selection_api_key_id.clone();
                         let user_group_ids = user_group_ids.clone();
+                        let requested_model = input.requested_model.clone();
                         async move {
                             let selection_load_started_at = std::time::Instant::now();
                             let selection = select_gateway_routing_group(
@@ -615,6 +618,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
                                     user_id: user_id.as_deref(),
                                     api_key_id: api_key_id.as_deref(),
                                     user_group_ids: &user_group_ids,
+                                    requested_model: Some(requested_model.as_str()),
                                 },
                             )
                             .await
@@ -952,6 +956,7 @@ fn routing_group_selection_cache_key(
     user_id: Option<&str>,
     api_key_id: Option<&str>,
     user_group_ids: &[String],
+    requested_model: &str,
 ) -> String {
     let groups = user_group_ids
         .iter()
@@ -959,11 +964,12 @@ fn routing_group_selection_cache_key(
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "v1|explicit={}|user={}|api_key={}|groups={}",
+        "v2|explicit={}|user={}|api_key={}|groups={}|model={}",
         escape_cache_key_part(explicit_group.unwrap_or_default()),
         escape_cache_key_part(user_id.unwrap_or_default()),
         escape_cache_key_part(api_key_id.unwrap_or_default()),
-        groups
+        groups,
+        escape_cache_key_part(requested_model)
     )
 }
 
@@ -1175,18 +1181,29 @@ mod tests {
             Some("user-1"),
             Some("key-1"),
             &["team-1".to_string()],
+            "gpt-5",
         );
         let second = routing_group_selection_cache_key(
             Some("private"),
             Some("user-2"),
             Some("key-2"),
             &["team-2".to_string()],
+            "gpt-5",
         );
 
         assert_ne!(first, second);
         assert!(first.contains("user=user-1"));
         assert!(first.contains("api_key=key-1"));
         assert!(first.contains("groups=team-1"));
+        assert!(first.contains("model=gpt-5"));
+    }
+
+    #[test]
+    fn routing_selection_cache_key_separates_models() {
+        let first = routing_group_selection_cache_key(None, None, None, &[], "gpt-5");
+        let second = routing_group_selection_cache_key(None, None, None, &[], "claude-4");
+
+        assert_ne!(first, second);
     }
 
     #[test]

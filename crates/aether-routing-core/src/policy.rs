@@ -290,6 +290,21 @@ fn model_allowed(patterns: &[String], requested_model: &str) -> bool {
             .any(|pattern| model_pattern_matches(pattern, requested_model))
 }
 
+pub fn config_scopes_model(config: &RoutingGroupConfig, model: &str) -> bool {
+    let model = model.trim();
+    if model.is_empty() {
+        return false;
+    }
+    config.model_policies.iter().any(|policy| {
+        is_concrete_model_pattern(&policy.model) && model_pattern_matches(&policy.model, model)
+    })
+}
+
+fn is_concrete_model_pattern(pattern: &str) -> bool {
+    let pattern = pattern.trim();
+    !pattern.is_empty() && pattern != "*"
+}
+
 fn default_sticky_key_attempts() -> u32 {
     crate::model::DEFAULT_STICKY_KEY_ATTEMPTS
 }
@@ -728,5 +743,45 @@ mod tests {
             err,
             RoutingPolicyError::ModelNotAllowed("claude".to_string())
         );
+    }
+
+    fn model_scoped_config(model: &str) -> RoutingGroupConfig {
+        serde_json::from_value(json!({
+            "default_policy": {},
+            "model_policies": [{ "model": model }],
+            "rules": []
+        }))
+        .expect("config")
+    }
+
+    #[test]
+    fn config_scopes_model_only_for_concrete_matching_patterns() {
+        assert!(config_scopes_model(
+            &model_scoped_config("deepseek-flash"),
+            "deepseek-flash"
+        ));
+        assert!(config_scopes_model(
+            &model_scoped_config("deepseek-*"),
+            "deepseek-flash"
+        ));
+        assert!(!config_scopes_model(
+            &model_scoped_config("deepseek-flash"),
+            "gpt-5"
+        ));
+        assert!(!config_scopes_model(&model_scoped_config("*"), "gpt-5"));
+        assert!(!config_scopes_model(&model_scoped_config(""), "gpt-5"));
+        assert!(!config_scopes_model(&model_scoped_config("gpt-5"), "  "));
+    }
+
+    #[test]
+    fn config_without_model_policies_never_scopes_a_model() {
+        let config: RoutingGroupConfig = serde_json::from_value(json!({
+            "default_policy": {},
+            "model_policies": [],
+            "rules": []
+        }))
+        .expect("config");
+
+        assert!(!config_scopes_model(&config, "gpt-5"));
     }
 }

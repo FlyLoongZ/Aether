@@ -957,6 +957,35 @@ fn system_default_routing_group(config_json: serde_json::Value) -> InMemoryRouti
     )
 }
 
+fn routing_preview_group(
+    id: &str,
+    sort_order: i64,
+    is_system_default: bool,
+    config_json: serde_json::Value,
+) -> StoredRoutingGroup {
+    StoredRoutingGroup {
+        id: id.to_string(),
+        name: id.to_string(),
+        description: None,
+        enabled: true,
+        is_system_default,
+        sort_order,
+        config_json,
+        version: 1,
+        created_at: 1,
+        updated_at: 1,
+        published_at: Some(1),
+    }
+}
+
+fn routing_preview_groups(groups: Vec<StoredRoutingGroup>) -> InMemoryRoutingGroupRepository {
+    InMemoryRoutingGroupRepository::seed(
+        groups,
+        std::iter::empty::<StoredRoutingGroupBinding>(),
+        std::iter::empty::<StoredRoutingGroupVersion>(),
+    )
+}
+
 fn routing_preview_provider_catalog(
     first_priority: i32,
     second_priority: i32,
@@ -1093,6 +1122,39 @@ async fn gateway_global_model_routing_preview_overrides_catalog_priority() {
     // The effective priority drives the preview order, so the catalog-lowest
     // provider is promoted to the front by the routing override.
     assert_eq!(payload["providers"][0]["id"], "provider-first");
+
+    gateway_handle.abort();
+}
+
+#[tokio::test]
+async fn gateway_global_model_routing_preview_prefers_the_model_scoped_group() {
+    let gateway = build_router_with_state(
+        AppState::new()
+            .expect("gateway should build")
+            .with_data_state_for_tests(
+                GatewayDataState::with_provider_catalog_reader_for_tests(
+                    routing_preview_provider_catalog(1, 2),
+                )
+                .with_global_model_repository_for_tests(routing_preview_global_model_repository())
+                .with_routing_group_repository_for_tests(Arc::new(routing_preview_groups(vec![
+                    routing_preview_group("system-default", 5, true, json!({})),
+                    routing_preview_group(
+                        "model-scoped",
+                        0,
+                        false,
+                        json!({
+                            "default_policy": { "priority_mode": "provider" },
+                            "model_policies": [{ "model": "gpt-5" }]
+                        }),
+                    ),
+                ]))),
+            ),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let payload = fetch_routing_preview(&gateway_url).await;
+    assert_eq!(payload["effective_policy"]["source"], "model_chain");
+    assert_eq!(payload["effective_policy"]["group_name"], "model-scoped");
 
     gateway_handle.abort();
 }

@@ -2,6 +2,7 @@ use aether_data_contracts::repository::routing_profiles::{
     RoutingGroupBindingQuery, RoutingGroupBindingSubject, RoutingGroupLookupKey,
     RoutingGroupReadRepository, StoredRoutingGroup,
 };
+use aether_routing_core::{config_scopes_model, RoutingGroupConfig};
 use thiserror::Error;
 
 pub(crate) const ROUTING_GROUP_HEADER: &str = "x-aether-scheduler-group";
@@ -26,7 +27,10 @@ pub(crate) struct GatewayRoutingSelectionInput<'a> {
     pub user_id: Option<&'a str>,
     pub api_key_id: Option<&'a str>,
     pub user_group_ids: &'a [String],
+    pub requested_model: Option<&'a str>,
 }
+
+const MODEL_CHAIN_SOURCE: &str = "model_chain";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct GatewayRoutingGroupSelection {
@@ -69,46 +73,41 @@ pub(crate) async fn select_gateway_routing_group(
         });
     }
 
-    // When there are no bindings at all, no principal-specific lookup can
-    // produce a group. The data-state repository answers this with a cached
-    // existence query, so the common "routing configured but unused" case
-    // does not materialize the binding table per API key/user.
     let has_bindings = repository
         .has_any_routing_group_binding()
         .await
         .map_err(repository_selection_error)?;
-    if !has_bindings {
-        let system_default = repository
-            .find_routing_group(RoutingGroupLookupKey::SystemDefault)
-            .await
-            .map_err(repository_selection_error)?
-            .filter(|group| group.enabled);
-        return Ok(GatewayRoutingGroupSelection {
-            group: system_default,
-            source: "system_default".to_string(),
-        });
-    }
-
-    for (subject_type, subject_id, source) in default_binding_candidates(&input) {
-        let bindings = repository
-            .list_routing_group_bindings(&RoutingGroupBindingQuery {
-                group_id: None,
-                subject_type: Some(subject_type),
-                subject_id: Some(subject_id.to_string()),
-            })
-            .await
-            .map_err(repository_selection_error)?;
-        for binding in bindings.into_iter().filter(|binding| binding.is_default) {
-            let group = repository
-                .find_routing_group(RoutingGroupLookupKey::Id(&binding.group_id))
+    if has_bindings {
+        for (subject_type, subject_id, source) in default_binding_candidates(&input) {
+            let bindings = repository
+                .list_routing_group_bindings(&RoutingGroupBindingQuery {
+                    group_id: None,
+                    subject_type: Some(subject_type),
+                    subject_id: Some(subject_id.to_string()),
+                })
                 .await
                 .map_err(repository_selection_error)?;
-            if let Some(group) = group.filter(|group| group.enabled) {
-                return Ok(GatewayRoutingGroupSelection {
-                    group: Some(group),
-                    source: source.to_string(),
-                });
+            for binding in bindings.into_iter().filter(|binding| binding.is_default) {
+                let group = repository
+                    .find_routing_group(RoutingGroupLookupKey::Id(&binding.group_id))
+                    .await
+                    .map_err(repository_selection_error)?;
+                if let Some(group) = group.filter(|group| group.enabled) {
+                    return Ok(GatewayRoutingGroupSelection {
+                        group: Some(group),
+                        source: source.to_string(),
+                    });
+                }
             }
+        }
+    }
+
+    if let Some(requested_model) = input.requested_model {
+        if let Some(group) = select_model_scoped_group(repository, requested_model).await? {
+            return Ok(GatewayRoutingGroupSelection {
+                group: Some(group),
+                source: MODEL_CHAIN_SOURCE.to_string(),
+            });
         }
     }
 
@@ -121,6 +120,42 @@ pub(crate) async fn select_gateway_routing_group(
         group: system_default,
         source: "system_default".to_string(),
     })
+}
+
+pub(crate) fn model_scoped_group_from(
+    groups: &[StoredRoutingGroup],
+    requested_model: &str,
+) -> Option<StoredRoutingGroup> {
+    let requested_model = requested_model.trim();
+    if requested_model.is_empty() {
+        return None;
+    }
+    let mut ordered = groups.iter().collect::<Vec<_>>();
+    ordered.sort_by(|left, right| {
+        left.sort_order
+            .cmp(&right.sort_order)
+            .then_with(|| left.name.cmp(&right.name))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    ordered.into_iter().find_map(|group| {
+        if !group.enabled || group.is_system_default {
+            return None;
+        }
+        let config =
+            serde_json::from_value::<RoutingGroupConfig>(group.config_json.clone()).ok()?;
+        config_scopes_model(&config, requested_model).then(|| group.clone())
+    })
+}
+
+async fn select_model_scoped_group(
+    repository: &(impl RoutingGroupReadRepository + ?Sized),
+    requested_model: &str,
+) -> Result<Option<StoredRoutingGroup>, GatewayRoutingSelectionError> {
+    let groups = repository
+        .list_routing_groups()
+        .await
+        .map_err(repository_selection_error)?;
+    Ok(model_scoped_group_from(&groups, requested_model))
 }
 
 async fn explicit_group_allowed(
@@ -271,6 +306,7 @@ mod tests {
                 user_id: None,
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &[],
+                requested_model: None,
             },
         )
         .await
@@ -307,6 +343,7 @@ mod tests {
                 user_id: Some("user-1"),
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &["user-group-1".to_string()],
+                requested_model: None,
             },
         )
         .await
@@ -356,6 +393,7 @@ mod tests {
                 user_id: Some("user-1"),
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &["team-1".to_string()],
+                requested_model: None,
             },
         )
         .await
@@ -376,6 +414,7 @@ mod tests {
                 user_id: Some("user-1"),
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &[],
+                requested_model: None,
             },
         )
         .await
@@ -400,6 +439,7 @@ mod tests {
                 user_id: Some("user-1"),
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &[],
+                requested_model: None,
             },
         )
         .await
@@ -426,6 +466,7 @@ mod tests {
                 user_id: Some("user-1"),
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &[],
+                requested_model: None,
             },
         )
         .await
@@ -466,6 +507,7 @@ mod tests {
                 user_id: Some("user-1"),
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &[],
+                requested_model: None,
             },
         )
         .await
@@ -517,6 +559,7 @@ mod tests {
                 user_id: Some("user-1"),
                 api_key_id: Some("api-key-1"),
                 user_group_ids: &[],
+                requested_model: None,
             },
         )
         .await
@@ -526,5 +569,202 @@ mod tests {
             error,
             GatewayRoutingSelectionError::Forbidden("private-group".to_string())
         );
+    }
+
+    fn model_scoped_config(model: &str) -> serde_json::Value {
+        json!({
+            "default_policy": {},
+            "model_policies": [{ "model": model }],
+            "rules": []
+        })
+    }
+
+    async fn create_group(
+        repository: &InMemoryRoutingGroupRepository,
+        id: &str,
+        enabled: bool,
+        is_system_default: bool,
+        sort_order: i64,
+        config_json: serde_json::Value,
+    ) {
+        repository
+            .create_routing_group(CreateRoutingGroupRecord {
+                id: id.to_string(),
+                name: id.to_string(),
+                description: None,
+                enabled,
+                is_system_default,
+                sort_order,
+                config_json,
+                version: 1,
+                created_at: 1,
+                updated_at: 1,
+                published_at: None,
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn select_for_model(
+        repository: &InMemoryRoutingGroupRepository,
+        model: &str,
+    ) -> GatewayRoutingGroupSelection {
+        select_gateway_routing_group(
+            repository,
+            GatewayRoutingSelectionInput {
+                requested_model: Some(model),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn model_scoped_group_above_default_captures_only_its_model() {
+        let repository = InMemoryRoutingGroupRepository::default();
+        create_group(&repository, "system-default", true, true, 5, json!({})).await;
+        create_group(
+            &repository,
+            "model-scoped",
+            true,
+            false,
+            0,
+            model_scoped_config("deepseek-flash"),
+        )
+        .await;
+
+        let matched = select_for_model(&repository, "deepseek-flash").await;
+        assert_eq!(matched.source, "model_chain");
+        assert_eq!(matched.group.unwrap().id, "model-scoped");
+
+        let other = select_for_model(&repository, "gpt-5").await;
+        assert_eq!(other.source, "system_default");
+        assert_eq!(other.group.unwrap().id, "system-default");
+    }
+
+    #[tokio::test]
+    async fn display_order_decides_between_model_scoped_groups() {
+        let repository = InMemoryRoutingGroupRepository::default();
+        create_group(
+            &repository,
+            "lower",
+            true,
+            false,
+            9,
+            model_scoped_config("gpt-5"),
+        )
+        .await;
+        create_group(
+            &repository,
+            "higher",
+            true,
+            false,
+            1,
+            model_scoped_config("gpt-5"),
+        )
+        .await;
+
+        let selection = select_for_model(&repository, "gpt-5").await;
+        assert_eq!(selection.group.unwrap().id, "higher");
+    }
+
+    #[tokio::test]
+    async fn disabled_model_scoped_group_never_serves_traffic() {
+        let repository = InMemoryRoutingGroupRepository::default();
+        create_group(&repository, "system-default", true, true, 1, json!({})).await;
+        create_group(
+            &repository,
+            "disabled-scoped",
+            false,
+            false,
+            0,
+            model_scoped_config("gpt-5"),
+        )
+        .await;
+
+        let selection = select_for_model(&repository, "gpt-5").await;
+        assert_eq!(selection.source, "system_default");
+        assert_eq!(selection.group.unwrap().id, "system-default");
+    }
+
+    #[tokio::test]
+    async fn catch_all_model_policy_does_not_capture_a_single_model() {
+        let repository = InMemoryRoutingGroupRepository::default();
+        create_group(&repository, "system-default", true, true, 1, json!({})).await;
+        create_group(
+            &repository,
+            "all-models",
+            true,
+            false,
+            0,
+            model_scoped_config("*"),
+        )
+        .await;
+
+        let selection = select_for_model(&repository, "gpt-5").await;
+        assert_eq!(selection.source, "system_default");
+        assert_eq!(selection.group.unwrap().id, "system-default");
+    }
+
+    #[tokio::test]
+    async fn principal_binding_outranks_the_model_scoped_chain() {
+        let repository = InMemoryRoutingGroupRepository::default();
+        create_group(&repository, "bound", true, false, 5, json!({})).await;
+        create_group(
+            &repository,
+            "model-scoped",
+            true,
+            false,
+            0,
+            model_scoped_config("gpt-5"),
+        )
+        .await;
+        repository
+            .create_routing_group_binding(CreateRoutingGroupBindingRecord {
+                id: "binding-1".to_string(),
+                group_id: "bound".to_string(),
+                subject_type: RoutingGroupBindingSubject::ApiKey,
+                subject_id: "api-key-1".to_string(),
+                is_default: true,
+                allow_explicit_select: true,
+                created_at: 1,
+                updated_at: 1,
+            })
+            .await
+            .unwrap();
+
+        let selection = select_gateway_routing_group(
+            &repository,
+            GatewayRoutingSelectionInput {
+                api_key_id: Some("api-key-1"),
+                requested_model: Some("gpt-5"),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(selection.source, "api_key_default");
+        assert_eq!(selection.group.unwrap().id, "bound");
+    }
+
+    #[tokio::test]
+    async fn model_chain_failure_surfaces_as_repository_error() {
+        let repository = FailingRoutingGroupRepository {
+            id_lookup_is_missing: false,
+        };
+
+        let error = select_gateway_routing_group(
+            &repository,
+            GatewayRoutingSelectionInput {
+                requested_model: Some("gpt-5"),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(error, GatewayRoutingSelectionError::Repository(_)));
     }
 }
