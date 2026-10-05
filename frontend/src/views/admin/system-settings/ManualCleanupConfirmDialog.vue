@@ -76,7 +76,7 @@
           v-if="mode === 'before_now'"
           class="mt-2 text-xs text-amber-600"
         >
-          当前时刻之前模式只允许清理详细请求体和压缩请求体，不会清请求头或整条记录。
+          当前时刻之前模式只允许清理请求体，不会清请求头或整条记录。
         </p>
         <p
           v-if="targetError"

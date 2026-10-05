@@ -256,12 +256,11 @@
       </h4>
       <div class="text-xs text-muted-foreground space-y-1">
         <p>1. <strong>详细日志阶段</strong>: 保留完整的 request_body 和 response_body</p>
-        <p>2. <strong>压缩日志阶段</strong>: body 字段被压缩存储，节省空间</p>
-        <p>3. <strong>统计阶段</strong>: 仅保留 tokens、成本等统计信息</p>
-        <p>4. <strong>归档删除</strong>: 超过保留期限后完全删除记录</p>
-        <p>5. <strong>候选记录</strong>: 独立按保留天数清理 request_candidates 审计记录，不再跟随 Key 删除联动</p>
-        <p>6. <strong>审计日志</strong>: 独立清理，记录用户登录、操作等安全事件</p>
-        <p>7. <strong>代理指标</strong>: 仅保留 1m/1h 聚合桶，清理任务按批次删除过期桶</p>
+        <p>2. <strong>统计阶段</strong>: 超过详细记录保留期后删除 body 字段，仅保留 tokens、成本等统计信息</p>
+        <p>3. <strong>归档删除</strong>: 超过保留期限后完全删除记录</p>
+        <p>4. <strong>候选记录</strong>: 独立按保留天数清理 request_candidates 审计记录，不再跟随 Key 删除联动</p>
+        <p>5. <strong>审计日志</strong>: 独立清理，记录用户登录、操作等安全事件</p>
+        <p>6. <strong>代理指标</strong>: 仅保留 1m/1h 聚合桶，清理任务按批次删除过期桶</p>
       </div>
     </div>
 
