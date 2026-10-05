@@ -124,6 +124,15 @@ describe('RoutingProfiles display order', () => {
     expect(renderedOrder(root)).toEqual([0, 1, 2])
   })
 
+  it('breaks equal sort_order ties in the same Unicode order as request routing', async () => {
+    route.name = 'RoutingProfiles'
+    const root = await mountPage(
+      ['😀', '\uE000', '阿', '中', 'a0', 'a', 'B'].map(name => group(name, 0)),
+    )
+
+    expect(renderedNames(root)).toEqual(['B', 'a', 'a0', '中', '阿', '\uE000', '😀'])
+  })
+
   it('inserts a strategy enabled before saving at the front and renumbers the rest', async () => {
     route.name = 'RoutingProfileCreate'
     route.params = { groupId: '' }

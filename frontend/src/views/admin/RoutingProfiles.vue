@@ -748,11 +748,21 @@ function normalizeRecord(group: RoutingGroupRecord): RoutingGroupRecord {
   }
 }
 
+function compareRoutingText(left: string, right: string): number {
+  let index = 0
+  while (index < left.length && index < right.length) {
+    const leftPoint = left.codePointAt(index) ?? 0
+    const rightPoint = right.codePointAt(index) ?? 0
+    if (leftPoint !== rightPoint) return leftPoint - rightPoint
+    index += leftPoint > 0xFFFF ? 2 : 1
+  }
+  return left.length - right.length
+}
+
 function sortGroupsForDisplay(items: RoutingGroupRecord[]): RoutingGroupRecord[] {
-  return [...items].sort((left, right) => {
-    if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order
-    return left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
-  })
+  return [...items].sort((left, right) => left.sort_order - right.sort_order
+    || compareRoutingText(left.name, right.name)
+    || compareRoutingText(left.id, right.id))
 }
 
 function groupOrderIndex(items: RoutingGroupRecord[], groupId: string): number {
