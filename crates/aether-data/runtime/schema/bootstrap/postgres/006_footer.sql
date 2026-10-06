@@ -28,7 +28,7 @@ INSERT INTO public.system_configs (id, key, value, description)
 VALUES (
     '00000000-0000-0000-0000-000000000002',
     'default_user_group_id',
-    '"00000000-0000-0000-0000-000000000001"'::json,
+    '"00000000-0000-0000-0000-000000000001"'::jsonb,
     'Default user group'
 )
 ON CONFLICT (key) DO NOTHING;

@@ -4,33 +4,33 @@
 -- relationship strict after this one-time migration.
 
 UPDATE public.users
-SET allowed_api_formats = (allowed_api_formats::jsonb || '["codex:live"]'::jsonb)::json
+SET allowed_api_formats = (allowed_api_formats::jsonb || '["codex:live"]'::jsonb)::jsonb
 WHERE LOWER(BTRIM(COALESCE(allowed_api_formats_mode, ''))) = 'specific'
-  AND json_typeof(allowed_api_formats) = 'array'
+  AND jsonb_typeof(allowed_api_formats::jsonb) = 'array'
   AND allowed_api_formats::jsonb ? 'openai:responses'
   AND NOT (allowed_api_formats::jsonb ? 'codex:live');
 
 UPDATE public.user_groups
-SET allowed_api_formats = (allowed_api_formats::jsonb || '["codex:live"]'::jsonb)::json
+SET allowed_api_formats = (allowed_api_formats::jsonb || '["codex:live"]'::jsonb)::jsonb
 WHERE LOWER(BTRIM(COALESCE(allowed_api_formats_mode, ''))) = 'specific'
-  AND json_typeof(allowed_api_formats) = 'array'
+  AND jsonb_typeof(allowed_api_formats::jsonb) = 'array'
   AND allowed_api_formats::jsonb ? 'openai:responses'
   AND NOT (allowed_api_formats::jsonb ? 'codex:live');
 
 UPDATE public.api_keys
-SET allowed_api_formats = (allowed_api_formats::jsonb || '["codex:live"]'::jsonb)::json
-WHERE json_typeof(allowed_api_formats) = 'array'
+SET allowed_api_formats = (allowed_api_formats::jsonb || '["codex:live"]'::jsonb)::jsonb
+WHERE jsonb_typeof(allowed_api_formats::jsonb) = 'array'
   AND allowed_api_formats::jsonb ? 'openai:responses'
   AND NOT (allowed_api_formats::jsonb ? 'codex:live');
 
 UPDATE public.provider_api_keys AS provider_key
 SET
-  api_formats = (provider_key.api_formats::jsonb || '["codex:live"]'::jsonb)::json,
+  api_formats = (provider_key.api_formats::jsonb || '["codex:live"]'::jsonb)::jsonb,
   updated_at = NOW()
 FROM public.providers AS provider
 WHERE provider.id = provider_key.provider_id
   AND LOWER(BTRIM(COALESCE(provider.provider_type, ''))) = 'codex'
-  AND json_typeof(provider_key.api_formats) = 'array'
+  AND jsonb_typeof(provider_key.api_formats::jsonb) = 'array'
   AND provider_key.api_formats::jsonb ? 'openai:responses'
   AND NOT (provider_key.api_formats::jsonb ? 'codex:live');
 
@@ -42,12 +42,12 @@ SET
       'codex:live',
       provider_key.auth_type_by_format::jsonb -> 'openai:responses'
     )
-  )::json,
+  )::jsonb,
   updated_at = NOW()
 FROM public.providers AS provider
 WHERE provider.id = provider_key.provider_id
   AND LOWER(BTRIM(COALESCE(provider.provider_type, ''))) = 'codex'
-  AND json_typeof(provider_key.auth_type_by_format) = 'object'
+  AND jsonb_typeof(provider_key.auth_type_by_format::jsonb) = 'object'
   AND provider_key.auth_type_by_format::jsonb ? 'openai:responses'
   AND NOT (provider_key.auth_type_by_format::jsonb ? 'codex:live');
 
@@ -55,12 +55,12 @@ UPDATE public.provider_api_keys AS provider_key
 SET
   allow_auth_channel_mismatch_formats = (
     provider_key.allow_auth_channel_mismatch_formats::jsonb || '["codex:live"]'::jsonb
-  )::json,
+  )::jsonb,
   updated_at = NOW()
 FROM public.providers AS provider
 WHERE provider.id = provider_key.provider_id
   AND LOWER(BTRIM(COALESCE(provider.provider_type, ''))) = 'codex'
-  AND json_typeof(provider_key.allow_auth_channel_mismatch_formats) = 'array'
+  AND jsonb_typeof(provider_key.allow_auth_channel_mismatch_formats::jsonb) = 'array'
   AND provider_key.allow_auth_channel_mismatch_formats::jsonb ? 'openai:responses'
   AND NOT (provider_key.allow_auth_channel_mismatch_formats::jsonb ? 'codex:live');
 
@@ -72,12 +72,12 @@ SET
       'codex:live',
       provider_key.rate_multipliers::jsonb -> 'openai:responses'
     )
-  )::json,
+  )::jsonb,
   updated_at = NOW()
 FROM public.providers AS provider
 WHERE provider.id = provider_key.provider_id
   AND LOWER(BTRIM(COALESCE(provider.provider_type, ''))) = 'codex'
-  AND json_typeof(provider_key.rate_multipliers) = 'object'
+  AND jsonb_typeof(provider_key.rate_multipliers::jsonb) = 'object'
   AND provider_key.rate_multipliers::jsonb ? 'openai:responses'
   AND NOT (provider_key.rate_multipliers::jsonb ? 'codex:live');
 
@@ -89,11 +89,11 @@ SET
       'codex:live',
       provider_key.global_priority_by_format::jsonb -> 'openai:responses'
     )
-  )::json,
+  )::jsonb,
   updated_at = NOW()
 FROM public.providers AS provider
 WHERE provider.id = provider_key.provider_id
   AND LOWER(BTRIM(COALESCE(provider.provider_type, ''))) = 'codex'
-  AND json_typeof(provider_key.global_priority_by_format) = 'object'
+  AND jsonb_typeof(provider_key.global_priority_by_format::jsonb) = 'object'
   AND provider_key.global_priority_by_format::jsonb ? 'openai:responses'
   AND NOT (provider_key.global_priority_by_format::jsonb ? 'codex:live');

@@ -162,19 +162,19 @@ SELECT
     NULLIF(BTRIM("usage".request_metadata->'client_session_affinity'->>'client_family'), ''),
     NULLIF(BTRIM("usage".request_metadata->>'client_family'), '')
   ) AS client_family,
-  NULL::json AS request_headers,
-  NULL::json AS request_body,
-  NULL::json AS provider_request_headers,
-  NULL::json AS provider_request_body,
-  NULL::json AS response_headers,
-  NULL::json AS response_body,
-  NULL::json AS client_response_headers,
-  NULL::json AS client_response_body,
+  NULL::jsonb AS request_headers,
+  NULL::jsonb AS request_body,
+  NULL::jsonb AS provider_request_headers,
+  NULL::jsonb AS provider_request_body,
+  NULL::jsonb AS response_headers,
+  NULL::jsonb AS response_body,
+  NULL::jsonb AS client_response_headers,
+  NULL::jsonb AS client_response_body,
   CASE
     WHEN NULLIF(BTRIM("usage".request_metadata->>'client_ip'), '') IS NOT NULL
       OR NULLIF(BTRIM("usage".request_metadata->>'routing_group_id'), '') IS NOT NULL
       OR NULLIF(BTRIM("usage".request_metadata->>'routing_group_name'), '') IS NOT NULL
-      OR json_typeof("usage".request_metadata->'routing_group_billing_multiplier') = 'number'
+      OR jsonb_typeof("usage".request_metadata->'routing_group_billing_multiplier') = 'number'
       OR "usage".request_metadata->'billing_multiplier_snapshot' IS NOT NULL
       OR NULLIF(BTRIM("usage".request_metadata->>'user_agent'), '') IS NOT NULL
       OR NULLIF(BTRIM("usage".request_metadata->>'request_path'), '') IS NOT NULL
@@ -190,9 +190,9 @@ SELECT
       OR NULLIF(BTRIM("usage".request_metadata->>'websocket_transport'), '') IS NOT NULL
       OR ("usage".request_metadata->>'usage_available') IN ('true', 'false')
       OR ("usage".request_metadata->>'usage_pricing_available') IN ('true', 'false')
-      OR json_typeof("usage".request_metadata->'chat_pii_redaction') = 'boolean'
-      OR json_typeof("usage".request_metadata->'live_session') = 'object'
-      OR json_typeof("usage".request_metadata->'realtime_session') = 'object'
+      OR jsonb_typeof("usage".request_metadata->'chat_pii_redaction') = 'boolean'
+      OR jsonb_typeof("usage".request_metadata->'live_session') = 'object'
+      OR jsonb_typeof("usage".request_metadata->'realtime_session') = 'object'
       THEN (jsonb_strip_nulls(jsonb_build_object(
         'routing_group_id',
         NULLIF(BTRIM("usage".request_metadata->>'routing_group_id'), ''),
@@ -200,7 +200,7 @@ SELECT
         NULLIF(BTRIM("usage".request_metadata->>'routing_group_name'), ''),
         'routing_group_billing_multiplier',
         CASE
-          WHEN json_typeof("usage".request_metadata->'routing_group_billing_multiplier') = 'number'
+          WHEN jsonb_typeof("usage".request_metadata->'routing_group_billing_multiplier') = 'number'
             THEN "usage".request_metadata->'routing_group_billing_multiplier'
           ELSE NULL
         END,
@@ -256,19 +256,19 @@ SELECT
         END,
         'chat_pii_redaction',
         CASE
-          WHEN json_typeof("usage".request_metadata->'chat_pii_redaction') = 'boolean'
+          WHEN jsonb_typeof("usage".request_metadata->'chat_pii_redaction') = 'boolean'
             THEN "usage".request_metadata->'chat_pii_redaction'
           ELSE NULL
         END,
         'live_session',
         CASE
-          WHEN json_typeof("usage".request_metadata->'live_session') = 'object'
+          WHEN jsonb_typeof("usage".request_metadata->'live_session') = 'object'
             THEN "usage".request_metadata->'live_session'
           ELSE NULL
         END,
         'realtime_session',
         CASE
-          WHEN json_typeof("usage".request_metadata->'realtime_session') = 'object'
+          WHEN jsonb_typeof("usage".request_metadata->'realtime_session') = 'object'
             THEN "usage".request_metadata->'realtime_session'
           ELSE NULL
         END
@@ -276,8 +276,8 @@ SELECT
         WHEN "usage".request_metadata->'billing_multiplier_snapshot' IS NOT NULL
           THEN jsonb_build_object('billing_multiplier_snapshot', "usage".request_metadata->'billing_multiplier_snapshot')
         ELSE '{}'::jsonb
-      END)::json
-    ELSE NULL::json
+      END)::jsonb
+    ELSE NULL::jsonb
   END AS request_metadata,
   NULL::varchar AS http_request_body_ref,
   NULL::varchar AS http_provider_request_body_ref,

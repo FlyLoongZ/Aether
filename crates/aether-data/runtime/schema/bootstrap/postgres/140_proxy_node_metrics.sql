@@ -1,5 +1,5 @@
 ALTER TABLE public.proxy_node_events
-    ADD COLUMN IF NOT EXISTS event_metadata json;
+    ADD COLUMN IF NOT EXISTS event_metadata jsonb;
 
 CREATE TABLE IF NOT EXISTS public.proxy_node_metrics_1m (
     node_id character varying(36) NOT NULL,
