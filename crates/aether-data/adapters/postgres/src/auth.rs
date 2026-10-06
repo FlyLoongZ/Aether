@@ -598,12 +598,12 @@ UPDATE api_keys
 SET
   key_encrypted = CASE WHEN $2 THEN $3 ELSE key_encrypted END,
   name = CASE WHEN $4 THEN $5 ELSE name END,
-  force_capabilities = CASE WHEN $6 THEN $7::json ELSE force_capabilities END,
+  force_capabilities = CASE WHEN $6 THEN $7::jsonb ELSE force_capabilities END,
   rate_limit = CASE WHEN $8 THEN $9 ELSE rate_limit END,
   concurrent_limit = CASE WHEN $10 THEN $11 ELSE concurrent_limit END,
-  allowed_providers = CASE WHEN $12 THEN $13::json ELSE allowed_providers END,
-  allowed_api_formats = CASE WHEN $14 THEN $15::json ELSE allowed_api_formats END,
-  allowed_models = CASE WHEN $16 THEN $17::json ELSE allowed_models END,
+  allowed_providers = CASE WHEN $12 THEN $13::jsonb ELSE allowed_providers END,
+  allowed_api_formats = CASE WHEN $14 THEN $15::jsonb ELSE allowed_api_formats END,
+  allowed_models = CASE WHEN $16 THEN $17::jsonb ELSE allowed_models END,
   ip_rules = CASE WHEN $18 THEN $19::jsonb ELSE ip_rules END,
   expires_at = CASE WHEN $20 THEN $21::timestamptz ELSE expires_at END,
   auto_delete_on_expiry = CASE WHEN $22 THEN $23 ELSE auto_delete_on_expiry END,
@@ -1557,13 +1557,13 @@ WHERE id = $2
 UPDATE api_keys
 SET key_encrypted = $1,
     name = $2,
-    allowed_providers = $3::json,
-    allowed_api_formats = $4::json,
-    allowed_models = $5::json,
+    allowed_providers = $3::jsonb,
+    allowed_api_formats = $4::jsonb,
+    allowed_models = $5::jsonb,
     ip_rules = $6::jsonb,
     rate_limit = $7,
     concurrent_limit = $8,
-    force_capabilities = $9::json,
+    force_capabilities = $9::jsonb,
     feature_settings = $10::jsonb,
     is_active = $11,
     expires_at = $12,
@@ -2116,13 +2116,13 @@ mod tests {
         assert!(UPDATE_STANDALONE_API_KEY_BASIC_SQL
             .contains("concurrent_limit = CASE WHEN $10 THEN $11 ELSE concurrent_limit END"));
         assert!(UPDATE_STANDALONE_API_KEY_BASIC_SQL.contains(
-            "allowed_providers = CASE WHEN $12 THEN $13::json ELSE allowed_providers END"
+            "allowed_providers = CASE WHEN $12 THEN $13::jsonb ELSE allowed_providers END"
         ));
         assert!(UPDATE_STANDALONE_API_KEY_BASIC_SQL.contains(
-            "allowed_api_formats = CASE WHEN $14 THEN $15::json ELSE allowed_api_formats END"
+            "allowed_api_formats = CASE WHEN $14 THEN $15::jsonb ELSE allowed_api_formats END"
         ));
         assert!(UPDATE_STANDALONE_API_KEY_BASIC_SQL
-            .contains("allowed_models = CASE WHEN $16 THEN $17::json ELSE allowed_models END"));
+            .contains("allowed_models = CASE WHEN $16 THEN $17::jsonb ELSE allowed_models END"));
         assert!(UPDATE_STANDALONE_API_KEY_BASIC_SQL
             .contains("ip_rules = CASE WHEN $18 THEN $19::jsonb ELSE ip_rules END"));
         assert!(UPDATE_STANDALONE_API_KEY_BASIC_SQL
@@ -2133,7 +2133,7 @@ mod tests {
             "auto_delete_on_expiry = CASE WHEN $22 THEN $23 ELSE auto_delete_on_expiry END"
         ));
         assert!(UPDATE_STANDALONE_API_KEY_BASIC_SQL.contains(
-            "force_capabilities = CASE WHEN $6 THEN $7::json ELSE force_capabilities END"
+            "force_capabilities = CASE WHEN $6 THEN $7::jsonb ELSE force_capabilities END"
         ));
     }
 

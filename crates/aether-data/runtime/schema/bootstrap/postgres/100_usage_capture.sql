@@ -24,10 +24,10 @@ CREATE INDEX IF NOT EXISTS ix_usage_body_blobs_request_id
 
 CREATE TABLE IF NOT EXISTS public.usage_http_audits (
     request_id character varying(100) NOT NULL,
-    request_headers json,
-    provider_request_headers json,
-    response_headers json,
-    client_response_headers json,
+    request_headers jsonb,
+    provider_request_headers jsonb,
+    response_headers jsonb,
+    client_response_headers jsonb,
     request_body_ref character varying(160),
     provider_request_body_ref character varying(160),
     response_body_ref character varying(160),

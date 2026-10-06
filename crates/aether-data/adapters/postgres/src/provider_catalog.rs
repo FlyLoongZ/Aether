@@ -417,7 +417,7 @@ UPDATE provider_api_keys
 SET
   upstream_metadata = COALESCE(upstream_metadata, '{}'::jsonb)
     || jsonb_build_object($2, $3::jsonb),
-  status_snapshot = (COALESCE(status_snapshot::jsonb, '{}'::jsonb) || $4::jsonb)::json,
+  status_snapshot = (COALESCE(status_snapshot, '{}'::jsonb) || $4::jsonb),
   updated_at = CASE
     WHEN $5::double precision IS NULL THEN NOW()
     ELSE TO_TIMESTAMP($5::double precision)
@@ -1094,7 +1094,7 @@ SET
     WHEN $9::text IS NULL THEN COALESCE(upstream_metadata, '{}'::jsonb) || $8::jsonb
     ELSE (COALESCE(upstream_metadata, '{}'::jsonb) || COALESCE($8::jsonb, '{}'::jsonb)) - $9
   END,
-  status_snapshot = (COALESCE(status_snapshot::jsonb, '{}'::jsonb) || $10::jsonb)::json,
+  status_snapshot = (COALESCE(status_snapshot, '{}'::jsonb) || $10::jsonb),
   error_count = CASE WHEN $11::boolean THEN 0 ELSE error_count END,
   updated_at = CASE
     WHEN $12::double precision IS NULL THEN NOW()
@@ -2338,9 +2338,9 @@ WHERE id = $1
         if update.codex_rotation.is_some() || update.reset_oauth_runtime {
             builder.push(", status_snapshot = ");
             match (update.codex_rotation.is_some(), update.reset_oauth_runtime) {
-                (true, true) => builder.push("jsonb_set(jsonb_set(COALESCE(status_snapshot::jsonb, '{}'::jsonb), '{quota}', 'null'::jsonb, true), '{oauth}', 'null'::jsonb, true)::json"),
-                (true, false) => builder.push("jsonb_set(COALESCE(status_snapshot::jsonb, '{}'::jsonb), '{quota}', 'null'::jsonb, true)::json"),
-                (false, true) => builder.push("jsonb_set(COALESCE(status_snapshot::jsonb, '{}'::jsonb), '{oauth}', 'null'::jsonb, true)::json"),
+                (true, true) => builder.push("jsonb_set(jsonb_set(COALESCE(status_snapshot, '{}'::jsonb), '{quota}', 'null'::jsonb, true), '{oauth}', 'null'::jsonb, true)"),
+                (true, false) => builder.push("jsonb_set(COALESCE(status_snapshot, '{}'::jsonb), '{quota}', 'null'::jsonb, true)"),
+                (false, true) => builder.push("jsonb_set(COALESCE(status_snapshot, '{}'::jsonb), '{oauth}', 'null'::jsonb, true)"),
                 (false, false) => unreachable!(),
             };
         }
@@ -2375,7 +2375,7 @@ WHERE id = $1
         }
         if update.codex_rotation.is_some() || update.reset_oauth_runtime {
             builder.push(
-                " AND jsonb_typeof(COALESCE(status_snapshot::jsonb, '{}'::jsonb)) = 'object'",
+                " AND jsonb_typeof(COALESCE(status_snapshot, '{}'::jsonb)) = 'object'",
             );
         }
         let rows_affected = builder
@@ -2792,7 +2792,7 @@ SET
   END,
   last_rpm_peak = $9,
   concurrent_429_count = $10,
-  status_snapshot = (COALESCE(status_snapshot::jsonb, '{}'::jsonb) || $11::jsonb)::json,
+  status_snapshot = (COALESCE(status_snapshot, '{}'::jsonb) || $11::jsonb),
   updated_at = CASE
     WHEN $12::double precision IS NULL THEN NOW()
     ELSE TO_TIMESTAMP($12::double precision)
@@ -2898,7 +2898,7 @@ WHERE id = $1
             r#"
 UPDATE provider_api_keys
 SET
-  status_snapshot = (COALESCE(status_snapshot::jsonb, '{}'::jsonb) || $2::jsonb)::json,
+  status_snapshot = (COALESCE(status_snapshot, '{}'::jsonb) || $2::jsonb),
   updated_at = CASE
     WHEN $3::double precision IS NULL THEN NOW()
     ELSE TO_TIMESTAMP($3::double precision)
@@ -3894,7 +3894,7 @@ mod tests {
         assert!(lock_sql.contains("for update"));
         assert!(update_sql
             .contains("jsonb_typeof(coalesce(upstream_metadata, '{}'::jsonb)) = 'object'"));
-        assert!(update_sql.contains("status_snapshot::jsonb"));
+        assert!(update_sql.contains("status_snapshot"));
         assert!(!update_sql.contains("is_active"));
     }
 
@@ -4064,9 +4064,9 @@ VALUES ($1, $2, $3, 0, 0, $4::jsonb)
             "api_key IS NOT DISTINCT FROM ",
             "auth_config IS NOT DISTINCT FROM ",
             "jsonb_typeof(COALESCE(upstream_metadata, '{}'::jsonb)) = 'object'",
-            "jsonb_typeof(COALESCE(status_snapshot::jsonb, '{}'::jsonb)) = 'object'",
+            "jsonb_typeof(COALESCE(status_snapshot, '{}'::jsonb)) = 'object'",
             "jsonb_set(COALESCE(upstream_metadata, '{}'::jsonb), '{codex}'",
-            "jsonb_set(COALESCE(status_snapshot::jsonb, '{}'::jsonb), '{quota}', 'null'::jsonb, true)::json",
+            "jsonb_set(COALESCE(status_snapshot, '{}'::jsonb), '{quota}', 'null'::jsonb, true)",
             "oauth_invalid_at = NULL, oauth_invalid_reason = NULL, error_count = 0",
         ] {
             assert!(

@@ -49,8 +49,8 @@ INSERT INTO "usage" (
   TRUE,
   COALESCE(
     CASE
-      WHEN ($22::json->>'upstream_is_stream') IN ('true', 'false')
-      THEN ($22::json->>'upstream_is_stream')::boolean
+      WHEN ($22::jsonb->>'upstream_is_stream') IN ('true', 'false')
+      THEN ($22::jsonb->>'upstream_is_stream')::boolean
       ELSE NULL
     END,
     TRUE
@@ -60,7 +60,7 @@ INSERT INTO "usage" (
   $21,
   'streaming',
   'pending',
-  $22::json,
+  $22::jsonb,
   COALESCE(TO_TIMESTAMP($23::double precision), NOW()),
   COALESCE(
     NULLIF($24::bigint, 0),
@@ -88,8 +88,8 @@ DO UPDATE SET
   is_stream = TRUE,
   upstream_is_stream = COALESCE(
     CASE
-      WHEN ($22::json->>'upstream_is_stream') IN ('true', 'false')
-      THEN ($22::json->>'upstream_is_stream')::boolean
+      WHEN ($22::jsonb->>'upstream_is_stream') IN ('true', 'false')
+      THEN ($22::jsonb->>'upstream_is_stream')::boolean
       ELSE NULL
     END,
     "usage".upstream_is_stream,

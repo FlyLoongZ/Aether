@@ -454,7 +454,7 @@ const TOUCH_OAUTH_LINK_SQL: &str = r#"
 UPDATE user_oauth_links
 SET provider_username = COALESCE($3, provider_username),
     provider_email = COALESCE($4, provider_email),
-    extra_data = COALESCE($5::json, extra_data),
+    extra_data = COALESCE($5::jsonb, extra_data),
     last_login_at = $6
 WHERE provider_type = $1
   AND provider_user_id = $2
@@ -844,7 +844,7 @@ INSERT INTO user_groups (
   allowed_models, allowed_models_mode,
   rate_limit, rate_limit_mode
 )
-VALUES ($1, $2, $3, $4, $5, $6::json, $7, $8::json, $9, $10::json, $11, $12, $13)
+VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9, $10::jsonb, $11, $12, $13)
 "#,
         )
         .bind(&id)
@@ -885,11 +885,11 @@ SET name = $2,
     normalized_name = $3,
     description = $4,
     priority = $5,
-    allowed_providers = $6::json,
+    allowed_providers = $6::jsonb,
     allowed_providers_mode = $7,
-    allowed_api_formats = $8::json,
+    allowed_api_formats = $8::jsonb,
     allowed_api_formats_mode = $9,
-    allowed_models = $10::json,
+    allowed_models = $10::jsonb,
     allowed_models_mode = $11,
     rate_limit = $12,
     rate_limit_mode = $13,
@@ -961,11 +961,11 @@ SET name = $2,
     normalized_name = $3,
     description = $4,
     priority = $5,
-    allowed_providers = $6::json,
+    allowed_providers = $6::jsonb,
     allowed_providers_mode = $7,
-    allowed_api_formats = $8::json,
+    allowed_api_formats = $8::jsonb,
     allowed_api_formats_mode = $9,
-    allowed_models = $10::json,
+    allowed_models = $10::jsonb,
     allowed_models_mode = $11,
     rate_limit = $12,
     rate_limit_mode = $13,
@@ -2139,15 +2139,15 @@ SET email = $2,
     email_verified = $3,
     username = $4,
     role = $5::userrole,
-    allowed_providers = $6::json,
+    allowed_providers = $6::jsonb,
     allowed_providers_mode = $7,
-    allowed_api_formats = $8::json,
+    allowed_api_formats = $8::jsonb,
     allowed_api_formats_mode = $9,
-    allowed_models = $10::json,
+    allowed_models = $10::jsonb,
     allowed_models_mode = $11,
     rate_limit = $12,
     rate_limit_mode = $13,
-    model_capability_settings = $14::json,
+    model_capability_settings = $14::jsonb,
     feature_settings = $15::jsonb,
     is_active = $16,
     security_version = security_version + CASE WHEN $17 THEN 1 ELSE 0 END,
@@ -2461,7 +2461,7 @@ SET role = CASE
         ELSE role
     END,
     allowed_providers = CASE
-        WHEN $4::BOOLEAN THEN $5::json
+        WHEN $4::BOOLEAN THEN $5::jsonb
         ELSE allowed_providers
     END,
     allowed_providers_mode = CASE
@@ -2469,7 +2469,7 @@ SET role = CASE
         ELSE allowed_providers_mode
     END,
     allowed_api_formats = CASE
-        WHEN $7::BOOLEAN THEN $8::json
+        WHEN $7::BOOLEAN THEN $8::jsonb
         ELSE allowed_api_formats
     END,
     allowed_api_formats_mode = CASE
@@ -2477,7 +2477,7 @@ SET role = CASE
         ELSE allowed_api_formats_mode
     END,
     allowed_models = CASE
-        WHEN $10::BOOLEAN THEN $11::json
+        WHEN $10::BOOLEAN THEN $11::jsonb
         ELSE allowed_models
     END,
     allowed_models_mode = CASE
@@ -2740,7 +2740,7 @@ INSERT INTO users (
 )
 VALUES (
   $1, $2, $3, $4, $5, $6::userrole, 'local'::authsource,
-  $7::json, $8, $9::json, $10, $11::json, $12, $13, $14,
+  $7::jsonb, $8, $9::jsonb, $10, $11::jsonb, $12, $13, $14,
   TRUE, FALSE, NOW(), NOW()
 )
 "#,

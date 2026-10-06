@@ -1,5 +1,5 @@
 ALTER TABLE public.provider_api_keys
-ADD COLUMN IF NOT EXISTS allow_auth_channel_mismatch_formats json;
+ADD COLUMN IF NOT EXISTS allow_auth_channel_mismatch_formats jsonb;
 
 ALTER TABLE public.provider_api_keys
 ADD COLUMN IF NOT EXISTS concurrent_limit integer;
@@ -27,16 +27,16 @@ WITH supported_formats AS (
     0 AS source_priority,
     MIN(format.ordinality) AS first_ordinality
   FROM public.provider_api_keys AS pak
-  CROSS JOIN LATERAL json_array_elements_text(
+  CROSS JOIN LATERAL jsonb_array_elements_text(
     CASE
       WHEN pak.api_formats IS NOT NULL
-        AND json_typeof(pak.api_formats) = 'array'
-      THEN pak.api_formats
-      ELSE '[]'::json
+        AND jsonb_typeof(pak.api_formats::jsonb) = 'array'
+      THEN pak.api_formats::jsonb
+      ELSE '[]'::jsonb
     END
   ) WITH ORDINALITY AS format(value, ordinality)
   WHERE pak.api_formats IS NOT NULL
-    AND json_typeof(pak.api_formats) = 'array'
+    AND jsonb_typeof(pak.api_formats::jsonb) = 'array'
   GROUP BY pak.id, api_format
 
   UNION ALL
@@ -50,7 +50,7 @@ WITH supported_formats AS (
   INNER JOIN public.provider_endpoints AS endpoint
     ON endpoint.provider_id = pak.provider_id
   WHERE pak.api_formats IS NULL
-    OR json_typeof(pak.api_formats) <> 'array'
+    OR jsonb_typeof(pak.api_formats::jsonb) <> 'array'
 ),
 deduplicated_formats AS (
   SELECT
@@ -65,7 +65,7 @@ deduplicated_formats AS (
 rebuilt AS (
   SELECT
     id,
-    json_agg(api_format ORDER BY source_priority, first_ordinality, api_format) AS api_formats
+    jsonb_agg(api_format ORDER BY source_priority, first_ordinality, api_format) AS api_formats
   FROM deduplicated_formats
   GROUP BY id
 )

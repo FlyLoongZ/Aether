@@ -162,17 +162,17 @@ SELECT
     NULLIF(BTRIM("usage".request_metadata->'client_session_affinity'->>'client_family'), ''),
     NULLIF(BTRIM("usage".request_metadata->>'client_family'), '')
   ) AS client_family,
-  NULL::json AS request_headers,
-  NULL::json AS request_body,
+  NULL::jsonb AS request_headers,
+  NULL::jsonb AS request_body,
   NULL::bytea AS request_body_compressed,
-  NULL::json AS provider_request_headers,
-  NULL::json AS provider_request_body,
+  NULL::jsonb AS provider_request_headers,
+  NULL::jsonb AS provider_request_body,
   NULL::bytea AS provider_request_body_compressed,
-  NULL::json AS response_headers,
-  NULL::json AS response_body,
+  NULL::jsonb AS response_headers,
+  NULL::jsonb AS response_body,
   NULL::bytea AS response_body_compressed,
-  NULL::json AS client_response_headers,
-  NULL::json AS client_response_body,
+  NULL::jsonb AS client_response_headers,
+  NULL::jsonb AS client_response_body,
   NULL::bytea AS client_response_body_compressed,
   CASE
     WHEN NULLIF(BTRIM("usage".request_metadata->>'client_ip'), '') IS NOT NULL
@@ -190,8 +190,8 @@ SELECT
       OR NULLIF(BTRIM("usage".request_metadata->>'websocket_transport'), '') IS NOT NULL
       OR ("usage".request_metadata->>'usage_available') IN ('true', 'false')
       OR ("usage".request_metadata->>'usage_pricing_available') IN ('true', 'false')
-      OR json_typeof("usage".request_metadata->'live_session') = 'object'
-      OR json_typeof("usage".request_metadata->'realtime_session') = 'object'
+      OR jsonb_typeof("usage".request_metadata->'live_session') = 'object'
+      OR jsonb_typeof("usage".request_metadata->'realtime_session') = 'object'
       THEN jsonb_strip_nulls(jsonb_build_object(
         'client_ip',
         NULLIF(BTRIM("usage".request_metadata->>'client_ip'), ''),
@@ -245,18 +245,18 @@ SELECT
         END,
         'live_session',
         CASE
-          WHEN json_typeof("usage".request_metadata->'live_session') = 'object'
+          WHEN jsonb_typeof("usage".request_metadata->'live_session') = 'object'
             THEN "usage".request_metadata->'live_session'
           ELSE NULL
         END,
         'realtime_session',
         CASE
-          WHEN json_typeof("usage".request_metadata->'realtime_session') = 'object'
+          WHEN jsonb_typeof("usage".request_metadata->'realtime_session') = 'object'
             THEN "usage".request_metadata->'realtime_session'
           ELSE NULL
         END
-      ))::json
-    ELSE NULL::json
+      ))::jsonb
+    ELSE NULL::jsonb
   END AS request_metadata,
   NULL::varchar AS http_request_body_ref,
   NULL::varchar AS http_provider_request_body_ref,

@@ -1491,7 +1491,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires AETHER_TEST_DATABASE_URL and PostgreSQL migrations"]
-    async fn live_postgres_candidate_nul_is_sanitized_and_legacy_json_is_discarded() {
+    async fn live_postgres_candidate_nul_is_sanitized_and_stale_json_is_discarded() {
         let database_url = std::env::var("AETHER_TEST_DATABASE_URL")
             .expect("AETHER_TEST_DATABASE_URL must point at the test database");
         let factory = PostgresPoolFactory::new(PostgresPoolConfig {
@@ -1525,8 +1525,8 @@ mod tests {
         let batch_request_id = format!("candidate-nul-batch-{suffix}");
         let healthy_request_id = format!("candidate-nul-healthy-{suffix}");
         let legacy_extra =
-            r#"{"old\u0000key":"old\u0000value","literal":"\\u0000","adjacent":"\u0000\u0000"}"#;
-        let legacy_capabilities = r#"{"cap\u0000key":"cap\u0000value"}"#;
+            r#"{"oldkey":"oldvalue","literal":"\\u0000"}"#;
+        let legacy_capabilities = r#"{"capkey":"capvalue"}"#;
         for request_id in [&single_request_id, &batch_request_id] {
             sqlx::query(
                 r#"
@@ -1534,7 +1534,7 @@ INSERT INTO request_candidates (
   id, request_id, candidate_index, retry_index, status,
   skip_reason, error_type, extra_data, required_capabilities, error_message, created_at
 )
-VALUES ($1, $2, 0, 0, 'pending', $3, $4, $5::json, $6::json, $7, NOW())
+VALUES ($1, $2, 0, 0, 'pending', $3, $4, $5::jsonb, $6::jsonb, $7, NOW())
 "#,
             )
             .bind(uuid::Uuid::new_v4().to_string())
@@ -1546,7 +1546,7 @@ VALUES ($1, $2, 0, 0, 'pending', $3, $4, $5::json, $6::json, $7, NOW())
             .bind("Bearer legacy-secret")
             .execute(repository.pool())
             .await
-            .expect("legacy JSON poison seed should persist in the json column");
+            .expect("stale diagnostics should persist in the jsonb columns");
         }
 
         let candidate = |request_id: &str, id: String| UpsertRequestCandidateRecord {

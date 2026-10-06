@@ -161,7 +161,7 @@ SET
     '{quota,windows}',
     updated_windows.windows,
     true
-  )::json,
+  )::jsonb,
   updated_at = NOW()
 FROM target_keys
 JOIN updated_windows ON updated_windows.id = target_keys.id

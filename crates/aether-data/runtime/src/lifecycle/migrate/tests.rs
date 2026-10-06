@@ -287,6 +287,14 @@ fn create_table_names(sql: &str) -> BTreeSet<String> {
 }
 
 #[test]
+fn empty_database_snapshot_uses_jsonb_for_all_usage_headers() {
+    for field in ["request_headers", "provider_request_headers", "response_headers", "client_response_headers"] {
+        assert_eq!(EMPTY_DATABASE_SNAPSHOT_SQL.matches(&format!("    {field} jsonb,")).count(), 2, "{field}");
+        assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains(&format!("    {field} json,")), "{field}");
+    }
+}
+
+#[test]
 fn empty_database_snapshot_sql_includes_usage_body_blobs_and_audit_admin_role() {
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("'audit_admin'"));
     assert!(
@@ -461,14 +469,14 @@ fn provider_api_keys_api_formats_remains_nullable_in_baselines() {
         .find(|migration| migration.version == 20260403000000)
         .expect("baseline migration should be embedded");
 
-    assert!(baseline_migration.sql.contains("api_formats json,"));
+    assert!(baseline_migration.sql.contains("api_formats jsonb,"));
     assert!(!baseline_migration
         .sql
-        .contains("api_formats json DEFAULT '[]'::json NOT NULL"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("api_formats json,"));
+        .contains("api_formats jsonb DEFAULT '[]'::jsonb NOT NULL"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("api_formats jsonb,"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("concurrent_limit integer,"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("allow_auth_channel_mismatch_formats json,"));
-    assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("api_formats json DEFAULT '[]'::json NOT NULL"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("allow_auth_channel_mismatch_formats jsonb,"));
+    assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("api_formats jsonb DEFAULT '[]'::jsonb NOT NULL"));
 
     let auth_mismatch_migration = POSTGRES_MIGRATOR
         .iter()
@@ -480,6 +488,60 @@ fn provider_api_keys_api_formats_remains_nullable_in_baselines() {
     assert!(auth_mismatch_migration
         .sql
         .contains("pak.allow_auth_channel_mismatch_formats IS NULL"));
+}
+
+#[test]
+fn every_json_column_is_declared_jsonb_and_normalized_by_migration() {
+    let baseline_migration = POSTGRES_MIGRATOR
+        .iter()
+        .find(|migration| migration.version == 20260403000000)
+        .expect("baseline migration should be embedded");
+    let normalization_migration = POSTGRES_MIGRATOR
+        .iter()
+        .find(|migration| migration.version == 20260923130000)
+        .expect("all-column jsonb normalization migration should be embedded");
+
+    for declaration in [
+        "allowed_providers jsonb,",
+        "event_metadata jsonb,",
+        "default_tiered_pricing jsonb,",
+        "tiered_pricing jsonb,",
+        "scopes jsonb,",
+        "api_formats jsonb,",
+        "status_snapshot jsonb,",
+        "header_rules jsonb,",
+        "remote_config jsonb,",
+        "client_hints jsonb,",
+        "model_capability_settings jsonb,",
+        "original_request_body jsonb,",
+        "value jsonb NOT NULL,",
+        "config jsonb NOT NULL,",
+    ] {
+        assert!(
+            baseline_migration.sql.contains(declaration),
+            "postgres baseline should declare `{declaration}`"
+        );
+        assert!(
+            EMPTY_DATABASE_SNAPSHOT_SQL.contains(declaration),
+            "empty-database snapshot should declare `{declaration}`"
+        );
+    }
+
+    for column in [
+        "allowed_providers",
+        "api_formats",
+        "status_snapshot",
+        "proxy_metadata",
+        "original_request_body",
+        "value",
+    ] {
+        assert!(
+            normalization_migration
+                .sql
+                .contains(&format!("ALTER COLUMN {column} TYPE jsonb USING {column}::jsonb")),
+            "normalization migration should convert `{column}`"
+        );
+    }
 }
 
 #[test]
@@ -1576,6 +1638,9 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20260903000000,
             20260908000000,
             20260923000000,
+            20260923120000,
+            20260923130000,
+            20260924000000,
         ]
     );
 }

@@ -3561,8 +3561,8 @@ fn usage_sql_qualifies_shared_usage_columns_for_single_record_fetches() {
 
 #[test]
 fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
-    assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::json AS request_headers"));
-    assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::json AS provider_request_body"));
+    assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS request_headers"));
+    assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS provider_request_body"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::bytea AS request_body_compressed"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_ref"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_state"));
@@ -3574,8 +3574,8 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("LEFT JOIN usage_routing_snapshots"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("LEFT JOIN usage_settlement_snapshots"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("settlement_billing_snapshot_schema_version"));
-    assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::json AS request_headers"));
-    assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::json AS provider_request_body"));
+    assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS request_headers"));
+    assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS provider_request_body"));
     assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX
         .contains("NULL::bytea AS client_response_body_compressed"));
     assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX
@@ -3627,8 +3627,8 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
             "CAST(usage_settlement_snapshots.billing_total_cost_usd AS DOUBLE PRECISION)"
         ));
     }
-    assert!(!super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb"));
-    assert!(!super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::jsonb"));
+    assert!(!super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::json AS "));
+    assert!(!super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::json AS "));
 }
 
 #[test]
@@ -3656,7 +3656,7 @@ fn usage_sql_list_queries_project_bounded_live_and_realtime_metadata() {
         for key in ["live_session", "realtime_session"] {
             assert!(sql.contains(format!("'{key}'").as_str()));
             assert!(sql.contains(
-                format!("WHEN json_typeof(\"usage\".request_metadata->'{key}') = 'object'")
+                format!("WHEN jsonb_typeof(\"usage\".request_metadata->'{key}') = 'object'")
                     .as_str()
             ));
             assert!(sql.contains(format!("THEN \"usage\".request_metadata->'{key}'").as_str()));
@@ -3726,8 +3726,8 @@ fn usage_sql_reads_list_output_price_from_settlement_snapshots_before_legacy_usa
 fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
     for placeholder in [41, 42, 44, 45, 47, 48, 50, 51, 53] {
         assert!(
-            super::UPSERT_SQL.contains(format!("${placeholder}::json").as_str()),
-            "missing ::json cast for placeholder ${placeholder}"
+            super::UPSERT_SQL.contains(format!("${placeholder}::jsonb").as_str()),
+            "missing ::jsonb cast for placeholder ${placeholder}"
         );
     }
 }
@@ -3735,7 +3735,7 @@ fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
 #[test]
 fn usage_sql_insert_values_aligns_request_metadata_and_timestamps() {
     let sql = normalize_newlines(super::UPSERT_SQL);
-    assert!(sql.contains("\n  $51::json,\n  $52,\n  $53::json,\n  CASE"));
+    assert!(sql.contains("\n  $51::jsonb,\n  $52,\n  $53::jsonb,\n  CASE"));
     assert!(sql.contains("WHEN $54 IS NULL THEN NULL"));
     assert!(sql.contains("TO_TIMESTAMP($55::double precision)"));
 }
@@ -3743,7 +3743,7 @@ fn usage_sql_insert_values_aligns_request_metadata_and_timestamps() {
 #[test]
 fn usage_sql_upsert_materializes_upstream_stream_mode() {
     assert!(super::UPSERT_SQL.contains("upstream_is_stream,"));
-    assert!(super::UPSERT_SQL.contains("$53::json->>'upstream_is_stream'"));
+    assert!(super::UPSERT_SQL.contains("$53::jsonb->>'upstream_is_stream'"));
     assert!(super::UPSERT_SQL.contains("COALESCE($21, FALSE)"));
     assert!(super::UPSERT_SQL.contains("upstream_is_stream = CASE"));
 }
@@ -4002,7 +4002,7 @@ fn first_byte_upsert_sql_is_single_row_guarded_and_preserves_existing_metadata()
     assert!(sql.contains("\"usage\".finalized_at IS NULL"));
     assert!(sql.contains(revision_guard));
     assert!(normalize_newlines(include_str!("mod.rs")).contains(revision_guard));
-    assert!(sql.contains("$22::json->>'upstream_is_stream'"));
+    assert!(sql.contains("$22::jsonb->>'upstream_is_stream'"));
     assert!(sql.contains("\"usage\".upstream_is_stream"));
 
     let update_clause = sql

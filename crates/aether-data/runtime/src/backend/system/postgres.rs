@@ -23,7 +23,7 @@ UPDATE system_configs
 SET value = TO_JSON($3::text),
     updated_at = NOW()
 WHERE key = $1
-  AND JSON_TYPEOF(value) = 'string'
+  AND JSONB_TYPEOF(value) = 'string'
   AND value #>> '{}' = $2
 "#;
 

@@ -54,12 +54,12 @@ WITH legacy_key_formats AS (
     ON provider.id = pak.provider_id
   LEFT JOIN LATERAL (
     SELECT key_format.value
-    FROM json_array_elements_text(
+    FROM jsonb_array_elements_text(
       CASE
         WHEN pak.api_formats IS NOT NULL
-          AND json_typeof(pak.api_formats) = 'array'
-        THEN pak.api_formats
-        ELSE '[]'::json
+          AND jsonb_typeof(pak.api_formats::jsonb) = 'array'
+        THEN pak.api_formats::jsonb
+        ELSE '[]'::jsonb
       END
     ) AS key_format(value)
     UNION ALL
@@ -125,10 +125,10 @@ WITH existing_auth_entries AS (
     0 AS source_priority,
     entry.ordinality
   FROM public.provider_api_keys AS pak
-  CROSS JOIN LATERAL json_each(
+  CROSS JOIN LATERAL jsonb_each(
     CASE
-      WHEN json_typeof(pak.auth_type_by_format) = 'object' THEN pak.auth_type_by_format
-      ELSE '{}'::json
+      WHEN jsonb_typeof(pak.auth_type_by_format::jsonb) = 'object' THEN pak.auth_type_by_format::jsonb
+      ELSE '{}'::jsonb
     END
   ) WITH ORDINALITY AS entry(key, value, ordinality)
   WHERE pak.auth_type_by_format IS NOT NULL
@@ -143,12 +143,12 @@ legacy_auth_entries AS (
   FROM public.provider_api_keys AS pak
   LEFT JOIN LATERAL (
     SELECT key_format.value, key_format.ordinality
-    FROM json_array_elements_text(
+    FROM jsonb_array_elements_text(
       CASE
         WHEN pak.api_formats IS NOT NULL
-          AND json_typeof(pak.api_formats) = 'array'
-        THEN pak.api_formats
-        ELSE '[]'::json
+          AND jsonb_typeof(pak.api_formats::jsonb) = 'array'
+        THEN pak.api_formats::jsonb
+        ELSE '[]'::jsonb
       END
     ) WITH ORDINALITY AS key_format(value, ordinality)
     UNION ALL
@@ -209,7 +209,7 @@ rebuilt AS (
 )
 UPDATE public.provider_api_keys AS pak
 SET
-  auth_type_by_format = rebuilt.auth_type_by_format::json,
+  auth_type_by_format = rebuilt.auth_type_by_format::jsonb,
   updated_at = NOW()
 FROM rebuilt
 WHERE pak.id = rebuilt.id
@@ -242,10 +242,10 @@ WITH expanded AS (
     formats.ordinality,
     public.aether_canonical_api_format_alias(formats.value) AS api_format
   FROM public.provider_api_keys AS pak
-  CROSS JOIN LATERAL json_array_elements_text(
+  CROSS JOIN LATERAL jsonb_array_elements_text(
     CASE
-      WHEN json_typeof(pak.api_formats) = 'array' THEN pak.api_formats
-      ELSE '[]'::json
+      WHEN jsonb_typeof(pak.api_formats::jsonb) = 'array' THEN pak.api_formats::jsonb
+      ELSE '[]'::jsonb
     END
   ) WITH ORDINALITY AS formats(value, ordinality)
   WHERE pak.api_formats IS NOT NULL
@@ -257,7 +257,7 @@ deduped AS (
   GROUP BY id, api_format
 ),
 rebuilt AS (
-  SELECT id, json_agg(api_format ORDER BY first_ordinality) AS api_formats
+  SELECT id, jsonb_agg(api_format ORDER BY first_ordinality) AS api_formats
   FROM deduped
   GROUP BY id
 )
@@ -275,10 +275,10 @@ WITH expanded AS (
     formats.ordinality,
     public.aether_canonical_api_format_alias(formats.value) AS api_format
   FROM public.api_keys AS key
-  CROSS JOIN LATERAL json_array_elements_text(
+  CROSS JOIN LATERAL jsonb_array_elements_text(
     CASE
-      WHEN json_typeof(key.allowed_api_formats) = 'array' THEN key.allowed_api_formats
-      ELSE '[]'::json
+      WHEN jsonb_typeof(key.allowed_api_formats::jsonb) = 'array' THEN key.allowed_api_formats::jsonb
+      ELSE '[]'::jsonb
     END
   ) WITH ORDINALITY AS formats(value, ordinality)
   WHERE key.allowed_api_formats IS NOT NULL
@@ -290,7 +290,7 @@ deduped AS (
   GROUP BY id, api_format
 ),
 rebuilt AS (
-  SELECT id, json_agg(api_format ORDER BY first_ordinality) AS allowed_api_formats
+  SELECT id, jsonb_agg(api_format ORDER BY first_ordinality) AS allowed_api_formats
   FROM deduped
   GROUP BY id
 )
@@ -308,10 +308,10 @@ WITH expanded AS (
     formats.ordinality,
     public.aether_canonical_api_format_alias(formats.value) AS api_format
   FROM public.users AS users
-  CROSS JOIN LATERAL json_array_elements_text(
+  CROSS JOIN LATERAL jsonb_array_elements_text(
     CASE
-      WHEN json_typeof(users.allowed_api_formats) = 'array' THEN users.allowed_api_formats
-      ELSE '[]'::json
+      WHEN jsonb_typeof(users.allowed_api_formats::jsonb) = 'array' THEN users.allowed_api_formats::jsonb
+      ELSE '[]'::jsonb
     END
   ) WITH ORDINALITY AS formats(value, ordinality)
   WHERE users.allowed_api_formats IS NOT NULL
@@ -323,7 +323,7 @@ deduped AS (
   GROUP BY id, api_format
 ),
 rebuilt AS (
-  SELECT id, json_agg(api_format ORDER BY first_ordinality) AS allowed_api_formats
+  SELECT id, jsonb_agg(api_format ORDER BY first_ordinality) AS allowed_api_formats
   FROM deduped
   GROUP BY id
 )
@@ -401,10 +401,10 @@ WITH rebuilt AS (
       ORDER BY entry.ordinality
     ) AS rate_multipliers
   FROM public.provider_api_keys AS pak
-  CROSS JOIN LATERAL json_each(
+  CROSS JOIN LATERAL jsonb_each(
     CASE
-      WHEN json_typeof(pak.rate_multipliers) = 'object' THEN pak.rate_multipliers
-      ELSE '{}'::json
+      WHEN jsonb_typeof(pak.rate_multipliers::jsonb) = 'object' THEN pak.rate_multipliers::jsonb
+      ELSE '{}'::jsonb
     END
   ) WITH ORDINALITY AS entry(key, value, ordinality)
   WHERE pak.rate_multipliers IS NOT NULL
@@ -412,7 +412,7 @@ WITH rebuilt AS (
 )
 UPDATE public.provider_api_keys AS pak
 SET
-  rate_multipliers = rebuilt.rate_multipliers::json,
+  rate_multipliers = rebuilt.rate_multipliers::jsonb,
   updated_at = NOW()
 FROM rebuilt
 WHERE pak.id = rebuilt.id
@@ -427,10 +427,10 @@ WITH rebuilt AS (
       ORDER BY entry.ordinality
     ) AS global_priority_by_format
   FROM public.provider_api_keys AS pak
-  CROSS JOIN LATERAL json_each(
+  CROSS JOIN LATERAL jsonb_each(
     CASE
-      WHEN json_typeof(pak.global_priority_by_format) = 'object' THEN pak.global_priority_by_format
-      ELSE '{}'::json
+      WHEN jsonb_typeof(pak.global_priority_by_format::jsonb) = 'object' THEN pak.global_priority_by_format::jsonb
+      ELSE '{}'::jsonb
     END
   ) WITH ORDINALITY AS entry(key, value, ordinality)
   WHERE pak.global_priority_by_format IS NOT NULL
@@ -438,7 +438,7 @@ WITH rebuilt AS (
 )
 UPDATE public.provider_api_keys AS pak
 SET
-  global_priority_by_format = rebuilt.global_priority_by_format::json,
+  global_priority_by_format = rebuilt.global_priority_by_format::jsonb,
   updated_at = NOW()
 FROM rebuilt
 WHERE pak.id = rebuilt.id

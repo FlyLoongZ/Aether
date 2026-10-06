@@ -9083,10 +9083,10 @@ ORDER BY "usage".user_id ASC
                 .push("COALESCE(CASE WHEN (CAST(")
                 .push_bind_unseparated(row.prepared.request_metadata_json.clone())
                 .push_unseparated(
-                    " AS json)->>'upstream_is_stream') IN ('true', 'false') THEN (CAST(",
+                    " AS jsonb)->>'upstream_is_stream') IN ('true', 'false') THEN (CAST(",
                 )
                 .push_bind_unseparated(row.prepared.request_metadata_json.clone())
-                .push_unseparated(" AS json)->>'upstream_is_stream')::boolean ELSE NULL END, ")
+                .push_unseparated(" AS jsonb)->>'upstream_is_stream')::boolean ELSE NULL END, ")
                 .push_bind_unseparated(row.usage.is_stream.unwrap_or(false))
                 .push_unseparated(")")
                 .push_bind(row.input_tokens)
@@ -9110,12 +9110,12 @@ ORDER BY "usage".user_id ASC
                 .push_bind(row.first_byte_time_ms)
                 .push_bind(row.usage.status.clone())
                 .push_bind(row.usage.billing_status.clone())
-                .push("CAST(NULL AS json)")
+                .push("CAST(NULL AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.request_body_storage.inline_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push_bind(None::<Vec<u8>>)
-                .push("CAST(NULL AS json)")
+                .push("CAST(NULL AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(
                     row.prepared
@@ -9123,14 +9123,14 @@ ORDER BY "usage".user_id ASC
                         .inline_json
                         .clone(),
                 )
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push_bind(None::<Vec<u8>>)
-                .push("CAST(NULL AS json)")
+                .push("CAST(NULL AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.response_body_storage.inline_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push_bind(None::<Vec<u8>>)
-                .push("CAST(NULL AS json)")
+                .push("CAST(NULL AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(
                     row.prepared
@@ -9138,11 +9138,11 @@ ORDER BY "usage".user_id ASC
                         .inline_json
                         .clone(),
                 )
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push_bind(None::<Vec<u8>>)
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.request_metadata_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push("CASE WHEN ")
                 .push_bind_unseparated(row.finalized_at_unix_secs)
                 .push_unseparated("::double precision IS NULL THEN NULL ELSE TO_TIMESTAMP(")
@@ -9284,16 +9284,16 @@ body_capture_mode
                 .push_bind(row.usage.request_id.clone())
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.request_headers_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.provider_request_headers_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.response_headers_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.client_response_headers_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push_bind(row.prepared.http_audit_refs.request_body_ref.clone())
                 .push_bind(
                     row.prepared
@@ -9740,10 +9740,10 @@ removed_last_used_at_unix_secs, usage_created_at_unix_secs
                 .push("COALESCE(CASE WHEN (CAST(")
                 .push_bind_unseparated(row.request_metadata_json.clone())
                 .push_unseparated(
-                    " AS json)->>'upstream_is_stream') IN ('true', 'false') THEN (CAST(",
+                    " AS jsonb)->>'upstream_is_stream') IN ('true', 'false') THEN (CAST(",
                 )
                 .push_bind_unseparated(row.request_metadata_json.clone())
-                .push_unseparated(" AS json)->>'upstream_is_stream')::boolean ELSE NULL END, TRUE)")
+                .push_unseparated(" AS jsonb)->>'upstream_is_stream')::boolean ELSE NULL END, TRUE)")
                 .push_bind(row.usage.status_code.map(i32::from))
                 .push_bind(row.response_time_ms)
                 .push_bind(row.first_byte_time_ms)
@@ -9751,7 +9751,7 @@ removed_last_used_at_unix_secs, usage_created_at_unix_secs
                 .push("'pending'")
                 .push("CAST(")
                 .push_bind_unseparated(row.request_metadata_json.clone())
-                .push_unseparated(" AS json)")
+                .push_unseparated(" AS jsonb)")
                 .push("COALESCE(TO_TIMESTAMP(")
                 .push_bind_unseparated(row.created_at_unix_ms)
                 .push_unseparated("::double precision), NOW())")
@@ -12018,27 +12018,27 @@ fn map_usage_row(
 
 fn shallow_usage_body_projection_sql(sql: &str) -> String {
     let replacements = [
-        ("\"usage\".request_body,", "NULL::json AS request_body,"),
+        ("\"usage\".request_body,", "NULL::jsonb AS request_body,"),
         (
             "\"usage\".request_body_compressed,",
             "CASE WHEN \"usage\".request_body_compressed IS NULL THEN NULL ELSE ''::bytea END AS request_body_compressed,",
         ),
         (
             "\"usage\".provider_request_body,",
-            "NULL::json AS provider_request_body,",
+            "NULL::jsonb AS provider_request_body,",
         ),
         (
             "\"usage\".provider_request_body_compressed,",
             "CASE WHEN \"usage\".provider_request_body_compressed IS NULL THEN NULL ELSE ''::bytea END AS provider_request_body_compressed,",
         ),
-        ("\"usage\".response_body,", "NULL::json AS response_body,"),
+        ("\"usage\".response_body,", "NULL::jsonb AS response_body,"),
         (
             "\"usage\".response_body_compressed,",
             "CASE WHEN \"usage\".response_body_compressed IS NULL THEN NULL ELSE ''::bytea END AS response_body_compressed,",
         ),
         (
             "\"usage\".client_response_body,",
-            "NULL::json AS client_response_body,",
+            "NULL::jsonb AS client_response_body,",
         ),
         (
             "\"usage\".client_response_body_compressed,",
@@ -13765,3 +13765,6 @@ fn usage_body_sql_columns(field: UsageBodyField) -> (&'static str, &'static str)
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod jsonb_tests;

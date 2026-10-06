@@ -130,10 +130,10 @@ WHERE id = $1
 
 const CAS_HEARTBEAT_PROXY_METADATA_SQL: &str = r#"
 UPDATE proxy_nodes
-SET proxy_metadata = $2::json, updated_at = NOW()
+SET proxy_metadata = $2::jsonb, updated_at = NOW()
 WHERE id = $1
   AND tunnel_generation = $3
-  AND proxy_metadata::jsonb IS NOT DISTINCT FROM $4::jsonb
+  AND proxy_metadata IS NOT DISTINCT FROM $4::jsonb
 "#;
 
 const UPDATE_TUNNEL_STATUS_SQL: &str = r#"
@@ -242,11 +242,11 @@ VALUES (
   COALESCE($8, 0),
   COALESCE($9, 0),
   $10,
-  $11::json,
+  $11::jsonb,
   $12,
   $13,
   FALSE,
-  $14::json,
+  $14::jsonb,
   $15
 )
 "#;
@@ -336,10 +336,10 @@ SET
   active_connections = COALESCE($8, active_connections),
   total_requests = COALESCE($9, total_requests),
   avg_latency_ms = COALESCE($10, avg_latency_ms),
-  hardware_info = COALESCE($11::json, hardware_info),
+  hardware_info = COALESCE($11::jsonb, hardware_info),
   estimated_max_concurrency = COALESCE($12, estimated_max_concurrency),
   tunnel_mode = $13,
-  proxy_metadata = COALESCE($14::json, proxy_metadata),
+  proxy_metadata = COALESCE($14::jsonb, proxy_metadata),
   updated_at = NOW()
 WHERE id = $1
 "#;
@@ -437,7 +437,7 @@ const UPDATE_PROXY_NODE_REMOTE_CONFIG_SQL: &str = r#"
 UPDATE proxy_nodes
 SET
   name = COALESCE($2, name),
-  remote_config = $3::json,
+  remote_config = $3::jsonb,
   config_version = config_version + 1,
   updated_at = NOW()
 WHERE id = $1
@@ -477,7 +477,7 @@ SELECT
   $1,
   $2,
   $3,
-  $4::json,
+  $4::jsonb,
   CASE
     WHEN $5::double precision IS NULL THEN NOW()
     ELSE TO_TIMESTAMP($5::double precision)
@@ -1157,8 +1157,8 @@ WHERE id = $1 AND proxy_password = $3
         let result = sqlx::query(
             r#"
 UPDATE proxy_nodes
-SET proxy_metadata = $2::json, updated_at = NOW()
-WHERE id = $1 AND proxy_metadata::jsonb = $3::jsonb
+SET proxy_metadata = $2::jsonb, updated_at = NOW()
+WHERE id = $1 AND proxy_metadata = $3::jsonb
 "#,
         )
         .bind(node_id)
@@ -1942,27 +1942,19 @@ fn proxy_node_id_in_use_error(node_id: &str, ip: &str, port: i32) -> DataLayerEr
 #[cfg(test)]
 mod tests {
     #[test]
-    fn proxy_node_sql_uses_json_casts_for_json_columns() {
+    fn proxy_node_sql_uses_jsonb_casts_for_jsonb_columns() {
         assert!(!super::APPLY_HEARTBEAT_SQL.contains("proxy_metadata"));
-        assert!(super::CAS_HEARTBEAT_PROXY_METADATA_SQL.contains("proxy_metadata = $2::json"));
+        assert!(super::CAS_HEARTBEAT_PROXY_METADATA_SQL.contains("proxy_metadata = $2::jsonb"));
         assert!(super::CAS_HEARTBEAT_PROXY_METADATA_SQL
-            .contains("proxy_metadata::jsonb IS NOT DISTINCT FROM $4::jsonb"));
+            .contains("proxy_metadata IS NOT DISTINCT FROM $4::jsonb"));
         assert!(super::INSERT_PROXY_NODE_SQL
-            .contains("\n  $11::json,\n  $12,\n  $13,\n  FALSE,\n  $14::json,\n  $15\n"));
+            .contains("\n  $11::jsonb,\n  $12,\n  $13,\n  FALSE,\n  $14::jsonb,\n  $15\n"));
         assert!(super::UPDATE_PROXY_NODE_REGISTRATION_SQL
-            .contains("hardware_info = COALESCE($11::json, hardware_info)"));
+            .contains("hardware_info = COALESCE($11::jsonb, hardware_info)"));
         assert!(super::UPDATE_PROXY_NODE_REGISTRATION_SQL
-            .contains("proxy_metadata = COALESCE($14::json, proxy_metadata)"));
+            .contains("proxy_metadata = COALESCE($14::jsonb, proxy_metadata)"));
         assert!(!super::UPDATE_PROXY_NODE_REGISTRATION_SQL.contains("tunnel_generation"));
         assert!(super::UPDATE_PROXY_NODE_REMOTE_CONFIG_SQL.contains("remote_config = $3::json"));
-    }
-
-    #[test]
-    fn proxy_node_sql_does_not_use_jsonb_casts() {
-        assert!(!super::APPLY_HEARTBEAT_SQL.contains("::jsonb"));
-        assert!(!super::INSERT_PROXY_NODE_SQL.contains("::jsonb"));
-        assert!(!super::UPDATE_PROXY_NODE_REGISTRATION_SQL.contains("::jsonb"));
-        assert!(!super::UPDATE_PROXY_NODE_REMOTE_CONFIG_SQL.contains("::jsonb"));
     }
 
     #[test]
