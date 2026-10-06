@@ -1,7 +1,7 @@
 use aether_data_contracts::repository::usage::{
-    canonical_usage_body_ref_for, parse_usage_body_ref, usage_body_ref, ApiKeyLastUsedDelta,
+    canonical_usage_body_ref_for, usage_body_ref, ApiKeyLastUsedDelta,
     ManagementTokenCounterDelta, ProxyNodeCounterDelta, StoredUsageAuditAggregation,
-    StoredUsageAuditSummary, StoredUsageBodyPayload, MAX_USAGE_BODY_BYTES,
+    StoredUsageAuditSummary, StoredUsageBodyPayload,
     StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
     StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
@@ -57,6 +57,9 @@ use aether_data_contracts::DataLayerError;
 
 pub mod cleanup;
 mod preparation;
+mod capture_codec;
+pub mod capture_storage;
+use capture_storage::prepare_body_delta;
 
 use preparation::prepare_usage_in_background;
 
@@ -64,26 +67,7 @@ use preparation::prepare_usage_in_background;
 // newly captured bodies always spill to usage_body_blobs and resolve through usage_http_audits.
 const MAX_INLINE_USAGE_BODY_BYTES: usize = 0;
 const MAX_SUPPORTED_UNIX_SECS: u64 = 253_402_300_799;
-const FIND_USAGE_BODY_BLOB_BY_REF_SQL: &str = r#"SELECT payload FROM usage_body_blobs WHERE body_ref = $1 AND request_id = $2 AND body_field = $3 LIMIT 1"#;
 const DELETE_USAGE_BODY_BLOB_SQL: &str = include_str!("queries/delete_usage_body_blob_sql.sql");
-static USAGE_BODY_DECODE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
-
-async fn decode_usage_body_in_background(
-    decode: impl FnOnce() -> Result<Option<Value>, DataLayerError> + Send + 'static,
-) -> Result<Option<Value>, DataLayerError> {
-    let permit = USAGE_BODY_DECODE_SLOTS.acquire().await.map_err(|error| {
-        DataLayerError::UnexpectedValue(format!("usage body decoder unavailable: {error}"))
-    })?;
-    tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        decode()
-    })
-    .await
-    .map_err(|error| {
-        DataLayerError::UnexpectedValue(format!("usage body decoder failed: {error}"))
-    })?
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct AggregateRangeSplit {
     raw_leading: Option<(DateTime<Utc>, DateTime<Utc>)>,
@@ -2847,7 +2831,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .map_postgres_err()?;
         let usage = row
             .as_ref()
-            .map(|row| map_usage_row(row))
+            .map(map_usage_row)
             .transpose()?;
         match usage {
             Some(usage) => self.hydrate_usage_body_refs(usage).await.map(Some),
@@ -2866,7 +2850,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .await
             .map_postgres_err()?;
         row.as_ref()
-            .map(|row| map_usage_row(row))
+            .map(map_usage_row)
             .transpose()
     }
 
@@ -2880,7 +2864,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .await
             .map_postgres_err()?;
         row.as_ref()
-            .map(|row| map_usage_row(row))
+            .map(map_usage_row)
             .transpose()
     }
 
@@ -2902,64 +2886,6 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             items.push(map_usage_row(&row)?);
         }
         Ok(items)
-    }
-
-    pub async fn read_body_payload(
-        &self,
-        body_ref: &str,
-    ) -> Result<Option<StoredUsageBodyPayload>, DataLayerError> {
-        let Some((request_id, field)) = parse_usage_body_ref(body_ref) else {
-            return Ok(None);
-        };
-        let canonical_ref = usage_body_ref(&request_id, field);
-        let row = sqlx::query(FIND_USAGE_BODY_BLOB_BY_REF_SQL)
-            .bind(&canonical_ref)
-            .bind(&request_id)
-            .bind(field.as_storage_field())
-            .fetch_optional(&self.pool)
-            .await
-            .map_postgres_err()?;
-        if let Some(row) = row {
-            let Some(bytes) = row
-                .try_get::<Option<Vec<u8>>, _>("payload")
-                .map_postgres_err()?
-            else {
-                return Ok(None);
-            };
-            if bytes.len() > MAX_USAGE_BODY_BYTES {
-                return Err(DataLayerError::UnexpectedValue(format!(
-                    "encoded usage json exceeds {MAX_USAGE_BODY_BYTES} bytes"
-                )));
-            }
-            return Ok(Some(StoredUsageBodyPayload(bytes)));
-        }
-        let (inline_column, _compressed_column) = usage_body_sql_columns(field);
-        let row = sqlx::query(&format!(
-            "SELECT {inline_column}::text AS inline_body FROM \"usage\" WHERE request_id = $1 LIMIT 1"
-        ))
-        .bind(request_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_postgres_err()?;
-        let Some(row) = row else {
-            return Ok(None);
-        };
-        Ok(row
-            .try_get::<Option<String>, _>("inline_body")
-            .map_postgres_err()?
-            .map(|body| StoredUsageBodyPayload(body.into_bytes())))
-    }
-
-    pub async fn resolve_body_ref(&self, body_ref: &str) -> Result<Option<Value>, DataLayerError> {
-        let Some(StoredUsageBodyPayload(bytes)) = self.read_body_payload(body_ref).await? else {
-            return Ok(None);
-        };
-        decode_usage_body_in_background(move || {
-            serde_json::from_slice(&bytes).map(Some).map_err(|error| {
-                DataLayerError::UnexpectedValue(format!("failed to parse usage json: {error}"))
-            })
-        })
-        .await
     }
 
     async fn hydrate_usage_body_refs(
@@ -8675,42 +8601,32 @@ ORDER BY "usage".user_id ASC
                         .await
                         .map_postgres_err()?;
                     if capture_update_allowed {
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            UsageBodyField::RequestBody,
-                            usage.request_body.as_ref(),
-                            &request_body_storage,
-                            clear_request_body,
-                        )
-                        .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            UsageBodyField::ProviderRequestBody,
-                            usage.provider_request_body.as_ref(),
-                            &provider_request_body_storage,
-                            clear_provider_request_body,
-                        )
-                        .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            UsageBodyField::ResponseBody,
-                            usage.response_body.as_ref(),
-                            &response_body_storage,
-                            clear_response_body,
-                        )
-                        .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            UsageBodyField::ClientResponseBody,
-                            usage.client_response_body.as_ref(),
-                            &client_response_body_storage,
-                            clear_client_response_body,
-                        )
-                        .await?;
+                        capture_storage::preserve_derived_bodies(tx, &usage.request_id, [
+                            capture_storage::CapturePairUpdate {
+                                base: &request_body_storage, target: &provider_request_body_storage,
+                                clear_base: clear_request_body, clear_target: clear_provider_request_body,
+                                field: UsageBodyField::ProviderRequestBody,
+                            },
+                            capture_storage::CapturePairUpdate {
+                                base: &response_body_storage, target: &client_response_body_storage,
+                                clear_base: clear_response_body, clear_target: clear_client_response_body,
+                                field: UsageBodyField::ClientResponseBody,
+                            },
+                        ]).await?;
+                        for (field, body, storage, clear) in [
+                            (UsageBodyField::RequestBody, usage.request_body.as_ref(),
+                             &request_body_storage, clear_request_body),
+                            (UsageBodyField::ProviderRequestBody, usage.provider_request_body.as_ref(),
+                             &provider_request_body_storage, clear_provider_request_body),
+                            (UsageBodyField::ResponseBody, usage.response_body.as_ref(),
+                             &response_body_storage, clear_response_body),
+                            (UsageBodyField::ClientResponseBody, usage.client_response_body.as_ref(),
+                             &client_response_body_storage, clear_client_response_body),
+                        ] {
+                            sync_usage_body_blob_storage(
+                                &mut **tx, &usage.request_id, field, body, storage, clear,
+                            ).await?;
+                        }
                         let http_audit_headers = UsageHttpAuditHeaders {
                             request_headers_json: request_headers_json.as_deref(),
                             provider_request_headers_json: provider_request_headers_json.as_deref(),
@@ -8726,8 +8642,6 @@ ORDER BY "usage".user_id ASC
                             http_audit_capture_mode,
                         )
                         .await?;
-                    }
-                    if capture_update_allowed {
                         sync_usage_routing_snapshot_storage(
                             &mut **tx,
                             &usage.request_id,
@@ -9194,7 +9108,7 @@ RETURNING
         tx: &mut sqlx::Transaction<'_, Postgres>,
         rows: &[&PreparedPendingUsage],
     ) -> Result<(), DataLayerError> {
-        let mut blobs = Vec::<(String, String, &'static str, Vec<u8>)>::new();
+        let mut blobs = Vec::<(String, String, &'static str, Vec<u8>, i32)>::new();
         for row in rows {
             for (field, storage) in [
                 (
@@ -9220,6 +9134,7 @@ RETURNING
                         row.usage.request_id.clone(),
                         field.as_storage_field(),
                         payload.clone(),
+                        storage.encoding,
                     ));
                 }
             }
@@ -9229,17 +9144,18 @@ RETURNING
         }
 
         let mut builder = QueryBuilder::<Postgres>::new(
-            "INSERT INTO usage_body_blobs (body_ref, request_id, body_field, payload) ",
+            "INSERT INTO usage_body_blobs (body_ref, request_id, body_field, payload, encoding) ",
         );
         builder.push_values(&blobs, |mut values, row| {
             values
                 .push_bind(row.0.clone())
                 .push_bind(row.1.clone())
                 .push_bind(row.2)
-                .push_bind(row.3.clone());
+                .push_bind(row.3.clone())
+                .push_bind(row.4);
         });
         builder.push(
-            " ON CONFLICT (body_ref) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()",
+            " ON CONFLICT (body_ref) DO UPDATE SET payload = EXCLUDED.payload, encoding = EXCLUDED.encoding, updated_at = NOW()",
         );
         builder
             .build()
@@ -12066,6 +11982,7 @@ fn to_u64(value: i32, field_name: &str) -> Result<u64, DataLayerError> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UsageBodyStorage {
+    encoding: i32,
     inline_json: Option<String>,
     detached_blob_bytes: Option<Vec<u8>>,
 }
@@ -12363,6 +12280,7 @@ fn usage_capture_update_allowed(
 fn prepare_usage_body_storage(value: Option<&Value>) -> Result<UsageBodyStorage, DataLayerError> {
     let Some(value) = value else {
         return Ok(UsageBodyStorage {
+            encoding: 0,
             inline_json: None,
             detached_blob_bytes: None,
         });
@@ -12372,6 +12290,7 @@ fn prepare_usage_body_storage(value: Option<&Value>) -> Result<UsageBodyStorage,
     })?;
     if bytes.len() == MAX_INLINE_USAGE_BODY_BYTES {
         return Ok(UsageBodyStorage {
+            encoding: 0,
             inline_json: Some(String::from_utf8(bytes).map_err(|err| {
                 DataLayerError::UnexpectedValue(format!(
                     "failed to encode inline usage body as utf-8: {err}"
@@ -12381,6 +12300,7 @@ fn prepare_usage_body_storage(value: Option<&Value>) -> Result<UsageBodyStorage,
         });
     }
     Ok(UsageBodyStorage {
+        encoding: 0,
         inline_json: None,
         detached_blob_bytes: Some(bytes),
     })
@@ -12506,11 +12426,13 @@ fn prepare_usage_upsert_context(
     let request_headers_json = json_bind_text(usage.request_headers.as_ref())?;
     let request_body_storage = prepare_usage_body_storage(request_body)?;
     let provider_request_headers_json = json_bind_text(usage.provider_request_headers.as_ref())?;
-    let provider_request_body_storage = prepare_usage_body_storage(provider_request_body)?;
+    let mut provider_request_body_storage = prepare_usage_body_storage(provider_request_body)?;
+    prepare_body_delta(&request_body_storage, &mut provider_request_body_storage);
     let response_headers_json = json_bind_text(usage.response_headers.as_ref())?;
     let response_body_storage = prepare_usage_body_storage(response_body)?;
     let client_response_headers_json = json_bind_text(usage.client_response_headers.as_ref())?;
-    let client_response_body_storage = prepare_usage_body_storage(client_response_body)?;
+    let mut client_response_body_storage = prepare_usage_body_storage(client_response_body)?;
+    prepare_body_delta(&response_body_storage, &mut client_response_body_storage);
     let http_audit_refs = UsageHttpAuditRefs {
         request_body_ref: resolved_write_usage_body_ref(
             request_body_ref,
@@ -13406,6 +13328,7 @@ where
             .bind(request_id)
             .bind(field.as_storage_field())
             .bind(payload)
+            .bind(storage.encoding)
             .execute(executor)
             .await
             .map_postgres_err()?;
@@ -13748,19 +13671,6 @@ fn attach_usage_settlement_pricing_snapshot_metadata(
         snapshot.price_per_request,
     );
     (!metadata.is_empty()).then_some(Value::Object(metadata))
-}
-
-fn usage_body_sql_columns(field: UsageBodyField) -> (&'static str, &'static str) {
-    match field {
-        UsageBodyField::RequestBody => ("request_body", "request_body_compressed"),
-        UsageBodyField::ProviderRequestBody => {
-            ("provider_request_body", "provider_request_body_compressed")
-        }
-        UsageBodyField::ResponseBody => ("response_body", "response_body_compressed"),
-        UsageBodyField::ClientResponseBody => {
-            ("client_response_body", "client_response_body_compressed")
-        }
-    }
 }
 
 #[cfg(test)]

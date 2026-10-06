@@ -4,7 +4,7 @@ use aether_data_contracts::repository::usage::{
 };
 use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
-use sqlx::Row;
+use sqlx::{postgres::PgArguments, query::Query, Postgres, Row};
 use tracing::warn;
 
 use super::SqlxUsageReadRepository;
@@ -353,6 +353,8 @@ async fn truncate_usage_body_blobs_table(pool: &PostgresPool) -> Result<(), Data
         .execute(&mut *tx)
         .await
         .map_err(postgres_error)?;
+    sqlx::query("UPDATE usage_http_audits SET request_body_ref = NULL, provider_request_body_ref = NULL, response_body_ref = NULL, client_response_body_ref = NULL, request_body_state = NULL, provider_request_body_state = NULL, response_body_state = NULL, client_response_body_state = NULL, body_capture_mode = 'none' WHERE request_body_ref IS NOT NULL OR provider_request_body_ref IS NOT NULL OR response_body_ref IS NOT NULL OR client_response_body_ref IS NOT NULL")
+        .execute(&mut *tx).await.map_err(postgres_error)?;
     tx.commit().await.map_err(postgres_error)?;
     Ok(())
 }
@@ -370,43 +372,30 @@ async fn cleanup_usage_body_fields(
     }
     let mut total_cleaned = 0usize;
     loop {
-        let rows = fetch_usage_body_cleanup_rows(
+        let rows = fetch_usage_cleanup_rows(
             pool,
-            SELECT_USAGE_COMPRESSED_BODY_BATCH_SQL,
-            cutoff_time,
-            batch_size,
+            sqlx::query(SELECT_USAGE_COMPRESSED_BODY_BATCH_SQL)
+                .bind(cutoff_time)
+                .bind(i64::try_from(batch_size).unwrap_or(i64::MAX)),
         )
         .await?;
         if rows.is_empty() {
             break;
         }
-        let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
-        let request_ids = rows
-            .iter()
-            .map(|row| row.request_id.clone())
-            .collect::<Vec<_>>();
-
+        let mut tx = pool.begin().await.map_err(postgres_error)?;
+        let (ids, request_ids) = lock_current_cleanup_rows(&mut tx, &rows, cutoff_time, None).await?;
+        if ids.is_empty() {
+            tx.commit().await.map_err(postgres_error)?;
+            continue;
+        }
         let cleaned = sqlx::query(CLEAR_USAGE_COMPRESSED_BODY_FIELDS_SQL)
             .bind(ids)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(postgres_error)?
             .rows_affected();
-        sqlx::query(DELETE_USAGE_BODY_BLOBS_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_REFS_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL)
-            .bind(request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
+        clear_usage_body_storage_in_tx(&mut tx, &request_ids).await?;
+        tx.commit().await.map_err(postgres_error)?;
         let cleaned = usize::try_from(cleaned).unwrap_or(usize::MAX);
         total_cleaned += cleaned;
         if rows.len() < batch_size {
@@ -416,15 +405,11 @@ async fn cleanup_usage_body_fields(
     Ok(total_cleaned)
 }
 
-async fn fetch_usage_body_cleanup_rows(
+async fn fetch_usage_cleanup_rows(
     pool: &PostgresPool,
-    sql: &str,
-    cutoff_time: DateTime<Utc>,
-    batch_size: usize,
+    query: Query<'_, Postgres, PgArguments>,
 ) -> Result<Vec<UsageBodyCleanupRow>, DataLayerError> {
-    let rows = sqlx::query(sql)
-        .bind(cutoff_time)
-        .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
+    let rows = query
         .fetch_all(pool)
         .await
         .map_err(postgres_error)?
@@ -439,6 +424,28 @@ async fn fetch_usage_body_cleanup_rows(
         })
         .collect::<Result<Vec<_>, DataLayerError>>()?;
     Ok(rows)
+}
+
+async fn clear_usage_body_storage_in_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    request_ids: &[String],
+) -> Result<(), DataLayerError> {
+    sqlx::query(DELETE_USAGE_BODY_BLOBS_SQL)
+        .bind(request_ids)
+        .execute(&mut **tx)
+        .await
+        .map_err(postgres_error)?;
+    sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_REFS_SQL)
+        .bind(request_ids)
+        .execute(&mut **tx)
+        .await
+        .map_err(postgres_error)?;
+    sqlx::query(DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL)
+        .bind(request_ids)
+        .execute(&mut **tx)
+        .await
+        .map_err(postgres_error)?;
+    Ok(())
 }
 
 async fn count_usage_body_candidates(
@@ -595,6 +602,33 @@ async fn delete_old_usage_records(
     Ok(total_deleted)
 }
 
+async fn lock_current_cleanup_rows(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    rows: &[UsageBodyCleanupRow],
+    cutoff: DateTime<Utc>,
+    lower_bound: Option<DateTime<Utc>>,
+) -> Result<(Vec<String>, Vec<String>), DataLayerError> {
+    let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
+    let request_ids = rows.iter().map(|row| row.request_id.clone()).collect::<Vec<_>>();
+    super::lock_usage_request_ids_in_tx(tx, &request_ids).await?;
+    let expected = rows.iter().map(|row| (row.id.as_str(), row.request_id.as_str()))
+        .collect::<std::collections::BTreeSet<_>>();
+    let current = sqlx::query(
+        "SELECT id, request_id FROM usage WHERE id = ANY($1) AND created_at < $2 AND ($3::timestamptz IS NULL OR created_at >= $3) ORDER BY id FOR UPDATE"
+    ).bind(ids).bind(cutoff).bind(lower_bound).fetch_all(&mut **tx).await.map_err(postgres_error)?;
+    let mut ids = Vec::new();
+    let mut request_ids = Vec::new();
+    for row in current {
+        let id: String = row.try_get("id").map_err(postgres_error)?;
+        let request_id: String = row.try_get("request_id").map_err(postgres_error)?;
+        if expected.contains(&(id.as_str(), request_id.as_str())) {
+            ids.push(id);
+            request_ids.push(request_id);
+        }
+    }
+    Ok((ids, request_ids))
+}
+
 async fn cleanup_usage_header_fields(
     pool: &PostgresPool,
     cutoff_time: DateTime<Utc>,
@@ -612,45 +646,40 @@ async fn cleanup_usage_header_fields(
 
     let mut total_cleaned = 0usize;
     loop {
-        let mut stream = sqlx::query(SELECT_USAGE_HEADER_BATCH_SQL)
-            .bind(cutoff_time)
-            .bind(newer_than)
-            .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
-            .fetch(pool);
-        let mut rows = Vec::new();
-        while let Some(row) = stream.try_next().await.map_err(postgres_error)? {
-            rows.push(UsageBodyCleanupRow {
-                id: row.try_get::<String, _>("id").map_err(postgres_error)?,
-                request_id: row
-                    .try_get::<String, _>("request_id")
-                    .map_err(postgres_error)?,
-            });
-        }
+        let rows = fetch_usage_cleanup_rows(
+            pool,
+            sqlx::query(SELECT_USAGE_HEADER_BATCH_SQL)
+                .bind(cutoff_time)
+                .bind(newer_than)
+                .bind(i64::try_from(batch_size).unwrap_or(i64::MAX)),
+        )
+        .await?;
         if rows.is_empty() {
             break;
         }
-        let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
-        let request_ids = rows
-            .iter()
-            .map(|row| row.request_id.clone())
-            .collect::<Vec<_>>();
-
+        let mut tx = pool.begin().await.map_err(postgres_error)?;
+        let (ids, request_ids) = lock_current_cleanup_rows(&mut tx, &rows, cutoff_time, newer_than).await?;
+        if ids.is_empty() {
+            tx.commit().await.map_err(postgres_error)?;
+            continue;
+        }
         let cleaned = sqlx::query(CLEAR_USAGE_HEADER_FIELDS_SQL)
             .bind(ids)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(postgres_error)?
             .rows_affected();
         sqlx::query(CLEAR_USAGE_HTTP_AUDIT_HEADERS_SQL)
             .bind(&request_ids)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(postgres_error)?;
         sqlx::query(DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL)
             .bind(request_ids)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(postgres_error)?;
+        tx.commit().await.map_err(postgres_error)?;
         let cleaned = usize::try_from(cleaned).unwrap_or(usize::MAX);
         total_cleaned += cleaned;
         if rows.len() < batch_size {
@@ -677,50 +706,31 @@ async fn cleanup_usage_stale_body_fields(
 
     let mut total_cleaned = 0usize;
     loop {
-        let mut stream = sqlx::query(SELECT_USAGE_STALE_BODY_BATCH_SQL)
-            .bind(cutoff_time)
-            .bind(newer_than)
-            .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
-            .fetch(pool);
-        let mut rows = Vec::new();
-        while let Some(row) = stream.try_next().await.map_err(postgres_error)? {
-            rows.push(UsageBodyCleanupRow {
-                id: row.try_get::<String, _>("id").map_err(postgres_error)?,
-                request_id: row
-                    .try_get::<String, _>("request_id")
-                    .map_err(postgres_error)?,
-            });
-        }
+        let rows = fetch_usage_cleanup_rows(
+            pool,
+            sqlx::query(SELECT_USAGE_STALE_BODY_BATCH_SQL)
+                .bind(cutoff_time)
+                .bind(newer_than)
+                .bind(i64::try_from(batch_size).unwrap_or(i64::MAX)),
+        )
+        .await?;
         if rows.is_empty() {
             break;
         }
-        let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
-        let request_ids = rows
-            .iter()
-            .map(|row| row.request_id.clone())
-            .collect::<Vec<_>>();
-
+        let mut tx = pool.begin().await.map_err(postgres_error)?;
+        let (ids, request_ids) = lock_current_cleanup_rows(&mut tx, &rows, cutoff_time, newer_than).await?;
+        if ids.is_empty() {
+            tx.commit().await.map_err(postgres_error)?;
+            continue;
+        }
         let cleaned = sqlx::query(CLEAR_USAGE_BODY_FIELDS_SQL)
             .bind(ids)
-            .execute(pool)
+            .execute(&mut *tx)
             .await
             .map_err(postgres_error)?
             .rows_affected();
-        sqlx::query(DELETE_USAGE_BODY_BLOBS_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_REFS_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL)
-            .bind(request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
+        clear_usage_body_storage_in_tx(&mut tx, &request_ids).await?;
+        tx.commit().await.map_err(postgres_error)?;
         let cleaned = usize::try_from(cleaned).unwrap_or(usize::MAX);
         total_cleaned += cleaned;
         if rows.len() < batch_size {

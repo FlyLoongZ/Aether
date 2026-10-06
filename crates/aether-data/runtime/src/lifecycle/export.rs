@@ -26,7 +26,7 @@ pub use postgres::{
 #[cfg(all(test, feature = "postgres"))]
 use postgres::normalize_postgres_import_payload;
 
-pub const EXPORT_FORMAT_VERSION: u32 = 2;
+pub const EXPORT_FORMAT_VERSION: u32 = 3;
 const MIN_SUPPORTED_EXPORT_FORMAT_VERSION: u32 = 1;
 
 // JSONL imports are ultimately materialized as a `DataImportPlan`, so an

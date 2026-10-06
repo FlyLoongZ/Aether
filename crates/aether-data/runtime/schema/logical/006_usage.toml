@@ -575,6 +575,11 @@ type = "text"
 length = 50
 
 [[table.usage_body_blobs.columns]]
+name = "encoding"
+type = "int32"
+default = 0
+
+[[table.usage_body_blobs.columns]]
 name = "payload"
 type = "bytes"
 

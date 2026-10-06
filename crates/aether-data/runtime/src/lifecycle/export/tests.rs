@@ -489,6 +489,175 @@ fn trusted_import_still_revokes_imported_sessions_and_live_tunnels() {
 
 #[tokio::test]
 #[ignore = "requires AETHER_TEST_POSTGRES_URL and PostgreSQL migrations"]
+async fn live_capture_exports_restore_and_reject_mismatched_deltas() {
+    use aether_data_postgres::capture_storage::encode_usage_body_delta;
+    use aether_data_contracts::repository::usage::{
+        usage_body_ref, UsageBodyField, UsageCleanupExecutionMode,
+        UsageCleanupTargets, UsageCleanupWindow,
+    };
+    let pool = PostgresPoolFactory::new(PostgresPoolConfig {
+        database_url: std::env::var("AETHER_TEST_POSTGRES_URL").unwrap(),
+        ..Default::default()
+    })
+    .unwrap()
+    .connect_lazy()
+    .unwrap();
+    run_postgres_migrations(&pool).await.unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let request_id = format!("capture-export-{id}");
+    let base = json!({"model":"client", "input":"shared content 汉字🌍".repeat(1000)});
+    let target = json!({"model":"provider", "input":base["input"]});
+    let base_bytes = serde_json::to_vec(&base).unwrap();
+    let target_bytes = serde_json::to_vec(&target).unwrap();
+    let delta = encode_usage_body_delta(&base_bytes, &target_bytes).unwrap();
+    let base_ref = usage_body_ref(&request_id, UsageBodyField::RequestBody);
+    let target_ref = usage_body_ref(&request_id, UsageBodyField::ProviderRequestBody);
+    sqlx::query("INSERT INTO usage (id, request_id, provider_name, model) VALUES ($1, $2, 'capture-export', 'test-model')")
+        .bind(&id).bind(&request_id).execute(&pool).await.unwrap();
+    for (reference, field, encoding, payload) in [
+        (&base_ref, "request_body", 0i32, base_bytes),
+        (&target_ref, "provider_request_body", 1i32, delta),
+    ] {
+        sqlx::query("INSERT INTO usage_body_blobs (body_ref, request_id, body_field, encoding, payload) VALUES ($1, $2, $3, $4, $5)")
+            .bind(reference).bind(&request_id).bind(field).bind(encoding).bind(payload).execute(&pool).await.unwrap();
+    }
+    let headers = json!({"authorization":"client", "shared":(0..500).map(|i| format!("{i:08x}")).collect::<String>()});
+    let provider_headers = json!({"authorization":"provider", "shared":headers["shared"]});
+    sqlx::query("INSERT INTO usage_http_audits (request_id, request_headers, provider_request_headers, request_body_ref, provider_request_body_ref, request_body_state, provider_request_body_state, body_capture_mode) VALUES ($1, $2, $3, $4, $5, 'reference', 'reference', 'full')")
+        .bind(&request_id).bind(&headers).bind(&provider_headers).bind(&base_ref).bind(&target_ref).execute(&pool).await.unwrap();
+    let exported = super::postgres::export_postgres_jsonl(
+        &pool,
+        vec![ExportDomain::Usage, ExportDomain::Auxiliary],
+        1_788_739_200,
+    )
+    .await
+    .unwrap();
+    let mut records = decode_jsonl(&exported).unwrap();
+    records.retain(|record| match record {
+        DataExportRecord::Manifest { .. } => true,
+        DataExportRecord::Row { payload, .. } => {
+            payload.get("request_id").and_then(Value::as_str) == Some(&request_id)
+        }
+    });
+    sqlx::query("DELETE FROM usage WHERE request_id = $1")
+        .bind(&request_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    super::postgres::import_postgres_jsonl(&pool, &encode_jsonl(&records).unwrap())
+        .await
+        .unwrap();
+    let repository = aether_data_postgres::SqlxUsageReadRepository::new(pool.clone());
+    assert_eq!(
+        repository.resolve_body_ref(&target_ref).await.unwrap(),
+        Some(target.clone())
+    );
+    assert_eq!(
+        repository
+            .find_by_request_id(&request_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .provider_request_headers,
+        Some(provider_headers.clone())
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i32>("SELECT encoding FROM usage_body_blobs WHERE body_ref = $1")
+            .bind(&target_ref).fetch_one(&pool).await.unwrap(),
+        1
+    );
+    let mut corrupted = records.clone();
+    for record in &mut corrupted {
+        if let DataExportRecord::Row { payload, .. } = record {
+            if payload.get("body_field").and_then(Value::as_str) == Some("request_body") {
+                payload["payload"] = json!("\\x7b7d");
+            }
+        }
+    }
+    assert!(
+        super::postgres::import_postgres_jsonl(&pool, &encode_jsonl(&corrupted).unwrap())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        repository.resolve_body_ref(&target_ref).await.unwrap(),
+        Some(target.clone())
+    );
+    corrupted.retain(|record| match record {
+        DataExportRecord::Manifest { .. } => true,
+        DataExportRecord::Row { payload, .. } => {
+            payload.get("body_field").and_then(Value::as_str) == Some("request_body")
+        }
+    });
+    super::postgres::import_postgres_jsonl(&pool, &encode_jsonl(&corrupted).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(
+        repository.resolve_body_ref(&base_ref).await.unwrap(),
+        Some(json!({}))
+    );
+    assert_eq!(
+        repository.resolve_body_ref(&target_ref).await.unwrap(),
+        Some(target.clone())
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i32>("SELECT encoding FROM usage_body_blobs WHERE body_ref = $1")
+            .bind(&target_ref).fetch_one(&pool).await.unwrap(),
+        0
+    );
+    for (body, headers) in [(true, false), (false, true), (true, true)] {
+        super::postgres::import_postgres_jsonl(&pool, &encode_jsonl(&records).unwrap())
+            .await
+            .unwrap();
+        sqlx::query("UPDATE usage SET created_at = '1970-01-02'::timestamptz WHERE request_id = $1")
+            .bind(&request_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let cutoff = chrono::DateTime::<chrono::Utc>::from_timestamp(172_800, 0).unwrap();
+        let summary = repository
+            .cleanup_usage(
+                &UsageCleanupWindow {
+                    body_cutoff: cutoff,
+                    header_cutoff: cutoff,
+                    log_cutoff: cutoff,
+                },
+                1,
+                false,
+                UsageCleanupTargets {
+                    body,
+                    headers,
+                    records: false,
+                    expired_keys: false,
+                },
+                UsageCleanupExecutionMode::Policy,
+            )
+            .await
+            .unwrap();
+        assert_eq!(summary.body_cleaned, usize::from(body));
+        assert_eq!(summary.header_cleaned, usize::from(headers));
+        assert_eq!(
+            repository.resolve_body_ref(&base_ref).await.unwrap(),
+            (!body).then(|| base.clone()),
+        );
+        assert_eq!(
+            repository.resolve_body_ref(&target_ref).await.unwrap(),
+            (!body).then(|| target.clone()),
+        );
+        assert_eq!(
+            repository.find_by_request_id(&request_id).await.unwrap().unwrap().provider_request_headers,
+            (!headers).then(|| provider_headers.clone()),
+        );
+    }
+    sqlx::query("DELETE FROM usage WHERE request_id = $1")
+        .bind(&request_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+#[ignore = "requires AETHER_TEST_POSTGRES_URL and PostgreSQL migrations"]
 async fn live_import_credential_policy_round_trips_through_postgres() {
     let pool = PostgresPoolFactory::new(PostgresPoolConfig {
         database_url: std::env::var("AETHER_TEST_POSTGRES_URL").unwrap(),

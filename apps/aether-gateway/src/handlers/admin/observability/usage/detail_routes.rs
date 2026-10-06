@@ -56,16 +56,17 @@ impl AdminUsageDetailBodyValue {
 
 fn admin_usage_body_load_error_code(error: &GatewayError) -> &'static str {
     if let GatewayError::Internal(message) = error {
-        if message.contains("decompressed usage json exceeds ")
-            || message.contains("encoded usage json exceeds ")
-        {
+        if message.contains("usage capture exceeds the body size limit") {
             return "too_large";
         }
         if message.contains("failed to parse usage json:")
-            || message.contains("failed to decompress usage json:")
-            || message.contains("failed to parse decompressed usage json:")
+            || message.contains("invalid usage capture")
+            || message.contains("unsupported usage capture encoding")
         {
             return "decode_failed";
+        }
+        if message.contains("missing usage capture base") {
+            return "missing";
         }
     }
     "storage_unavailable"
@@ -196,10 +197,10 @@ async fn build_admin_usage_raw_body_response(
             tracing::warn!(error = ?error, usage_id = %item.id, field = field.as_storage_field(), "failed to read admin usage raw body");
             let code = admin_usage_body_load_error_code(&error);
             admin_usage_raw_body_error(
-                if code == "too_large" {
-                    http::StatusCode::PAYLOAD_TOO_LARGE
-                } else {
-                    http::StatusCode::SERVICE_UNAVAILABLE
+                match code {
+                    "too_large" => http::StatusCode::PAYLOAD_TOO_LARGE,
+                    "missing" => http::StatusCode::NOT_FOUND,
+                    _ => http::StatusCode::SERVICE_UNAVAILABLE,
                 },
                 code,
             )
@@ -422,7 +423,7 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
             if let Some(format) = body_format {
                 if format != "raw" || body_field.is_none() {
                     return Ok(Some(admin_usage_bad_request_response(
-                        "body_format=raw 必须指定 body_field",
+                        "body_format 必须是 raw，且必须指定 body_field",
                     )));
                 }
                 if let Some(field) = body_field {
@@ -585,13 +586,15 @@ mod tests {
     fn body_load_errors_expose_safe_codes_instead_of_internal_messages() {
         for (message, expected) in [
             (
-                "unexpected database value: encoded usage json exceeds 67108864 bytes",
-                "too_large",
-            ),
-            (
                 "failed to parse usage json: invalid JSON",
                 "decode_failed",
             ),
+            ("usage capture exceeds the body size limit", "too_large"),
+            ("invalid usage capture encoding", "decode_failed"),
+            ("invalid usage capture base", "decode_failed"),
+            ("unsupported usage capture encoding", "decode_failed"),
+            ("missing usage capture base", "missing"),
+            ("usage body read capacity exhausted", "storage_unavailable"),
             (
                 "postgres error: private connection details",
                 "storage_unavailable",

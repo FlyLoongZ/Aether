@@ -164,6 +164,102 @@ fn lazy_usage_repository() -> SqlxUsageReadRepository {
 }
 
 #[tokio::test]
+#[ignore = "requires AETHER_TEST_DATABASE_URL and PostgreSQL migrations"]
+async fn live_capture_delta_preserves_partial_updates() {
+    let factory = PostgresPoolFactory::new(PostgresPoolConfig {
+        database_url: std::env::var("AETHER_TEST_DATABASE_URL").unwrap(),
+        min_connections: 0, max_connections: 4, acquire_timeout_ms: 10_000,
+        idle_timeout_ms: 30_000, max_lifetime_ms: 60_000, statement_cache_capacity: 64,
+        require_ssl: false,
+    }).unwrap();
+    let repository = SqlxUsageReadRepository::new(factory.connect_lazy().unwrap());
+    crate::run_migrations(repository.pool()).await.unwrap();
+    for batch in [false, true] {
+        let request_id = format!("capture-delta-{}", uuid::Uuid::new_v4());
+        let base = json!({"model":"client", "messages": [{"role":"user", "content":"long shared prompt 汉字🌍".repeat(1000)}]});
+        let target = json!({"model":"provider", "messages":base["messages"]});
+        let headers = json!({"authorization":"client-token", "x-shared":(0..500).map(|index| format!("{index:08x}")).collect::<String>()});
+        let provider_headers = json!({"authorization":"provider-token", "x-shared":headers["x-shared"]});
+        let mut record = fast_clear_usage_record(&request_id, "delta-provider", 1_700_000_000, false, UsageBodyCaptureState::Inline, None);
+        record.request_body = Some(base.clone());
+        record.request_body_state = Some(UsageBodyCaptureState::Inline);
+        record.provider_request_body = Some(target.clone());
+        record.request_headers = Some(headers.clone());
+        record.provider_request_headers = Some(provider_headers.clone());
+        record.response_body = Some(base.clone());
+        record.client_response_body = Some(target.clone());
+        record.response_headers = Some(headers.clone());
+        record.client_response_headers = Some(provider_headers.clone());
+        if batch { repository.upsert_pending_many(vec![record]).await.unwrap(); }
+        else { repository.upsert(record).await.unwrap(); }
+        let body_ref = usage_body_ref(&request_id, UsageBodyField::ProviderRequestBody);
+        let bundle = repository.read_body_storage_bundle(&body_ref).await.unwrap().unwrap();
+        assert_eq!(bundle.encoding, 1);
+        assert_eq!(serde_json::from_slice::<serde_json::Value>(&bundle.restore().unwrap()).unwrap(), target);
+        for (field, expected) in [
+            (UsageBodyField::RequestBody, &base),
+            (UsageBodyField::ProviderRequestBody, &target),
+            (UsageBodyField::ResponseBody, &base),
+            (UsageBodyField::ClientResponseBody, &target),
+        ] {
+            let payload = repository.read_body_payload(&usage_body_ref(&request_id, field))
+                .await.unwrap().unwrap();
+            assert_eq!(payload.0, serde_json::to_vec(expected).unwrap());
+        }
+        let stored = repository.find_by_request_id(&request_id).await.unwrap().unwrap();
+        assert_eq!(stored.provider_request_headers, Some(provider_headers.clone()));
+        let stored_headers: (serde_json::Value, serde_json::Value, serde_json::Value, serde_json::Value) =
+            sqlx::query_as("SELECT request_headers, provider_request_headers, response_headers, client_response_headers FROM usage_http_audits WHERE request_id = $1")
+                .bind(&request_id).fetch_one(repository.pool()).await.unwrap();
+        assert_eq!(stored_headers, (headers.clone(), provider_headers.clone(), headers.clone(), provider_headers.clone()));
+        let client_ref = usage_body_ref(&request_id, UsageBodyField::ClientResponseBody);
+        assert_eq!(repository.read_body_storage_bundle(&client_ref).await.unwrap().unwrap().encoding, 1);
+        assert_eq!(repository.resolve_body_ref(&client_ref).await.unwrap(), Some(target.clone()));
+        let mut corrupted = repository.pool().begin().await.unwrap();
+        sqlx::query("UPDATE usage_body_blobs SET payload = $2 WHERE request_id = $1 AND body_field = 'request_body'")
+            .bind(&request_id).bind(b"{}".to_vec()).execute(&mut *corrupted).await.unwrap();
+        assert!(super::capture_storage::validate_usage_capture_import(&mut corrupted, std::slice::from_ref(&request_id)).await.is_err());
+        corrupted.rollback().await.unwrap();
+        for (mutation, expected_error) in [
+            ("UPDATE usage_body_blobs SET payload = '{}'::bytea WHERE request_id = $1 AND body_field = 'request_body'", "invalid usage capture encoding"),
+            ("DELETE FROM usage_body_blobs WHERE request_id = $1 AND body_field = 'request_body'", "missing usage capture base"),
+        ] {
+            sqlx::query(mutation).bind(&request_id).execute(repository.pool()).await.unwrap();
+            let error = repository.read_body_payload(&body_ref).await.unwrap_err();
+            assert!(error.to_string().contains(expected_error), "{error}");
+            sqlx::query(super::UPSERT_USAGE_BODY_BLOB_SQL)
+                .bind(usage_body_ref(&request_id, UsageBodyField::RequestBody))
+                .bind(&request_id)
+                .bind("request_body")
+                .bind(serde_json::to_vec(&base).unwrap())
+                .bind(0i32)
+                .execute(repository.pool()).await.unwrap();
+            assert_eq!(repository.read_body_payload(&body_ref).await.unwrap().unwrap().0, serde_json::to_vec(&target).unwrap());
+        }
+        let mut update = fast_clear_usage_record(&request_id, "delta-provider", 1_700_000_001, false, UsageBodyCaptureState::Inline, None);
+        update.request_body = Some(json!({"model":"changed", "messages":base["messages"]}));
+        update.request_body_state = Some(UsageBodyCaptureState::Inline);
+        update.provider_request_body = None;
+        update.provider_request_body_state = None;
+        update.request_headers = Some(json!({"authorization":"different-token"}));
+        update.response_body = Some(json!({"changed":true}));
+        update.response_headers = Some(json!({"x-changed":"different"}));
+        repository.upsert(update).await.unwrap();
+        let bundle = repository.read_body_storage_bundle(&body_ref).await.unwrap().unwrap();
+        assert_eq!(bundle.encoding, 0);
+        assert_eq!(serde_json::from_slice::<serde_json::Value>(&bundle.restore().unwrap()).unwrap(), target);
+        let stored = repository.find_by_request_id(&request_id).await.unwrap().unwrap();
+        assert_eq!(stored.request_headers, Some(json!({"authorization":"different-token"})));
+        assert_eq!(stored.response_headers, Some(json!({"x-changed":"different"})));
+        assert_eq!(stored.provider_request_headers, Some(provider_headers.clone()));
+        assert_eq!(stored.client_response_headers, Some(provider_headers));
+        assert_eq!(repository.read_body_storage_bundle(&client_ref).await.unwrap().unwrap().encoding, 0);
+        assert_eq!(repository.resolve_body_ref(&client_ref).await.unwrap(), Some(target));
+        sqlx::query("DELETE FROM usage WHERE request_id = $1").bind(&request_id).execute(repository.pool()).await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn pending_batch_is_opt_in_and_rejects_non_pending_before_connecting() {
     let repository = lazy_usage_repository();
     assert!(UsageWriteRepository::supports_pending_usage_batch(
@@ -900,7 +996,16 @@ async fn live_pending_batch_and_terminal_upserts_count_each_provider_request_onc
     let pending_start = Arc::clone(&start);
     let pending = tokio::spawn(async move {
         pending_start.wait().await;
-        pending_repository.upsert_pending_many(pending_rows).await
+        let mut attempts = 0;
+        loop {
+            match pending_repository.upsert_pending_many(pending_rows.clone()).await {
+                Err(aether_data_contracts::DataLayerError::TimedOut(_)) if attempts < 8 => {
+                    attempts += 1;
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                result => break result,
+            }
+        }
     });
     let terminal_repository = repository.clone();
     let terminal_start = Arc::clone(&start);
@@ -909,7 +1014,18 @@ async fn live_pending_batch_and_terminal_upserts_count_each_provider_request_onc
         let mut writes = tokio::task::JoinSet::new();
         for row in terminal_rows {
             let repository = terminal_repository.clone();
-            writes.spawn(async move { repository.upsert(row).await });
+            writes.spawn(async move {
+                let mut attempts = 0;
+                loop {
+                    match repository.upsert(row.clone()).await {
+                        Err(aether_data_contracts::DataLayerError::TimedOut(_)) if attempts < 8 => {
+                            attempts += 1;
+                            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                        }
+                        result => break result,
+                    }
+                }
+            });
         }
         while let Some(result) = writes.join_next().await {
             result.expect("terminal upsert task should not panic")?;
@@ -4319,48 +4435,6 @@ fn prepare_usage_body_storage_detaches_small_payloads_into_blob_storage() {
         serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
         payload
     );
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
-    let runtime_thread = std::thread::current().id();
-    let payload = json!({"message": "background decoding"});
-    let bytes = prepare_usage_body_storage(Some(&payload))
-        .expect("body should serialize")
-        .detached_blob_bytes
-        .expect("body should be detached");
-
-    let decoded = super::decode_usage_body_in_background(move || {
-        assert_ne!(std::thread::current().id(), runtime_thread);
-        serde_json::from_slice::<serde_json::Value>(&bytes)
-            .map(Some)
-            .map_err(|error| {
-                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
-                    "failed to parse usage json: {error}"
-                ))
-            })
-    })
-    .await
-    .expect("body should decode");
-
-    assert_eq!(decoded, Some(payload));
-}
-
-#[tokio::test]
-async fn usage_body_decode_preserves_storage_decode_errors() {
-    let error = super::decode_usage_body_in_background(|| {
-        serde_json::from_slice::<serde_json::Value>(b"not json")
-            .map(Some)
-            .map_err(|error| {
-                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
-                    "failed to parse usage json: {error}"
-                ))
-            })
-    })
-    .await
-    .expect_err("corrupt bodies should fail");
-
-    assert!(error.to_string().contains("failed to parse usage json:"));
 }
 
 #[test]

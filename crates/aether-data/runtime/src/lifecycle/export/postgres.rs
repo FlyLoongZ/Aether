@@ -85,6 +85,15 @@ async fn import_postgres_plan_with_options(
 ) -> Result<usize, DataLayerError> {
     let identity_scope = IdentityImportScope::from_plan(plan)?;
     let mut tx = pool.begin().await.map_sql_err()?;
+    let capture_request_ids = plan.manifest.domains.iter()
+        .flat_map(|domain| plan.rows(*domain).iter().map(move |row| (*domain, row)))
+        .filter(|(domain, row)| *domain == ExportDomain::Usage ||
+            (*domain == ExportDomain::Auxiliary && matches!(row.payload.get("__table").and_then(Value::as_str), Some("usage_body_blobs"))))
+        .filter_map(|(_, row)| row.payload.get("request_id").and_then(Value::as_str).map(str::to_string))
+        .collect::<BTreeSet<_>>().into_iter().collect::<Vec<_>>();
+    for ids in capture_request_ids.chunks(1) {
+        aether_data_postgres::capture_storage::prepare_usage_capture_import(&mut tx, ids).await?;
+    }
     let identity_state = capture_postgres_identity_import_state(&mut tx, &identity_scope).await?;
     let mut imported = 0usize;
     let mut column_cache = BTreeMap::<String, PostgresImportColumns>::new();
@@ -131,6 +140,9 @@ async fn import_postgres_plan_with_options(
             .await?;
             imported = imported.saturating_add(1);
         }
+    }
+    for ids in capture_request_ids.chunks(1) {
+        aether_data_postgres::capture_storage::validate_usage_capture_import(&mut tx, ids).await?;
     }
     enforce_postgres_identity_import_invariants(&mut tx, &identity_scope, identity_state).await?;
     if !plan.rows(ExportDomain::Auxiliary).is_empty() {
@@ -614,6 +626,9 @@ async fn import_postgres_row(
         options,
     );
 
+    if table_name == "usage_body_blobs" && target_columns.contains_key("encoding") {
+        object.entry("encoding").or_insert(Value::from(0));
+    }
     let columns = object.keys().map(String::as_str).collect::<Vec<_>>();
     let column_sql = columns
         .iter()

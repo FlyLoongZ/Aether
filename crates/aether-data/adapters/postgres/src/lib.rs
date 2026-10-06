@@ -63,7 +63,7 @@ pub use tx::{
     PostgresTransaction, PostgresTransactionOptions, PostgresTransactionRunner, TransactionMode,
 };
 pub use types::DatabaseRecordId;
-pub use usage::{cleanup, SqlxUsageReadRepository};
+pub use usage::{capture_storage, cleanup, SqlxUsageReadRepository};
 pub use users::SqlxUserReadRepository;
 pub use video_tasks::{SqlxVideoTaskReadRepository, SqlxVideoTaskRepository};
 pub use wallet::SqlxWalletRepository;

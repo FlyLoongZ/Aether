@@ -2450,6 +2450,8 @@ async fn gateway_admin_usage_detail_validates_body_field_selection() {
         "body_field=",
         "include_bodies=false&body_field=request_body",
         "body_format=raw",
+        "body_format=encoded&body_field=request_body",
+        "include_bodies=false&body_format=raw&body_field=request_body",
         "body_format=unknown&body_field=request_body",
         "body_format=&body_field=request_body",
     ] {
@@ -2490,7 +2492,9 @@ async fn gateway_admin_usage_detail_raw_reads_only_selected_body_and_is_not_cach
             let response = local_admin_usage_response(
                 &state,
                 http::Method::GET,
-                &format!("/api/admin/usage/usage-selected-body?body_field={field}&body_format=raw"),
+                &format!(
+                    "/api/admin/usage/usage-selected-body?body_field={field}&body_format=raw"
+                ),
                 None,
             )
             .await;
@@ -2504,7 +2508,10 @@ async fn gateway_admin_usage_detail_raw_reads_only_selected_body_and_is_not_cach
                 "usage-selected-body"
             );
             assert_eq!(response.headers()["x-aether-body-field"], field);
-            assert_eq!(response.headers()["x-aether-body-encoding"], "json");
+            assert_eq!(
+                response.headers()["x-aether-body-encoding"],
+                "json"
+            );
             assert!(response.extensions().get::<AdminAuditEvent>().is_some());
             let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
             assert_eq!(
@@ -2513,6 +2520,65 @@ async fn gateway_admin_usage_detail_raw_reads_only_selected_body_and_is_not_cach
             );
         }
     }
+}
+
+#[tokio::test]
+#[ignore = "requires AETHER_TEST_DATABASE_URL and PostgreSQL migrations"]
+async fn live_admin_usage_detail_raw_restores_delta_and_reports_corruption() {
+    use aether_data::driver::postgres::{
+        capture_storage::encode_usage_body_delta,
+        run_migrations, PostgresPoolConfig, PostgresPoolFactory, SqlxUsageReadRepository,
+    };
+    use aether_data_contracts::repository::usage::{
+        usage_body_ref, UsageBodyField,
+    };
+
+    let pool = PostgresPoolFactory::new(PostgresPoolConfig {
+        database_url: std::env::var("AETHER_TEST_DATABASE_URL").unwrap(),
+        ..Default::default()
+    }).unwrap().connect_lazy().unwrap();
+    run_migrations(&pool).await.unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let request_id = format!("raw-capture-{id}");
+    let base = serde_json::to_vec(&json!({"input": "shared 汉字🌍".repeat(1000)})).unwrap();
+    let mut target = b"{ \"model\" : \"provider\", \"body\" : ".to_vec();
+    target.extend_from_slice(&base);
+    target.extend_from_slice(b" }");
+    let delta = encode_usage_body_delta(&base, &target).unwrap();
+    let base_ref = usage_body_ref(&request_id, UsageBodyField::RequestBody);
+    let target_ref = usage_body_ref(&request_id, UsageBodyField::ProviderRequestBody);
+    sqlx::query("INSERT INTO usage (id, request_id, provider_name, model) VALUES ($1, $2, 'raw-capture', 'test-model')")
+        .bind(&id).bind(&request_id).execute(&pool).await.unwrap();
+    for (reference, field, encoding, payload) in [
+        (&base_ref, "request_body", 0i32, base),
+        (&target_ref, "provider_request_body", 1i32, delta),
+    ] {
+        sqlx::query("INSERT INTO usage_body_blobs (body_ref, request_id, body_field, encoding, payload) VALUES ($1, $2, $3, $4, $5)")
+            .bind(reference).bind(&request_id).bind(field).bind(encoding).bind(payload)
+            .execute(&pool).await.unwrap();
+    }
+    sqlx::query("INSERT INTO usage_http_audits (request_id, request_body_ref, provider_request_body_ref, request_body_state, provider_request_body_state, body_capture_mode) VALUES ($1, $2, $3, 'reference', 'reference', 'full')")
+        .bind(&request_id).bind(&base_ref).bind(&target_ref).execute(&pool).await.unwrap();
+    let state = AppState::new().unwrap().with_data_state_for_tests(
+        GatewayDataState::with_usage_reader_for_tests(Arc::new(SqlxUsageReadRepository::new(pool.clone()))),
+    );
+    let uri = format!("/api/admin/usage/{id}?include_bodies=true&body_field=provider_request_body&body_format=raw");
+    let response = local_admin_usage_response(&state, http::Method::GET, &uri, None).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["x-aether-body-encoding"], "json");
+    assert_eq!(to_bytes(response.into_body(), target.len()).await.unwrap().as_ref(), target);
+    for (mutation, status, code) in [
+        ("UPDATE usage_body_blobs SET payload = '{}'::bytea WHERE body_ref = $1", StatusCode::SERVICE_UNAVAILABLE, "decode_failed"),
+        ("DELETE FROM usage_body_blobs WHERE body_ref = $1", StatusCode::NOT_FOUND, "missing"),
+    ] {
+        sqlx::query(mutation).bind(&base_ref).execute(&pool).await.unwrap();
+        let response = local_admin_usage_response(&state, http::Method::GET, &uri, None).await;
+        assert_eq!(response.status(), status);
+        assert_eq!(response.headers()["x-aether-body-error"], code);
+    }
+    sqlx::query("DELETE FROM usage WHERE request_id = $1")
+        .bind(&request_id).execute(&pool).await.unwrap();
+    pool.close().await;
 }
 
 #[tokio::test]

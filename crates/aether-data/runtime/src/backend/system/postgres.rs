@@ -853,14 +853,14 @@ async fn purge_postgres_request_bodies_batch(
         "usage_body_blobs",
         r#"
 WITH doomed AS (
-    SELECT body_ref
+    SELECT DISTINCT request_id
     FROM public.usage_body_blobs
-    ORDER BY body_ref ASC
+    ORDER BY request_id ASC
     LIMIT $1
 )
 DELETE FROM public.usage_body_blobs AS blobs
 USING doomed
-WHERE blobs.body_ref = doomed.body_ref
+WHERE blobs.request_id = doomed.request_id
 "#,
         summary,
         limit,
