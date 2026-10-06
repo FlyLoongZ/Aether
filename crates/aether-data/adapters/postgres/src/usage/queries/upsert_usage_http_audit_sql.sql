@@ -15,10 +15,10 @@ INSERT INTO usage_http_audits (
   body_capture_mode
 ) VALUES (
   $1,
-  $2::json,
-  $3::json,
-  $4::json,
-  $5::json,
+  $2::jsonb,
+  $3::jsonb,
+  $4::jsonb,
+  $5::jsonb,
   $6,
   $7,
   $8,

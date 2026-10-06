@@ -65,7 +65,7 @@ INNER JOIN LATERAL (
       pak.api_formats IS NULL
       OR EXISTS (
         SELECT 1
-        FROM json_array_elements_text(pak.api_formats) AS fmt(value)
+        FROM jsonb_array_elements_text(pak.api_formats) AS fmt(value)
         WHERE LOWER(BTRIM(fmt.value)) = ANY($2::text[])
       )
     )
@@ -156,7 +156,7 @@ WHERE p.is_active = TRUE
     pak.api_formats IS NULL
     OR EXISTS (
       SELECT 1
-      FROM json_array_elements_text(pak.api_formats) AS fmt(value)
+      FROM jsonb_array_elements_text(pak.api_formats) AS fmt(value)
       WHERE LOWER(BTRIM(fmt.value)) = ANY($2::text[])
     )
   )
@@ -340,7 +340,7 @@ INNER JOIN LATERAL (
       pak.api_formats IS NULL
       OR EXISTS (
         SELECT 1
-        FROM json_array_elements_text(pak.api_formats) AS fmt(value)
+        FROM jsonb_array_elements_text(pak.api_formats) AS fmt(value)
         WHERE LOWER(BTRIM(fmt.value)) = ANY($3::text[])
       )
     )
@@ -432,7 +432,7 @@ WHERE p.is_active = TRUE
     pak.api_formats IS NULL
     OR EXISTS (
       SELECT 1
-      FROM json_array_elements_text(pak.api_formats) AS fmt(value)
+      FROM jsonb_array_elements_text(pak.api_formats) AS fmt(value)
       WHERE LOWER(BTRIM(fmt.value)) = ANY($3::text[])
     )
   )
@@ -624,7 +624,7 @@ WHERE p.is_active = TRUE
     pak.api_formats IS NULL
     OR EXISTS (
       SELECT 1
-      FROM json_array_elements_text(pak.api_formats) AS fmt(value)
+      FROM jsonb_array_elements_text(pak.api_formats) AS fmt(value)
       WHERE LOWER(BTRIM(fmt.value)) = ANY($5::text[])
     )
   )

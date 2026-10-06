@@ -78,8 +78,8 @@ INSERT INTO "usage" (
   COALESCE($21, FALSE),
   COALESCE(
     CASE
-      WHEN ($49::json->>'upstream_is_stream') IN ('true', 'false')
-      THEN ($49::json->>'upstream_is_stream')::boolean
+      WHEN ($49::jsonb->>'upstream_is_stream') IN ('true', 'false')
+      THEN ($49::jsonb->>'upstream_is_stream')::boolean
       ELSE NULL
     END,
     COALESCE($21, FALSE)
@@ -124,15 +124,15 @@ INSERT INTO "usage" (
   $38,
   $39,
   $40,
-  $41::json,
-  $42::json,
-  $43::json,
-  $44::json,
-  $45::json,
-  $46::json,
-  $47::json,
-  $48::json,
-  $49::json,
+  $41::jsonb,
+  $42::jsonb,
+  $43::jsonb,
+  $44::jsonb,
+  $45::jsonb,
+  $46::jsonb,
+  $47::jsonb,
+  $48::jsonb,
+  $49::jsonb,
   CASE
     WHEN $50 IS NULL THEN NULL
     ELSE TO_TIMESTAMP($50::double precision)
