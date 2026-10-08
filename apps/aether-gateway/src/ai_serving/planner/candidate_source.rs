@@ -477,15 +477,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
     > {
         if !self.priority_page_emitted {
             self.priority_page_emitted = true;
-            let mut priority_page = self.cached_next_priority_page().await?;
-            if self.routing_policy.is_some() {
-                while let Some(mut page) = self.next_page_after_priority().await? {
-                    priority_page.candidates.append(&mut page.candidates);
-                    priority_page
-                        .skipped_candidates
-                        .append(&mut page.skipped_candidates);
-                }
-            }
+            let priority_page = self.cached_next_priority_page().await?;
             if !priority_page.candidates.is_empty() || !priority_page.skipped_candidates.is_empty()
             {
                 return Ok(Some(priority_page));
@@ -620,6 +612,11 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
             self.next_priority_page_with_planning_gate().await?
         };
         self.remember_seen_candidates_from_page(&page);
+        if self.routing_policy.is_some() {
+            // The cached snapshot includes all pages required for global ranking.
+            self.format_index = self.candidate_api_formats.len();
+            self.deferred_pages_by_format.clear();
+        }
         Ok(page)
     }
 
@@ -757,8 +754,21 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         >,
         GatewayError,
     > {
-        let _permit = acquire_candidate_planning_gate(self.state, &self.trace_id).await?;
-        self.next_priority_page().await
+        let mut priority_page = {
+            let _permit = acquire_candidate_planning_gate(self.state, &self.trace_id).await?;
+            self.next_priority_page().await?
+        };
+        // Collect inside the cache loader, not after every cache hit. Later
+        // pages may outrank the first even without explicit priority overrides.
+        if self.routing_policy.is_some() {
+            while let Some(mut page) = self.next_page_after_priority().await? {
+                priority_page.candidates.append(&mut page.candidates);
+                priority_page
+                    .skipped_candidates
+                    .append(&mut page.skipped_candidates);
+            }
+        }
+        Ok(priority_page)
     }
 
     async fn split_priority_conversion_page(

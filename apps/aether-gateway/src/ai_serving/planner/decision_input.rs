@@ -24,9 +24,9 @@ use crate::client_session_affinity::client_session_affinity_from_api_request;
 use crate::clock::current_unix_secs;
 use crate::routing::{
     apply_routing_mutation_plan, build_routing_trace_seed, resolve_gateway_routing_policy,
-    resolve_gateway_static_default_routing_policy, select_gateway_routing_group,
-    GatewayRoutingPolicyInput, GatewayRoutingSelectionError, GatewayRoutingSelectionInput,
-    GatewayStaticRoutingPolicyInput, ROUTING_GROUP_HEADER,
+    resolve_gateway_static_default_routing_policy, retarget_gateway_routing_policy,
+    select_gateway_routing_group, GatewayRoutingPolicyInput, GatewayRoutingSelectionError,
+    GatewayRoutingSelectionInput, GatewayStaticRoutingPolicyInput, ROUTING_GROUP_HEADER,
 };
 use crate::stage_metrics::observe_gateway_stage_ms;
 use crate::{AiExecutionDecision, AppState, GatewayError};
@@ -691,7 +691,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
 
     let headers_json = headers_to_routing_value(&parts.headers);
     let policy_resolve_started_at = std::time::Instant::now();
-    let policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
+    let mut policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
         group_id: group_id.as_deref(),
         group_name: group_name.as_deref(),
         group_version,
@@ -732,6 +732,11 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
         }
     }
     if requested_model_changed {
+        retarget_gateway_routing_policy(
+            &mut policy,
+            &group_config_json,
+            input.requested_model.as_str(),
+        )?;
         let model_directive_resolution = input
             .model_directive_policy
             .resolve_reasoning(client_api_format, Some(input.requested_model.as_str()));
@@ -746,35 +751,13 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
             .await;
     }
 
-    let effective_headers_json = headers_to_routing_value(&effective_headers);
     input.client_session_affinity = client_session_affinity_from_api_request(
         client_api_format,
         &effective_headers,
         Some(&effective_body_json),
     );
-    let final_policy_resolve_started_at = std::time::Instant::now();
-    let mut final_policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
-        group_id: group_id.as_deref(),
-        group_name: group_name.as_deref(),
-        group_version,
-        group_config_json: &group_config_json,
-        selection_source: selection_source.as_str(),
-        requested_model: input.requested_model.as_str(),
-        resolved_model: input.requested_model.as_str(),
-        api_format: client_api_format,
-        user_id: Some(input.auth_context.user_id.as_str()),
-        api_key_id: Some(input.auth_context.api_key_id.as_str()),
-        headers: &effective_headers_json,
-        body: &effective_body_json,
-        phase: RoutingRulePhase::ClientRequest,
-    })?;
-    observe_gateway_stage_ms(
-        "routing_policy_resolve",
-        final_policy_resolve_started_at.elapsed().as_millis() as u64,
-    );
-    final_policy.mutation_plan = policy.mutation_plan.clone();
-    input.routing_trace_seed = Some(build_routing_trace_seed(&final_policy, client_api_format));
-    input.routing_policy = Some(final_policy);
+    input.routing_trace_seed = Some(build_routing_trace_seed(&policy, client_api_format));
+    input.routing_policy = Some(policy);
     input.routing_context = Some(LocalRoutingRequestContext {
         group_id,
         group_name,

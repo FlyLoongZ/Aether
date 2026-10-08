@@ -25,7 +25,7 @@ use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::{attach_admin_audit_response, query_param_value};
 use crate::routing::{
     apply_routing_mutation_plan, build_routing_trace_seed, resolve_gateway_routing_policy,
-    GatewayRoutingPolicyInput,
+    retarget_gateway_routing_policy, GatewayRoutingPolicyInput,
 };
 use crate::GatewayError;
 
@@ -423,7 +423,12 @@ async fn dry_run_routing_group(
     let headers_json = payload.headers.unwrap_or_else(|| json!({}));
     let mut header_map = header_map_from_value(&headers_json)?;
     let mut body = payload.body.unwrap_or_else(|| json!({}));
-    let policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
+    let original_body_model = body
+        .get("model")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let phase = payload.phase.unwrap_or(RoutingRulePhase::ClientRequest);
+    let mut policy = resolve_gateway_routing_policy(GatewayRoutingPolicyInput {
         group_id: Some(group.id.as_str()),
         group_name: Some(group.name.as_str()),
         group_version: Some(group.version),
@@ -436,10 +441,20 @@ async fn dry_run_routing_group(
         api_key_id: payload.api_key_id.as_deref(),
         headers: &headers_json,
         body: &body,
-        phase: payload.phase.unwrap_or(RoutingRulePhase::ClientRequest),
+        phase,
     })?;
     let patch_summary = patch_summary(&policy.mutation_plan);
     apply_routing_mutation_plan(&mut body, &mut header_map, &policy.mutation_plan)?;
+    if phase == RoutingRulePhase::ClientRequest {
+        if let Some(model) = body
+            .get("model")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|model| !model.is_empty() && Some(*model) != original_body_model.as_deref())
+        {
+            retarget_gateway_routing_policy(&mut policy, &group.config_json, model)?;
+        }
+    }
     let mut trace = build_routing_trace_seed(&policy, api_format);
     trace.client_request_patch_summary = patch_summary.clone();
 

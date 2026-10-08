@@ -1,4 +1,4 @@
-export type RoutingConditionOp = 'eq' | 'ne' | 'in' | 'contains' | 'exists' | 'matches'
+export type RoutingConditionOp = 'eq' | 'ne' | 'in' | 'contains' | 'exists' | 'prefix' | 'suffix'
 
 export interface RoutingConditionLeaf {
   field: string
@@ -27,7 +27,8 @@ export const routingConditionOpLabels: Record<RoutingConditionOp, string> = {
   in: '包含于',
   contains: '包含',
   exists: '存在',
-  matches: '匹配',
+  prefix: '前缀匹配',
+  suffix: '后缀匹配',
 }
 
 export function isConditionLeaf(condition: RoutingCondition): condition is RoutingConditionLeaf {

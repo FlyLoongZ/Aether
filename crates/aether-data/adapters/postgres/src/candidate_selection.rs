@@ -929,7 +929,15 @@ impl SqlxMinimalCandidateSelectionReadRepository {
             sql_match_aliases(&api_format_permission_aliases(&canonical_api_format));
         let limit = i64::from(query.limit.max(1));
         let offset = i64::from(query.offset);
-        let sql = pool_key_candidate_selection_sql(&query.order);
+        let mut sql = pool_key_candidate_selection_sql(&query.order);
+        let apply_priority_overrides = !query.key_priority_overrides.is_empty()
+            && !matches!(query.order, StoredPoolKeyCandidateOrder::LoadBalance { .. });
+        if apply_priority_overrides {
+            sql = sql.replace(
+                "pak.internal_priority ASC",
+                "COALESCE(($9::jsonb ->> pak.id)::integer, pak.internal_priority) ASC",
+            );
+        }
         for api_format in storage_aliases {
             let mut query_builder = sqlx::query(sql.as_str())
                 .bind(api_format)
@@ -942,6 +950,8 @@ impl SqlxMinimalCandidateSelectionReadRepository {
                 .bind(offset);
             if let StoredPoolKeyCandidateOrder::LoadBalance { seed } = &query.order {
                 query_builder = query_builder.bind(seed.as_str());
+            } else if apply_priority_overrides {
+                query_builder = query_builder.bind(serde_json::json!(query.key_priority_overrides));
             }
             rows.extend(
                 Self::collect_query_rows(

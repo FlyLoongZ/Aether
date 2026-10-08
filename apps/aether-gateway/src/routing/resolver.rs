@@ -82,6 +82,18 @@ pub(crate) fn resolve_gateway_routing_policy(
     Ok(policy)
 }
 
+pub(crate) fn retarget_gateway_routing_policy(
+    policy: &mut ResolvedRoutingPolicy,
+    group_config_json: &Value,
+    resolved_model: &str,
+) -> Result<(), GatewayError> {
+    let config = serde_json::from_value::<RoutingGroupConfig>(group_config_json.clone())
+        .map_err(|_| invalid_routing_group_config())?;
+    policy
+        .retarget_model(&config, resolved_model)
+        .map_err(routing_policy_error)
+}
+
 pub(crate) fn resolve_gateway_static_default_routing_policy(
     input: GatewayStaticRoutingPolicyInput<'_>,
 ) -> Result<Option<ResolvedRoutingPolicy>, GatewayError> {

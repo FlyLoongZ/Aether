@@ -74,6 +74,39 @@ pub struct ResolvedRoutingPolicy {
     pub matched_rules: Vec<MatchedRoutingRule>,
 }
 
+impl ResolvedRoutingPolicy {
+    /// Refresh model overlays after a rewrite without matching rules against
+    /// the mutated request. The original matching rules retain precedence.
+    pub fn retarget_model(
+        &mut self,
+        config: &RoutingGroupConfig,
+        resolved_model: &str,
+    ) -> Result<(), RoutingPolicyError> {
+        let mut updated = self.clone();
+        updated.resolved_model = resolved_model.to_string();
+        updated.ranking_overlay = RankingOverlay::default();
+        updated.pool_policy_overrides.clear();
+        for model_policy in matching_model_policies(config, &self.requested_model, resolved_model) {
+            apply_model_policy(&mut updated, model_policy);
+        }
+        for matched in &self.matched_rules {
+            if let Some(rule) = config.rules.iter().find(|rule| rule.id == matched.id) {
+                for action in &rule.actions {
+                    if matches!(
+                        action,
+                        RoutingAction::JsonPatchBody { .. } | RoutingAction::PatchHeaders { .. }
+                    ) {
+                        continue;
+                    }
+                    apply_action(&mut updated, action, &self.requested_model, resolved_model)?;
+                }
+            }
+        }
+        *self = updated;
+        Ok(())
+    }
+}
+
 pub fn resolve_routing_policy(
     config: &RoutingGroupConfig,
     input: RoutingPolicyInput<'_>,

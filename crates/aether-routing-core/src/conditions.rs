@@ -14,7 +14,7 @@ pub enum RoutingConditionOp {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 pub enum RoutingCondition {
     All {
         all: Vec<RoutingCondition>,

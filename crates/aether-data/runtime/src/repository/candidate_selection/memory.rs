@@ -146,7 +146,7 @@ impl MinimalCandidateSelectionReadRepository for InMemoryMinimalCandidateSelecti
                     && row.model_id == query.model_id
             })
             .collect::<Vec<_>>();
-        sort_pool_key_rows(&mut rows, &query.order);
+        sort_pool_key_rows(&mut rows, &query.order, &query.key_priority_overrides);
         Ok(rows
             .into_iter()
             .skip(query.offset as usize)
@@ -191,6 +191,7 @@ impl MinimalCandidateSelectionReadRepository for InMemoryMinimalCandidateSelecti
 fn sort_pool_key_rows(
     rows: &mut [StoredMinimalCandidateSelectionRow],
     order: &StoredPoolKeyCandidateOrder,
+    priority_overrides: &std::collections::BTreeMap<String, i32>,
 ) {
     rows.sort_by(|left, right| match order {
         StoredPoolKeyCandidateOrder::LoadBalance { seed } => {
@@ -198,9 +199,14 @@ fn sort_pool_key_rows(
                 .cmp(&stable_pool_key_hash(seed.as_str(), right.key_id.as_str()))
                 .then(left.key_id.cmp(&right.key_id))
         }
-        _ => left
-            .key_internal_priority
-            .cmp(&right.key_internal_priority)
+        _ => priority_overrides
+            .get(&left.key_id)
+            .unwrap_or(&left.key_internal_priority)
+            .cmp(
+                priority_overrides
+                    .get(&right.key_id)
+                    .unwrap_or(&right.key_internal_priority),
+            )
             .then(left.key_id.cmp(&right.key_id)),
     });
 }
@@ -883,6 +889,7 @@ mod tests {
                 model_id: "model-pool".to_string(),
                 selected_provider_model_name: "gpt-5".to_string(),
                 order: StoredPoolKeyCandidateOrder::InternalPriority,
+                key_priority_overrides: Default::default(),
                 offset: 2,
                 limit: 2,
             })

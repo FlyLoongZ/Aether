@@ -368,6 +368,7 @@ pub(crate) struct PoolKeyCursor<'a> {
     requested_model: Option<String>,
     request_auth_channel: Option<String>,
     routing_overlay: Option<RankingOverlay>,
+    routing_key_priorities: BTreeMap<String, i32>,
     routing_allowed_key_ids: Option<Vec<String>>,
     effective_pool_config: Option<AdminProviderPoolConfig>,
     runtime_miss_trace_id: Option<String>,
@@ -435,6 +436,33 @@ impl<'a> PoolKeyCursor<'a> {
         let pool_key_order =
             pool_key_candidate_order_for_group(&group, effective_pool_config.as_ref());
         let routing_overlay = routing_policy.map(|policy| policy.ranking_overlay.clone());
+        let routing_key_priorities = routing_overlay
+            .as_ref()
+            .map(|overlay| {
+                let mut priorities = overlay.key_priority_overrides.clone();
+                if let Some((_, overrides)) =
+                    overlay
+                        .key_priority_overrides_by_format
+                        .iter()
+                        .find(|(format, _)| {
+                            crate::ai_serving::api_format_alias_matches(
+                                format,
+                                &group.candidate.endpoint_api_format,
+                            )
+                        })
+                {
+                    priorities.extend(overrides.clone());
+                }
+                priorities
+            })
+            .unwrap_or_default();
+        // Priority-based paging must not be preempted by an unrelated score top-N.
+        let skip_score_phase = !routing_key_priorities.is_empty()
+            && matches!(
+                pool_key_order,
+                StoredPoolKeyCandidateOrder::InternalPriority
+                    | StoredPoolKeyCandidateOrder::SingleAccount
+            );
         let routing_allowed_key_ids = routing_policy
             .map(|policy| &policy.ranking_overlay.allowed_keys)
             .filter(|key_ids| !key_ids.is_empty())
@@ -466,6 +494,7 @@ impl<'a> PoolKeyCursor<'a> {
             requested_model: requested_model.map(str::to_string),
             request_auth_channel: request_auth_channel.map(str::to_string),
             routing_overlay,
+            routing_key_priorities,
             routing_allowed_key_ids,
             effective_pool_config,
             runtime_miss_trace_id: None,
@@ -480,7 +509,7 @@ impl<'a> PoolKeyCursor<'a> {
             absolute_max_scanned_keys: absolute_max_scanned_keys.max(window_config.window_size),
             score_top_n,
             score_next_offset: 0,
-            score_phase_exhausted: false,
+            score_phase_exhausted: skip_score_phase,
             score_schedule_interest_count: 0,
             routing_allowed_key_offset: 0,
             routing_allowed_rows: None,
@@ -663,6 +692,7 @@ impl<'a> PoolKeyCursor<'a> {
             model_id: self.group.candidate.model_id.clone(),
             selected_provider_model_name: self.group.candidate.selected_provider_model_name.clone(),
             order: self.pool_key_order.clone(),
+            key_priority_overrides: self.routing_key_priorities.clone(),
             offset: self.next_offset,
             limit,
         };
@@ -766,30 +796,17 @@ impl<'a> PoolKeyCursor<'a> {
                         return None;
                     }
                 };
-                let api_format = self.group.candidate.endpoint_api_format.as_str();
                 rows.sort_by(|left, right| {
-                    let left_priority = self.routing_overlay.as_ref().map_or(
-                        left.key_internal_priority,
-                        |overlay| {
-                            overlay.key_priority_for_format(
-                                &left.key_id,
-                                api_format,
-                                left.key_internal_priority,
-                            )
-                        },
-                    );
-                    let right_priority = self.routing_overlay.as_ref().map_or(
-                        right.key_internal_priority,
-                        |overlay| {
-                            overlay.key_priority_for_format(
-                                &right.key_id,
-                                api_format,
-                                right.key_internal_priority,
-                            )
-                        },
-                    );
+                    let left_priority = self
+                        .routing_key_priorities
+                        .get(&left.key_id)
+                        .unwrap_or(&left.key_internal_priority);
+                    let right_priority = self
+                        .routing_key_priorities
+                        .get(&right.key_id)
+                        .unwrap_or(&right.key_internal_priority);
                     left_priority
-                        .cmp(&right_priority)
+                        .cmp(right_priority)
                         .then(left.key_id.cmp(&right.key_id))
                 });
                 self.routing_allowed_key_offset = key_ids.len();
@@ -1326,7 +1343,7 @@ impl<'a> PoolKeyCursor<'a> {
 
     async fn build_eligible_candidate(
         &mut self,
-        candidate: aether_scheduler_core::SchedulerMinimalCandidateSelectionCandidate,
+        mut candidate: aether_scheduler_core::SchedulerMinimalCandidateSelectionCandidate,
     ) -> Option<EligibleLocalExecutionCandidate> {
         if self
             .routing_overlay
@@ -1367,6 +1384,10 @@ impl<'a> PoolKeyCursor<'a> {
         ) {
             self.record_skip_reason(skip_reason);
             return None;
+        }
+        if let Some(priority) = self.routing_key_priorities.get(&candidate.key_id) {
+            candidate.key_internal_priority = *priority;
+            candidate.key_global_priority_for_format = Some(*priority);
         }
         Some(EligibleLocalExecutionCandidate {
             kind: LocalExecutionCandidateKind::SingleKey,

@@ -463,6 +463,7 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
             model_id: query.model_id.clone(),
             selected_provider_model_name: query.selected_provider_model_name.clone(),
             order: CandidateSelectionPoolOrderKey::from(&query.order),
+            key_priority_overrides: query.key_priority_overrides.clone(),
             offset: query.offset,
             limit: query.limit,
         };
@@ -520,6 +521,7 @@ enum CandidateSelectionCacheKey {
         model_id: String,
         selected_provider_model_name: String,
         order: CandidateSelectionPoolOrderKey,
+        key_priority_overrides: std::collections::BTreeMap<String, i32>,
         offset: u32,
         limit: u32,
     },
@@ -1227,6 +1229,7 @@ mod tests {
             order: StoredPoolKeyCandidateOrder::LoadBalance {
                 seed: seed.to_string(),
             },
+            key_priority_overrides: Default::default(),
             offset: 0,
             limit: 2,
         };

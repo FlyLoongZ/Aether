@@ -6,7 +6,7 @@ pub(crate) mod trace;
 pub(crate) use mutations::apply_routing_mutation_plan;
 pub(crate) use resolver::{
     resolve_gateway_routing_policy, resolve_gateway_static_default_routing_policy,
-    GatewayRoutingPolicyInput, GatewayStaticRoutingPolicyInput,
+    retarget_gateway_routing_policy, GatewayRoutingPolicyInput, GatewayStaticRoutingPolicyInput,
 };
 pub(crate) use selection::{
     model_scoped_group_from, select_gateway_routing_group, GatewayRoutingGroupSelection,

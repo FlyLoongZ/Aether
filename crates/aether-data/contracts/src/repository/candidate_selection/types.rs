@@ -67,6 +67,8 @@ pub struct StoredPoolKeyCandidateRowsQuery {
     pub selected_provider_model_name: String,
     #[serde(default)]
     pub order: StoredPoolKeyCandidateOrder,
+    #[serde(default)]
+    pub key_priority_overrides: std::collections::BTreeMap<String, i32>,
     pub offset: u32,
     pub limit: u32,
 }
