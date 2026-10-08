@@ -46,6 +46,7 @@ pub(crate) enum LocalExecutionCandidateKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct SkippedLocalExecutionCandidate {
+    pub(crate) kind: LocalExecutionCandidateKind,
     pub(crate) candidate: SchedulerMinimalCandidateSelectionCandidate,
     pub(crate) skip_reason: &'static str,
     pub(crate) transport: Option<Arc<GatewayProviderTransportSnapshot>>,
@@ -104,6 +105,7 @@ impl AiCandidateResolutionPort for GatewayLocalCandidateResolutionPort<'_> {
             "local execution candidate skipped during planning"
         );
         SkippedLocalExecutionCandidate {
+            kind: LocalExecutionCandidateKind::SingleKey,
             candidate,
             skip_reason: "transport_snapshot_missing",
             transport: None,
@@ -166,6 +168,11 @@ impl AiCandidateResolutionPort for GatewayLocalCandidateResolutionPort<'_> {
             "local execution candidate skipped during planning"
         );
         SkippedLocalExecutionCandidate {
+            kind: if provider_transport_uses_pool(&transport) {
+                LocalExecutionCandidateKind::PoolGroup
+            } else {
+                LocalExecutionCandidateKind::SingleKey
+            },
             candidate,
             skip_reason,
             transport: Some(transport),

@@ -161,6 +161,7 @@ pub(super) async fn list_local_video_create_candidate_attempts(
             preselection_skipped
                 .into_iter()
                 .map(|item| SkippedLocalExecutionCandidate {
+                    kind: crate::ai_serving::planner::candidate_resolution::LocalExecutionCandidateKind::SingleKey,
                     candidate: item.candidate,
                     skip_reason: item.skip_reason,
                     transport: None,
@@ -234,6 +235,7 @@ pub(super) async fn build_local_video_create_candidate_attempt_source<'a>(
         preselection_skipped
             .into_iter()
             .map(|item| SkippedLocalExecutionCandidate {
+                kind: crate::ai_serving::planner::candidate_resolution::LocalExecutionCandidateKind::SingleKey,
                 candidate: item.candidate,
                 skip_reason: item.skip_reason,
                 transport: None,
@@ -330,7 +332,8 @@ pub(super) async fn mark_skipped_local_video_candidate(
     state: &AppState,
     input: &LocalVideoCreateDecisionInput,
     trace_id: &str,
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
+    client_api_format: &str,
+    eligible: &crate::ai_serving::planner::candidate_resolution::EligibleLocalExecutionCandidate,
     candidate_index: u32,
     candidate_id: &str,
     skip_reason: &'static str,
@@ -344,7 +347,9 @@ pub(super) async fn mark_skipped_local_video_candidate(
         state,
         trace_id,
         persistence_policy.skipped,
-        candidate,
+        input.routing_policy.as_ref(),
+        client_api_format,
+        eligible,
         candidate_index,
         candidate_id,
         skip_reason,
@@ -356,7 +361,8 @@ pub(super) async fn mark_skipped_local_video_candidate_with_failure_diagnostic(
     state: &AppState,
     input: &LocalVideoCreateDecisionInput,
     trace_id: &str,
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
+    client_api_format: &str,
+    eligible: &crate::ai_serving::planner::candidate_resolution::EligibleLocalExecutionCandidate,
     candidate_index: u32,
     candidate_id: &str,
     skip_reason: &'static str,
@@ -371,7 +377,9 @@ pub(super) async fn mark_skipped_local_video_candidate_with_failure_diagnostic(
         state,
         trace_id,
         persistence_policy.skipped,
-        candidate,
+        input.routing_policy.as_ref(),
+        client_api_format,
+        eligible,
         candidate_index,
         candidate_id,
         skip_reason,

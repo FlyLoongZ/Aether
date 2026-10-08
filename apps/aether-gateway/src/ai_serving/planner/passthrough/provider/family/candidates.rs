@@ -161,6 +161,7 @@ pub(crate) async fn materialize_local_same_format_provider_candidate_attempts(
         preselection_skipped
             .into_iter()
             .map(|item| SkippedLocalExecutionCandidate {
+                kind: crate::ai_serving::planner::candidate_resolution::LocalExecutionCandidateKind::SingleKey,
                 candidate: item.candidate,
                 skip_reason: item.skip_reason,
                 transport: None,
@@ -271,6 +272,7 @@ pub(crate) async fn build_local_same_format_provider_candidate_attempt_source<'a
         preselection_skipped
             .into_iter()
             .map(|item| SkippedLocalExecutionCandidate {
+                kind: crate::ai_serving::planner::candidate_resolution::LocalExecutionCandidateKind::SingleKey,
                 candidate: item.candidate,
                 skip_reason: item.skip_reason,
                 transport: None,

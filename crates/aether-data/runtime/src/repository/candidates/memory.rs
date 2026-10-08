@@ -18,6 +18,7 @@ fn merge_extra_data(
     existing: Option<serde_json::Value>,
     overlay: Option<serde_json::Value>,
     preserve_error_details: bool,
+    merge_routing_trace: bool,
 ) -> Option<serde_json::Value> {
     match (existing, overlay) {
         (
@@ -33,6 +34,36 @@ fn merge_extra_data(
                     "request_body_build_error",
                 ] {
                     overlay_object.remove(key);
+                }
+            }
+            if merge_routing_trace {
+                if let (Some(existing_trace), Some(overlay_trace)) = (
+                    existing_object
+                        .get("routing_trace")
+                        .and_then(serde_json::Value::as_object),
+                    overlay_object
+                        .get_mut("routing_trace")
+                        .and_then(serde_json::Value::as_object_mut),
+                ) {
+                    if preserve_error_details {
+                        *overlay_trace = existing_trace.clone();
+                    } else {
+                        if let (Some(old_facts), Some(new_facts)) = (
+                            existing_trace
+                                .get("runtime_facts")
+                                .and_then(serde_json::Value::as_object),
+                            overlay_trace
+                                .get_mut("runtime_facts")
+                                .and_then(serde_json::Value::as_object_mut),
+                        ) {
+                            let mut facts = old_facts.clone();
+                            facts.extend(new_facts.clone());
+                            *new_facts = facts;
+                        }
+                        let mut trace = existing_trace.clone();
+                        trace.extend(overlay_trace.clone());
+                        *overlay_trace = trace;
+                    }
                 }
             }
             existing_object.extend(overlay_object);
@@ -486,6 +517,7 @@ impl RequestCandidateWriteRepository for InMemoryRequestCandidateRepository {
                 existing.as_ref().and_then(|row| row.extra_data.clone()),
                 candidate.extra_data,
                 preserve_existing_lifecycle,
+                preserve_existing_lifecycle || candidate.status == RequestCandidateStatus::Skipped,
             ),
             required_capabilities: candidate.required_capabilities.or_else(|| {
                 existing

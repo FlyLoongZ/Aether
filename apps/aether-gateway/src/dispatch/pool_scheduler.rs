@@ -561,6 +561,7 @@ impl<'a> PoolKeyCursor<'a> {
             .map(|(reason, count)| ((*reason).to_string(), serde_json::json!(count)))
             .collect::<serde_json::Map<String, serde_json::Value>>();
         Some(SkippedLocalExecutionCandidate {
+            kind: self.group.kind,
             candidate: self.group.candidate.clone(),
             skip_reason: self.runtime_miss_pool_exhaustion_skip_reason(),
             transport: Some(self.group.transport.clone()),
@@ -1045,6 +1046,7 @@ impl<'a> PoolKeyCursor<'a> {
             self.record_skip_reason(POOL_ACCOUNT_EXHAUSTED_SKIP_REASON);
             self.skipped_candidates
                 .push(SkippedLocalExecutionCandidate {
+                    kind: LocalExecutionCandidateKind::SingleKey,
                     candidate: pool_candidate_from_catalog_key(&self.group, key),
                     skip_reason: POOL_ACCOUNT_EXHAUSTED_SKIP_REASON,
                     transport: None,
@@ -1130,6 +1132,7 @@ impl<'a> PoolKeyCursor<'a> {
         self.record_skip_reason(ROUTING_PROFILE_DISALLOWED_KEY_SKIP_REASON);
         self.skipped_candidates
             .push(SkippedLocalExecutionCandidate {
+                kind: candidate.kind,
                 candidate: candidate.candidate.clone(),
                 skip_reason: ROUTING_PROFILE_DISALLOWED_KEY_SKIP_REASON,
                 transport: Some(candidate.transport.clone()),
@@ -1154,6 +1157,7 @@ impl<'a> PoolKeyCursor<'a> {
                 self.record_skip_reason("pool_cooldown");
                 self.skipped_candidates
                     .push(SkippedLocalExecutionCandidate {
+                        kind: candidate.kind,
                         candidate: candidate.candidate.clone(),
                         skip_reason: "pool_cooldown",
                         transport: Some(candidate.transport.clone()),
@@ -1824,6 +1828,7 @@ fn run_local_execution_pool_scheduler_with_runtime_map(
                 });
                 if should_seal_cold_member {
                     skipped_candidates.push(SkippedLocalExecutionCandidate {
+                        kind: candidate.kind,
                         candidate: candidate.candidate.clone(),
                         skip_reason: POOL_ACTIVE_PROBE_SEALED_SKIP_REASON,
                         transport: Some(candidate.transport.clone()),
@@ -1858,6 +1863,7 @@ fn run_local_execution_pool_scheduler_with_runtime_map(
         .collect::<Vec<_>>();
     skipped_candidates.extend(outcome.skipped_candidates.into_iter().map(|skipped| {
         SkippedLocalExecutionCandidate {
+            kind: skipped.candidate.kind,
             candidate: skipped.candidate.candidate,
             skip_reason: skipped.skip_reason,
             transport: Some(skipped.candidate.transport),

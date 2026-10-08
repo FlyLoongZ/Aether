@@ -162,6 +162,9 @@ pub(crate) fn apply_provider_request_routing_policy_to_decision_with_websocket_m
     );
 
     let Some(context) = input.routing_context.as_ref() else {
+        if let Some(policy) = input.routing_policy.as_ref() {
+            ensure_report_context_routing_trace(input, decision, policy);
+        }
         // Cache identity headers are projected only at the terminal boundary. Any non-empty
         // session headers already present here are explicit client or header-rule inputs and stay
         // authoritative.

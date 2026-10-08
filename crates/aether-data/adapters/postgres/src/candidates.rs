@@ -476,7 +476,23 @@ fn postgres_candidate_upsert_sql(template: &str) -> String {
             "__AETHER_CANDIDATE_EXTRA_DATA__",
             "CASE WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped') \
              AND (EXCLUDED.status <> request_candidates.status OR EXCLUDED.extra_data IS NULL) \
-             THEN request_candidates.extra_data ELSE EXCLUDED.extra_data END",
+             THEN request_candidates.extra_data \
+             WHEN EXCLUDED.status = 'skipped' \
+             AND jsonb_typeof(request_candidates.extra_data->'routing_trace') = 'object' \
+             AND jsonb_typeof(EXCLUDED.extra_data->'routing_trace') = 'object' \
+             THEN EXCLUDED.extra_data || jsonb_build_object('routing_trace', \
+                  (request_candidates.extra_data->'routing_trace') || (EXCLUDED.extra_data->'routing_trace') \
+                  || CASE WHEN jsonb_typeof(request_candidates.extra_data->'routing_trace'->'runtime_facts') = 'object' \
+                          AND jsonb_typeof(EXCLUDED.extra_data->'routing_trace'->'runtime_facts') = 'object' \
+                     THEN jsonb_build_object('runtime_facts', \
+                          (request_candidates.extra_data->'routing_trace'->'runtime_facts') \
+                          || (EXCLUDED.extra_data->'routing_trace'->'runtime_facts')) \
+                     ELSE '{}'::jsonb END) \
+             WHEN EXCLUDED.extra_data->'routing_trace' IS NULL \
+             AND jsonb_typeof(request_candidates.extra_data->'routing_trace') = 'object' \
+             THEN COALESCE(EXCLUDED.extra_data, '{}'::jsonb) \
+                  || jsonb_build_object('routing_trace', request_candidates.extra_data->'routing_trace') \
+             ELSE EXCLUDED.extra_data END",
         )
 }
 
@@ -1457,7 +1473,8 @@ mod tests {
             assert!(
                 sql.contains("COALESCE(EXCLUDED.error_message, request_candidates.error_message)")
             );
-            assert!(sql.contains("THEN request_candidates.extra_data ELSE EXCLUDED.extra_data END"));
+            assert!(sql.contains("THEN request_candidates.extra_data"));
+            assert!(sql.contains("ELSE EXCLUDED.extra_data END"));
             assert!(sql.contains("required_capabilities = EXCLUDED.required_capabilities"));
             assert!(!sql.contains("COALESCE(request_candidates.extra_data"));
             assert!(!sql.contains("request_candidates.required_capabilities"));

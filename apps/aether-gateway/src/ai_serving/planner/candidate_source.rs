@@ -1348,6 +1348,8 @@ fn skipped_local_execution_candidate_from_scheduler_skip(
     skipped_candidate: SchedulerSkippedCandidate,
 ) -> SkippedLocalExecutionCandidate {
     SkippedLocalExecutionCandidate {
+        kind:
+            crate::ai_serving::planner::candidate_resolution::LocalExecutionCandidateKind::SingleKey,
         candidate: skipped_candidate.candidate,
         skip_reason: skipped_candidate.skip_reason,
         transport: None,

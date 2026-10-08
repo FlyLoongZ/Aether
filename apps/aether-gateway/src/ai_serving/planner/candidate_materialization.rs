@@ -1721,22 +1721,11 @@ fn attach_routing_trace_to_skipped_candidate(
     selected_order: u32,
     mut skipped_candidate: SkippedLocalExecutionCandidate,
 ) -> SkippedLocalExecutionCandidate {
-    let kind = if skipped_candidate
-        .transport
-        .as_ref()
-        .is_some_and(|transport| {
-            admin_provider_pool_config_from_config_value(transport.provider.config.as_ref())
-                .is_some()
-        }) {
-        LocalExecutionCandidateKind::PoolGroup
-    } else {
-        LocalExecutionCandidateKind::SingleKey
-    };
     skipped_candidate.extra_data = attach_routing_trace_to_extra_data(
         routing_policy,
         client_api_format,
         &skipped_candidate.candidate,
-        kind,
+        skipped_candidate.kind,
         skipped_candidate.ranking.as_ref(),
         Some(skipped_candidate.skip_reason),
         Some(selected_order),
@@ -1768,6 +1757,21 @@ fn attach_routing_trace_to_extra_data(
         skip_reason,
         selected_order,
     );
+    let mut routing_trace = serde_json::json!(routing_trace);
+    let fields = routing_trace
+        .as_object_mut()
+        .expect("routing trace is an object");
+    // This stage has not observed provider mutations or pool expansion.
+    fields.remove("provider_request_patch_summary");
+    fields.remove("pool_expansion");
+    if ranking.is_none() {
+        if let Some(facts) = fields
+            .get_mut("runtime_facts")
+            .and_then(Value::as_object_mut)
+        {
+            facts.remove("cache_affinity_hit");
+        }
+    }
     Some(merge_routing_trace_into_extra_data(
         extra_data,
         routing_trace,
@@ -1776,7 +1780,7 @@ fn attach_routing_trace_to_extra_data(
 
 fn merge_routing_trace_into_extra_data(
     extra_data: Option<Value>,
-    routing_trace: RoutingDecisionTrace,
+    mut routing_trace: Value,
 ) -> Value {
     let mut object = match extra_data {
         Some(Value::Object(object)) => object,
@@ -1787,10 +1791,54 @@ fn merge_routing_trace_into_extra_data(
         }
         None => serde_json::Map::new(),
     };
-    object.insert(
-        "routing_trace".to_string(),
-        serde_json::json!(routing_trace),
-    );
+    if let (Some(Value::Object(mut existing)), Some(incoming)) = (
+        object.remove("routing_trace"),
+        routing_trace.as_object_mut(),
+    ) {
+        if let (Some(old_facts), Some(new_facts)) = (
+            existing.get("runtime_facts").and_then(Value::as_object),
+            incoming
+                .get_mut("runtime_facts")
+                .and_then(Value::as_object_mut),
+        ) {
+            let mut facts = old_facts.clone();
+            facts.extend(new_facts.clone());
+            *new_facts = facts;
+        }
+        if let (Some(old_candidates), Some(new_candidates)) = (
+            existing.get("global_candidates").and_then(Value::as_array),
+            incoming
+                .get_mut("global_candidates")
+                .and_then(Value::as_array_mut),
+        ) {
+            let mut candidates = old_candidates.clone();
+            for update in new_candidates.iter() {
+                let matched = candidates.iter_mut().find(|candidate| {
+                    [
+                        "candidate_kind",
+                        "provider_id",
+                        "endpoint_id",
+                        "model_id",
+                        "key_id",
+                    ]
+                    .iter()
+                    .all(|field| candidate.get(*field) == update.get(*field))
+                });
+                if let (Some(candidate), Some(fields)) =
+                    (matched.and_then(Value::as_object_mut), update.as_object())
+                {
+                    candidate.extend(fields.clone());
+                } else {
+                    candidates.push(update.clone());
+                }
+            }
+            *new_candidates = candidates;
+        }
+        // Only supplied facts win; omitted fields retain the previous snapshot.
+        existing.extend(incoming.clone());
+        routing_trace = Value::Object(existing);
+    }
+    object.insert("routing_trace".to_string(), routing_trace);
     Value::Object(object)
 }
 
@@ -1995,24 +2043,24 @@ pub(crate) async fn mark_skipped_local_execution_candidate(
     state: &AppState,
     trace_id: &str,
     context: LocalSkippedCandidatePersistenceContext<'_>,
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
+    routing_policy: Option<&ResolvedRoutingPolicy>,
+    client_api_format: &str,
+    eligible: &EligibleLocalExecutionCandidate,
     candidate_index: u32,
     candidate_id: &str,
     skip_reason: &'static str,
 ) {
-    persist_skipped_local_execution_candidate(
+    mark_skipped_local_execution_candidate_with_extra_data(
         state,
         trace_id,
-        context.user_id,
-        context.api_key_id,
-        candidate,
+        context,
+        routing_policy,
+        client_api_format,
+        eligible,
         candidate_index,
         candidate_id,
-        context.required_capabilities,
         skip_reason,
         None,
-        context.error_context,
-        context.record_runtime_miss_diagnostic,
     )
     .await;
 }
@@ -2021,18 +2069,30 @@ pub(crate) async fn mark_skipped_local_execution_candidate_with_extra_data(
     state: &AppState,
     trace_id: &str,
     context: LocalSkippedCandidatePersistenceContext<'_>,
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
+    routing_policy: Option<&ResolvedRoutingPolicy>,
+    client_api_format: &str,
+    eligible: &EligibleLocalExecutionCandidate,
     candidate_index: u32,
     candidate_id: &str,
     skip_reason: &'static str,
     extra_data: Option<Value>,
 ) {
+    let extra_data = attach_routing_trace_to_extra_data(
+        routing_policy,
+        client_api_format,
+        &eligible.candidate,
+        eligible.kind,
+        eligible.ranking.as_ref(),
+        Some(skip_reason),
+        Some(candidate_index),
+        extra_data,
+    );
     persist_skipped_local_execution_candidate(
         state,
         trace_id,
         context.user_id,
         context.api_key_id,
-        candidate,
+        &eligible.candidate,
         candidate_index,
         candidate_id,
         context.required_capabilities,
@@ -2048,7 +2108,9 @@ pub(crate) async fn mark_skipped_local_execution_candidate_with_failure_diagnost
     state: &AppState,
     trace_id: &str,
     context: LocalSkippedCandidatePersistenceContext<'_>,
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
+    routing_policy: Option<&ResolvedRoutingPolicy>,
+    client_api_format: &str,
+    eligible: &EligibleLocalExecutionCandidate,
     candidate_index: u32,
     candidate_id: &str,
     skip_reason: &'static str,
@@ -2058,7 +2120,9 @@ pub(crate) async fn mark_skipped_local_execution_candidate_with_failure_diagnost
         state,
         trace_id,
         context,
-        candidate,
+        routing_policy,
+        client_api_format,
+        eligible,
         candidate_index,
         candidate_id,
         skip_reason,
@@ -3103,6 +3167,7 @@ mod tests {
             0,
             vec![
                 SkippedLocalExecutionCandidate {
+                    kind: LocalExecutionCandidateKind::SingleKey,
                     candidate: sample_candidate("pool-skipped"),
                     skip_reason: "pool_cooldown",
                     transport: Some(sample_transport(
@@ -3113,6 +3178,7 @@ mod tests {
                     extra_data: None,
                 },
                 SkippedLocalExecutionCandidate {
+                    kind: LocalExecutionCandidateKind::SingleKey,
                     candidate: sample_candidate("normal-skipped"),
                     skip_reason: "key_inactive",
                     transport: None,
