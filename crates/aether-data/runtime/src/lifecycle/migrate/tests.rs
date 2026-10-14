@@ -402,7 +402,7 @@ fn empty_database_snapshot_sql_includes_usage_body_blobs_and_audit_admin_role() 
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_created_id_desc"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_request_candidates_endpoint_status_created"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_background_task_runs_status_created"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_legacy_body_ref_cleanup_created_at"));
+    assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_legacy_body_ref_cleanup_created_at"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_settlement_dashboard_cover"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_stale_pending_created_request"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("autovacuum_analyze_scale_factor = 0.02"));
@@ -1682,6 +1682,7 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20261007000000,
             20261008000000,
             20261009000000,
+            20261011000000,
             20261019010000,
         ]
     );
@@ -3104,12 +3105,7 @@ async fn postgres_migrations_repair_invalid_concurrent_indexes() {
 
     for (migration_version, index_name, table_name) in [
         (
-            20260715000000_i64,
-            "idx_usage_legacy_body_ref_cleanup_created_at",
-            "public.usage",
-        ),
-        (
-            20260918000000,
+            20260918000000_i64,
             "idx_usage_settlement_dashboard_cover_v2",
             "public.usage_settlement_snapshots",
         ),
