@@ -69,13 +69,6 @@ const ADMIN_USAGE_CHILD_TABLES: &[&str] = &[
     "user_model_usage_counts",
 ];
 
-const USAGE_BODY_FIELD_COLUMNS: &[&str] = &[
-    "request_body",
-    "response_body",
-    "provider_request_body",
-    "client_response_body",
-];
-
 const ADMIN_USER_SCOPED_TABLES: &[&str] = &[
     "stats_user_daily_cost_savings_model_provider",
     "stats_user_daily_cost_savings_model",

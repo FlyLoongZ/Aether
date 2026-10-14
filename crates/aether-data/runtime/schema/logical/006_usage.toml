@@ -354,17 +354,7 @@ type = "json"
 nullable = true
 
 [[table.usage.columns]]
-name = "request_body"
-type = "json"
-nullable = true
-
-[[table.usage.columns]]
 name = "provider_request_headers"
-type = "json"
-nullable = true
-
-[[table.usage.columns]]
-name = "provider_request_body"
 type = "json"
 nullable = true
 
@@ -374,17 +364,7 @@ type = "json"
 nullable = true
 
 [[table.usage.columns]]
-name = "response_body"
-type = "json"
-nullable = true
-
-[[table.usage.columns]]
 name = "client_response_headers"
-type = "json"
-nullable = true
-
-[[table.usage.columns]]
-name = "client_response_body"
 type = "json"
 nullable = true
 

@@ -349,9 +349,14 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
                 "batch={batch}, field={field:?}"
             );
         }
-        let legacy_content_present: bool = sqlx::query_scalar("SELECT request_body IS NOT NULL OR request_headers IS NOT NULL OR response_body IS NOT NULL FROM usage WHERE request_id = $1")
-            .bind(&request_id).fetch_one(repository.pool()).await.unwrap();
-        assert!(!legacy_content_present);
+        let legacy_header_present: bool = sqlx::query_scalar(
+            "SELECT request_headers IS NOT NULL FROM usage WHERE request_id = $1",
+        )
+        .bind(&request_id)
+        .fetch_one(repository.pool())
+        .await
+        .unwrap();
+        assert!(!legacy_header_present);
         sqlx::query("DELETE FROM usage WHERE request_id = $1")
             .bind(&request_id)
             .execute(repository.pool())
@@ -1782,28 +1787,13 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
     .expect("clear tombstone should be stored");
     assert!(physical_metadata.get("provider_service_tier").is_none());
 
-    let physical_body =
-        sqlx::query("SELECT provider_request_body FROM \"usage\" WHERE request_id = $1")
-            .bind(&request_id)
-            .fetch_one(repository.pool())
-            .await
-            .expect("physical body columns should be readable");
-    assert!(physical_body
-        .try_get::<Option<serde_json::Value>, _>("provider_request_body")
-        .expect("provider body column should decode")
-        .is_none());
-
     let physical_http = sqlx::query(
-        "SELECT provider_request_body_ref, provider_request_body_state FROM usage_http_audits WHERE request_id = $1",
+        "SELECT provider_request_body_state FROM usage_http_audits WHERE request_id = $1",
     )
     .bind(&request_id)
     .fetch_one(repository.pool())
     .await
     .expect("HTTP audit row should be readable");
-    assert!(physical_http
-        .try_get::<Option<String>, _>("provider_request_body_ref")
-        .expect("provider body ref should decode")
-        .is_none());
     assert_eq!(
         physical_http
             .try_get::<Option<String>, _>("provider_request_body_state")
@@ -3557,7 +3547,6 @@ fn usage_sql_qualifies_shared_usage_columns_for_single_record_fetches() {
 #[test]
 fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS request_headers"));
-    assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS provider_request_body"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_ref"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_state"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX
@@ -3569,7 +3558,6 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("LEFT JOIN usage_settlement_snapshots"));
     assert!(super::LIST_USAGE_AUDITS_PREFIX.contains("settlement_billing_snapshot_schema_version"));
     assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS request_headers"));
-    assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS provider_request_body"));
     assert!(super::LIST_RECENT_USAGE_AUDITS_PREFIX
         .contains("NULL::varchar AS http_client_response_body_ref"));
     assert!(
@@ -3710,7 +3698,7 @@ async fn live_usage_list_metadata_preserves_boolean_chat_pii_redaction() {
         // Extract the entire outer CASE, including its gate, instead of duplicating the
         // production expression. Omitting the marker from either branch must fail.
         let projection = prefix
-            .split_once("NULL::jsonb AS client_response_body,\n")
+            .split_once("NULL::jsonb AS client_response_headers,\n")
             .and_then(|(_, tail)| tail.split_once("  END AS request_metadata,"))
             .map(|(projection, _)| projection)
             .expect("list metadata projection should be present");
@@ -3828,7 +3816,7 @@ fn usage_sql_reads_list_output_price_from_settlement_snapshots_before_legacy_usa
 
 #[test]
 fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
-    for placeholder in [41, 42, 43, 44, 45, 46, 47, 48, 49] {
+    for placeholder in [41, 42, 43, 44, 45] {
         assert!(
             super::UPSERT_SQL.contains(format!("${placeholder}::jsonb").as_str()),
             "missing ::jsonb cast for placeholder ${placeholder}"
@@ -3839,15 +3827,15 @@ fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
 #[test]
 fn usage_sql_insert_values_aligns_request_metadata_and_timestamps() {
     let sql = normalize_newlines(super::UPSERT_SQL);
-    assert!(sql.contains("\n  $48::jsonb,\n  $49::jsonb,\n  CASE"));
-    assert!(sql.contains("WHEN $50 IS NULL THEN NULL"));
-    assert!(sql.contains("TO_TIMESTAMP($51::double precision)"));
+    assert!(sql.contains("\n  $44::jsonb,\n  $45::jsonb,\n  CASE"));
+    assert!(sql.contains("WHEN $46 IS NULL THEN NULL"));
+    assert!(sql.contains("TO_TIMESTAMP($47::double precision)"));
 }
 
 #[test]
 fn usage_sql_upsert_materializes_upstream_stream_mode() {
     assert!(super::UPSERT_SQL.contains("upstream_is_stream,"));
-    assert!(super::UPSERT_SQL.contains("$49::jsonb->>'upstream_is_stream'"));
+    assert!(super::UPSERT_SQL.contains("$45::jsonb->>'upstream_is_stream'"));
     assert!(super::UPSERT_SQL.contains("COALESCE($21, FALSE)"));
     assert!(super::UPSERT_SQL.contains("upstream_is_stream = CASE"));
 }
@@ -3910,9 +3898,9 @@ fn usage_sql_settlement_pricing_snapshot_billing_values_use_authoritative_incomi
 #[test]
 fn usage_sql_upsert_recovers_missing_provider_links_after_billing_finalizes() {
     for assignment in [
-        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
-        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
-        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
+        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
+        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
+        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
     ] {
         assert!(
             super::UPSERT_SQL.contains(assignment),
@@ -3988,29 +3976,12 @@ fn usage_sql_clears_legacy_header_columns_on_upsert() {
 }
 
 #[test]
-fn usage_sql_detached_body_flags_clear_body_columns() {
-    for flag in ["$53", "$54", "$55", "$56"] {
-        assert!(
-            super::UPSERT_SQL.contains(format!("WHEN {flag} THEN NULL").as_str()),
-            "missing detached body clear flag: {flag}"
-        );
-    }
-}
-
-#[test]
-fn usage_sql_capture_guard_covers_bodies_metadata_and_http_ref_tombstones() {
-    for assignment in [
-        "request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "provider_request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "client_response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-    ] {
-        assert!(
-            super::UPSERT_SQL.contains(assignment),
-            "missing guard: {assignment}"
-        );
-    }
+fn usage_sql_capture_guard_covers_metadata_and_http_ref_tombstones() {
+    assert!(
+        super::UPSERT_SQL
+            .contains("request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $49"),
+        "missing request_metadata guard"
+    );
     for assignment in [
         "WHEN EXCLUDED.request_body_state = 'none' THEN NULL",
         "WHEN EXCLUDED.provider_request_body_state = 'none' THEN NULL",
@@ -4030,7 +4001,7 @@ fn usage_sql_capture_guard_covers_bodies_metadata_and_http_ref_tombstones() {
 #[test]
 fn usage_sql_terminal_snapshots_replace_sparse_routing_and_settlement_facts() {
     assert!(super::UPSERT_SQL.contains(
-        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $57 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
+        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $49 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
     ));
     let routing = super::UPSERT_USAGE_ROUTING_SNAPSHOT_SQL;
     assert!(routing.contains("candidate_id = CASE WHEN $14 THEN EXCLUDED.candidate_id"));

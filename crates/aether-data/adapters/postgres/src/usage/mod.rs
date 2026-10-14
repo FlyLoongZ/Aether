@@ -2138,13 +2138,9 @@ INSERT INTO "usage" (
   status,
   billing_status,
   request_headers,
-  request_body,
   provider_request_headers,
-  provider_request_body,
   response_headers,
-  response_body,
   client_response_headers,
-  client_response_body,
   request_metadata,
   finalized_at,
   created_at,
@@ -3073,8 +3069,7 @@ ORDER BY request_count DESC, "usage".provider_name ASC
         &self,
         request_id: &str,
     ) -> Result<Option<StoredRequestUsageAudit>, DataLayerError> {
-        let sql = shallow_usage_body_projection_sql(FIND_BY_REQUEST_ID_SQL);
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(FIND_BY_REQUEST_ID_SQL)
             .bind(request_id)
             .fetch_optional(&self.pool)
             .await
@@ -3129,35 +3124,21 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?;
-        if let Some(row) = row {
-            let Some(bytes) = row
-                .try_get::<Option<Vec<u8>>, _>("payload")
-                .map_postgres_err()?
-            else {
-                return Ok(None);
-            };
-            if bytes.len() > MAX_USAGE_BODY_BYTES {
-                return Err(DataLayerError::UnexpectedValue(format!(
-                    "encoded usage json exceeds {MAX_USAGE_BODY_BYTES} bytes"
-                )));
-            }
-            return Ok(Some(StoredUsageBodyPayload(bytes)));
-        }
-        let inline_column = usage_body_inline_column(field);
-        let row = sqlx::query(&format!(
-            "SELECT {inline_column}::text AS inline_body FROM \"usage\" WHERE request_id = $1 LIMIT 1"
-        ))
-        .bind(request_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_postgres_err()?;
         let Some(row) = row else {
             return Ok(None);
         };
-        Ok(row
-            .try_get::<Option<String>, _>("inline_body")
+        let Some(bytes) = row
+            .try_get::<Option<Vec<u8>>, _>("payload")
             .map_postgres_err()?
-            .map(|body| StoredUsageBodyPayload(body.into_bytes())))
+        else {
+            return Ok(None);
+        };
+        if bytes.len() > MAX_USAGE_BODY_BYTES {
+            return Err(DataLayerError::UnexpectedValue(format!(
+                "encoded usage json exceeds {MAX_USAGE_BODY_BYTES} bytes"
+            )));
+        }
+        Ok(Some(StoredUsageBodyPayload(bytes)))
     }
 
     pub async fn resolve_body_ref(&self, body_ref: &str) -> Result<Option<Value>, DataLayerError> {
@@ -8969,10 +8950,6 @@ ORDER BY "usage".user_id ASC
                         .bind(None::<String>)
                         .bind(None::<String>)
                         .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
                         .bind(&request_metadata_json)
                         .bind(usage.finalized_at_unix_secs.map(|value| value as f64))
                         .bind(usage.created_at_unix_ms.map(|value| value as f64))
@@ -8982,16 +8959,6 @@ ORDER BY "usage".user_id ASC
                                 usage.updated_at_unix_secs
                             ))
                         })?)
-                        .bind(request_body_storage.has_detached_blob() || clear_request_body)
-                        .bind(
-                            provider_request_body_storage.has_detached_blob()
-                                || clear_provider_request_body,
-                        )
-                        .bind(response_body_storage.has_detached_blob() || clear_response_body)
-                        .bind(
-                            client_response_body_storage.has_detached_blob()
-                                || clear_client_response_body,
-                        )
                         .bind(capture_update_allowed)
                         .fetch_one(&mut **tx)
                         .await
@@ -9432,10 +9399,8 @@ ORDER BY "usage".user_id ASC
                 .push_bind(row.first_byte_time_ms)
                 .push_bind(row.usage.status.clone())
                 .push_bind(row.usage.billing_status.clone())
-                .push("CAST(NULL AS jsonb)")
-                .push("CAST(NULL AS jsonb)")
-                .push("CAST(NULL AS jsonb)")
-                .push("CAST(NULL AS jsonb)")
+                // The four header mirrors are always NULL here: the HTTP audit row
+                // owns them, and the body columns no longer exist at all.
                 .push("CAST(NULL AS jsonb)")
                 .push("CAST(NULL AS jsonb)")
                 .push("CAST(NULL AS jsonb)")
@@ -12264,13 +12229,9 @@ fn map_usage_row(row: &sqlx::postgres::PgRow) -> Result<StoredRequestUsageAudit,
         .try_get::<Option<String>, _>("client_family")
         .map_postgres_err()?;
     usage.request_headers = row.try_get("request_headers").map_postgres_err()?;
-    let request_body = usage_json_column(row, "request_body")?;
     usage.provider_request_headers = row.try_get("provider_request_headers").map_postgres_err()?;
-    let provider_request_body = usage_json_column(row, "provider_request_body")?;
     usage.response_headers = row.try_get("response_headers").map_postgres_err()?;
-    let response_body = usage_json_column(row, "response_body")?;
     usage.client_response_headers = row.try_get("client_response_headers").map_postgres_err()?;
-    let client_response_body = usage_json_column(row, "client_response_body")?;
     let request_metadata: Option<Value> = row.try_get("request_metadata").map_postgres_err()?;
     let http_audit_refs = UsageHttpAuditRefs {
         request_body_ref: row_try_get_optional(row, "http_request_body_ref")?,
@@ -12300,10 +12261,6 @@ fn map_usage_row(row: &sqlx::postgres::PgRow) -> Result<StoredRequestUsageAudit,
     };
     let routing_snapshot = usage_routing_snapshot_from_row(row)?;
     let settlement_pricing_snapshot = usage_settlement_pricing_snapshot_from_row(row)?;
-    usage.request_body = request_body;
-    usage.provider_request_body = provider_request_body;
-    usage.response_body = response_body;
-    usage.client_response_body = client_response_body;
     let request_metadata_object = request_metadata.as_ref().and_then(Value::as_object);
     usage.request_body_ref = resolved_read_usage_body_ref(
         None,
@@ -12351,27 +12308,6 @@ fn map_usage_row(row: &sqlx::postgres::PgRow) -> Result<StoredRequestUsageAudit,
         &settlement_pricing_snapshot,
     );
     Ok(usage)
-}
-
-fn shallow_usage_body_projection_sql(sql: &str) -> String {
-    let replacements = [
-        ("\"usage\".request_body,", "NULL::jsonb AS request_body,"),
-        (
-            "\"usage\".provider_request_body,",
-            "NULL::jsonb AS provider_request_body,",
-        ),
-        ("\"usage\".response_body,", "NULL::jsonb AS response_body,"),
-        (
-            "\"usage\".client_response_body,",
-            "NULL::jsonb AS client_response_body,",
-        ),
-    ];
-
-    replacements
-        .into_iter()
-        .fold(sql.to_string(), |current, (from, to)| {
-            current.replace(from, to)
-        })
 }
 
 fn to_i32(value: u64) -> Result<i32, DataLayerError> {
@@ -13556,14 +13492,6 @@ fn usage_settlement_pricing_snapshot_from_usage(
     })
 }
 
-fn usage_json_column(
-    row: &sqlx::postgres::PgRow,
-    inline_column: &str,
-) -> Result<Option<Value>, DataLayerError> {
-    row.try_get::<Option<Value>, _>(inline_column)
-        .map_postgres_err()
-}
-
 #[cfg(test)]
 fn attach_usage_http_audit_body_refs(
     metadata: Option<Value>,
@@ -14047,15 +13975,6 @@ fn attach_usage_settlement_pricing_snapshot_metadata(
         snapshot.price_per_request,
     );
     (!metadata.is_empty()).then_some(Value::Object(metadata))
-}
-
-fn usage_body_inline_column(field: UsageBodyField) -> &'static str {
-    match field {
-        UsageBodyField::RequestBody => "request_body",
-        UsageBodyField::ProviderRequestBody => "provider_request_body",
-        UsageBodyField::ResponseBody => "response_body",
-        UsageBodyField::ClientResponseBody => "client_response_body",
-    }
 }
 
 #[cfg(test)]

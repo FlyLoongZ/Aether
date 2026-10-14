@@ -82,11 +82,7 @@ FROM usage
 WHERE created_at < $1
   AND ($2::timestamptz IS NULL OR created_at >= $2)
   AND (
-    request_body IS NOT NULL
-    OR response_body IS NOT NULL
-    OR provider_request_body IS NOT NULL
-    OR client_response_body IS NOT NULL
-    OR EXISTS (
+    EXISTS (
       SELECT 1
       FROM usage_body_blobs
       WHERE usage_body_blobs.request_id = usage.request_id
@@ -130,14 +126,6 @@ WHERE created_at < $1
   )
 ORDER BY created_at ASC, id ASC
 LIMIT $2
-"#;
-const CLEAR_USAGE_BODY_FIELDS_SQL: &str = r#"
-UPDATE usage
-SET request_body = NULL,
-    response_body = NULL,
-    provider_request_body = NULL,
-    client_response_body = NULL
-WHERE id = ANY($1)
 "#;
 const DELETE_USAGE_BODY_BLOBS_SQL: &str = r#"
 DELETE FROM usage_body_blobs
@@ -461,11 +449,7 @@ FROM usage
 WHERE created_at < $1
   AND ($2::timestamptz IS NULL OR created_at >= $2)
   AND (
-    request_body IS NOT NULL
-    OR response_body IS NOT NULL
-    OR provider_request_body IS NOT NULL
-    OR client_response_body IS NOT NULL
-    OR EXISTS (
+    EXISTS (
       SELECT 1
       FROM usage_body_blobs
       WHERE usage_body_blobs.request_id = usage.request_id
@@ -655,18 +639,12 @@ async fn cleanup_usage_stale_body_fields(
         if rows.is_empty() {
             break;
         }
-        let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
         let request_ids = rows
             .iter()
             .map(|row| row.request_id.clone())
             .collect::<Vec<_>>();
 
-        let cleaned = sqlx::query(CLEAR_USAGE_BODY_FIELDS_SQL)
-            .bind(ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?
-            .rows_affected();
+        let cleaned = rows.len();
         sqlx::query(DELETE_USAGE_BODY_BLOBS_SQL)
             .bind(&request_ids)
             .execute(pool)
@@ -682,7 +660,6 @@ async fn cleanup_usage_stale_body_fields(
             .execute(pool)
             .await
             .map_err(postgres_error)?;
-        let cleaned = usize::try_from(cleaned).unwrap_or(usize::MAX);
         total_cleaned += cleaned;
         if rows.len() < batch_size {
             break;

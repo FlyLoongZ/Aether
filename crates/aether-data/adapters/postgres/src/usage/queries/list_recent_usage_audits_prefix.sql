@@ -163,13 +163,9 @@ SELECT
     NULLIF(BTRIM("usage".request_metadata->>'client_family'), '')
   ) AS client_family,
   NULL::jsonb AS request_headers,
-  NULL::jsonb AS request_body,
   NULL::jsonb AS provider_request_headers,
-  NULL::jsonb AS provider_request_body,
   NULL::jsonb AS response_headers,
-  NULL::jsonb AS response_body,
   NULL::jsonb AS client_response_headers,
-  NULL::jsonb AS client_response_body,
   CASE
     WHEN NULLIF(BTRIM("usage".request_metadata->>'client_ip'), '') IS NOT NULL
       OR NULLIF(BTRIM("usage".request_metadata->>'routing_group_id'), '') IS NOT NULL

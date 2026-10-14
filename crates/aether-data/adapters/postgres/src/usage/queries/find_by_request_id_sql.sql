@@ -163,19 +163,15 @@ SELECT
     NULLIF(BTRIM("usage".request_metadata->>'client_family'), '')
   ) AS client_family,
   COALESCE(usage_http_audits.request_headers, "usage".request_headers) AS request_headers,
-  "usage".request_body,
   COALESCE(
     usage_http_audits.provider_request_headers,
     "usage".provider_request_headers
   ) AS provider_request_headers,
-  "usage".provider_request_body,
   COALESCE(usage_http_audits.response_headers, "usage".response_headers) AS response_headers,
-  "usage".response_body,
   COALESCE(
     usage_http_audits.client_response_headers,
     "usage".client_response_headers
   ) AS client_response_headers,
-  "usage".client_response_body,
   "usage".request_metadata,
   usage_http_audits.request_body_ref AS http_request_body_ref,
   usage_http_audits.provider_request_body_ref AS http_provider_request_body_ref,

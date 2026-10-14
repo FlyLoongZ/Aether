@@ -602,25 +602,6 @@ WHERE request_count <> 0
         }
         AdminSystemPurgeTarget::RequestBodies => {
             pg_delete_table(tx, "usage_body_blobs", summary).await?;
-            pg_execute_if_table_has_columns(
-                tx,
-                "usage",
-                USAGE_BODY_FIELD_COLUMNS,
-                "usage_body_fields_cleaned",
-                r#"
-UPDATE public.usage
-SET request_body = NULL,
-    response_body = NULL,
-    provider_request_body = NULL,
-    client_response_body = NULL
-WHERE request_body IS NOT NULL
-   OR response_body IS NOT NULL
-   OR provider_request_body IS NOT NULL
-   OR client_response_body IS NOT NULL
-"#,
-                summary,
-            )
-            .await?;
             pg_execute_if_table(
                 tx,
                 "usage_http_audits",
@@ -858,34 +839,6 @@ WHERE blobs.body_ref = doomed.body_ref
         limit,
     )
     .await?;
-    pg_execute_batch_if_table_has_columns(
-        tx,
-        "usage",
-        USAGE_BODY_FIELD_COLUMNS,
-        "usage_body_fields_cleaned",
-        r#"
-WITH batch AS (
-    SELECT request_id
-    FROM public.usage
-    WHERE request_body IS NOT NULL
-       OR response_body IS NOT NULL
-       OR provider_request_body IS NOT NULL
-       OR client_response_body IS NOT NULL
-    ORDER BY created_at_unix_ms ASC, request_id ASC
-    LIMIT $1
-)
-UPDATE public.usage AS usage_rows
-SET request_body = NULL,
-    response_body = NULL,
-    provider_request_body = NULL,
-    client_response_body = NULL
-FROM batch
-WHERE usage_rows.request_id = batch.request_id
-"#,
-        summary,
-        limit,
-    )
-    .await?;
     pg_execute_batch_if_table(
         tx,
         "usage_http_audits",
@@ -1007,26 +960,6 @@ async fn pg_execute_if_table(
     Ok(())
 }
 
-async fn pg_execute_if_table_has_columns(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    table: &str,
-    columns: &[&str],
-    key: &str,
-    sql: &str,
-    summary: &mut AdminSystemPurgeSummary,
-) -> Result<(), DataLayerError> {
-    if !pg_table_has_columns(tx, checked_sql_identifier(table)?, columns).await? {
-        return Ok(());
-    }
-    let rows = sqlx::query(sql)
-        .execute(&mut **tx)
-        .await
-        .map_postgres_err()?
-        .rows_affected();
-    summary.add(key, rows);
-    Ok(())
-}
-
 async fn pg_execute_batch_if_table(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     table: &str,
@@ -1036,28 +969,6 @@ async fn pg_execute_batch_if_table(
     limit: i64,
 ) -> Result<(), DataLayerError> {
     if !pg_table_exists(tx, checked_sql_identifier(table)?).await? {
-        return Ok(());
-    }
-    let rows = sqlx::query(sql)
-        .bind(limit)
-        .execute(&mut **tx)
-        .await
-        .map_postgres_err()?
-        .rows_affected();
-    summary.add(key, rows);
-    Ok(())
-}
-
-async fn pg_execute_batch_if_table_has_columns(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    table: &str,
-    columns: &[&str],
-    key: &str,
-    sql: &str,
-    summary: &mut AdminSystemPurgeSummary,
-    limit: i64,
-) -> Result<(), DataLayerError> {
-    if !pg_table_has_columns(tx, checked_sql_identifier(table)?, columns).await? {
         return Ok(());
     }
     let rows = sqlx::query(sql)
@@ -1080,38 +991,6 @@ async fn pg_table_exists(
         .fetch_one(&mut **tx)
         .await
         .map_postgres_err()
-}
-
-async fn pg_table_has_columns(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    table: &str,
-    columns: &[&str],
-) -> Result<bool, DataLayerError> {
-    let table = checked_sql_identifier(table)?;
-    if !pg_table_exists(tx, table).await? {
-        return Ok(false);
-    }
-    for column in columns {
-        let column = checked_sql_identifier(column)?;
-        let exists: bool = sqlx::query_scalar(
-            "SELECT EXISTS (
-                SELECT 1
-                FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = $1
-                  AND column_name = $2
-            )",
-        )
-        .bind(table)
-        .bind(column)
-        .fetch_one(&mut **tx)
-        .await
-        .map_postgres_err()?;
-        if !exists {
-            return Ok(false);
-        }
-    }
-    Ok(true)
 }
 
 impl PostgresBackend {

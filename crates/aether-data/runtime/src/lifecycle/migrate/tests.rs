@@ -1552,9 +1552,6 @@ fn deprecation_migration_and_baseline_mark_legacy_usage_columns() {
         .contains("COMMENT ON COLUMN public.usage.request_headers"));
     assert!(http_migration
         .sql
-        .contains("COMMENT ON COLUMN public.usage.request_body"));
-    assert!(http_migration
-        .sql
         .contains("COMMENT ON COLUMN public.usage.billing_status"));
     assert!(http_migration
         .sql
@@ -1566,7 +1563,6 @@ fn deprecation_migration_and_baseline_mark_legacy_usage_columns() {
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.username"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.api_key_name"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.request_headers"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.request_body"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.billing_status"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.finalized_at"));
 }
