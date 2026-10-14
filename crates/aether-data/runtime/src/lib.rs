@@ -1,8 +1,8 @@
 //! Runtime data access for Aether.
 //!
 //! This crate is the runtime composition facade. It selects concrete SQL
-//! adapters, owns in-memory repositories and maintenance/backfill/export
-//! workflows, and exposes application-facing backend handles. Shared repository
+//! adapters, owns in-memory repositories and maintenance/backfill workflows,
+//! and exposes application-facing backend handles. Shared repository
 //! contracts live in `aether-data-contracts`; request-path SQL and executable
 //! migrations live in the driver adapter crates.
 //!
