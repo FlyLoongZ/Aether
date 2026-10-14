@@ -130,6 +130,7 @@ pub fn should_skip_upstream_passthrough_header(name: &str) -> bool {
             // Claude CLI client identifier; re-injected by the Claude Code adapter
             // when the upstream is Anthropic, filtered for everybody else.
             | "x-app"
+            | "x-trace-id"
         )
         || should_skip_request_header(name)
 }
@@ -159,6 +160,7 @@ pub(crate) fn should_skip_upstream_complete_passthrough_header(name: &str) -> bo
                 | "x-forwarded-scheme"
                 | "x-forwarded-host"
                 | "x-forwarded-port"
+                | "x-trace-id"
         )
         || should_skip_request_header(name)
 }
@@ -408,6 +410,18 @@ mod tests {
                 "complete passthrough should strip {header}"
             );
         }
+    }
+
+    #[test]
+    fn strips_trace_id_from_upstream_passthrough() {
+        for header in ["x-trace-id", "X-Trace-Id", "X-TRACE-ID"] {
+            assert!(should_skip_upstream_passthrough_header(header));
+            assert!(should_skip_upstream_complete_passthrough_header(header));
+        }
+        assert!(!should_skip_request_header("x-request-id"));
+        // The tunnel relay re-uses `should_skip_request_header` to carry trace
+        // ids between gateway instances, so that shared filter must keep it.
+        assert!(!should_skip_request_header("x-trace-id"));
     }
 
     #[test]
