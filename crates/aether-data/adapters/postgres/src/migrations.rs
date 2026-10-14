@@ -231,7 +231,6 @@ async fn repair_invalid_concurrent_index(
 ) -> Result<(), MigrateError> {
     // Only these fixed, trusted identifiers may be interpolated into DROP INDEX.
     let index_name = match migration_version {
-        20260715000000 => "idx_usage_legacy_body_ref_cleanup_created_at",
         20260715130000 => "idx_usage_settlement_dashboard_cover",
         20260720000000 => "idx_usage_stale_pending_created_request",
         20260918000000 => "idx_usage_settlement_dashboard_cover_v2",
@@ -462,6 +461,7 @@ mod tests {
             20260920000000,
             20260921020000,
             20260921020100,
+            20261011000000,
         ] {
             let migration = POSTGRES_MIGRATOR
                 .iter()
