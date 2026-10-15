@@ -6,6 +6,16 @@ use tokio::sync::Semaphore;
 
 static USAGE_PREPARATION_EXECUTOR: OnceLock<UsagePreparationExecutor> = OnceLock::new();
 
+/// Workers allowed to compress captured body pairs at once.
+///
+/// Compression is the one expensive step of a usage write, and it is deliberately
+/// not run inside the preparation executor: that one bounds how many callers may
+/// hold their input records, and a pair can take a second to compress, which would
+/// either reject callers or force the bound up to a number that bounds nothing.
+/// Compressing only needs a worker bound, because the caller holds the serialized
+/// container either way.
+static USAGE_BODY_COMPRESSION_WORKERS: Semaphore = Semaphore::const_new(4);
+
 pub(super) async fn prepare_usage_in_background<T: Send + 'static>(
     prepare: impl FnOnce() -> Result<T, DataLayerError> + Send + 'static,
 ) -> Result<T, DataLayerError> {
@@ -15,6 +25,30 @@ pub(super) async fn prepare_usage_in_background<T: Send + 'static>(
         })
         .run(prepare)
         .await
+}
+
+/// Compresses prepared body pairs off the runtime thread.
+///
+/// There is no admission limit and no queue deadline on purpose: callers wait for
+/// a worker instead of being turned away, and the work they wait with is the
+/// serialized container they are about to write anyway.
+pub(super) async fn compress_usage_bodies_in_background<T: Send + 'static>(
+    compress: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, DataLayerError> {
+    let worker = USAGE_BODY_COMPRESSION_WORKERS
+        .acquire()
+        .await
+        .map_err(|_| {
+            DataLayerError::TimedOut("usage body compression workers unavailable".to_string())
+        })?;
+    tokio::task::spawn_blocking(move || {
+        let _worker = worker;
+        compress()
+    })
+    .await
+    .map_err(|error| {
+        DataLayerError::TimedOut(format!("usage body compression worker failed: {error}"))
+    })
 }
 
 struct UsagePreparationExecutor {

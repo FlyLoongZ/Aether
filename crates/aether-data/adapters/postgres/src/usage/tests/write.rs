@@ -673,14 +673,14 @@ fn usage_sql_recovers_void_failures_before_upsert_and_settlement() {
 async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
     let runtime_thread = std::thread::current().id();
     let payload = json!({"message": "background decoding"});
-    let bytes = prepare_usage_body_storage(Some(&payload))
-        .expect("body should serialize")
-        .detached_blob_bytes
-        .expect("body should be detached");
+    let storage = prepare_usage_body_pair(UsageBodyField::RequestBody, Some(&payload), None)
+        .expect("body should serialize");
+    let encoding = storage.encoding;
+    let bytes = storage.payload.expect("body should be detached");
 
     let decoded = super::super::decode_usage_body_in_background(move || {
         assert_ne!(std::thread::current().id(), runtime_thread);
-        serde_json::from_slice::<serde_json::Value>(&bytes)
+        decode_container(encoding, &bytes)
             .map(Some)
             .map_err(|error| {
                 aether_data_contracts::DataLayerError::UnexpectedValue(format!(
@@ -691,7 +691,13 @@ async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
     .await
     .expect("body should decode");
 
-    assert_eq!(decoded, Some(payload));
+    assert_eq!(
+        container_body(
+            &decoded.expect("body should decode"),
+            UsageBodyField::RequestBody
+        ),
+        Some(payload)
+    );
 }
 
 #[test]

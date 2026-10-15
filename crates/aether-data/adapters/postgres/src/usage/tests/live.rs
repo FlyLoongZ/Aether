@@ -2351,3 +2351,85 @@ async fn live_usage_health_timeline_totals_match_breakdown() {
             .expect("cleanup verification query");
     assert_eq!(remaining, 0, "探针数据必须清理干净，不能留在测试库里");
 }
+
+#[tokio::test]
+#[ignore = "requires AETHER_TEST_DATABASE_URL and PostgreSQL migrations"]
+async fn live_partial_update_keeps_the_other_half_of_a_body_pair() {
+    let factory = PostgresPoolFactory::new(PostgresPoolConfig {
+        database_url: std::env::var("AETHER_TEST_DATABASE_URL").unwrap(),
+        min_connections: 1,
+        max_connections: 2,
+        acquire_timeout_ms: 10_000,
+        idle_timeout_ms: 30_000,
+        max_lifetime_ms: 60_000,
+        statement_cache_capacity: 64,
+        require_ssl: false,
+    })
+    .unwrap();
+    let repository = SqlxUsageReadRepository::new(factory.connect_lazy().unwrap());
+    crate::run_migrations(repository.pool()).await.unwrap();
+
+    let request_id = format!("req-pair-merge-{}", uuid::Uuid::new_v4().simple());
+    let now_unix_secs = Utc::now().timestamp() as u64;
+    let mut first = fast_clear_usage_record(
+        &request_id,
+        "pair-merge-test",
+        now_unix_secs,
+        false,
+        UsageBodyCaptureState::Inline,
+        None,
+    );
+    first.request_body = Some(json!({"messages": [{"role": "user", "content": "hello"}]}));
+    first.provider_request_body = Some(json!({
+        "model": "gpt-5",
+        "messages": [{"role": "user", "content": "hello"}]
+    }));
+    first.request_body_state = Some(UsageBodyCaptureState::Reference);
+    first.provider_request_body_state = Some(UsageBodyCaptureState::Reference);
+    repository.upsert(first).await.unwrap();
+
+    // A later update that carries only one half must not drop the other: both live
+    // in the same stored frame, so the missing half has to be merged back in.
+    let mut second = fast_clear_usage_record(
+        &request_id,
+        "pair-merge-test",
+        now_unix_secs + 1,
+        false,
+        UsageBodyCaptureState::Inline,
+        None,
+    );
+    second.status = "streaming".to_string();
+    second.request_body = Some(json!({"messages": [{"role": "user", "content": "again"}]}));
+    second.provider_request_body = None;
+    second.request_body_state = Some(UsageBodyCaptureState::Reference);
+    second.provider_request_body_state = Some(UsageBodyCaptureState::Reference);
+    repository.upsert(second).await.unwrap();
+
+    let stored = repository
+        .find_by_request_id_shallow(&request_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        repository
+            .resolve_body_ref(&stored.body_ref(UsageBodyField::RequestBody).unwrap())
+            .await
+            .unwrap(),
+        Some(json!({"messages": [{"role": "user", "content": "again"}]}))
+    );
+    assert_eq!(
+        repository
+            .resolve_body_ref(
+                &stored
+                    .body_ref(UsageBodyField::ProviderRequestBody)
+                    .unwrap()
+            )
+            .await
+            .unwrap(),
+        Some(json!({
+            "model": "gpt-5",
+            "messages": [{"role": "user", "content": "hello"}]
+        }))
+    );
+}
+

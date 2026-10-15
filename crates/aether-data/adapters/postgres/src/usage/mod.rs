@@ -85,10 +85,12 @@ mod preparation;
 mod projection_reader;
 
 use body_codec::{
-    container_body, decode_container, is_container, BodyPair, BROWSER_DECODABLE_MAX_BYTES,
-    ENCODING_ZSTD_CONTAINER, MAX_DECODABLE_CONTAINER_BYTES,
+    build_container, container_body, decode_container, encode_container_bytes, is_container,
+    serialize_container, serialize_pair_container, BodyPair, BROWSER_DECODABLE_MAX_BYTES,
+    ENCODING_RAW_CONTAINER, ENCODING_RAW_SINGLE, ENCODING_ZSTD_CONTAINER,
+    MAX_DECODABLE_CONTAINER_BYTES,
 };
-use preparation::prepare_usage_in_background;
+use preparation::{compress_usage_bodies_in_background, prepare_usage_in_background};
 
 const MAX_SUPPORTED_UNIX_SECS: u64 = 253_402_300_799;
 const FIND_USAGE_BODY_BLOB_SQL: &str = r#"SELECT payload, encoding, logical_bytes FROM usage_body_blobs WHERE request_id = $1 AND body_field = $2 LIMIT 1"#;
@@ -8844,6 +8846,13 @@ ORDER BY "usage".user_id ASC
         // while preparing them. Stale lifecycle updates still ignore preparation errors below.
         let (usage, prepared) =
             prepare_usage_in_background(move || Ok(prepare_usage_for_persistence(usage))).await?;
+        // Preparation errors stay deferred to the transaction, which knows whether the
+        // update is stale. Compression runs outside the bounded preparation step and
+        // outside the transaction.
+        let prepared = match prepared {
+            Ok(prepared) => Ok(compress_usage_body_pairs(prepared).await?),
+            Err(error) => Err(error),
+        };
         self.tx_runner
             .run_read_write(|tx| {
                 Box::pin(async move {
@@ -8892,10 +8901,7 @@ ORDER BY "usage".user_id ASC
                         provider_request_headers_json,
                         response_headers_json,
                         client_response_headers_json,
-                        request_body_storage,
-                        provider_request_body_storage,
-                        response_body_storage,
-                        client_response_body_storage,
+                        bodies,
                         http_audit_states,
                         http_audit_capture_mode,
                         routing_snapshot,
@@ -9029,40 +9035,36 @@ ORDER BY "usage".user_id ASC
                         .await
                         .map_postgres_err()?;
                     if capture_update_allowed {
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
+                        // A stored row holds both halves of its pair, so a partial update
+                        // merges back the half it did not carry before writing.
+                        let request_body_merged = merge_usage_body_pair_storage(
+                            tx,
                             &usage.request_id,
-                            UsageBodyField::RequestBody,
-                            usage.request_body.as_ref(),
-                            &request_body_storage,
-                            clear_request_body,
+                            &bodies.request,
+                            previous_usage.as_ref(),
+                            [clear_request_body, clear_provider_request_body],
                         )
                         .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
+                        let response_body_merged = merge_usage_body_pair_storage(
+                            tx,
                             &usage.request_id,
-                            UsageBodyField::ProviderRequestBody,
-                            usage.provider_request_body.as_ref(),
-                            &provider_request_body_storage,
-                            clear_provider_request_body,
+                            &bodies.response,
+                            previous_usage.as_ref(),
+                            [clear_response_body, clear_client_response_body],
                         )
                         .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
+                        sync_usage_body_pair_storage(
+                            tx,
                             &usage.request_id,
-                            UsageBodyField::ResponseBody,
-                            usage.response_body.as_ref(),
-                            &response_body_storage,
-                            clear_response_body,
+                            request_body_merged.as_ref().unwrap_or(&bodies.request),
+                            clear_request_body && clear_provider_request_body,
                         )
                         .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
+                        sync_usage_body_pair_storage(
+                            tx,
                             &usage.request_id,
-                            UsageBodyField::ClientResponseBody,
-                            usage.client_response_body.as_ref(),
-                            &client_response_body_storage,
-                            clear_client_response_body,
+                            response_body_merged.as_ref().unwrap_or(&bodies.response),
+                            clear_response_body && clear_client_response_body,
                         )
                         .await?;
                         let http_audit_headers = UsageHttpAuditHeaders {
@@ -9106,20 +9108,22 @@ ORDER BY "usage".user_id ASC
                             ))
                         })?;
                     if capture_update_allowed {
-                        if request_body_storage.has_detached_blob() {
+                        // Only a half this update actually carried is reflected back; a half
+                        // merged in from the stored row is not part of the incoming event.
+                        if bodies.request.holds(UsageBodyField::RequestBody) {
                             stored.request_body = usage.request_body.clone();
                         }
                         stored.request_headers = usage.request_headers.clone();
                         stored.provider_request_headers = usage.provider_request_headers.clone();
-                        if provider_request_body_storage.has_detached_blob() {
+                        if bodies.request.holds(UsageBodyField::ProviderRequestBody) {
                             stored.provider_request_body = usage.provider_request_body.clone();
                         }
                         stored.response_headers = usage.response_headers.clone();
-                        if response_body_storage.has_detached_blob() {
+                        if bodies.response.holds(UsageBodyField::ResponseBody) {
                             stored.response_body = usage.response_body.clone();
                         }
                         stored.client_response_headers = usage.client_response_headers.clone();
-                        if client_response_body_storage.has_detached_blob() {
+                        if bodies.response.holds(UsageBodyField::ClientResponseBody) {
                             stored.client_response_body = usage.client_response_body.clone();
                         }
                         stored.request_body_state =
@@ -9303,6 +9307,9 @@ ORDER BY "usage".user_id ASC
             Ok((batch_rows, fallback_rows))
         })
         .await?;
+        // Compression runs outside the bounded preparation step, off the runtime
+        // thread, and outside the batch transaction below.
+        let batch_rows = compress_prepared_pending_usage(batch_rows).await?;
 
         let mut inserted_request_ids = BTreeSet::<String>::new();
         if !batch_rows.is_empty() {
@@ -9479,32 +9486,17 @@ RETURNING
         tx: &mut sqlx::Transaction<'_, Postgres>,
         rows: &[&PreparedPendingUsage],
     ) -> Result<(), DataLayerError> {
-        let mut blobs = Vec::<(String, String, &'static str, Vec<u8>)>::new();
+        let mut blobs = Vec::<(String, String, &'static str, Vec<u8>, i16, Option<i32>)>::new();
         for row in rows {
-            for (field, storage) in [
-                (
-                    UsageBodyField::RequestBody,
-                    &row.prepared.request_body_storage,
-                ),
-                (
-                    UsageBodyField::ProviderRequestBody,
-                    &row.prepared.provider_request_body_storage,
-                ),
-                (
-                    UsageBodyField::ResponseBody,
-                    &row.prepared.response_body_storage,
-                ),
-                (
-                    UsageBodyField::ClientResponseBody,
-                    &row.prepared.client_response_body_storage,
-                ),
-            ] {
-                if let Some(payload) = storage.detached_blob_bytes.as_ref() {
+            for storage in [&row.prepared.bodies.request, &row.prepared.bodies.response] {
+                if let Some(payload) = storage.payload.as_ref() {
                     blobs.push((
-                        usage_body_ref(&row.usage.request_id, field),
+                        usage_body_ref(&row.usage.request_id, storage.base),
                         row.usage.request_id.clone(),
-                        field.as_storage_field(),
+                        storage.base.as_storage_field(),
                         payload.clone(),
+                        storage.encoding,
+                        storage.logical_bytes,
                     ));
                 }
             }
@@ -9514,17 +9506,19 @@ RETURNING
         }
 
         let mut builder = QueryBuilder::<Postgres>::new(
-            "INSERT INTO usage_body_blobs (body_ref, request_id, body_field, payload) ",
+            "INSERT INTO usage_body_blobs (body_ref, request_id, body_field, payload, encoding, logical_bytes) ",
         );
         builder.push_values(&blobs, |mut values, row| {
             values
                 .push_bind(row.0.clone())
                 .push_bind(row.1.clone())
                 .push_bind(row.2)
-                .push_bind(row.3.clone());
+                .push_bind(row.3.clone())
+                .push_bind(row.4)
+                .push_bind(row.5);
         });
         builder.push(
-            " ON CONFLICT (body_ref) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()",
+            " ON CONFLICT (body_ref) DO UPDATE SET payload = EXCLUDED.payload, encoding = EXCLUDED.encoding, logical_bytes = EXCLUDED.logical_bytes, updated_at = NOW()",
         );
         builder
             .build()
@@ -12285,9 +12279,91 @@ fn to_u64(value: i32, field_name: &str) -> Result<u64, DataLayerError> {
         .map_err(|_| DataLayerError::UnexpectedValue(format!("invalid {field_name}: {value}")))
 }
 
+/// One direction's captured bodies, ready for `usage_body_blobs`.
+///
+/// Both halves of a direction share a row, so this is built once per pair rather
+/// than once per field: the two bodies are near copies of each other, and only a
+/// frame over both of them can see that (see `body_codec`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct UsageBodyStorage {
-    detached_blob_bytes: Option<Vec<u8>>,
+struct UsageBodyPairStorage {
+    base: UsageBodyField,
+    /// The bytes to store: a zstd frame, or an uncompressed container when
+    /// compression failed. Absent when the pair has no body to store at all.
+    payload: Option<Vec<u8>>,
+    encoding: i16,
+    logical_bytes: Option<i32>,
+    /// Whether each half of the pair was captured, base field first. A pair that
+    /// carries only one half is what a partial update has to merge against the
+    /// stored row, and which half is missing is what makes a field's capture state
+    /// a single-body reference.
+    present: [bool; 2],
+}
+
+impl UsageBodyPairStorage {
+    fn empty(base: UsageBodyField) -> Self {
+        Self {
+            base,
+            payload: None,
+            encoding: ENCODING_RAW_SINGLE,
+            logical_bytes: None,
+            present: [false, false],
+        }
+    }
+
+    /// Whether the payload carries `field`'s body.
+    fn holds(&self, field: UsageBodyField) -> bool {
+        let sibling = BodyPair::for_field(self.base).sibling();
+        self.payload.is_some() && self.present[usize::from(field == sibling)]
+    }
+}
+
+impl Default for UsageBodyPairStorage {
+    /// A placeholder for `mem::take` while a prepared write is being compressed.
+    /// It never reaches storage: the caller puts the compressed pairs back first.
+    fn default() -> Self {
+        Self::empty(UsageBodyField::RequestBody)
+    }
+}
+
+/// The two directions of captured bodies one write carries.
+#[derive(Debug, Default)]
+struct PreparedUsageBodies {
+    request: UsageBodyPairStorage,
+    response: UsageBodyPairStorage,
+}
+
+impl PreparedUsageBodies {
+    /// Compresses both directions, keeping the uncompressed containers when
+    /// compression fails.
+    fn compressed(self) -> Self {
+        Self {
+            request: compress_usage_body_pair(self.request),
+            response: compress_usage_body_pair(self.response),
+        }
+    }
+}
+
+/// Compresses a prepared pair, keeping its uncompressed container on failure.
+///
+/// Losing the compression is much better than losing a body, and the container
+/// serialized while preparing the record is already a valid payload.
+fn compress_usage_body_pair(storage: UsageBodyPairStorage) -> UsageBodyPairStorage {
+    let Some(payload) = storage.payload.as_ref() else {
+        return storage;
+    };
+    let Ok(encoded) = encode_container_bytes(payload) else {
+        tracing::warn!(
+            base = storage.base.as_storage_field(),
+            "failed to compress a usage body pair; storing it uncompressed"
+        );
+        return storage;
+    };
+    UsageBodyPairStorage {
+        payload: Some(encoded.payload),
+        encoding: encoded.encoding,
+        logical_bytes: i32::try_from(encoded.logical_bytes).ok(),
+        ..storage
+    }
 }
 
 /// One `usage_body_blobs` row, as the read path needs it.
@@ -12298,10 +12374,32 @@ struct StoredUsageBodyBlobRow {
     logical_bytes: Option<i32>,
 }
 
-impl UsageBodyStorage {
-    fn has_detached_blob(&self) -> bool {
-        self.detached_blob_bytes.is_some()
-    }
+/// Compresses the body pairs of a prepared write, off the runtime thread.
+///
+/// A compression failure keeps the containers uncompressed rather than losing a
+/// body; only a worker failure reaches the caller, so the write is retried.
+async fn compress_usage_body_pairs(
+    prepared: PreparedUsageUpsert,
+) -> Result<PreparedUsageUpsert, DataLayerError> {
+    let mut prepared = prepared;
+    let bodies = std::mem::take(&mut prepared.bodies);
+    prepared.bodies = compress_usage_bodies_in_background(move || bodies.compressed()).await?;
+    Ok(prepared)
+}
+
+/// Compresses the body pairs of a prepared batch, off the runtime thread.
+async fn compress_prepared_pending_usage(
+    rows: Vec<(usize, PreparedPendingUsage)>,
+) -> Result<Vec<(usize, PreparedPendingUsage)>, DataLayerError> {
+    compress_usage_bodies_in_background(move || {
+        rows.into_iter()
+            .map(|(sequence, mut row)| {
+                row.prepared.bodies = row.prepared.bodies.compressed();
+                (sequence, row)
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -12446,10 +12544,7 @@ struct PreparedUsageUpsert {
     provider_request_headers_json: Option<String>,
     response_headers_json: Option<String>,
     client_response_headers_json: Option<String>,
-    request_body_storage: UsageBodyStorage,
-    provider_request_body_storage: UsageBodyStorage,
-    response_body_storage: UsageBodyStorage,
-    client_response_body_storage: UsageBodyStorage,
+    bodies: PreparedUsageBodies,
     http_audit_states: UsageHttpAuditStates,
     http_audit_capture_mode: &'static str,
     routing_snapshot: UsageRoutingSnapshot,
@@ -12568,23 +12663,39 @@ fn usage_capture_update_allowed(
     !(previous_status == "streaming" && incoming_status == "pending")
 }
 
-fn prepare_usage_body_storage(value: Option<&Value>) -> Result<UsageBodyStorage, DataLayerError> {
-    let Some(value) = value else {
-        return Ok(UsageBodyStorage {
-            detached_blob_bytes: None,
-        });
-    };
-    let bytes = serde_json::to_vec(value).map_err(|err| {
-        DataLayerError::UnexpectedValue(format!("failed to serialize usage json: {err}"))
-    })?;
-    Ok(UsageBodyStorage {
-        detached_blob_bytes: Some(bytes),
+/// Builds the pair payload for one direction, uncompressed.
+///
+/// Compression happens later, off the runtime thread and outside the bounded
+/// preparation step. What this returns is already a valid container, so a pair
+/// that never gets compressed is stored correctly, just larger.
+fn prepare_usage_body_pair(
+    base: UsageBodyField,
+    own: Option<&Value>,
+    sibling: Option<&Value>,
+) -> Result<UsageBodyPairStorage, DataLayerError> {
+    if own.is_none() && sibling.is_none() {
+        return Ok(UsageBodyPairStorage::empty(base));
+    }
+    let pair = BodyPair::for_field(base);
+    let payload = serialize_pair_container(pair, own, sibling)?;
+    Ok(UsageBodyPairStorage {
+        base,
+        logical_bytes: i32::try_from(payload.len()).ok(),
+        payload: Some(payload),
+        encoding: ENCODING_RAW_CONTAINER,
+        // A body that is literally JSON `null` is what the container spells a half
+        // that was not captured, so it does not count as present here either.
+        present: [
+            own.is_some_and(|body| !body.is_null()),
+            sibling.is_some_and(|body| !body.is_null()),
+        ],
     })
 }
 
 fn usage_body_capture_state_for_storage(
     incoming_state: Option<UsageBodyCaptureState>,
-    storage: &UsageBodyStorage,
+    storage: &UsageBodyPairStorage,
+    field: UsageBodyField,
     body_ref: Option<&str>,
 ) -> Option<UsageBodyCaptureState> {
     if matches!(
@@ -12597,10 +12708,22 @@ fn usage_body_capture_state_for_storage(
     ) {
         return incoming_state;
     }
-    if storage.has_detached_blob() || body_ref.is_some() {
+    if storage.holds(field) || body_ref.is_some() {
         return Some(UsageBodyCaptureState::Reference);
     }
     incoming_state
+}
+
+/// Whether a capture state means the stored row holds a body.
+fn usage_body_state_holds_a_body(state: Option<UsageBodyCaptureState>) -> bool {
+    matches!(
+        state,
+        Some(
+            UsageBodyCaptureState::Inline
+                | UsageBodyCaptureState::Reference
+                | UsageBodyCaptureState::Truncated
+        )
+    )
 }
 
 fn json_bind_text(value: Option<&Value>) -> Result<Option<String>, DataLayerError> {
@@ -12700,32 +12823,43 @@ fn prepare_usage_upsert_context(
         .then_some(usage.client_response_body_ref.as_deref())
         .flatten();
     let request_headers_json = json_bind_text(usage.request_headers.as_ref())?;
-    let request_body_storage = prepare_usage_body_storage(request_body)?;
     let provider_request_headers_json = json_bind_text(usage.provider_request_headers.as_ref())?;
-    let provider_request_body_storage = prepare_usage_body_storage(provider_request_body)?;
     let response_headers_json = json_bind_text(usage.response_headers.as_ref())?;
-    let response_body_storage = prepare_usage_body_storage(response_body)?;
     let client_response_headers_json = json_bind_text(usage.client_response_headers.as_ref())?;
-    let client_response_body_storage = prepare_usage_body_storage(client_response_body)?;
+    // Both halves of a direction share one stored row, so they are prepared together.
+    let request_body_pair = prepare_usage_body_pair(
+        UsageBodyField::RequestBody,
+        request_body,
+        provider_request_body,
+    )?;
+    let response_body_pair = prepare_usage_body_pair(
+        UsageBodyField::ResponseBody,
+        response_body,
+        client_response_body,
+    )?;
     let http_audit_states = UsageHttpAuditStates {
         request_body_state: usage_body_capture_state_for_storage(
             usage.request_body_state,
-            &request_body_storage,
+            &request_body_pair,
+            UsageBodyField::RequestBody,
             request_body_ref,
         ),
         provider_request_body_state: usage_body_capture_state_for_storage(
             usage.provider_request_body_state,
-            &provider_request_body_storage,
+            &request_body_pair,
+            UsageBodyField::ProviderRequestBody,
             provider_request_body_ref,
         ),
         response_body_state: usage_body_capture_state_for_storage(
             usage.response_body_state,
-            &response_body_storage,
+            &response_body_pair,
+            UsageBodyField::ResponseBody,
             response_body_ref,
         ),
         client_response_body_state: usage_body_capture_state_for_storage(
             usage.client_response_body_state,
-            &client_response_body_storage,
+            &response_body_pair,
+            UsageBodyField::ClientResponseBody,
             client_response_body_ref,
         ),
     };
@@ -12734,25 +12868,25 @@ fn prepare_usage_upsert_context(
         [
             (
                 UsageBodyField::RequestBody,
-                &request_body_storage,
+                &request_body_pair,
                 request_body,
                 request_body_ref,
             ),
             (
                 UsageBodyField::ProviderRequestBody,
-                &provider_request_body_storage,
+                &request_body_pair,
                 provider_request_body,
                 provider_request_body_ref,
             ),
             (
                 UsageBodyField::ResponseBody,
-                &response_body_storage,
+                &response_body_pair,
                 response_body,
                 response_body_ref,
             ),
             (
                 UsageBodyField::ClientResponseBody,
-                &client_response_body_storage,
+                &response_body_pair,
                 client_response_body,
                 client_response_body_ref,
             ),
@@ -12798,10 +12932,10 @@ fn prepare_usage_upsert_context(
         provider_request_headers_json,
         response_headers_json,
         client_response_headers_json,
-        request_body_storage,
-        provider_request_body_storage,
-        response_body_storage,
-        client_response_body_storage,
+        bodies: PreparedUsageBodies {
+            request: request_body_pair,
+            response: response_body_pair,
+        },
         http_audit_states,
         http_audit_capture_mode,
         routing_snapshot,
@@ -13416,7 +13550,7 @@ fn prepare_request_metadata_for_body_storage<const N: usize>(
     metadata: Option<Value>,
     body_fields: [(
         UsageBodyField,
-        &UsageBodyStorage,
+        &UsageBodyPairStorage,
         Option<&Value>,
         Option<&str>,
     ); N],
@@ -13431,15 +13565,17 @@ fn prepare_request_metadata_for_body_storage<const N: usize>(
         None => Map::new(),
     };
     let should_replace = !metadata.is_empty()
-        || body_fields.iter().any(|(_, storage, value, explicit_ref)| {
-            storage.has_detached_blob() || value.is_some() || explicit_ref.is_some()
-        });
+        || body_fields
+            .iter()
+            .any(|(field, storage, value, explicit_ref)| {
+                storage.holds(*field) || value.is_some() || explicit_ref.is_some()
+            });
     if !should_replace {
         return None;
     }
 
     for (field, storage, value, explicit_ref) in body_fields {
-        if storage.has_detached_blob() || value.is_some() || explicit_ref.is_some() {
+        if storage.holds(field) || value.is_some() || explicit_ref.is_some() {
             let ref_key = field.as_ref_key();
             metadata.remove(ref_key);
         }
@@ -13448,41 +13584,158 @@ fn prepare_request_metadata_for_body_storage<const N: usize>(
     Some(Value::Object(metadata))
 }
 
-async fn sync_usage_body_blob_storage<'e, E>(
-    executor: E,
+async fn sync_usage_body_pair_storage(
+    executor: &mut sqlx::PgConnection,
+    request_id: &str,
+    storage: &UsageBodyPairStorage,
+    clear_existing: bool,
+) -> Result<(), DataLayerError> {
+    let body_ref = usage_body_ref(request_id, storage.base);
+    let sibling_ref = usage_body_ref(request_id, BodyPair::for_field(storage.base).sibling());
+    if clear_existing {
+        for body_ref in [&body_ref, &sibling_ref] {
+            sqlx::query(DELETE_USAGE_BODY_BLOB_SQL)
+                .bind(body_ref)
+                .execute(&mut *executor)
+                .await
+                .map_postgres_err()?;
+        }
+        return Ok(());
+    }
+    let Some(payload) = storage.payload.as_ref() else {
+        return Ok(());
+    };
+    sqlx::query(UPSERT_USAGE_BODY_BLOB_SQL)
+        .bind(&body_ref)
+        .bind(request_id)
+        .bind(storage.base.as_storage_field())
+        .bind(payload)
+        .bind(storage.encoding)
+        .bind(storage.logical_bytes)
+        .execute(&mut *executor)
+        .await
+        .map_postgres_err()?;
+    // The pair now owns the other half's body as well, so a single-body row an older
+    // write left under that field has to go with it.
+    sqlx::query(DELETE_USAGE_BODY_BLOB_SQL)
+        .bind(&sibling_ref)
+        .execute(&mut *executor)
+        .await
+        .map_postgres_err()?;
+    Ok(())
+}
+
+/// Reads the pair container a field's body lives in, from inside a transaction.
+async fn read_usage_body_pair_in_tx(
+    executor: &mut sqlx::PgConnection,
     request_id: &str,
     field: UsageBodyField,
-    value: Option<&Value>,
-    storage: &UsageBodyStorage,
-    clear_existing: bool,
-) -> Result<(), DataLayerError>
-where
-    E: sqlx::Executor<'e, Database = Postgres>,
-{
-    let body_ref = usage_body_ref(request_id, field);
-    if clear_existing {
-        sqlx::query(DELETE_USAGE_BODY_BLOB_SQL)
-            .bind(&body_ref)
-            .execute(executor)
-            .await
-            .map_postgres_err()?;
-    } else if let Some(payload) = storage.detached_blob_bytes.as_ref() {
-        sqlx::query(UPSERT_USAGE_BODY_BLOB_SQL)
-            .bind(&body_ref)
+) -> Result<Option<Value>, DataLayerError> {
+    let pair = BodyPair::for_field(field);
+    for lookup in [pair.base(), field] {
+        let row = sqlx::query(FIND_USAGE_BODY_BLOB_SQL)
             .bind(request_id)
-            .bind(field.as_storage_field())
-            .bind(payload)
-            .execute(executor)
+            .bind(lookup.as_storage_field())
+            .fetch_optional(&mut *executor)
             .await
             .map_postgres_err()?;
-    } else if value.is_some() {
-        sqlx::query(DELETE_USAGE_BODY_BLOB_SQL)
-            .bind(&body_ref)
-            .execute(executor)
-            .await
-            .map_postgres_err()?;
+        let Some(row) = row else {
+            continue;
+        };
+        let Some(payload) = row
+            .try_get::<Option<Vec<u8>>, _>("payload")
+            .map_postgres_err()?
+        else {
+            continue;
+        };
+        let encoding: i16 = row.try_get("encoding").map_postgres_err()?;
+        if is_container(encoding) {
+            return decode_container(encoding, &payload).map(Some);
+        }
+        if lookup != field {
+            // A single body under the pair's other half cannot answer for this one.
+            continue;
+        }
+        // A row written before pairs existed holds this field's body on its own, so
+        // it is wrapped into a one-sided container.
+        let body: Value = serde_json::from_slice(&payload).map_err(|error| {
+            DataLayerError::UnexpectedValue(format!("failed to parse usage json: {error}"))
+        })?;
+        let container = if lookup == pair.base() {
+            build_container(pair, Some(&body), None)
+        } else {
+            build_container(pair, None, Some(&body))
+        };
+        return Ok(Some(container));
     }
-    Ok(())
+    Ok(None)
+}
+
+/// Fills a half that a partial update left out but the stored row still holds.
+///
+/// A stored row carries both halves of its pair, so writing one half would drop the
+/// other unless it is merged back in first. Only a half the row already captured is
+/// filled, and never one this update cleared.
+async fn merge_usage_body_pair_storage(
+    executor: &mut sqlx::PgConnection,
+    request_id: &str,
+    storage: &UsageBodyPairStorage,
+    previous: Option<&StoredRequestUsageAudit>,
+    cleared: [bool; 2],
+) -> Result<Option<UsageBodyPairStorage>, DataLayerError> {
+    // Only a pair that carries exactly one half can gain the other from the row.
+    if storage.present[0] == storage.present[1] {
+        return Ok(None);
+    }
+    let Some(previous) = previous else {
+        return Ok(None);
+    };
+    let Some(payload) = storage.payload.as_ref() else {
+        return Ok(None);
+    };
+    let mut merged = decode_container(storage.encoding, payload)?;
+    let mut filled = false;
+    for (index, field) in BodyPair::for_field(storage.base)
+        .fields()
+        .iter()
+        .enumerate()
+    {
+        if cleared[index] || storage.present[index] {
+            continue;
+        }
+        if !usage_body_state_holds_a_body(previous.body_state(*field)) {
+            continue;
+        }
+        let Some(mut stored) = read_usage_body_pair_in_tx(executor, request_id, *field).await?
+        else {
+            continue;
+        };
+        let Some(body) = stored
+            .as_object_mut()
+            .and_then(|object| object.remove(field.as_capture_key()))
+            .filter(|body| !body.is_null())
+        else {
+            continue;
+        };
+        if let Some(object) = merged.as_object_mut() {
+            object.insert(field.as_capture_key().to_string(), body);
+            filled = true;
+        }
+    }
+    if !filled {
+        return Ok(None);
+    }
+    // Compression happens outside the write transaction, so a merged pair is stored
+    // as an uncompressed container: correct, and the next write that carries both
+    // halves compresses it.
+    let payload = serialize_container(&merged)?;
+    Ok(Some(UsageBodyPairStorage {
+        base: storage.base,
+        logical_bytes: i32::try_from(payload.len()).ok(),
+        payload: Some(payload),
+        encoding: ENCODING_RAW_CONTAINER,
+        present: [true, true],
+    }))
 }
 
 async fn sync_usage_http_audit_storage<'e, E>(

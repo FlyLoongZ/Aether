@@ -263,19 +263,24 @@ fn usage_sql_capture_guard_covers_bodies_metadata_and_audit_body_states() {
     assert!(source.contains("if capture_update_allowed {"));
 }
 
-#[test]
-fn prepare_usage_body_storage_detaches_small_payloads_into_blob_storage() {
-    let payload = json!({"message": "hello"});
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
-
-    let compressed = storage
-        .detached_blob_bytes
+/// The body one field of a prepared pair stores.
+fn stored_body(storage: &UsageBodyPairStorage, field: UsageBodyField) -> serde_json::Value {
+    let payload = storage
+        .payload
         .as_deref()
-        .expect("small payload should now be ref-backed");
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
-        payload
-    );
+        .expect("pair should store a payload");
+    let container =
+        decode_container(storage.encoding, payload).expect("pair payload should decode");
+    container_body(&container, field).expect("field should be present")
+}
+
+#[test]
+fn prepare_usage_body_pair_frames_small_payloads() {
+    let payload = json!({"message": "hello"});
+    let storage = prepare_usage_body_pair(UsageBodyField::RequestBody, Some(&payload), None)
+        .expect("storage should serialize");
+
+    assert_eq!(stored_body(&storage, UsageBodyField::RequestBody), payload);
 }
 
 #[tokio::test]
@@ -296,26 +301,41 @@ async fn usage_body_decode_preserves_storage_decode_errors() {
 }
 
 #[test]
-fn prepare_usage_body_storage_detaches_large_payloads() {
+fn prepare_usage_body_pair_stores_an_uncompressed_container() {
     let payload = json!({
         "content": "x".repeat(64 * 1024)
     });
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
+    let storage = prepare_usage_body_pair(UsageBodyField::RequestBody, Some(&payload), None)
+        .expect("storage should serialize");
 
-    let compressed = storage
-        .detached_blob_bytes
-        .as_deref()
-        .expect("large payload should be detached");
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
-        payload
-    );
+    // Preparing a record only serializes; compression happens afterwards, outside
+    // the bounded preparation step and outside the write transaction.
+    assert_eq!(storage.encoding, ENCODING_RAW_CONTAINER);
+    assert_eq!(stored_body(&storage, UsageBodyField::RequestBody), payload);
 }
 
 #[test]
-fn prepare_usage_body_storage_streams_json_shapes_into_raw_payloads() {
+fn compress_usage_body_pair_turns_the_container_into_a_frame() {
+    let payload = json!({
+        "content": "x".repeat(64 * 1024)
+    });
+    let storage = prepare_usage_body_pair(UsageBodyField::RequestBody, Some(&payload), None)
+        .expect("storage should serialize");
+
+    let compressed = compress_usage_body_pair(storage);
+    assert_eq!(compressed.encoding, ENCODING_ZSTD_CONTAINER);
+    assert_eq!(
+        stored_body(&compressed, UsageBodyField::RequestBody),
+        payload
+    );
+    assert!(compressed.payload.as_deref().unwrap().len() < 64 * 1024);
+}
+
+#[test]
+fn prepare_usage_body_pair_keeps_json_shapes_readable() {
+    // A body that is literally JSON `null` is the one shape that cannot survive:
+    // `null` is how the container spells a half that was not captured.
     for payload in [
-        serde_json::Value::Null,
         json!(false),
         json!(42),
         json!(["quoted\"text", "line\nbreak", "\u{4e2d}\u{6587}", null]),
@@ -324,16 +344,18 @@ fn prepare_usage_body_storage_streams_json_shapes_into_raw_payloads() {
             "nested": {"values": [true, null, 1.25, -7]}
         }),
     ] {
-        let storage = prepare_usage_body_storage(Some(&payload)).expect("body should serialize");
-        let compressed = storage
-            .detached_blob_bytes
-            .expect("body should be detached");
-        assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&compressed)
-                .expect("body should remain readable"),
-            payload
-        );
+        let storage = prepare_usage_body_pair(UsageBodyField::RequestBody, Some(&payload), None)
+            .expect("body should serialize");
+        assert_eq!(stored_body(&storage, UsageBodyField::RequestBody), payload);
     }
+
+    let storage = prepare_usage_body_pair(
+        UsageBodyField::RequestBody,
+        Some(&serde_json::Value::Null),
+        None,
+    )
+    .expect("body should serialize");
+    assert!(!storage.holds(UsageBodyField::RequestBody));
 }
 
 #[test]
@@ -368,16 +390,17 @@ fn managed_capture_preparation_moves_bodies_without_a_second_reservation() {
     usage.total_cost_usd = Some(0.25);
     usage.actual_total_cost_usd = Some(0.125);
     let expected_accounting = sanitize_usage_for_persistence(usage.clone());
-    let bytes = [
-        usage.request_body.as_ref(),
-        usage.provider_request_body.as_ref(),
-        usage.response_body.as_ref(),
-        usage.client_response_body.as_ref(),
-    ]
-    .into_iter()
-    .flatten()
-    .map(|body| std::mem::size_of::<serde_json::Value>() + usage_json_heap_estimate(body))
-    .sum();
+    let bodies = [
+        usage.request_body.clone(),
+        usage.provider_request_body.clone(),
+        usage.response_body.clone(),
+        usage.client_response_body.clone(),
+    ];
+    let bytes = bodies
+        .iter()
+        .flatten()
+        .map(|body| std::mem::size_of::<serde_json::Value>() + usage_json_heap_estimate(body))
+        .sum();
     let budget = Arc::new(UsageCaptureMemoryBudget::new(bytes));
     assert!(usage.capture_retention.reserve(Arc::clone(&budget), bytes));
 
@@ -386,37 +409,48 @@ fn managed_capture_preparation_moves_bodies_without_a_second_reservation() {
     assert_eq!(budget.retained_bytes(), 0);
     assert_eq!(budget.downgraded_total(), 0);
     assert_eq!(accounting, expected_accounting);
-    for (storage, expected) in [
-        prepared.request_body_storage,
-        prepared.provider_request_body_storage,
-        prepared.response_body_storage,
-        prepared.client_response_body_storage,
-    ]
-    .into_iter()
-    .zip(bodies)
-    {
-        assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(
-                storage.detached_blob_bytes.as_deref().unwrap()
-            )
-            .unwrap(),
-            expected
-        );
+    for (field, expected) in [
+        (UsageBodyField::RequestBody, bodies[0].as_ref()),
+        (UsageBodyField::ProviderRequestBody, bodies[1].as_ref()),
+        (UsageBodyField::ResponseBody, bodies[2].as_ref()),
+        (UsageBodyField::ClientResponseBody, bodies[3].as_ref()),
+    ] {
+        let pair = if matches!(
+            field,
+            UsageBodyField::RequestBody | UsageBodyField::ProviderRequestBody
+        ) {
+            &prepared.bodies.request
+        } else {
+            &prepared.bodies.response
+        };
+        let payload = pair
+            .payload
+            .as_deref()
+            .expect("pair should store a payload");
+        let container =
+            decode_container(pair.encoding, payload).expect("pair payload should decode");
+        assert_eq!(container_body(&container, field), expected.cloned());
     }
 }
 
 #[test]
 fn usage_body_capture_state_for_storage_marks_detached_bodies_as_reference() {
     let payload = json!({"message": "hello"});
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
+    let storage = prepare_usage_body_pair(UsageBodyField::RequestBody, Some(&payload), None)
+        .expect("storage should serialize");
 
-    assert!(storage.has_detached_blob());
+    assert!(storage.holds(UsageBodyField::RequestBody));
     assert_eq!(
-        usage_body_capture_state_for_storage(Some(UsageBodyCaptureState::Inline), &storage, None,),
+        usage_body_capture_state_for_storage(
+            Some(UsageBodyCaptureState::Inline),
+            &storage,
+            UsageBodyField::RequestBody,
+            None,
+        ),
         Some(UsageBodyCaptureState::Reference)
     );
     assert_eq!(
-        usage_body_capture_state_for_storage(None, &storage, None),
+        usage_body_capture_state_for_storage(None, &storage, UsageBodyField::RequestBody, None),
         Some(UsageBodyCaptureState::Reference)
     );
 }
@@ -424,12 +458,14 @@ fn usage_body_capture_state_for_storage_marks_detached_bodies_as_reference() {
 #[test]
 fn usage_body_capture_state_for_storage_preserves_unavailable_states() {
     let payload = json!({"message": "hello"});
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
+    let storage = prepare_usage_body_pair(UsageBodyField::RequestBody, Some(&payload), None)
+        .expect("storage should serialize");
 
     assert_eq!(
         usage_body_capture_state_for_storage(
             Some(UsageBodyCaptureState::Disabled),
             &storage,
+            UsageBodyField::RequestBody,
             Some("usage://request/req-1/request_body"),
         ),
         Some(UsageBodyCaptureState::Disabled)
@@ -438,6 +474,7 @@ fn usage_body_capture_state_for_storage_preserves_unavailable_states() {
         usage_body_capture_state_for_storage(
             Some(UsageBodyCaptureState::Unavailable),
             &storage,
+            UsageBodyField::RequestBody,
             Some("usage://request/req-1/request_body"),
         ),
         Some(UsageBodyCaptureState::Unavailable)
@@ -458,6 +495,8 @@ fn explicit_none_capture_drops_residual_body_ref_and_incoming_fast_metadata_befo
         "model": "gpt-5",
         "service_tier": "priority"
     }));
+    usage.provider_request_body_ref =
+        Some("usage://request/req-none-residual/provider_request_body".to_string());
     usage.request_metadata = Some(json!({
         "trace_id": "trace-1",
         "provider_service_tier": "priority",
@@ -469,7 +508,10 @@ fn explicit_none_capture_drops_residual_body_ref_and_incoming_fast_metadata_befo
     let (_, prepared) = prepare_usage_for_persistence(usage);
     let prepared = prepared.expect("usage should prepare");
     assert!(prepared.clear_provider_request_body);
-    assert!(!prepared.provider_request_body_storage.has_detached_blob());
+    assert!(!prepared
+        .bodies
+        .request
+        .holds(UsageBodyField::ProviderRequestBody));
     assert_eq!(
         prepared.request_metadata_value,
         Some(json!({"trace_id": "trace-1"}))
@@ -506,12 +548,20 @@ fn request_body_fact_clear_keeps_unrelated_metadata_and_emits_an_empty_tombstone
 
 #[test]
 fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys() {
-    let detached = prepare_usage_body_storage(Some(&json!({
-        "content": "x".repeat(64 * 1024)
-    })))
+    let detached = prepare_usage_body_pair(
+        UsageBodyField::RequestBody,
+        Some(&json!({
+            "content": "x".repeat(64 * 1024)
+        })),
+        None,
+    )
     .expect("detached storage should build");
-    let inline =
-        prepare_usage_body_storage(Some(&json!({"message": "inline"}))).expect("inline body");
+    let inline = prepare_usage_body_pair(
+        UsageBodyField::RequestBody,
+        None,
+        Some(&json!({"message": "inline"})),
+    )
+    .expect("inline body");
 
     let metadata = prepare_request_metadata_for_body_storage(
         Some(json!({
