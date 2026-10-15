@@ -147,13 +147,10 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
                 stored.body_state(field),
                 Some(UsageBodyCaptureState::Reference)
             );
-            assert_eq!(
-                stored.body_ref(field),
-                Some(usage_body_ref(&request_id, field).as_str())
-            );
+            assert_eq!(stored.body_ref(field), Some(usage_body_ref(&request_id, field)));
             assert_eq!(
                 repository
-                    .resolve_body_ref(stored.body_ref(field).unwrap())
+                    .resolve_body_ref(&stored.body_ref(field).unwrap())
                     .await
                     .unwrap()
                     .as_ref(),
@@ -550,7 +547,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
     );
     assert_eq!(
         repository
-            .resolve_body_ref(captured.body_ref(UsageBodyField::RequestBody).unwrap())
+            .resolve_body_ref(&captured.body_ref(UsageBodyField::RequestBody).unwrap())
             .await
             .unwrap(),
         Some(json!({"messages": [{"role": "user", "content": "hello"}]}))

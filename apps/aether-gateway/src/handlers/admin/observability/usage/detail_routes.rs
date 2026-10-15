@@ -18,8 +18,8 @@ use aether_admin::observability::usage::{
     admin_usage_provider_key_name, ADMIN_USAGE_DATA_UNAVAILABLE_DETAIL,
 };
 use aether_data_contracts::repository::usage::{
-    canonical_usage_body_ref_for, StoredRequestUsageAudit, StoredUsageBodyPayload,
-    UsageBodyCaptureState, UsageBodyField, MAX_USAGE_BODY_BYTES,
+    StoredRequestUsageAudit, StoredUsageBodyPayload, UsageBodyCaptureState, UsageBodyField,
+    MAX_USAGE_BODY_BYTES,
 };
 use axum::{
     body::Body,
@@ -160,10 +160,7 @@ async fn read_admin_usage_raw_body(
         Some(UsageBodyCaptureState::Inline | UsageBodyCaptureState::Truncated)
     ) && inline_body.is_some();
     if !prefer_inline {
-        if let Some(body_ref) = item
-            .body_ref(field)
-            .and_then(|reference| canonical_usage_body_ref_for(reference, &item.request_id, field))
-        {
+        if let Some(body_ref) = item.body_ref(field) {
             if let Some(payload) = state.read_request_usage_body_payload(&body_ref).await? {
                 return Ok(Some(payload));
             }

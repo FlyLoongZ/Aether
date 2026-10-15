@@ -992,7 +992,6 @@ async fn admin_monitoring_trace_request_does_not_expose_inline_connect_json_resp
     framed.extend_from_slice(&(payload.len() as u32).to_be_bytes());
     framed.extend_from_slice(payload);
     usage.response_body = Some(json!(BASE64_STANDARD.encode(framed)));
-    usage.response_body_ref = Some("usage://request/request-connect/response_body".to_string());
     usage.response_body_state = Some(UsageBodyCaptureState::Inline);
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let data_state =

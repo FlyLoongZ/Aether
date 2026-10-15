@@ -1,9 +1,8 @@
 use aether_data_contracts::repository::usage::{
-    canonical_usage_body_ref_for, parse_usage_body_ref, usage_body_ref, ApiKeyLastUsedDelta,
-    ManagementTokenCounterDelta, ProxyNodeCounterDelta, StoredUsageAuditAggregation,
-    StoredUsageAuditSummary, StoredUsageBodyPayload, StoredUsageBreakdownSummaryRow,
-    StoredUsageCacheAffinityHitSummary, StoredUsageCacheAffinityIntervalRow,
-    StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
+    parse_usage_body_ref, usage_body_ref, ApiKeyLastUsedDelta, ManagementTokenCounterDelta,
+    ProxyNodeCounterDelta, StoredUsageAuditAggregation, StoredUsageAuditSummary,
+    StoredUsageBodyPayload, StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
+    StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
     StoredUsageDashboardStatsSummary, StoredUsageDashboardSummary, StoredUsageErrorDistributionRow,
     StoredUsageHealthTimelineRow, StoredUsageLeaderboardSummary,
@@ -3187,13 +3186,11 @@ ORDER BY request_count DESC, "usage".provider_name ASC
         usage: &StoredRequestUsageAudit,
         field: UsageBodyField,
     ) -> Result<Option<Value>, DataLayerError> {
-        let body_ref = usage
-            .body_ref(field)
-            .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, &usage.request_id, field));
-        match body_ref.as_deref() {
-            Some(body_ref) => self.resolve_body_ref(body_ref).await,
-            None => Ok(None),
-        }
+        // `usage_body_blobs` is the canonical owner of captured bodies, and the reference it
+        // stores is always `usage://request/{request_id}/{field}`, so the row identity alone
+        // decides whether a body exists.
+        self.resolve_body_ref(&usage_body_ref(&usage.request_id, field))
+            .await
     }
 
     pub async fn summarize_provider_usage_since(
@@ -8832,7 +8829,6 @@ ORDER BY "usage".user_id ASC
                         provider_request_body_storage,
                         response_body_storage,
                         client_response_body_storage,
-                        http_audit_refs,
                         http_audit_states,
                         http_audit_capture_mode,
                         routing_snapshot,
@@ -9012,7 +9008,6 @@ ORDER BY "usage".user_id ASC
                             &mut **tx,
                             &usage.request_id,
                             &http_audit_headers,
-                            &http_audit_refs,
                             &http_audit_states,
                             http_audit_capture_mode,
                         )
@@ -9060,50 +9055,6 @@ ORDER BY "usage".user_id ASC
                         if client_response_body_storage.has_detached_blob() {
                             stored.client_response_body = usage.client_response_body.clone();
                         }
-                        stored.request_body_ref = if clear_request_body {
-                            None
-                        } else {
-                            resolved_write_usage_body_ref(
-                                usage.request_body_ref.as_deref(),
-                                &usage.request_id,
-                                UsageBodyField::RequestBody,
-                                request_body_storage.has_detached_blob(),
-                                http_audit_refs.request_body_ref.as_deref(),
-                            )
-                        };
-                        stored.provider_request_body_ref = if clear_provider_request_body {
-                            None
-                        } else {
-                            resolved_write_usage_body_ref(
-                                usage.provider_request_body_ref.as_deref(),
-                                &usage.request_id,
-                                UsageBodyField::ProviderRequestBody,
-                                provider_request_body_storage.has_detached_blob(),
-                                http_audit_refs.provider_request_body_ref.as_deref(),
-                            )
-                        };
-                        stored.response_body_ref = if clear_response_body {
-                            None
-                        } else {
-                            resolved_write_usage_body_ref(
-                                usage.response_body_ref.as_deref(),
-                                &usage.request_id,
-                                UsageBodyField::ResponseBody,
-                                response_body_storage.has_detached_blob(),
-                                http_audit_refs.response_body_ref.as_deref(),
-                            )
-                        };
-                        stored.client_response_body_ref = if clear_client_response_body {
-                            None
-                        } else {
-                            resolved_write_usage_body_ref(
-                                usage.client_response_body_ref.as_deref(),
-                                &usage.request_id,
-                                UsageBodyField::ClientResponseBody,
-                                client_response_body_storage.has_detached_blob(),
-                                http_audit_refs.client_response_body_ref.as_deref(),
-                            )
-                        };
                         stored.request_body_state =
                             usage.request_body_state.or(stored.request_body_state);
                         stored.provider_request_body_state = usage
@@ -9528,7 +9479,6 @@ RETURNING
                     || row.prepared.provider_request_headers_json.is_some()
                     || row.prepared.response_headers_json.is_some()
                     || row.prepared.client_response_headers_json.is_some()
-                    || row.prepared.http_audit_refs.any_present()
                     || row.prepared.http_audit_states.any_present()
                     || row.prepared.http_audit_capture_mode != "none"
             })
@@ -9540,10 +9490,8 @@ RETURNING
         let mut builder = QueryBuilder::<Postgres>::new(
             r#"INSERT INTO usage_http_audits (
 request_id, request_headers, provider_request_headers, response_headers,
-client_response_headers, request_body_ref, provider_request_body_ref,
-response_body_ref, client_response_body_ref, request_body_state,
-provider_request_body_state, response_body_state, client_response_body_state,
-body_capture_mode
+client_response_headers, request_body_state, provider_request_body_state,
+response_body_state, client_response_body_state, body_capture_mode
 ) "#,
         );
         builder.push_values(&rows, |mut values, row| {
@@ -9561,20 +9509,6 @@ body_capture_mode
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.client_response_headers_json.clone())
                 .push_unseparated(" AS jsonb)")
-                .push_bind(row.prepared.http_audit_refs.request_body_ref.clone())
-                .push_bind(
-                    row.prepared
-                        .http_audit_refs
-                        .provider_request_body_ref
-                        .clone(),
-                )
-                .push_bind(row.prepared.http_audit_refs.response_body_ref.clone())
-                .push_bind(
-                    row.prepared
-                        .http_audit_refs
-                        .client_response_body_ref
-                        .clone(),
-                )
                 .push_bind(usage_body_capture_state_bind_text(
                     row.prepared.http_audit_states.request_body_state,
                 ))
@@ -9596,10 +9530,6 @@ ON CONFLICT (request_id) DO UPDATE SET
   provider_request_headers = COALESCE(EXCLUDED.provider_request_headers, usage_http_audits.provider_request_headers),
   response_headers = COALESCE(EXCLUDED.response_headers, usage_http_audits.response_headers),
   client_response_headers = COALESCE(EXCLUDED.client_response_headers, usage_http_audits.client_response_headers),
-  request_body_ref = CASE WHEN EXCLUDED.request_body_state = 'none' THEN NULL ELSE COALESCE(EXCLUDED.request_body_ref, usage_http_audits.request_body_ref) END,
-  provider_request_body_ref = CASE WHEN EXCLUDED.provider_request_body_state = 'none' THEN NULL ELSE COALESCE(EXCLUDED.provider_request_body_ref, usage_http_audits.provider_request_body_ref) END,
-  response_body_ref = CASE WHEN EXCLUDED.response_body_state = 'none' THEN NULL ELSE COALESCE(EXCLUDED.response_body_ref, usage_http_audits.response_body_ref) END,
-  client_response_body_ref = CASE WHEN EXCLUDED.client_response_body_state = 'none' THEN NULL ELSE COALESCE(EXCLUDED.client_response_body_ref, usage_http_audits.client_response_body_ref) END,
   request_body_state = COALESCE(EXCLUDED.request_body_state, usage_http_audits.request_body_state),
   provider_request_body_state = COALESCE(EXCLUDED.provider_request_body_state, usage_http_audits.provider_request_body_state),
   response_body_state = COALESCE(EXCLUDED.response_body_state, usage_http_audits.response_body_state),
@@ -12235,12 +12165,6 @@ fn map_usage_row(row: &sqlx::postgres::PgRow) -> Result<StoredRequestUsageAudit,
     usage.response_headers = row.try_get("response_headers").map_postgres_err()?;
     usage.client_response_headers = row.try_get("client_response_headers").map_postgres_err()?;
     let request_metadata: Option<Value> = row.try_get("request_metadata").map_postgres_err()?;
-    let http_audit_refs = UsageHttpAuditRefs {
-        request_body_ref: row_try_get_optional(row, "http_request_body_ref")?,
-        provider_request_body_ref: row_try_get_optional(row, "http_provider_request_body_ref")?,
-        response_body_ref: row_try_get_optional(row, "http_response_body_ref")?,
-        client_response_body_ref: row_try_get_optional(row, "http_client_response_body_ref")?,
-    };
     let http_audit_states = UsageHttpAuditStates {
         request_body_state: row_try_get_optional::<String>(row, "http_request_body_state")?
             .as_deref()
@@ -12263,35 +12187,6 @@ fn map_usage_row(row: &sqlx::postgres::PgRow) -> Result<StoredRequestUsageAudit,
     };
     let routing_snapshot = usage_routing_snapshot_from_row(row)?;
     let settlement_pricing_snapshot = usage_settlement_pricing_snapshot_from_row(row)?;
-    let request_metadata_object = request_metadata.as_ref().and_then(Value::as_object);
-    usage.request_body_ref = resolved_read_usage_body_ref(
-        None,
-        request_metadata_object,
-        &usage.request_id,
-        UsageBodyField::RequestBody,
-        http_audit_refs.request_body_ref.as_deref(),
-    );
-    usage.provider_request_body_ref = resolved_read_usage_body_ref(
-        None,
-        request_metadata_object,
-        &usage.request_id,
-        UsageBodyField::ProviderRequestBody,
-        http_audit_refs.provider_request_body_ref.as_deref(),
-    );
-    usage.response_body_ref = resolved_read_usage_body_ref(
-        None,
-        request_metadata_object,
-        &usage.request_id,
-        UsageBodyField::ResponseBody,
-        http_audit_refs.response_body_ref.as_deref(),
-    );
-    usage.client_response_body_ref = resolved_read_usage_body_ref(
-        None,
-        request_metadata_object,
-        &usage.request_id,
-        UsageBodyField::ClientResponseBody,
-        http_audit_refs.client_response_body_ref.as_deref(),
-    );
     usage.request_body_state = http_audit_states.request_body_state;
     usage.provider_request_body_state = http_audit_states.provider_request_body_state;
     usage.response_body_state = http_audit_states.response_body_state;
@@ -12331,23 +12226,6 @@ struct UsageBodyStorage {
 impl UsageBodyStorage {
     fn has_detached_blob(&self) -> bool {
         self.detached_blob_bytes.is_some()
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct UsageHttpAuditRefs {
-    request_body_ref: Option<String>,
-    provider_request_body_ref: Option<String>,
-    response_body_ref: Option<String>,
-    client_response_body_ref: Option<String>,
-}
-
-impl UsageHttpAuditRefs {
-    fn any_present(&self) -> bool {
-        self.request_body_ref.is_some()
-            || self.provider_request_body_ref.is_some()
-            || self.response_body_ref.is_some()
-            || self.client_response_body_ref.is_some()
     }
 }
 
@@ -12497,7 +12375,6 @@ struct PreparedUsageUpsert {
     provider_request_body_storage: UsageBodyStorage,
     response_body_storage: UsageBodyStorage,
     client_response_body_storage: UsageBodyStorage,
-    http_audit_refs: UsageHttpAuditRefs,
     http_audit_states: UsageHttpAuditStates,
     http_audit_capture_mode: &'static str,
     routing_snapshot: UsageRoutingSnapshot,
@@ -12755,56 +12632,26 @@ fn prepare_usage_upsert_context(
     let response_body_storage = prepare_usage_body_storage(response_body)?;
     let client_response_headers_json = json_bind_text(usage.client_response_headers.as_ref())?;
     let client_response_body_storage = prepare_usage_body_storage(client_response_body)?;
-    let http_audit_refs = UsageHttpAuditRefs {
-        request_body_ref: resolved_write_usage_body_ref(
-            request_body_ref,
-            &usage.request_id,
-            UsageBodyField::RequestBody,
-            request_body_storage.has_detached_blob(),
-            None,
-        ),
-        provider_request_body_ref: resolved_write_usage_body_ref(
-            provider_request_body_ref,
-            &usage.request_id,
-            UsageBodyField::ProviderRequestBody,
-            provider_request_body_storage.has_detached_blob(),
-            None,
-        ),
-        response_body_ref: resolved_write_usage_body_ref(
-            response_body_ref,
-            &usage.request_id,
-            UsageBodyField::ResponseBody,
-            response_body_storage.has_detached_blob(),
-            None,
-        ),
-        client_response_body_ref: resolved_write_usage_body_ref(
-            client_response_body_ref,
-            &usage.request_id,
-            UsageBodyField::ClientResponseBody,
-            client_response_body_storage.has_detached_blob(),
-            None,
-        ),
-    };
     let http_audit_states = UsageHttpAuditStates {
         request_body_state: usage_body_capture_state_for_storage(
             usage.request_body_state,
             &request_body_storage,
-            http_audit_refs.request_body_ref.as_deref(),
+            request_body_ref,
         ),
         provider_request_body_state: usage_body_capture_state_for_storage(
             usage.provider_request_body_state,
             &provider_request_body_storage,
-            http_audit_refs.provider_request_body_ref.as_deref(),
+            provider_request_body_ref,
         ),
         response_body_state: usage_body_capture_state_for_storage(
             usage.response_body_state,
             &response_body_storage,
-            http_audit_refs.response_body_ref.as_deref(),
+            response_body_ref,
         ),
         client_response_body_state: usage_body_capture_state_for_storage(
             usage.client_response_body_state,
             &client_response_body_storage,
-            http_audit_refs.client_response_body_ref.as_deref(),
+            client_response_body_ref,
         ),
     };
     let mut request_metadata_value = prepare_request_metadata_for_body_storage(
@@ -12852,7 +12699,12 @@ fn prepare_usage_upsert_context(
     request_metadata_value =
         project_usage_request_metadata(request_metadata_value, preserve_empty_metadata_tombstone);
     let http_audit_capture_mode = usage_http_audit_capture_mode(
-        &http_audit_refs,
+        [
+            request_body_ref,
+            provider_request_body_ref,
+            response_body_ref,
+            client_response_body_ref,
+        ],
         [
             request_body,
             provider_request_body,
@@ -12875,7 +12727,6 @@ fn prepare_usage_upsert_context(
         provider_request_body_storage,
         response_body_storage,
         client_response_body_storage,
-        http_audit_refs,
         http_audit_states,
         http_audit_capture_mode,
         routing_snapshot,
@@ -12909,49 +12760,6 @@ fn parse_usage_body_capture_state(value: &str) -> Option<UsageBodyCaptureState> 
     }
 }
 
-#[cfg(test)]
-fn usage_http_audit_body_refs(metadata: Option<&Value>) -> UsageHttpAuditRefs {
-    let object = metadata.and_then(Value::as_object);
-    UsageHttpAuditRefs {
-        request_body_ref: metadata_ref_value(object, "request_body_ref"),
-        provider_request_body_ref: metadata_ref_value(object, "provider_request_body_ref"),
-        response_body_ref: metadata_ref_value(object, "response_body_ref"),
-        client_response_body_ref: metadata_ref_value(object, "client_response_body_ref"),
-    }
-}
-
-fn resolved_read_usage_body_ref(
-    explicit_ref: Option<&str>,
-    metadata: Option<&serde_json::Map<String, Value>>,
-    request_id: &str,
-    field: UsageBodyField,
-    http_audit_ref: Option<&str>,
-) -> Option<String> {
-    explicit_ref
-        .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
-        .or_else(|| {
-            http_audit_ref
-                .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
-        })
-        .or_else(|| metadata_usage_body_ref_value(metadata, request_id, field))
-}
-
-fn resolved_write_usage_body_ref(
-    explicit_ref: Option<&str>,
-    request_id: &str,
-    field: UsageBodyField,
-    has_detached_blob: bool,
-    http_audit_ref: Option<&str>,
-) -> Option<String> {
-    explicit_ref
-        .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
-        .or_else(|| has_detached_blob.then(|| usage_body_ref(request_id, field)))
-        .or_else(|| {
-            http_audit_ref
-                .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
-        })
-}
-
 fn metadata_ref_value(
     metadata: Option<&serde_json::Map<String, Value>>,
     key: &str,
@@ -12962,15 +12770,6 @@ fn metadata_ref_value(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
-}
-
-fn metadata_usage_body_ref_value(
-    metadata: Option<&serde_json::Map<String, Value>>,
-    request_id: &str,
-    field: UsageBodyField,
-) -> Option<String> {
-    metadata_ref_value(metadata, field.as_ref_key())
-        .and_then(|body_ref| canonical_usage_body_ref_for(&body_ref, request_id, field))
 }
 
 fn metadata_number_value(
@@ -13186,10 +12985,10 @@ fn billing_snapshot_string_field(
 }
 
 fn usage_http_audit_capture_mode(
-    refs: &UsageHttpAuditRefs,
+    body_refs: [Option<&str>; 4],
     body_values: [Option<&Value>; 4],
 ) -> &'static str {
-    if refs.any_present() {
+    if body_refs.iter().any(Option::is_some) {
         return "ref_backed";
     }
     if body_values.iter().any(Option::is_some) {
@@ -13495,43 +13294,6 @@ fn usage_settlement_pricing_snapshot_from_usage(
 }
 
 #[cfg(test)]
-fn attach_usage_http_audit_body_refs(
-    metadata: Option<Value>,
-    refs: &UsageHttpAuditRefs,
-) -> Option<Value> {
-    if !refs.any_present() {
-        return metadata;
-    }
-
-    let mut metadata = match metadata {
-        Some(Value::Object(object)) => object,
-        Some(value) => return Some(value),
-        None => Map::new(),
-    };
-    maybe_insert_string_value(
-        &mut metadata,
-        "request_body_ref",
-        refs.request_body_ref.as_deref(),
-    );
-    maybe_insert_string_value(
-        &mut metadata,
-        "provider_request_body_ref",
-        refs.provider_request_body_ref.as_deref(),
-    );
-    maybe_insert_string_value(
-        &mut metadata,
-        "response_body_ref",
-        refs.response_body_ref.as_deref(),
-    );
-    maybe_insert_string_value(
-        &mut metadata,
-        "client_response_body_ref",
-        refs.client_response_body_ref.as_deref(),
-    );
-    (!metadata.is_empty()).then_some(Value::Object(metadata))
-}
-
-#[cfg(test)]
 fn attach_usage_routing_snapshot_metadata(
     metadata: Option<Value>,
     snapshot: &UsageRoutingSnapshot,
@@ -13652,18 +13414,13 @@ async fn sync_usage_http_audit_storage<'e, E>(
     executor: E,
     request_id: &str,
     headers: &UsageHttpAuditHeaders<'_>,
-    refs: &UsageHttpAuditRefs,
     states: &UsageHttpAuditStates,
     body_capture_mode: &str,
 ) -> Result<(), DataLayerError>
 where
     E: sqlx::Executor<'e, Database = Postgres>,
 {
-    if !headers.any_present()
-        && !refs.any_present()
-        && !states.any_present()
-        && body_capture_mode == "none"
-    {
+    if !headers.any_present() && !states.any_present() && body_capture_mode == "none" {
         return Ok(());
     }
 
@@ -13673,10 +13430,6 @@ where
         .bind(headers.provider_request_headers_json)
         .bind(headers.response_headers_json)
         .bind(headers.client_response_headers_json)
-        .bind(refs.request_body_ref.as_deref())
-        .bind(refs.provider_request_body_ref.as_deref())
-        .bind(refs.response_body_ref.as_deref())
-        .bind(refs.client_response_body_ref.as_deref())
         .bind(usage_body_capture_state_bind_text(
             states.request_body_state,
         ))

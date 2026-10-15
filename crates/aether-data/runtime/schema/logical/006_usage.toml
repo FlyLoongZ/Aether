@@ -592,30 +592,6 @@ type = "json"
 nullable = true
 
 [[table.usage_http_audits.columns]]
-name = "request_body_ref"
-type = "text"
-length = 160
-nullable = true
-
-[[table.usage_http_audits.columns]]
-name = "provider_request_body_ref"
-type = "text"
-length = 160
-nullable = true
-
-[[table.usage_http_audits.columns]]
-name = "response_body_ref"
-type = "text"
-length = 160
-nullable = true
-
-[[table.usage_http_audits.columns]]
-name = "client_response_body_ref"
-type = "text"
-length = 160
-nullable = true
-
-[[table.usage_http_audits.columns]]
 name = "request_body_state"
 type = "text"
 length = 32

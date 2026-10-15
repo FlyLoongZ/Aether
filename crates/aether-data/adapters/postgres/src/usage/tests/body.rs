@@ -4,8 +4,14 @@ use super::*;
 fn usage_sql_reads_http_audits_for_single_record_fetches() {
     assert!(super::super::FIND_BY_REQUEST_ID_SQL.contains("LEFT JOIN usage_http_audits"));
     assert!(super::super::FIND_BY_ID_SQL.contains("LEFT JOIN usage_http_audits"));
-    assert!(super::super::FIND_BY_REQUEST_ID_SQL.contains("http_request_body_ref"));
-    assert!(super::super::FIND_BY_ID_SQL.contains("http_client_response_body_ref"));
+    // The body reference is derived from the row identity, so no query reads a stored one.
+    for sql in [
+        super::super::FIND_BY_REQUEST_ID_SQL,
+        super::super::FIND_BY_ID_SQL,
+    ] {
+        assert!(!sql.contains("http_request_body_ref"));
+        assert!(!sql.contains("http_client_response_body_ref"));
+    }
     for sql in [
         super::super::FIND_BY_REQUEST_ID_SQL,
         super::super::FIND_BY_ID_SQL,
@@ -55,9 +61,6 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(super::super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS request_headers"));
     assert!(super::super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS provider_request_body"));
     assert!(
-        super::super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_ref")
-    );
-    assert!(
         super::super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_state")
     );
     assert!(super::super::LIST_USAGE_AUDITS_PREFIX
@@ -76,8 +79,6 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     );
     assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
         .contains("NULL::jsonb AS provider_request_body"));
-    assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
-        .contains("NULL::varchar AS http_client_response_body_ref"));
     assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
         .contains("NULL::varchar AS http_request_body_state"));
     assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
@@ -231,7 +232,7 @@ fn usage_sql_detached_body_flags_clear_body_columns() {
 }
 
 #[test]
-fn usage_sql_capture_guard_covers_bodies_metadata_and_http_ref_tombstones() {
+fn usage_sql_capture_guard_covers_bodies_metadata_and_audit_body_states() {
     for assignment in [
         "request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
         "provider_request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
@@ -244,15 +245,17 @@ fn usage_sql_capture_guard_covers_bodies_metadata_and_http_ref_tombstones() {
             "missing guard: {assignment}"
         );
     }
+    // The audit row keeps the capture states but no stored reference.
+    assert!(!super::super::UPSERT_USAGE_HTTP_AUDIT_SQL.contains("body_ref"));
     for assignment in [
-        "WHEN EXCLUDED.request_body_state = 'none' THEN NULL",
-        "WHEN EXCLUDED.provider_request_body_state = 'none' THEN NULL",
-        "WHEN EXCLUDED.response_body_state = 'none' THEN NULL",
-        "WHEN EXCLUDED.client_response_body_state = 'none' THEN NULL",
+        "request_body_state = COALESCE(",
+        "provider_request_body_state = COALESCE(",
+        "response_body_state = COALESCE(",
+        "client_response_body_state = COALESCE(",
     ] {
         assert!(
             super::super::UPSERT_USAGE_HTTP_AUDIT_SQL.contains(assignment),
-            "missing HTTP ref tombstone: {assignment}"
+            "missing HTTP body state assignment: {assignment}"
         );
     }
     let source = include_str!("../mod.rs");
@@ -455,8 +458,6 @@ fn explicit_none_capture_drops_residual_body_ref_and_incoming_fast_metadata_befo
         "model": "gpt-5",
         "service_tier": "priority"
     }));
-    usage.provider_request_body_ref =
-        Some("usage://request/req-none-residual/provider_request_body".to_string());
     usage.request_metadata = Some(json!({
         "trace_id": "trace-1",
         "provider_service_tier": "priority",
@@ -469,7 +470,6 @@ fn explicit_none_capture_drops_residual_body_ref_and_incoming_fast_metadata_befo
     let prepared = prepared.expect("usage should prepare");
     assert!(prepared.clear_provider_request_body);
     assert!(!prepared.provider_request_body_storage.has_detached_blob());
-    assert_eq!(prepared.http_audit_refs.provider_request_body_ref, None);
     assert_eq!(
         prepared.request_metadata_value,
         Some(json!({"trace_id": "trace-1"}))
@@ -545,189 +545,24 @@ fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys(
 }
 
 #[test]
-fn usage_http_audit_body_refs_extracts_only_non_empty_values() {
-    let refs = usage_http_audit_body_refs(Some(&json!({
-        "request_body_ref": "usage://request/req-123/request_body",
-        "provider_request_body_ref": "  ",
-        "response_body_ref": "usage://request/req-123/response_body"
-    })));
-
-    assert_eq!(
-        refs,
-        UsageHttpAuditRefs {
-            request_body_ref: Some("usage://request/req-123/request_body".to_string()),
-            provider_request_body_ref: None,
-            response_body_ref: Some("usage://request/req-123/response_body".to_string()),
-            client_response_body_ref: None,
-        }
-    );
-}
-
-#[test]
-fn resolved_read_usage_body_ref_prefers_typed_then_http_audit_then_metadata() {
-    let metadata = json!({
-        "request_body_ref": "usage://request/req-123/request_body"
-    });
-    let invalid_metadata = json!({
-        "request_body_ref": "blob://metadata-request"
-    });
-    let mismatched_metadata = json!({
-        "request_body_ref": "usage://request/req-other/request_body"
-    });
-
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            Some("usage://request/req-123/request_body"),
-            metadata.as_object(),
-            "req-123",
-            UsageBodyField::RequestBody,
-            Some("usage://request/req-123/request_body"),
-        ),
-        Some("usage://request/req-123/request_body".to_string())
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            metadata.as_object(),
-            "req-123",
-            UsageBodyField::RequestBody,
-            Some("usage://request/req-123/request_body"),
-        ),
-        Some("usage://request/req-123/request_body".to_string())
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            metadata.as_object(),
-            "req-123",
-            UsageBodyField::RequestBody,
-            None,
-        ),
-        Some(usage_body_ref("req-123", UsageBodyField::RequestBody))
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            invalid_metadata.as_object(),
-            "req-123",
-            UsageBodyField::RequestBody,
-            None,
-        ),
-        None
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            mismatched_metadata.as_object(),
-            "req-123",
-            UsageBodyField::RequestBody,
-            None,
-        ),
-        None
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            None,
-            "req-123",
-            UsageBodyField::ResponseBody,
-            Some("usage://request/req-123/response_body"),
-        ),
-        Some(usage_body_ref("req-123", UsageBodyField::ResponseBody))
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            None,
-            "req-123",
-            UsageBodyField::ClientResponseBody,
-            Some("usage://request/req-123/client_response_body"),
-        ),
-        Some("usage://request/req-123/client_response_body".to_string())
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            Some("usage://request/req-other/request_body"),
-            None,
-            "req-123",
-            UsageBodyField::RequestBody,
-            Some("usage://request/req-123/request_body"),
-        ),
-        Some(usage_body_ref("req-123", UsageBodyField::RequestBody))
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            None,
-            "req-123",
-            UsageBodyField::RequestBody,
-            Some("usage://request/req-other/request_body"),
-        ),
-        None
-    );
-    assert_eq!(
-        resolved_read_usage_body_ref(
-            None,
-            None,
-            "req-123",
-            UsageBodyField::RequestBody,
-            Some("usage://request/req-123/response_body"),
-        ),
-        None
-    );
-}
-
-#[test]
 fn usage_http_audit_capture_mode_prefers_refs_over_inline_legacy() {
-    let refs = UsageHttpAuditRefs {
-        request_body_ref: Some("usage://request/req-123/request_body".to_string()),
-        ..UsageHttpAuditRefs::default()
-    };
     assert_eq!(
-        usage_http_audit_capture_mode(&refs, [Some(&json!({"request": true})), None, None, None]),
+        usage_http_audit_capture_mode(
+            [Some("usage://request/req-123/request_body"), None, None, None],
+            [Some(&json!({"request": true})), None, None, None]
+        ),
         "ref_backed"
     );
     assert_eq!(
         usage_http_audit_capture_mode(
-            &UsageHttpAuditRefs::default(),
+            [None, None, None, None],
             [Some(&json!({"request": true})), None, None, None]
         ),
         "inline_legacy"
     );
     assert_eq!(
-        usage_http_audit_capture_mode(&UsageHttpAuditRefs::default(), [None, None, None, None]),
+        usage_http_audit_capture_mode([None, None, None, None], [None, None, None, None]),
         "none"
-    );
-}
-
-#[test]
-fn attach_usage_http_audit_body_refs_adds_missing_metadata_without_overwriting_existing_keys() {
-    let metadata = attach_usage_http_audit_body_refs(
-        Some(json!({
-            "candidate_id": "cand-1",
-            "request_body_ref": "blob://existing"
-        })),
-        &UsageHttpAuditRefs {
-            request_body_ref: Some("usage://request/req-123/request_body".to_string()),
-            provider_request_body_ref: Some(
-                "usage://request/req-123/provider_request_body".to_string(),
-            ),
-            response_body_ref: None,
-            client_response_body_ref: Some(
-                "usage://request/req-123/client_response_body".to_string(),
-            ),
-        },
-    )
-    .expect("metadata should remain");
-
-    assert_eq!(
-        metadata,
-        json!({
-            "candidate_id": "cand-1",
-            "request_body_ref": "blob://existing",
-            "provider_request_body_ref": "usage://request/req-123/provider_request_body",
-            "client_response_body_ref": "usage://request/req-123/client_response_body"
-        })
     );
 }
 

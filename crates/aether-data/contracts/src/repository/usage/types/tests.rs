@@ -587,13 +587,12 @@ fn settlement_accessors_fall_back_to_billing_snapshot_and_legacy_output_price() 
 }
 
 #[test]
-fn body_ref_and_routing_accessors_prefer_typed_fields() {
+fn body_ref_is_derived_from_capture_state_and_routing_accessors_prefer_typed_fields() {
     let mut usage = sample_usage();
-    usage.request_body_ref = Some("usage://request/req-1/request_body".to_string());
-    usage.provider_request_body_ref =
-        Some("usage://request/req-1/provider_request_body".to_string());
-    usage.response_body_ref = Some("usage://request/req-1/response_body".to_string());
-    usage.client_response_body_ref = Some("usage://request/req-1/client_response_body".to_string());
+    usage.request_body_state = Some(UsageBodyCaptureState::Reference);
+    usage.provider_request_body_state = Some(UsageBodyCaptureState::Reference);
+    usage.response_body_state = Some(UsageBodyCaptureState::Reference);
+    usage.client_response_body_state = Some(UsageBodyCaptureState::Reference);
     usage.candidate_id = Some("cand-typed".to_string());
     usage.key_name = Some("primary-typed".to_string());
     usage.planner_kind = Some("claude_cli_sync".to_string());
@@ -616,19 +615,23 @@ fn body_ref_and_routing_accessors_prefer_typed_fields() {
     }));
 
     assert_eq!(
-        usage.body_ref(UsageBodyField::RequestBody),
+        usage.body_ref(UsageBodyField::RequestBody).as_deref(),
         Some("usage://request/req-1/request_body")
     );
     assert_eq!(
-        usage.body_ref(UsageBodyField::ProviderRequestBody),
+        usage
+            .body_ref(UsageBodyField::ProviderRequestBody)
+            .as_deref(),
         Some("usage://request/req-1/provider_request_body")
     );
     assert_eq!(
-        usage.body_ref(UsageBodyField::ResponseBody),
+        usage.body_ref(UsageBodyField::ResponseBody).as_deref(),
         Some("usage://request/req-1/response_body")
     );
     assert_eq!(
-        usage.body_ref(UsageBodyField::ClientResponseBody),
+        usage
+            .body_ref(UsageBodyField::ClientResponseBody)
+            .as_deref(),
         Some("usage://request/req-1/client_response_body")
     );
     assert_eq!(usage.routing_candidate_id(), Some("cand-typed"));
@@ -676,7 +679,6 @@ fn body_ref_accessor_ignores_legacy_metadata_compatibility_keys() {
 fn body_capture_result_prefers_typed_state_over_inline_body_presence() {
     let mut usage = sample_usage();
     usage.request_body = Some(json!({"model": "gpt-5"}));
-    usage.request_body_ref = Some("usage://request/req-1/request_body".to_string());
     usage.request_body_state = Some(UsageBodyCaptureState::Disabled);
 
     let result =
@@ -1158,7 +1160,6 @@ fn extracts_anthropic_fast_speed_as_its_own_processing_tier() {
 #[test]
 fn request_body_capture_json_entry_includes_capture_source_and_body_ref() {
     let mut usage = sample_usage();
-    usage.request_body_ref = Some("usage://request/req-1/request_body".to_string());
     usage.request_body_state = Some(UsageBodyCaptureState::Reference);
 
     let entry = usage.request_body_capture_json_entry();

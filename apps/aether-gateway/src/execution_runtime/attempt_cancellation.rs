@@ -483,7 +483,6 @@ mod tests {
         .await
         .expect("cancelled usage should be recorded");
         assert_eq!(usage.provider_request_body, None);
-        assert_eq!(usage.provider_request_body_ref, None);
         assert_eq!(
             usage.provider_request_body_state,
             Some(UsageBodyCaptureState::Disabled)
