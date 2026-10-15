@@ -118,7 +118,9 @@ CREATE TABLE IF NOT EXISTS public.usage_body_blobs (
     body_field character varying(50) NOT NULL,
     payload bytea NOT NULL,
     created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL
+    updated_at timestamp with time zone NOT NULL,
+    encoding smallint DEFAULT 0 NOT NULL,
+    logical_bytes integer
 );
 
 ALTER TABLE ONLY public.usage_body_blobs ADD CONSTRAINT usage_body_blobs_pkey PRIMARY KEY (body_ref);

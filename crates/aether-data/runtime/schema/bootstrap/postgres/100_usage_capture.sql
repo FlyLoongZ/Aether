@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS public.usage_body_blobs (
     payload bytea NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    encoding smallint DEFAULT 0 NOT NULL,
+    logical_bytes integer,
     CONSTRAINT usage_body_blobs_pkey PRIMARY KEY (body_ref),
     CONSTRAINT usage_body_blobs_request_id_field_key UNIQUE (request_id, body_field),
     CONSTRAINT usage_body_blobs_request_id_fkey
@@ -690,3 +692,8 @@ COMMENT ON COLUMN public.usage.response_body IS
   'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.response_body_ref. Legacy compatibility only; do not write new values.';
 COMMENT ON COLUMN public.usage.client_response_body IS
   'DEPRECATED: HTTP body owner moved to public.usage_body_blobs plus public.usage_http_audits.client_response_body_ref. Legacy compatibility only; do not write new values.';
+
+COMMENT ON COLUMN public.usage_body_blobs.encoding IS
+  'Body payload encoding: 0 = raw single body written before paired frames existed, 1 = zstd frame carrying the paired container, 2 = uncompressed container written when zstd encoding failed.';
+COMMENT ON COLUMN public.usage_body_blobs.logical_bytes IS
+  'Uncompressed byte length of the stored payload, recorded on write so read paths can size-guard without decoding. NULL on rows written before this column existed.';
