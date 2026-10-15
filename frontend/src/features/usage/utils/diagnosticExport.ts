@@ -4,6 +4,10 @@ import { decodeBody } from './body-document-engine'
 import { diagnosticObject } from './failureDiagnostic'
 
 const MAX_SOURCE_BYTES = 1024 * 1024
+// A body captured as a pair arrives inside one container, so the download can be
+// about twice the body it carries. The body itself is still bounded by
+// MAX_SOURCE_BYTES once the container has been split.
+const MAX_SOURCE_CONTAINER_BYTES = MAX_SOURCE_BYTES * 2
 const MAX_EXPORT_CHARS = 64 * 1024
 const SECRET_KEY = /^(?:authorization|proxy[-_]authorization|cookie|set[-_]cookie|(?:x[-_])?api[-_]?key|x[-_]goog[-_]api[-_]key|(?:openai|anthropic)[-_]api[-_]?key|(?:x[-_])?auth[-_]token|api[-_]secret|secret[-_]key|session(?:[-_]id)?|key|token|access[-_]token|refresh[-_]token|id[-_]token|client[-_]secret|secret|password|passwd|credential|credentials|private[-_]key)$/i
 const CONTENT_KEY = /^(?:text|content|prompt|system|instructions|input|arguments|partial_json|thinking|signature|data|image|url|image_url|audio|video|raw_response|body|description|refusal)$/i
@@ -160,7 +164,7 @@ async function loadBody(usageId: string, field: RequestBodyField, signal: AbortS
   try {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
     const response = await dashboardApi.getRequestBody(usageId, field, controller.signal, loaded => {
-      if (loaded > MAX_SOURCE_BYTES) {
+      if (loaded > MAX_SOURCE_CONTAINER_BYTES) {
         tooLarge = true
         controller.abort()
       }
