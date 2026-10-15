@@ -546,6 +546,17 @@ type = "timestamp"
 name = "updated_at"
 type = "timestamp"
 
+[[table.usage_body_blobs.columns]]
+name = "encoding"
+type = "int32"
+driver.postgres.type = "smallint"
+default = 0
+
+[[table.usage_body_blobs.columns]]
+name = "logical_bytes"
+type = "int32"
+nullable = true
+
 [[table.usage_body_blobs.uniques]]
 name = "usage_body_blobs_request_id_field_key"
 columns = ["request_id", "body_field"]
