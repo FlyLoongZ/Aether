@@ -5,7 +5,7 @@ use aether_data_contracts::repository::usage::{
 use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
 use sqlx::Row;
-use tracing::warn;
+use tracing::{info, warn};
 
 use super::SqlxUsageReadRepository;
 use crate::{error::postgres_error, DataLayerError, PostgresPool};
@@ -234,6 +234,10 @@ impl SqlxUsageReadRepository {
             0
         };
 
+        if let Err(err) = log_usage_body_storage_summary(&self.pool).await {
+            warn!(error = %err, "usage body storage summary failed");
+        }
+
         Ok(UsageCleanupSummary {
             body_cleaned,
             header_cleaned,
@@ -297,6 +301,51 @@ pub async fn preview_usage_cleanup_impl(
     };
 
     Ok(UsageCleanupPreviewCounts { body, header, log })
+}
+
+const SELECT_USAGE_BODY_STORAGE_SUMMARY_SQL: &str = r#"
+SELECT
+  body_field,
+  encoding,
+  COUNT(*)::BIGINT AS row_count,
+  COUNT(logical_bytes)::BIGINT AS encoded_rows,
+  COALESCE(SUM(logical_bytes), 0)::BIGINT AS logical_bytes,
+  COALESCE(SUM(octet_length(payload)), 0)::BIGINT AS stored_bytes
+FROM usage_body_blobs
+GROUP BY body_field, encoding
+ORDER BY body_field, encoding
+"#;
+
+/// Logs how stored bodies are encoded and what they cost.
+///
+/// This is the only place that can say whether paired frames pay off:
+/// `logical_bytes` is what the bodies would have taken uncompressed, and
+/// `octet_length(payload)` is what they take now. Rows written before the
+/// encoding column existed report `encoding = 0` and no `logical_bytes`.
+async fn log_usage_body_storage_summary(pool: &PostgresPool) -> Result<(), DataLayerError> {
+    let rows = sqlx::query(SELECT_USAGE_BODY_STORAGE_SUMMARY_SQL)
+        .fetch_all(pool)
+        .await
+        .map_err(postgres_error)?;
+    for row in rows {
+        let body_field: String = row.try_get("body_field").map_err(postgres_error)?;
+        info!(
+            body_field = body_field.as_str(),
+            encoding = row.try_get::<i16, _>("encoding").map_err(postgres_error)?,
+            rows = row.try_get::<i64, _>("row_count").map_err(postgres_error)?,
+            encoded_rows = row
+                .try_get::<i64, _>("encoded_rows")
+                .map_err(postgres_error)?,
+            logical_bytes = row
+                .try_get::<i64, _>("logical_bytes")
+                .map_err(postgres_error)?,
+            stored_bytes = row
+                .try_get::<i64, _>("stored_bytes")
+                .map_err(postgres_error)?,
+            "usage body storage summary"
+        );
+    }
+    Ok(())
 }
 
 async fn truncate_usage_body_blobs_table(pool: &PostgresPool) -> Result<(), DataLayerError> {
