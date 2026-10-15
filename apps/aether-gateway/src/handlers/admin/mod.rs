@@ -42,7 +42,7 @@ pub(crate) use self::provider::ops::providers::store_admin_provider_ops_balance_
 pub(crate) use self::provider::pool::config::admin_provider_pool_config;
 pub(crate) use self::provider::write::provider::reconcile_admin_fixed_provider_template_endpoints;
 pub(crate) use self::request::{
-    AdminAppState, AdminGatewayProviderTransportSnapshot, AdminLocalOAuthRefreshError,
+    accepts_zstd, AdminAppState, AdminGatewayProviderTransportSnapshot, AdminLocalOAuthRefreshError,
     AdminRequestContext, AdminRouteRequest, SystemExportMode,
 };
 pub(crate) use self::routes::maybe_build_local_admin_response;

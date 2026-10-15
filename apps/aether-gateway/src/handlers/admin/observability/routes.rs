@@ -30,6 +30,7 @@ pub(crate) async fn maybe_build_local_admin_observability_response(
         &request.state(),
         &request.request_context(),
         request.request_body(),
+        request.accepts_zstd(),
     )
     .await?
     {
