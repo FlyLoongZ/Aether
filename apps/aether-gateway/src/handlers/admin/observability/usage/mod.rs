@@ -12,6 +12,7 @@ pub(crate) async fn maybe_build_local_admin_usage_response(
     state: &AdminAppState<'_>,
     request_context: &AdminRequestContext<'_>,
     request_body: Option<&axum::body::Bytes>,
+    accepts_zstd: bool,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let Some(decision) = request_context.decision() else {
         return Ok(None);
@@ -25,6 +26,7 @@ pub(crate) async fn maybe_build_local_admin_usage_response(
         state,
         request_context,
         request_body,
+        accepts_zstd,
     )
     .await?
     {

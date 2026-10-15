@@ -2092,8 +2092,42 @@ pub fn canonical_usage_body_ref_for(
 
 pub const MAX_USAGE_BODY_BYTES: usize = 64 * 1024 * 1024;
 
+/// `usage_body_blobs.encoding` of a raw, single body.
+///
+/// Rows written before paired frames hold one uncompressed body in `payload`,
+/// and this is also the value clients see as `x-aether-body-encoding: 0`.
+pub const ENCODING_RAW_SINGLE: i16 = 0;
+
+/// `usage_body_blobs.encoding` of a zstd frame carrying both halves of a pair.
+pub const ENCODING_ZSTD_CONTAINER: i16 = 1;
+
+/// `usage_body_blobs.encoding` of an uncompressed pair container.
+pub const ENCODING_RAW_CONTAINER: i16 = 2;
+
+/// A stored usage body payload, as `usage_body_blobs` holds it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredUsageBodyPayload(pub Vec<u8>);
+pub struct StoredUsageBodyPayload {
+    /// The stored bytes: a raw body, a zstd frame, or a container, per `encoding`.
+    pub bytes: Vec<u8>,
+    /// The value of `usage_body_blobs.encoding`, reported to clients as
+    /// `x-aether-body-encoding`.
+    pub encoding: i16,
+    /// Whether `bytes` may be served as `Content-Encoding: zstd` for the client
+    /// to decompress itself. Only a zstd container whose window a browser will
+    /// accept qualifies; anything else is decoded before it is sent.
+    pub client_zstd_frame: bool,
+}
+
+impl StoredUsageBodyPayload {
+    /// A body that was never compressed, which is what clients already read.
+    pub fn raw_json(bytes: Vec<u8>) -> Self {
+        Self {
+            bytes,
+            encoding: ENCODING_RAW_SINGLE,
+            client_zstd_frame: false,
+        }
+    }
+}
 
 #[async_trait]
 pub trait UsageReadRepository: Send + Sync {
@@ -2168,7 +2202,7 @@ pub trait UsageReadRepository: Send + Sync {
             .await?
             .map(|value| {
                 serde_json::to_vec(&value)
-                    .map(StoredUsageBodyPayload)
+                    .map(StoredUsageBodyPayload::raw_json)
                     .map_err(|error| crate::DataLayerError::UnexpectedValue(error.to_string()))
             })
             .transpose()

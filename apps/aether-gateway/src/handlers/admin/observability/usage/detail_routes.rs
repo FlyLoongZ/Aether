@@ -19,7 +19,7 @@ use aether_admin::observability::usage::{
 };
 use aether_data_contracts::repository::usage::{
     StoredRequestUsageAudit, StoredUsageBodyPayload, UsageBodyCaptureState, UsageBodyField,
-    MAX_USAGE_BODY_BYTES,
+    ENCODING_ZSTD_CONTAINER,
 };
 use axum::{
     body::Body,
@@ -58,12 +58,16 @@ fn admin_usage_body_load_error_code(error: &GatewayError) -> &'static str {
     if let GatewayError::Internal(message) = error {
         if message.contains("decompressed usage json exceeds ")
             || message.contains("encoded usage json exceeds ")
+            || message.contains("stored usage body payload exceeds ")
         {
             return "too_large";
         }
         if message.contains("failed to parse usage json:")
             || message.contains("failed to decompress usage json:")
             || message.contains("failed to parse decompressed usage json:")
+            || message.contains("usage body frame:")
+            || message.contains("usage body container:")
+            || message.contains("is not a pair container")
         {
             return "decode_failed";
         }
@@ -139,10 +143,38 @@ async fn resolve_admin_usage_detail_body_value(
     }
 }
 
+/// How a stored raw body travels to the client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AdminUsageRawBodyTravel {
+    /// The stored bytes can be sent as they are.
+    PassThrough,
+    /// A zstd frame the client cannot read, so it has to be decoded here first.
+    DecodeOnServer,
+}
+
+impl AdminUsageRawBodyTravel {
+    /// Only a browser-sized zstd frame for a client that takes zstd may travel as
+    /// `Content-Encoding: zstd` and be decoded by the client itself.
+    ///
+    /// Everything else -- a client that does not take zstd, or a frame whose
+    /// window is past what a browser accepts -- has to be decoded here. Otherwise
+    /// the client receives compressed bytes it has no way to read.
+    fn for_payload(payload: &StoredUsageBodyPayload, accepts_zstd: bool) -> Self {
+        if payload.encoding == ENCODING_ZSTD_CONTAINER
+            && !(payload.client_zstd_frame && accepts_zstd)
+        {
+            Self::DecodeOnServer
+        } else {
+            Self::PassThrough
+        }
+    }
+}
+
 async fn read_admin_usage_raw_body(
     state: &AdminAppState<'_>,
     item: &StoredRequestUsageAudit,
     field: UsageBodyField,
+    accepts_zstd: bool,
 ) -> Result<Option<StoredUsageBodyPayload>, GatewayError> {
     if matches!(
         item.body_state(field),
@@ -162,6 +194,21 @@ async fn read_admin_usage_raw_body(
     if !prefer_inline {
         if let Some(body_ref) = item.body_ref(field) {
             if let Some(payload) = state.read_request_usage_body_payload(&body_ref).await? {
+                if AdminUsageRawBodyTravel::for_payload(&payload, accepts_zstd)
+                    == AdminUsageRawBodyTravel::DecodeOnServer
+                {
+                    // The client cannot read this frame, so decode the body here
+                    // and hand over the field it asked for.
+                    return state
+                        .resolve_request_usage_body_ref(&body_ref)
+                        .await?
+                        .map(|body| {
+                            serde_json::to_vec(&body)
+                                .map(StoredUsageBodyPayload::raw_json)
+                                .map_err(|error| GatewayError::Internal(error.to_string()))
+                        })
+                        .transpose();
+                }
                 return Ok(Some(payload));
             }
         }
@@ -174,7 +221,7 @@ async fn read_admin_usage_raw_body(
     fallback
         .map(|value| {
             serde_json::to_vec(&value)
-                .map(StoredUsageBodyPayload)
+                .map(StoredUsageBodyPayload::raw_json)
                 .map_err(|error| GatewayError::Internal(error.to_string()))
         })
         .transpose()
@@ -184,10 +231,11 @@ async fn build_admin_usage_raw_body_response(
     state: &AdminAppState<'_>,
     item: &StoredRequestUsageAudit,
     field: UsageBodyField,
+    accepts_zstd: bool,
 ) -> Response<Body> {
-    let result = read_admin_usage_raw_body(state, item, field).await;
+    let result = read_admin_usage_raw_body(state, item, field, accepts_zstd).await;
     let mut response = match result {
-        Ok(Some(payload)) => admin_usage_raw_payload_response(payload),
+        Ok(Some(payload)) => admin_usage_raw_payload_response(payload, accepts_zstd),
         Ok(None) => admin_usage_raw_body_error(http::StatusCode::NOT_FOUND, "missing"),
         Err(error) => {
             tracing::warn!(error = ?error, usage_id = %item.id, field = field.as_storage_field(), "failed to read admin usage raw body");
@@ -227,21 +275,39 @@ async fn build_admin_usage_raw_body_response(
     )
 }
 
-fn admin_usage_raw_payload_response(payload: StoredUsageBodyPayload) -> Response<Body> {
-    let StoredUsageBodyPayload(bytes) = payload;
-    if bytes.len() > MAX_USAGE_BODY_BYTES {
-        admin_usage_raw_body_error(http::StatusCode::PAYLOAD_TOO_LARGE, "too_large")
-    } else {
-        (
-            [
-                ("content-type", "application/octet-stream"),
-                ("content-encoding", "identity"),
-                ("x-aether-body-encoding", "json"),
-            ],
-            bytes,
-        )
-            .into_response()
-    }
+fn admin_usage_raw_payload_response(
+    payload: StoredUsageBodyPayload,
+    accepts_zstd: bool,
+) -> Response<Body> {
+    // The read path already refused anything past the size it hands out, so this
+    // only decides how the bytes travel: a frame the client decodes itself, or
+    // bytes that are already the body.
+    let StoredUsageBodyPayload {
+        bytes,
+        encoding,
+        client_zstd_frame,
+    } = payload;
+    debug_assert!(
+        encoding != ENCODING_ZSTD_CONTAINER || (client_zstd_frame && accepts_zstd),
+        "a zstd frame must be decoded before it reaches a client that cannot read it"
+    );
+    let body_encoding = encoding.to_string();
+    (
+        [
+            ("content-type", "application/octet-stream"),
+            (
+                "content-encoding",
+                if client_zstd_frame && accepts_zstd {
+                    "zstd"
+                } else {
+                    "identity"
+                },
+            ),
+            ("x-aether-body-encoding", body_encoding.as_str()),
+        ],
+        bytes,
+    )
+        .into_response()
 }
 
 fn admin_usage_raw_body_error(status: http::StatusCode, code: &'static str) -> Response<Body> {
@@ -257,6 +323,7 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
     state: &AdminAppState<'_>,
     request_context: &AdminRequestContext<'_>,
     request_body: Option<&axum::body::Bytes>,
+    accepts_zstd: bool,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let route_kind = request_context
         .control_decision
@@ -424,7 +491,8 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
                 }
                 if let Some(field) = body_field {
                     return Ok(Some(
-                        build_admin_usage_raw_body_response(state, &item, field).await,
+                        build_admin_usage_raw_body_response(state, &item, field, accepts_zstd)
+                            .await,
                     ));
                 }
             }
@@ -561,21 +629,93 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
 
 #[cfg(test)]
 mod tests {
-    use super::admin_usage_body_load_error_code;
+    use super::{admin_usage_body_load_error_code, AdminUsageRawBodyTravel};
     use crate::GatewayError;
+    use aether_data_contracts::repository::usage::{
+        StoredUsageBodyPayload, ENCODING_RAW_CONTAINER, ENCODING_ZSTD_CONTAINER,
+    };
 
     #[tokio::test]
     async fn admin_usage_raw_body_does_not_decode_or_reencode_stored_bytes() {
-        use super::{admin_usage_raw_payload_response, StoredUsageBodyPayload};
-        let response = admin_usage_raw_payload_response(StoredUsageBodyPayload(
-            b"{ \"untouched\" : true }".to_vec(),
-        ));
+        use super::admin_usage_raw_payload_response;
+        let response = admin_usage_raw_payload_response(
+            StoredUsageBodyPayload::raw_json(b"{ \"untouched\" : true }".to_vec()),
+            true,
+        );
         assert_eq!(response.headers()["content-encoding"], "identity");
-        assert_eq!(response.headers()["x-aether-body-encoding"], "json");
+        assert_eq!(response.headers()["x-aether-body-encoding"], "0");
         let bytes = axum::body::to_bytes(response.into_body(), 1024)
             .await
             .unwrap();
         assert_eq!(bytes.as_ref(), b"{ \"untouched\" : true }".as_slice());
+    }
+
+    #[test]
+    fn raw_body_travel_decodes_every_frame_the_client_cannot_read() {
+        use AdminUsageRawBodyTravel::{DecodeOnServer, PassThrough};
+        let frame = |client_zstd_frame| StoredUsageBodyPayload {
+            bytes: vec![0x28, 0xB5, 0x2F, 0xFD],
+            encoding: ENCODING_ZSTD_CONTAINER,
+            client_zstd_frame,
+        };
+        let plain_container = StoredUsageBodyPayload {
+            bytes: b"{\"request\":null,\"provider_request\":null}".to_vec(),
+            encoding: ENCODING_RAW_CONTAINER,
+            client_zstd_frame: false,
+        };
+
+        // A browser-sized frame and a client that takes zstd: the client decodes it.
+        assert_eq!(
+            AdminUsageRawBodyTravel::for_payload(&frame(true), true),
+            PassThrough
+        );
+        // The client does not take zstd.
+        assert_eq!(
+            AdminUsageRawBodyTravel::for_payload(&frame(true), false),
+            DecodeOnServer
+        );
+        // The window is past what a browser accepts, even though the client takes zstd.
+        assert_eq!(
+            AdminUsageRawBodyTravel::for_payload(&frame(false), true),
+            DecodeOnServer
+        );
+        assert_eq!(
+            AdminUsageRawBodyTravel::for_payload(&frame(false), false),
+            DecodeOnServer
+        );
+        // An uncompressed container is already plain JSON either way.
+        assert_eq!(
+            AdminUsageRawBodyTravel::for_payload(&plain_container, true),
+            PassThrough
+        );
+        assert_eq!(
+            AdminUsageRawBodyTravel::for_payload(&plain_container, false),
+            PassThrough
+        );
+    }
+
+    #[tokio::test]
+    async fn admin_usage_raw_body_only_carries_a_frame_with_zstd_content_coding() {
+        use super::admin_usage_raw_payload_response;
+        let frame = StoredUsageBodyPayload {
+            bytes: vec![0x28, 0xB5, 0x2F, 0xFD],
+            encoding: ENCODING_ZSTD_CONTAINER,
+            client_zstd_frame: true,
+        };
+        let response = admin_usage_raw_payload_response(frame, true);
+        assert_eq!(response.headers()["content-encoding"], "zstd");
+        assert_eq!(response.headers()["x-aether-body-encoding"], "1");
+
+        let container = StoredUsageBodyPayload {
+            bytes: b"{\"request\":null,\"provider_request\":null}".to_vec(),
+            encoding: ENCODING_RAW_CONTAINER,
+            client_zstd_frame: false,
+        };
+        for accepts_zstd in [true, false] {
+            let response = admin_usage_raw_payload_response(container.clone(), accepts_zstd);
+            assert_eq!(response.headers()["content-encoding"], "identity");
+            assert_eq!(response.headers()["x-aether-body-encoding"], "2");
+        }
     }
 
     #[test]
@@ -585,7 +725,19 @@ mod tests {
                 "unexpected database value: encoded usage json exceeds 67108864 bytes",
                 "too_large",
             ),
+            (
+                "unexpected database value: stored usage body payload exceeds 134283264 bytes",
+                "too_large",
+            ),
             ("failed to parse usage json: invalid JSON", "decode_failed"),
+            (
+                "failed to decompress usage body frame: Data corruption detected",
+                "decode_failed",
+            ),
+            (
+                "failed to parse usage body container: expected value",
+                "decode_failed",
+            ),
             (
                 "postgres error: private connection details",
                 "storage_unavailable",

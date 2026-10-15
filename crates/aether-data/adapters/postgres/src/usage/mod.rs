@@ -84,10 +84,14 @@ mod overview_buckets;
 mod preparation;
 mod projection_reader;
 
+use body_codec::{
+    container_body, decode_container, is_container, BodyPair, BROWSER_DECODABLE_MAX_BYTES,
+    ENCODING_ZSTD_CONTAINER, MAX_DECODABLE_CONTAINER_BYTES,
+};
 use preparation::prepare_usage_in_background;
 
 const MAX_SUPPORTED_UNIX_SECS: u64 = 253_402_300_799;
-const FIND_USAGE_BODY_BLOB_BY_REF_SQL: &str = r#"SELECT payload FROM usage_body_blobs WHERE body_ref = $1 AND request_id = $2 AND body_field = $3 LIMIT 1"#;
+const FIND_USAGE_BODY_BLOB_SQL: &str = r#"SELECT payload, encoding, logical_bytes FROM usage_body_blobs WHERE request_id = $1 AND body_field = $2 LIMIT 1"#;
 const DELETE_USAGE_BODY_BLOB_SQL: &str = include_str!("queries/delete_usage_body_blob_sql.sql");
 static USAGE_BODY_DECODE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
 
@@ -3121,39 +3125,98 @@ ORDER BY request_count DESC, "usage".provider_name ASC
         let Some((request_id, field)) = parse_usage_body_ref(body_ref) else {
             return Ok(None);
         };
-        let canonical_ref = usage_body_ref(&request_id, field);
-        let row = sqlx::query(FIND_USAGE_BODY_BLOB_BY_REF_SQL)
-            .bind(&canonical_ref)
-            .bind(&request_id)
-            .bind(field.as_storage_field())
+        // Rows written as pairs are keyed by the pair's base field, so either half
+        // is found there. Rows written before paired frames are keyed by their own
+        // field and answer only for it, which is why a base row that is not a
+        // container is skipped when the caller asked for the other half.
+        let pair = BodyPair::for_field(field);
+        let base_row = self
+            .find_usage_body_blob(&request_id, pair.base().as_storage_field())
+            .await?;
+        let row = match base_row {
+            Some(row) if is_container(row.encoding) || pair.base() == field => Some(row),
+            _ if pair.base() == field => None,
+            _ => {
+                self.find_usage_body_blob(&request_id, field.as_storage_field())
+                    .await?
+            }
+        };
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let limit = if is_container(row.encoding) {
+            MAX_DECODABLE_CONTAINER_BYTES
+        } else {
+            MAX_USAGE_BODY_BYTES as u64
+        };
+        let known_logical_bytes = row
+            .logical_bytes
+            .map(|logical| u64::from(logical.max(0) as u32));
+        // The length guard can fall back to the stored length, but the browser
+        // decision cannot: a compressed frame's length says nothing about its
+        // window, so an unrecorded length has to be decoded on the server.
+        let logical_bytes = known_logical_bytes.unwrap_or(row.payload.len() as u64);
+        if logical_bytes > limit {
+            return Err(DataLayerError::UnexpectedValue(format!(
+                "stored usage body payload exceeds {limit} bytes"
+            )));
+        }
+        Ok(Some(StoredUsageBodyPayload {
+            client_zstd_frame: row.encoding == ENCODING_ZSTD_CONTAINER
+                && known_logical_bytes
+                    .is_some_and(|logical| logical <= BROWSER_DECODABLE_MAX_BYTES),
+            bytes: row.payload,
+            encoding: row.encoding,
+        }))
+    }
+
+    async fn find_usage_body_blob(
+        &self,
+        request_id: &str,
+        body_field: &str,
+    ) -> Result<Option<StoredUsageBodyBlobRow>, DataLayerError> {
+        let row = sqlx::query(FIND_USAGE_BODY_BLOB_SQL)
+            .bind(request_id)
+            .bind(body_field)
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?;
         let Some(row) = row else {
             return Ok(None);
         };
-        let Some(bytes) = row
+        let Some(payload) = row
             .try_get::<Option<Vec<u8>>, _>("payload")
             .map_postgres_err()?
         else {
             return Ok(None);
         };
-        if bytes.len() > MAX_USAGE_BODY_BYTES {
-            return Err(DataLayerError::UnexpectedValue(format!(
-                "encoded usage json exceeds {MAX_USAGE_BODY_BYTES} bytes"
-            )));
-        }
-        Ok(Some(StoredUsageBodyPayload(bytes)))
+        Ok(Some(StoredUsageBodyBlobRow {
+            payload,
+            encoding: row.try_get("encoding").map_postgres_err()?,
+            logical_bytes: row.try_get("logical_bytes").map_postgres_err()?,
+        }))
     }
 
     pub async fn resolve_body_ref(&self, body_ref: &str) -> Result<Option<Value>, DataLayerError> {
-        let Some(StoredUsageBodyPayload(bytes)) = self.read_body_payload(body_ref).await? else {
+        let Some((_, field)) = parse_usage_body_ref(body_ref) else {
+            return Ok(None);
+        };
+        let Some(payload) = self.read_body_payload(body_ref).await? else {
             return Ok(None);
         };
         decode_usage_body_in_background(move || {
-            serde_json::from_slice(&bytes).map(Some).map_err(|error| {
-                DataLayerError::UnexpectedValue(format!("failed to parse usage json: {error}"))
-            })
+            if is_container(payload.encoding) {
+                let container = decode_container(payload.encoding, &payload.bytes)?;
+                Ok(container_body(&container, field))
+            } else {
+                serde_json::from_slice(&payload.bytes)
+                    .map(Some)
+                    .map_err(|error| {
+                        DataLayerError::UnexpectedValue(format!(
+                            "failed to parse usage json: {error}"
+                        ))
+                    })
+            }
         })
         .await
     }
@@ -12225,6 +12288,14 @@ fn to_u64(value: i32, field_name: &str) -> Result<u64, DataLayerError> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct UsageBodyStorage {
     detached_blob_bytes: Option<Vec<u8>>,
+}
+
+/// One `usage_body_blobs` row, as the read path needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StoredUsageBodyBlobRow {
+    payload: Vec<u8>,
+    encoding: i16,
+    logical_bytes: Option<i32>,
 }
 
 impl UsageBodyStorage {

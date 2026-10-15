@@ -12,7 +12,10 @@ use aether_data::repository::users::{
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
 };
-use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UsageBodyCaptureState};
+use aether_data_contracts::repository::usage::{
+    usage_body_ref, StoredRequestUsageAudit, StoredUsageBodyPayload, UsageBodyCaptureState,
+    UsageBodyField, ENCODING_ZSTD_CONTAINER,
+};
 use axum::body::{to_bytes, Body, Bytes};
 use axum::routing::any;
 use axum::{extract::Request, Router};
@@ -26,6 +29,7 @@ use super::super::{
 use crate::audit::AdminAuditEvent;
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
+use crate::handlers::admin::accepts_zstd;
 use crate::handlers::admin::observability::usage::maybe_build_local_admin_usage_response;
 use crate::handlers::admin::{AdminAppState, AdminRequestContext};
 
@@ -43,7 +47,16 @@ async fn local_admin_usage_response(
     uri: &str,
     body: Option<serde_json::Value>,
 ) -> axum::response::Response<Body> {
-    let headers = trusted_admin_headers();
+    local_admin_usage_response_with_headers(state, method, uri, body, trusted_admin_headers()).await
+}
+
+async fn local_admin_usage_response_with_headers(
+    state: &AppState,
+    method: http::Method,
+    uri: &str,
+    body: Option<serde_json::Value>,
+    headers: HeaderMap,
+) -> axum::response::Response<Body> {
     let request_context = resolve_public_request_context(
         state,
         &method,
@@ -58,6 +71,7 @@ async fn local_admin_usage_response(
         &AdminAppState::new(state),
         &AdminRequestContext::new(&request_context),
         body_bytes.as_ref(),
+        accepts_zstd(&headers),
     )
     .await
     .expect("local usage response should build")
@@ -2456,7 +2470,7 @@ async fn gateway_admin_usage_detail_raw_reads_only_selected_body_and_is_not_cach
                 "usage-selected-body"
             );
             assert_eq!(response.headers()["x-aether-body-field"], field);
-            assert_eq!(response.headers()["x-aether-body-encoding"], "json");
+            assert_eq!(response.headers()["x-aether-body-encoding"], "0");
             assert!(response.extensions().get::<AdminAuditEvent>().is_some());
             let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
             assert_eq!(
@@ -2527,7 +2541,7 @@ async fn gateway_admin_usage_detail_raw_preserves_authorization_and_binary_heade
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()["content-encoding"], "identity");
-    assert_eq!(response.headers()["x-aether-body-encoding"], "json");
+    assert_eq!(response.headers()["x-aether-body-encoding"], "0");
     assert_eq!(
         response.headers()["cache-control"],
         "no-store, no-transform"
@@ -2538,6 +2552,113 @@ async fn gateway_admin_usage_detail_raw_preserves_authorization_and_binary_heade
         json!({ "marker": "response_body" })
     );
     server.abort();
+}
+
+#[tokio::test]
+async fn gateway_admin_usage_detail_decodes_a_frame_a_browser_cannot_read() {
+    let usage = sample_selective_body_usage();
+    let provider_ref = usage_body_ref(&usage.request_id, UsageBodyField::ProviderRequestBody);
+    let repository = InMemoryUsageReadRepository::seed_with_detached_bodies(vec![usage])
+        .with_detached_body_payload(
+            provider_ref,
+            StoredUsageBodyPayload {
+                // A frame whose window is past what a browser accepts: the gateway
+                // has to decode it, otherwise the client gets bytes it cannot read.
+                bytes: vec![0x28, 0xB5, 0x2F, 0xFD],
+                encoding: ENCODING_ZSTD_CONTAINER,
+                client_zstd_frame: false,
+            },
+        );
+    let state = AppState::new().unwrap().with_data_state_for_tests(
+        GatewayDataState::with_usage_reader_for_tests(Arc::new(repository)),
+    );
+    let mut headers = trusted_admin_headers();
+    headers.insert(
+        http::header::ACCEPT_ENCODING,
+        HeaderValue::from_static("gzip, deflate, br, zstd"),
+    );
+    let response = local_admin_usage_response_with_headers(
+        &state,
+        http::Method::GET,
+        "/api/admin/usage/usage-selected-body?body_field=provider_request_body&body_format=raw",
+        None,
+        headers,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["content-encoding"], "identity");
+    assert_eq!(response.headers()["x-aether-body-encoding"], "0");
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+        json!({ "marker": "provider_request_body" })
+    );
+}
+
+#[tokio::test]
+async fn gateway_admin_usage_detail_hands_a_browser_sized_frame_to_zstd_clients() {
+    let frame = vec![0x28, 0xB5, 0x2F, 0xFD];
+    for (accept_encoding, expected_encoding, expected_bytes) in [
+        (
+            Some("gzip, deflate, br, zstd"),
+            "1",
+            axum::body::Bytes::from(frame.clone()),
+        ),
+        (
+            None,
+            "0",
+            axum::body::Bytes::from(
+                serde_json::to_vec(&json!({ "marker": "provider_request_body" })).unwrap(),
+            ),
+        ),
+    ] {
+        let usage = sample_selective_body_usage();
+        let provider_ref = usage_body_ref(&usage.request_id, UsageBodyField::ProviderRequestBody);
+        let repository = InMemoryUsageReadRepository::seed_with_detached_bodies(vec![usage])
+            .with_detached_body_payload(
+                provider_ref,
+                StoredUsageBodyPayload {
+                    bytes: frame.clone(),
+                    encoding: ENCODING_ZSTD_CONTAINER,
+                    client_zstd_frame: true,
+                },
+            );
+        let state = AppState::new().unwrap().with_data_state_for_tests(
+            GatewayDataState::with_usage_reader_for_tests(Arc::new(repository)),
+        );
+        let mut headers = trusted_admin_headers();
+        if let Some(value) = accept_encoding {
+            headers.insert(
+                http::header::ACCEPT_ENCODING,
+                HeaderValue::from_static(value),
+            );
+        }
+        let response = local_admin_usage_response_with_headers(
+            &state,
+            http::Method::GET,
+            "/api/admin/usage/usage-selected-body?body_field=provider_request_body&body_format=raw",
+            None,
+            headers,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK, "{accept_encoding:?}");
+        assert_eq!(
+            response.headers()["content-encoding"],
+            if accept_encoding.is_some() {
+                "zstd"
+            } else {
+                "identity"
+            },
+            "{accept_encoding:?}"
+        );
+        assert_eq!(
+            response.headers()["x-aether-body-encoding"],
+            expected_encoding,
+            "{accept_encoding:?}"
+        );
+        let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(bytes, expected_bytes, "{accept_encoding:?}");
+    }
 }
 
 #[tokio::test]

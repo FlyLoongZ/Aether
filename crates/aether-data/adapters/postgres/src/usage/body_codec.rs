@@ -61,12 +61,12 @@ use aether_data_contracts::repository::usage::{UsageBodyField, MAX_USAGE_BODY_BY
 use aether_data_contracts::DataLayerError;
 use serde_json::{Map, Value};
 
-/// `encoding` of a raw, single body: what rows written before paired frames hold.
-pub const ENCODING_RAW_SINGLE: i16 = 0;
-/// `encoding` of a zstd frame carrying a pair container.
-pub const ENCODING_ZSTD_CONTAINER: i16 = 1;
-/// `encoding` of an uncompressed pair container.
-pub const ENCODING_RAW_CONTAINER: i16 = 2;
+// The encoding values reach clients as `x-aether-body-encoding`, so they are
+// defined with the rest of the usage body contract and re-exported here for the
+// codec's own vocabulary.
+pub use aether_data_contracts::repository::usage::{
+    ENCODING_RAW_CONTAINER, ENCODING_RAW_SINGLE, ENCODING_ZSTD_CONTAINER,
+};
 
 /// zstd compression level for stored containers.
 ///
@@ -196,6 +196,9 @@ pub fn decode_container(encoding: i16, payload: &[u8]) -> Result<Value, DataLaye
     match encoding {
         ENCODING_ZSTD_CONTAINER => parse(&decompress(payload)?),
         ENCODING_RAW_CONTAINER => parse(payload),
+        ENCODING_RAW_SINGLE => Err(DataLayerError::UnexpectedValue(
+            "a raw single usage body is not a pair container".to_string(),
+        )),
         other => Err(DataLayerError::UnexpectedValue(format!(
             "usage body encoding {other} is not a pair container"
         ))),

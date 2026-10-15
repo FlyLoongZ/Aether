@@ -5,7 +5,7 @@ use std::sync::RwLock;
 use aether_ai_formats::UPSTREAM_IS_STREAM_KEY;
 use aether_data_contracts::repository::usage::{
     parse_usage_body_ref, preserve_usage_routing_group_snapshot, sanitize_usage_request_metadata,
-    usage_body_ref, StoredUsageAuditAggregation, StoredUsageAuditSummary,
+    usage_body_ref, StoredUsageAuditAggregation, StoredUsageAuditSummary, StoredUsageBodyPayload,
     StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
     StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
@@ -55,6 +55,7 @@ pub struct InMemoryUsageReadRepository {
     dashboard_projection: RwLock<dashboard_summary::DashboardProjection>,
     by_request_id: RwLock<BTreeMap<String, StoredRequestUsageAudit>>,
     detached_bodies: RwLock<BTreeMap<String, Value>>,
+    detached_payloads: RwLock<BTreeMap<String, StoredUsageBodyPayload>>,
     provider_usage_windows: RwLock<Vec<StoredProviderUsageWindow>>,
     auth_api_keys: Option<Arc<InMemoryAuthApiKeySnapshotRepository>>,
     provider_catalog: Option<Arc<InMemoryProviderCatalogReadRepository>>,
@@ -87,6 +88,7 @@ impl InMemoryUsageReadRepository {
             dashboard_projection: Default::default(),
             by_request_id: RwLock::new(by_request_id),
             detached_bodies: RwLock::new(BTreeMap::new()),
+            detached_payloads: RwLock::new(BTreeMap::new()),
             provider_usage_windows: RwLock::new(Vec::new()),
             auth_api_keys: None,
             provider_catalog: None,
@@ -139,6 +141,7 @@ impl InMemoryUsageReadRepository {
             dashboard_projection: Default::default(),
             by_request_id: RwLock::new(by_request_id),
             detached_bodies: RwLock::new(detached_bodies),
+            detached_payloads: RwLock::new(BTreeMap::new()),
             provider_usage_windows: RwLock::new(Vec::new()),
             auth_api_keys: None,
             provider_catalog: None,
@@ -146,6 +149,20 @@ impl InMemoryUsageReadRepository {
             analytics_candidates: Default::default(),
             analytics_allocations: Default::default(),
         }
+    }
+
+    /// Lights a body reference up with a stored payload the in-memory store does
+    /// not write itself, so tests can exercise zstd frames and their encodings.
+    pub fn with_detached_body_payload(
+        mut self,
+        body_ref: impl Into<String>,
+        payload: StoredUsageBodyPayload,
+    ) -> Self {
+        self.detached_payloads
+            .get_mut()
+            .expect("usage repository lock")
+            .insert(body_ref.into(), payload);
+        self
     }
 
     pub fn with_provider_usage_windows<I>(self, items: I) -> Self
@@ -156,6 +173,7 @@ impl InMemoryUsageReadRepository {
             dashboard_projection: self.dashboard_projection,
             by_request_id: self.by_request_id,
             detached_bodies: self.detached_bodies,
+            detached_payloads: self.detached_payloads,
             provider_usage_windows: RwLock::new(items.into_iter().collect()),
             auth_api_keys: self.auth_api_keys,
             provider_catalog: self.provider_catalog,
@@ -1384,6 +1402,29 @@ impl UsageReadRepository for InMemoryUsageReadRepository {
             UsageBodyField::ResponseBody => usage.response_body,
             UsageBodyField::ClientResponseBody => usage.client_response_body,
         }))
+    }
+
+    async fn read_body_payload(
+        &self,
+        body_ref: &str,
+    ) -> Result<Option<StoredUsageBodyPayload>, DataLayerError> {
+        if let Some(payload) = self
+            .detached_payloads
+            .read()
+            .expect("usage repository lock")
+            .get(body_ref)
+            .cloned()
+        {
+            return Ok(Some(payload));
+        }
+        self.resolve_body_ref(body_ref)
+            .await?
+            .map(|value| {
+                serde_json::to_vec(&value)
+                    .map(StoredUsageBodyPayload::raw_json)
+                    .map_err(|error| DataLayerError::UnexpectedValue(error.to_string()))
+            })
+            .transpose()
     }
 
     async fn list_usage_audits(
