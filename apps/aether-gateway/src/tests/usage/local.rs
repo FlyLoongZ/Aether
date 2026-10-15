@@ -457,7 +457,6 @@ async fn gateway_truncates_deep_request_echo_for_local_openai_chat_sync_usage_im
             .get("depth")
             .is_some()
     );
-    assert!(stored_usage.request_body_ref.is_none());
     assert_eq!(
         stored_usage.request_body_state,
         Some(UsageBodyCaptureState::Inline)
@@ -602,7 +601,6 @@ async fn gateway_ignores_legacy_max_request_body_size_for_local_openai_chat_sync
             .len()
             > 128
     );
-    assert!(stored_usage.request_body_ref.is_none());
     assert_eq!(
         stored_usage.request_body_state,
         Some(UsageBodyCaptureState::Inline)
@@ -614,7 +612,6 @@ async fn gateway_ignores_legacy_max_request_body_size_for_local_openai_chat_sync
             .len()
             > 128
     );
-    assert!(stored_usage.provider_request_body_ref.is_none());
     assert_eq!(
         stored_usage.provider_request_body_state,
         Some(UsageBodyCaptureState::Inline)
@@ -935,13 +932,11 @@ async fn gateway_records_failed_usage_when_all_local_openai_chat_candidates_exha
         Some("trace-openai-chat-local-report-sync-failure-123")
     );
     assert!(stored_usage.response_body.is_none());
-    assert!(stored_usage.response_body_ref.is_none());
     assert_eq!(
         stored_usage.response_body_state,
         Some(UsageBodyCaptureState::Disabled)
     );
     assert!(stored_usage.client_response_body.is_none());
-    assert!(stored_usage.client_response_body_ref.is_none());
     assert_eq!(
         stored_usage.client_response_body_state,
         Some(UsageBodyCaptureState::Disabled)
@@ -1046,7 +1041,6 @@ async fn gateway_records_failed_usage_when_sync_runtime_transport_is_unavailable
     assert_eq!(stored_usage.billing_status, "void");
     assert_eq!(stored_usage.status_code, Some(503));
     assert!(stored_usage.response_body.is_none());
-    assert!(stored_usage.response_body_ref.is_none());
     assert_eq!(
         stored_usage.response_body_state,
         Some(UsageBodyCaptureState::Disabled)
@@ -1391,7 +1385,6 @@ async fn gateway_records_failed_usage_for_claude_runtime_miss_without_execution_
         Some("trace-claude-runtime-miss-usage-123")
     );
     assert!(stored_usage.client_response_body.is_none());
-    assert!(stored_usage.client_response_body_ref.is_none());
     assert_eq!(
         stored_usage.client_response_body_state,
         Some(UsageBodyCaptureState::Disabled)
@@ -1789,7 +1782,6 @@ async fn gateway_ignores_legacy_max_response_body_size_for_stream_usage_impl() {
             .len()
             > 128
     );
-    assert!(stored_usage.response_body_ref.is_none());
     assert_eq!(
         stored_usage.response_body_state,
         Some(UsageBodyCaptureState::Inline)
@@ -1803,7 +1795,6 @@ async fn gateway_ignores_legacy_max_response_body_size_for_stream_usage_impl() {
             .len()
             > 128
     );
-    assert!(stored_usage.client_response_body_ref.is_none());
     assert_eq!(
         stored_usage.client_response_body_state,
         Some(UsageBodyCaptureState::Inline)
@@ -2071,7 +2062,6 @@ async fn gateway_records_failed_usage_when_all_local_claude_cli_candidates_are_s
         "Bearer sk-client-claude-cli-usage-local-miss"
     );
     assert!(stored_usage.request_body.is_none());
-    assert!(stored_usage.request_body_ref.is_none());
     assert_eq!(
         stored_usage.request_body_state,
         Some(UsageBodyCaptureState::Disabled)
@@ -2328,7 +2318,6 @@ fn gateway_keeps_failed_usage_request_capture_lightweight_for_large_local_claude
             Some(UsageBodyCaptureState::Disabled)
         );
         assert!(stored_usage.request_body.is_none());
-        assert!(stored_usage.request_body_ref.is_none());
         assert!(stored_usage.provider_request_body.is_none());
         assert_eq!(
             stored_usage

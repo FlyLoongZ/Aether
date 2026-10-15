@@ -4,10 +4,6 @@ INSERT INTO usage_http_audits (
   provider_request_headers,
   response_headers,
   client_response_headers,
-  request_body_ref,
-  provider_request_body_ref,
-  response_body_ref,
-  client_response_body_ref,
   request_body_state,
   provider_request_body_state,
   response_body_state,
@@ -23,11 +19,7 @@ INSERT INTO usage_http_audits (
   $7,
   $8,
   $9,
-  $10,
-  $11,
-  $12,
-  $13,
-  $14
+  $10
 )
 ON CONFLICT (request_id)
 DO UPDATE SET
@@ -41,25 +33,6 @@ DO UPDATE SET
     EXCLUDED.client_response_headers,
     usage_http_audits.client_response_headers
   ),
-  request_body_ref = CASE
-    WHEN EXCLUDED.request_body_state = 'none' THEN NULL
-    ELSE COALESCE(EXCLUDED.request_body_ref, usage_http_audits.request_body_ref)
-  END,
-  provider_request_body_ref = CASE
-    WHEN EXCLUDED.provider_request_body_state = 'none' THEN NULL
-    ELSE COALESCE(EXCLUDED.provider_request_body_ref, usage_http_audits.provider_request_body_ref)
-  END,
-  response_body_ref = CASE
-    WHEN EXCLUDED.response_body_state = 'none' THEN NULL
-    ELSE COALESCE(EXCLUDED.response_body_ref, usage_http_audits.response_body_ref)
-  END,
-  client_response_body_ref = CASE
-    WHEN EXCLUDED.client_response_body_state = 'none' THEN NULL
-    ELSE COALESCE(
-      EXCLUDED.client_response_body_ref,
-      usage_http_audits.client_response_body_ref
-    )
-  END,
   request_body_state = COALESCE(
     EXCLUDED.request_body_state,
     usage_http_audits.request_body_state

@@ -4,9 +4,9 @@ use std::sync::RwLock;
 
 use aether_ai_formats::UPSTREAM_IS_STREAM_KEY;
 use aether_data_contracts::repository::usage::{
-    canonical_usage_body_ref_for, parse_usage_body_ref, preserve_usage_routing_group_snapshot,
-    sanitize_usage_request_metadata, usage_body_ref, StoredUsageAuditAggregation,
-    StoredUsageAuditSummary, StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
+    parse_usage_body_ref, preserve_usage_routing_group_snapshot, sanitize_usage_request_metadata,
+    usage_body_ref, StoredUsageAuditAggregation, StoredUsageAuditSummary,
+    StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
     StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
     StoredUsageDashboardSummary, StoredUsageErrorDistributionRow, StoredUsageHealthTimelineRow,
@@ -80,7 +80,6 @@ impl InMemoryUsageReadRepository {
     {
         let mut by_request_id = BTreeMap::new();
         for mut item in items {
-            hydrate_legacy_body_refs(&mut item);
             hydrate_client_family(&mut item);
             by_request_id.insert(item.request_id.clone(), item);
         }
@@ -104,41 +103,36 @@ impl InMemoryUsageReadRepository {
         let mut by_request_id = BTreeMap::new();
         let mut detached_bodies = BTreeMap::new();
         for mut item in items {
-            hydrate_legacy_body_refs(&mut item);
             hydrate_client_family(&mut item);
             let request_id = item.request_id.clone();
-            if let Some(body_ref) = detach_usage_body(
+            detach_usage_body(
                 &request_id,
                 &mut item.request_body,
+                &mut item.request_body_state,
                 &mut detached_bodies,
                 UsageBodyField::RequestBody,
-            ) {
-                item.request_body_ref = Some(body_ref);
-            }
-            if let Some(body_ref) = detach_usage_body(
+            );
+            detach_usage_body(
                 &request_id,
                 &mut item.provider_request_body,
+                &mut item.provider_request_body_state,
                 &mut detached_bodies,
                 UsageBodyField::ProviderRequestBody,
-            ) {
-                item.provider_request_body_ref = Some(body_ref);
-            }
-            if let Some(body_ref) = detach_usage_body(
+            );
+            detach_usage_body(
                 &request_id,
                 &mut item.response_body,
+                &mut item.response_body_state,
                 &mut detached_bodies,
                 UsageBodyField::ResponseBody,
-            ) {
-                item.response_body_ref = Some(body_ref);
-            }
-            if let Some(body_ref) = detach_usage_body(
+            );
+            detach_usage_body(
                 &request_id,
                 &mut item.client_response_body,
+                &mut item.client_response_body_state,
                 &mut detached_bodies,
                 UsageBodyField::ClientResponseBody,
-            ) {
-                item.client_response_body_ref = Some(body_ref);
-            }
+            );
             by_request_id.insert(request_id, item);
         }
         Self {
@@ -2960,92 +2954,30 @@ impl UsageReadRepository for InMemoryUsageReadRepository {
 fn detach_usage_body(
     request_id: &str,
     body: &mut Option<Value>,
+    state: &mut Option<UsageBodyCaptureState>,
     detached_bodies: &mut BTreeMap<String, Value>,
     field: UsageBodyField,
-) -> Option<String> {
-    let value = body.take()?;
-    let body_ref = usage_body_ref(request_id, field);
-    detached_bodies.insert(body_ref.clone(), value);
-    Some(body_ref)
-}
-
-fn usage_body_ref_from_metadata(
-    metadata: Option<&Value>,
-    request_id: &str,
-    field: UsageBodyField,
-) -> Option<String> {
-    metadata
-        .and_then(Value::as_object)
-        .and_then(|object| object.get(field.as_ref_key()))
-        .and_then(Value::as_str)
-        .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, request_id, field))
+) {
+    let Some(value) = body.take() else {
+        return;
+    };
+    detached_bodies.insert(usage_body_ref(request_id, field), value);
+    // A body that lives in the detached store is a reference, mirroring
+    // `usage_body_capture_state_for_storage` in the Postgres adapter.
+    if !matches!(
+        *state,
+        Some(
+            UsageBodyCaptureState::Disabled
+                | UsageBodyCaptureState::Unavailable
+                | UsageBodyCaptureState::None
+        )
+    ) {
+        *state = Some(UsageBodyCaptureState::Reference);
+    }
 }
 
 fn sanitize_memory_request_metadata(metadata: Option<Value>) -> Option<Value> {
     sanitize_usage_request_metadata(metadata)
-}
-
-fn hydrate_legacy_body_refs(item: &mut StoredRequestUsageAudit) {
-    item.request_body_ref = item
-        .request_body_ref
-        .as_deref()
-        .and_then(|body_ref| {
-            canonical_usage_body_ref_for(body_ref, &item.request_id, UsageBodyField::RequestBody)
-        })
-        .or_else(|| {
-            usage_body_ref_from_metadata(
-                item.request_metadata.as_ref(),
-                &item.request_id,
-                UsageBodyField::RequestBody,
-            )
-        });
-    item.provider_request_body_ref = item
-        .provider_request_body_ref
-        .as_deref()
-        .and_then(|body_ref| {
-            canonical_usage_body_ref_for(
-                body_ref,
-                &item.request_id,
-                UsageBodyField::ProviderRequestBody,
-            )
-        })
-        .or_else(|| {
-            usage_body_ref_from_metadata(
-                item.request_metadata.as_ref(),
-                &item.request_id,
-                UsageBodyField::ProviderRequestBody,
-            )
-        });
-    item.response_body_ref = item
-        .response_body_ref
-        .as_deref()
-        .and_then(|body_ref| {
-            canonical_usage_body_ref_for(body_ref, &item.request_id, UsageBodyField::ResponseBody)
-        })
-        .or_else(|| {
-            usage_body_ref_from_metadata(
-                item.request_metadata.as_ref(),
-                &item.request_id,
-                UsageBodyField::ResponseBody,
-            )
-        });
-    item.client_response_body_ref = item
-        .client_response_body_ref
-        .as_deref()
-        .and_then(|body_ref| {
-            canonical_usage_body_ref_for(
-                body_ref,
-                &item.request_id,
-                UsageBodyField::ClientResponseBody,
-            )
-        })
-        .or_else(|| {
-            usage_body_ref_from_metadata(
-                item.request_metadata.as_ref(),
-                &item.request_id,
-                UsageBodyField::ClientResponseBody,
-            )
-        });
 }
 
 fn hydrate_client_family(item: &mut StoredRequestUsageAudit) {
@@ -3061,7 +2993,7 @@ fn merge_usage_body_capture(
     incoming_state: Option<UsageBodyCaptureState>,
     existing: Option<&StoredRequestUsageAudit>,
     field: UsageBodyField,
-) -> (Option<Value>, Option<String>, Option<UsageBodyCaptureState>) {
+) -> (Option<Value>, Option<UsageBodyCaptureState>) {
     if matches!(
         incoming_state,
         Some(
@@ -3070,21 +3002,19 @@ fn merge_usage_body_capture(
                 | UsageBodyCaptureState::Unavailable
         )
     ) {
-        return (None, None, incoming_state);
+        return (None, incoming_state);
     }
     if incoming_body.is_some() {
         return (
             incoming_body,
-            None,
             incoming_state.or(Some(UsageBodyCaptureState::Inline)),
         );
     }
     if incoming_ref.is_some() {
-        return (None, incoming_ref, Some(UsageBodyCaptureState::Reference));
+        return (None, Some(UsageBodyCaptureState::Reference));
     }
     (
         existing.and_then(|item| item.body_value(field).cloned()),
-        existing.and_then(|item| item.body_ref(field).map(ToOwned::to_owned)),
         incoming_state.or_else(|| existing.and_then(|item| item.body_state(field))),
     )
 }
@@ -3335,36 +3265,34 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                     .as_ref()
                     .and_then(|stored| stored.request_metadata.as_ref()),
             ));
-        let (request_body, request_body_ref, request_body_state) = merge_usage_body_capture(
+        let (request_body, request_body_state) = merge_usage_body_capture(
             capture_usage.request_body.take(),
             capture_usage.request_body_ref.take(),
             capture_usage.request_body_state,
             existing.as_ref(),
             UsageBodyField::RequestBody,
         );
-        let (provider_request_body, provider_request_body_ref, provider_request_body_state) =
-            merge_usage_body_capture(
-                capture_usage.provider_request_body.take(),
-                capture_usage.provider_request_body_ref.take(),
-                capture_usage.provider_request_body_state,
-                existing.as_ref(),
-                UsageBodyField::ProviderRequestBody,
-            );
-        let (response_body, response_body_ref, response_body_state) = merge_usage_body_capture(
+        let (provider_request_body, provider_request_body_state) = merge_usage_body_capture(
+            capture_usage.provider_request_body.take(),
+            capture_usage.provider_request_body_ref.take(),
+            capture_usage.provider_request_body_state,
+            existing.as_ref(),
+            UsageBodyField::ProviderRequestBody,
+        );
+        let (response_body, response_body_state) = merge_usage_body_capture(
             capture_usage.response_body.take(),
             capture_usage.response_body_ref.take(),
             capture_usage.response_body_state,
             existing.as_ref(),
             UsageBodyField::ResponseBody,
         );
-        let (client_response_body, client_response_body_ref, client_response_body_state) =
-            merge_usage_body_capture(
-                capture_usage.client_response_body.take(),
-                capture_usage.client_response_body_ref.take(),
-                capture_usage.client_response_body_state,
-                existing.as_ref(),
-                UsageBodyField::ClientResponseBody,
-            );
+        let (client_response_body, client_response_body_state) = merge_usage_body_capture(
+            capture_usage.client_response_body.take(),
+            capture_usage.client_response_body_ref.take(),
+            capture_usage.client_response_body_state,
+            existing.as_ref(),
+            UsageBodyField::ClientResponseBody,
+        );
         let stored = StoredRequestUsageAudit {
             id: existing
                 .as_ref()
@@ -3479,7 +3407,6 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                     .and_then(|item| item.request_headers.clone())
             }),
             request_body,
-            request_body_ref,
             request_body_state,
             provider_request_headers: capture_usage.provider_request_headers.or_else(|| {
                 existing
@@ -3487,7 +3414,6 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                     .and_then(|item| item.provider_request_headers.clone())
             }),
             provider_request_body,
-            provider_request_body_ref,
             provider_request_body_state,
             response_headers: capture_usage.response_headers.or_else(|| {
                 existing
@@ -3495,7 +3421,6 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                     .and_then(|item| item.response_headers.clone())
             }),
             response_body,
-            response_body_ref,
             response_body_state,
             client_response_headers: capture_usage.client_response_headers.or_else(|| {
                 existing
@@ -3503,7 +3428,6 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                     .and_then(|item| item.client_response_headers.clone())
             }),
             client_response_body,
-            client_response_body_ref,
             client_response_body_state,
             candidate_id: if replace_routing_snapshot {
                 capture_usage.candidate_id

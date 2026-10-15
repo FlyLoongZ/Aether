@@ -6151,9 +6151,7 @@ async fn execute_stream_from_frame_stream_decodes_non_success_windsurf_connect_e
     .expect("usage should be written");
     assert_eq!(record.status_code, Some(429));
     assert!(record.response_body.is_none());
-    assert!(record.response_body_ref.is_none());
     assert!(record.client_response_body.is_none());
-    assert!(record.client_response_body_ref.is_none());
 }
 
 #[tokio::test]

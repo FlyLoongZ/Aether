@@ -624,24 +624,16 @@ WHERE request_body IS NOT NULL
             pg_execute_if_table(
                 tx,
                 "usage_http_audits",
-                "usage_http_audit_body_refs_cleaned",
+                "usage_http_audit_body_states_cleaned",
                 r#"
 UPDATE public.usage_http_audits
-SET request_body_ref = NULL,
-    provider_request_body_ref = NULL,
-    response_body_ref = NULL,
-    client_response_body_ref = NULL,
-    request_body_state = NULL,
+SET request_body_state = NULL,
     provider_request_body_state = NULL,
     response_body_state = NULL,
     client_response_body_state = NULL,
     body_capture_mode = 'none',
     updated_at = NOW()
-WHERE request_body_ref IS NOT NULL
-   OR provider_request_body_ref IS NOT NULL
-   OR response_body_ref IS NOT NULL
-   OR client_response_body_ref IS NOT NULL
-   OR request_body_state IS NOT NULL
+WHERE request_body_state IS NOT NULL
    OR provider_request_body_state IS NOT NULL
    OR response_body_state IS NOT NULL
    OR client_response_body_state IS NOT NULL
@@ -889,16 +881,12 @@ WHERE usage_rows.request_id = batch.request_id
     pg_execute_batch_if_table(
         tx,
         "usage_http_audits",
-        "usage_http_audit_body_refs_cleaned",
+        "usage_http_audit_body_states_cleaned",
         r#"
 WITH batch AS (
     SELECT request_id
     FROM public.usage_http_audits
-    WHERE request_body_ref IS NOT NULL
-       OR provider_request_body_ref IS NOT NULL
-       OR response_body_ref IS NOT NULL
-       OR client_response_body_ref IS NOT NULL
-       OR request_body_state IS NOT NULL
+    WHERE request_body_state IS NOT NULL
        OR provider_request_body_state IS NOT NULL
        OR response_body_state IS NOT NULL
        OR client_response_body_state IS NOT NULL
@@ -907,11 +895,7 @@ WITH batch AS (
     LIMIT $1
 )
 UPDATE public.usage_http_audits AS audits
-SET request_body_ref = NULL,
-    provider_request_body_ref = NULL,
-    response_body_ref = NULL,
-    client_response_body_ref = NULL,
-    request_body_state = NULL,
+SET request_body_state = NULL,
     provider_request_body_state = NULL,
     response_body_state = NULL,
     client_response_body_state = NULL,

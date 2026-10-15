@@ -1614,7 +1614,7 @@ mod tests {
 
     use aether_data_contracts::repository::{
         candidates::{RequestCandidateStatus, StoredRequestCandidate},
-        usage::StoredRequestUsageAudit,
+        usage::{StoredRequestUsageAudit, UsageBodyCaptureState},
     };
     use serde_json::json;
 
@@ -2278,10 +2278,8 @@ mod tests {
             client_response_headers: Some(json!({
                 "content-type": "application/json"
             })),
-            response_body_ref: Some("usage://request/req-1/response_body".to_string()),
-            client_response_body_ref: Some(
-                "usage://request/req-1/client_response_body".to_string(),
-            ),
+            response_body_state: Some(UsageBodyCaptureState::Reference),
+            client_response_body_state: Some(UsageBodyCaptureState::Reference),
             request_metadata: Some(json!({"chat_pii_redaction": true})),
             ..sample_usage("completed")
         };

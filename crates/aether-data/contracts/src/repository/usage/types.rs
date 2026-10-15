@@ -523,15 +523,11 @@ pub struct StoredRequestUsageAudit {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_body: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub request_body_ref: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_body_state: Option<UsageBodyCaptureState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_request_headers: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_request_body: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_request_body_ref: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_request_body_state: Option<UsageBodyCaptureState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -539,15 +535,11 @@ pub struct StoredRequestUsageAudit {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_body: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub response_body_ref: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_body_state: Option<UsageBodyCaptureState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_response_headers: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_response_body: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_response_body_ref: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_response_body_state: Option<UsageBodyCaptureState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -693,19 +685,15 @@ impl StoredRequestUsageAudit {
             billing_status,
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             request_body_state: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             provider_request_body_state: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             response_body_state: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
             client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
@@ -977,13 +965,15 @@ impl StoredRequestUsageAudit {
         })
     }
 
-    pub fn body_ref(&self, field: UsageBodyField) -> Option<&str> {
-        match field {
-            UsageBodyField::RequestBody => self.request_body_ref.as_deref(),
-            UsageBodyField::ProviderRequestBody => self.provider_request_body_ref.as_deref(),
-            UsageBodyField::ResponseBody => self.response_body_ref.as_deref(),
-            UsageBodyField::ClientResponseBody => self.client_response_body_ref.as_deref(),
-        }
+    /// The stored reference is always `usage://request/{request_id}/{field}`, so it is derived
+    /// from the row identity instead of being persisted on the audit row. Only a reference-backed
+    /// capture has one: an inline or truncated body is not behind a reference.
+    pub fn body_ref(&self, field: UsageBodyField) -> Option<String> {
+        matches!(
+            self.body_state(field),
+            Some(UsageBodyCaptureState::Reference)
+        )
+        .then(|| usage_body_ref(&self.request_id, field))
     }
 
     pub fn body_value(&self, field: UsageBodyField) -> Option<&Value> {
@@ -1012,7 +1002,10 @@ impl StoredRequestUsageAudit {
         resolve_usage_body_capture_result(
             self.body_state(field),
             body.is_some(),
-            self.body_ref(field).is_some(),
+            matches!(
+                self.body_state(field),
+                Some(UsageBodyCaptureState::Reference)
+            ),
         )
     }
 
@@ -1022,7 +1015,7 @@ impl StoredRequestUsageAudit {
         body: Option<&Value>,
     ) -> serde_json::Map<String, Value> {
         self.body_capture_result(field, body)
-            .as_json_entry(self.body_ref(field))
+            .as_json_entry(self.body_ref(field).as_deref())
     }
 
     pub fn request_body_capture_json_entry(&self) -> serde_json::Map<String, Value> {

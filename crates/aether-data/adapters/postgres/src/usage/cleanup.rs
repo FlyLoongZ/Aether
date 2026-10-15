@@ -71,10 +71,6 @@ WHERE request_id = ANY($1)
   AND response_headers IS NULL
   AND provider_request_headers IS NULL
   AND client_response_headers IS NULL
-  AND request_body_ref IS NULL
-  AND provider_request_body_ref IS NULL
-  AND response_body_ref IS NULL
-  AND client_response_body_ref IS NULL
 "#;
 const SELECT_USAGE_STALE_BODY_BATCH_SQL: &str = r#"
 SELECT id, request_id
@@ -96,10 +92,10 @@ WHERE created_at < $1
       FROM usage_http_audits
       WHERE usage_http_audits.request_id = usage.request_id
         AND (
-          usage_http_audits.request_body_ref IS NOT NULL
-          OR usage_http_audits.provider_request_body_ref IS NOT NULL
-          OR usage_http_audits.response_body_ref IS NOT NULL
-          OR usage_http_audits.client_response_body_ref IS NOT NULL
+          usage_http_audits.request_body_state IS NOT NULL
+          OR usage_http_audits.provider_request_body_state IS NOT NULL
+          OR usage_http_audits.response_body_state IS NOT NULL
+          OR usage_http_audits.client_response_body_state IS NOT NULL
         )
     )
   )
@@ -121,10 +117,10 @@ WHERE created_at < $1
       FROM usage_http_audits
       WHERE usage_http_audits.request_id = usage.request_id
         AND (
-          usage_http_audits.request_body_ref IS NOT NULL
-          OR usage_http_audits.provider_request_body_ref IS NOT NULL
-          OR usage_http_audits.response_body_ref IS NOT NULL
-          OR usage_http_audits.client_response_body_ref IS NOT NULL
+          usage_http_audits.request_body_state IS NOT NULL
+          OR usage_http_audits.provider_request_body_state IS NOT NULL
+          OR usage_http_audits.response_body_state IS NOT NULL
+          OR usage_http_audits.client_response_body_state IS NOT NULL
         )
     )
   )
@@ -143,13 +139,9 @@ const DELETE_USAGE_BODY_BLOBS_SQL: &str = r#"
 DELETE FROM usage_body_blobs
 WHERE request_id = ANY($1)
 "#;
-const CLEAR_USAGE_HTTP_AUDIT_BODY_REFS_SQL: &str = r#"
+const CLEAR_USAGE_HTTP_AUDIT_BODY_CAPTURE_SQL: &str = r#"
 UPDATE usage_http_audits
-SET request_body_ref = NULL,
-    provider_request_body_ref = NULL,
-    response_body_ref = NULL,
-    client_response_body_ref = NULL,
-    body_capture_mode = 'none',
+SET body_capture_mode = 'none',
     updated_at = NOW()
 WHERE request_id = ANY($1)
 "#;
@@ -367,7 +359,7 @@ async fn cleanup_usage_body_fields(
             .execute(pool)
             .await
             .map_err(postgres_error)?;
-        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_REFS_SQL)
+        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_CAPTURE_SQL)
             .bind(&request_ids)
             .execute(pool)
             .await
@@ -430,10 +422,10 @@ WHERE created_at < $1
       FROM usage_http_audits
       WHERE usage_http_audits.request_id = usage.request_id
         AND (
-          usage_http_audits.request_body_ref IS NOT NULL
-          OR usage_http_audits.provider_request_body_ref IS NOT NULL
-          OR usage_http_audits.response_body_ref IS NOT NULL
-          OR usage_http_audits.client_response_body_ref IS NOT NULL
+          usage_http_audits.request_body_state IS NOT NULL
+          OR usage_http_audits.provider_request_body_state IS NOT NULL
+          OR usage_http_audits.response_body_state IS NOT NULL
+          OR usage_http_audits.client_response_body_state IS NOT NULL
         )
     )
   )
@@ -475,10 +467,10 @@ WHERE created_at < $1
       FROM usage_http_audits
       WHERE usage_http_audits.request_id = usage.request_id
         AND (
-          usage_http_audits.request_body_ref IS NOT NULL
-          OR usage_http_audits.provider_request_body_ref IS NOT NULL
-          OR usage_http_audits.response_body_ref IS NOT NULL
-          OR usage_http_audits.client_response_body_ref IS NOT NULL
+          usage_http_audits.request_body_state IS NOT NULL
+          OR usage_http_audits.provider_request_body_state IS NOT NULL
+          OR usage_http_audits.response_body_state IS NOT NULL
+          OR usage_http_audits.client_response_body_state IS NOT NULL
         )
     )
   )
@@ -672,7 +664,7 @@ async fn cleanup_usage_stale_body_fields(
             .execute(pool)
             .await
             .map_err(postgres_error)?;
-        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_REFS_SQL)
+        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_CAPTURE_SQL)
             .bind(&request_ids)
             .execute(pool)
             .await

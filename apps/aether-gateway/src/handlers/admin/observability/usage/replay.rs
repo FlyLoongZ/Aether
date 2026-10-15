@@ -6,10 +6,7 @@ use aether_admin::observability::usage::{
 };
 use aether_data_contracts::repository::{
     provider_catalog::StoredProviderCatalogEndpoint,
-    usage::{
-        canonical_usage_body_ref_for, StoredRequestUsageAudit, UsageBodyCaptureState,
-        UsageBodyField,
-    },
+    usage::{StoredRequestUsageAudit, UsageBodyCaptureState, UsageBodyField},
 };
 use axum::{
     body::Body,
@@ -67,11 +64,8 @@ pub(super) async fn admin_usage_resolve_body_value(
         }
         Some(UsageBodyCaptureState::Reference) | None => {}
     }
-    let body_ref = item
-        .body_ref(field)
-        .and_then(|body_ref| canonical_usage_body_ref_for(body_ref, &item.request_id, field));
-    let resolved_ref_body = match body_ref.as_deref() {
-        Some(body_ref) => state.resolve_request_usage_body_ref(body_ref).await?,
+    let resolved_ref_body = match item.body_ref(field) {
+        Some(body_ref) => state.resolve_request_usage_body_ref(&body_ref).await?,
         None => None,
     };
     Ok(admin_usage_body_value_from_sources(

@@ -279,10 +279,6 @@ SELECT
       END)::jsonb
     ELSE NULL::jsonb
   END AS request_metadata,
-  NULL::varchar AS http_request_body_ref,
-  NULL::varchar AS http_provider_request_body_ref,
-  NULL::varchar AS http_response_body_ref,
-  NULL::varchar AS http_client_response_body_ref,
   NULL::varchar AS http_request_body_state,
   NULL::varchar AS http_provider_request_body_state,
   NULL::varchar AS http_response_body_state,

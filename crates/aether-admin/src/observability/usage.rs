@@ -639,7 +639,9 @@ fn admin_usage_scheduling_failure_json(
             && item.provider_api_key_id.is_none()
             && item.provider_request_headers.is_none()
             && item.provider_request_body.is_none()
-            && item.provider_request_body_ref.is_none(),
+            && item
+                .body_ref(UsageBodyField::ProviderRequestBody)
+                .is_none(),
     })
 }
 
@@ -738,7 +740,7 @@ fn admin_usage_error_domains_json(item: &StoredRequestUsageAudit) -> Value {
         || item.provider_api_key_id.is_some()
         || item.provider_request_headers.is_some()
         || item.provider_request_body.is_some()
-        || item.provider_request_body_ref.is_some();
+        || item.body_ref(UsageBodyField::ProviderRequestBody).is_some();
     let upstream_error = if has_upstream_attempt {
         admin_usage_error_domain_json(
             "upstream_response",

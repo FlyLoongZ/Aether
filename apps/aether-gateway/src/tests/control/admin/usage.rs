@@ -2475,7 +2475,6 @@ async fn gateway_admin_usage_detail_raw_rejects_foreign_refs_and_disabled_captur
     ] {
         let mut usage = sample_selective_body_usage();
         usage.response_body = None;
-        usage.response_body_ref = Some("usage://request/foreign-request/response_body".to_string());
         usage.response_body_state = Some(body_state);
         let mut foreign = sample_selective_body_usage();
         foreign.id = "foreign-usage".to_string();
@@ -2545,7 +2544,6 @@ async fn gateway_admin_usage_detail_raw_preserves_authorization_and_binary_heade
 async fn gateway_admin_usage_detail_isolates_missing_body_errors() {
     let mut usage = sample_selective_body_usage();
     usage.request_body = None;
-    usage.request_body_ref = Some("usage://request/req-selected-body/request_body".to_string());
     usage.request_body_state = Some(UsageBodyCaptureState::Reference);
     let state = AppState::new()
         .expect("gateway should build")

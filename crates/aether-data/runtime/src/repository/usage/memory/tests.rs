@@ -942,7 +942,7 @@ async fn upsert_uses_typed_provider_capture_as_the_fast_fact_snapshot() {
         assert_eq!(terminal.execution_path, None);
         if state == UsageBodyCaptureState::None {
             assert_eq!(terminal.provider_request_body, None);
-            assert_eq!(terminal.provider_request_body_ref, None);
+            assert_eq!(terminal.body_ref(UsageBodyField::ProviderRequestBody), None);
 
             let mut late = sample_upsert_usage_record(&request_id);
             late.provider_request_body = Some(json!({
@@ -958,7 +958,7 @@ async fn upsert_uses_typed_provider_capture_as_the_fast_fact_snapshot() {
                 .expect("late pending usage should not regress terminal capture");
             assert_eq!(late.provider_service_tier(), None);
             assert_eq!(late.provider_request_body, None);
-            assert_eq!(late.provider_request_body_ref, None);
+            assert_eq!(late.body_ref(UsageBodyField::ProviderRequestBody), None);
         }
     }
 }
@@ -1846,33 +1846,6 @@ async fn streaming_refresh_without_timing_does_not_clear_stream_timing() {
 }
 
 #[tokio::test]
-async fn seed_hydrates_legacy_body_ref_metadata_into_typed_fields() {
-    let repository = InMemoryUsageReadRepository::seed(vec![StoredRequestUsageAudit {
-        request_metadata: Some(json!({
-            "request_body_ref": "usage://request/req-legacy/request_body"
-        })),
-        ..sample_usage("req-legacy", 100)
-    }]);
-
-    let usage = repository
-        .find_by_request_id("req-legacy")
-        .await
-        .expect("find should succeed")
-        .expect("usage should exist");
-
-    assert_eq!(
-        usage.body_ref(UsageBodyField::RequestBody),
-        Some("usage://request/req-legacy/request_body")
-    );
-    assert_eq!(
-        usage.request_metadata,
-        Some(json!({
-            "request_body_ref": "usage://request/req-legacy/request_body"
-        }))
-    );
-}
-
-#[tokio::test]
 async fn seed_ignores_invalid_or_mismatched_legacy_body_ref_metadata() {
     let repository = InMemoryUsageReadRepository::seed(vec![
         StoredRequestUsageAudit {
@@ -1927,11 +1900,13 @@ async fn detached_body_seed_moves_large_payloads_behind_usage_refs() {
     assert!(stored.request_body.is_none());
     assert!(stored.provider_request_body.is_none());
     assert_eq!(
-        stored.body_ref(UsageBodyField::RequestBody),
+        stored.body_ref(UsageBodyField::RequestBody).as_deref(),
         Some("usage://request/req-detached/request_body")
     );
     assert_eq!(
-        stored.body_ref(UsageBodyField::ProviderRequestBody),
+        stored
+            .body_ref(UsageBodyField::ProviderRequestBody)
+            .as_deref(),
         Some("usage://request/req-detached/provider_request_body")
     );
     assert_eq!(stored.request_metadata, None);
@@ -1958,23 +1933,6 @@ async fn detached_body_seed_moves_large_payloads_behind_usage_refs() {
             "stream": false
         }))
     );
-}
-
-#[tokio::test]
-async fn seed_discards_cross_request_and_cross_field_body_refs() {
-    let mut usage = sample_usage("req-ref-target", 100);
-    usage.request_body_ref = Some("usage://request/req-ref-owner/request_body".to_string());
-    usage.response_body_ref = Some("usage://request/req-ref-target/request_body".to_string());
-
-    let repository = InMemoryUsageReadRepository::seed(vec![usage]);
-    let stored = repository
-        .find_by_request_id("req-ref-target")
-        .await
-        .expect("find should succeed")
-        .expect("usage should exist");
-
-    assert!(stored.request_body_ref.is_none());
-    assert!(stored.response_body_ref.is_none());
 }
 
 #[tokio::test]
@@ -2311,7 +2269,7 @@ async fn upsert_does_not_backfill_typed_body_refs_from_request_metadata() {
         .await
         .expect("upsert should succeed");
 
-    assert_eq!(stored.request_body_ref, None);
+    assert_eq!(stored.body_ref(UsageBodyField::RequestBody), None);
     assert_eq!(stored.request_metadata, None);
 }
 
@@ -2541,16 +2499,12 @@ async fn upsert_preserves_existing_legacy_display_columns_when_new_write_omits_t
         billing_status: "pending".to_string(),
         request_headers: None,
         request_body: None,
-        request_body_ref: None,
         provider_request_headers: None,
         provider_request_body: None,
-        provider_request_body_ref: None,
         response_headers: None,
         response_body: None,
-        response_body_ref: None,
         client_response_headers: None,
         client_response_body: None,
-        client_response_body_ref: None,
         request_body_state: None,
         provider_request_body_state: None,
         response_body_state: None,

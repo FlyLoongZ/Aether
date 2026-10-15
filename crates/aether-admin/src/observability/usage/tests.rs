@@ -10,7 +10,9 @@ use super::{
     admin_usage_safe_metadata_value, admin_usage_total_tokens, admin_usage_upstream_is_stream,
     build_admin_usage_detail_payload,
 };
-use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UsageBodyField};
+use aether_data_contracts::repository::usage::{
+    StoredRequestUsageAudit, UsageBodyCaptureState, UsageBodyField,
+};
 
 fn sample_usage(
     status: &str,
@@ -680,8 +682,8 @@ fn stream_modes_fall_back_to_captured_response_headers_when_bodies_are_detached(
         client_response_headers: Some(json!({
             "content-type": "application/json"
         })),
-        response_body_ref: Some("usage://request/req-1/response_body".to_string()),
-        client_response_body_ref: Some("usage://request/req-1/client_response_body".to_string()),
+        response_body_state: Some(UsageBodyCaptureState::Reference),
+        client_response_body_state: Some(UsageBodyCaptureState::Reference),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -785,7 +787,7 @@ fn admin_usage_fallback_flag_uses_routing_candidate_index() {
 #[test]
 fn body_availability_considers_typed_reference_fields() {
     let item = StoredRequestUsageAudit {
-        request_body_ref: Some("usage://request/req-1/request_body".to_string()),
+        request_body_state: Some(UsageBodyCaptureState::Reference),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -854,13 +856,13 @@ fn detail_payload_preserves_original_headers_with_or_without_bodies() {
 fn detail_payload_marks_reference_backed_bodies_as_available() {
     let item = StoredRequestUsageAudit {
         request_body: None,
-        request_body_ref: Some("usage://request/req-1/request_body".to_string()),
+        request_body_state: Some(UsageBodyCaptureState::Reference),
         provider_request_body: None,
-        provider_request_body_ref: Some("usage://request/req-1/provider_request_body".to_string()),
+        provider_request_body_state: Some(UsageBodyCaptureState::Reference),
         response_body: None,
-        response_body_ref: Some("usage://request/req-1/response_body".to_string()),
+        response_body_state: Some(UsageBodyCaptureState::Reference),
         client_response_body: None,
-        client_response_body_ref: Some("usage://request/req-1/client_response_body".to_string()),
+        client_response_body_state: Some(UsageBodyCaptureState::Reference),
         request_metadata: Some(json!({
             "request_body_ref": "usage://request/req-1/request_body",
             "provider_request_body_ref": "usage://request/req-1/provider_request_body",
@@ -1073,7 +1075,6 @@ fn detail_payload_does_not_promote_local_client_error_to_upstream_error() {
         provider_api_key_id: None,
         provider_request_headers: None,
         provider_request_body: None,
-        provider_request_body_ref: None,
         candidate_id: None,
         execution_path: Some("local_execution_runtime_miss".to_string()),
         local_execution_runtime_miss_reason: Some("candidate_list_empty".to_string()),
@@ -1122,14 +1123,13 @@ fn detail_payload_simplifies_local_client_error_when_client_body_is_unloaded() {
         provider_api_key_id: None,
         provider_request_headers: None,
         provider_request_body: None,
-        provider_request_body_ref: None,
         candidate_id: None,
         execution_path: Some("local_execution_runtime_miss".to_string()),
         local_execution_runtime_miss_reason: Some("candidate_list_empty".to_string()),
         error_category: Some("http_error".to_string()),
         client_response_headers: Some(json!({"content-type": "application/json"})),
         client_response_body: None,
-        client_response_body_ref: Some("usage://request/req-1/client_response_body".to_string()),
+        client_response_body_state: Some(UsageBodyCaptureState::Reference),
         response_body: None,
         ..sample_usage("failed", Some(503), Some(message))
     };
@@ -1168,14 +1168,13 @@ fn detail_payload_simplifies_all_candidates_skipped_when_client_body_is_unloaded
         provider_api_key_id: None,
         provider_request_headers: None,
         provider_request_body: None,
-        provider_request_body_ref: None,
         candidate_id: None,
         execution_path: Some("local_execution_runtime_miss".to_string()),
         local_execution_runtime_miss_reason: Some("all_candidates_skipped".to_string()),
         error_category: Some("http_error".to_string()),
         client_response_headers: Some(json!({"content-type": "application/json"})),
         client_response_body: None,
-        client_response_body_ref: Some("usage://request/req-1/client_response_body".to_string()),
+        client_response_body_state: Some(UsageBodyCaptureState::Reference),
         response_body: None,
         ..sample_usage("failed", Some(503), Some(message))
     };
