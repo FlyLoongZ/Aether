@@ -29,7 +29,9 @@
 //!
 //! The container is `{"<capture key>": <body>|null, ...}` over the two keys from
 //! [`UsageBodyField::as_capture_key`], the base field first. Writing `null` for a
-//! missing half keeps every field of a pair reachable from the same row.
+//! missing half keeps every field of a pair reachable from the same row, and it
+//! also means a body that is literally JSON `null` reads back as absent rather
+//! than as a body of its own.
 //!
 //! # Compression parameters
 //!
@@ -59,6 +61,8 @@ use std::io::Write;
 
 use aether_data_contracts::repository::usage::{UsageBodyField, MAX_USAGE_BODY_BYTES};
 use aether_data_contracts::DataLayerError;
+use serde::ser::SerializeMap;
+use serde::Serializer;
 use serde_json::{Map, Value};
 
 // The encoding values reach clients as `x-aether-body-encoding`, so they are
@@ -163,27 +167,28 @@ pub fn build_container(
     Value::Object(container)
 }
 
-/// Serializes and compresses a container into the payload to store.
-pub fn encode_container(container: &Value) -> Result<EncodedBody, DataLayerError> {
-    let logical = serialize(container)?;
+/// Compresses a serialized container into the payload to store.
+///
+/// The write path serializes a container while preparing a record and compresses
+/// it afterwards, so the two steps are separate here as well.
+pub fn encode_container_bytes(logical: &[u8]) -> Result<EncodedBody, DataLayerError> {
     Ok(EncodedBody {
-        payload: compress(&logical)?,
+        payload: compress(logical)?,
         encoding: ENCODING_ZSTD_CONTAINER,
         logical_bytes: logical.len() as i64,
     })
 }
 
-/// Serializes a container without compressing it.
+/// A serialized container, stored without compressing it.
 ///
-/// This is the write path's fallback when [`encode_container`] fails: it keeps
-/// both bodies instead of dropping one, at the cost of not compressing them.
-pub fn encode_raw_container(container: &Value) -> Result<EncodedBody, DataLayerError> {
-    let logical = serialize(container)?;
-    Ok(EncodedBody {
+/// This is what the write path keeps when compression fails: it keeps both bodies
+/// instead of dropping one, at the cost of not compressing them.
+pub fn raw_container_bytes(logical: Vec<u8>) -> EncodedBody {
+    EncodedBody {
         logical_bytes: logical.len() as i64,
         payload: logical,
         encoding: ENCODING_RAW_CONTAINER,
-    })
+    }
 }
 
 /// Whether payloads with this `encoding` are pair containers.
@@ -221,7 +226,37 @@ pub fn window_log_for_len(len: u64) -> u32 {
     needed.clamp(ZSTD_WINDOW_LOG_MIN, ZSTD_WINDOW_LOG_MAX)
 }
 
-fn serialize(container: &Value) -> Result<Vec<u8>, DataLayerError> {
+/// Serializes the container for a pair straight from references.
+///
+/// Preparing a record must not copy its bodies, so the container is written
+/// without ever materializing it as a [`Value`]. Keys are written base field
+/// first, the order the format documents.
+pub fn serialize_pair_container(
+    pair: BodyPair,
+    base_body: Option<&Value>,
+    sibling_body: Option<&Value>,
+) -> Result<Vec<u8>, DataLayerError> {
+    const ABSENT: Value = Value::Null;
+    let mut serializer = serde_json::Serializer::new(Vec::new());
+    {
+        let mut map = serializer
+            .serialize_map(Some(2))
+            .map_err(|error| container_error("serialize", error))?;
+        map.serialize_entry(pair.base().as_capture_key(), base_body.unwrap_or(&ABSENT))
+            .map_err(|error| container_error("serialize", error))?;
+        map.serialize_entry(
+            pair.sibling().as_capture_key(),
+            sibling_body.unwrap_or(&ABSENT),
+        )
+        .map_err(|error| container_error("serialize", error))?;
+        map.end()
+            .map_err(|error| container_error("serialize", error))?;
+    }
+    Ok(serializer.into_inner())
+}
+
+/// Serializes a container into the bytes that are stored, compressed or not.
+pub fn serialize_container(container: &Value) -> Result<Vec<u8>, DataLayerError> {
     serde_json::to_vec(container).map_err(|error| {
         DataLayerError::UnexpectedValue(format!(
             "failed to serialize usage body container: {error}"
@@ -233,6 +268,10 @@ fn parse(bytes: &[u8]) -> Result<Value, DataLayerError> {
     serde_json::from_slice(bytes).map_err(|error| {
         DataLayerError::UnexpectedValue(format!("failed to parse usage body container: {error}"))
     })
+}
+
+fn container_error(action: &str, error: serde_json::Error) -> DataLayerError {
+    DataLayerError::UnexpectedValue(format!("failed to {action} usage body container: {error}"))
 }
 
 fn compress(input: &[u8]) -> Result<Vec<u8>, DataLayerError> {
@@ -320,6 +359,17 @@ mod tests {
         BodyPair::for_field(UsageBodyField::RequestBody)
     }
 
+    /// Compresses a container the way the write path does.
+    fn encode(container: &Value) -> EncodedBody {
+        encode_container_bytes(&serialize_container(container).expect("container should serialize"))
+            .expect("container should encode")
+    }
+
+    /// Stores a container without compressing it.
+    fn encode_raw(container: &Value) -> EncodedBody {
+        raw_container_bytes(serialize_container(container).expect("container should serialize"))
+    }
+
     fn round_trip(encoded: &EncodedBody) -> Value {
         decode_container(encoded.encoding, &encoded.payload).expect("container should decode")
     }
@@ -371,7 +421,7 @@ mod tests {
         let sibling = json!({"model": "gpt-5.4", "messages": [{"role": "user", "content": "hi"}]});
         let container = build_container(pair, Some(&base), Some(&sibling));
 
-        let encoded = encode_container(&container).expect("container should encode");
+        let encoded = encode(&container);
         assert_eq!(encoded.encoding, ENCODING_ZSTD_CONTAINER);
         assert!(encoded.logical_bytes > 0);
 
@@ -394,7 +444,7 @@ mod tests {
         let container = build_container(pair, Some(&base), None);
         assert_eq!(container["provider_request"], Value::Null);
 
-        let decoded = round_trip(&encode_container(&container).expect("container should encode"));
+        let decoded = round_trip(&encode(&container));
         assert_eq!(
             container_body(&decoded, UsageBodyField::RequestBody),
             Some(base)
@@ -408,7 +458,7 @@ mod tests {
     #[test]
     fn raw_containers_are_stored_uncompressed() {
         let container = build_container(request_pair(), Some(&json!({"model": "gpt-5"})), None);
-        let encoded = encode_raw_container(&container).expect("container should serialize");
+        let encoded = encode_raw(&container);
 
         assert_eq!(encoded.encoding, ENCODING_RAW_CONTAINER);
         assert_ne!(
@@ -450,7 +500,7 @@ mod tests {
     fn small_frames_declare_a_browser_sized_window() {
         let body = json!({"model": "gpt-5", "messages": [{"role": "user", "content": "hello"}]});
         let container = build_container(request_pair(), Some(&body), Some(&body));
-        let encoded = encode_container(&container).expect("container should encode");
+        let encoded = encode(&container);
 
         let header = frame_header(&encoded.payload);
         assert!(header.checksum, "frames must carry a checksum");
@@ -470,7 +520,7 @@ mod tests {
         // 6 MiB per body, so the container is past the 8 MiB window limit.
         let body = json!({"content": "abcdefgh".repeat(768 * 1024)});
         let container = build_container(request_pair(), Some(&body), Some(&body));
-        let encoded = encode_container(&container).expect("container should encode");
+        let encoded = encode(&container);
         assert!(encoded.logical_bytes as u64 > BROWSER_DECODABLE_MAX_BYTES);
 
         let header = frame_header(&encoded.payload);
@@ -486,7 +536,7 @@ mod tests {
     #[test]
     fn corrupt_frames_are_rejected() {
         let container = build_container(request_pair(), Some(&json!({"model": "gpt-5"})), None);
-        let mut encoded = encode_container(&container).expect("container should encode");
+        let mut encoded = encode(&container);
         let last = encoded.payload.len() - 1;
         encoded.payload[last] ^= 0xFF;
 
@@ -516,12 +566,9 @@ mod tests {
             json!({"model": "gpt-5.4", "messages": [{"role": "user", "content": prompt}]});
         let pair = request_pair();
 
-        let paired = encode_container(&build_container(pair, Some(&base), Some(&sibling)))
-            .expect("container should encode");
-        let base_only = encode_container(&build_container(pair, Some(&base), None))
-            .expect("container should encode");
-        let sibling_only = encode_container(&build_container(pair, Some(&sibling), None))
-            .expect("container should encode");
+        let paired = encode(&build_container(pair, Some(&base), Some(&sibling)));
+        let base_only = encode(&build_container(pair, Some(&base), None));
+        let sibling_only = encode(&build_container(pair, Some(&sibling), None));
         let independent = base_only.payload.len() + sibling_only.payload.len();
 
         assert!(
