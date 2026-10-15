@@ -47,6 +47,37 @@ describe('dashboard body loading', () => {
     await expect(dashboardApi.getRequestBody('usage-1', 'request_body')).rejects.toThrow('Invalid body response')
   })
 
+  it.each([
+    ['1', 'request_body', 'request'],
+    ['1', 'provider_request_body', 'provider_request'],
+    ['2', 'response_body', 'response'],
+    ['2', 'client_response_body', 'client_response'],
+  ] as const)('picks this field out of a %s container', async (encoding, field, key) => {
+    const container = {
+      request: { model: 'gpt-5' },
+      provider_request: { model: 'gpt-5.4' },
+      response: { id: 'chatcmpl-1' },
+      client_response: { id: 'chatcmpl-2' },
+    }
+    getMock.mockResolvedValue({ data: new TextEncoder().encode(JSON.stringify(container)).buffer as ArrayBuffer, headers: { 'x-aether-body-encoding': encoding, 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': field } })
+    const { bytes } = await dashboardApi.getRequestBody('usage-1', field)
+    expect(JSON.parse(new TextDecoder().decode(bytes))).toEqual(container[key])
+  })
+
+  it('treats the encoding column value 0 as a single body', async () => {
+    const bytes = new ArrayBuffer(20)
+    getMock.mockResolvedValue({ data: bytes, headers: { 'x-aether-body-encoding': '0', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'request_body' } })
+    await expect(dashboardApi.getRequestBody('usage-1', 'request_body')).resolves.toEqual({ bytes })
+  })
+
+  it('rejects a container without the requested field or without valid json', async () => {
+    const headers = { 'x-aether-body-encoding': '1', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'provider_request_body' }
+    getMock.mockResolvedValue({ data: new TextEncoder().encode(JSON.stringify({ request: { model: 'gpt-5' }, provider_request: null })).buffer as ArrayBuffer, headers })
+    await expect(dashboardApi.getRequestBody('usage-1', 'provider_request_body')).rejects.toThrow('Invalid body response')
+    getMock.mockResolvedValue({ data: new TextEncoder().encode('not json').buffer as ArrayBuffer, headers })
+    await expect(dashboardApi.getRequestBody('usage-1', 'provider_request_body')).rejects.toThrow('Invalid body response')
+  })
+
   it('defaults to shallow details and isolates cached records', async () => {
     await dashboardApi.getRequestDetail('usage-1')
     expect(getMock).toHaveBeenLastCalledWith('/api/admin/usage/usage-1', { params: { include_bodies: false } })

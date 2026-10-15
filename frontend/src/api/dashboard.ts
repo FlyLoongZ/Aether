@@ -193,6 +193,17 @@ export interface RequestSettlementSnapshot {
 export type RequestBodyField = 'request_body' | 'provider_request_body' | 'response_body' | 'client_response_body'
 export type RequestBodyLoadErrorCode = 'too_large' | 'decode_failed' | 'missing' | 'storage_unavailable'
 
+// A stored pair travels in one container, keyed by the capture field it holds.
+const PAIRED_BODY_KEYS: Record<RequestBodyField, string> = {
+  request_body: 'request',
+  provider_request_body: 'provider_request',
+  response_body: 'response',
+  client_response_body: 'client_response'
+}
+// `json` is the value older gateways send for a single body; `0` is the same
+// thing once the encoding column reaches clients. `1` and `2` are containers.
+const SINGLE_BODY_ENCODINGS = new Set(['json', '0'])
+
 export class RequestBodyProtocolError extends Error {
   constructor() {
     super('Invalid body response')
@@ -496,10 +507,27 @@ export const dashboardApi = {
       ...(onProgress ? { onDownloadProgress: (event: { loaded: number }) => onProgress(event.loaded) } : {}),
     })
     const encoding = response.headers['x-aether-body-encoding']
-    if (encoding !== 'json' || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
+    const known = encoding === '1' || encoding === '2' || SINGLE_BODY_ENCODINGS.has(encoding)
+    if (!known || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
       throw new RequestBodyProtocolError()
     }
-    return { bytes: response.data }
+    // A single body is already the body itself, whether the gateway called it
+    // `json` or `0`. A container holds both halves of the pair, so pick this
+    // field out of it and hand back just that body.
+    if (SINGLE_BODY_ENCODINGS.has(encoding)) {
+      return { bytes: response.data }
+    }
+    let container: Record<string, unknown>
+    try {
+      container = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(response.data)) as Record<string, unknown>
+    } catch {
+      throw new RequestBodyProtocolError()
+    }
+    const body = container[PAIRED_BODY_KEYS[field]]
+    if (body === undefined || body === null) {
+      throw new RequestBodyProtocolError()
+    }
+    return { bytes: new TextEncoder().encode(JSON.stringify(body)).buffer as ArrayBuffer }
   },
 
   async prefetchRequestDetail(requestId: string): Promise<void> {
