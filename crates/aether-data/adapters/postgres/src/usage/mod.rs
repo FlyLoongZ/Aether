@@ -65,6 +65,10 @@ mod analytics;
 #[cfg(test)]
 mod analytics_tests;
 mod attribution;
+// The frame codec lands ahead of the read and write paths that call it, so only
+// the codec's own tests reach it until those land.
+#[cfg_attr(not(test), allow(dead_code))]
+mod body_codec;
 pub mod cleanup;
 mod dashboard;
 mod dashboard_charts;
