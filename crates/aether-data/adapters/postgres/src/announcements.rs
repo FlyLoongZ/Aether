@@ -497,7 +497,7 @@ mod tests {
     use super::SqlxAnnouncementReadRepository;
 
     #[tokio::test]
-    #[ignore = "requires AETHER_TEST_DATABASE_URL; uses connection-local temporary tables"]
+    #[ignore = "requires AETHER_TEST_DATABASE_URL and PostgreSQL migrations; uses connection-local temporary tables"]
     async fn live_personal_announcement_page_preserves_global_unread_and_visibility() {
         use aether_data_contracts::repository::announcements::{
             AnnouncementReadRepository, AnnouncementWriteRepository, UserAnnouncementListQuery,
@@ -507,6 +507,10 @@ mod tests {
             .connect(&std::env::var("AETHER_TEST_DATABASE_URL").unwrap())
             .await
             .unwrap();
+        // The temporary tables below are cloned from the real ones, so the schema has to
+        // exist first. Applying it here keeps the test from depending on some other live
+        // test having migrated the database already.
+        crate::run_migrations(&pool).await.unwrap();
         sqlx::raw_sql(
             "CREATE TEMP TABLE announcements (LIKE public.announcements INCLUDING ALL);
           CREATE TEMP TABLE announcement_reads (LIKE public.announcement_reads INCLUDING ALL);
