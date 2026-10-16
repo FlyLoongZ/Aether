@@ -7332,6 +7332,19 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
 
     apply_endpoint_response_header_rules(state, &plan, &mut headers, None).await?;
 
+    // Record the client headers alongside the assembled provider headers: the
+    // seed falls back to the provider headers when no client value is set.
+    let mut object = match report_context {
+        Some(Value::Object(object)) => object,
+        Some(other) => serde_json::Map::from_iter([("seed".to_string(), other)]),
+        None => serde_json::Map::new(),
+    };
+    object.insert(
+        "client_response_headers".to_string(),
+        serde_json::to_value(&headers).unwrap_or(Value::Null),
+    );
+    report_context = Some(Value::Object(object));
+
     let request_id = request_id.to_string();
     let candidate_id = candidate_id.map(ToOwned::to_owned);
     let (tx, rx) = mpsc::channel::<Result<Bytes, IoError>>(16);

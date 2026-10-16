@@ -99,6 +99,6 @@ client actually received. The terminal usage row records both sides as well:
 | Field | Contents |
 | --- | --- |
 | `response_headers` / `response_body` | The preserved upstream response |
-| `client_response_headers` | The header set the gateway assembled for the client (upstream retentions plus endpoint rules); gateway-internal control headers are not part of it |
+| `client_response_headers` | The header set the gateway assembled for the client (upstream retentions plus endpoint rules) on every reported request, including successes; gateway-internal control headers are not part of it |
 | `client_response_body` | What the gateway actually sent |
 | `status_code` | The real upstream status code, even when the outer transport replied `200` |

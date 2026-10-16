@@ -23,7 +23,7 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_ENCODING, CONTENT_LENGTH, CONTEN
 use axum::http::{HeaderName, HeaderValue, Response, StatusCode};
 use futures_util::StreamExt;
 use http_body_util::BodyExt;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::time::MissedTickBehavior;
@@ -2984,6 +2984,21 @@ async fn execute_execution_runtime_sync_impl(
     let mut client_headers = headers.clone();
     apply_endpoint_response_header_rules(state, &plan, &mut client_headers, body_json.as_ref())
         .await?;
+    let mut report_context = report_context;
+    // Keep the client side of the usage row aligned with the assembled client
+    // headers: the seed falls back to the provider headers otherwise.
+    if (200..300).contains(&status_code) {
+        let mut object = match report_context {
+            Some(Value::Object(object)) => object,
+            Some(other) => Map::from_iter([("seed".to_string(), other)]),
+            None => Map::new(),
+        };
+        object.insert(
+            "client_response_headers".to_string(),
+            serde_json::to_value(&client_headers).unwrap_or(Value::Null),
+        );
+        report_context = Some(Value::Object(object));
+    }
     let explicit_finalize = should_finalize_sync_response(report_kind.as_deref());
     let mapped_error_finalize_kind =
         resolve_core_sync_error_finalize_report_kind(plan_kind, &result, body_json.as_ref());

@@ -48,8 +48,8 @@ use crate::executor::candidate_loop::{
     execute_sync_plan_and_reports_with_transfer_tracker, ProviderTransferTracker,
 };
 use crate::executor::{
-    record_failed_usage_for_exhausted_request, LocalExecutionExhaustion,
-    LocalExecutionRequestOutcome,
+    record_failed_usage_for_deferred_context, record_failed_usage_for_exhausted_request,
+    take_deferred_usage_context, LocalExecutionExhaustion, LocalExecutionRequestOutcome,
 };
 use crate::request_diagnostics::{current_request_diagnostics, scope_request_diagnostics_with};
 use crate::stage_metrics::observe_gateway_stage_ms;
@@ -822,10 +822,12 @@ where
     let (tx, rx) = mpsc::channel::<Result<Bytes, IoError>>(1);
     let request_diagnostics = current_request_diagnostics();
     let cancel_on_disconnect = crate::request_lifecycle::cancel_on_client_disconnect();
+    let state_for_usage = state.clone();
 
     tokio::spawn(async move {
         scope_request_diagnostics_with(request_diagnostics, async move {
             let completion = standard_text_sync_heartbeat_final_bytes(
+                &state_for_usage,
                 client_api_format.as_str(),
                 redaction_slot.as_ref(),
                 tokio::select! {
@@ -884,6 +886,7 @@ async fn record_standard_text_sync_heartbeat_exhaustion(
 }
 
 async fn standard_text_sync_heartbeat_final_bytes(
+    state: &AppState,
     client_api_format: &str,
     redaction_slot: Option<&crate::privacy::RedactionSessionSlot>,
     result: Result<LocalExecutionRequestOutcome, GatewayError>,
@@ -891,6 +894,7 @@ async fn standard_text_sync_heartbeat_final_bytes(
     match result {
         Ok(LocalExecutionRequestOutcome::Responded(response)) => {
             standard_text_sync_heartbeat_response_body_bytes(
+                state,
                 client_api_format,
                 redaction_slot,
                 response,
@@ -912,12 +916,19 @@ async fn standard_text_sync_heartbeat_final_bytes(
 }
 
 async fn standard_text_sync_heartbeat_response_body_bytes(
+    state: &AppState,
     client_api_format: &str,
     redaction_slot: Option<&crate::privacy::RedactionSessionSlot>,
     response: Response<Body>,
 ) -> Vec<u8> {
     let status_code = response.status().as_u16();
-    let (parts, body) = response.into_parts();
+    let (mut parts, body) = response.into_parts();
+    // The wrapped attempt may have kept an upstream error for the client. This
+    // shell replaces the response, so the accounting row is written here from
+    // the captured context rather than from the outer response.
+    if let Some(context) = take_deferred_usage_context(&mut parts.extensions) {
+        crate::executor::record_failed_usage_for_deferred_context(state, context).await;
+    }
     match to_bytes(body, crate::headers::max_internal_buffered_body_bytes()).await {
         Ok(bytes) => {
             let body = match standard_text_sync_heartbeat_restore_response_body(
@@ -1102,6 +1113,7 @@ fn build_openai_image_sync_heartbeat_shell_response(
     let (tx, rx) = mpsc::channel::<Result<Bytes, IoError>>(1);
     let request_diagnostics = current_request_diagnostics();
     let cancel_on_disconnect = crate::request_lifecycle::cancel_on_client_disconnect();
+    let state_for_usage = state.clone();
 
     tokio::spawn(async move {
         scope_request_diagnostics_with(request_diagnostics, async move {
@@ -1120,7 +1132,7 @@ fn build_openai_image_sync_heartbeat_shell_response(
                 _ = tx.closed(), if cancel_on_disconnect => return,
                 result = execution => result,
             };
-            let bytes = openai_image_sync_heartbeat_final_bytes(outcome).await;
+            let bytes = openai_image_sync_heartbeat_final_bytes(&state_for_usage, outcome).await;
             let _ = tx.send(Ok(Bytes::from(bytes))).await;
         })
         .await;
@@ -1196,11 +1208,12 @@ async fn execute_openai_image_sync_heartbeat_attempts(
 }
 
 async fn openai_image_sync_heartbeat_final_bytes(
+    state: &AppState,
     result: Result<LocalExecutionRequestOutcome, GatewayError>,
 ) -> Vec<u8> {
     match result {
         Ok(LocalExecutionRequestOutcome::Responded(response)) => {
-            openai_image_sync_heartbeat_response_body_bytes(response).await
+            openai_image_sync_heartbeat_response_body_bytes(state, response).await
         }
         Ok(LocalExecutionRequestOutcome::Exhausted(_))
         | Ok(LocalExecutionRequestOutcome::NoPath) => openai_image_sync_heartbeat_error_body(
@@ -1214,14 +1227,18 @@ async fn openai_image_sync_heartbeat_final_bytes(
     }
 }
 
-async fn openai_image_sync_heartbeat_response_body_bytes(response: Response<Body>) -> Vec<u8> {
+async fn openai_image_sync_heartbeat_response_body_bytes(
+    state: &AppState,
+    response: Response<Body>,
+) -> Vec<u8> {
     let status_code = response.status().as_u16();
-    match to_bytes(
-        response.into_body(),
-        crate::headers::max_internal_buffered_body_bytes(),
-    )
-    .await
-    {
+    let (mut parts, body) = response.into_parts();
+    // The shell replaces the wrapped response, so a kept upstream error's
+    // accounting row is written here from the captured context.
+    if let Some(context) = take_deferred_usage_context(&mut parts.extensions) {
+        crate::executor::record_failed_usage_for_deferred_context(state, context).await;
+    }
+    match to_bytes(body, crate::headers::max_internal_buffered_body_bytes()).await {
         Ok(bytes) if status_code < 400 && !bytes.is_empty() => bytes.to_vec(),
         Ok(bytes) if status_code >= 400 => {
             openai_image_sync_heartbeat_error_body_from_response(status_code, bytes.as_ref())
@@ -1849,12 +1866,13 @@ mod tests {
 
     #[tokio::test]
     async fn openai_image_sync_heartbeat_success_body_is_unchanged() {
+        let state = AppState::new().expect("state should build");
         let response = Response::builder()
             .status(StatusCode::OK)
             .body(Body::from(r#"{"data":[{"b64_json":"x"}]}"#))
             .expect("response should build");
 
-        let bytes = openai_image_sync_heartbeat_response_body_bytes(response).await;
+        let bytes = openai_image_sync_heartbeat_response_body_bytes(&state, response).await;
         let body: Value = serde_json::from_slice(&bytes).expect("body should decode");
 
         assert_eq!(body, json!({"data": [{"b64_json": "x"}]}));
@@ -1868,6 +1886,7 @@ mod tests {
 
     #[tokio::test]
     async fn openai_image_sync_heartbeat_error_body_includes_upstream_status() {
+        let state = AppState::new().expect("state should build");
         let response = Response::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)
             .body(Body::from(
@@ -1875,7 +1894,7 @@ mod tests {
             ))
             .expect("response should build");
 
-        let bytes = openai_image_sync_heartbeat_response_body_bytes(response).await;
+        let bytes = openai_image_sync_heartbeat_response_body_bytes(&state, response).await;
         let body: Value = serde_json::from_slice(&bytes).expect("body should decode");
 
         assert_eq!(body["error"]["type"], json!("rate_limit"));
@@ -1896,8 +1915,12 @@ mod tests {
 
     #[tokio::test]
     async fn openai_image_sync_heartbeat_no_path_returns_json_error_body() {
-        let bytes =
-            openai_image_sync_heartbeat_final_bytes(Ok(LocalExecutionRequestOutcome::NoPath)).await;
+        let state = AppState::new().expect("state should build");
+        let bytes = openai_image_sync_heartbeat_final_bytes(
+            &state,
+            Ok(LocalExecutionRequestOutcome::NoPath),
+        )
+        .await;
         let body: Value = serde_json::from_slice(&bytes).expect("body should decode");
 
         assert_eq!(body["error"]["type"], json!("upstream_error"));
@@ -1971,7 +1994,7 @@ mod tests {
             test_openai_image_heartbeat_attempt(1, "endpoint-success", "candidate-success"),
         ];
         let outcome = execute_openai_image_sync_heartbeat_attempts(
-            state,
+            state.clone(),
             "/v1/images/generations".to_string(),
             "trace-image-heartbeat-retry".to_string(),
             test_openai_image_heartbeat_decision(),
@@ -1985,7 +2008,7 @@ mod tests {
         let LocalExecutionRequestOutcome::Responded(response) = outcome else {
             panic!("second candidate should return a response");
         };
-        let bytes = openai_image_sync_heartbeat_response_body_bytes(response).await;
+        let bytes = openai_image_sync_heartbeat_response_body_bytes(&state, response).await;
         let body: Value = serde_json::from_slice(&bytes).expect("body should decode");
 
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
@@ -2034,7 +2057,7 @@ mod tests {
             ),
         ];
         let outcome = execute_openai_image_sync_heartbeat_attempts(
-            state,
+            state.clone(),
             "/v1/images/generations".to_string(),
             "trace-image-heartbeat-sticky-retry".to_string(),
             test_openai_image_heartbeat_decision(),
@@ -2048,7 +2071,7 @@ mod tests {
         let LocalExecutionRequestOutcome::Responded(response) = outcome else {
             panic!("second candidate should return a response");
         };
-        let bytes = openai_image_sync_heartbeat_response_body_bytes(response).await;
+        let bytes = openai_image_sync_heartbeat_response_body_bytes(&state, response).await;
         let body: Value = serde_json::from_slice(&bytes).expect("body should decode");
 
         let seen_plans = seen_plans.lock().expect("mutex should lock").clone();
@@ -2120,7 +2143,7 @@ mod tests {
         attempts[3].plan.key_id = "key-fallback".to_string();
 
         let outcome = execute_openai_image_sync_heartbeat_attempts(
-            state,
+            state.clone(),
             "/v1/images/generations".to_string(),
             "trace-image-heartbeat-transfer-limit".to_string(),
             test_openai_image_heartbeat_decision(),
@@ -2134,7 +2157,7 @@ mod tests {
         let LocalExecutionRequestOutcome::Responded(response) = outcome else {
             panic!("fallback provider should return a response");
         };
-        let bytes = openai_image_sync_heartbeat_response_body_bytes(response).await;
+        let bytes = openai_image_sync_heartbeat_response_body_bytes(&state, response).await;
         let body: Value = serde_json::from_slice(&bytes).expect("body should decode");
 
         assert_eq!(call_count.load(Ordering::SeqCst), 3);
@@ -2167,13 +2190,88 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn standard_text_sync_heartbeat_records_the_preserved_upstream_error() {
+        let usage_repository = Arc::new(InMemoryUsageReadRepository::default());
+        let state = AppState::new()
+            .expect("state should build")
+            .with_data_state_for_tests(
+                crate::data::GatewayDataState::with_request_candidate_and_usage_repository_for_tests(
+                    Arc::new(InMemoryRequestCandidateRepository::default()),
+                    Arc::clone(&usage_repository),
+                )
+                // Bodies are only stored when the record level asks for them.
+                .with_system_config_values_for_tests([(
+                    "request_record_level".to_string(),
+                    json!("full"),
+                )]),
+            )
+            .with_usage_runtime_for_tests(UsageRuntimeConfig {
+                enabled: true,
+                ..UsageRuntimeConfig::default()
+            });
+        let plan = test_standard_text_heartbeat_plan(
+            "endpoint-success",
+            "candidate-success",
+            "openai:responses:compact",
+        );
+        let mut response = Response::builder()
+            .status(StatusCode::TOO_MANY_REQUESTS)
+            .body(Body::from(
+                r#"{"error":{"message":"slow down","type":"rate_limit"}}"#,
+            ))
+            .expect("response should build");
+        // Mirrors what the exhaustion fallback attaches when it keeps a
+        // retryable upstream error for the client.
+        response
+            .extensions_mut()
+            .insert(crate::execution_runtime::ExhaustionFallbackCapture {
+                status_code: 429,
+                provider_headers: json!({"content-type": "application/json"}),
+                provider_body: Some(json!({"error": {"message": "slow down"}})),
+                client_headers: json!({"content-type": "application/json"}),
+                client_body: Some(json!({"error": {"message": "slow down"}})),
+            });
+        crate::executor::attach_deferred_usage_context(&mut response, &plan, None);
+
+        let _ = standard_text_sync_heartbeat_response_body_bytes(
+            &state,
+            "openai:responses:compact",
+            None,
+            response,
+        )
+        .await;
+
+        let usage = usage_repository
+            .find_by_request_id(&plan.request_id)
+            .await
+            .expect("usage should read")
+            .expect("the shell must record the kept upstream error");
+        assert_eq!(usage.status, "failed");
+        assert_eq!(
+            usage.status_code,
+            Some(429),
+            "the upstream status wins over the shell's 200"
+        );
+        assert_eq!(
+            usage
+                .client_response_body
+                .as_ref()
+                .and_then(|body| body.get("error"))
+                .and_then(|error| error.get("message")),
+            Some(&json!("slow down"))
+        );
+    }
+
+    #[tokio::test]
     async fn standard_text_sync_heartbeat_success_body_is_unchanged() {
+        let state = AppState::new().expect("state should build");
         let response = Response::builder()
             .status(StatusCode::OK)
             .body(Body::from(r#"{"id":"resp_123","output":[]}"#))
             .expect("response should build");
 
         let bytes = standard_text_sync_heartbeat_response_body_bytes(
+            &state,
             "openai:responses:compact",
             None,
             response,
@@ -2186,6 +2284,7 @@ mod tests {
 
     #[tokio::test]
     async fn standard_text_sync_heartbeat_claude_error_body_includes_upstream_status() {
+        let state = AppState::new().expect("state should build");
         let response = Response::builder()
             .status(StatusCode::TOO_MANY_REQUESTS)
             .body(Body::from(
@@ -2193,9 +2292,13 @@ mod tests {
             ))
             .expect("response should build");
 
-        let bytes =
-            standard_text_sync_heartbeat_response_body_bytes("claude:messages", None, response)
-                .await;
+        let bytes = standard_text_sync_heartbeat_response_body_bytes(
+            &state,
+            "claude:messages",
+            None,
+            response,
+        )
+        .await;
         let body: Value = serde_json::from_slice(&bytes).expect("body should decode");
 
         assert_eq!(body["type"], json!("error"));
@@ -2225,12 +2328,14 @@ mod tests {
 
     #[tokio::test]
     async fn standard_text_sync_heartbeat_redirect_status_is_wrapped_as_error() {
+        let state = AppState::new().expect("state should build");
         let response = Response::builder()
             .status(StatusCode::TEMPORARY_REDIRECT)
             .body(Body::from(r#"{"location":"https://upstream.example"}"#))
             .expect("response should build");
 
         let bytes = standard_text_sync_heartbeat_response_body_bytes(
+            &state,
             "openai:responses:compact",
             None,
             response,
@@ -2511,6 +2616,7 @@ mod tests {
             panic!("second candidate should return a response");
         };
         let bytes = standard_text_sync_heartbeat_response_body_bytes(
+            &state,
             "openai:responses:compact",
             None,
             response,

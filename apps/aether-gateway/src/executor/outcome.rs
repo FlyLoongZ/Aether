@@ -38,6 +38,21 @@ pub(crate) struct DeferredUpstreamResponse;
 pub(crate) struct DeferredUsageContext {
     plan: ExecutionPlan,
     report_context: Option<Value>,
+    /// Both sides of the preserved upstream error. Falls back to the outer
+    /// response status/headers when the response carries no capture.
+    status_code: Option<u16>,
+    provider_headers: Option<Value>,
+    provider_body: Option<Value>,
+    client_headers: Option<Value>,
+    client_body: Option<Value>,
+}
+
+/// Removes the deferred accounting context from a response that is about to be
+/// consumed into bytes, so a wrapping shell can forward it outward.
+pub(crate) fn take_deferred_usage_context(
+    extensions: &mut http::Extensions,
+) -> Option<DeferredUsageContext> {
+    extensions.remove::<DeferredUsageContext>()
 }
 
 #[derive(Debug, Clone)]
@@ -87,10 +102,39 @@ pub(crate) fn attach_deferred_usage_context(
     plan: &ExecutionPlan,
     report_context: Option<&Value>,
 ) {
+    // A preserved upstream error carries both sides of the exchange; a generic
+    // deferred response (for example a synthesized fallback) has none.
+    let capture = response
+        .extensions()
+        .get::<crate::execution_runtime::ExhaustionFallbackCapture>()
+        .cloned();
     response.extensions_mut().insert(DeferredUsageContext {
         plan: plan.clone(),
         report_context: report_context.cloned(),
+        status_code: capture.as_ref().map(|capture| capture.status_code),
+        provider_headers: capture
+            .as_ref()
+            .map(|capture| capture.provider_headers.clone()),
+        provider_body: capture
+            .as_ref()
+            .and_then(|capture| capture.provider_body.clone()),
+        client_headers: capture
+            .as_ref()
+            .map(|capture| capture.client_headers.clone()),
+        client_body: capture
+            .as_ref()
+            .and_then(|capture| capture.client_body.clone()),
     });
+}
+
+pub(crate) async fn record_failed_usage_for_deferred_context(
+    state: &AppState,
+    context: DeferredUsageContext,
+) {
+    if !state.usage_runtime.is_enabled() {
+        return;
+    }
+    write_deferred_usage_event(state, context, None).await;
 }
 
 pub(crate) fn record_failed_usage_for_deferred_response<'a>(
@@ -98,7 +142,7 @@ pub(crate) fn record_failed_usage_for_deferred_response<'a>(
     response: &Response<Body>,
 ) -> impl std::future::Future<Output = ()> + Send + 'a {
     let context = response.extensions().get::<DeferredUsageContext>().cloned();
-    let status_code = response.status().as_u16();
+    let response_status_code = response.status().as_u16();
     async move {
         if !state.usage_runtime.is_enabled() {
             return;
@@ -106,33 +150,54 @@ pub(crate) fn record_failed_usage_for_deferred_response<'a>(
         let Some(context) = context else {
             return;
         };
-        let mut data = build_usage_event_data_seed(&context.plan, context.report_context.as_ref());
-        data.request_metadata = crate::usage::reporting::failure::with_analytics_failure(
-            data.request_metadata.as_ref(),
-            "upstream",
-            "response",
-            "candidates_exhausted",
-        );
-        data.status_code = Some(status_code);
-        data.error_message =
-            Some("all local candidates failed; returning preserved upstream error".to_string());
-        data.error_category = error_category_for_failed_status(status_code)
-            .or_else(|| Some("upstream_error".to_string()));
-        data.response_headers = Some(json_header_map());
-        data.client_response_headers = Some(json_header_map());
-
-        state
-            .usage_runtime
-            .record_terminal_event_direct(
-                state.usage_lifecycle_data_state().as_ref(),
-                UsageEvent::new(
-                    UsageEventType::Failed,
-                    context.plan.request_id.clone(),
-                    data,
-                ),
-            )
-            .await;
+        write_deferred_usage_event(state, context, Some(response_status_code)).await;
     }
+}
+
+async fn write_deferred_usage_event(
+    state: &AppState,
+    context: DeferredUsageContext,
+    response_status_code: Option<u16>,
+) {
+    // A heartbeat shell already replied 200 to the client, so prefer the
+    // recorded upstream status when present.
+    let status_code = context
+        .status_code
+        .or(response_status_code)
+        .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR.as_u16());
+    let mut data = build_usage_event_data_seed(&context.plan, context.report_context.as_ref());
+    data.request_metadata = crate::usage::reporting::failure::with_analytics_failure(
+        data.request_metadata.as_ref(),
+        "upstream",
+        "response",
+        "candidates_exhausted",
+    );
+    data.status_code = Some(status_code);
+    data.error_message =
+        Some("all local candidates failed; returning preserved upstream error".to_string());
+    data.error_category = error_category_for_failed_status(status_code)
+        .or_else(|| Some("upstream_error".to_string()));
+    data.response_headers = Some(
+        context
+            .provider_headers
+            .unwrap_or_else(|| json_header_map()),
+    );
+    data.response_body = context.provider_body;
+    data.client_response_headers =
+        Some(context.client_headers.unwrap_or_else(|| json_header_map()));
+    data.client_response_body = context.client_body;
+
+    state
+        .usage_runtime
+        .record_terminal_event_direct(
+            state.usage_lifecycle_data_state().as_ref(),
+            UsageEvent::new(
+                UsageEventType::Failed,
+                context.plan.request_id.clone(),
+                data,
+            ),
+        )
+        .await;
 }
 
 pub(crate) fn is_deferred_upstream_response(response: &Response<Body>) -> bool {
@@ -1195,16 +1260,71 @@ mod tests {
         insert_runtime_miss_candidate_usage_metadata,
         request_candidate_represents_provider_execution, runtime_miss_client_error_body,
         runtime_miss_original_headers_json, select_last_runtime_miss_executed_candidate,
-        select_last_runtime_miss_routing_candidate, LocalExecutionRuntimeMissContext,
-        RuntimeMissCandidateContext,
+        select_last_runtime_miss_routing_candidate, take_deferred_usage_context,
+        DeferredUsageContext, LocalExecutionRuntimeMissContext, RuntimeMissCandidateContext,
     };
     use crate::constants::EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS;
     use crate::state::LocalExecutionRuntimeMissDiagnostic;
+    use aether_contracts::{ExecutionPlan, RequestBody};
     use aether_data_contracts::repository::candidates::{
         RequestCandidateStatus, StoredRequestCandidate,
     };
     use aether_usage_runtime::UsageEventData;
+    use axum::body::Body;
+    use axum::http::Response;
     use serde_json::{json, Map, Value};
+    use std::collections::BTreeMap;
+
+    fn test_plan() -> ExecutionPlan {
+        ExecutionPlan {
+            request_id: "req-deferred-usage".to_string(),
+            candidate_id: Some("cand-deferred-usage".to_string()),
+            provider_name: Some("test-provider".to_string()),
+            provider_id: "provider-test".to_string(),
+            endpoint_id: "endpoint-test".to_string(),
+            key_id: "key-test".to_string(),
+            method: "POST".to_string(),
+            url: "https://example.test/v1/chat/completions".to_string(),
+            headers: BTreeMap::new(),
+            content_type: Some("application/json".to_string()),
+            content_encoding: None,
+            body: RequestBody::from_json(json!({"model": "test-model"})),
+            stream: false,
+            client_api_format: "openai:chat".to_string(),
+            provider_api_format: "openai:chat".to_string(),
+            model_name: Some("test-model".to_string()),
+            proxy: None,
+            transport_profile: None,
+            timeouts: None,
+        }
+    }
+
+    fn test_deferred_context() -> DeferredUsageContext {
+        DeferredUsageContext {
+            plan: test_plan(),
+            report_context: None,
+            status_code: Some(503),
+            provider_headers: Some(json!({"content-type": "application/json"})),
+            provider_body: Some(json!({"error": {"message": "upstream failed"}})),
+            client_headers: Some(json!({"content-type": "application/json"})),
+            client_body: Some(json!({"error": {"message": "upstream failed"}})),
+        }
+    }
+
+    #[test]
+    fn take_deferred_usage_context_moves_the_extension_out_of_the_response() {
+        let mut response = Response::builder()
+            .status(200)
+            .body(Body::empty())
+            .expect("response should build");
+        response.extensions_mut().insert(test_deferred_context());
+
+        let context = take_deferred_usage_context(response.extensions_mut())
+            .expect("context should move out of the response");
+
+        assert_eq!(context.status_code, Some(503));
+        assert!(take_deferred_usage_context(response.extensions_mut()).is_none());
+    }
 
     #[test]
     fn local_execution_client_error_message_is_client_friendly() {
