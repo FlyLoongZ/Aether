@@ -34,7 +34,7 @@ pub(crate) use self::constants::{
     MAX_STREAM_PREFETCH_BYTES, MAX_STREAM_PREFETCH_FRAMES,
 };
 pub(crate) use self::exhaustion_fallback::{
-    build_exhaustion_fallback, ExhaustionFallbackInput,
+    build_exhaustion_fallback, ExhaustionFallbackCapture, ExhaustionFallbackInput,
 };
 pub(crate) use self::fallback::{
     analyze_local_candidate_failover_sync, local_failover_response_text,

@@ -16,9 +16,9 @@ pub(crate) use outcome::{
     attach_deferred_usage_context, beautify_local_execution_client_error_message,
     build_local_execution_exhaustion, build_local_execution_runtime_miss_context,
     is_deferred_upstream_response, mark_deferred_upstream_response,
-    record_failed_usage_for_deferred_response, record_failed_usage_for_exhausted_request,
-    record_failed_usage_for_runtime_miss_request, LocalExecutionExhaustion,
-    LocalExecutionRequestOutcome,
+    record_failed_usage_for_deferred_context, record_failed_usage_for_deferred_response,
+    record_failed_usage_for_exhausted_request, record_failed_usage_for_runtime_miss_request,
+    take_deferred_usage_context, LocalExecutionExhaustion, LocalExecutionRequestOutcome,
 };
 
 pub(crate) use plan_fallback::{

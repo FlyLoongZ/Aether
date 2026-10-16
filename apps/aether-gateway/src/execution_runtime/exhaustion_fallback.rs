@@ -32,6 +32,18 @@ pub(crate) struct ExhaustionFallbackInput<'a> {
     pub(crate) candidate_id: Option<&'a str>,
 }
 
+/// Both sides of a preserved upstream error, captured while both are still
+/// available so the terminal usage row can show the upstream response and the
+/// response the client actually received.
+#[derive(Debug, Clone)]
+pub(crate) struct ExhaustionFallbackCapture {
+    pub(crate) status_code: u16,
+    pub(crate) provider_headers: Value,
+    pub(crate) provider_body: Option<Value>,
+    pub(crate) client_headers: Value,
+    pub(crate) client_body: Option<Value>,
+}
+
 fn resolve_format<'a>(report_context: Option<&'a Value>, key: &str, fallback: &'a str) -> &'a str {
     report_context
         .and_then(|value| value.get(key))
@@ -104,16 +116,16 @@ pub(crate) async fn build_exhaustion_fallback(
         align_gemini_error_code_with_status(client_api_format, body, status_code);
     }
 
-    let (body, mut headers) = match converted {
+    let (client_body_bytes, mut headers) = match converted.as_ref() {
         Some(converted) => {
-            let body = serde_json::to_vec(&converted)
+            let body = serde_json::to_vec(converted)
                 .map_err(|err| GatewayError::Internal(err.to_string()))?;
             let mut headers = provider_headers.clone();
             // The rebuilt body is plain JSON, so a provider content-encoding
             // would make the client decode bytes that are no longer encoded.
             headers.retain(|name, _| !name.eq_ignore_ascii_case("content-encoding"));
-            // Replace the inherited content-type instead of adding next to it: the
-            // upstream key is lowercase today, but a transport that keeps the
+            // Replace the retained content-type by a case-insensitive removal:
+            // the upstream key is lowercase today, but a transport that keeps the
             // provider's casing would otherwise leave two content-type headers.
             headers.retain(|name, _| !name.eq_ignore_ascii_case("content-type"));
             headers.insert("content-type".to_string(), "application/json".to_string());
@@ -130,11 +142,31 @@ pub(crate) async fn build_exhaustion_fallback(
     let response = build_client_response_from_parts(
         status_code,
         &headers,
-        Body::from(body),
+        Body::from(client_body_bytes.clone()),
         trace_id,
         Some(decision),
     )?;
-    attach_control_metadata_headers(response, request_id, candidate_id)
+    let mut response = attach_control_metadata_headers(response, request_id, candidate_id)?;
+
+    // Record the headers the gateway assembled for the client, not the wire
+    // headers: building the response also adds gateway-internal control and
+    // security headers, which no other report path records either.
+    let capture = ExhaustionFallbackCapture {
+        status_code,
+        provider_headers: serde_json::to_value(provider_headers).unwrap_or(Value::Null),
+        provider_body: crate::orchestration::trace_upstream_response_body(
+            provider_body_json,
+            provider_body,
+        ),
+        client_headers: serde_json::to_value(&headers).unwrap_or(Value::Null),
+        client_body: crate::orchestration::trace_upstream_response_body(
+            converted.as_ref(),
+            &client_body_bytes,
+        ),
+    };
+    response.extensions_mut().insert(capture);
+
+    Ok(response)
 }
 
 #[cfg(test)]
@@ -291,6 +323,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn capture_records_upstream_and_client_sides_separately() {
+        let state = AppState::new().expect("app state should build");
+        let plan = test_plan("openai:chat", "claude:messages");
+        let decision = test_decision();
+        let raw = br#"{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}"#;
+        let provider_headers = BTreeMap::from([
+            ("content-type".to_string(), "application/json".to_string()),
+            ("retry-after".to_string(), "12".to_string()),
+        ]);
+        let provider_body_json: serde_json::Value =
+            serde_json::from_slice(raw).expect("provider body should parse");
+
+        let response = build_exhaustion_fallback(
+            &state,
+            ExhaustionFallbackInput {
+                plan: &plan,
+                report_context: None,
+                trace_id: "trace-capture",
+                decision: &decision,
+                status_code: 429,
+                provider_headers: &provider_headers,
+                provider_body: raw,
+                provider_body_json: Some(&provider_body_json),
+                rebuild_client_body: false,
+                request_id: Some(plan.request_id.as_str()),
+                candidate_id: plan.candidate_id.as_deref(),
+            },
+        )
+        .await
+        .expect("fallback should build");
+
+        let capture = response
+            .extensions()
+            .get::<super::ExhaustionFallbackCapture>()
+            .expect("fallback must record both sides for the usage row")
+            .clone();
+
+        assert_eq!(capture.status_code, 429);
+        // Upstream side keeps the provider's own error body and headers.
+        assert_eq!(capture.provider_headers["retry-after"], json!("12"));
+        assert_eq!(
+            capture.provider_body,
+            Some(json!({
+                "type": "error",
+                "error": {"type": "rate_limit_error", "message": "slow down"}
+            }))
+        );
+        // Client side is the rebuilt body plus the upstream headers that are
+        // allowed through the shared filter.
+        assert_eq!(
+            capture.client_body,
+            Some(json!({"error": {"message": "slow down", "type": "rate_limit_error"}}))
+        );
+        assert_eq!(
+            capture.client_headers.get("retry-after"),
+            Some(&json!("12"))
+        );
+        // Gateway-internal plumbing must not leak into the recorded client side.
+        assert!(capture
+            .client_headers
+            .get("x-aether-control-candidate-id")
+            .is_none());
+        assert!(capture
+            .client_headers
+            .get("content-security-policy")
+            .is_none());
+    }
+
+    #[tokio::test]
     async fn cross_format_replaces_a_mixed_case_content_type_once() {
         let state = AppState::new().expect("app state should build");
         let plan = test_plan("openai:chat", "claude:messages");
@@ -429,10 +530,8 @@ data: {"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}
         let plan = test_plan("gemini:generate_content", "openai:chat");
         let decision = test_decision();
         let raw = br#"{"error":{"message":"bad gateway","type":"server_error"}}"#;
-        let provider_headers = BTreeMap::from([(
-            "content-type".to_string(),
-            "application/json".to_string(),
-        )]);
+        let provider_headers =
+            BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
         let provider_body_json: serde_json::Value =
             serde_json::from_slice(raw).expect("provider body should parse");
 
