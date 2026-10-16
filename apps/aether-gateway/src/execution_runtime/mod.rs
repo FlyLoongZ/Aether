@@ -5,6 +5,7 @@ pub(crate) mod attempt_cancellation;
 pub(crate) mod attempt_lifecycle;
 mod chatgpt_web_image;
 mod constants;
+mod exhaustion_fallback;
 mod fallback;
 mod grok;
 mod kiro_cache;
@@ -31,6 +32,9 @@ pub(crate) use self::chatgpt_web_image::maybe_execute_chatgpt_web_image_sync;
 pub(crate) use self::constants::{
     MAX_ERROR_BODY_BYTES, MAX_EXECUTION_STREAM_FRAME_LINE_BYTES, MAX_STREAM_BODY_CAPTURE_BYTES,
     MAX_STREAM_PREFETCH_BYTES, MAX_STREAM_PREFETCH_FRAMES,
+};
+pub(crate) use self::exhaustion_fallback::{
+    build_exhaustion_fallback, ExhaustionFallbackInput,
 };
 pub(crate) use self::fallback::{
     analyze_local_candidate_failover_sync, local_failover_response_text,

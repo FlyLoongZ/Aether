@@ -119,11 +119,11 @@ use crate::execution_runtime::transport::{
 use crate::execution_runtime::windsurf::maybe_execute_windsurf_stream;
 use crate::execution_runtime::{
     ai_attempt_retry_scope_from_failure_disposition, apply_endpoint_response_header_rules,
-    attach_provider_response_headers_to_report_context, local_failover_response_text,
-    resolve_core_stream_direct_finalize_report_kind,
+    attach_provider_response_headers_to_report_context, build_exhaustion_fallback,
+    local_failover_response_text, resolve_core_stream_direct_finalize_report_kind,
     resolve_core_stream_error_finalize_report_kind,
     resolve_local_candidate_failover_analysis_stream, should_fallback_to_control_stream,
-    should_retry_next_local_candidate_stream, LocalFailoverDecision,
+    should_retry_next_local_candidate_stream, ExhaustionFallbackInput, LocalFailoverDecision,
 };
 use crate::execution_runtime::{
     MAX_ERROR_BODY_BYTES, MAX_STREAM_PREFETCH_BYTES, MAX_STREAM_PREFETCH_FRAMES,
@@ -6286,25 +6286,25 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
             }
             if failure_disposition.preserve_upstream_error {
                 if let Some(retry_fallback) = retry_fallback_out.as_deref_mut() {
-                    let mut fallback_headers = headers.clone();
-                    apply_endpoint_response_header_rules(
-                        state,
-                        &plan,
-                        &mut fallback_headers,
-                        provider_body_json.as_ref(),
-                    )
-                    .await?;
-                    *retry_fallback = Some(attach_control_metadata_headers(
-                        build_client_response_from_parts(
-                            status_code,
-                            &fallback_headers,
-                            Body::from(provider_error_body.clone()),
-                            trace_id,
-                            Some(decision),
-                        )?,
-                        Some(request_id),
-                        candidate_id,
-                    )?);
+                    *retry_fallback = Some(
+                        build_exhaustion_fallback(
+                            state,
+                            ExhaustionFallbackInput {
+                                plan: &plan,
+                                report_context: report_context.as_ref(),
+                                trace_id,
+                                decision,
+                                status_code,
+                                provider_headers: &headers,
+                                provider_body: &provider_error_body,
+                                provider_body_json: provider_body_json.as_ref(),
+                                rebuild_client_body: false,
+                                request_id: Some(request_id),
+                                candidate_id,
+                            },
+                        )
+                        .await?,
+                    );
                 }
             }
             let terminal_unix_secs = current_request_candidate_unix_ms();

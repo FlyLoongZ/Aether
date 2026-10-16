@@ -301,31 +301,71 @@ pub(crate) fn build_best_effort_local_core_error_body(
         .as_ref()
         .and_then(|value| value.get("client_api_format"))
         .and_then(|value| value.as_str())
-        .unwrap_or(default_api_format.as_str())
-        .trim()
-        .to_ascii_lowercase();
+        .unwrap_or(default_api_format.as_str());
     let provider_api_format = payload
         .report_context
         .as_ref()
         .and_then(|value| value.get("provider_api_format"))
         .and_then(|value| value.as_str())
-        .map(|value| value.trim().to_ascii_lowercase())
-        .unwrap_or_else(|| client_api_format.clone());
+        .unwrap_or(client_api_format);
+
+    Ok(build_client_error_body_for_provider_error(
+        client_api_format,
+        provider_api_format,
+        payload.status_code,
+        body_json,
+    ))
+}
+
+/// Shared provider-error conversion used by both the terminal error finalize
+/// path and the candidate-exhaustion fallback, so the two can never disagree
+/// about the client-facing error shape.
+///
+/// Returns `None` when the client format is unknown or the error cannot be
+/// rebuilt for it; callers then keep the provider body as-is.
+pub(crate) fn build_client_error_body_for_provider_error(
+    client_api_format: &str,
+    provider_api_format: &str,
+    status_code: u16,
+    body_json: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    let client_api_format = client_api_format.trim().to_ascii_lowercase();
+    let provider_api_format = provider_api_format.trim().to_ascii_lowercase();
 
     if client_api_format.is_empty() {
-        return Ok(None);
+        return None;
     }
     if client_api_format == provider_api_format {
-        return Ok(Some(body_json.clone()));
+        return Some(body_json.clone());
     }
 
-    let details = extract_local_sync_error_details(payload.status_code, body_json);
-    Ok(build_core_error_body_for_client_format(
+    let details = extract_local_sync_error_details(status_code, body_json);
+    build_core_error_body_for_client_format(
         &client_api_format,
         &details.message,
         details.code.as_deref(),
         details.kind,
-    ))
+    )
+}
+
+/// Gemini's numeric `error.code` describes the HTTP status the client receives.
+/// A rebuilt error body derives the code from the error class, which can differ
+/// (for example a 502 is classified as a server error and would carry 500).
+pub(crate) fn align_gemini_error_code_with_status(
+    client_api_format: &str,
+    body: &mut serde_json::Value,
+    status_code: u16,
+) {
+    if crate::ai_serving::normalize_api_format_alias(client_api_format) != "gemini:generate_content"
+    {
+        return;
+    }
+    if let Some(error) = body
+        .get_mut("error")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        error.insert("code".to_string(), serde_json::Value::from(status_code));
+    }
 }
 
 pub(crate) fn resolve_local_core_error_response_body_json(
