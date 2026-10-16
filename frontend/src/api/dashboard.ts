@@ -211,6 +211,13 @@ export class RequestBodyProtocolError extends Error {
   }
 }
 
+// One download of a stored pair yields both capture fields of that direction.
+// Single bodies (encoding `json`/`0`) only ever carry the requested field.
+export interface RequestBodyPair {
+  encoding: string
+  bodies: Partial<Record<RequestBodyField, ArrayBuffer>>
+}
+
 export interface RequestDetail {
   id: string // UUID
   request_id: string
@@ -499,7 +506,11 @@ export const dashboardApi = {
     return options.signal ? fetchDetail() : cachedRequest(cacheKey, fetchDetail, cacheTtlMs)
   },
 
-  async getRequestBody(requestId: string, field: RequestBodyField, signal?: AbortSignal, onProgress?: (loaded: number) => void) {
+  // A container holds both halves of the pair, so one request can hand back the
+  // sibling the caller did not ask for. Returning both lets the caller fill a
+  // pair cache from a single download instead of re-fetching the same container
+  // when the user toggles to the other half.
+  async getRequestBodyPair(requestId: string, field: RequestBodyField, signal?: AbortSignal, onProgress?: (loaded: number) => void): Promise<RequestBodyPair> {
     const response = await apiClient.get<ArrayBuffer>(`/api/admin/usage/${requestId}`, {
       params: { include_bodies: true, body_field: field, body_format: 'raw' },
       responseType: 'arraybuffer',
@@ -512,10 +523,10 @@ export const dashboardApi = {
       throw new RequestBodyProtocolError()
     }
     // A single body is already the body itself, whether the gateway called it
-    // `json` or `0`. A container holds both halves of the pair, so pick this
-    // field out of it and hand back just that body.
+    // `json` or `0`. There is no sibling to split out.
     if (SINGLE_BODY_ENCODINGS.has(encoding)) {
-      return { bytes: response.data }
+      const bodies: Partial<Record<RequestBodyField, ArrayBuffer>> = { [field]: response.data }
+      return { encoding, bodies }
     }
     let container: Record<string, unknown>
     try {
@@ -523,11 +534,23 @@ export const dashboardApi = {
     } catch {
       throw new RequestBodyProtocolError()
     }
-    const body = container[PAIRED_BODY_KEYS[field]]
-    if (body === undefined || body === null) {
+    const bodies: Partial<Record<RequestBodyField, ArrayBuffer>> = {}
+    for (const [pairField, key] of Object.entries(PAIRED_BODY_KEYS) as Array<[RequestBodyField, string]>) {
+      const body = container[key]
+      if (body === undefined || body === null) continue
+      bodies[pairField] = new TextEncoder().encode(JSON.stringify(body)).buffer as ArrayBuffer
+    }
+    if (!bodies[field]) {
       throw new RequestBodyProtocolError()
     }
-    return { bytes: new TextEncoder().encode(JSON.stringify(body)).buffer as ArrayBuffer }
+    return { encoding, bodies }
+  },
+
+  async getRequestBody(requestId: string, field: RequestBodyField, signal?: AbortSignal, onProgress?: (loaded: number) => void) {
+    const { bodies } = await dashboardApi.getRequestBodyPair(requestId, field, signal, onProgress)
+    const bytes = bodies[field]
+    if (!bytes) throw new RequestBodyProtocolError()
+    return { bytes }
   },
 
   async prefetchRequestDetail(requestId: string): Promise<void> {
