@@ -132,8 +132,11 @@ const mappingModel = computed(() => {
 
 const responseModel = computed(() => {
   const response = normalizeText(props.record.response_model)
-  if (response && response !== normalizeText(props.record.model)) return response
-  return null
+  if (!response) return null
+  if (response === normalizeText(props.record.model)) return null
+  // 响应模型与映射模型一致时无需重复展示。
+  if (mappingModel.value && response === mappingModel.value) return null
+  return response
 })
 
 const hasModelFacts = computed(() => mappingModel.value !== null || responseModel.value !== null)

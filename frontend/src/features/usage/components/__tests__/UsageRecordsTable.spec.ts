@@ -673,6 +673,17 @@ describe('UsageRecordsTable', () => {
     expect(root.querySelector('[data-usage-model-response]')).toBeNull()
   })
 
+  it('hides a response model when it matches the mapping model', () => {
+    const root = mountUsageRecordsTable([buildRecord({
+      model: 'gpt-5',
+      target_model: 'gpt-5.1',
+      response_model: 'gpt-5.1',
+    })])
+
+    expect(root.querySelector('[data-usage-model-mapping]')?.textContent).toContain('映射模型')
+    expect(root.querySelector('[data-usage-model-response]')).toBeNull()
+  })
+
   it('stacks three model badges even without a model mapping', () => {
     const root = mountUsageRecordsTable([buildRecord({
       model: 'gpt-5',
