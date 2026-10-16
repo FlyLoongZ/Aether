@@ -59,7 +59,7 @@ reset, protocol error) stops failover or moves to the next candidate.
 When such a failure does reach the client, the status is derived from the
 failure class: timeouts return `504`, everything else `502`.
 
-## Exhaustion behavior
+## Upstream error passthrough
 
 `preserve_last_upstream_error_on_exhaustion` (default `true`) controls what the
 client receives once every candidate has failed.

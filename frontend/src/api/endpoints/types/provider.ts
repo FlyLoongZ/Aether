@@ -916,6 +916,8 @@ export interface FailoverRulesConfig {
   continue_status_codes?: number[]
   success_failover_patterns?: FailoverRuleItem[]
   error_stop_patterns?: FailoverRuleItem[]
+  /** 候选全部失败时是否把最后一个上游错误返回给客户端（默认 true） */
+  preserve_last_upstream_error_on_exhaustion?: boolean
 }
 
 export interface ProviderWithEndpointsSummary {
