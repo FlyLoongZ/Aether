@@ -8,6 +8,33 @@
     @update:model-value="handleClose"
   >
     <div class="space-y-5 max-h-[60vh] overflow-y-auto px-0.5 py-0.5 -mx-0.5">
+      <!-- 上游错误透传 -->
+      <div class="space-y-3">
+        <div>
+          <h3 class="text-sm font-medium">
+            上游错误透传
+          </h3>
+          <p class="text-xs text-muted-foreground mt-0.5">
+            候选全部失败后，决定客户端收到的是上游错误还是网关合成的错误
+          </p>
+        </div>
+
+        <div class="flex items-center justify-between gap-4 rounded-lg border bg-muted/50 p-3">
+          <div class="min-w-0 space-y-0.5">
+            <span class="text-sm font-medium">候选耗尽后返回上游错误</span>
+            <p class="text-xs leading-relaxed text-muted-foreground">
+              默认开启：客户端收到最后一个上游错误的状态码与错误体，关闭后改为返回网关合成的错误（503）。
+            </p>
+          </div>
+          <Switch
+            aria-label="上游错误透传"
+            class="shrink-0"
+            :model-value="preserveLastUpstreamErrorOnExhaustion"
+            @update:model-value="(value: boolean) => preserveLastUpstreamErrorOnExhaustion = value"
+          />
+        </div>
+      </div>
+
       <!-- 传输错误规则 -->
       <div class="space-y-3">
         <div>
@@ -292,6 +319,7 @@ const emit = defineEmits<{
 const { success, error: showError } = useToast()
 const saving = ref(false)
 const continueOnTransportErrors = ref(true)
+const preserveLastUpstreamErrorOnExhaustion = ref(true)
 
 const successPatterns = ref<FailoverRuleItem[]>([])
 const errorPatterns = ref<FailoverRuleItem[]>([])
@@ -316,6 +344,7 @@ const MANAGED_FAILOVER_RULE_KEYS = [
   'stop_on_transport_errors',
   'success_failover_patterns',
   'error_stop_patterns',
+  'preserve_last_upstream_error_on_exhaustion',
   ...TOP_LEVEL_STOP_STATUS_CODE_KEYS,
 ] as const
 
@@ -367,6 +396,11 @@ function buildNextFailoverRules(
   if (!continueOnTransportErrors.value) {
     nextRules.stop_on_transport_errors = true
   }
+  // Only the non-default value is persisted so the key never shows up in
+  // provider configs that rely on the default behavior.
+  if (!preserveLastUpstreamErrorOnExhaustion.value) {
+    nextRules.preserve_last_upstream_error_on_exhaustion = false
+  }
 
   return Object.values(nextRules).some(hasPersistableFailoverValue)
     ? nextRules as FailoverRulesConfig
@@ -377,6 +411,8 @@ watch(() => [props.open, props.provider], () => {
   if (props.open && props.provider) {
     const rules = props.provider.failover_rules
     continueOnTransportErrors.value = rules?.stop_on_transport_errors !== true
+    preserveLastUpstreamErrorOnExhaustion.value =
+      rules?.preserve_last_upstream_error_on_exhaustion !== false
     successPatterns.value = (rules?.success_failover_patterns || []).map(r => ({
       ...r,
       pattern: r.pattern || '',
