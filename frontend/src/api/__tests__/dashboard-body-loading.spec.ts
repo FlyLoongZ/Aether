@@ -64,6 +64,25 @@ describe('dashboard body loading', () => {
     expect(JSON.parse(new TextDecoder().decode(bytes))).toEqual(container[key])
   })
 
+  it('returns both halves of a pair container from one download', async () => {
+    const container = { response: { id: 'chatcmpl-1' }, client_response: { id: 'chatcmpl-2' } }
+    getMock.mockResolvedValue({ data: new TextEncoder().encode(JSON.stringify(container)).buffer as ArrayBuffer, headers: { 'x-aether-body-encoding': '1', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'response_body' } })
+    const pair = await dashboardApi.getRequestBodyPair('usage-1', 'response_body')
+    expect(pair.encoding).toBe('1')
+    expect(Object.keys(pair.bodies).sort()).toEqual(['client_response_body', 'response_body'])
+    expect(JSON.parse(new TextDecoder().decode(pair.bodies.response_body!))).toEqual(container.response)
+    expect(JSON.parse(new TextDecoder().decode(pair.bodies.client_response_body!))).toEqual(container.client_response)
+  })
+
+  it('keeps a single body to the requested field only', async () => {
+    const bytes = new ArrayBuffer(20)
+    getMock.mockResolvedValue({ data: bytes, headers: { 'x-aether-body-encoding': 'json', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'request_body' } })
+    const pair = await dashboardApi.getRequestBodyPair('usage-1', 'request_body')
+    expect(pair.encoding).toBe('json')
+    expect(Object.keys(pair.bodies)).toEqual(['request_body'])
+    expect(pair.bodies.request_body).toBe(bytes)
+  })
+
   it('treats the encoding column value 0 as a single body', async () => {
     const bytes = new ArrayBuffer(20)
     getMock.mockResolvedValue({ data: bytes, headers: { 'x-aether-body-encoding': '0', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'request_body' } })
