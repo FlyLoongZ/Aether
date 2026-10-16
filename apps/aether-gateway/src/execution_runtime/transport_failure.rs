@@ -7,7 +7,7 @@ use std::sync::{
 
 use aether_usage_runtime::{build_usage_event_data_seed, UsageEvent, UsageEventType};
 use axum::body::Body;
-use axum::http::Response;
+use axum::http::{Response, StatusCode};
 use serde_json::{json, Value};
 
 use crate::ai_serving::{build_core_error_body_for_client_format, LocalCoreSyncErrorKind};
@@ -16,8 +16,54 @@ use crate::control::GatewayControlDecision;
 use crate::request_diagnostics::attach_current_request_diagnostics_and_candidate_timing_to_report_context;
 use crate::{AppState, GatewayError};
 
+use super::submission::align_gemini_error_code_with_status;
+
 const TRANSPORT_ERROR_CLIENT_MESSAGE: &str =
     "Upstream transport failed before an HTTP response was received";
+
+/// Client-facing projection of a transport failure.
+///
+/// Timeout-class failures are gateway timeouts (the gateway gave up waiting);
+/// everything else means the upstream response could not be used at all. The
+/// message stays fine-grained per failure class so a client can tell a TLS
+/// failure from a stream read timeout.
+struct TransportFailureProjection {
+    status_code: u16,
+    message: &'static str,
+}
+
+fn project_transport_failure(error_type: &str) -> TransportFailureProjection {
+    let lowered = error_type.trim().to_ascii_lowercase();
+    let is_timeout = lowered.contains("timeout") || lowered.contains("timed_out");
+    let status_code = if is_timeout {
+        StatusCode::GATEWAY_TIMEOUT.as_u16()
+    } else {
+        StatusCode::BAD_GATEWAY.as_u16()
+    };
+    let message = match lowered.as_str() {
+        "connect_timeout" => "Upstream connection timed out",
+        "first_byte_timeout" => "Upstream response timed out before the first byte",
+        "read_timeout" => "Upstream response stream timed out",
+        "tls_error" => "Upstream TLS connection failed",
+        "proxy_error" => "Upstream proxy request failed",
+        "execution_runtime_stream_read_error" => "Upstream response stream failed",
+        "execution_runtime_stream_frame_decode_error"
+        | "execution_runtime_stream_chunk_decode_error" => {
+            "Execution runtime stream protocol failed"
+        }
+        "execution_runtime_sync_json_stream_bridge_error"
+        | "execution_runtime_stream_rewrite_error"
+        | "execution_runtime_stream_rewrite_flush_error" => {
+            "Execution runtime stream processing failed"
+        }
+        _ if is_timeout => "Upstream response timed out",
+        _ => TRANSPORT_ERROR_CLIENT_MESSAGE,
+    };
+    TransportFailureProjection {
+        status_code,
+        message,
+    }
+}
 
 #[derive(Debug, Default)]
 pub(crate) struct StreamCandidateWatchdogProgress {
@@ -77,15 +123,16 @@ pub(crate) async fn build_transport_error_stop_response(
     report_context: Option<&Value>,
     trace_id: &str,
     decision: &GatewayControlDecision,
-    client_status_code: u16,
     error_type: &str,
     error_message: &str,
     elapsed_ms: u64,
 ) -> Result<Response<Body>, GatewayError> {
     mark_stream_candidate_watchdog_terminal_started();
-    let client_body = build_core_error_body_for_client_format(
+    let projection = project_transport_failure(error_type);
+    let client_status_code = projection.status_code;
+    let mut client_body = build_core_error_body_for_client_format(
         &plan.client_api_format,
-        TRANSPORT_ERROR_CLIENT_MESSAGE,
+        projection.message,
         Some("upstream_transport_error"),
         LocalCoreSyncErrorKind::ServerError,
     )
@@ -93,11 +140,18 @@ pub(crate) async fn build_transport_error_stop_response(
         json!({
             "error": {
                 "type": "server_error",
-                "message": TRANSPORT_ERROR_CLIENT_MESSAGE,
+                "message": projection.message,
                 "code": "upstream_transport_error",
             }
         })
     });
+    // The Gemini error shape carries a numeric `code`; keep it aligned with the
+    // status the client actually receives.
+    align_gemini_error_code_with_status(
+        &plan.client_api_format,
+        &mut client_body,
+        client_status_code,
+    );
     let body_bytes =
         serde_json::to_vec(&client_body).map_err(|err| GatewayError::Internal(err.to_string()))?;
     let headers = BTreeMap::from([
@@ -158,4 +212,59 @@ pub(crate) async fn build_transport_error_stop_response(
         Some(plan.request_id.as_str()),
         plan.candidate_id.as_deref(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::project_transport_failure;
+
+    #[test]
+    fn timeout_class_failures_are_gateway_timeouts() {
+        for error_type in [
+            "first_byte_timeout",
+            "read_timeout",
+            "connect_timeout",
+            "local_stream_candidate_watchdog_timeout",
+            "direct_passthrough_first_byte_timed_out",
+        ] {
+            let projection = project_transport_failure(error_type);
+            assert_eq!(projection.status_code, 504, "error_type: {error_type}");
+        }
+    }
+
+    #[test]
+    fn non_timeout_transport_failures_are_bad_gateways() {
+        for error_type in [
+            "execution_runtime_stream_read_error",
+            "tls_error",
+            "proxy_error",
+            "grok_execution_unavailable",
+            "execution_runtime_unavailable",
+        ] {
+            let projection = project_transport_failure(error_type);
+            assert_eq!(projection.status_code, 502, "error_type: {error_type}");
+        }
+    }
+
+    #[test]
+    fn messages_stay_fine_grained_per_failure_class() {
+        assert_eq!(
+            project_transport_failure("tls_error").message,
+            "Upstream TLS connection failed"
+        );
+        assert_eq!(
+            project_transport_failure("read_timeout").message,
+            "Upstream response stream timed out"
+        );
+        assert_eq!(
+            project_transport_failure("first_byte_timeout").message,
+            "Upstream response timed out before the first byte"
+        );
+        // Known-bad but unclassified failures fall back to the generic text
+        // rather than leaking the internal transport message.
+        assert_eq!(
+            project_transport_failure("grok_execution_unavailable").message,
+            "Upstream transport failed before an HTTP response was received"
+        );
+    }
 }
