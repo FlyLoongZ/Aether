@@ -9026,10 +9026,6 @@ ORDER BY "usage".user_id ASC
                         .bind(None::<String>)
                         .bind(None::<String>)
                         .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
                         .bind(&request_metadata_json)
                         .bind(usage.finalized_at_unix_secs.map(|value| value as f64))
                         .bind(usage.created_at_unix_ms.map(|value| value as f64))
@@ -9039,16 +9035,6 @@ ORDER BY "usage".user_id ASC
                                 usage.updated_at_unix_secs
                             ))
                         })?)
-                        .bind(request_body_storage.has_detached_blob() || clear_request_body)
-                        .bind(
-                            provider_request_body_storage.has_detached_blob()
-                                || clear_provider_request_body,
-                        )
-                        .bind(response_body_storage.has_detached_blob() || clear_response_body)
-                        .bind(
-                            client_response_body_storage.has_detached_blob()
-                                || clear_client_response_body,
-                        )
                         .bind(capture_update_allowed)
                         .fetch_one(&mut **tx)
                         .await
@@ -14117,7 +14103,6 @@ fn attach_usage_settlement_pricing_snapshot_metadata(
     );
     (!metadata.is_empty()).then_some(Value::Object(metadata))
 }
-
 
 #[cfg(test)]
 mod tests;

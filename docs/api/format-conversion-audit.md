@@ -236,3 +236,27 @@ Stream fixture coverage:
 Matrix-level interception remains the authoritative runtime path for cross-format
 unknown events; direct client emitters are covered only as provider/client
 building blocks.
+
+## Upstream Error Passthrough
+
+When every local candidate fails, the gateway keeps the last upstream error and
+returns it to the client instead of synthesizing a gateway error. The body
+follows the same boundary as every other response: same-format plans are byte
+passthrough, cross-format plans are rebuilt in the client protocol.
+
+| Area | Current behavior | Status |
+| --- | --- | --- |
+| Eligible failures | An eligible failure is an upstream HTTP response with `status >= 400`. A transport failure has no upstream response and is never preserved: it is projected to `502`/`504`, and exhaustion synthesizes an error | native |
+| Same-format error body | Provider bytes are returned unchanged, so unknown fields and key order survive. A private stream error has no client-format bytes to pass through, so it is rebuilt in the client protocol | native |
+| Cross-format error body | `message`, `code`, and the derived error class are extracted and rebuilt through `build_core_error_body_for_client_format` | mapped |
+| Error message text | Upstream `4xx`/`5xx` messages are passed through as-is; only gateway-internal `ExecutionError` messages are replaced with stable text | native |
+| Response headers | Only `content-type` and `content-encoding` survive, because they describe the bytes themselves. Everything else (`retry-after`, `x-ratelimit-*`, `x-request-id`, `server`, `cf-ray`, organization ids, ...) is dropped | native |
+| `content-encoding` | Kept when the body is forwarded byte-for-byte; dropped whenever the body is re-encoded | native |
+| Transport failures | No upstream response exists, so the gateway derives the status from the failure class: timeouts return `504`, everything else `502` | native |
+| Explicit stop rules | `stop_status_codes`, `error_stop_patterns`, `stop_cyber_policy_errors`, and `UseDefault` keep their existing passthrough behavior and are not gated by the exhaustion switch | native |
+| `2xx` embedded errors | An explicit error event inside a `2xx` stream is returned with the derived error status and a client-format error body; a `2xx` body that only matched `success_failover_patterns` is never surfaced as an error | native |
+| Streaming after commit | The status code is already sent, so the upstream error event itself is forwarded as the terminal SSE event; there is no status rewrite | native |
+
+The behavior is controlled per provider/endpoint by
+`preserve_last_upstream_error_on_exhaustion` (default `true`); see
+`docs/operations/failover-rules.md`.
