@@ -26,6 +26,9 @@ impl LocalFailoverDecision {
 pub(crate) struct LocalFailoverAnalysis {
     pub(crate) classification: LocalFailoverClassification,
     pub(crate) decision: LocalFailoverDecision,
+    /// Whether a retryable upstream error should still be kept as the client
+    /// visible response once every candidate is exhausted.
+    pub(crate) preserve_on_exhaustion: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +42,7 @@ impl LocalFailoverAnalysis {
         Self {
             classification: LocalFailoverClassification::UseDefault,
             decision: LocalFailoverDecision::UseDefault,
+            preserve_on_exhaustion: true,
         }
     }
 }
@@ -51,6 +55,7 @@ pub(crate) fn analyze_local_failover(
     LocalFailoverAnalysis {
         classification,
         decision: decision_from_classification(classification),
+        preserve_on_exhaustion: policy.preserve_last_upstream_error_on_exhaustion,
     }
 }
 
@@ -86,8 +91,12 @@ pub(crate) fn apply_provider_failure_disposition(
         return analysis;
     }
 
-    let disposition =
-        classify_failure_disposition(provider_api_format, analysis.classification, status_code);
+    let disposition = classify_failure_disposition(
+        provider_api_format,
+        analysis.classification,
+        status_code,
+        analysis.preserve_on_exhaustion,
+    );
     let decision = match disposition.retry_action {
         FailureRetryAction::Stop => LocalFailoverDecision::StopLocalFailover,
         FailureRetryAction::NextCandidate
@@ -98,6 +107,7 @@ pub(crate) fn apply_provider_failure_disposition(
     LocalFailoverAnalysis {
         classification: analysis.classification,
         decision,
+        preserve_on_exhaustion: analysis.preserve_on_exhaustion,
     }
 }
 

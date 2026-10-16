@@ -25,6 +25,12 @@ pub(crate) struct LocalFailoverPolicy {
     pub(crate) error_stop_patterns: Vec<LocalFailoverRegexRule>,
     pub(crate) stop_cyber_policy_errors: bool,
     pub(crate) retry_client_errors_by_default: bool,
+    /// When every local candidate fails, keep the last upstream error and
+    /// return it to the client instead of a synthesized gateway error.
+    ///
+    /// Only gates the newly added exhaustion passthrough; explicit stop rules
+    /// keep their existing passthrough behavior either way.
+    pub(crate) preserve_last_upstream_error_on_exhaustion: bool,
 }
 
 impl Default for LocalFailoverPolicy {
@@ -41,6 +47,7 @@ impl Default for LocalFailoverPolicy {
             error_stop_patterns: Vec::new(),
             stop_cyber_policy_errors: true,
             retry_client_errors_by_default: true,
+            preserve_last_upstream_error_on_exhaustion: true,
         }
     }
 }
@@ -179,6 +186,10 @@ pub(crate) fn local_failover_policy_from_transport(
         error_stop_patterns: rules
             .map(|value| parse_regex_rules(value, "error_stop_patterns"))
             .unwrap_or_default(),
+        preserve_last_upstream_error_on_exhaustion: rules
+            .and_then(|value| value.get("preserve_last_upstream_error_on_exhaustion"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
     }
 }
 
@@ -224,6 +235,10 @@ pub(crate) fn local_failover_policy_from_report_context(
             .unwrap_or(true),
         retry_client_errors_by_default: object
             .get("retry_client_errors_by_default")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        preserve_last_upstream_error_on_exhaustion: object
+            .get("preserve_last_upstream_error_on_exhaustion")
             .and_then(Value::as_bool)
             .unwrap_or(true),
     })
@@ -289,6 +304,7 @@ fn local_failover_policy_to_value(policy: &LocalFailoverPolicy) -> Value {
         "error_stop_patterns": policy.error_stop_patterns.iter().map(local_failover_regex_rule_to_value).collect::<Vec<_>>(),
         "stop_cyber_policy_errors": policy.stop_cyber_policy_errors,
         "retry_client_errors_by_default": policy.retry_client_errors_by_default,
+        "preserve_last_upstream_error_on_exhaustion": policy.preserve_last_upstream_error_on_exhaustion,
     })
 }
 
@@ -554,6 +570,7 @@ mod tests {
                 }],
                 stop_cyber_policy_errors: true,
                 retry_client_errors_by_default: true,
+                preserve_last_upstream_error_on_exhaustion: true,
             })
         );
     }

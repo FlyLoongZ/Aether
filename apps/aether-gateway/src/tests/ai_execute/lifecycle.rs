@@ -1,7 +1,7 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json, start_server,
     Arc, Body, Bytes, HeaderValue, Infallible, Json, Mutex, Request, Response, Router, StatusCode,
-    LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER, TRACE_ID_HEADER,
+    TRACE_ID_HEADER,
 };
 
 use aether_data::repository::auth::{
@@ -524,7 +524,7 @@ async fn gateway_returns_error_body_when_prefetch_detects_embedded_stream_error_
         .await
         .expect("request should succeed");
 
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(
         response
             .headers()
@@ -532,15 +532,8 @@ async fn gateway_returns_error_body_when_prefetch_detects_embedded_stream_error_
             .and_then(|value| value.to_str().ok()),
         Some("application/json")
     );
-    assert_eq!(
-        response
-            .headers()
-            .get(LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("execution_runtime_candidates_exhausted")
-    );
     let body_json: serde_json::Value = response.json().await.expect("response body should parse");
-    assert_eq!(body_json["error"]["type"], "http_error");
+    assert_eq!(body_json["error"]["type"], "rate_limit_error");
     let stored_candidates = request_candidate_repository
         .list_by_request_id("trace-openai-chat-stream-prefetch-error-123")
         .await

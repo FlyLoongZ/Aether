@@ -2901,6 +2901,7 @@ async fn execute_execution_runtime_sync_impl(
             &plan.provider_api_format,
             local_failover_analysis.classification,
             result.status_code,
+            local_failover_analysis.preserve_on_exhaustion,
         );
         if let Some(retry_scope) = retry_scope_out.as_deref_mut() {
             *retry_scope =
