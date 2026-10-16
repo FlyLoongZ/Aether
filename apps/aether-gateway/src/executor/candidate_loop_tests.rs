@@ -211,6 +211,8 @@ struct TransferTestPort<'a> {
     retry_scope: AiAttemptRetryScope,
     executed: StdMutex<Vec<&'static str>>,
     unused: StdMutex<Vec<&'static str>>,
+    /// Status codes handed back as preserved fallbacks, consumed per attempt.
+    fallback_statuses: StdMutex<std::collections::VecDeque<u16>>,
 }
 
 impl<'a> TransferTestPort<'a> {
@@ -225,6 +227,7 @@ impl<'a> TransferTestPort<'a> {
             retry_scope: AiAttemptRetryScope::Candidate,
             executed: StdMutex::new(Vec::new()),
             unused: StdMutex::new(Vec::new()),
+            fallback_statuses: StdMutex::new(std::collections::VecDeque::new()),
         }
     }
 
@@ -235,7 +238,16 @@ impl<'a> TransferTestPort<'a> {
             retry_scope,
             executed: StdMutex::new(Vec::new()),
             unused: StdMutex::new(Vec::new()),
+            fallback_statuses: StdMutex::new(std::collections::VecDeque::new()),
         }
+    }
+
+    /// Every attempt fails and preserves the next status code, so the loop
+    /// has to decide which one the client finally receives.
+    fn with_retry_fallbacks(state: &'a AppState, statuses: impl IntoIterator<Item = u16>) -> Self {
+        let mut port = Self::new(state);
+        port.fallback_statuses = StdMutex::new(statuses.into_iter().collect());
+        port
     }
 }
 
@@ -286,6 +298,16 @@ impl AiAttemptLoopPort<TransferTestAttempt> for TransferTestPort<'_> {
         attempt: &TransferTestAttempt,
     ) -> Result<AiAttemptExecutionOutcome<Self::Response>, Self::Error> {
         self.executed.lock().unwrap().push(attempt.label);
+        if let Some(status) = self.fallback_statuses.lock().unwrap().pop_front() {
+            let response = Response::builder()
+                .status(status)
+                .body(Body::from(format!("upstream error {status}")))
+                .expect("fallback response should build");
+            return Ok(AiAttemptExecutionOutcome::Retry {
+                scope: self.retry_scope,
+                fallback_response: Some(response),
+            });
+        }
         Ok(if attempt.plan.provider_id == "provider-b" {
             AiAttemptExecutionOutcome::Responded(Response::new(Body::from("ok")))
         } else {
@@ -1563,4 +1585,92 @@ async fn stream_candidate_target_admission_timeout_continues_without_duplicate_r
         ))
     ));
     assert!(writer.records.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn exhaustion_returns_the_last_preserved_upstream_error() {
+    let state = AppState::new().unwrap();
+    let statuses = vec![500u16, 503, 429];
+    let attempts = statuses
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            let mut plan = test_plan(None);
+            plan.provider_id = format!("provider-{index}");
+            plan.key_id = format!("key-{index}");
+            TransferTestAttempt {
+                label: "candidate",
+                plan,
+                report_context: json!({
+                    "local_failover_policy": {
+                        "max_transfer_count": 0,
+                        "max_transfer_timeout_seconds": 0
+                    }
+                }),
+            }
+        })
+        .collect::<Vec<_>>();
+    let port = TransferTestPort::with_retry_fallbacks(&state, statuses);
+    let mut source = TransferTestAttemptSource {
+        attempts: attempts.into(),
+        skipped_providers: Vec::new(),
+    };
+
+    let outcome = run_dynamic_attempt_loop(
+        &port,
+        &mut source,
+        "exhaustion-passthrough",
+        "test",
+        Duration::from_secs(1),
+    )
+    .await
+    .unwrap();
+
+    let LocalExecutionRequestOutcome::Responded(response) = outcome else {
+        panic!("the last preserved upstream error must reach the client");
+    };
+    assert_eq!(response.status().as_u16(), 429);
+    assert!(crate::executor::is_deferred_upstream_response(&response));
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body should read");
+    assert_eq!(body.as_ref(), b"upstream error 429");
+}
+
+#[tokio::test]
+async fn exhaustion_without_preserved_errors_reports_exhausted() {
+    let state = AppState::new().unwrap();
+    let mut plan = test_plan(None);
+    plan.provider_id = "provider-a".to_string();
+    plan.key_id = "key-a".to_string();
+    let mut source = TransferTestAttemptSource {
+        attempts: std::iter::once(TransferTestAttempt {
+            label: "candidate",
+            plan,
+            report_context: json!({
+                "local_failover_policy": {
+                    "max_transfer_count": 0,
+                    "max_transfer_timeout_seconds": 0
+                }
+            }),
+        })
+        .collect(),
+        skipped_providers: Vec::new(),
+    };
+    let port = TransferTestPort::new(&state);
+
+    let outcome = run_dynamic_attempt_loop(
+        &port,
+        &mut source,
+        "exhaustion-without-fallback",
+        "test",
+        Duration::from_secs(1),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        matches!(outcome, LocalExecutionRequestOutcome::Exhausted(_)),
+        "without a preserved response the loop must report exhaustion"
+    );
 }

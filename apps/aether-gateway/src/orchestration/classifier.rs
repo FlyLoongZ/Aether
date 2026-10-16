@@ -141,6 +141,7 @@ impl FailureDisposition {
 pub(crate) const fn failure_disposition_from_local_classification(
     classification: LocalFailoverClassification,
     status_code: u16,
+    preserve_on_exhaustion: bool,
 ) -> FailureDisposition {
     match classification {
         LocalFailoverClassification::StopStatusCode
@@ -164,12 +165,17 @@ pub(crate) const fn failure_disposition_from_local_classification(
             FailureTokenAction::None,
             false,
         ),
+        // Retryable upstream errors keep their response as the exhaustion
+        // fallback: when every candidate fails the client receives the last
+        // upstream error instead of a synthesized gateway error. Non-error
+        // statuses (for example a 200 in `continue_status_codes`) are never
+        // preserved, and the policy switch can restore the old behavior.
         LocalFailoverClassification::RetryStatusCode
         | LocalFailoverClassification::RetryUpstreamFailure => FailureDisposition::new(
             FailureRetryAction::NextCandidate,
             FailureScope::None,
             FailureTokenAction::None,
-            false,
+            preserve_on_exhaustion && status_code >= 400,
         ),
     }
 }
@@ -177,6 +183,7 @@ pub(crate) const fn failure_disposition_from_local_classification(
 pub(crate) const fn classify_anthropic_failure_disposition(
     classification: LocalFailoverClassification,
     status_code: u16,
+    preserve_on_exhaustion: bool,
 ) -> FailureDisposition {
     if matches!(
         classification,
@@ -185,7 +192,11 @@ pub(crate) const fn classify_anthropic_failure_disposition(
             | LocalFailoverClassification::StopExecutionError
             | LocalFailoverClassification::StopCyberPolicy
     ) {
-        let generic = failure_disposition_from_local_classification(classification, status_code);
+        let generic = failure_disposition_from_local_classification(
+            classification,
+            status_code,
+            preserve_on_exhaustion,
+        );
         return match status_code {
             401 => FailureDisposition::new(
                 generic.retry_action,
@@ -227,6 +238,11 @@ pub(crate) const fn classify_anthropic_failure_disposition(
         };
     }
 
+    // Retry-class failures are only preserved when the exhaustion switch is
+    // on. Explicit stop classifications above are handled separately and keep
+    // their passthrough behavior.
+    let preserve_retry_error = preserve_on_exhaustion && status_code >= 400;
+
     match status_code {
         400 => FailureDisposition::new(
             FailureRetryAction::Stop,
@@ -238,19 +254,19 @@ pub(crate) const fn classify_anthropic_failure_disposition(
             FailureRetryAction::NextCredential,
             FailureScope::Credential,
             FailureTokenAction::ForceRefresh,
-            true,
+            preserve_retry_error,
         ),
         403 => FailureDisposition::new(
             FailureRetryAction::NextCredential,
             FailureScope::Credential,
             FailureTokenAction::None,
-            true,
+            preserve_retry_error,
         ),
         404 => FailureDisposition::new(
             FailureRetryAction::NextEndpoint,
             FailureScope::Endpoint,
             FailureTokenAction::None,
-            true,
+            preserve_retry_error,
         ),
         413 => FailureDisposition::new(
             FailureRetryAction::Stop,
@@ -262,21 +278,25 @@ pub(crate) const fn classify_anthropic_failure_disposition(
             FailureRetryAction::NextCredential,
             FailureScope::CredentialModel,
             FailureTokenAction::None,
-            true,
+            preserve_retry_error,
         ),
         529 => FailureDisposition::new(
             FailureRetryAction::NextEndpoint,
             FailureScope::Provider,
             FailureTokenAction::None,
-            true,
+            preserve_retry_error,
         ),
         500..=599 => FailureDisposition::new(
             FailureRetryAction::NextEndpoint,
             FailureScope::Endpoint,
             FailureTokenAction::None,
-            true,
+            preserve_retry_error,
         ),
-        _ => failure_disposition_from_local_classification(classification, status_code),
+        _ => failure_disposition_from_local_classification(
+            classification,
+            status_code,
+            preserve_on_exhaustion,
+        ),
     }
 }
 
@@ -284,14 +304,19 @@ pub(crate) fn classify_failure_disposition(
     provider_api_format: &str,
     classification: LocalFailoverClassification,
     status_code: u16,
+    preserve_on_exhaustion: bool,
 ) -> FailureDisposition {
     if provider_api_format
         .trim()
         .eq_ignore_ascii_case("claude:messages")
     {
-        classify_anthropic_failure_disposition(classification, status_code)
+        classify_anthropic_failure_disposition(classification, status_code, preserve_on_exhaustion)
     } else {
-        failure_disposition_from_local_classification(classification, status_code)
+        failure_disposition_from_local_classification(
+            classification,
+            status_code,
+            preserve_on_exhaustion,
+        )
     }
 }
 
@@ -921,22 +946,44 @@ mod tests {
 
     #[test]
     fn legacy_classification_preserves_candidate_by_candidate_retry() {
+        // Retryable upstream errors keep their response for the exhaustion
+        // fallback, so the last upstream error can reach the client.
         assert_eq!(
             failure_disposition_from_local_classification(
                 LocalFailoverClassification::RetryUpstreamFailure,
                 429,
+                true,
             ),
             FailureDisposition {
                 retry_action: FailureRetryAction::NextCandidate,
                 failure_scope: FailureScope::None,
                 token_action: FailureTokenAction::None,
-                preserve_upstream_error: false,
+                preserve_upstream_error: true,
             }
+        );
+        // The switch restores the previous behavior of dropping the response.
+        assert!(
+            !failure_disposition_from_local_classification(
+                LocalFailoverClassification::RetryUpstreamFailure,
+                429,
+                false,
+            )
+            .preserve_upstream_error
+        );
+        // A non-error status that only continues failover is never preserved.
+        assert!(
+            !failure_disposition_from_local_classification(
+                LocalFailoverClassification::RetryStatusCode,
+                200,
+                true,
+            )
+            .preserve_upstream_error
         );
         assert_eq!(
             failure_disposition_from_local_classification(
                 LocalFailoverClassification::StopErrorPattern,
                 400,
+                true,
             )
             .retry_action,
             FailureRetryAction::Stop
@@ -944,10 +991,27 @@ mod tests {
     }
 
     #[test]
+    fn explicit_stop_keeps_preserving_even_when_the_switch_is_off() {
+        for classification in [
+            LocalFailoverClassification::StopStatusCode,
+            LocalFailoverClassification::StopErrorPattern,
+            LocalFailoverClassification::StopExecutionError,
+            LocalFailoverClassification::StopCyberPolicy,
+        ] {
+            assert!(
+                failure_disposition_from_local_classification(classification, 500, false)
+                    .preserve_upstream_error,
+                "{classification:?} must stay unaffected by the exhaustion switch"
+            );
+        }
+    }
+
+    #[test]
     fn anthropic_bad_request_stops_and_preserves_upstream_error() {
         let disposition = classify_anthropic_failure_disposition(
             LocalFailoverClassification::RetryUpstreamFailure,
             400,
+            true,
         );
 
         assert_eq!(disposition.retry_action, FailureRetryAction::Stop);
@@ -961,6 +1025,7 @@ mod tests {
         let unauthorized = classify_anthropic_failure_disposition(
             LocalFailoverClassification::RetryUpstreamFailure,
             401,
+            true,
         );
         assert_eq!(
             unauthorized.retry_action,
@@ -972,6 +1037,7 @@ mod tests {
         let forbidden = classify_anthropic_failure_disposition(
             LocalFailoverClassification::RetryUpstreamFailure,
             403,
+            true,
         );
         assert_eq!(forbidden.retry_action, FailureRetryAction::NextCredential);
         assert_eq!(forbidden.failure_scope, FailureScope::Credential);
@@ -983,6 +1049,7 @@ mod tests {
         let disposition = classify_anthropic_failure_disposition(
             LocalFailoverClassification::RetryUpstreamFailure,
             429,
+            true,
         );
 
         assert_eq!(disposition.retry_action, FailureRetryAction::NextCredential);
@@ -997,6 +1064,7 @@ mod tests {
         let disposition = classify_anthropic_failure_disposition(
             LocalFailoverClassification::RetryUpstreamFailure,
             529,
+            true,
         );
 
         assert_eq!(disposition.retry_action, FailureRetryAction::NextEndpoint);
@@ -1012,6 +1080,7 @@ mod tests {
         let not_found = classify_anthropic_failure_disposition(
             LocalFailoverClassification::RetryUpstreamFailure,
             404,
+            true,
         );
         assert_eq!(not_found.retry_action, FailureRetryAction::NextEndpoint);
         assert_eq!(not_found.failure_scope, FailureScope::Endpoint);
@@ -1020,10 +1089,40 @@ mod tests {
         let oversized = classify_anthropic_failure_disposition(
             LocalFailoverClassification::RetryUpstreamFailure,
             413,
+            true,
         );
         assert_eq!(oversized.retry_action, FailureRetryAction::Stop);
         assert_eq!(oversized.failure_scope, FailureScope::None);
         assert!(oversized.preserve_upstream_error);
+    }
+
+    #[test]
+    fn anthropic_retry_statuses_respect_the_exhaustion_switch() {
+        for status_code in [401, 403, 404, 429, 529, 500, 503] {
+            let disposition = classify_anthropic_failure_disposition(
+                LocalFailoverClassification::RetryUpstreamFailure,
+                status_code,
+                false,
+            );
+            assert!(
+                !disposition.preserve_upstream_error,
+                "status {status_code} must not be preserved when the switch is off"
+            );
+        }
+
+        // 400/413 stop failover instead of exhausting it, so their passthrough
+        // behavior is independent of the exhaustion switch.
+        for status_code in [400, 413] {
+            let disposition = classify_anthropic_failure_disposition(
+                LocalFailoverClassification::RetryUpstreamFailure,
+                status_code,
+                false,
+            );
+            assert!(
+                disposition.preserve_upstream_error,
+                "status {status_code} must keep its stop-rule passthrough"
+            );
+        }
     }
 
     #[test]
@@ -1040,6 +1139,7 @@ mod tests {
         let auth = classify_anthropic_failure_disposition(
             LocalFailoverClassification::StopStatusCode,
             401,
+            true,
         );
         assert_eq!(auth.retry_action, FailureRetryAction::Stop);
         assert_eq!(auth.failure_scope, FailureScope::Credential);
@@ -1048,6 +1148,7 @@ mod tests {
         let overloaded = classify_anthropic_failure_disposition(
             LocalFailoverClassification::StopStatusCode,
             529,
+            true,
         );
         assert_eq!(overloaded.retry_action, FailureRetryAction::Stop);
         assert_eq!(overloaded.failure_scope, FailureScope::Provider);

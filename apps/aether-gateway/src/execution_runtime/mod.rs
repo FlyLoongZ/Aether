@@ -87,6 +87,7 @@ mod retry_scope_tests {
                 "claude:messages",
                 LocalFailoverClassification::RetryUpstreamFailure,
                 status_code,
+                true,
             ))
         };
 
@@ -102,13 +103,26 @@ mod retry_scope_tests {
             "openai:chat",
             LocalFailoverClassification::RetryUpstreamFailure,
             429,
+            true,
         );
 
         assert_eq!(
             ai_attempt_retry_scope_from_failure_disposition(disposition),
             AiAttemptRetryScope::Candidate
         );
-        assert!(!disposition.preserve_upstream_error);
+        assert!(disposition.preserve_upstream_error);
+
+        let without_exhaustion_passthrough = classify_failure_disposition(
+            "openai:chat",
+            LocalFailoverClassification::RetryUpstreamFailure,
+            429,
+            false,
+        );
+        assert_eq!(
+            ai_attempt_retry_scope_from_failure_disposition(without_exhaustion_passthrough),
+            AiAttemptRetryScope::Candidate
+        );
+        assert!(!without_exhaustion_passthrough.preserve_upstream_error);
     }
 }
 pub use server::{

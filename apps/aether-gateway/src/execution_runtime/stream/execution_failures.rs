@@ -619,6 +619,7 @@ pub(super) async fn handle_prefetch_provider_private_stream_error(
             &plan.provider_api_format,
             failure_analysis.classification,
             status_code,
+            failure_analysis.preserve_on_exhaustion,
         );
         if let Some(retry_scope) = retry_scope_out {
             *retry_scope = ai_attempt_retry_scope_from_failure_disposition(failure_disposition);
@@ -695,10 +696,15 @@ pub(super) async fn handle_prefetch_stream_failure(
     candidate_elapsed_ms: u64,
     failure: StreamFailureReport,
     retry_scope_out: Option<&mut AiAttemptRetryScope>,
+    retry_fallback_out: Option<&mut Option<Response<Body>>>,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let transport_error = failure.transport_error;
     let candidate_status_code = failure.upstream_status_code;
     let honor_http_failover = failure.honor_http_failover;
+    // Captured before `build_stream_failure_sync_payload` normalizes the header
+    // map, so a preserved fallback can still see the provider's own
+    // body-representation headers.
+    let upstream_headers = headers.clone();
     let mut payload = build_stream_failure_sync_payload(
         trace_id,
         report_kind.to_string(),
@@ -754,9 +760,33 @@ pub(super) async fn handle_prefetch_stream_failure(
             &plan.provider_api_format,
             failure_analysis.classification,
             payload.status_code,
+            failure_analysis.preserve_on_exhaustion,
         );
         if let Some(retry_scope) = retry_scope_out {
             *retry_scope = ai_attempt_retry_scope_from_failure_disposition(failure_disposition);
+        }
+        if failure_disposition.preserve_upstream_error {
+            if let Some(retry_fallback) = retry_fallback_out {
+                *retry_fallback = Some(
+                    build_exhaustion_fallback(
+                        state,
+                        ExhaustionFallbackInput {
+                            plan,
+                            report_context: payload.report_context.as_ref(),
+                            trace_id,
+                            decision,
+                            status_code: payload.status_code,
+                            provider_headers: &upstream_headers,
+                            provider_body: buffered_body,
+                            provider_body_json: payload.body_json.as_ref(),
+                            rebuild_client_body: false,
+                            request_id: Some(request_id),
+                            candidate_id,
+                        },
+                    )
+                    .await?,
+                );
+            }
         }
         warn!(
             event_name = "local_stream_candidate_retry_scheduled",

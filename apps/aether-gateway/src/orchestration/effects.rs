@@ -1851,8 +1851,10 @@ fn local_candidate_failure_should_invalidate_affinity_for_provider(
         return true;
     }
 
+    // Only `retry_action` and `failure_scope` are read here, so the exhaustion
+    // switch is irrelevant to this decision.
     let disposition =
-        classify_failure_disposition(provider_api_format, classification, status_code);
+        classify_failure_disposition(provider_api_format, classification, status_code, true);
     !(disposition.retry_action == crate::orchestration::FailureRetryAction::Stop
         && disposition.failure_scope == FailureScope::None)
 }
@@ -1870,7 +1872,7 @@ fn local_candidate_failure_should_apply_key_effects(
     }
 
     matches!(
-        classify_failure_disposition(provider_api_format, classification, status_code)
+        classify_failure_disposition(provider_api_format, classification, status_code, true)
             .failure_scope,
         FailureScope::Credential
     )

@@ -68,6 +68,7 @@ pub(crate) async fn analyze_local_candidate_failover_sync(
             return LocalFailoverAnalysis {
                 classification: LocalFailoverClassification::StopExecutionError,
                 decision: LocalFailoverDecision::StopLocalFailover,
+                preserve_on_exhaustion: true,
             };
         }
     }
@@ -1034,6 +1035,7 @@ mod tests {
                 error_stop_patterns: Vec::new(),
                 stop_cyber_policy_errors: true,
                 retry_client_errors_by_default: true,
+                preserve_last_upstream_error_on_exhaustion: true,
             }
         );
     }

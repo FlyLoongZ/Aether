@@ -1495,6 +1495,7 @@ async fn analyze_prefetched_stream_failure(
         plan.provider_api_format.as_str(),
         analysis.classification,
         failure.status_code,
+        analysis.preserve_on_exhaustion,
     );
     AnalyzedPrefetchedStreamFailure {
         status_code: failure.status_code,
@@ -6280,6 +6281,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                 &plan.provider_api_format,
                 failover_analysis.classification,
                 status_code,
+                failover_analysis.preserve_on_exhaustion,
             );
             if let Some(retry_scope) = retry_scope_out.as_deref_mut() {
                 *retry_scope = ai_attempt_retry_scope_from_failure_disposition(failure_disposition);
@@ -6712,13 +6714,14 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                 request_id,
                                 candidate_id,
                                 report_kind,
-                                headers,
+                                upstream_headers.clone(),
                                 prefetched_usage_telemetry.clone(),
                                 &provider_prefetched_body,
                                 candidate_started_unix_secs,
                                 stream_elapsed_ms_since(stream_started_at),
                                 failure,
                                 retry_scope_out.as_deref_mut(),
+                                retry_fallback_out.as_deref_mut(),
                             )
                             .await;
                         }
@@ -6765,12 +6768,13 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                         request_id,
                         candidate_id,
                         report_kind,
-                        headers,
+                        upstream_headers.clone(),
                         prefetched_usage_telemetry.clone(),
                         &provider_prefetched_body,
                         candidate_started_unix_secs,
                         stream_elapsed_ms_since(stream_started_at),
                         failure,
+                        None,
                         None,
                     )
                     .await;
@@ -6792,7 +6796,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                         request_id,
                         candidate_id,
                         report_kind,
-                        headers,
+                        upstream_headers.clone(),
                         prefetched_usage_telemetry.clone(),
                         &provider_prefetched_body,
                         status_code,
@@ -6847,12 +6851,13 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                     request_id,
                                     candidate_id,
                                     report_kind,
-                                    headers,
+                                    upstream_headers.clone(),
                                     prefetched_usage_telemetry.clone(),
                                     &prefetched_body,
                                     candidate_started_unix_secs,
                                     stream_elapsed_ms_since(stream_started_at),
                                     failure,
+                                    None,
                                     None,
                                 )
                                 .await;
@@ -6918,7 +6923,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                     request_id,
                                     candidate_id,
                                     report_kind,
-                                    headers,
+                                    upstream_headers.clone(),
                                     prefetched_usage_telemetry.clone(),
                                     &provider_prefetched_body,
                                     status_code,
@@ -6950,7 +6955,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                 request_id,
                                 candidate_id,
                                 report_kind,
-                                headers,
+                                upstream_headers.clone(),
                                 prefetched_usage_telemetry.clone(),
                                 &provider_prefetched_body,
                                 status_code,
@@ -6987,7 +6992,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                 request_id,
                                 candidate_id,
                                 report_kind,
-                                headers,
+                                upstream_headers.clone(),
                                 prefetched_usage_telemetry.clone(),
                                 &provider_prefetched_body,
                                 status_code,
@@ -7078,12 +7083,13 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                         request_id,
                                         candidate_id,
                                         report_kind,
-                                        headers,
+                                        upstream_headers.clone(),
                                         prefetched_usage_telemetry.clone(),
                                         &provider_prefetched_body,
                                         candidate_started_unix_secs,
                                         stream_elapsed_ms_since(stream_started_at),
                                         failure,
+                                        None,
                                         None,
                                     )
                                     .await;
@@ -7114,12 +7120,13 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                     request_id,
                                     candidate_id,
                                     report_kind,
-                                    headers,
+                                    upstream_headers.clone(),
                                     prefetched_usage_telemetry.clone(),
                                     &provider_prefetched_body,
                                     candidate_started_unix_secs,
                                     stream_elapsed_ms_since(stream_started_at),
                                     failure,
+                                    None,
                                     None,
                                 )
                                 .await;
@@ -7164,12 +7171,13 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                                     request_id,
                                     candidate_id,
                                     report_kind,
-                                    headers,
+                                    upstream_headers.clone(),
                                     prefetched_usage_telemetry.clone(),
                                     &provider_prefetched_body,
                                     candidate_started_unix_secs,
                                     stream_elapsed_ms_since(stream_started_at),
                                     failure,
+                                    None,
                                     None,
                                 )
                                 .await;
@@ -7219,7 +7227,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                             request_id,
                             candidate_id,
                             report_kind,
-                            headers,
+                            upstream_headers.clone(),
                             prefetched_usage_telemetry.clone(),
                             &provider_prefetched_body,
                             status_code,
@@ -7257,13 +7265,14 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                         request_id,
                         candidate_id,
                         report_kind,
-                        headers,
+                        upstream_headers.clone(),
                         prefetched_usage_telemetry.clone(),
                         &provider_prefetched_body,
                         candidate_started_unix_secs,
                         stream_elapsed_ms_since(stream_started_at),
                         build_stream_failure_from_execution_error(&error),
                         retry_scope_out.as_deref_mut(),
+                        retry_fallback_out.as_deref_mut(),
                     )
                     .await;
                 }
