@@ -904,7 +904,7 @@ async fn gateway_records_failed_usage_when_all_local_openai_chat_candidates_exha
             .expect("body should read"),
     )
     .expect("body should parse");
-    assert_eq!(body_json["error"]["type"], "http_error");
+    assert_eq!(body_json["error"]["message"], "primary unavailable");
 
     let stored_usage = wait_for_usage_status(
         usage_repository.as_ref(),
@@ -924,12 +924,8 @@ async fn gateway_records_failed_usage_when_all_local_openai_chat_candidates_exha
     assert_eq!(stored_usage.model, "gpt-5");
     assert_eq!(stored_usage.api_format.as_deref(), Some("openai:chat"));
     assert_eq!(
-        stored_usage
-            .request_metadata
-            .as_ref()
-            .and_then(|value| value.get("trace_id"))
-            .and_then(|value| value.as_str()),
-        Some("trace-openai-chat-local-report-sync-failure-123")
+        stored_usage.request_id,
+        "trace-openai-chat-local-report-sync-failure-123"
     );
     assert!(stored_usage.response_body.is_none());
     assert_eq!(
