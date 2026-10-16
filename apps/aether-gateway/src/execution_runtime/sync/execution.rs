@@ -67,8 +67,9 @@ use crate::execution_runtime::windsurf::maybe_execute_windsurf_sync;
 use crate::execution_runtime::{
     ai_attempt_retry_scope_from_failure_disposition, analyze_local_candidate_failover_sync,
     apply_endpoint_response_header_rules, attach_provider_response_headers_to_report_context,
-    local_failover_response_text, resolve_core_sync_error_finalize_report_kind,
-    should_fallback_to_control_sync, should_finalize_sync_response, LocalFailoverDecision,
+    build_exhaustion_fallback, local_failover_response_text,
+    resolve_core_sync_error_finalize_report_kind, should_fallback_to_control_sync,
+    should_finalize_sync_response, ExhaustionFallbackInput, LocalFailoverDecision,
 };
 use crate::log_ids::short_request_id;
 use crate::orchestration::{
@@ -2907,25 +2908,25 @@ async fn execute_execution_runtime_sync_impl(
         }
         if failure_disposition.preserve_upstream_error {
             if let Some(retry_fallback) = retry_fallback_out.as_deref_mut() {
-                let mut fallback_headers = headers.clone();
-                apply_endpoint_response_header_rules(
-                    state,
-                    &plan,
-                    &mut fallback_headers,
-                    body_json.as_ref(),
-                )
-                .await?;
-                *retry_fallback = Some(attach_control_metadata_headers(
-                    build_client_response_from_parts(
-                        result.status_code,
-                        &fallback_headers,
-                        Body::from(body_bytes.clone()),
-                        trace_id,
-                        Some(decision),
-                    )?,
-                    Some(plan.request_id.as_str()),
-                    plan.candidate_id.as_deref(),
-                )?);
+                *retry_fallback = Some(
+                    build_exhaustion_fallback(
+                        state,
+                        ExhaustionFallbackInput {
+                            plan: &plan,
+                            report_context: report_context.as_ref(),
+                            trace_id,
+                            decision,
+                            status_code: result.status_code,
+                            provider_headers: &headers,
+                            provider_body: &body_bytes,
+                            provider_body_json: body_json.as_ref(),
+                            rebuild_client_body: false,
+                            request_id: Some(plan.request_id.as_str()),
+                            candidate_id: plan.candidate_id.as_deref(),
+                        },
+                    )
+                    .await?,
+                );
             }
         }
         let terminal_unix_secs = current_request_candidate_unix_ms();

@@ -18,6 +18,9 @@ use crate::api::response::attach_control_metadata_headers;
 use crate::clock::current_unix_ms as current_request_candidate_unix_ms;
 use crate::control::GatewayControlDecision;
 use crate::execution_runtime::ai_attempt_retry_scope_from_failure_disposition;
+use crate::execution_runtime::{
+    build_exhaustion_fallback, ExhaustionFallbackInput,
+};
 use crate::execution_runtime::submission::{
     resolve_core_error_background_report_kind, submit_local_core_error_or_sync_finalize,
 };
@@ -622,17 +625,35 @@ pub(super) async fn handle_prefetch_provider_private_stream_error(
         }
         if failure_disposition.preserve_upstream_error {
             if let Some(retry_fallback) = retry_fallback_out {
-                *retry_fallback = Some(attach_control_metadata_headers(
-                    crate::api::response::build_client_response_from_parts(
-                        upstream_status_code,
-                        &upstream_headers,
-                        Body::from(buffered_body.to_vec()),
-                        trace_id,
-                        Some(decision),
-                    )?,
-                    Some(request_id),
-                    candidate_id,
-                )?);
+                // A 2xx response has no upstream error status to pass through.
+                // Keep the derived error status and rebuild the body in the
+                // client protocol instead of returning a success status with
+                // an SSE body.
+                let (fallback_status_code, rebuild_client_body) =
+                    if upstream_status_code >= 400 {
+                        (upstream_status_code, false)
+                    } else {
+                        (status_code, true)
+                    };
+                *retry_fallback = Some(
+                    build_exhaustion_fallback(
+                        state,
+                        ExhaustionFallbackInput {
+                            plan,
+                            report_context: payload.report_context.as_ref(),
+                            trace_id,
+                            decision,
+                            status_code: fallback_status_code,
+                            provider_headers: &upstream_headers,
+                            provider_body: buffered_body,
+                            provider_body_json: payload.body_json.as_ref(),
+                            rebuild_client_body,
+                            request_id: Some(request_id),
+                            candidate_id,
+                        },
+                    )
+                    .await?,
+                );
             }
         }
         warn!(
