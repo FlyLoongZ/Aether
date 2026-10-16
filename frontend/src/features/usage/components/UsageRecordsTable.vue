@@ -1699,12 +1699,16 @@ function getModelTooltip(record: UsageRecord): string {
   const cyberSuffix = hasCyberPolicyError(record) ? '\nCyber Policy: blocked' : ''
   const suffix = `${reasoningEffort ? `\nReasoning: ${reasoningEffort}` : ''}${tierSuffix}${cyberSuffix}`
   const requestModel = record.model.trim()
-  const mappingModel = record.target_model?.trim()
+  const rawMappingModel = record.target_model?.trim()
+  const mappingModel = rawMappingModel && rawMappingModel !== requestModel ? rawMappingModel : null
   const responseModel = record.response_model?.trim()
+  const showResponseModel = responseModel
+    && responseModel !== requestModel
+    && responseModel !== mappingModel
   return [
     requestModel,
-    mappingModel && mappingModel !== requestModel ? `映射模型: ${mappingModel}` : null,
-    responseModel && responseModel !== requestModel ? `响应模型: ${responseModel}` : null,
+    mappingModel ? `映射模型: ${mappingModel}` : null,
+    showResponseModel ? `响应模型: ${responseModel}` : null,
   ].filter((line): line is string => Boolean(line)).join('\n') + suffix
 }
 </script>
