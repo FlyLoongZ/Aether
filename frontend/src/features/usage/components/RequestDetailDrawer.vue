@@ -1454,7 +1454,17 @@ const curlCopied = ref(false)
 const replayDialogOpen = ref(false)
 const bodyLoading = ref(false)
 const bodyLoadError = ref<string | null>(null)
-const bodyDocuments = shallowRef(new Map<RequestBodyField, BodyDocument>())
+type BodyPair = 'request' | 'response'
+
+interface BodyPairEntry {
+  // Bytes that have not been handed to a worker yet. Kept so switching to the
+  // sibling decodes locally instead of re-downloading the same container.
+  buffers: Partial<Record<RequestBodyField, ArrayBuffer>>
+  documents: Partial<Record<RequestBodyField, BodyDocument>>
+}
+
+const ALL_BODY_FIELDS: RequestBodyField[] = ['request_body', 'provider_request_body', 'response_body', 'client_response_body']
+const bodyPairCache = shallowRef(new Map<BodyPair, BodyPairEntry>())
 const bodyCopying = ref(false)
 const bodyLoadFailures = new Map<RequestBodyField, string>()
 let bodyLoadController: AbortController | null = null
@@ -1882,14 +1892,16 @@ function setDataSource(source: 'client' | 'provider') {
   }
 }
 
-// 获取当前数据源的请求体数据
+// 获取当前数据源的请求体数据（按对缓存，取对应一半）
 const currentRequestBody = computed(() => {
-  return bodyDocuments.value.get(requestBodyField.value) ?? null
+  const field = requestBodyField.value
+  return bodyPairCache.value.get(bodyPairForField(field))?.documents[field] ?? null
 })
 
-// 获取当前数据源的响应体数据
+// 获取当前数据源的响应体数据（按对缓存，取对应一半）
 const currentResponseBody = computed(() => {
-  return bodyDocuments.value.get(responseBodyField.value) ?? null
+  const field = responseBodyField.value
+  return bodyPairCache.value.get(bodyPairForField(field))?.documents[field] ?? null
 })
 
 const currentRequestBodyApiFormat = computed(() => {
@@ -2638,20 +2650,71 @@ function detailMatchesRequestId(
   return candidate.id === requestId || candidate.request_id === requestId
 }
 
+function bodyPairForField(field: RequestBodyField): BodyPair {
+  return field === 'request_body' || field === 'provider_request_body' ? 'request' : 'response'
+}
+
+function bodyPairByteLength(entry: BodyPairEntry): number {
+  let total = 0
+  for (const field of ALL_BODY_FIELDS) {
+    total += entry.documents[field]?.byteLength ?? entry.buffers[field]?.byteLength ?? 0
+  }
+  return total
+}
+
+function disposeBodyPair(entry: BodyPairEntry) {
+  for (const document of Object.values(entry.documents)) document?.dispose()
+  entry.documents = {}
+  entry.buffers = {}
+}
+
+// The pair the user is viewing is always kept; other pairs are evicted
+// least-recently-used only when the decoded-byte budget is exceeded. Both
+// halves of a pair stay together, so a toggle never re-downloads the container.
+function storeBodyPair(pair: BodyPair, entry: BodyPairEntry) {
+  const cache = new Map(bodyPairCache.value)
+  cache.delete(pair)
+  cache.set(pair, entry)
+  let total = 0
+  for (const cached of cache.values()) total += bodyPairByteLength(cached)
+  for (const [cachedPair, cached] of cache) {
+    if (cachedPair === pair) continue
+    if (total <= MAX_BODY_BYTES) break
+    const freed = bodyPairByteLength(cached)
+    disposeBodyPair(cached)
+    cache.delete(cachedPair)
+    total -= freed
+  }
+  bodyPairCache.value = cache
+}
+
+function clearBodyPairErrors(entry: BodyPairEntry) {
+  if (!detail.value) return
+  const errors = { ...detail.value.body_load_errors }
+  const codes = { ...detail.value.body_load_error_codes }
+  for (const field of ALL_BODY_FIELDS) {
+    if (!entry.documents[field] && !entry.buffers[field]) continue
+    errors[field] = false
+    codes[field] = undefined
+    bodyLoadFailures.delete(field)
+  }
+  detail.value = { ...detail.value, body_load_errors: errors, body_load_error_codes: codes }
+}
+
 async function ensureBodyContentLoaded() {
   const field = activeBodyField.value
   const usageId = props.requestId
   if (!props.isOpen || !usageId || !field || !detailMatchesRequestId(detail.value, usageId)) return
   if (!detail.value || bodyLoading.value) return
-  const cached = bodyDocuments.value.get(field)
-  if (cached) {
-    const documents = new Map(bodyDocuments.value)
-    documents.delete(field)
-    documents.set(field, cached)
-    bodyDocuments.value = documents
+  const pair = bodyPairForField(field)
+  const cachedEntry = bodyPairCache.value.get(pair)
+  if (cachedEntry?.documents[field]) {
+    storeBodyPair(pair, cachedEntry)
     return
   }
-  if (!hasBodyContent(detail.value[`has_${field}`], detail.value[field])) return
+  // A sibling buffer left by an earlier download means this half is already
+  // local; only a truly missing body needs a request.
+  if (!cachedEntry?.buffers[field] && !hasBodyContent(detail.value[`has_${field}`], detail.value[field])) return
   const previousFailure = bodyLoadFailures.get(field)
   if (previousFailure) {
     bodyLoadError.value = previousFailure
@@ -2663,26 +2726,40 @@ async function ensureBodyContentLoaded() {
   bodyLoadController = controller
   bodyLoading.value = true
   bodyLoadError.value = null
+  const isStale = () => requestId !== bodyLoadRequestId || controller.signal.aborted || !detail.value ||
+    !props.isOpen || !detailMatchesRequestId(detail.value, usageId)
   try {
-    const response = await dashboardApi.getRequestBody(detail.value.id, field, controller.signal)
-    const document = await BodyDocument.load(response.bytes, controller.signal)
-    if (requestId !== bodyLoadRequestId || controller.signal.aborted || !detail.value ||
-      !props.isOpen || !detailMatchesRequestId(detail.value, usageId)) {
+    let entry = bodyPairCache.value.get(pair)
+    if (!entry?.buffers[field]) {
+      // One request per direction: the container carries the sibling too.
+      const response = await dashboardApi.getRequestBodyPair(detail.value.id, field, controller.signal)
+      if (isStale()) return
+      const current = bodyPairCache.value.get(pair)
+      entry = {
+        buffers: { ...(current?.buffers ?? {}), ...response.bodies },
+        documents: { ...(current?.documents ?? {}) },
+      }
+      storeBodyPair(pair, entry)
+    }
+    const bytes = entry?.buffers[field]
+    if (!entry || !bytes) return
+    // Decode from a copy and keep the cached bytes until the document exists, so
+    // an aborted decode (a quick toggle) still has a local half to fall back on.
+    const document = await BodyDocument.load(bytes.slice(0), controller.signal)
+    if (isStale()) {
       document.dispose()
       return
     }
-    const documents = new Map(bodyDocuments.value)
-    let cachedBytes = document.byteLength
-    for (const existing of documents.values()) cachedBytes += existing.byteLength
-    for (const [cachedField, existing] of documents) {
-      if (documents.size < 2 && cachedBytes <= MAX_BODY_BYTES) break
-      existing.dispose()
-      documents.delete(cachedField)
-      cachedBytes -= existing.byteLength
+    const current = bodyPairCache.value.get(pair)
+    if (!current) {
+      document.dispose()
+      return
     }
-    documents.set(field, document)
-    bodyDocuments.value = documents
-    detail.value = { ...detail.value, body_load_errors: { ...detail.value.body_load_errors, [field]: false }, body_load_error_codes: { ...detail.value.body_load_error_codes, [field]: undefined } }
+    const buffers = { ...current.buffers }
+    delete buffers[field]
+    const nextEntry = { buffers, documents: { ...current.documents, [field]: document } }
+    storeBodyPair(pair, nextEntry)
+    clearBodyPairErrors(nextEntry)
   } catch (err) {
     if (requestId !== bodyLoadRequestId || controller.signal.aborted || axios.isCancel(err)) return
     log.error('Failed to load request bodies:', err)
@@ -2703,10 +2780,14 @@ async function ensureBodyContentLoaded() {
 function handleBodyDocumentError(error: unknown) {
   const field = activeBodyField.value
   if (!field) return
-  const documents = new Map(bodyDocuments.value)
-  documents.get(field)?.dispose()
-  documents.delete(field)
-  bodyDocuments.value = documents
+  const pair = bodyPairForField(field)
+  const entry = bodyPairCache.value.get(pair)
+  if (entry) {
+    entry.documents[field]?.dispose()
+    const documents = { ...entry.documents }
+    delete documents[field]
+    storeBodyPair(pair, { buffers: { ...entry.buffers }, documents })
+  }
   bodyLoadError.value = formatRequestBodyLoadError(error)
   bodyLoadFailures.set(field, bodyLoadError.value)
 }
@@ -2727,8 +2808,8 @@ function cancelBodyContentLoad() {
 
 function resetBodyContentState() {
   cancelBodyContentLoad()
-  for (const document of bodyDocuments.value.values()) document.dispose()
-  bodyDocuments.value = new Map()
+  for (const entry of bodyPairCache.value.values()) disposeBodyPair(entry)
+  bodyPairCache.value = new Map()
   bodyLoadFailures.clear()
 }
 
