@@ -35,9 +35,9 @@ pub(crate) use self::app::{
 };
 pub(crate) use self::cache::{
     CachedProviderTransportSnapshot, ProviderTransportSnapshotFlight,
-    ProviderTransportSnapshotFlightResult, AUTH_API_KEY_LAST_USED_MAX_ENTRIES,
-    AUTH_API_KEY_LAST_USED_TTL, PROVIDER_TRANSPORT_SNAPSHOT_CACHE_MAX_ENTRIES,
-    PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL, PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL,
+    ProviderTransportSnapshotFlightResult, AUTH_API_KEY_LAST_USED_TTL,
+    PROVIDER_TRANSPORT_SNAPSHOT_CACHE_MAX_ENTRIES, PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL,
+    PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL,
 };
 pub use self::cors::FrontdoorCorsConfig;
 pub(crate) use self::instance::resolve_gateway_instance_id;

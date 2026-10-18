@@ -1,14 +1,15 @@
 use std::time::Duration;
 
-use aether_cache::ExpiringMap;
+use aether_cache::Gate;
 
+/// Remembers which request shapes recently bypassed direct planning.
 #[derive(Debug, Default)]
 pub(crate) struct DirectPlanBypassCache {
-    entries: ExpiringMap<String, ()>,
+    gate: Gate<String>,
 }
 
 impl DirectPlanBypassCache {
-    pub(crate) fn should_skip(&self, cache_key: &str, ttl: Duration) -> bool {
-        self.entries.contains_fresh(&cache_key.to_string(), ttl)
+    pub(crate) fn should_skip(&self, cache_key: &str, window: Duration) -> bool {
+        self.gate.peek(cache_key, window).is_some()
     }
 }
