@@ -676,7 +676,6 @@ async fn attempt_failure_invalidates_scheduler_affinity_cache() {
             key_id: "key-1".to_string(),
         },
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
     assert!(state
         .read_scheduler_affinity_target(cache_key.as_str(), SCHEDULER_AFFINITY_TTL)
@@ -719,7 +718,6 @@ async fn attempt_failure_invalidates_session_scoped_scheduler_affinity_cache() {
                 key_id: "key-1".to_string(),
             },
             SCHEDULER_AFFINITY_TTL,
-            16,
         );
     }
 
@@ -766,7 +764,6 @@ async fn attempt_failure_keeps_scheduler_affinity_for_non_affinity_candidate() {
         &cache_key,
         affinity_target.clone(),
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
 
     apply_local_execution_effect(
@@ -810,7 +807,6 @@ async fn attempt_failure_keeps_scheduler_affinity_for_non_pool_sibling_key() {
         &cache_key,
         affinity_target.clone(),
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
 
     apply_local_execution_effect(
@@ -853,7 +849,6 @@ async fn attempt_failure_invalidates_scheduler_affinity_for_same_pool_candidate(
             key_id: "key-2".to_string(),
         },
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
 
     apply_local_execution_effect(
@@ -896,7 +891,6 @@ async fn attempt_failure_keeps_scheduler_affinity_for_non_failure_status() {
             key_id: "key-1".to_string(),
         },
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
 
     apply_local_execution_effect(
@@ -1007,7 +1001,6 @@ async fn configured_stop_pattern_keeps_scheduler_affinity_cache() {
             key_id: "key-1".to_string(),
         },
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
 
     apply_local_execution_effect(
@@ -1309,7 +1302,6 @@ async fn fallback_success_rewarms_scheduler_affinity_after_failed_candidate_inva
             key_id: "key-1".to_string(),
         },
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
     apply_local_execution_effect(
         &state,
@@ -1457,7 +1449,6 @@ async fn anthropic_non_credential_failures_preserve_key_wide_state() {
             &cache_key,
             target.clone(),
             SCHEDULER_AFFINITY_TTL,
-            16,
         );
         let headers = BTreeMap::from([("Retry-After".to_string(), "120".to_string())]);
         let context = LocalExecutionEffectContext {
@@ -3050,12 +3041,7 @@ async fn adaptive_rate_limit_effect_updates_adaptive_key_observation() {
         endpoint_id: plan.endpoint_id.clone(),
         key_id: plan.key_id.clone(),
     };
-    state.remember_scheduler_affinity_target(
-        &cache_key,
-        target.clone(),
-        SCHEDULER_AFFINITY_TTL,
-        16,
-    );
+    state.remember_scheduler_affinity_target(&cache_key, target.clone(), SCHEDULER_AFFINITY_TTL);
     let initial_epoch = state.scheduler_affinity_epoch();
 
     apply_local_execution_effect(
@@ -3301,12 +3287,7 @@ async fn adaptive_success_effect_expands_limit_from_recent_rpm_usage() {
         endpoint_id: plan.endpoint_id.clone(),
         key_id: plan.key_id.clone(),
     };
-    state.remember_scheduler_affinity_target(
-        &cache_key,
-        target.clone(),
-        SCHEDULER_AFFINITY_TTL,
-        16,
-    );
+    state.remember_scheduler_affinity_target(&cache_key, target.clone(), SCHEDULER_AFFINITY_TTL);
     let initial_epoch = state.scheduler_affinity_epoch();
 
     apply_local_execution_effect(

@@ -229,7 +229,6 @@ async fn reuses_cached_scheduler_affinity_candidate_before_sorted_fallback() {
             key_id: "key-b".to_string(),
         },
         Duration::from_secs(300),
-        100,
     );
 
     let selected = select_candidate(
@@ -340,7 +339,6 @@ async fn cached_affinity_candidate_cannot_use_reserved_provider_key_rpm_capacity
             key_id: "key-a".to_string(),
         },
         Duration::from_secs(300),
-        100,
     );
 
     let selected = select_candidate(

@@ -3,9 +3,8 @@ use aether_scheduler_core::{
     matches_affinity_target, ClientSessionAffinity, SchedulerAffinityTarget,
 };
 
-use crate::data::auth::GatewayAuthApiKeySnapshot;
-
 use super::SchedulerMinimalCandidateSelectionCandidate;
+use crate::data::auth::GatewayAuthApiKeySnapshot;
 
 pub(super) fn build_scheduler_affinity_cache_key(
     auth_snapshot: Option<&GatewayAuthApiKeySnapshot>,

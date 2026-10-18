@@ -673,7 +673,6 @@ async fn system_config_entry_write_refreshes_cache_and_scheduler_affinity_for_fo
             key_id: "key-old".to_string(),
         },
         ttl,
-        128,
     );
     assert!(state
         .read_scheduler_affinity_target(cache_key, ttl)
@@ -1041,7 +1040,6 @@ fn scheduler_affinity_epoch_blocks_stale_rewarm_after_invalidation() {
         cache_key,
         first_target.clone(),
         ttl,
-        16,
         Some(initial_epoch),
     ));
     assert_eq!(
@@ -1055,7 +1053,6 @@ fn scheduler_affinity_epoch_blocks_stale_rewarm_after_invalidation() {
         cache_key,
         next_target.clone(),
         ttl,
-        16,
         Some(initial_epoch),
     ));
     assert_eq!(state.read_scheduler_affinity_target(cache_key, ttl), None);
@@ -1064,7 +1061,6 @@ fn scheduler_affinity_epoch_blocks_stale_rewarm_after_invalidation() {
         cache_key,
         next_target.clone(),
         ttl,
-        16,
         Some(next_epoch),
     ));
     assert_eq!(

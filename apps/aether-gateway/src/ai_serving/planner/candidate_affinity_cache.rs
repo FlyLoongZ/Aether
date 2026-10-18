@@ -8,8 +8,6 @@ use aether_scheduler_core::{
 use crate::ai_serving::{GatewayAuthApiKeySnapshot, PlannerAppState};
 use crate::scheduler::affinity::SCHEDULER_AFFINITY_TTL;
 
-const PLANNER_SCHEDULER_AFFINITY_MAX_ENTRIES: usize = 10_000;
-
 pub(crate) fn has_explicit_session_affinity(
     client_session_affinity: Option<&ClientSessionAffinity>,
 ) -> bool {
@@ -157,7 +155,6 @@ fn remember_scheduler_affinity_for_candidate_with_scope_at_epoch(
             key_id: candidate.key_id.clone(),
         },
         SCHEDULER_AFFINITY_TTL,
-        PLANNER_SCHEDULER_AFFINITY_MAX_ENTRIES,
         expected_epoch,
     );
 }

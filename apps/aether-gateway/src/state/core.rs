@@ -1989,16 +1989,9 @@ impl AppState {
         cache_key: &str,
         target: SchedulerAffinityTarget,
         ttl: Duration,
-        max_entries: usize,
     ) {
         let epoch = self.scheduler_affinity_epoch();
-        self.remember_scheduler_affinity_target_for_epoch(
-            cache_key,
-            target,
-            ttl,
-            max_entries,
-            Some(epoch),
-        );
+        self.remember_scheduler_affinity_target_for_epoch(cache_key, target, ttl, Some(epoch));
     }
 
     pub(crate) fn remember_scheduler_affinity_target_for_epoch(
@@ -2006,7 +1999,6 @@ impl AppState {
         cache_key: &str,
         target: SchedulerAffinityTarget,
         ttl: Duration,
-        max_entries: usize,
         expected_epoch: Option<u64>,
     ) -> bool {
         let epoch = expected_epoch.unwrap_or_else(|| self.scheduler_affinity_epoch());
@@ -2014,13 +2006,8 @@ impl AppState {
             return false;
         }
         self.spawn_scheduler_affinity_runtime_write(cache_key, &target, ttl, epoch);
-        self.scheduler_affinity_cache.insert_for_epoch(
-            cache_key.to_string(),
-            target,
-            ttl,
-            max_entries,
-            epoch,
-        );
+        self.scheduler_affinity_cache
+            .insert_for_epoch(cache_key.to_string(), target, ttl, epoch);
         true
     }
 

@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt;
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::RwLock;
+use std::time::Duration;
 
 use super::auth::GatewayAuthApiKeySnapshot;
 use super::candidates::{read_request_candidate_trace, RequestCandidateTrace};
@@ -13,7 +15,7 @@ use crate::provider_transport::{
     read_provider_transport_snapshot, GatewayProviderTransportSnapshot,
 };
 use crate::video_tasks::LocalVideoTaskReadResponse;
-use aether_cache::ExpiringMap;
+use aether_cache::{value_weight, CacheWeight, ExpiringMap, OnceMap, OnceMapError};
 use aether_data::repository::announcements::{
     AnnouncementListQuery, AnnouncementReadRepository, AnnouncementWriteRepository,
     CreateAnnouncementRecord, StoredAnnouncement, StoredAnnouncementPage, UpdateAnnouncementRecord,
@@ -243,20 +245,124 @@ pub(super) enum BillingModelContextCacheKey {
     },
 }
 
-pub(super) struct BillingModelContextCacheState {
-    pub(super) entries: ExpiringMap<BillingModelContextCacheKey, Option<StoredBillingModelContext>>,
-    pub(super) inflight: std::sync::Mutex<
-        HashMap<BillingModelContextCacheKey, Arc<BillingModelContextInflightState>>,
-    >,
-    pub(super) epoch: std::sync::atomic::AtomicU64,
-    pub(super) mutation: std::sync::Mutex<()>,
-    pub(super) admission: Arc<tokio::sync::Semaphore>,
+impl CacheWeight for BillingModelContextCacheKey {
+    fn cache_weight(&self) -> usize {
+        match self {
+            Self::ByModelId {
+                provider_id,
+                provider_api_key_id,
+                model_id,
+            } => value_weight::<Self>(
+                provider_id.capacity()
+                    + provider_api_key_id.as_ref().map_or(0, String::capacity)
+                    + model_id.capacity(),
+            ),
+            Self::ByGlobalModelName {
+                provider_id,
+                provider_api_key_id,
+                global_model_name,
+            } => value_weight::<Self>(
+                provider_id.capacity()
+                    + provider_api_key_id.as_ref().map_or(0, String::capacity)
+                    + global_model_name.capacity(),
+            ),
+        }
+    }
 }
 
-pub(super) struct BillingModelContextInflightState {
-    pub(super) epoch: u64,
-    pub(super) completion: std::sync::OnceLock<Result<(), DataLayerError>>,
-    pub(super) notify: tokio::sync::Notify,
+/// Billing context lookups, cached with request coalescing.
+///
+/// The cache owns its TTL and byte budget, so both are decided at one boundary
+/// instead of being threaded through every caller.
+pub(super) struct BillingModelContextCacheState {
+    entries: OnceMap<BillingModelContextCacheKey, BillingModelContextCacheValue, DataLayerError>,
+}
+
+/// Wrapper so the weight can live next to the cache that stores the value.
+#[derive(Debug, Clone)]
+pub(super) struct BillingModelContextCacheValue(pub(super) Option<Arc<StoredBillingModelContext>>);
+
+impl CacheWeight for BillingModelContextCacheValue {
+    fn cache_weight(&self) -> usize {
+        let Some(context) = self.0.as_ref() else {
+            return 0;
+        };
+        value_weight::<StoredBillingModelContext>(
+            context.provider_id.capacity()
+                + context
+                    .provider_billing_type
+                    .as_ref()
+                    .map_or(0, String::capacity)
+                + context
+                    .provider_api_key_id
+                    .as_ref()
+                    .map_or(0, String::capacity)
+                + context
+                    .provider_api_key_rate_multipliers
+                    .as_ref()
+                    .map_or(0, CacheWeight::cache_weight)
+                + context.global_model_id.capacity()
+                + context.global_model_name.capacity()
+                + context
+                    .global_model_config
+                    .as_ref()
+                    .map_or(0, CacheWeight::cache_weight)
+                + context
+                    .default_tiered_pricing
+                    .as_ref()
+                    .map_or(0, CacheWeight::cache_weight)
+                + context.model_id.as_ref().map_or(0, String::capacity)
+                + context
+                    .model_provider_model_name
+                    .as_ref()
+                    .map_or(0, String::capacity)
+                + context
+                    .model_config
+                    .as_ref()
+                    .map_or(0, CacheWeight::cache_weight)
+                + context
+                    .model_tiered_pricing
+                    .as_ref()
+                    .map_or(0, CacheWeight::cache_weight),
+        )
+    }
+}
+
+/// Answers go stale quickly because pricing edits must take effect, so the
+/// window is short and the byte budget is the real bound.
+const BILLING_MODEL_CONTEXT_CACHE_TTL: Duration = Duration::from_secs(30);
+const BILLING_MODEL_CONTEXT_CACHE_CAPACITY_BYTES: usize = 8 * 1024 * 1024;
+const BILLING_MODEL_CONTEXT_CACHE_MAX_INFLIGHT: usize = 4096;
+
+impl Default for BillingModelContextCacheState {
+    fn default() -> Self {
+        Self {
+            entries: OnceMap::builder()
+                .capacity_bytes(BILLING_MODEL_CONTEXT_CACHE_CAPACITY_BYTES)
+                .max_inflight(BILLING_MODEL_CONTEXT_CACHE_MAX_INFLIGHT)
+                .build(),
+        }
+    }
+}
+
+impl BillingModelContextCacheState {
+    pub(super) async fn get_or_load<F, Fut>(
+        &self,
+        key: BillingModelContextCacheKey,
+        load: F,
+    ) -> Result<Arc<BillingModelContextCacheValue>, OnceMapError<DataLayerError>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<BillingModelContextCacheValue, DataLayerError>>,
+    {
+        self.entries
+            .get_or_load(key, BILLING_MODEL_CONTEXT_CACHE_TTL, load)
+            .await
+    }
+
+    pub(super) fn invalidate_all(&self) {
+        self.entries.invalidate_all();
+    }
 }
 
 impl fmt::Debug for GatewayDataState {

@@ -15,8 +15,8 @@ use super::{
 };
 
 struct TestLookup {
-    name_context: Option<StoredBillingModelContext>,
-    model_id_context: Option<StoredBillingModelContext>,
+    name_context: Option<Arc<StoredBillingModelContext>>,
+    model_id_context: Option<Arc<StoredBillingModelContext>>,
 }
 
 #[async_trait]
@@ -26,7 +26,7 @@ impl BillingModelContextLookup for TestLookup {
         _provider_id: &str,
         _provider_api_key_id: Option<&str>,
         _model_id: &str,
-    ) -> Result<Option<StoredBillingModelContext>, aether_data_contracts::DataLayerError> {
+    ) -> Result<Option<Arc<StoredBillingModelContext>>, aether_data_contracts::DataLayerError> {
         Ok(self.model_id_context.clone())
     }
 
@@ -35,14 +35,14 @@ impl BillingModelContextLookup for TestLookup {
         _provider_id: &str,
         _provider_api_key_id: Option<&str>,
         _global_model_name: &str,
-    ) -> Result<Option<StoredBillingModelContext>, aether_data_contracts::DataLayerError> {
+    ) -> Result<Option<Arc<StoredBillingModelContext>>, aether_data_contracts::DataLayerError> {
         Ok(self.name_context.clone())
     }
 }
 
 fn wire_billing_lookup(pricing: Option<Value>, request_price: Option<f64>) -> TestLookup {
     TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-wire".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -61,7 +61,7 @@ fn wire_billing_lookup(pricing: Option<Value>, request_price: Option<f64>) -> Te
                 None,
             )
             .expect("wire billing context"),
-        ),
+        )),
         model_id_context: None,
     }
 }
@@ -749,7 +749,7 @@ fn processing_tier_uses_request_derived_metadata_when_body_capture_was_truncated
 #[tokio::test]
 async fn settlement_uses_effective_gpt_5_6_cache_ttl_after_body_capture() {
     let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -781,7 +781,7 @@ async fn settlement_uses_effective_gpt_5_6_cache_ttl_after_body_capture() {
                 None,
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
 
@@ -847,7 +847,7 @@ async fn settlement_uses_effective_gpt_5_6_cache_ttl_after_body_capture() {
 #[tokio::test]
 async fn enriches_completed_usage_event_with_billing_snapshot() {
     let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -866,7 +866,7 @@ async fn enriches_completed_usage_event_with_billing_snapshot() {
                 None,
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
     let mut event = UsageEvent::new(
@@ -909,7 +909,7 @@ async fn enriches_completed_usage_event_with_billing_snapshot() {
 #[tokio::test]
 async fn openai_fast_usage_without_overlay_inherits_global_model_pricing() {
     let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -934,7 +934,7 @@ async fn openai_fast_usage_without_overlay_inherits_global_model_pricing() {
                 None,
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
     let mut event = UsageEvent::new(
@@ -985,7 +985,7 @@ async fn openai_fast_usage_without_overlay_inherits_global_model_pricing() {
 #[tokio::test]
 async fn settlement_uses_requested_processing_tier_catalog_and_ignores_response_tier() {
     let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -1013,7 +1013,7 @@ async fn settlement_uses_requested_processing_tier_catalog_and_ignores_response_
                 })),
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
     let mut event = UsageEvent::new(
@@ -1087,7 +1087,7 @@ async fn settlement_uses_requested_processing_tier_catalog_and_ignores_response_
 #[tokio::test]
 async fn requested_processing_catalog_controls_image_price_with_independent_fixed_price() {
     let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -1115,7 +1115,7 @@ async fn requested_processing_catalog_controls_image_price_with_independent_fixe
                 })),
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
     let mut event = UsageEvent::new(
@@ -1176,7 +1176,7 @@ async fn requested_processing_catalog_controls_image_price_with_independent_fixe
 #[tokio::test]
 async fn image_usage_uses_image_count_for_request_cost() {
     let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -1195,7 +1195,7 @@ async fn image_usage_uses_image_count_for_request_cost() {
                 None,
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
     let mut event = UsageEvent::new(
@@ -1260,7 +1260,7 @@ async fn image_usage_uses_image_count_for_request_cost() {
 #[tokio::test]
 async fn image_usage_uses_configured_output_price_matrix() {
     let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -1292,7 +1292,7 @@ async fn image_usage_uses_configured_output_price_matrix() {
                 None,
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
     let mut event = UsageEvent::new(
@@ -1357,7 +1357,7 @@ async fn cancelled_usage_bills_only_configured_request_fee() {
         [("chat", None), ("chat", Some(0.02)), ("image", Some(0.02))]
     {
         let lookup = TestLookup {
-        name_context: Some(
+        name_context: Some(Arc::new(
             StoredBillingModelContext::new(
                 "provider-1".to_string(),
                 Some("pay_as_you_go".to_string()),
@@ -1376,7 +1376,7 @@ async fn cancelled_usage_bills_only_configured_request_fee() {
                 None,
             )
             .expect("billing context should build"),
-        ),
+        )),
         model_id_context: None,
     };
         let mut event = UsageEvent::new(
@@ -1512,8 +1512,8 @@ async fn enriches_by_provider_model_id_before_name_fallback() {
     )
     .expect("priced billing context should build");
     let lookup = TestLookup {
-        name_context: Some(blank_name_context),
-        model_id_context: Some(priced_model_context),
+        name_context: Some(Arc::new(blank_name_context)),
+        model_id_context: Some(Arc::new(priced_model_context)),
     };
     let mut event = UsageEvent::new(
         UsageEventType::Completed,
