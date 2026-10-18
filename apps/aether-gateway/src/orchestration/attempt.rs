@@ -38,6 +38,14 @@ pub(crate) struct LocalExecutionCandidateMetadata {
     pub(crate) sticky_key_attempts: Option<u32>,
 }
 
+impl aether_cache::CacheWeight for LocalExecutionCandidateMetadata {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.candidate_group_id.as_ref().map_or(0, String::capacity),
+        )
+    }
+}
+
 pub(crate) const SCHEDULER_AFFINITY_EPOCH_REPORT_FIELD: &str = "scheduler_affinity_epoch";
 pub(crate) const ROUTING_POOL_POLICY_OVERRIDE_REPORT_FIELD: &str = "routing_pool_policy_override";
 pub(crate) const POOL_KEY_LEASE_KEY_REPORT_FIELD: &str = "pool_key_lease_key";

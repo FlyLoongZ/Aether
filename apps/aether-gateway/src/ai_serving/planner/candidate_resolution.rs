@@ -37,6 +37,40 @@ pub(crate) struct EligibleLocalExecutionCandidate {
     pub(crate) ranking: Option<SchedulerRankingOutcome>,
 }
 
+// Both candidate records only *borrow* their transport snapshot through an Arc
+// that ProviderTransportSnapshotCache owns and accounts for. Weighing it here
+// would charge the same snapshot once per candidate and per cached page, so the
+// weight below covers only what the record itself owns.
+impl aether_cache::CacheWeight for EligibleLocalExecutionCandidate {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.candidate.cache_weight()
+                + self.provider_api_format.capacity()
+                + self.orchestration.cache_weight()
+                + self
+                    .ranking
+                    .as_ref()
+                    .map_or(0, |ranking| ranking.cache_weight()),
+        )
+    }
+}
+
+impl aether_cache::CacheWeight for SkippedLocalExecutionCandidate {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.candidate.cache_weight()
+                + self
+                    .ranking
+                    .as_ref()
+                    .map_or(0, |ranking| ranking.cache_weight())
+                + self
+                    .extra_data
+                    .as_ref()
+                    .map_or(0, aether_cache::CacheWeight::cache_weight),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum LocalExecutionCandidateKind {
     #[default]

@@ -1,350 +1,127 @@
-use std::collections::HashMap;
 use std::future::Future;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
-use aether_cache::ExpiringMap;
+use aether_cache::{optional_strings_weight, value_weight, CacheWeight, OnceMap};
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::candidate_selection::{
     MinimalCandidateSelectionReadRepository, StoredApiFormatCandidateRowsQuery,
     StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateOrder,
     StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
-    StoredRequestedModelCandidateRowsQuery,
+    StoredProviderModelMapping, StoredRequestedModelCandidateRowsQuery,
 };
 use async_trait::async_trait;
-use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 use tokio::time::timeout;
 use tracing::warn;
 
 const CANDIDATE_SELECTION_CACHE_TTL: Duration = Duration::from_secs(5);
-const CANDIDATE_SELECTION_CACHE_MAX_ENTRIES: usize = 4096;
+const CANDIDATE_SELECTION_CACHE_CAPACITY_BYTES: usize = 16 * 1024 * 1024;
 const CANDIDATE_SELECTION_CACHE_MAX_INFLIGHT: usize = 4096;
 #[cfg(not(test))]
 const CANDIDATE_SELECTION_CACHE_LOAD_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(test)]
 const CANDIDATE_SELECTION_CACHE_LOAD_TIMEOUT: Duration = Duration::from_millis(50);
-#[cfg(not(test))]
-const CANDIDATE_SELECTION_CACHE_INFLIGHT_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
-#[cfg(test)]
-const CANDIDATE_SELECTION_CACHE_INFLIGHT_WAIT_TIMEOUT: Duration = Duration::from_millis(50);
+
+/// A cached candidate page.
+///
+/// One row owns a dozen strings plus several JSON values, so its weight has to
+/// walk them. Only this crate caches pages of rows, so the impl lives here
+/// rather than on the contract type.
+#[derive(Debug, Clone)]
+struct CandidateRows(Vec<StoredMinimalCandidateSelectionRow>);
+
+impl CacheWeight for CandidateRows {
+    fn cache_weight(&self) -> usize {
+        value_weight::<Self>(
+            self.0.capacity() * std::mem::size_of::<StoredMinimalCandidateSelectionRow>(),
+        )
+        .saturating_add(self.0.iter().map(candidate_row_weight).sum())
+    }
+}
+
+fn candidate_row_weight(row: &StoredMinimalCandidateSelectionRow) -> usize {
+    let strings = row.provider_id.capacity()
+        + row.provider_name.capacity()
+        + row.provider_type.capacity()
+        + row.endpoint_id.capacity()
+        + row.endpoint_api_format.capacity()
+        + row.key_id.capacity()
+        + row.key_name.capacity()
+        + row.key_auth_type.capacity()
+        + row.model_id.capacity()
+        + row.global_model_id.capacity()
+        + row.global_model_name.capacity()
+        + row.model_provider_model_name.capacity()
+        + row.endpoint_api_family.as_ref().map_or(0, String::capacity)
+        + row.endpoint_kind.as_ref().map_or(0, String::capacity)
+        + optional_strings_weight(row.key_api_formats.as_ref())
+        + optional_strings_weight(row.key_allowed_models.as_ref())
+        + optional_strings_weight(row.global_model_mappings.as_ref())
+        + row
+            .key_capabilities
+            .as_ref()
+            .map_or(0, |value| value.cache_weight())
+        + row
+            .key_global_priority_by_format
+            .as_ref()
+            .map_or(0, |value| value.cache_weight())
+        + row
+            .model_provider_model_mappings
+            .as_ref()
+            .map_or(0, |mappings| {
+                mappings.capacity() * std::mem::size_of::<StoredProviderModelMapping>()
+                    + mappings
+                        .iter()
+                        .map(|mapping| {
+                            mapping.name.capacity()
+                                + optional_strings_weight(mapping.api_formats.as_ref())
+                                + optional_strings_weight(mapping.endpoint_ids.as_ref())
+                                + optional_strings_weight(mapping.operations.as_ref())
+                        })
+                        .sum::<usize>()
+            });
+
+    value_weight::<StoredMinimalCandidateSelectionRow>(strings)
+}
 
 pub(super) struct CachedMinimalCandidateSelectionReadRepository {
     inner: Arc<dyn MinimalCandidateSelectionReadRepository>,
-    entries: ExpiringMap<CandidateSelectionCacheKey, Vec<StoredMinimalCandidateSelectionRow>>,
-    inflight: Mutex<HashMap<CandidateSelectionCacheKey, Arc<InflightState>>>,
-    epoch: AtomicU64,
-    mutation: Mutex<()>,
-    admission: Arc<Semaphore>,
+    cache: OnceMap<CandidateSelectionCacheKey, CandidateRows, DataLayerError>,
 }
 
 impl CachedMinimalCandidateSelectionReadRepository {
     pub(super) fn new(inner: Arc<dyn MinimalCandidateSelectionReadRepository>) -> Self {
         Self {
             inner,
-            entries: ExpiringMap::new(),
-            inflight: Mutex::new(HashMap::new()),
-            epoch: AtomicU64::new(0),
-            mutation: Mutex::new(()),
-            admission: Arc::new(Semaphore::new(CANDIDATE_SELECTION_CACHE_MAX_INFLIGHT)),
+            cache: OnceMap::builder()
+                .capacity_bytes(CANDIDATE_SELECTION_CACHE_CAPACITY_BYTES)
+                .max_inflight(CANDIDATE_SELECTION_CACHE_MAX_INFLIGHT)
+                .build(),
         }
     }
-
     async fn get_or_load<F, Fut>(
         &self,
         key: CandidateSelectionCacheKey,
         load: F,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>
     where
-        F: Fn() -> Fut,
+        F: FnOnce() -> Fut,
         Fut: Future<Output = Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>>,
     {
-        if let Some(rows) = self.entries.get_fresh(&key, CANDIDATE_SELECTION_CACHE_TTL) {
-            return Ok(rows);
-        }
-
-        self.load_after_cache_miss(key, load).await
-    }
-
-    async fn load_after_cache_miss<F, Fut>(
-        &self,
-        key: CandidateSelectionCacheKey,
-        load: F,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>
-    where
-        F: Fn() -> Fut,
-        Fut: Future<Output = Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>>,
-    {
-        loop {
-            match self.register_inflight(&key) {
-                InflightRegistration::Saturated => {
-                    return Err(DataLayerError::TimedOut(format!(
-                        "candidate selection cache admission saturated for {key:?}"
-                    )));
-                }
-                InflightRegistration::Follower(state) => {
-                    match timeout(
-                        CANDIDATE_SELECTION_CACHE_INFLIGHT_WAIT_TIMEOUT,
-                        state.wait(),
-                    )
+        // The loader keeps its own deadline so a timeout is still logged.
+        let load_key = key.clone();
+        let rows = self
+            .cache
+            .get_or_load(key, CANDIDATE_SELECTION_CACHE_TTL, || async move {
+                load_candidate_selection_rows_with_timeout(&load_key, load())
                     .await
-                    {
-                        Ok(Ok(())) => {}
-                        Ok(Err(error)) => return Err(error),
-                        Err(_) => self.expire_inflight(&key, &state),
-                    }
-                    if let Some(rows) = self.entries.get_fresh(&key, CANDIDATE_SELECTION_CACHE_TTL)
-                    {
-                        return Ok(rows);
-                    }
-                    continue;
-                }
-                InflightRegistration::Leader(mut guard) => {
-                    // A writer may have populated the cache after the first
-                    // miss but before this flight was registered.
-                    if let Some(rows) = self.entries.get_fresh(&key, CANDIDATE_SELECTION_CACHE_TTL)
-                    {
-                        return Ok(rows);
-                    }
-
-                    let result = load_candidate_selection_rows_with_timeout(&key, load()).await;
-                    match &result {
-                        Ok(rows) => guard.finish_loaded(rows.clone()),
-                        Err(error) => guard.finish(Some(error.clone())),
-                    }
-                    return result;
-                }
-            }
-        }
-    }
-
-    fn register_inflight(&self, key: &CandidateSelectionCacheKey) -> InflightRegistration<'_> {
-        let mut inflight = self
-            .inflight
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(state) = inflight.get(key) {
-            return InflightRegistration::Follower(Arc::clone(state));
-        }
-        if inflight.len() >= CANDIDATE_SELECTION_CACHE_MAX_INFLIGHT {
-            return InflightRegistration::Saturated;
-        }
-        let Ok(admission) = Arc::clone(&self.admission).try_acquire_owned() else {
-            return InflightRegistration::Saturated;
-        };
-        let state = Arc::new(InflightState {
-            epoch: self.epoch.load(Ordering::Acquire),
-            notify: Notify::new(),
-            completed: AtomicBool::new(false),
-            error: Mutex::new(None),
-        });
-        inflight.insert(key.clone(), Arc::clone(&state));
-        InflightRegistration::Leader(InflightGuard::new(self, key.clone(), state, admission))
-    }
-
-    fn finish_inflight(
-        &self,
-        key: &CandidateSelectionCacheKey,
-        state: &Arc<InflightState>,
-        rows: Option<Vec<StoredMinimalCandidateSelectionRow>>,
-        admission: Option<OwnedSemaphorePermit>,
-    ) -> Option<Arc<InflightState>> {
-        let _mutation = self
-            .mutation
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut inflight = self
-            .inflight
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        drop(admission);
-        if !inflight
-            .get(key)
-            .is_some_and(|current| Arc::ptr_eq(current, state))
-            || self.epoch.load(Ordering::Acquire) != state.epoch
-        {
-            return None;
-        }
-        if let Some(rows) = rows {
-            self.entries.insert(
-                key.clone(),
-                rows,
-                CANDIDATE_SELECTION_CACHE_TTL,
-                CANDIDATE_SELECTION_CACHE_MAX_ENTRIES,
-            );
-        }
-        let removed = inflight.remove(key);
-        drop(inflight);
-        drop(_mutation);
-        removed
-    }
-
-    fn expire_inflight(&self, key: &CandidateSelectionCacheKey, state: &Arc<InflightState>) {
-        let _mutation = self
-            .mutation
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let removed = {
-            let mut inflight = self
-                .inflight
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if inflight
-                .get(key)
-                .is_some_and(|current| Arc::ptr_eq(current, state))
-            {
-                inflight.remove(key)
-            } else {
-                None
-            }
-        };
-        drop(_mutation);
-        if let Some(state) = removed {
-            warn!(
-                event_name = "candidate_selection_cache_inflight_expired",
-                log_type = "ops",
-                cache_key = ?key,
-                wait_timeout_ms = CANDIDATE_SELECTION_CACHE_INFLIGHT_WAIT_TIMEOUT.as_millis() as u64,
-                "gateway candidate selection cache expired stale inflight load"
-            );
-            state.complete(None);
-        }
-    }
-
-    fn clear(&self) {
-        let _mutation = self
-            .mutation
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        self.epoch.fetch_add(1, Ordering::AcqRel);
-        self.entries.clear();
-        let states = self
-            .inflight
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .drain()
-            .map(|(_, state)| state)
-            .collect::<Vec<_>>();
-        if !states.is_empty() {
-            warn!(
-                event_name = "candidate_selection_cache_inflight_cleared",
-                log_type = "ops",
-                "gateway candidate selection cache cleared in-flight loads"
-            );
-            for state in states {
-                state.complete(None);
-            }
-        }
-    }
-}
-
-struct InflightState {
-    epoch: u64,
-    notify: Notify,
-    completed: AtomicBool,
-    error: Mutex<Option<DataLayerError>>,
-}
-
-impl InflightState {
-    fn complete(&self, error: Option<DataLayerError>) {
-        if let Some(error) = error {
-            if let Ok(mut current) = self.error.lock() {
-                *current = Some(error);
-            }
-        }
-        if !self.completed.swap(true, Ordering::AcqRel) {
-            self.notify.notify_waiters();
-        }
-    }
-
-    async fn wait(&self) -> Result<(), DataLayerError> {
-        loop {
-            if self.completed.load(Ordering::Acquire) {
-                return self
-                    .error
-                    .lock()
-                    .ok()
-                    .and_then(|error| error.clone())
-                    .map_or(Ok(()), Err);
-            }
-
-            // Register before checking completion a second time. Creating a
-            // Notified future alone is insufficient because notify_waiters()
-            // can otherwise run before the future's first poll.
-            let mut notified = Box::pin(self.notify.notified());
-            notified.as_mut().enable();
-            if self.completed.load(Ordering::Acquire) {
-                return self
-                    .error
-                    .lock()
-                    .ok()
-                    .and_then(|error| error.clone())
-                    .map_or(Ok(()), Err);
-            }
-            notified.await;
-        }
-    }
-}
-
-enum InflightRegistration<'a> {
-    Leader(InflightGuard<'a>),
-    Follower(Arc<InflightState>),
-    Saturated,
-}
-
-struct InflightGuard<'a> {
-    cache: &'a CachedMinimalCandidateSelectionReadRepository,
-    key: Option<CandidateSelectionCacheKey>,
-    state: Arc<InflightState>,
-    admission: Option<OwnedSemaphorePermit>,
-}
-
-impl<'a> InflightGuard<'a> {
-    fn new(
-        cache: &'a CachedMinimalCandidateSelectionReadRepository,
-        key: CandidateSelectionCacheKey,
-        state: Arc<InflightState>,
-        admission: OwnedSemaphorePermit,
-    ) -> Self {
-        Self {
-            cache,
-            key: Some(key),
-            state,
-            admission: Some(admission),
-        }
-    }
-
-    #[cfg(test)]
-    fn epoch(&self) -> u64 {
-        self.state.epoch
-    }
-
-    fn finish_loaded(&mut self, rows: Vec<StoredMinimalCandidateSelectionRow>) {
-        let removed = self.key.take().and_then(|key| {
-            self.cache
-                .finish_inflight(&key, &self.state, Some(rows), self.admission.take())
-        });
-        self.admission.take();
-        if let Some(removed) = removed {
-            removed.complete(None);
-        }
-    }
-
-    fn finish(&mut self, error: Option<DataLayerError>) {
-        let removed = self.key.take().and_then(|key| {
-            self.cache
-                .finish_inflight(&key, &self.state, None, self.admission.take())
-        });
-        self.admission.take();
-        if let Some(removed) = removed {
-            removed.complete(error);
-        }
-    }
-}
-
-impl Drop for InflightGuard<'_> {
-    fn drop(&mut self) {
-        self.finish(None);
+                    .map(CandidateRows)
+            })
+            .await
+            .map_err(|error| error.or_else_load(DataLayerError::TimedOut))?;
+        // The repository trait hands out owned rows; the cache keeps one shared
+        // page so concurrent readers never build it twice.
+        Ok(rows.0.clone())
     }
 }
 
@@ -376,7 +153,7 @@ where
 #[async_trait]
 impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelectionReadRepository {
     fn clear_local_cache(&self) {
-        self.clear();
+        self.cache.invalidate_all();
         self.inner.clear_local_cache();
     }
 
@@ -534,6 +311,72 @@ enum CandidateSelectionCacheKey {
     },
 }
 
+impl CacheWeight for CandidateSelectionCacheKey {
+    fn cache_weight(&self) -> usize {
+        let owned = match self {
+            Self::ApiFormat { api_format } => api_format.capacity(),
+            Self::ApiFormatPage { api_format, .. } => api_format.capacity(),
+            Self::ApiFormatAndGlobalModel {
+                api_format,
+                global_model_name,
+            } => api_format.capacity() + global_model_name.capacity(),
+            Self::ApiFormatAndRequestedModel {
+                api_format,
+                requested_model_name,
+            } => api_format.capacity() + requested_model_name.capacity(),
+            Self::RequestedModelPage {
+                api_format,
+                requested_model_name,
+                ..
+            } => api_format.capacity() + requested_model_name.capacity(),
+            Self::PoolKeyRowsForGroup {
+                api_format,
+                provider_id,
+                endpoint_id,
+                model_id,
+                selected_provider_model_name,
+                order,
+                ..
+            } => {
+                api_format.capacity()
+                    + provider_id.capacity()
+                    + endpoint_id.capacity()
+                    + model_id.capacity()
+                    + selected_provider_model_name.capacity()
+                    + order.cache_weight()
+            }
+            Self::PoolKeyRowsForGroupKeyIds {
+                api_format,
+                provider_id,
+                endpoint_id,
+                model_id,
+                selected_provider_model_name,
+                key_ids,
+            } => {
+                api_format.capacity()
+                    + provider_id.capacity()
+                    + endpoint_id.capacity()
+                    + model_id.capacity()
+                    + selected_provider_model_name.capacity()
+                    + value_weight::<Vec<String>>(
+                        key_ids.capacity() * std::mem::size_of::<String>(),
+                    )
+                    + key_ids.iter().map(|id| id.capacity()).sum::<usize>()
+            }
+        };
+        value_weight::<Self>(owned)
+    }
+}
+
+impl CacheWeight for CandidateSelectionPoolOrderKey {
+    fn cache_weight(&self) -> usize {
+        match self {
+            Self::LoadBalance { seed } => seed.capacity(),
+            Self::InternalPriority | Self::Lru | Self::CacheAffinity | Self::SingleAccount => 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum CandidateSelectionPoolOrderKey {
     InternalPriority,
@@ -565,7 +408,7 @@ fn normalize_api_format_key(api_format: &str) -> String {
 mod tests {
     use super::*;
     use std::future::pending;
-    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct StubCandidateSelectionRepository {
         calls: AtomicUsize,
@@ -642,6 +485,7 @@ mod tests {
         }
     }
 
+    /// The first load never answers; later loads return immediately.
     struct FirstLoadPendingThenFastRepository {
         calls: AtomicUsize,
     }
@@ -713,23 +557,31 @@ mod tests {
         }
     }
 
+    fn requested_model_page(offset: u32, limit: u32) -> StoredRequestedModelCandidateRowsQuery {
+        StoredRequestedModelCandidateRowsQuery {
+            api_format: "openai:chat".to_string(),
+            requested_model_name: "gpt-5.5".to_string(),
+            offset,
+            limit,
+        }
+    }
+
     #[tokio::test]
-    async fn candidate_selection_cache_coalesces_concurrent_loads() {
+    async fn concurrent_misses_load_once() {
         let inner = Arc::new(StubCandidateSelectionRepository::new(
             Duration::from_millis(25),
         ));
         let cache = Arc::new(CachedMinimalCandidateSelectionReadRepository::new(
             inner.clone(),
         ));
-        let mut tasks = Vec::new();
 
+        let mut tasks = Vec::new();
         for _ in 0..16 {
             let cache = cache.clone();
             tasks.push(tokio::spawn(async move {
                 cache.list_for_exact_api_format("openai").await.unwrap();
             }));
         }
-
         for task in tasks {
             task.await.unwrap();
         }
@@ -738,477 +590,43 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn candidate_selection_cache_only_notifies_matching_inflight_key() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key_a = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let key_b = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "anthropic:messages".to_string(),
-        };
-
-        let mut leader_a = match cache.register_inflight(&key_a) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first key registration should lead"),
-        };
-        let mut leader_b = match cache.register_inflight(&key_b) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("second key registration should lead independently"),
-        };
-        let state_a = match cache.register_inflight(&key_a) {
-            InflightRegistration::Follower(state) => state,
-            _ => panic!("duplicate key registration should follow"),
-        };
-
-        leader_b.finish(None);
-        assert!(
-            tokio::time::timeout(Duration::from_millis(10), state_a.wait())
-                .await
-                .is_err(),
-            "completing another key must not wake this follower"
-        );
-        leader_a.finish(None);
-        tokio::time::timeout(Duration::from_millis(100), state_a.wait())
-            .await
-            .expect("completing the matching key must wake its follower")
-            .expect("successful completion should not publish an error");
-        assert!(cache.inflight.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_follower_observes_completion_before_first_poll() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-
-        let mut leader = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let state = match cache.register_inflight(&key) {
-            InflightRegistration::Follower(state) => state,
-            _ => panic!("second registration should follow"),
-        };
-
-        // Complete before wait() is constructed or polled. notify_waiters()
-        // alone would lose this notification and wait for the full timeout.
-        leader.finish(None);
-        tokio::time::timeout(Duration::from_millis(100), state.wait())
-            .await
-            .expect("completed follower must not miss the broadcast")
-            .expect("successful completion should not publish an error");
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_shares_leader_failure() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let mut leader = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let state = match cache.register_inflight(&key) {
-            InflightRegistration::Follower(state) => state,
-            _ => panic!("second registration should follow"),
-        };
-
-        leader.finish(Some(DataLayerError::Sql(
-            "forced candidate cache load failure".to_string(),
-        )));
-        let error = tokio::time::timeout(Duration::from_millis(100), state.wait())
-            .await
-            .expect("failed load should release its follower")
-            .expect_err("follower should observe the leader failure");
-        assert_eq!(
-            error.to_string(),
-            "sql error: forced candidate cache load failure"
-        );
-        assert!(cache.inflight.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn candidate_selection_cache_broadcasts_to_all_same_key_followers() {
-        const FOLLOWERS: usize = 64;
-
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let mut leader = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-
-        let mut tasks = Vec::with_capacity(FOLLOWERS);
-        for _ in 0..FOLLOWERS {
-            let state = match cache.register_inflight(&key) {
-                InflightRegistration::Follower(state) => state,
-                _ => panic!("same-key registration should follow"),
-            };
-            tasks.push(tokio::spawn(async move { state.wait().await }));
-        }
-
-        tokio::task::yield_now().await;
-        leader.finish(None);
-        for task in tasks {
-            tokio::time::timeout(Duration::from_millis(250), task)
-                .await
-                .expect("all same-key followers should receive completion")
-                .expect("follower task should finish")
-                .expect("successful completion should not publish an error");
-        }
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_cancelled_guard_wakes_registered_follower() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let guard = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let state = match cache.register_inflight(&key) {
-            InflightRegistration::Follower(state) => state,
-            _ => panic!("second registration should follow"),
-        };
-
-        drop(guard);
-        tokio::time::timeout(Duration::from_millis(100), state.wait())
-            .await
-            .expect("leader cancellation must wake an existing follower")
-            .expect("leader cancellation should allow a retry");
-        assert!(cache.inflight.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_clear_wakes_follower_and_old_guard_keeps_new_flight() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let old_guard = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let old_state = match cache.register_inflight(&key) {
-            InflightRegistration::Follower(state) => state,
-            _ => panic!("second registration should follow"),
-        };
-        let old_epoch = old_guard.epoch();
-
-        cache.clear();
-        assert!(cache.epoch.load(Ordering::Acquire) > old_epoch);
-        let mut new_guard = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("registration after clear should lead"),
-        };
-        assert_ne!(old_guard.epoch(), new_guard.epoch());
-
-        // Dropping the invalidated leader's RAII guard must not remove the
-        // new flight created for the same key after clear().
-        drop(old_guard);
-        assert!(cache
-            .inflight
-            .lock()
-            .unwrap()
-            .get(&key)
-            .is_some_and(|current| Arc::ptr_eq(current, &new_guard.state)));
-        tokio::time::timeout(Duration::from_millis(100), old_state.wait())
-            .await
-            .expect("clear must wake followers of the invalidated flight")
-            .expect("clear should allow a retry");
-
-        new_guard.finish(None);
-        assert!(cache.inflight.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_clear_invalidates_entries() {
+    async fn a_repeat_read_is_served_from_the_cache() {
         let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
         let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
 
         cache.list_for_exact_api_format("openai").await.unwrap();
         cache.list_for_exact_api_format("openai").await.unwrap();
+
         assert_eq!(inner.calls(), 1);
-
-        cache.clear_local_cache();
-        cache.list_for_exact_api_format("openai").await.unwrap();
-        assert_eq!(inner.calls(), 2);
-    }
-
-    #[test]
-    fn candidate_selection_cache_rejects_publication_from_pre_clear_flight() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let mut stale_leader = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-
-        cache.clear();
-        stale_leader.finish_loaded(Vec::new());
-
-        assert!(cache
-            .entries
-            .get_fresh(&key, CANDIDATE_SELECTION_CACHE_TTL)
-            .is_none());
-    }
-
-    #[test]
-    fn candidate_selection_cache_clear_keeps_active_load_admission_bounded() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let mut cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        cache.admission = Arc::new(Semaphore::new(2));
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let mut detached_leaders = Vec::new();
-
-        for _ in 0..2 {
-            let leader = match cache.register_inflight(&key) {
-                InflightRegistration::Leader(guard) => guard,
-                _ => panic!("load below the hard active limit should lead"),
-            };
-            cache.clear();
-            detached_leaders.push(leader);
-        }
-
-        assert_eq!(cache.admission.available_permits(), 0);
-        assert!(matches!(
-            cache.register_inflight(&key),
-            InflightRegistration::Saturated
-        ));
-        drop(detached_leaders);
-        assert_eq!(cache.admission.available_permits(), 2);
-        assert!(matches!(
-            cache.register_inflight(&key),
-            InflightRegistration::Leader(_)
-        ));
-    }
-
-    #[test]
-    fn candidate_selection_cache_expired_leader_cannot_publish_over_replacement() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let mut old_leader = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let old_state = Arc::clone(&old_leader.state);
-        cache.expire_inflight(&key, &old_state);
-        let mut replacement = match cache.register_inflight(&key) {
-            InflightRegistration::Leader(guard) => guard,
-            _ => panic!("expiration should allow a replacement leader"),
-        };
-        assert_eq!(old_leader.epoch(), replacement.epoch());
-
-        old_leader.finish_loaded(vec![sample_row("stale-key", 1)]);
-        assert!(cache
-            .entries
-            .get_fresh(&key, CANDIDATE_SELECTION_CACHE_TTL)
-            .is_none());
-
-        replacement.finish_loaded(vec![sample_row("fresh-key", 2)]);
-        let cached = cache
-            .entries
-            .get_fresh(&key, CANDIDATE_SELECTION_CACHE_TTL)
-            .expect("replacement should publish");
-        assert_eq!(cached[0].key_id, "fresh-key");
     }
 
     #[tokio::test]
-    async fn candidate_selection_cache_rechecks_fresh_entry_after_leader_registration() {
+    async fn pages_of_the_same_query_do_not_share_an_entry() {
         let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: "openai:chat".to_string(),
-        };
-        let expected = vec![sample_row("cached-key", 1)];
-        cache.entries.insert(
-            key.clone(),
-            expected.clone(),
-            CANDIDATE_SELECTION_CACHE_TTL,
-            CANDIDATE_SELECTION_CACHE_MAX_ENTRIES,
-        );
-        let loads = AtomicUsize::new(0);
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
 
-        // Exercise the post-initial-miss path directly to model a concurrent
-        // writer filling the cache immediately before flight registration.
-        let rows = cache
-            .load_after_cache_miss(key, || async {
-                loads.fetch_add(1, Ordering::SeqCst);
-                Ok(Vec::new())
+        cache
+            .list_for_exact_api_format_page(&StoredApiFormatCandidateRowsQuery {
+                api_format: "openai:chat".to_string(),
+                offset: 0,
+                limit: 256,
             })
             .await
-            .expect("fresh entry should satisfy the lookup");
-
-        assert_eq!(rows, expected);
-        assert_eq!(loads.load(Ordering::SeqCst), 0);
-        assert!(cache.inflight.lock().unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_keys_api_format_pages_by_offset() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
-        let first = StoredApiFormatCandidateRowsQuery {
-            api_format: "openai:chat".to_string(),
-            offset: 0,
-            limit: 256,
-        };
-        let second = StoredApiFormatCandidateRowsQuery {
-            offset: 256,
-            ..first.clone()
-        };
-
+            .unwrap();
         cache
-            .list_for_exact_api_format_page(&first)
-            .await
-            .expect("first page should load");
-        cache
-            .list_for_exact_api_format_page(&first)
-            .await
-            .expect("first page should be cached");
-        cache
-            .list_for_exact_api_format_page(&second)
-            .await
-            .expect("second page should load independently");
-
-        assert_eq!(inner.calls(), 2);
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_releases_inflight_when_leader_is_cancelled() {
-        let inner = Arc::new(FirstLoadPendingThenFastRepository::new());
-        let cache = Arc::new(CachedMinimalCandidateSelectionReadRepository::new(
-            inner.clone(),
-        ));
-        let leader_cache = cache.clone();
-        let leader = tokio::spawn(async move {
-            leader_cache
-                .list_for_exact_api_format_and_requested_model_page(
-                    &StoredRequestedModelCandidateRowsQuery {
-                        api_format: "openai:chat".to_string(),
-                        requested_model_name: "gpt-5.5".to_string(),
-                        offset: 0,
-                        limit: 64,
-                    },
-                )
-                .await
-        });
-
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        leader.abort();
-        let _ = leader.await;
-
-        tokio::time::timeout(
-            Duration::from_millis(200),
-            cache.list_for_exact_api_format_and_requested_model_page(
-                &StoredRequestedModelCandidateRowsQuery {
-                    api_format: "openai:chat".to_string(),
-                    requested_model_name: "gpt-5.5".to_string(),
-                    offset: 0,
-                    limit: 64,
-                },
-            ),
-        )
-        .await
-        .expect("cancelled leader must not leave a permanent inflight wait")
-        .unwrap();
-        assert_eq!(inner.calls(), 2);
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_cache_times_out_and_clears_stuck_load() {
-        let inner = Arc::new(FirstLoadPendingThenFastRepository::new());
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
-        let err = cache
-            .list_for_exact_api_format_and_requested_model_page(
-                &StoredRequestedModelCandidateRowsQuery {
-                    api_format: "openai:chat".to_string(),
-                    requested_model_name: "gpt-5.5".to_string(),
-                    offset: 0,
-                    limit: 64,
-                },
-            )
-            .await
-            .unwrap_err();
-        assert!(matches!(err, DataLayerError::TimedOut(_)));
-
-        cache
-            .list_for_exact_api_format_and_requested_model_page(
-                &StoredRequestedModelCandidateRowsQuery {
-                    api_format: "openai:chat".to_string(),
-                    requested_model_name: "gpt-5.5".to_string(),
-                    offset: 0,
-                    limit: 64,
-                },
-            )
+            .list_for_exact_api_format_page(&StoredApiFormatCandidateRowsQuery {
+                api_format: "openai:chat".to_string(),
+                offset: 256,
+                limit: 256,
+            })
             .await
             .unwrap();
+
         assert_eq!(inner.calls(), 2);
     }
 
     #[tokio::test]
-    async fn candidate_selection_cache_clear_releases_inflight_waiters() {
-        let inner = Arc::new(FirstLoadPendingThenFastRepository::new());
-        let cache = Arc::new(CachedMinimalCandidateSelectionReadRepository::new(
-            inner.clone(),
-        ));
-        let leader_cache = cache.clone();
-        let leader = tokio::spawn(async move {
-            leader_cache
-                .list_for_exact_api_format_and_requested_model_page(
-                    &StoredRequestedModelCandidateRowsQuery {
-                        api_format: "openai:chat".to_string(),
-                        requested_model_name: "gpt-5.5".to_string(),
-                        offset: 0,
-                        limit: 64,
-                    },
-                )
-                .await
-        });
-        tokio::time::sleep(Duration::from_millis(10)).await;
-
-        cache.clear_local_cache();
-        tokio::time::timeout(
-            Duration::from_millis(200),
-            cache.list_for_exact_api_format_and_requested_model_page(
-                &StoredRequestedModelCandidateRowsQuery {
-                    api_format: "openai:chat".to_string(),
-                    requested_model_name: "gpt-5.5".to_string(),
-                    offset: 0,
-                    limit: 64,
-                },
-            ),
-        )
-        .await
-        .expect("cache clear must release stale inflight waiters")
-        .unwrap();
-        assert_eq!(inner.calls(), 2);
-        leader.abort();
-        let _ = leader.await;
-    }
-
-    #[tokio::test]
-    async fn candidate_selection_load_balance_cache_keeps_seed_specific_entries() {
+    async fn load_balance_seeds_get_their_own_entries() {
         let inner = Arc::new(StubCandidateSelectionRepository {
             calls: AtomicUsize::new(0),
             delay: Duration::ZERO,
@@ -1232,25 +650,57 @@ mod tests {
             limit: 2,
         };
 
-        let first = cache
+        cache
             .list_pool_key_rows_for_group(&query("seed-a"))
             .await
             .unwrap();
-        let second = cache
+        cache
             .list_pool_key_rows_for_group(&query("seed-b"))
             .await
             .unwrap();
-
         assert_eq!(inner.calls(), 2);
-        assert_eq!(first.len(), 3);
-        assert_eq!(second.len(), 3);
 
-        let third = cache
+        let repeated = cache
             .list_pool_key_rows_for_group(&query("seed-a"))
             .await
             .unwrap();
         assert_eq!(inner.calls(), 2);
-        assert_eq!(third.len(), 3);
+        assert_eq!(repeated.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn clearing_the_cache_forces_a_reload() {
+        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
+
+        cache.list_for_exact_api_format("openai").await.unwrap();
+        cache.list_for_exact_api_format("openai").await.unwrap();
+        assert_eq!(inner.calls(), 1);
+
+        cache.clear_local_cache();
+        cache.list_for_exact_api_format("openai").await.unwrap();
+
+        assert_eq!(inner.calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_leader_that_never_answers_times_out_and_the_next_read_succeeds() {
+        let inner = Arc::new(FirstLoadPendingThenFastRepository::new());
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
+
+        let error = cache
+            .list_for_exact_api_format_and_requested_model_page(&requested_model_page(0, 64))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, DataLayerError::TimedOut(_)));
+
+        // The timed-out flight must not keep the key pinned.
+        cache
+            .list_for_exact_api_format_and_requested_model_page(&requested_model_page(0, 64))
+            .await
+            .unwrap();
+
+        assert_eq!(inner.calls(), 2);
     }
 
     fn sample_row(key_id: &str, key_internal_priority: i32) -> StoredMinimalCandidateSelectionRow {
