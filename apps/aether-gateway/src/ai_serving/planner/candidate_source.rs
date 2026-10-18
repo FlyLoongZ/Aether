@@ -24,7 +24,7 @@ use crate::cache::{
     record_candidate_page_cache_load, record_candidate_page_cache_miss,
     record_candidate_page_cache_none, record_candidate_row_page_cache_follower_wait,
     record_candidate_row_page_cache_hit, record_candidate_row_page_cache_load,
-    record_candidate_row_page_cache_miss, record_candidate_row_page_cache_none, CacheLoadObserver,
+    record_candidate_row_page_cache_miss, record_candidate_row_page_cache_none,
     CandidatePageCacheKey, CandidatePageSnapshot, CandidateRowPageCacheKey,
 };
 use crate::clock::request_distribution_seed;
@@ -653,20 +653,10 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         let ttl = candidate_page_cache_ttl_from_env();
         let stale_ttl = candidate_page_cache_stale_ttl(ttl);
         let cached = cache
-            .get_or_load_once_stale_while_refreshing(
-                key,
-                ttl,
-                stale_ttl,
-                || async {
-                    let page = self.next_priority_page_with_planning_gate().await?;
-                    Ok::<_, GatewayError>(Some(Arc::new(page) as Arc<CandidatePageSnapshot>))
-                },
-                CacheLoadObserver::new()
-                    .on_hit(record_candidate_page_cache_hit)
-                    .on_miss(record_candidate_page_cache_miss)
-                    .on_load(record_candidate_page_cache_load)
-                    .on_follower_wait(record_candidate_page_cache_follower_wait),
-            )
+            .get_or_load(key, stale_ttl, || async {
+                let page = self.next_priority_page_with_planning_gate().await?;
+                Ok::<_, GatewayError>(Some(Arc::new(page) as Arc<CandidatePageSnapshot>))
+            })
             .await?;
 
         match cached {
@@ -1004,30 +994,20 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         let ttl = candidate_page_cache_ttl_from_env();
         let stale_ttl = candidate_page_cache_stale_ttl(ttl);
         let cached = cache
-            .get_or_load_once_stale_while_refreshing(
-                key,
-                ttl,
-                stale_ttl,
-                || async {
-                    let page = read_requested_model_rows_fast_path_page(
-                        self.state.app().data.as_ref(),
-                        normalized_api_format,
-                        routing_model,
-                        requested_name,
-                        offset,
-                        limit,
-                        false,
-                    )
-                    .await
-                    .map_err(|err| GatewayError::Internal(err.to_string()))?;
-                    Ok::<_, GatewayError>(Some(Arc::new(page)))
-                },
-                CacheLoadObserver::new()
-                    .on_hit(record_candidate_row_page_cache_hit)
-                    .on_miss(record_candidate_row_page_cache_miss)
-                    .on_load(record_candidate_row_page_cache_load)
-                    .on_follower_wait(record_candidate_row_page_cache_follower_wait),
-            )
+            .get_or_load(key, stale_ttl, || async {
+                let page = read_requested_model_rows_fast_path_page(
+                    self.state.app().data.as_ref(),
+                    normalized_api_format,
+                    routing_model,
+                    requested_name,
+                    offset,
+                    limit,
+                    false,
+                )
+                .await
+                .map_err(|err| GatewayError::Internal(err.to_string()))?;
+                Ok::<_, GatewayError>(Some(Arc::new(page)))
+            })
             .await?;
 
         match cached {
@@ -1064,27 +1044,17 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         let ttl = candidate_page_cache_ttl_from_env();
         let stale_ttl = candidate_page_cache_stale_ttl(ttl);
         let cached = cache
-            .get_or_load_once_stale_while_refreshing(
-                key,
-                ttl,
-                stale_ttl,
-                || async {
-                    let page = read_api_format_rows_fallback_page(
-                        self.state.app().data.as_ref(),
-                        normalized_api_format,
-                        offset,
-                        limit,
-                    )
-                    .await
-                    .map_err(|err| GatewayError::Internal(err.to_string()))?;
-                    Ok::<_, GatewayError>(Some(Arc::new(page)))
-                },
-                CacheLoadObserver::new()
-                    .on_hit(record_candidate_row_page_cache_hit)
-                    .on_miss(record_candidate_row_page_cache_miss)
-                    .on_load(record_candidate_row_page_cache_load)
-                    .on_follower_wait(record_candidate_row_page_cache_follower_wait),
-            )
+            .get_or_load(key, stale_ttl, || async {
+                let page = read_api_format_rows_fallback_page(
+                    self.state.app().data.as_ref(),
+                    normalized_api_format,
+                    offset,
+                    limit,
+                )
+                .await
+                .map_err(|err| GatewayError::Internal(err.to_string()))?;
+                Ok::<_, GatewayError>(Some(Arc::new(page)))
+            })
             .await?;
 
         match cached {

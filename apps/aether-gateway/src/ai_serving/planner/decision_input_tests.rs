@@ -102,7 +102,8 @@ async fn explicit_auth_snapshot_override_does_not_fall_back_to_the_planner_cache
     // therefore be the exact value used to build the planner input.
     let state = AppState::new().expect("test state should build");
     let mut strong_snapshot = sample_auth_snapshot();
-    strong_snapshot.api_key_allowed_models = Some(vec!["gpt-live-only".to_string()]);
+    std::sync::Arc::make_mut(&mut strong_snapshot).api_key_allowed_models =
+        Some(vec!["gpt-live-only".to_string()]);
 
     let resolved = resolve_local_authenticated_decision_input_with_snapshot(
         &state,
@@ -117,14 +118,14 @@ async fn explicit_auth_snapshot_override_does_not_fall_back_to_the_planner_cache
     .expect("snapshot override should resolve")
     .expect("the explicit snapshot should replace the missing cached value");
 
-    assert_eq!(resolved.auth_snapshot, strong_snapshot);
+    assert_eq!(*resolved.auth_snapshot, *strong_snapshot);
 }
 
 #[tokio::test]
 async fn explicit_auth_snapshot_override_rejects_an_identity_mismatch() {
     let state = AppState::new().expect("test state should build");
     let mut wrong_snapshot = sample_auth_snapshot();
-    wrong_snapshot.api_key_id = "another-key".to_string();
+    std::sync::Arc::make_mut(&mut wrong_snapshot).api_key_id = "another-key".to_string();
 
     let error = resolve_local_authenticated_decision_input_with_snapshot(
         &state,
@@ -226,7 +227,7 @@ async fn api_key_routing_selection_applies_at_planner_and_invalidates_after_chan
     ) -> Result<LocalRequestedModelDecisionInput, GatewayError> {
         let mut input = sample_decision_input();
         input.auth_context.api_key_id = key_id.into();
-        input.auth_snapshot.api_key_id = key_id.into();
+        std::sync::Arc::make_mut(&mut input.auth_snapshot).api_key_id = key_id.into();
         attach_routing_policy_to_local_requested_model_input(
             state,
             parts,
@@ -402,8 +403,8 @@ fn sample_auth_context() -> ExecutionRuntimeAuthContext {
     }
 }
 
-fn sample_auth_snapshot() -> GatewayAuthApiKeySnapshot {
-    GatewayAuthApiKeySnapshot {
+fn sample_auth_snapshot() -> std::sync::Arc<GatewayAuthApiKeySnapshot> {
+    std::sync::Arc::new(GatewayAuthApiKeySnapshot {
         user_id: "user-1".to_string(),
         username: "alice".to_string(),
         email: None,
@@ -428,7 +429,7 @@ fn sample_auth_snapshot() -> GatewayAuthApiKeySnapshot {
         api_key_allowed_models: None,
         api_key_ip_rules: None,
         currently_usable: true,
-    }
+    })
 }
 
 fn sample_decision_input() -> LocalRequestedModelDecisionInput {

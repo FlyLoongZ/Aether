@@ -33,7 +33,7 @@ impl AppState {
         let runtime_key = format!("{ADMIN_SECURITY_BLACKLIST_PREFIX}{cache_key}");
         Ok(self
             .admin_security_blacklist_cache
-            .get_or_load_once(cache_key, admin_security_cache_ttl(), || async {
+            .get_or_load(cache_key, admin_security_cache_ttl(), || async {
                 self.runtime_state
                     .kv_exists(&runtime_key)
                     .await
@@ -50,7 +50,7 @@ impl AppState {
     ) -> Result<bool, GatewayError> {
         let rules = self
             .admin_security_whitelist_cache
-            .get_or_load_once(
+            .get_or_load(
                 ADMIN_SECURITY_WHITELIST_CACHE_KEY.to_string(),
                 admin_security_cache_ttl(),
                 || async {

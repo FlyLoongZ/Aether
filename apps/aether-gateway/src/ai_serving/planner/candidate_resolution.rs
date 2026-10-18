@@ -37,6 +37,41 @@ pub(crate) struct EligibleLocalExecutionCandidate {
     pub(crate) ranking: Option<SchedulerRankingOutcome>,
 }
 
+impl aether_cache::CacheWeight for EligibleLocalExecutionCandidate {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.candidate.cache_weight()
+                + self.provider_api_format.capacity()
+                + self.transport.cache_weight()
+                + self.orchestration.cache_weight()
+                + self
+                    .ranking
+                    .as_ref()
+                    .map_or(0, |ranking| ranking.cache_weight()),
+        )
+    }
+}
+
+impl aether_cache::CacheWeight for SkippedLocalExecutionCandidate {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.candidate.cache_weight()
+                + self
+                    .transport
+                    .as_ref()
+                    .map_or(0, aether_cache::CacheWeight::cache_weight)
+                + self
+                    .ranking
+                    .as_ref()
+                    .map_or(0, |ranking| ranking.cache_weight())
+                + self
+                    .extra_data
+                    .as_ref()
+                    .map_or(0, aether_cache::CacheWeight::cache_weight),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum LocalExecutionCandidateKind {
     #[default]

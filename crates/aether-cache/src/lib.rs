@@ -17,7 +17,6 @@ mod gate;
 mod namespace;
 mod once_map;
 mod snapshot;
-mod ttl_map;
 mod weight;
 
 pub use budget::CacheBudget;
@@ -29,5 +28,3 @@ pub use weight::{optional_strings_weight, value_weight, vec_weight, CacheWeight}
 
 #[cfg(test)]
 pub use once_map::CacheStats;
-
-pub use ttl_map::{ExpiringMap, ExpiringMapFreshEntry};

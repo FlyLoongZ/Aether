@@ -37,6 +37,14 @@ pub(crate) struct GatewayRoutingGroupSelection {
     pub source: String,
 }
 
+impl aether_cache::CacheWeight for GatewayRoutingGroupSelection {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.source.capacity() + self.group.as_ref().map_or(0, |group| group.name.capacity()),
+        )
+    }
+}
+
 pub(crate) async fn select_gateway_routing_group(
     repository: &(impl RoutingGroupReadRepository + ?Sized),
     input: GatewayRoutingSelectionInput<'_>,

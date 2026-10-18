@@ -91,6 +91,62 @@ pub struct GatewayProviderTransportEndpoint {
     pub proxy: Option<serde_json::Value>,
 }
 
+impl aether_cache::CacheWeight for GatewayProviderTransportSnapshot {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.provider.cache_weight() + self.endpoint.cache_weight() + self.key.cache_weight(),
+        )
+    }
+}
+
+impl aether_cache::CacheWeight for GatewayProviderTransportProvider {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.id.capacity()
+                + self.name.capacity()
+                + self.provider_type.capacity()
+                + self.website.as_ref().map_or(0, String::capacity)
+                + self
+                    .proxy
+                    .as_ref()
+                    .map_or(0, aether_cache::CacheWeight::cache_weight)
+                + self
+                    .config
+                    .as_ref()
+                    .map_or(0, aether_cache::CacheWeight::cache_weight),
+        )
+    }
+}
+
+impl aether_cache::CacheWeight for GatewayProviderTransportEndpoint {
+    fn cache_weight(&self) -> usize {
+        let json = [
+            &self.header_rules,
+            &self.body_rules,
+            &self.config,
+            &self.format_acceptance_config,
+            &self.proxy,
+        ]
+        .into_iter()
+        .map(|value| {
+            value
+                .as_ref()
+                .map_or(0, aether_cache::CacheWeight::cache_weight)
+        })
+        .sum::<usize>();
+        aether_cache::value_weight::<Self>(
+            self.id.capacity()
+                + self.provider_id.capacity()
+                + self.api_format.capacity()
+                + self.api_family.as_ref().map_or(0, String::capacity)
+                + self.endpoint_kind.as_ref().map_or(0, String::capacity)
+                + self.base_url.capacity()
+                + self.custom_path.as_ref().map_or(0, String::capacity)
+                + json,
+        )
+    }
+}
+
 impl std::fmt::Debug for GatewayProviderTransportEndpoint {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
@@ -144,6 +200,43 @@ pub struct GatewayProviderTransportKey {
     pub decrypted_api_key: String,
     #[serde(skip_serializing)]
     pub decrypted_auth_config: Option<String>,
+}
+
+impl aether_cache::CacheWeight for GatewayProviderTransportKey {
+    fn cache_weight(&self) -> usize {
+        let lists = aether_cache::optional_strings_weight(self.api_formats.as_ref())
+            + aether_cache::optional_strings_weight(self.allowed_models.as_ref());
+        let json = [
+            &self.auth_type_by_format,
+            &self.allow_auth_channel_mismatch_formats,
+            &self.capabilities,
+            &self.rate_multipliers,
+            &self.global_priority_by_format,
+            &self.proxy,
+            &self.fingerprint,
+            &self.upstream_metadata,
+        ]
+        .into_iter()
+        .map(|value| {
+            value
+                .as_ref()
+                .map_or(0, aether_cache::CacheWeight::cache_weight)
+        })
+        .sum::<usize>();
+        aether_cache::value_weight::<Self>(
+            self.id.capacity()
+                + self.provider_id.capacity()
+                + self.name.capacity()
+                + self.auth_type.capacity()
+                + self.decrypted_api_key.capacity()
+                + self
+                    .decrypted_auth_config
+                    .as_ref()
+                    .map_or(0, String::capacity)
+                + lists
+                + json,
+        )
+    }
 }
 
 impl std::fmt::Debug for GatewayProviderTransportKey {

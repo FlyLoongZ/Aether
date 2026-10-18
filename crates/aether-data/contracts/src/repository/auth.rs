@@ -1,3 +1,4 @@
+use aether_cache::{optional_strings_weight, value_weight, CacheWeight};
 use async_trait::async_trait;
 
 fn redacted_optional_secret<T>(value: &Option<T>) -> Option<&'static str> {
@@ -164,6 +165,27 @@ pub struct ResolvedAuthApiKeySnapshot {
     pub api_key_allowed_models: Option<Vec<String>>,
     pub api_key_ip_rules: Option<Vec<String>>,
     pub currently_usable: bool,
+}
+
+impl CacheWeight for ResolvedAuthApiKeySnapshot {
+    fn cache_weight(&self) -> usize {
+        value_weight::<Self>(
+            self.user_id.capacity()
+                + self.username.capacity()
+                + self.email.as_ref().map_or(0, String::capacity)
+                + self.user_role.capacity()
+                + self.user_auth_source.capacity()
+                + self.api_key_id.capacity()
+                + self.api_key_name.as_ref().map_or(0, String::capacity)
+                + optional_strings_weight(self.user_allowed_providers.as_ref())
+                + optional_strings_weight(self.user_allowed_api_formats.as_ref())
+                + optional_strings_weight(self.user_allowed_models.as_ref())
+                + optional_strings_weight(self.api_key_allowed_providers.as_ref())
+                + optional_strings_weight(self.api_key_allowed_api_formats.as_ref())
+                + optional_strings_weight(self.api_key_allowed_models.as_ref())
+                + optional_strings_weight(self.api_key_ip_rules.as_ref()),
+        )
+    }
 }
 
 impl ResolvedAuthApiKeySnapshot {

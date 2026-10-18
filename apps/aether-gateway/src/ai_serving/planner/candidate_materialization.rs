@@ -42,7 +42,7 @@ use crate::cache::{
     candidate_page_cache_stale_ttl, candidate_page_cache_ttl_from_env,
     record_candidate_page_resolve_cache_follower_wait, record_candidate_page_resolve_cache_hit,
     record_candidate_page_resolve_cache_load, record_candidate_page_resolve_cache_miss,
-    CacheLoadObserver, CandidateResolvedPageCacheKey, CandidateResolvedPageSnapshot,
+    CandidateResolvedPageCacheKey, CandidateResolvedPageSnapshot,
 };
 use crate::clock::current_unix_ms;
 use crate::dispatch::refs::dispatch_ref_for_local_candidate;
@@ -1344,7 +1344,7 @@ async fn resolve_priority_candidate_page_with_cache(
     let request_auth_channel = cursor.request_auth_channel.as_deref();
     let resolution_mode = cursor.resolution_mode;
     let cached = cache
-        .get_or_load_once_stale_while_revalidating(
+        .get_or_load_revalidating(
             key,
             ttl,
             stale_ttl,
@@ -1376,11 +1376,6 @@ async fn resolve_priority_candidate_page_with_cache(
                     resolution_mode,
                 )
             },
-            CacheLoadObserver::new()
-                .on_hit(record_candidate_page_resolve_cache_hit)
-                .on_miss(record_candidate_page_resolve_cache_miss)
-                .on_load(record_candidate_page_resolve_cache_load)
-                .on_follower_wait(record_candidate_page_resolve_cache_follower_wait),
         )
         .await
         .unwrap_or(None);

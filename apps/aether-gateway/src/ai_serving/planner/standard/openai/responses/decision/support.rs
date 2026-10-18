@@ -106,7 +106,7 @@ pub(crate) async fn resolve_local_openai_responses_decision_input_with_snapshot(
         resolve_local_authenticated_decision_input_with_snapshot(
             state,
             auth_context.clone(),
-            Some(auth_snapshot.clone()),
+            Some(std::sync::Arc::new(auth_snapshot.clone())),
             Some(requested_model.as_str()),
             decision.auth_endpoint_signature.as_deref(),
             None,

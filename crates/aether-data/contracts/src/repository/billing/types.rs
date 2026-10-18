@@ -1,3 +1,4 @@
+use aether_cache::{value_weight, CacheWeight};
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -402,6 +403,13 @@ pub struct UserDailyQuotaAvailabilityRecord {
     pub used_usd: f64,
     pub remaining_usd: f64,
     pub allow_wallet_overage: bool,
+}
+
+impl CacheWeight for UserDailyQuotaAvailabilityRecord {
+    fn cache_weight(&self) -> usize {
+        // Every field is a small scalar.
+        value_weight::<Self>(0)
+    }
 }
 
 #[async_trait]
