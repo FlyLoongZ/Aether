@@ -59,8 +59,6 @@ mod auth_cookie;
 mod dashboard;
 #[path = "public_support/routing_groups.rs"]
 mod routing_groups;
-#[path = "public_support/vscodex.rs"]
-mod vscodex;
 
 #[tokio::test]
 async fn health_v2_public_scope_filters_summary_lists_and_details_before_projection() {
