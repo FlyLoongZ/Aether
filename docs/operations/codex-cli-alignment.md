@@ -27,7 +27,7 @@
 
 记忆接口是 CLI 可选功能对应的协议。是否启动记忆任务仍由 CLI 自己的 feature/config 决定。它要求提供商支持该原生端点；Kiro、Grok、Antigravity 和 Gemini CLI 等私有适配器不能通过格式标签冒充支持。配置自定义路径时须使用 `/memories/{operation}` 等模板；仅描述 Responses 的固定路径会被拒绝。
 
-Apps 文件上传属于 CLI 的 ChatGPT Apps 专用路径，普通自定义 API 提供商不会启动该流程；本次不将其伪装成通用 Responses 路由。`aether-vscodex` 的 app-server UI 协议版本属于独立客户端，不覆盖成 CLI 版本。
+Apps 文件上传属于 CLI 的 ChatGPT Apps 专用路径，普通自定义 API 提供商不会启动该流程；本次不将其伪装成通用 Responses 路由。
 
 验证命令：
 

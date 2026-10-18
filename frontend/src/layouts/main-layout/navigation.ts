@@ -21,7 +21,6 @@ import {
   Server,
   Shield,
   SlidersHorizontal,
-  SquareTerminal,
   Users,
   Wallet,
   Zap,
@@ -51,7 +50,6 @@ const moduleIconMap: Record<string, LucideIcon> = {
   Server,
   Send,
   SlidersHorizontal,
-  SquareTerminal,
   CreditCard,
   Gift,
 }
@@ -90,7 +88,6 @@ export function buildNavigation(options: {
         items: [
           { name: t('nav.modelCatalog'), href: '/dashboard/models', icon: Box },
           { name: t('nav.apiKeys'), href: '/dashboard/api-keys', icon: Key },
-          { name: t('nav.vscodex'), href: '/dashboard/vscodex', icon: SquareTerminal },
         ]
       },
       {

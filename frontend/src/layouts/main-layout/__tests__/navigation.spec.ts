@@ -59,58 +59,6 @@ describe('main layout navigation builder', () => {
     expect(navigation.flatMap(group => group.items.map(item => item.name))).toContain('tx:nav.myReferral')
   })
 
-  it('exposes remote control to users and active administrators', () => {
-    const userNavigation = buildNavigation({
-      canAccessAdmin: false,
-      modules: {},
-      isModuleActive: () => false,
-      t: translate,
-    })
-    const adminNavigation = buildNavigation({
-      canAccessAdmin: true,
-      modules: {
-        vscodex: {
-          active: true,
-          name: 'test-module',
-          available: true,
-          enabled: true,
-          config_validated: true,
-          config_error: null,
-          description: '',
-          category: 'integration',
-          health: 'healthy',
-          admin_route: '/dashboard/vscodex',
-          admin_menu_group: 'overview',
-          admin_menu_order: 80,
-          admin_menu_icon: 'SquareTerminal',
-          display_name: '远程控制',
-        },
-      },
-      isModuleActive: () => false,
-      t: translate,
-    })
-
-    const findVscodeControl = (navigation: ReturnType<typeof buildNavigation>) => (
-      navigation
-        .flatMap(group => group.items)
-        .find(item => item.href === '/dashboard/vscodex')
-    )
-
-    expect(findVscodeControl(userNavigation)).toMatchObject({
-      name: 'tx:nav.vscodex',
-      href: '/dashboard/vscodex',
-    })
-    expect(findVscodeControl(adminNavigation)).toMatchObject({
-      name: '远程控制',
-      href: '/dashboard/vscodex',
-    })
-
-    const overviewItems = adminNavigation.find(group => group.title === 'tx:nav.group.overview')?.items ?? []
-    expect(overviewItems.findIndex(item => item.name === '远程控制')).toBe(
-      overviewItems.findIndex(item => item.name === 'tx:nav.healthMonitor') + 1,
-    )
-  })
-
   it('keeps the five fixed overview destinations in product order', () => {
     const navigation = buildNavigation({ canAccessAdmin: true, modules: {}, isModuleActive: () => false })
     expect(navigation[0]?.items.map(item => item.href)).toEqual([
@@ -194,32 +142,32 @@ describe('main layout navigation builder', () => {
     ])
 
     expect(buildBreadcrumbs({
-      route: route('/dashboard/vscodex'),
+      route: route('/admin/first'),
       navigation: buildNavigation({
         canAccessAdmin: true,
         modules: {
-          vscodex: {
+          first: {
             active: true,
-          name: 'test-module',
-          available: true,
-          enabled: true,
-          config_validated: true,
-          config_error: null,
-          description: '',
-          category: 'integration',
-          health: 'healthy',
-            admin_route: '/dashboard/vscodex',
+            name: 'test-module',
+            available: true,
+            enabled: true,
+            config_validated: true,
+            config_error: null,
+            description: '',
+            category: 'integration',
+            health: 'healthy',
+            admin_route: '/admin/first',
             admin_menu_group: 'overview',
             admin_menu_order: 80,
-            admin_menu_icon: 'SquareTerminal',
-            display_name: '远程控制',
+            admin_menu_icon: 'Gift',
+            display_name: 'First module',
           },
         },
         isModuleActive: () => false,
         t: translate,
       }),
       modules: {
-        vscodex: {
+        first: {
           active: true,
           name: 'test-module',
           available: true,
@@ -229,18 +177,18 @@ describe('main layout navigation builder', () => {
           description: '',
           category: 'integration',
           health: 'healthy',
-          admin_route: '/dashboard/vscodex',
+          admin_route: '/admin/first',
           admin_menu_group: 'overview',
           admin_menu_order: 80,
-          admin_menu_icon: 'SquareTerminal',
-          display_name: '远程控制',
+          admin_menu_icon: 'Gift',
+          display_name: 'First module',
         },
       },
-      isNavActive: href => href === '/dashboard/vscodex',
+      isNavActive: href => href === '/admin/first',
       t: translate,
     })).toEqual([
       expect.objectContaining({ label: expect.any(String) }),
-      { label: '远程控制' },
+      { label: 'First module' },
     ])
   })
 

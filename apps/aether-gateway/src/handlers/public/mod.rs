@@ -29,5 +29,5 @@ pub(crate) use self::support::filter_eligible_model_rows;
 pub(crate) use self::support::{
     build_api_key_install_session_response, build_unhandled_public_support_response,
     matches_model_mapping_for_models, maybe_build_local_admin_announcements_response,
-    maybe_build_local_public_support_response, vscodex_ws_proxy, CreateApiKeyInstallSessionRequest,
+    maybe_build_local_public_support_response, CreateApiKeyInstallSessionRequest,
 };
