@@ -93,7 +93,6 @@ impl ProviderTransportSnapshotFlight {
 }
 
 pub(crate) const AUTH_API_KEY_LAST_USED_TTL: Duration = Duration::from_secs(60);
-pub(crate) const AUTH_API_KEY_LAST_USED_MAX_ENTRIES: usize = 10_000;
 // Keep normal freshness short for cross-node configuration propagation. A
 // stale entry is served while one background refresh runs, so an idle burst
 // does not turn expiry into a synchronous database wait.
