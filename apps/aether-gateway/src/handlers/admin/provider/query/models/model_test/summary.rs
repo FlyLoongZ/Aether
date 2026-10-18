@@ -11,7 +11,7 @@ pub(super) fn provider_query_test_attempt_payload(
     execution: &ProviderQueryExecutionOutcome,
 ) -> Value {
     let endpoint_route = provider_query_endpoint_route_payload(candidate, execution);
-    let response_body = provider_query_success_response_body(execution);
+    let response_body = provider_query_response_body(execution);
     let endpoint_product = endpoint_route
         .get("product")
         .cloned()
@@ -51,15 +51,50 @@ pub(super) fn provider_query_test_attempt_payload(
     })
 }
 
+// Model tests are an admin diagnostic surface: the provider's own reason is
+// what makes a failed attempt actionable, so the projection keeps it and only
+// strips the credentials this gateway sent.
+const PROVIDER_QUERY_DIAGNOSTIC_MAX_CHARS: usize = 512;
+const PROVIDER_QUERY_SENSITIVE_VALUE_MIN_LEN: usize = 8;
+
 pub(super) fn provider_query_error_projection(
     execution: &ProviderQueryExecutionOutcome,
 ) -> Option<String> {
-    execution.error_message.as_ref().map(|_| {
-        execution
-            .status_code
-            .map(|status| format!("HTTP {status}"))
-            .unwrap_or_else(|| "Provider request failed".to_string())
+    let message = execution.error_message.as_deref()?;
+    let sensitive_values = provider_query_execution_sensitive_values(execution);
+    let message = provider_query_bounded_diagnostic(&provider_query_mask_sensitive_values(
+        message,
+        &sensitive_values,
+    ));
+    Some(match execution.status_code {
+        Some(status) => format!("HTTP {status}: {message}"),
+        None => message,
     })
+}
+
+fn provider_query_mask_sensitive_values(
+    value: &str,
+    sensitive_values: &BTreeSet<String>,
+) -> String {
+    let mut masked = value.to_string();
+    for sensitive in sensitive_values {
+        if sensitive.len() >= PROVIDER_QUERY_SENSITIVE_VALUE_MIN_LEN {
+            masked = masked.replace(sensitive.as_str(), "[REDACTED]");
+        }
+    }
+    masked
+}
+
+fn provider_query_bounded_diagnostic(value: &str) -> String {
+    if value.chars().count() <= PROVIDER_QUERY_DIAGNOSTIC_MAX_CHARS {
+        return value.to_string();
+    }
+    let mut bounded: String = value
+        .chars()
+        .take(PROVIDER_QUERY_DIAGNOSTIC_MAX_CHARS)
+        .collect();
+    bounded.push('…');
+    bounded
 }
 
 fn provider_query_endpoint_route_payload(
@@ -212,13 +247,11 @@ pub(super) fn redacted_provider_query_value(value: &Value) -> Value {
     redacted_provider_query_value_with_sensitive_values(value, &BTreeSet::new())
 }
 
-pub(super) fn provider_query_success_response_body(
+/// Reported for failures too: the upstream body is the evidence behind the
+/// projected error message. Redaction is shared with the success path.
+pub(super) fn provider_query_response_body(
     execution: &ProviderQueryExecutionOutcome,
 ) -> Option<Value> {
-    if execution.status != "success" {
-        return None;
-    }
-
     let sensitive_values = provider_query_execution_sensitive_values(execution);
     execution
         .response_body
@@ -706,7 +739,7 @@ mod tests {
     }
 
     #[test]
-    fn attempt_payload_does_not_reflect_upstream_error_text_or_response_secrets() {
+    fn failed_attempt_reports_upstream_reason_and_keeps_body() {
         let candidate = ProviderQueryTestCandidate {
             endpoint: StoredProviderCatalogEndpoint::new(
                 "endpoint-1".to_string(),
@@ -733,34 +766,51 @@ mod tests {
             status: "failed",
             skip_reason: None,
             error_message: Some(
-                "authorization=Bearer upstream-secret https://user:pass@example.test?q=secret"
-                    .to_string(),
+                "Invalid model: request-credential-token-1234 is not available".to_string(),
             ),
-            status_code: Some(502),
+            status_code: Some(404),
             latency_ms: Some(1),
-            request_url: "https://api.example.test/v1/chat".to_string(),
-            request_headers: BTreeMap::new(),
-            request_body: json!({}),
+            request_url: "https://api.example.test/v1/chat?key=query-credential-token-9012"
+                .to_string(),
+            request_headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "Bearer request-credential-token-1234".to_string(),
+            )]),
+            request_body: json!({"metadata": {"apiKey": "body-credential-token-5678"}}),
             response_headers: BTreeMap::new(),
             response_body: Some(json!({
-                "error": {"message": "authorization=Bearer response-message-secret"},
-                "content": "password=response-content-secret",
-                "access_token": "response-secret",
-                "nested": {"password": "private-password"}
+                "error": {
+                    "message": "The model `gpt-test` does not exist",
+                    "type": "invalid_request_error",
+                    "code": "model_not_found"
+                },
+                "access_token": "response-secret-token"
             })),
         };
 
         let payload = provider_query_test_attempt_payload(0, &candidate, &execution);
-        assert_eq!(payload["error_message"], json!("HTTP 502"));
-        assert!(payload["response_body"].is_null());
+        assert_eq!(
+            payload["error_message"],
+            json!("HTTP 404: Invalid model: [REDACTED] is not available")
+        );
+        assert_eq!(
+            payload.pointer("/response_body/error/code"),
+            Some(&json!("model_not_found"))
+        );
+        assert_eq!(
+            payload.pointer("/response_body/error/message"),
+            Some(&json!("The model `gpt-test` does not exist"))
+        );
+        assert_eq!(
+            payload.pointer("/response_body/access_token"),
+            Some(&json!("[REDACTED]"))
+        );
         let serialized = payload.to_string();
         for secret in [
-            "upstream-secret",
-            "response-message-secret",
-            "response-content-secret",
-            "response-secret",
-            "private-password",
-            "user:pass",
+            "request-credential-token-1234",
+            "query-credential-token-9012",
+            "body-credential-token-5678",
+            "response-secret-token",
         ] {
             assert!(!serialized.contains(secret), "leaked {secret}");
         }
@@ -770,9 +820,8 @@ mod tests {
             provider_query_test_attempt_payload(0, &candidate, &execution);
         assert_eq!(
             network_failure_payload["error_message"],
-            json!("Provider request failed")
+            json!("Invalid model: [REDACTED] is not available")
         );
-        assert!(network_failure_payload["response_body"].is_null());
     }
 
     #[test]

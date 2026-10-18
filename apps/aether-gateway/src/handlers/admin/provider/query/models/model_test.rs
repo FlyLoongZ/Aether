@@ -92,7 +92,7 @@ use self::model_mapping::{
 };
 use self::summary::{
     provider_query_candidate_summary_payload, provider_query_error_projection,
-    provider_query_success_response_body, provider_query_test_attempt_payload,
+    provider_query_response_body, provider_query_test_attempt_payload,
 };
 
 pub(crate) const ADMIN_PROVIDER_QUERY_LOCAL_TEST_MODEL_MESSAGE: &str =
@@ -1640,6 +1640,31 @@ fn provider_query_execution_json_body(result: &aether_contracts::ExecutionResult
         })
 }
 
+const PROVIDER_QUERY_RAW_ERROR_BODY_MAX_CHARS: usize = 8 * 1024;
+
+fn provider_query_error_response_body(result: &aether_contracts::ExecutionResult) -> Option<Value> {
+    if let Some(body) = provider_query_execution_json_body(result) {
+        return Some(body);
+    }
+    // Reverse proxies answer with HTML or plain text; keep it as evidence
+    // instead of reporting a bare status code.
+    provider_query_decode_execution_body(result)
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
+        .map(|text| {
+            let total = text.chars().count();
+            let mut bounded: String = text
+                .chars()
+                .take(PROVIDER_QUERY_RAW_ERROR_BODY_MAX_CHARS)
+                .collect();
+            if bounded.chars().count() < total {
+                bounded.push('…');
+            }
+            Value::String(bounded)
+        })
+}
+
 fn provider_query_aggregate_standard_stream_sync_response(
     provider_api_format: &str,
     body: &[u8],
@@ -1915,7 +1940,7 @@ async fn provider_query_execute_kiro_test_candidate(
         )
         .await?
     } else {
-        result.body.as_ref().and_then(|body| body.json_body.clone())
+        provider_query_error_response_body(&result)
     };
     let did_fail = result.status_code >= 400;
     let error_message = if did_fail {
@@ -2443,7 +2468,7 @@ async fn provider_query_execute_openai_image_test_candidate(
         .await?
         .or_else(|| provider_query_execution_json_body(&result))
     } else {
-        provider_query_execution_json_body(&result)
+        provider_query_error_response_body(&result)
     };
     let did_fail = result.status_code >= 400;
     let error_message = if did_fail {
@@ -2723,7 +2748,7 @@ async fn provider_query_execute_antigravity_test_candidate(
         .await?
         .or_else(|| result.body.as_ref().and_then(|body| body.json_body.clone()))
     } else {
-        result.body.as_ref().and_then(|body| body.json_body.clone())
+        provider_query_error_response_body(&result)
     };
     let did_fail = result.status_code >= 400;
     let error_message = if did_fail {
@@ -2888,16 +2913,20 @@ async fn provider_query_execute_grok_test_candidate(
             });
         }
     };
-    let response_body = result.body.as_ref().and_then(|body| body.json_body.clone());
-    let did_fail = result.status_code >= 400 || response_body.is_none();
+    let json_body = result.body.as_ref().and_then(|body| body.json_body.clone());
+    let did_fail = result.status_code >= 400 || json_body.is_none();
+    // Failure classification keeps the JSON-only rule, but the error text is
+    // still the best evidence when the provider answered with plain text.
+    let response_body = if did_fail {
+        provider_query_error_response_body(&result)
+    } else {
+        json_body
+    };
     let error_message = if did_fail {
         provider_query_extract_error_message(&result).or_else(|| {
-            response_body.is_none().then(|| {
-                format!(
-                    "Provider returned HTTP {} without a model-test response body",
-                    result.status_code
-                )
-            })
+            response_body
+                .is_none()
+                .then(|| "Provider returned no model-test response body".to_string())
         })
     } else {
         None
@@ -3527,18 +3556,14 @@ async fn provider_query_execute_standard_test_candidate(
             private_report_context.as_ref(),
         )
     } else {
-        result.body.as_ref().and_then(|body| body.json_body.clone())
+        provider_query_error_response_body(&result)
     };
     let missing_success_body = result.status_code < 400 && response_body.is_none();
     let did_fail = result.status_code >= 400 || missing_success_body;
     let error_message = if did_fail {
         provider_query_extract_error_message(&result).or_else(|| {
-            missing_success_body.then(|| {
-                format!(
-                    "Provider returned HTTP {} without a model-test response body",
-                    result.status_code
-                )
-            })
+            missing_success_body
+                .then(|| "Provider returned no model-test response body".to_string())
         })
     } else {
         None
@@ -3703,18 +3728,14 @@ async fn provider_query_execute_windsurf_test_candidate(
         )
         .await?
     } else {
-        result.body.as_ref().and_then(|body| body.json_body.clone())
+        provider_query_error_response_body(&result)
     };
     let missing_success_body = result.status_code < 400 && response_body.is_none();
     let did_fail = result.status_code >= 400 || missing_success_body;
     let error_message = if did_fail {
         provider_query_extract_error_message(&result).or_else(|| {
-            missing_success_body.then(|| {
-                format!(
-                    "Provider returned HTTP {} without a model-test response body",
-                    result.status_code
-                )
-            })
+            missing_success_body
+                .then(|| "Provider returned no model-test response body".to_string())
         })
     } else {
         None
@@ -3919,7 +3940,7 @@ async fn build_admin_provider_query_kiro_failover_response(
             total_attempts += 1;
         }
         let is_success = execution.status == "success";
-        let response_body = provider_query_success_response_body(&execution);
+        let response_body = provider_query_response_body(&execution);
         attempts.push(provider_query_test_attempt_payload(
             candidate_index,
             candidate,
