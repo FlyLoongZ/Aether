@@ -5,6 +5,7 @@ use std::sync::{
     Arc,
 };
 
+use aether_contracts::ExecutionErrorKind;
 use aether_usage_runtime::{build_usage_event_data_seed, UsageEvent, UsageEventType};
 use axum::body::Body;
 use axum::http::{Response, StatusCode};
@@ -20,6 +21,63 @@ use super::submission::align_gemini_error_code_with_status;
 
 const TRANSPORT_ERROR_CLIENT_MESSAGE: &str =
     "Upstream transport failed before an HTTP response was received";
+const UPSTREAM_STREAM_FAILURE_MESSAGE: &str = "Upstream response stream failed";
+const EXECUTION_STREAM_PROTOCOL_FAILURE_MESSAGE: &str = "Execution runtime stream protocol failed";
+const EXECUTION_STREAM_PROCESSING_FAILURE_MESSAGE: &str =
+    "Execution runtime stream processing failed";
+const EXECUTION_STREAM_FAILURE_MESSAGE: &str = "Execution runtime stream failed";
+
+/// The single client-facing text table for execution failures.
+///
+/// Both the transport projection and the stream failure reports read it, so a
+/// failure never reads differently depending on which path happened to handle
+/// it. `None` means the text depends on the response (an upstream HTTP status)
+/// rather than on the kind alone, and the caller supplies it.
+pub(crate) fn client_message_for_execution_error_kind(
+    kind: &ExecutionErrorKind,
+) -> Option<&'static str> {
+    match kind {
+        ExecutionErrorKind::ConnectTimeout => Some("Upstream connection timed out"),
+        ExecutionErrorKind::FirstByteTimeout => {
+            Some("Upstream response timed out before the first byte")
+        }
+        ExecutionErrorKind::ReadTimeout => Some("Upstream response stream timed out"),
+        ExecutionErrorKind::TlsError => Some("Upstream TLS connection failed"),
+        ExecutionErrorKind::ProxyError => Some("Upstream proxy request failed"),
+        ExecutionErrorKind::ProtocolError => Some(UPSTREAM_STREAM_FAILURE_MESSAGE),
+        ExecutionErrorKind::Cancelled => Some("Request was cancelled"),
+        ExecutionErrorKind::Internal => Some(EXECUTION_STREAM_FAILURE_MESSAGE),
+        ExecutionErrorKind::Upstream4xx | ExecutionErrorKind::Upstream5xx => None,
+    }
+}
+
+/// Failures the execution runtime reports by name rather than as an
+/// `ExecutionErrorKind` value.
+fn execution_runtime_failure_message(error_type: &str) -> Option<&'static str> {
+    match error_type {
+        "execution_runtime_stream_read_error" => Some(UPSTREAM_STREAM_FAILURE_MESSAGE),
+        "execution_runtime_stream_frame_decode_error"
+        | "execution_runtime_stream_chunk_decode_error" => {
+            Some(EXECUTION_STREAM_PROTOCOL_FAILURE_MESSAGE)
+        }
+        "execution_runtime_sync_json_stream_bridge_error"
+        | "execution_runtime_stream_rewrite_error"
+        | "execution_runtime_stream_rewrite_flush_error" => {
+            Some(EXECUTION_STREAM_PROCESSING_FAILURE_MESSAGE)
+        }
+        _ => None,
+    }
+}
+
+/// Shared lookup by the `error_type` string that reaches the client. Falls back
+/// to `None` for unknown names so each caller keeps its own generic text.
+pub(crate) fn client_message_for_error_type(error_type: &str) -> Option<&'static str> {
+    serde_json::from_value::<ExecutionErrorKind>(Value::String(error_type.to_string()))
+        .ok()
+        .as_ref()
+        .and_then(client_message_for_execution_error_kind)
+        .or_else(|| execution_runtime_failure_message(error_type))
+}
 
 /// Client-facing projection of a transport failure.
 ///
@@ -40,25 +98,11 @@ fn project_transport_failure(error_type: &str) -> TransportFailureProjection {
     } else {
         StatusCode::BAD_GATEWAY.as_u16()
     };
-    let message = match lowered.as_str() {
-        "connect_timeout" => "Upstream connection timed out",
-        "first_byte_timeout" => "Upstream response timed out before the first byte",
-        "read_timeout" => "Upstream response stream timed out",
-        "tls_error" => "Upstream TLS connection failed",
-        "proxy_error" => "Upstream proxy request failed",
-        "execution_runtime_stream_read_error" => "Upstream response stream failed",
-        "execution_runtime_stream_frame_decode_error"
-        | "execution_runtime_stream_chunk_decode_error" => {
-            "Execution runtime stream protocol failed"
-        }
-        "execution_runtime_sync_json_stream_bridge_error"
-        | "execution_runtime_stream_rewrite_error"
-        | "execution_runtime_stream_rewrite_flush_error" => {
-            "Execution runtime stream processing failed"
-        }
-        _ if is_timeout => "Upstream response timed out",
-        _ => TRANSPORT_ERROR_CLIENT_MESSAGE,
-    };
+    let message = client_message_for_error_type(&lowered).unwrap_or(if is_timeout {
+        "Upstream response timed out"
+    } else {
+        TRANSPORT_ERROR_CLIENT_MESSAGE
+    });
     TransportFailureProjection {
         status_code,
         message,
@@ -216,7 +260,12 @@ pub(crate) async fn build_transport_error_stop_response(
 
 #[cfg(test)]
 mod tests {
-    use super::project_transport_failure;
+    use aether_contracts::ExecutionErrorKind;
+
+    use super::{
+        client_message_for_error_type, client_message_for_execution_error_kind,
+        project_transport_failure,
+    };
 
     #[test]
     fn timeout_class_failures_are_gateway_timeouts() {
@@ -266,5 +315,46 @@ mod tests {
             project_transport_failure("grok_execution_unavailable").message,
             "Upstream transport failed before an HTTP response was received"
         );
+    }
+
+    #[test]
+    fn every_error_kind_resolves_to_the_same_text_from_a_string() {
+        // The stop path resolves by `error_type`, the stream report path by the
+        // kind value. They share one table, so the two must agree.
+        for kind in [
+            ExecutionErrorKind::ConnectTimeout,
+            ExecutionErrorKind::FirstByteTimeout,
+            ExecutionErrorKind::ReadTimeout,
+            ExecutionErrorKind::TlsError,
+            ExecutionErrorKind::ProxyError,
+            ExecutionErrorKind::ProtocolError,
+            ExecutionErrorKind::Cancelled,
+            ExecutionErrorKind::Internal,
+        ] {
+            let error_type = serde_json::to_value(&kind)
+                .expect("kind should serialize")
+                .as_str()
+                .expect("kind should serialize to a string")
+                .to_string();
+            assert_eq!(
+                client_message_for_error_type(&error_type),
+                client_message_for_execution_error_kind(&kind),
+                "error_type: {error_type}"
+            );
+            assert!(
+                client_message_for_error_type(&error_type).is_some(),
+                "{error_type} must resolve"
+            );
+        }
+    }
+
+    #[test]
+    fn upstream_status_kinds_leave_the_text_to_the_caller() {
+        for kind in [
+            ExecutionErrorKind::Upstream4xx,
+            ExecutionErrorKind::Upstream5xx,
+        ] {
+            assert!(client_message_for_execution_error_kind(&kind).is_none());
+        }
     }
 }
