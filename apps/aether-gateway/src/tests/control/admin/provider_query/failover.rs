@@ -1467,9 +1467,9 @@ async fn gateway_retries_non_kiro_failover_after_success_status_without_body_imp
     assert_eq!(attempts[0]["status_code"], json!(200));
     assert_eq!(
         attempts[0]["error_message"],
-        // Attempt diagnostics intentionally expose only the status class;
-        // detailed provider response text is not returned to the admin UI.
-        json!("HTTP 200")
+        // Model-test diagnostics keep the provider's own reason available to
+        // the admin who configured this credential.
+        json!("HTTP 200: Provider returned no model-test response body")
     );
     assert_eq!(attempts[1]["status"], json!("success"));
 
