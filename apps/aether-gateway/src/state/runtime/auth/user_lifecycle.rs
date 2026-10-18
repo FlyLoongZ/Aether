@@ -1298,13 +1298,11 @@ mod tests {
 
         let cache_key = "auth-context-cache-key".to_string();
         let ttl = Duration::from_secs(60);
+        let key = || crate::cache::AuthContextCacheKey::resolved(&cache_key);
         state
             .auth_context_cache
-            .insert(cache_key.clone(), cached_auth_context(), ttl, 10);
-        assert!(state
-            .auth_context_cache
-            .get_fresh(&cache_key, ttl)
-            .is_some());
+            .publish(key(), cached_auth_context(), ttl);
+        assert!(state.auth_context_cache.peek_within(key(), ttl).is_some());
 
         state
             .update_user_group(&group.id, user_group_record(None, "unrestricted"))
@@ -1312,9 +1310,6 @@ mod tests {
             .expect("group should update")
             .expect("group should exist after update");
 
-        assert!(state
-            .auth_context_cache
-            .get_fresh(&cache_key, ttl)
-            .is_none());
+        assert!(state.auth_context_cache.peek_within(key(), ttl).is_none());
     }
 }

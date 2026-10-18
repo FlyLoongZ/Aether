@@ -1,5 +1,6 @@
 use std::{sync::OnceLock, time::Duration};
 
+use aether_cache::OnceMapError;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogProvider,
 };
@@ -24,22 +25,18 @@ use super::principal::derive_principal_candidate;
 use super::types::{
     GatewayCredentialCarrier, GatewayPrincipalCandidate, GatewayTrustedAuthHeaders,
 };
-use crate::cache::{AuthContextCacheGeneration, AuthContextInflightRegistration};
+use crate::cache::{AuthContextCacheKey, AUTH_CONTEXT_CACHE_TTL};
 use crate::headers::header_value_str;
 use crate::local_auth_token::{
     decode_local_auth_token, local_auth_token_identity_matches_user, LocalAuthTokenType,
 };
 
-const AUTH_CONTEXT_CACHE_TTL: Duration = Duration::from_secs(60);
 const AUTH_CONTEXT_CACHE_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 const AUTH_CONTEXT_NEGATIVE_CACHE_TTL: Duration = Duration::from_secs(10);
-const AUTH_CONTEXT_CACHE_MAX_ENTRIES: usize = 10_000;
-const AUTH_CONTEXT_CACHE_MAX_ENTRIES_ENV: &str = "AETHER_GATEWAY_AUTH_CONTEXT_CACHE_MAX_ENTRIES";
 const AUTH_CONTEXT_CACHE_REFRESH_INTERVAL_SECS_ENV: &str =
     "AETHER_GATEWAY_AUTH_CONTEXT_CACHE_REFRESH_INTERVAL_SECS";
 const AUTH_CONTEXT_NEGATIVE_CACHE_TTL_SECS_ENV: &str =
     "AETHER_GATEWAY_AUTH_CONTEXT_NEGATIVE_CACHE_TTL_SECS";
-const AUTH_CONTEXT_NEGATIVE_CACHE_KEY_PREFIX: &str = "negative:";
 
 #[derive(Debug, Clone, Deserialize)]
 struct AntigravityBearerBridgeConfig {
@@ -112,6 +109,12 @@ impl VerifiedApiKeyHash {
 
     fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+impl aether_cache::CacheWeight for VerifiedApiKeyHash {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(self.0.capacity())
     }
 }
 
@@ -222,7 +225,6 @@ pub(in super::super) async fn resolve_control_decision_auth_with_trusted_auth(
             headers,
             uri,
             decision.auth_endpoint_signature.as_deref(),
-            true,
             trusted_auth_verified,
         )
         .await?;
@@ -545,7 +547,6 @@ pub(crate) async fn resolve_execution_runtime_auth_context(
         headers,
         uri,
         Some(auth_endpoint_signature),
-        true,
         cfg!(test),
     )
     .await?
@@ -581,65 +582,44 @@ async fn revalidate_cached_auth_context(
         return Ok(auth_context);
     }
 
-    loop {
-        match state.auth_context_cache.register_inflight(cache_key) {
-            AuthContextInflightRegistration::Leader(guard) => {
-                let refreshed = match resolve_security_fresh_auth_context(
-                    state,
-                    headers,
-                    uri,
-                    auth_context.clone(),
-                    auth_endpoint_signature,
-                    trusted_auth_verified,
-                )
-                .await
-                {
-                    Ok(refreshed) => refreshed,
-                    Err(error) => {
-                        // A failed security refresh must not leave the old allow
-                        // available to this flight's followers. Publish the same
-                        // error so a failed backend read is not retried once per
-                        // follower.
-                        guard.fail(error.clone());
-                        return Err(error);
-                    }
-                };
-                if guard.generation_is_current() {
-                    put_cached_auth_context(
-                        state,
-                        cache_key.to_string(),
-                        refreshed.clone(),
-                        Some(guard.generation()),
-                    );
-                }
-                return Ok(refreshed);
-            }
-            AuthContextInflightRegistration::Follower(waiter) => {
-                waiter.wait().await?;
-                if let Some((refreshed, age)) = get_cached_auth_context_with_age(state, cache_key) {
-                    // A cancelled/failed leader leaves the old due entry in
-                    // place. Only a newly published security-fresh value may
-                    // be reused by followers.
-                    if !auth_context_cache_refresh_due(state, age) {
-                        return Ok(refreshed);
-                    }
-                }
-            }
-            AuthContextInflightRegistration::Bypass => {
-                let refreshed = resolve_security_fresh_auth_context(
-                    state,
-                    headers,
-                    uri,
-                    auth_context,
-                    auth_endpoint_signature,
-                    trusted_auth_verified,
-                )
-                .await;
-                if refreshed.is_err() {
-                    state.auth_context_cache.invalidate(cache_key);
-                }
-                return refreshed;
-            }
+    match state
+        .auth_context_cache
+        .reload(AuthContextCacheKey::resolved(cache_key), || {
+            resolve_security_fresh_auth_context(
+                state,
+                headers,
+                uri,
+                auth_context.clone(),
+                auth_endpoint_signature,
+                trusted_auth_verified,
+            )
+        })
+        .await
+    {
+        Ok(refreshed) => {
+            put_cached_auth_context(state, cache_key, refreshed.clone());
+            Ok(refreshed)
+        }
+        Err(OnceMapError::Load(error)) => {
+            // A failed security refresh must not leave the old allow readable
+            // by later requests on this key.
+            state.auth_context_cache.invalidate(cache_key);
+            Err(error)
+        }
+        // Admission or timeout means the load never ran, so run it here rather
+        // than turning cache pressure into an authorization failure.
+        Err(_) => {
+            let refreshed = resolve_security_fresh_auth_context(
+                state,
+                headers,
+                uri,
+                auth_context,
+                auth_endpoint_signature,
+                trusted_auth_verified,
+            )
+            .await?;
+            put_cached_auth_context(state, cache_key, refreshed.clone());
+            Ok(refreshed)
         }
     }
 }
@@ -677,7 +657,6 @@ async fn resolve_data_backed_auth_context_cached(
     headers: &http::HeaderMap,
     uri: &Uri,
     auth_endpoint_signature: Option<&str>,
-    cache_negative: bool,
     trusted_auth_verified: bool,
 ) -> Result<Option<GatewayControlAuthContext>, GatewayError> {
     let Some(cache_key) = cache_key else {
@@ -690,60 +669,24 @@ async fn resolve_data_backed_auth_context_cached(
         )
         .await;
     };
-    loop {
-        match state.auth_context_cache.register_inflight(cache_key) {
-            AuthContextInflightRegistration::Leader(guard) => {
-                let resolved = match resolve_data_backed_auth_context_with_trusted_auth(
-                    state,
-                    headers,
-                    uri,
-                    auth_endpoint_signature,
-                    trusted_auth_verified,
-                )
-                .await
-                {
-                    Ok(resolved) => resolved,
-                    Err(error) => {
-                        guard.fail(error.clone());
-                        return Err(error);
-                    }
-                };
-                if let Some(auth_context) = resolved.as_ref() {
-                    if cache_negative
-                        || (!auth_context.user_id.is_empty() && !auth_context.api_key_id.is_empty())
-                    {
-                        if guard.generation_is_current() {
-                            put_cached_auth_context(
-                                state,
-                                cache_key.to_string(),
-                                auth_context.clone(),
-                                Some(guard.generation()),
-                            );
-                        }
-                    }
-                }
-                return Ok(resolved);
-            }
-            AuthContextInflightRegistration::Follower(notified) => {
-                notified.wait().await?;
-                if let Some(auth_context) = get_cached_auth_context(state, cache_key) {
-                    return Ok(Some(auth_context));
-                }
-                if !cache_negative {
-                    return Ok(None);
-                }
-            }
-            AuthContextInflightRegistration::Bypass => {
-                return resolve_data_backed_auth_context_with_trusted_auth(
-                    state,
-                    headers,
-                    uri,
-                    auth_endpoint_signature,
-                    trusted_auth_verified,
-                )
-                .await;
-            }
+    let resolved = state
+        .auth_context_cache
+        .get_or_load(AuthContextCacheKey::resolved(cache_key), || {
+            resolve_data_backed_auth_context_with_trusted_auth(
+                state,
+                headers,
+                uri,
+                auth_endpoint_signature,
+                trusted_auth_verified,
+            )
+        })
+        .await?;
+    match resolved {
+        Some(auth_context) => {
+            put_cached_auth_context(state, cache_key, auth_context.clone());
+            Ok(Some(auth_context))
         }
+        None => Ok(None),
     }
 }
 
@@ -837,9 +780,8 @@ fn deny_refreshed_auth_context(
 
 fn put_cached_auth_context(
     state: &AppState,
-    cache_key: String,
+    cache_key: &str,
     auth_context: GatewayControlAuthContext,
-    generation: Option<AuthContextCacheGeneration>,
 ) {
     let (cache_key, ttl) = if is_negative_auth_context(&auth_context) {
         let ttl = auth_context_negative_cache_ttl();
@@ -847,39 +789,18 @@ fn put_cached_auth_context(
             return;
         }
         (
-            negative_auth_context_cache_key(&cache_key),
+            AuthContextCacheKey::negative(cache_key),
             AUTH_CONTEXT_CACHE_TTL.max(ttl),
         )
     } else {
-        (cache_key, AUTH_CONTEXT_CACHE_TTL)
+        (
+            AuthContextCacheKey::resolved(cache_key),
+            AUTH_CONTEXT_CACHE_TTL,
+        )
     };
-    if let Some(generation) = generation {
-        state.auth_context_cache.insert_if_generation(
-            cache_key,
-            auth_context,
-            ttl,
-            auth_context_cache_max_entries(),
-            &generation,
-        );
-    } else {
-        state.auth_context_cache.insert(
-            cache_key,
-            auth_context,
-            ttl,
-            auth_context_cache_max_entries(),
-        );
-    }
-}
-
-fn auth_context_cache_max_entries() -> usize {
-    static MAX_ENTRIES: OnceLock<usize> = OnceLock::new();
-    *MAX_ENTRIES.get_or_init(|| {
-        std::env::var(AUTH_CONTEXT_CACHE_MAX_ENTRIES_ENV)
-            .ok()
-            .and_then(|value| value.trim().parse::<usize>().ok())
-            .filter(|value| *value > 0)
-            .unwrap_or(AUTH_CONTEXT_CACHE_MAX_ENTRIES)
-    })
+    state
+        .auth_context_cache
+        .publish(cache_key, auth_context, ttl);
 }
 
 fn auth_context_cache_refresh_interval(_state: &AppState) -> Duration {
@@ -915,10 +836,6 @@ fn auth_context_negative_cache_ttl() -> Duration {
             .map(Duration::from_secs)
             .unwrap_or(AUTH_CONTEXT_NEGATIVE_CACHE_TTL)
     })
-}
-
-fn negative_auth_context_cache_key(cache_key: &str) -> String {
-    format!("{AUTH_CONTEXT_NEGATIVE_CACHE_KEY_PREFIX}{cache_key}")
 }
 
 fn is_negative_auth_context(auth_context: &GatewayControlAuthContext) -> bool {
@@ -1473,16 +1390,17 @@ fn get_cached_auth_context_with_age(
 ) -> Option<(GatewayControlAuthContext, Duration)> {
     let negative_ttl = auth_context_negative_cache_ttl();
     if !negative_ttl.is_zero() {
-        if let Some(auth_context) = state
+        if let Some(cached) = state
             .auth_context_cache
-            .get_fresh_with_age(&negative_auth_context_cache_key(cache_key), negative_ttl)
+            .peek_within(AuthContextCacheKey::negative(cache_key), negative_ttl)
         {
-            return Some(auth_context);
+            return Some(cached);
         }
     }
-    state
-        .auth_context_cache
-        .get_fresh_with_age(cache_key, AUTH_CONTEXT_CACHE_TTL)
+    state.auth_context_cache.peek_within(
+        AuthContextCacheKey::resolved(cache_key),
+        AUTH_CONTEXT_CACHE_TTL,
+    )
 }
 
 #[cfg(test)]
