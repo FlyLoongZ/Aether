@@ -15,6 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use bytes::Bytes;
 use chrono::Datelike;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
@@ -887,9 +888,11 @@ pub(super) async fn handle_dashboard_stats_get(
         .as_deref()
         .unwrap_or("");
     let cache_key = format!("stats:{cache_identity}:{query_string}");
-    let cache_ttl = std::time::Duration::from_secs(30);
 
-    if let Some(cached) = state.dashboard_response_cache.get(&cache_key, cache_ttl) {
+    if let Some(cached) = state
+        .dashboard_response_cache
+        .get(&cache_key, crate::cache::DASHBOARD_STATS_CACHE_TTL)
+    {
         return Response::builder()
             .status(http::StatusCode::OK)
             .header(http::header::CONTENT_TYPE, "application/json")
@@ -1126,7 +1129,12 @@ pub(super) async fn handle_dashboard_stats_get(
             },
             "token_breakdown": token_breakdown,
         });
-        return dashboard_cached_json_response(state, cache_key, cache_ttl, &payload);
+        return dashboard_cached_json_response(
+            state,
+            cache_key,
+            crate::cache::DASHBOARD_STATS_CACHE_TTL,
+            &payload,
+        );
     }
 
     let wallet = if state.has_wallet_data_reader() {
@@ -1188,7 +1196,12 @@ pub(super) async fn handle_dashboard_stats_get(
         "token_breakdown": token_breakdown,
         "monthly_cost": dashboard_round_f64(period_totals.total_cost_usd, 4),
     });
-    dashboard_cached_json_response(state, cache_key, cache_ttl, &payload)
+    dashboard_cached_json_response(
+        state,
+        cache_key,
+        crate::cache::DASHBOARD_STATS_CACHE_TTL,
+        &payload,
+    )
 }
 
 fn dashboard_daily_aggregate_record(
@@ -1247,9 +1260,11 @@ pub(super) async fn handle_dashboard_daily_stats_get(
         .as_deref()
         .unwrap_or("");
     let cache_key = format!("daily:{cache_identity}:{query_string}");
-    let cache_ttl = std::time::Duration::from_secs(60);
 
-    if let Some(cached) = state.dashboard_response_cache.get(&cache_key, cache_ttl) {
+    if let Some(cached) = state
+        .dashboard_response_cache
+        .get(&cache_key, crate::cache::DASHBOARD_DAILY_CACHE_TTL)
+    {
         return Response::builder()
             .status(http::StatusCode::OK)
             .header(http::header::CONTENT_TYPE, "application/json")
@@ -1294,7 +1309,12 @@ pub(super) async fn handle_dashboard_daily_stats_get(
         &model_summary,
         &provider_summary,
     );
-    dashboard_cached_json_response(state, cache_key, cache_ttl, &payload)
+    dashboard_cached_json_response(
+        state,
+        cache_key,
+        crate::cache::DASHBOARD_DAILY_CACHE_TTL,
+        &payload,
+    )
 }
 
 pub(super) async fn handle_dashboard_recent_requests_get(
@@ -1409,9 +1429,11 @@ pub(super) async fn handle_dashboard_provider_status_get(
 
     let cache_identity = "admin";
     let cache_key = format!("provider:{cache_identity}");
-    let cache_ttl = std::time::Duration::from_secs(20);
 
-    if let Some(cached) = state.dashboard_response_cache.get(&cache_key, cache_ttl) {
+    if let Some(cached) = state.dashboard_response_cache.get(
+        &cache_key,
+        crate::cache::DASHBOARD_PROVIDER_STATUS_CACHE_TTL,
+    ) {
         return Response::builder()
             .status(http::StatusCode::OK)
             .header(http::header::CONTENT_TYPE, "application/json")
@@ -1490,7 +1512,12 @@ pub(super) async fn handle_dashboard_provider_status_get(
     }
 
     let payload = json!({ "providers": entries });
-    dashboard_cached_json_response(state, cache_key, cache_ttl, &payload)
+    dashboard_cached_json_response(
+        state,
+        cache_key,
+        crate::cache::DASHBOARD_PROVIDER_STATUS_CACHE_TTL,
+        &payload,
+    )
 }
 
 fn dashboard_parse_limit(
@@ -1535,7 +1562,7 @@ fn dashboard_cached_json_response(
     cache_ttl: std::time::Duration,
     payload: &serde_json::Value,
 ) -> Response<Body> {
-    let bytes = serde_json::to_vec(payload).unwrap_or_default();
+    let bytes = Bytes::from(serde_json::to_vec(payload).unwrap_or_default());
     state
         .dashboard_response_cache
         .insert(cache_key, bytes.clone(), cache_ttl);
