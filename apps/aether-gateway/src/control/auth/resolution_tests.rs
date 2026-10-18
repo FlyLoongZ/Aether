@@ -18,7 +18,7 @@ use axum::http::{HeaderMap, Uri};
 use futures_util::future::join_all;
 
 use super::{
-    api_key_is_expired, get_cached_auth_context,
+    api_key_is_expired, get_cached_auth_context_with_age,
     refresh_execution_runtime_auth_context_with_snapshot, resolve_control_decision_auth,
     resolve_data_backed_auth_context, resolve_execution_runtime_auth_context,
     ControlDecisionAuthResolution, GatewayLocalAuthRejection,
@@ -228,7 +228,8 @@ async fn control_auth_caches_invalid_api_key_rejections() {
     );
     let cache_key = build_auth_context_cache_key(&headers, &request_uri, "openai:chat")
         .expect("cache key should exist");
-    let cached = get_cached_auth_context(&state, &cache_key)
+    let cached = get_cached_auth_context_with_age(&state, &cache_key)
+        .map(|(auth_context, _)| auth_context)
         .expect("invalid API key rejection should be cached");
     assert_eq!(
         cached.local_rejection,
@@ -631,7 +632,8 @@ async fn execution_runtime_auth_context_revalidates_cached_wallet_state() {
     let cache_key =
         build_auth_context_cache_key(&headers, &uri("/v1/chat/completions"), "openai:chat")
             .expect("cache key should exist");
-    let refreshed = get_cached_auth_context(&state, &cache_key)
+    let refreshed = get_cached_auth_context_with_age(&state, &cache_key)
+        .map(|(auth_context, _)| auth_context)
         .expect("synchronous refresh should publish the wallet denial");
     assert_eq!(
         refreshed.local_rejection,

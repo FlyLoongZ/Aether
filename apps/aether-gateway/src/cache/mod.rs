@@ -9,9 +9,7 @@ mod scheduler_affinity;
 mod system_config;
 
 pub(crate) use auth_api_key_last_used::AuthApiKeyLastUsedCache;
-pub(crate) use auth_context::{
-    AuthContextCache, AuthContextCacheGeneration, AuthContextInflightRegistration,
-};
+pub(crate) use auth_context::{is_negative_auth_context, AuthContextCache, AUTH_CONTEXT_CACHE_TTL};
 pub(crate) use auth_runtime::{
     AuthApiKeyFeatureCacheKey, AuthApiKeyIdentityCacheKey, AuthSnapshotCache, AuthSnapshotCacheKey,
     CacheLoadObserver, JsonValueCache, ValueCache,

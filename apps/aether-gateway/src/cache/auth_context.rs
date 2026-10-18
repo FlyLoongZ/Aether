@@ -1,297 +1,186 @@
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::future::Future;
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-use aether_cache::ExpiringMap;
-use tokio::sync::futures::OwnedNotified;
-use tokio::sync::Notify;
+use aether_cache::{optional_strings_weight, value_weight, CacheWeight, OnceMap, OnceMapError};
 
-use crate::{control::GatewayControlAuthContext, GatewayError};
+use crate::control::{GatewayControlAuthContext, GatewayLocalAuthRejection};
+use crate::GatewayError;
 
+pub(crate) const AUTH_CONTEXT_CACHE_TTL: Duration = Duration::from_secs(60);
+const AUTH_CONTEXT_CACHE_CAPACITY_BYTES: usize = 8 * 1024 * 1024;
+const AUTH_CONTEXT_CACHE_MAX_INFLIGHT: usize = 1024;
+
+impl CacheWeight for GatewayControlAuthContext {
+    fn cache_weight(&self) -> usize {
+        let strings = self.user_id.capacity()
+            + self.api_key_id.capacity()
+            + self.username.as_ref().map_or(0, String::capacity)
+            + self.api_key_name.as_ref().map_or(0, String::capacity)
+            + self
+                .verified_api_key_hash
+                .as_ref()
+                .map_or(0, CacheWeight::cache_weight);
+        let lists = optional_strings_weight(self.allowed_models.as_ref())
+            + optional_strings_weight(self.ip_rules.as_ref());
+        value_weight::<Self>(strings + lists)
+    }
+}
+
+/// Whether `auth_context` is a rejection rather than a usable principal.
+///
+/// A rejection is worth remembering only long enough to keep one bad credential
+/// from hammering the database, so it lives inside a much shorter window than a
+/// resolved context. The cache is the only place that distinction survives, so
+/// the predicate lives here with it.
+pub(crate) fn is_negative_auth_context(auth_context: &GatewayControlAuthContext) -> bool {
+    auth_context.user_id.is_empty()
+        || auth_context.api_key_id.is_empty()
+        || matches!(
+            auth_context.local_rejection,
+            Some(GatewayLocalAuthRejection::InvalidApiKey)
+        )
+}
+
+/// Authorization contexts keyed by the request's credentials.
+///
+/// One entry per credential, whatever the answer turned out to be: a resolved
+/// principal and the rejection that proves the credential wrong are two answers
+/// to the same question, so they share one slot — and therefore one in-flight
+/// load. Only the read window differs; see [`AuthContextCache::peek_within`].
+///
+/// The value is `Option` because a resolution can legitimately find no principal
+/// at all, which callers treat as a miss.
 #[derive(Debug)]
 pub(crate) struct AuthContextCache {
-    entries: ExpiringMap<String, GatewayControlAuthContext>,
-    inflight: std::sync::Mutex<HashMap<String, Arc<AuthContextInflightState>>>,
-    // Guards cache publication across invalidation. A request that started
-    // before a mutation must not repopulate the cache after it is cleared.
-    generation: AtomicU64,
-    mutation: std::sync::Mutex<()>,
+    entries: OnceMap<String, Option<GatewayControlAuthContext>, GatewayError>,
     #[cfg(test)]
     refresh_interval_override_millis: AtomicU64,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct AuthContextCacheGeneration {
-    global: u64,
-    state: Arc<AuthContextInflightState>,
-}
-
-#[derive(Debug)]
-struct AuthContextInflightState {
-    completed: AtomicBool,
-    publishable: AtomicBool,
-    error: std::sync::Mutex<Option<GatewayError>>,
-    notify: Arc<Notify>,
-}
-
-impl AuthContextInflightState {
-    fn new() -> Self {
-        Self {
-            completed: AtomicBool::new(false),
-            publishable: AtomicBool::new(true),
-            error: std::sync::Mutex::new(None),
-            notify: Arc::new(Notify::new()),
-        }
-    }
-
-    fn waiter(self: &Arc<Self>) -> AuthContextInflightWaiter {
-        AuthContextInflightWaiter {
-            state: Arc::clone(self),
-            notified: Arc::clone(&self.notify).notified_owned(),
-        }
-    }
-
-    fn complete(&self) {
-        self.completed.store(true, Ordering::Release);
-        self.notify.notify_waiters();
-    }
-
-    fn invalidate(&self) {
-        self.publishable.store(false, Ordering::Release);
-        self.complete();
-    }
-
-    fn fail(&self, error: GatewayError) {
-        self.publishable.store(false, Ordering::Release);
-        if let Ok(mut current) = self.error.lock() {
-            *current = Some(error);
-        }
-        self.complete();
-    }
-
-    fn error(&self) -> Option<GatewayError> {
-        self.error.lock().ok().and_then(|error| error.clone())
-    }
-}
-
-pub(crate) struct AuthContextInflightWaiter {
-    state: Arc<AuthContextInflightState>,
-    notified: OwnedNotified,
-}
-
-impl AuthContextInflightWaiter {
-    pub(crate) async fn wait(self) -> Result<(), GatewayError> {
-        let Self { state, notified } = self;
-        if state.completed.load(Ordering::Acquire) {
-            return state.error().map_or(Ok(()), Err);
-        }
-
-        tokio::pin!(notified);
-        if notified.as_mut().enable() || state.completed.load(Ordering::Acquire) {
-            return state.error().map_or(Ok(()), Err);
-        }
-        notified.await;
-        state.error().map_or(Ok(()), Err)
-    }
 }
 
 impl Default for AuthContextCache {
     fn default() -> Self {
         Self {
-            entries: ExpiringMap::default(),
-            inflight: std::sync::Mutex::new(HashMap::new()),
-            generation: AtomicU64::new(0),
-            mutation: std::sync::Mutex::new(()),
+            entries: OnceMap::builder()
+                .capacity_bytes(AUTH_CONTEXT_CACHE_CAPACITY_BYTES)
+                .max_inflight(AUTH_CONTEXT_CACHE_MAX_INFLIGHT)
+                .build(),
             #[cfg(test)]
             refresh_interval_override_millis: AtomicU64::new(0),
         }
     }
 }
 
-pub(crate) enum AuthContextInflightRegistration<'a> {
-    Leader(AuthContextInflightGuard<'a>),
-    Follower(AuthContextInflightWaiter),
-    Bypass,
-}
-
-pub(crate) struct AuthContextInflightGuard<'a> {
-    cache: &'a AuthContextCache,
-    cache_key: Option<String>,
-    state: Arc<AuthContextInflightState>,
-    generation: AuthContextCacheGeneration,
-}
-
-#[cfg(test)]
-pub(crate) struct AuthContextOwnedInflightGuard {
-    cache: Arc<AuthContextCache>,
-    cache_key: Option<String>,
-    state: Arc<AuthContextInflightState>,
-    generation: AuthContextCacheGeneration,
-}
-
-impl AuthContextInflightGuard<'_> {
-    pub(crate) fn generation(&self) -> AuthContextCacheGeneration {
-        self.generation.clone()
-    }
-
-    pub(crate) fn generation_is_current(&self) -> bool {
-        self.cache.generation_is_current(&self.generation)
-    }
-
-    pub(crate) fn fail(&self, error: GatewayError) {
-        if let Some(cache_key) = self.cache_key.as_deref() {
-            self.cache.fail_inflight(cache_key, &self.state, error);
-        }
-    }
-}
-
-#[cfg(test)]
-impl AuthContextOwnedInflightGuard {
-    pub(crate) fn generation(&self) -> AuthContextCacheGeneration {
-        self.generation.clone()
-    }
-
-    pub(crate) fn generation_is_current(&self) -> bool {
-        self.cache.generation_is_current(&self.generation)
-    }
-}
-
-impl Drop for AuthContextInflightGuard<'_> {
-    fn drop(&mut self) {
-        let Some(cache_key) = self.cache_key.take() else {
-            return;
-        };
-        self.cache.finish_inflight(&cache_key, &self.state);
-    }
-}
-
-#[cfg(test)]
-impl Drop for AuthContextOwnedInflightGuard {
-    fn drop(&mut self) {
-        let Some(cache_key) = self.cache_key.take() else {
-            return;
-        };
-        self.cache.finish_inflight(&cache_key, &self.state);
-    }
-}
-
 impl AuthContextCache {
-    fn finish_inflight(&self, cache_key: &str, state: &Arc<AuthContextInflightState>) {
-        if let Ok(mut inflight) = self.inflight.lock() {
-            // A clear may already have detached and completed this flight.
-            // Keep drop idempotent so an old guard cannot affect its replacement.
-            if inflight
-                .get(cache_key)
-                .is_some_and(|current| Arc::ptr_eq(current, state))
-            {
-                state.complete();
-                inflight.remove(cache_key);
-            }
-        }
-    }
-
-    fn fail_inflight(
+    /// A cached answer for `cache_key` still inside the window its own kind
+    /// allows, together with the age it was published at.
+    ///
+    /// A resolved context lives for `resolved_max_age`; a rejection lives for
+    /// `negative_max_age`, which an operator may set to zero to disable negative
+    /// caching. Entries are retained for the longer of the two so that widening
+    /// the negative window does not require waiting for a miss.
+    ///
+    /// Freshness is decided here rather than by the entry's own window, because
+    /// both kinds share one slot: an entry stored with the longer window would
+    /// otherwise keep a rejection readable for the resolved window's lifetime.
+    pub(crate) fn peek_within(
         &self,
         cache_key: &str,
-        state: &Arc<AuthContextInflightState>,
-        error: GatewayError,
-    ) {
-        let Ok(_mutation) = self.mutation.lock() else {
-            state.fail(error);
-            return;
-        };
-        let removed_current = match self.inflight.lock() {
-            Ok(mut inflight) => {
-                if inflight
-                    .get(cache_key)
-                    .is_some_and(|current| Arc::ptr_eq(current, state))
-                {
-                    inflight.remove(cache_key);
-                    true
-                } else {
-                    false
-                }
-            }
-            Err(_) => {
-                state.fail(error);
-                return;
-            }
-        };
-        if removed_current {
-            self.remove_entries_for_key(cache_key);
-            state.fail(error);
-        }
-    }
-
-    fn remove_entries_for_key(&self, cache_key: &str) {
-        self.entries.remove(&cache_key.to_string());
-        self.entries.remove(&format!("negative:{cache_key}"));
-    }
-
-    #[cfg(test)]
-    pub(crate) fn get_fresh(
-        &self,
-        cache_key: &str,
-        ttl: Duration,
-    ) -> Option<GatewayControlAuthContext> {
-        self.entries.get_fresh(&cache_key.to_string(), ttl)
-    }
-
-    pub(crate) fn get_fresh_with_age(
-        &self,
-        cache_key: &str,
-        ttl: Duration,
+        resolved_max_age: Duration,
+        negative_max_age: Duration,
     ) -> Option<(GatewayControlAuthContext, Duration)> {
-        self.entries.get_with_age(&cache_key.to_string(), ttl)
+        let retained_for = resolved_max_age.max(negative_max_age);
+        let (value, age) = self.entries.peek_within_age(cache_key, retained_for)?;
+        let context = value.as_ref().as_ref()?;
+        let allowed_for = if is_negative_auth_context(context) {
+            negative_max_age
+        } else {
+            resolved_max_age
+        };
+        (!allowed_for.is_zero() && age <= allowed_for).then(|| (context.clone(), age))
     }
 
-    pub(crate) fn insert(
+    /// Stores `auth_context` and drops any load in flight for the key, so a
+    /// slower read cannot overwrite what the application just decided.
+    pub(crate) fn publish(
         &self,
-        cache_key: String,
+        cache_key: &str,
         auth_context: GatewayControlAuthContext,
-        ttl: Duration,
-        max_entries: usize,
+        window: Duration,
     ) {
-        let Ok(_mutation) = self.mutation.lock() else {
-            return;
-        };
         self.entries
-            .insert(cache_key, auth_context, ttl, max_entries);
+            .publish(cache_key.to_string(), Some(auth_context), window);
     }
 
-    pub(crate) fn insert_if_generation(
+    /// Resolves through the cache, running the loader once per credential.
+    pub(crate) async fn get_or_load<F, Fut>(
         &self,
-        cache_key: String,
-        auth_context: GatewayControlAuthContext,
-        ttl: Duration,
-        max_entries: usize,
-        generation: &AuthContextCacheGeneration,
-    ) -> bool {
-        let Ok(_mutation) = self.mutation.lock() else {
-            return false;
-        };
-        if !self.generation_is_current(generation) {
-            return false;
+        cache_key: &str,
+        resolved_ttl: Duration,
+        negative_ttl: Duration,
+        load: F,
+    ) -> Result<Option<GatewayControlAuthContext>, GatewayError>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<Option<GatewayControlAuthContext>, GatewayError>>,
+    {
+        if let Some((context, _)) = self.peek_within(cache_key, resolved_ttl, negative_ttl) {
+            return Ok(Some(context));
         }
+        // The kind-aware window above already decided this is a miss, so the
+        // load must not re-read the store through the plain per-entry window.
         self.entries
-            .insert(cache_key, auth_context, ttl, max_entries);
-        true
+            .reload(cache_key.to_string(), resolved_ttl.max(negative_ttl), load)
+            .await
+            .map(|value| (*value).clone())
+            .map_err(|error| error.or_else_load(GatewayError::Internal))
     }
 
-    fn generation_for_state(
+    /// Re-resolves in the foreground even when an answer is cached, running the
+    /// loader once per credential. Authorization staleness is not negotiable,
+    /// but the load behind it still is.
+    ///
+    /// The cache failure stays in the error so callers can tell a failed
+    /// resolution from one that never ran.
+    pub(crate) async fn reload<F, Fut>(
         &self,
-        state: &Arc<AuthContextInflightState>,
-    ) -> AuthContextCacheGeneration {
-        AuthContextCacheGeneration {
-            global: self.generation.load(Ordering::Acquire),
-            state: Arc::clone(state),
-        }
+        cache_key: &str,
+        resolved_ttl: Duration,
+        negative_ttl: Duration,
+        load: F,
+    ) -> Result<GatewayControlAuthContext, OnceMapError<GatewayError>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<GatewayControlAuthContext, GatewayError>>,
+    {
+        let value = self
+            .entries
+            .reload(
+                cache_key.to_string(),
+                resolved_ttl.max(negative_ttl),
+                || async move { load().await.map(Some) },
+            )
+            .await?;
+        // A reload only ever coalesces with another reload, and every reload
+        // loader wraps its answer in `Some`, so this is unreachable. It is an
+        // error rather than an `expect` because a panic here would happen on
+        // the authorization path, where a failed refresh already has a
+        // handling story.
+        value.as_ref().clone().ok_or_else(|| {
+            OnceMapError::Load(GatewayError::Internal(
+                "cache reload returned no auth context".to_string(),
+            ))
+        })
     }
 
-    fn generation_is_current(&self, generation: &AuthContextCacheGeneration) -> bool {
-        self.generation.load(Ordering::Acquire) == generation.global
-            && generation.state.publishable.load(Ordering::Acquire)
+    /// Drops the cached answer for one credential.
+    pub(crate) fn invalidate(&self, cache_key: &str) {
+        self.entries.invalidate(cache_key);
+    }
+
+    pub(crate) fn invalidate_all(&self) {
+        self.entries.invalidate_all();
     }
 
     #[cfg(test)]
@@ -309,108 +198,22 @@ impl AuthContextCache {
         (millis > 0).then(|| Duration::from_millis(millis))
     }
 
-    pub(crate) fn register_inflight(&self, cache_key: &str) -> AuthContextInflightRegistration<'_> {
-        let cache_key = cache_key.trim();
-        if cache_key.is_empty() {
-            return AuthContextInflightRegistration::Bypass;
-        }
-        let Ok(_mutation) = self.mutation.lock() else {
-            return AuthContextInflightRegistration::Bypass;
-        };
-        match self.inflight.lock() {
-            Ok(mut inflight) => {
-                if let Some(state) = inflight.get(cache_key) {
-                    // Create the waiter while holding the map lock so leader
-                    // completion cannot race between lookup and registration.
-                    AuthContextInflightRegistration::Follower(state.waiter())
-                } else {
-                    let state = Arc::new(AuthContextInflightState::new());
-                    let generation = self.generation_for_state(&state);
-                    inflight.insert(cache_key.to_string(), Arc::clone(&state));
-                    AuthContextInflightRegistration::Leader(AuthContextInflightGuard {
-                        cache: self,
-                        cache_key: Some(cache_key.to_string()),
-                        state,
-                        generation,
-                    })
-                }
-            }
-            Err(_) => AuthContextInflightRegistration::Bypass,
-        }
-    }
-
     #[cfg(test)]
-    pub(crate) fn try_register_owned_leader(
-        self: &Arc<Self>,
-        cache_key: &str,
-    ) -> Option<AuthContextOwnedInflightGuard> {
-        let cache_key = cache_key.trim();
-        if cache_key.is_empty() {
-            return None;
-        }
-        let Ok(_mutation) = self.mutation.lock() else {
-            return None;
-        };
-        let Ok(mut inflight) = self.inflight.lock() else {
-            return None;
-        };
-        if inflight.contains_key(cache_key) {
-            return None;
-        }
-
-        let state = Arc::new(AuthContextInflightState::new());
-        let generation = self.generation_for_state(&state);
-        inflight.insert(cache_key.to_string(), Arc::clone(&state));
-        Some(AuthContextOwnedInflightGuard {
-            cache: Arc::clone(self),
-            cache_key: Some(cache_key.to_string()),
-            state,
-            generation,
-        })
-    }
-
-    pub(crate) fn clear(&self) {
-        let Ok(_mutation) = self.mutation.lock() else {
-            return;
-        };
-        self.generation.fetch_add(1, Ordering::AcqRel);
-        self.entries.clear();
-        let states = self
-            .inflight
-            .lock()
-            .map(|mut inflight| inflight.drain().map(|(_, state)| state).collect::<Vec<_>>())
-            .unwrap_or_default();
-        for state in states {
-            state.invalidate();
-        }
-    }
-
-    pub(crate) fn invalidate(&self, cache_key: &str) {
-        let cache_key = cache_key.trim();
-        if cache_key.is_empty() {
-            return;
-        }
-        let Ok(_mutation) = self.mutation.lock() else {
-            return;
-        };
-        self.remove_entries_for_key(cache_key);
-        let state = self
-            .inflight
-            .lock()
-            .ok()
-            .and_then(|mut inflight| inflight.remove(cache_key));
-        if let Some(state) = state {
-            state.invalidate();
-        }
+    pub(crate) fn len(&self) -> usize {
+        self.entries.len()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthContextCache, AuthContextInflightRegistration};
-    use crate::{control::GatewayControlAuthContext, GatewayError};
+    use super::{is_negative_auth_context, AuthContextCache, AUTH_CONTEXT_CACHE_TTL};
+    use crate::control::{GatewayControlAuthContext, GatewayLocalAuthRejection};
+    use crate::GatewayError;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+
+    const NEGATIVE_TTL: Duration = Duration::from_secs(10);
 
     fn context(api_key_id: &str) -> GatewayControlAuthContext {
         GatewayControlAuthContext {
@@ -431,274 +234,270 @@ mod tests {
         }
     }
 
+    fn rejection() -> GatewayControlAuthContext {
+        GatewayControlAuthContext {
+            user_id: String::new(),
+            api_key_id: String::new(),
+            username: None,
+            api_key_name: None,
+            balance_remaining: None,
+            access_allowed: false,
+            user_rate_limit: None,
+            api_key_rate_limit: None,
+            api_key_is_standalone: false,
+            admin_bypass_limits: false,
+            local_rejection: Some(GatewayLocalAuthRejection::InvalidApiKey),
+            allowed_models: None,
+            ip_rules: None,
+            verified_api_key_hash: None,
+        }
+    }
+
+    fn peek(cache: &AuthContextCache) -> Option<(GatewayControlAuthContext, Duration)> {
+        cache.peek_within("key-a", AUTH_CONTEXT_CACHE_TTL, NEGATIVE_TTL)
+    }
+
     #[tokio::test]
-    async fn auth_context_singleflight_notifies_only_matching_key() {
+    async fn a_resolved_context_is_served_from_the_cache() {
         let cache = AuthContextCache::default();
-        let leader_a = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("key-a should register a leader"),
-        };
-        let leader_b = match cache.register_inflight("key-b") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("key-b should register a leader"),
-        };
-        let follower_a = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Follower(notified) => notified,
-            _ => panic!("second key-a registration should follow"),
-        };
-        let follower_b = match cache.register_inflight("key-b") {
-            AuthContextInflightRegistration::Follower(notified) => notified,
-            _ => panic!("second key-b registration should follow"),
-        };
+        let loads = Arc::new(AtomicUsize::new(0));
 
-        drop(leader_b);
-        tokio::time::timeout(Duration::from_millis(100), follower_b.wait())
-            .await
-            .expect("key-b follower should wake when key-b completes")
-            .expect("successful flight should not publish an error");
-        assert!(
-            tokio::time::timeout(Duration::from_millis(20), follower_a.wait())
+        for _ in 0..4 {
+            let loads = Arc::clone(&loads);
+            cache
+                .get_or_load(
+                    "key-a",
+                    AUTH_CONTEXT_CACHE_TTL,
+                    NEGATIVE_TTL,
+                    || async move {
+                        loads.fetch_add(1, Ordering::SeqCst);
+                        Ok(Some(context("api-key-a")))
+                    },
+                )
                 .await
-                .is_err(),
-            "key-a follower must not wake when unrelated key-b completes"
-        );
+                .expect("resolution should succeed");
+        }
 
-        drop(leader_a);
-        assert!(cache.inflight.lock().unwrap().is_empty());
+        assert_eq!(loads.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            peek(&cache)
+                .expect("the cached context should be readable")
+                .0
+                .api_key_id,
+            "api-key-a"
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_resolutions_of_one_key_run_once() {
+        let cache = Arc::new(AuthContextCache::default());
+        let loads = Arc::new(AtomicUsize::new(0));
+
+        let mut tasks = Vec::new();
+        for _ in 0..16 {
+            let cache = Arc::clone(&cache);
+            let loads = Arc::clone(&loads);
+            tasks.push(tokio::spawn(async move {
+                cache
+                    .get_or_load(
+                        "key-a",
+                        AUTH_CONTEXT_CACHE_TTL,
+                        NEGATIVE_TTL,
+                        || async move {
+                            loads.fetch_add(1, Ordering::SeqCst);
+                            Ok(Some(context("api-key-a")))
+                        },
+                    )
+                    .await
+                    .expect("resolution should succeed")
+            }));
+        }
+        for task in tasks {
+            task.await.expect("task should join");
+        }
+
+        assert_eq!(loads.load(Ordering::SeqCst), 1);
     }
 
     #[test]
-    fn clear_rejects_publication_from_old_inflight_generation() {
+    fn a_resolution_that_finds_nothing_is_not_readable() {
         let cache = AuthContextCache::default();
-        let leader = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("key-a should register a leader"),
-        };
-        let old_generation = leader.generation();
-
-        cache.clear();
-        assert!(!leader.generation_is_current());
-        assert!(!cache.insert_if_generation(
+        cache.entries.publish(
             "key-a".to_string(),
-            context("stale-key"),
-            Duration::from_secs(60),
-            10,
-            &old_generation,
-        ));
-        assert!(cache.get_fresh("key-a", Duration::from_secs(60)).is_none());
+            None,
+            AUTH_CONTEXT_CACHE_TTL.max(NEGATIVE_TTL),
+        );
+
+        assert!(peek(&cache).is_none());
     }
 
-    #[tokio::test]
-    async fn invalidate_removes_only_one_key_and_releases_its_followers() {
+    /// The whole point of one slot per credential: a rejection must not inherit
+    /// the resolved window just because it shares the entry.
+    #[test]
+    fn a_rejection_is_not_readable_past_the_negative_window() {
         let cache = AuthContextCache::default();
-        cache.insert(
-            "key-a".to_string(),
-            context("api-key-a"),
-            Duration::from_secs(60),
-            10,
+        cache.publish(
+            "key-a",
+            rejection(),
+            AUTH_CONTEXT_CACHE_TTL.max(NEGATIVE_TTL),
         );
-        cache.insert(
-            "key-b".to_string(),
-            context("api-key-b"),
-            Duration::from_secs(60),
-            10,
+        assert!(peek(&cache).is_some(), "a fresh rejection is readable");
+
+        std::thread::sleep(NEGATIVE_TTL + Duration::from_millis(20));
+
+        assert!(
+            peek(&cache).is_none(),
+            "a rejection must expire with the negative window, not the resolved one"
         );
-        cache.insert(
-            "negative:key-a".to_string(),
-            context("negative-api-key-a"),
-            Duration::from_secs(60),
-            10,
+    }
+
+    /// A disabled negative cache must not fall back to reading the entry.
+    #[test]
+    fn a_rejection_is_never_readable_with_a_zero_negative_window() {
+        let cache = AuthContextCache::default();
+        cache.publish("key-a", rejection(), AUTH_CONTEXT_CACHE_TTL);
+
+        assert!(cache
+            .peek_within("key-a", AUTH_CONTEXT_CACHE_TTL, Duration::ZERO)
+            .is_none());
+        assert!(
+            cache
+                .peek_within("key-a", AUTH_CONTEXT_CACHE_TTL, NEGATIVE_TTL)
+                .is_some(),
+            "the entry is still stored; only its read window is disabled"
         );
-        let old_leader = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("key-a should register a leader"),
-        };
-        let old_generation = old_leader.generation();
-        let follower = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Follower(waiter) => waiter,
-            _ => panic!("second key-a registration should follow"),
-        };
+    }
+
+    /// A negative answer must not suppress the next lookup once its window is
+    /// over, even though the entry is retained for longer.
+    #[tokio::test]
+    async fn an_expired_rejection_triggers_a_new_load() {
+        let cache = AuthContextCache::default();
+        let loads = Arc::new(AtomicUsize::new(0));
+        let negative_ttl = Duration::from_millis(20);
+
+        for _ in 0..2 {
+            let loads = Arc::clone(&loads);
+            cache
+                .get_or_load(
+                    "key-a",
+                    AUTH_CONTEXT_CACHE_TTL,
+                    negative_ttl,
+                    || async move {
+                        loads.fetch_add(1, Ordering::SeqCst);
+                        Ok(Some(rejection()))
+                    },
+                )
+                .await
+                .expect("resolution should succeed");
+            tokio::time::sleep(negative_ttl + Duration::from_millis(20)).await;
+        }
+
+        assert_eq!(loads.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn invalidate_drops_only_one_key() {
+        let cache = AuthContextCache::default();
+        cache.publish("key-a", context("api-key-a"), AUTH_CONTEXT_CACHE_TTL);
+        cache.publish("key-a-neg", rejection(), AUTH_CONTEXT_CACHE_TTL);
+        cache.publish("key-b", context("api-key-b"), AUTH_CONTEXT_CACHE_TTL);
 
         cache.invalidate("key-a");
 
-        tokio::time::timeout(Duration::from_millis(100), follower.wait())
-            .await
-            .expect("invalidating key-a should release its follower")
-            .expect("explicit invalidation should allow a retry");
-        assert!(cache.get_fresh("key-a", Duration::from_secs(60)).is_none());
-        assert!(cache
-            .get_fresh("negative:key-a", Duration::from_secs(60))
-            .is_none());
+        assert!(peek(&cache).is_none());
         assert_eq!(
             cache
-                .get_fresh("key-b", Duration::from_secs(60))
-                .expect("unrelated cache entry should survive")
+                .peek_within("key-b", AUTH_CONTEXT_CACHE_TTL, NEGATIVE_TTL)
+                .expect("an unrelated key should survive")
+                .0
                 .api_key_id,
             "api-key-b"
         );
-        assert!(!old_leader.generation_is_current());
-        assert!(!cache.insert_if_generation(
-            "key-a".to_string(),
-            context("stale-key"),
-            Duration::from_secs(60),
-            10,
-            &old_generation,
-        ));
+    }
 
-        let replacement = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("invalidated key should admit a replacement leader"),
-        };
-        drop(old_leader);
-        assert!(matches!(
-            cache.register_inflight("key-a"),
-            AuthContextInflightRegistration::Follower(_)
-        ));
-        drop(replacement);
+    #[test]
+    fn invalidate_all_drops_every_key() {
+        let cache = AuthContextCache::default();
+        cache.publish("key-a", context("api-key-a"), AUTH_CONTEXT_CACHE_TTL);
+        cache.publish("key-b", context("api-key-b"), AUTH_CONTEXT_CACHE_TTL);
+
+        cache.invalidate_all();
+
+        assert_eq!(cache.len(), 0);
     }
 
     #[tokio::test]
-    async fn leader_drop_before_follower_first_poll_does_not_lose_wakeup() {
+    async fn reload_runs_the_loader_even_when_a_context_is_cached() {
         let cache = AuthContextCache::default();
-        let leader = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let follower = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Follower(waiter) => waiter,
-            _ => panic!("second registration should follow"),
-        };
+        cache.publish("key-a", context("stale"), AUTH_CONTEXT_CACHE_TTL);
 
-        drop(leader);
-        tokio::time::timeout(Duration::from_millis(100), follower.wait())
+        let refreshed = cache
+            .reload("key-a", AUTH_CONTEXT_CACHE_TTL, NEGATIVE_TTL, || async {
+                Ok(context("fresh"))
+            })
             .await
-            .expect("completion before first poll must release the follower")
-            .expect("successful flight should not publish an error");
-    }
+            .expect("reload should succeed");
 
-    #[tokio::test]
-    async fn flight_failure_is_shared_and_cannot_remove_replacement() {
-        let cache = AuthContextCache::default();
-        cache.insert(
-            "key-a".to_string(),
-            context("stale-key"),
-            Duration::from_secs(60),
-            10,
+        assert_eq!(refreshed.api_key_id, "fresh");
+        assert_eq!(
+            peek(&cache)
+                .expect("reload should publish its result")
+                .0
+                .api_key_id,
+            "fresh"
         );
-        let old_leader = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let follower = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Follower(waiter) => waiter,
-            _ => panic!("second registration should follow"),
-        };
-
-        old_leader.fail(GatewayError::Internal(
-            "forced auth load failure".to_string(),
-        ));
-        let error = tokio::time::timeout(Duration::from_millis(100), follower.wait())
-            .await
-            .expect("failed flight should release its follower")
-            .expect_err("follower should observe the leader error");
-        assert_eq!(error.into_message(), "forced auth load failure");
-        assert!(cache.get_fresh("key-a", Duration::from_secs(60)).is_none());
-
-        let replacement = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("failed flight should allow a replacement"),
-        };
-        drop(old_leader);
-        assert!(matches!(
-            cache.register_inflight("key-a"),
-            AuthContextInflightRegistration::Follower(_)
-        ));
-        drop(replacement);
     }
 
+    /// A security refresh that discovers the credential is gone must replace the
+    /// allow it was revalidating — and, being a rejection, expire on the short
+    /// window rather than live on the resolved one.
     #[tokio::test]
-    async fn invalidation_wins_over_detached_leader_failure() {
+    async fn a_reload_that_denies_replaces_the_allow_it_revalidated() {
         let cache = AuthContextCache::default();
-        let old_leader = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Leader(guard) => guard,
-            _ => panic!("first registration should lead"),
-        };
-        let follower = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Follower(waiter) => waiter,
-            _ => panic!("second registration should follow"),
-        };
+        let negative_ttl = Duration::from_millis(20);
+        cache.publish("key-a", context("api-key-a"), AUTH_CONTEXT_CACHE_TTL);
+        assert!(cache
+            .peek_within("key-a", AUTH_CONTEXT_CACHE_TTL, negative_ttl)
+            .is_some());
 
-        cache.invalidate("key-a");
-        old_leader.fail(GatewayError::Internal(
-            "superseded auth load failure".to_string(),
-        ));
-        follower
-            .wait()
+        let refreshed = cache
+            .reload("key-a", AUTH_CONTEXT_CACHE_TTL, negative_ttl, || async {
+                Ok(rejection())
+            })
             .await
-            .expect("invalidation should keep the detached flight retryable");
-    }
+            .expect("reload should succeed");
+        assert!(is_negative_auth_context(&refreshed));
+        assert!(
+            !cache
+                .peek_within("key-a", AUTH_CONTEXT_CACHE_TTL, negative_ttl)
+                .expect("the rejection is readable for its own window")
+                .0
+                .access_allowed,
+            "the allow the refresh was revalidating must be gone"
+        );
 
-    #[test]
-    fn owned_refresh_allows_only_one_leader_per_key() {
-        let cache = Arc::new(AuthContextCache::default());
-        let leader = cache
-            .try_register_owned_leader("key-a")
-            .expect("first refresh should lead");
-        assert!(cache.try_register_owned_leader("key-a").is_none());
-        assert!(cache.try_register_owned_leader("key-b").is_some());
-
-        drop(leader);
-        assert!(cache.try_register_owned_leader("key-a").is_some());
-    }
-
-    #[test]
-    fn clear_rejects_owned_refresh_publication_and_preserves_replacement() {
-        let cache = Arc::new(AuthContextCache::default());
-        let old_leader = cache
-            .try_register_owned_leader("key-a")
-            .expect("first refresh should lead");
-        let old_generation = old_leader.generation();
-
-        cache.clear();
-        let replacement = cache
-            .try_register_owned_leader("key-a")
-            .expect("clear should allow a replacement refresh");
-        assert!(!old_leader.generation_is_current());
-        assert!(!cache.insert_if_generation(
-            "key-a".to_string(),
-            context("stale-key"),
-            Duration::from_secs(60),
-            10,
-            &old_generation,
-        ));
-
-        drop(old_leader);
-        assert!(cache.try_register_owned_leader("key-a").is_none());
-        drop(replacement);
-        assert!(cache.try_register_owned_leader("key-a").is_some());
+        tokio::time::sleep(negative_ttl + Duration::from_millis(20)).await;
+        assert!(
+            cache
+                .peek_within("key-a", AUTH_CONTEXT_CACHE_TTL, negative_ttl)
+                .is_none(),
+            "a rejection must not survive past the negative window"
+        );
     }
 
     #[tokio::test]
-    async fn cancelled_owned_refresh_wakes_waiters_and_allows_retry() {
-        let cache = Arc::new(AuthContextCache::default());
-        let guard = cache
-            .try_register_owned_leader("key-a")
-            .expect("first refresh should lead");
-        let task = tokio::spawn(async move {
-            let _guard = guard;
-            std::future::pending::<()>().await;
-        });
-        let follower = match cache.register_inflight("key-a") {
-            AuthContextInflightRegistration::Follower(waiter) => waiter,
-            _ => panic!("hard miss should follow the background refresh"),
-        };
+    async fn a_failed_load_publishes_nothing() {
+        let cache = AuthContextCache::default();
 
-        task.abort();
-        let _ = task.await;
-        tokio::time::timeout(Duration::from_millis(100), follower.wait())
+        let error = cache
+            .get_or_load("key-a", AUTH_CONTEXT_CACHE_TTL, NEGATIVE_TTL, || async {
+                Err(GatewayError::Internal("forced failure".to_string()))
+            })
             .await
-            .expect("cancellation must release existing waiters")
-            .expect("cancellation should allow a retry");
-        assert!(cache.try_register_owned_leader("key-a").is_some());
+            .expect_err("the failure should surface");
+
+        assert_eq!(error.into_message(), "forced failure");
+        assert!(peek(&cache).is_none());
     }
 }
