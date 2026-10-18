@@ -242,7 +242,6 @@ async fn admin_monitoring_cache_affinities_and_delete_use_runtime_scheduler_affi
             key_id: "provider-key-1".to_string(),
         },
         crate::scheduler::affinity::SCHEDULER_AFFINITY_TTL,
-        128,
     );
 
     let list_context = request_context(
@@ -399,7 +398,6 @@ async fn admin_monitoring_cache_affinities_parse_session_scoped_scheduler_affini
             key_id: "provider-key-1".to_string(),
         },
         crate::scheduler::affinity::SCHEDULER_AFFINITY_TTL,
-        128,
     );
     state.remember_scheduler_affinity_target(
         &other_affinity_cache_key,
@@ -409,7 +407,6 @@ async fn admin_monitoring_cache_affinities_parse_session_scoped_scheduler_affini
             key_id: "provider-key-1".to_string(),
         },
         crate::scheduler::affinity::SCHEDULER_AFFINITY_TTL,
-        128,
     );
 
     let list_response = local_monitoring_response(

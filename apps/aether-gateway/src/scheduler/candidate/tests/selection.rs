@@ -465,7 +465,6 @@ async fn fixed_order_ignores_cached_scheduler_affinity_promotion() {
             key_id: "key-b".to_string(),
         },
         Duration::from_secs(300),
-        100,
     );
 
     let selected = select_candidate(
@@ -584,7 +583,6 @@ async fn cache_affinity_promotes_cached_scheduler_affinity_candidate_when_enable
             key_id: "key-b".to_string(),
         },
         Duration::from_secs(300),
-        100,
     );
 
     let selected = select_candidate_impl(
@@ -649,7 +647,6 @@ async fn cache_affinity_ignores_cached_scheduler_affinity_without_client_session
             key_id: "key-b".to_string(),
         },
         Duration::from_secs(300),
-        100,
     );
 
     let selected = select_candidate(
@@ -755,7 +752,6 @@ async fn load_balance_ignores_provider_priority_and_cached_affinity() {
             key_id: "key-b".to_string(),
         },
         Duration::from_secs(300),
-        100,
     );
 
     let first_pass = collect_selectable_candidates(

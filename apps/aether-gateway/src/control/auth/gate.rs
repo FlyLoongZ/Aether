@@ -434,7 +434,7 @@ async fn calculate_execution_plan_cost_upper_bound(
     estimate.requested_processing_tier = requested_processing_tier.map(ToOwned::to_owned);
     estimate.cache_ttl_minutes = cache_ttl_minutes;
     estimate.max_output_tokens = max_output_tokens;
-    let mut pricing = aether_billing::BillingModelPricingSnapshot::from(context);
+    let mut pricing = aether_billing::BillingModelPricingSnapshot::from(&*context);
     if use_base_cost {
         pricing.provider_billing_type = None;
         pricing.provider_api_key_rate_multipliers = None;
@@ -551,7 +551,7 @@ async fn validate_execution_plan_pricing_uncached(
     else {
         return Ok(());
     };
-    aether_billing::BillingModelPricingSnapshot::from(context)
+    aether_billing::BillingModelPricingSnapshot::from(&*context)
         .validate_authorization_pricing_configuration(requested_processing_tier)
         .map_err(|err| GatewayError::Internal(err.to_string()))
 }
@@ -562,7 +562,7 @@ async fn load_execution_plan_billing_context(
     model_id: Option<&str>,
     global_model_name: Option<&str>,
 ) -> Result<
-    Option<aether_data_contracts::repository::billing::StoredBillingModelContext>,
+    Option<std::sync::Arc<aether_data_contracts::repository::billing::StoredBillingModelContext>>,
     GatewayError,
 > {
     let context = match model_id {

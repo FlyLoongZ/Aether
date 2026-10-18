@@ -8,6 +8,7 @@ use aether_data_contracts::DataLayerError;
 use aether_usage_runtime::{UsageEvent, UsageEventType};
 use async_trait::async_trait;
 use serde_json::{json, Map, Value};
+use std::sync::Arc;
 
 use crate::{
     BillingComputation, BillingModelPricingSnapshot, BillingService, BillingSnapshotStatus,
@@ -23,7 +24,7 @@ pub trait BillingModelContextLookup: Send + Sync {
         provider_id: &str,
         provider_api_key_id: Option<&str>,
         model_id: &str,
-    ) -> Result<Option<StoredBillingModelContext>, DataLayerError> {
+    ) -> Result<Option<Arc<StoredBillingModelContext>>, DataLayerError> {
         let _ = (provider_id, provider_api_key_id, model_id);
         Ok(None)
     }
@@ -33,7 +34,7 @@ pub trait BillingModelContextLookup: Send + Sync {
         provider_id: &str,
         provider_api_key_id: Option<&str>,
         global_model_name: &str,
-    ) -> Result<Option<StoredBillingModelContext>, DataLayerError>;
+    ) -> Result<Option<Arc<StoredBillingModelContext>>, DataLayerError>;
 }
 
 pub async fn enrich_usage_event_with_billing(
@@ -110,7 +111,7 @@ pub async fn enrich_usage_event_with_billing(
             )
             .await?
         {
-            let pricing = map_pricing_context(context);
+            let pricing = map_pricing_context(&context);
             let computation = calculate_billing_computation(&pricing, event)?;
             apply_billing_computation(event, &pricing, computation)?;
             return Ok(());
@@ -130,7 +131,7 @@ pub async fn enrich_usage_event_with_billing(
             continue;
         };
 
-        let pricing = map_pricing_context(context);
+        let pricing = map_pricing_context(&context);
         let computation = calculate_billing_computation(&pricing, event)?;
         if matches!(
             computation.cost_result.status,
@@ -412,7 +413,7 @@ fn apply_billing_computation(
     Ok(())
 }
 
-fn map_pricing_context(context: StoredBillingModelContext) -> BillingModelPricingSnapshot {
+fn map_pricing_context(context: &StoredBillingModelContext) -> BillingModelPricingSnapshot {
     context.into()
 }
 

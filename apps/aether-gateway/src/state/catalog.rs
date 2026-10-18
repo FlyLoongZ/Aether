@@ -1632,7 +1632,6 @@ mod tests {
                 key_id: "key-1".to_string(),
             },
             ttl,
-            128,
         );
         assert!(state
             .read_scheduler_affinity_target(cache_key, ttl)
@@ -1687,7 +1686,7 @@ mod tests {
             endpoint_id: "endpoint-1".to_string(),
             key_id: "key-1".to_string(),
         };
-        state.remember_scheduler_affinity_target(cache_key, target.clone(), ttl, 128);
+        state.remember_scheduler_affinity_target(cache_key, target.clone(), ttl);
         let initial_epoch = state.scheduler_affinity_epoch();
 
         let health_by_format = serde_json::json!({

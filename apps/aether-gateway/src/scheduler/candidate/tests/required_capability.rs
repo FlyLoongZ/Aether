@@ -188,7 +188,6 @@ async fn required_capability_without_model_uses_session_scoped_affinity() {
             key_id: "key-b".to_string(),
         },
         SCHEDULER_AFFINITY_TTL,
-        16,
     );
 
     let selection = list_selectable_candidates_for_required_capability_without_requested_model(
