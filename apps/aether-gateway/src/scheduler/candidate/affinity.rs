@@ -5,7 +5,7 @@ use aether_scheduler_core::{
 
 use crate::data::auth::GatewayAuthApiKeySnapshot;
 
-use super::SchedulerMinimalCandidateSelectionCandidate;
+use super::{SchedulerMinimalCandidateSelectionCandidate, SchedulerRuntimeState};
 
 pub(super) fn build_scheduler_affinity_cache_key(
     auth_snapshot: Option<&GatewayAuthApiKeySnapshot>,
@@ -42,4 +42,28 @@ pub(super) fn scheduler_candidate_matches_affinity_target(
     target: &SchedulerAffinityTarget,
 ) -> bool {
     matches_affinity_target(candidate, target)
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+pub(super) fn remember_scheduler_affinity(
+    affinity_cache_key: Option<&str>,
+    state: &(impl SchedulerRuntimeState + ?Sized),
+    candidate: &SchedulerMinimalCandidateSelectionCandidate,
+    expected_epoch: Option<u64>,
+) {
+    let Some(cache_key) = affinity_cache_key else {
+        return;
+    };
+    let (provider_id, endpoint_id, key_id) = candidate_key(candidate);
+
+    let _ = state.remember_scheduler_affinity_target_for_epoch(
+        cache_key,
+        SchedulerAffinityTarget {
+            provider_id,
+            endpoint_id,
+            key_id,
+        },
+        SCHEDULER_AFFINITY_TTL,
+        expected_epoch,
+    );
 }

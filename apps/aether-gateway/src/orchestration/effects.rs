@@ -376,7 +376,6 @@ impl LocalExecutionAuthConfigFence {
 }
 
 const ADAPTIVE_RPM_RECENT_CANDIDATE_LIMIT: usize = 512;
-const LOCAL_EXECUTION_SCHEDULER_AFFINITY_MAX_ENTRIES: usize = 10_000;
 
 pub(crate) async fn apply_local_execution_effect(
     state: &AppState,
@@ -786,7 +785,6 @@ async fn remember_successful_local_scheduler_affinity(
         &cache_key,
         target,
         SCHEDULER_AFFINITY_TTL,
-        LOCAL_EXECUTION_SCHEDULER_AFFINITY_MAX_ENTRIES,
         expected_epoch,
     );
 }

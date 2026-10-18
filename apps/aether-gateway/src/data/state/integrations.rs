@@ -177,7 +177,7 @@ impl BillingModelContextLookup for GatewayDataState {
         provider_id: &str,
         provider_api_key_id: Option<&str>,
         model_id: &str,
-    ) -> Result<Option<StoredBillingModelContext>, DataLayerError> {
+    ) -> Result<Option<std::sync::Arc<StoredBillingModelContext>>, DataLayerError> {
         GatewayDataState::find_billing_model_context_by_model_id(
             self,
             provider_id,
@@ -192,7 +192,7 @@ impl BillingModelContextLookup for GatewayDataState {
         provider_id: &str,
         provider_api_key_id: Option<&str>,
         global_model_name: &str,
-    ) -> Result<Option<StoredBillingModelContext>, DataLayerError> {
+    ) -> Result<Option<std::sync::Arc<StoredBillingModelContext>>, DataLayerError> {
         GatewayDataState::find_billing_model_context(
             self,
             provider_id,

@@ -667,4 +667,33 @@ impl SchedulerRuntimeState for AppState {
     ) -> Option<SchedulerAffinityTarget> {
         AppState::read_scheduler_affinity_target(self, cache_key, ttl)
     }
+
+    fn scheduler_affinity_epoch(&self) -> u64 {
+        AppState::scheduler_affinity_epoch(self)
+    }
+
+    fn remember_scheduler_affinity_target(
+        &self,
+        cache_key: &str,
+        target: SchedulerAffinityTarget,
+        ttl: Duration,
+    ) {
+        AppState::remember_scheduler_affinity_target(self, cache_key, target, ttl);
+    }
+
+    fn remember_scheduler_affinity_target_for_epoch(
+        &self,
+        cache_key: &str,
+        target: SchedulerAffinityTarget,
+        ttl: Duration,
+        expected_epoch: Option<u64>,
+    ) -> bool {
+        AppState::remember_scheduler_affinity_target_for_epoch(
+            self,
+            cache_key,
+            target,
+            ttl,
+            expected_epoch,
+        )
+    }
 }

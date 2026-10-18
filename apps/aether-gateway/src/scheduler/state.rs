@@ -39,4 +39,21 @@ pub(crate) trait SchedulerRuntimeState {
         cache_key: &str,
         ttl: Duration,
     ) -> Option<SchedulerAffinityTarget>;
+
+    fn scheduler_affinity_epoch(&self) -> u64;
+
+    fn remember_scheduler_affinity_target(
+        &self,
+        cache_key: &str,
+        target: SchedulerAffinityTarget,
+        ttl: Duration,
+    );
+
+    fn remember_scheduler_affinity_target_for_epoch(
+        &self,
+        cache_key: &str,
+        target: SchedulerAffinityTarget,
+        ttl: Duration,
+        expected_epoch: Option<u64>,
+    ) -> bool;
 }

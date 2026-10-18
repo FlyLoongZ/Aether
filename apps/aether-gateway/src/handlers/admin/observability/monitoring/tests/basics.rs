@@ -325,7 +325,6 @@ async fn admin_monitoring_cache_stats_count_runtime_scheduler_affinities() {
             key_id: "provider-key-1".to_string(),
         },
         crate::scheduler::affinity::SCHEDULER_AFFINITY_TTL,
-        128,
     );
 
     let response = local_monitoring_response(

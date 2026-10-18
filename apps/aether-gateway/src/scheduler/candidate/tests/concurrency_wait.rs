@@ -241,6 +241,28 @@ impl SchedulerRuntimeState for CountingState {
     ) -> Option<SchedulerAffinityTarget> {
         None
     }
+
+    fn scheduler_affinity_epoch(&self) -> u64 {
+        0
+    }
+
+    fn remember_scheduler_affinity_target(
+        &self,
+        _cache_key: &str,
+        _target: SchedulerAffinityTarget,
+        _ttl: Duration,
+    ) {
+    }
+
+    fn remember_scheduler_affinity_target_for_epoch(
+        &self,
+        _cache_key: &str,
+        _target: SchedulerAffinityTarget,
+        _ttl: Duration,
+        _expected_epoch: Option<u64>,
+    ) -> bool {
+        true
+    }
 }
 
 type Selection = (
