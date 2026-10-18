@@ -118,6 +118,75 @@ pub(crate) struct CandidateResolvedPageCacheKey {
     resolution_mode: &'static str,
 }
 
+impl aether_cache::CacheWeight for CandidateRowPageCacheKey {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(self.api_format.capacity() + self.kind.cache_weight())
+    }
+}
+
+impl aether_cache::CacheWeight for CandidateRowPageCacheKind {
+    fn cache_weight(&self) -> usize {
+        match self {
+            Self::RequestedModel {
+                requested_model_name,
+                requested_name,
+                ..
+            } => aether_cache::value_weight::<Self>(
+                requested_model_name.capacity() + requested_name.capacity(),
+            ),
+            Self::ApiFormatFallback { .. } => aether_cache::value_weight::<Self>(0),
+        }
+    }
+}
+
+impl aether_cache::CacheWeight for CandidatePageCacheKey {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.requested_model.capacity()
+                + self.request_operation.capacity()
+                + self.client_api_format.capacity()
+                + self.auth_identity.cache_weight()
+                + self.required_capabilities_hash.capacity()
+                + self.routing_policy_hash.capacity()
+                + self.request_auth_channel.capacity()
+                + self.client_session_affinity_hash.capacity()
+                + self.model_directive_policy_hash.capacity(),
+        )
+    }
+}
+
+impl aether_cache::CacheWeight for CandidatePageAuthIdentity {
+    fn cache_weight(&self) -> usize {
+        match self {
+            Self::Standalone { api_key_id } => {
+                aether_cache::value_weight::<Self>(api_key_id.capacity())
+            }
+            Self::UserApiKey {
+                user_id,
+                api_key_id,
+            } => aether_cache::value_weight::<Self>(user_id.capacity() + api_key_id.capacity()),
+        }
+    }
+}
+
+impl aether_cache::CacheWeight for CandidateResolvedPageCacheKey {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(self.page_key.cache_weight())
+    }
+}
+
+impl aether_cache::CacheWeight for CandidateResolvedPageSnapshot {
+    fn cache_weight(&self) -> usize {
+        // The candidate records themselves are shared `Arc`s held by the pages
+        // that produced them; weigh the arrays this snapshot owns.
+        aether_cache::value_weight::<Self>(
+            self.candidates.capacity() * std::mem::size_of::<EligibleLocalExecutionCandidate>()
+                + self.resolved_skipped.capacity()
+                    * std::mem::size_of::<SkippedLocalExecutionCandidate>(),
+        )
+    }
+}
+
 impl CandidateRowPageCacheKey {
     pub(crate) fn new(
         api_format: &str,
@@ -242,7 +311,25 @@ impl CandidatePageAuthIdentity {
     }
 }
 
+#[cfg(not(test))]
+static CANDIDATE_PAGE_CACHE_TTL: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+#[cfg(not(test))]
+static CANDIDATE_PAGE_CACHE_STALE_TTL: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+
+/// Resolved once per process: the planner asks for these windows on every
+/// request, and parsing the environment there is pure overhead.
 pub(crate) fn candidate_page_cache_ttl_from_env() -> Duration {
+    #[cfg(test)]
+    {
+        resolve_candidate_page_cache_ttl()
+    }
+    #[cfg(not(test))]
+    {
+        *CANDIDATE_PAGE_CACHE_TTL.get_or_init(resolve_candidate_page_cache_ttl)
+    }
+}
+
+fn resolve_candidate_page_cache_ttl() -> Duration {
     let ttl_ms = std::env::var(CANDIDATE_PAGE_CACHE_TTL_ENV)
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
@@ -256,6 +343,18 @@ pub(crate) fn candidate_page_cache_ttl_from_env() -> Duration {
 }
 
 pub(crate) fn candidate_page_cache_stale_ttl(ttl: Duration) -> Duration {
+    #[cfg(test)]
+    {
+        resolve_candidate_page_cache_stale_ttl().max(ttl)
+    }
+    #[cfg(not(test))]
+    {
+        (*CANDIDATE_PAGE_CACHE_STALE_TTL.get_or_init(resolve_candidate_page_cache_stale_ttl))
+            .max(ttl)
+    }
+}
+
+fn resolve_candidate_page_cache_stale_ttl() -> Duration {
     let stale_ttl_ms = std::env::var(CANDIDATE_PAGE_CACHE_STALE_TTL_ENV)
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
@@ -265,7 +364,7 @@ pub(crate) fn candidate_page_cache_stale_ttl(ttl: Duration) -> Duration {
             MIN_CANDIDATE_PAGE_CACHE_STALE_TTL_MS,
             MAX_CANDIDATE_PAGE_CACHE_STALE_TTL_MS,
         );
-    Duration::from_millis(stale_ttl_ms).max(ttl)
+    Duration::from_millis(stale_ttl_ms)
 }
 
 pub(crate) fn record_candidate_page_cache_hit() {
