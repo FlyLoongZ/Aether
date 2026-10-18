@@ -218,10 +218,46 @@ pub(crate) fn append_execution_contract_fields_to_value(
     }
 }
 
+/// Writes a single entry into a report context.
+///
+/// Report contexts are free-form JSON, so a caller may hand over a non-object
+/// value; preserving it under `seed` keeps that data instead of dropping it.
+pub(crate) fn insert_report_context_entry(
+    report_context: &mut Option<Value>,
+    key: &str,
+    value: Value,
+) {
+    let mut object = match report_context.take() {
+        Some(Value::Object(object)) => object,
+        Some(other) => Map::from_iter([("seed".to_string(), other)]),
+        None => Map::new(),
+    };
+    object.insert(key.to_string(), value);
+    *report_context = Some(Value::Object(object));
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{append_execution_contract_fields_to_value, ConversionMode, ExecutionStrategy};
+    use super::{
+        append_execution_contract_fields_to_value, insert_report_context_entry, ConversionMode,
+        ExecutionStrategy,
+    };
     use serde_json::json;
+
+    #[test]
+    fn report_context_entry_seeds_a_non_object_context() {
+        let mut context = Some(json!("legacy"));
+        insert_report_context_entry(&mut context, "client_response_headers", json!({}));
+
+        assert_eq!(
+            context,
+            Some(json!({"seed": "legacy", "client_response_headers": {}}))
+        );
+
+        let mut missing: Option<serde_json::Value> = None;
+        insert_report_context_entry(&mut missing, "status", json!(429));
+        assert_eq!(missing, Some(json!({"status": 429})));
+    }
 
     #[test]
     fn execution_contract_helper_appends_unified_fields() {
