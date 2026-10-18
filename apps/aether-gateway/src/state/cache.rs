@@ -1,96 +1,12 @@
+use std::future::Future;
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
 use std::time::Duration;
+
+use aether_cache::OnceMap;
 
 use super::super::error::GatewayError;
 use super::super::provider_transport;
-use tokio::sync::Notify;
-
-#[derive(Debug, Clone)]
-pub(crate) enum ProviderTransportSnapshotFlightResult {
-    Published(Arc<provider_transport::GatewayProviderTransportSnapshot>),
-    Missing,
-    Invalidated,
-    Retry,
-    Error(GatewayError),
-}
-
-/// One transport snapshot load per cache key. The completion value is kept
-/// alongside the notification so a waiter that is scheduled after the
-/// broadcast can still observe the result without a lost wakeup.
-#[derive(Debug)]
-pub(crate) struct ProviderTransportSnapshotFlight {
-    generation: u64,
-    notify: Arc<Notify>,
-    result: StdMutex<Option<ProviderTransportSnapshotFlightResult>>,
-}
-
-impl ProviderTransportSnapshotFlight {
-    pub(crate) fn new(generation: u64) -> Self {
-        Self {
-            generation,
-            notify: Arc::new(Notify::new()),
-            result: StdMutex::new(None),
-        }
-    }
-
-    pub(crate) fn generation(&self) -> u64 {
-        self.generation
-    }
-
-    fn result(&self) -> Option<ProviderTransportSnapshotFlightResult> {
-        self.result
-            .lock()
-            .map(|result| result.clone())
-            .unwrap_or_else(|poisoned| poisoned.into_inner().clone())
-    }
-
-    /// Completes the flight once. A clear/cancellation may win the race with
-    /// the leader; in that case the old result must not overwrite Invalidated.
-    pub(crate) fn complete(&self, result: ProviderTransportSnapshotFlightResult) -> bool {
-        let completed = match self.result.lock() {
-            Ok(mut current) => {
-                if current.is_some() {
-                    false
-                } else {
-                    *current = Some(result);
-                    true
-                }
-            }
-            Err(poisoned) => {
-                let mut current = poisoned.into_inner();
-                if current.is_some() {
-                    false
-                } else {
-                    *current = Some(result);
-                    true
-                }
-            }
-        };
-        if completed {
-            self.notify.notify_waiters();
-        }
-        completed
-    }
-
-    pub(crate) async fn wait(&self) -> ProviderTransportSnapshotFlightResult {
-        loop {
-            if let Some(result) = self.result() {
-                return result;
-            }
-
-            // Register before checking the completion state a second time.
-            // This closes the result-check/notify race even when the task has
-            // not been polled yet when the leader broadcasts completion.
-            let mut notified = Box::pin(self.notify.notified());
-            notified.as_mut().enable();
-            if let Some(result) = self.result() {
-                return result;
-            }
-            notified.await;
-        }
-    }
-}
+use super::super::provider_transport::ProviderTransportSnapshotCacheKey;
 
 pub(crate) const AUTH_API_KEY_LAST_USED_TTL: Duration = Duration::from_secs(60);
 // Keep normal freshness short for cross-node configuration propagation. A
@@ -102,11 +18,86 @@ pub(crate) const PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL: Duration = Duration::fro
 // credential mutation advances the generation and clears the entry.
 pub(crate) const PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL: Duration =
     Duration::from_secs(5 * 60);
-pub(crate) const PROVIDER_TRANSPORT_SNAPSHOT_CACHE_MAX_ENTRIES: usize = 1_024;
+const PROVIDER_TRANSPORT_SNAPSHOT_CACHE_CAPACITY_BYTES: usize = 16 * 1024 * 1024;
+const PROVIDER_TRANSPORT_SNAPSHOT_CACHE_LOAD_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Provider transport snapshots, one per `(provider, endpoint, key)`.
+///
+/// A missing row is cached like a hit: without it, a provider whose transport
+/// cannot be resolved would re-read the database on every request.
 #[derive(Debug, Clone)]
-pub(crate) struct CachedProviderTransportSnapshot {
-    pub(crate) loaded_at: std::time::Instant,
-    pub(crate) generation: u64,
-    pub(crate) snapshot: Arc<provider_transport::GatewayProviderTransportSnapshot>,
+pub(crate) struct ProviderTransportSnapshotCache {
+    entries: OnceMap<
+        ProviderTransportSnapshotCacheKey,
+        Option<Arc<provider_transport::GatewayProviderTransportSnapshot>>,
+        GatewayError,
+    >,
+}
+
+impl Default for ProviderTransportSnapshotCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ProviderTransportSnapshotCache {
+    pub(crate) fn new() -> Self {
+        Self {
+            entries: OnceMap::builder()
+                .capacity_bytes(PROVIDER_TRANSPORT_SNAPSHOT_CACHE_CAPACITY_BYTES)
+                .load_timeout(PROVIDER_TRANSPORT_SNAPSHOT_CACHE_LOAD_TIMEOUT)
+                .build(),
+        }
+    }
+
+    /// Loads the snapshot for one `(provider, endpoint, key)` triple.
+    ///
+    /// The caller owns both loaders because the background one has to be
+    /// `'static`; the cache only owns the key and the windows.
+    pub(crate) async fn get_or_load<C, CF, B, BF>(
+        &self,
+        provider_id: &str,
+        endpoint_id: &str,
+        key_id: &str,
+        cold_load: C,
+        background_refresh: B,
+    ) -> Result<Option<Arc<provider_transport::GatewayProviderTransportSnapshot>>, GatewayError>
+    where
+        C: FnOnce() -> CF,
+        CF: Future<
+            Output = Result<
+                Option<Arc<provider_transport::GatewayProviderTransportSnapshot>>,
+                GatewayError,
+            >,
+        >,
+        B: FnOnce() -> BF,
+        BF: Future<
+                Output = Result<
+                    Option<Arc<provider_transport::GatewayProviderTransportSnapshot>>,
+                    GatewayError,
+                >,
+            > + Send
+            + 'static,
+    {
+        let Some(cache_key) =
+            ProviderTransportSnapshotCacheKey::new(provider_id, endpoint_id, key_id)
+        else {
+            return cold_load().await;
+        };
+        self.entries
+            .get_or_load_revalidating(
+                cache_key,
+                PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL,
+                PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL,
+                cold_load,
+                background_refresh,
+            )
+            .await
+            .map(|value| (*value).clone())
+            .map_err(|error| error.or_else_load(GatewayError::Internal))
+    }
+
+    pub(crate) fn clear(&self) {
+        self.entries.invalidate_all();
+    }
 }
