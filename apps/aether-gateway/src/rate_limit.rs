@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use aether_cache::ExpiringMap;
+use aether_cache::OnceMap;
 use aether_runtime_state::{RateLimitCheck, RateLimitInput, RateLimitScope};
 use tokio::sync::Mutex;
 use tracing::warn;
@@ -15,7 +15,6 @@ use std::sync::Mutex as StdMutex;
 
 const SYSTEM_RPM_CONFIG_KEY: &str = "rate_limit_per_minute";
 const SYSTEM_RPM_CONFIG_CACHE_TTL: Duration = Duration::from_secs(15);
-const SYSTEM_RPM_CONFIG_CACHE_MAX_ENTRIES: usize = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrontdoorUserRpmConfig {
@@ -98,7 +97,7 @@ pub(crate) enum FrontdoorUserRpmOutcome {
 pub(crate) struct FrontdoorUserRpmLimiter {
     config: FrontdoorUserRpmConfig,
     memory_counts: Arc<Mutex<HashMap<String, (u64, u32)>>>,
-    system_default_cache: Arc<ExpiringMap<String, u32>>,
+    system_default_cache: Arc<OnceMap<String, u32, GatewayError>>,
     #[cfg(test)]
     system_default_override: Arc<StdMutex<Option<u32>>>,
 }
@@ -108,7 +107,7 @@ impl FrontdoorUserRpmLimiter {
         Self {
             config,
             memory_counts: Arc::new(Mutex::new(HashMap::new())),
-            system_default_cache: Arc::new(ExpiringMap::default()),
+            system_default_cache: Arc::new(OnceMap::builder().build()),
             #[cfg(test)]
             system_default_override: Arc::new(StdMutex::new(None)),
         }
@@ -126,7 +125,7 @@ impl FrontdoorUserRpmLimiter {
     }
 
     pub(crate) fn clear_system_default_cache(&self) {
-        self.system_default_cache.clear();
+        self.system_default_cache.invalidate_all();
     }
 
     pub(crate) fn current_bucket(&self, now_ts: u64) -> u64 {
@@ -263,26 +262,22 @@ impl FrontdoorUserRpmLimiter {
             }
         }
 
-        let cache_key = SYSTEM_RPM_CONFIG_KEY.to_string();
-        if let Some(limit) = self
+        let limit = self
             .system_default_cache
-            .get_fresh(&cache_key, SYSTEM_RPM_CONFIG_CACHE_TTL)
-        {
-            return Ok(limit);
-        }
-
-        let limit = parse_system_default_limit(
-            state
-                .read_system_config_json_value(SYSTEM_RPM_CONFIG_KEY)
-                .await?,
-        )?;
-        self.system_default_cache.insert(
-            cache_key,
-            limit,
-            SYSTEM_RPM_CONFIG_CACHE_TTL,
-            SYSTEM_RPM_CONFIG_CACHE_MAX_ENTRIES,
-        );
-        Ok(limit)
+            .get_or_load(
+                SYSTEM_RPM_CONFIG_KEY.to_string(),
+                SYSTEM_RPM_CONFIG_CACHE_TTL,
+                || async {
+                    parse_system_default_limit(
+                        state
+                            .read_system_config_json_value(SYSTEM_RPM_CONFIG_KEY)
+                            .await?,
+                    )
+                },
+            )
+            .await
+            .map_err(|error| error.or_else_load(GatewayError::Internal))?;
+        Ok(*limit)
     }
 
     #[cfg(test)]
