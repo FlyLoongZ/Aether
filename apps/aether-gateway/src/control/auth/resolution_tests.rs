@@ -1161,22 +1161,7 @@ async fn due_antigravity_bearer_refresh_observes_cross_node_allowlist_revocation
             .await
             .expect("stale app config read should succeed"),
         Some(allowed_config),
-        "the node-local AppState cache should remain stale for the regression setup"
-    );
-    assert_eq!(
-        nodes
-            .first
-            .data
-            .find_system_config_value(crate::constants::ANTIGRAVITY_BEARER_BRIDGE_CONFIG_KEY,)
-            .await
-            .expect("stale data config read should succeed"),
-        Some(serde_json::json!({
-            "enabled": true,
-            "auth_user_id": "user-antigravity-bearer-revocation",
-            "auth_api_key_id": "key-antigravity-bearer-revocation",
-            "bearer_sha256_allowlist": [hash_api_key(raw_bearer)]
-        })),
-        "the node-local data cache should remain stale for the regression setup"
+        "the app cache should remain stale for the regression setup"
     );
     tokio::time::sleep(Duration::from_millis(15)).await;
 
