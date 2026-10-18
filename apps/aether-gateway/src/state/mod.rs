@@ -33,12 +33,9 @@ pub(crate) use self::app::{
     upstream_target_gate_auto_limit, upstream_target_gate_limit_from_env,
     FrontdoorRuntimeGuardConfig, REQUEST_BODY_BUFFER_PERMIT_BYTES,
 };
-pub(crate) use self::cache::{
-    CachedProviderTransportSnapshot, ProviderTransportSnapshotFlight,
-    ProviderTransportSnapshotFlightResult, AUTH_API_KEY_LAST_USED_TTL,
-    PROVIDER_TRANSPORT_SNAPSHOT_CACHE_MAX_ENTRIES, PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL,
-    PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL,
-};
+#[cfg(test)]
+pub(crate) use self::cache::PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL;
+pub(crate) use self::cache::{ProviderTransportSnapshotCache, AUTH_API_KEY_LAST_USED_TTL};
 pub use self::cors::FrontdoorCorsConfig;
 pub(crate) use self::instance::resolve_gateway_instance_id;
 pub(crate) use self::oauth::{
@@ -55,4 +52,3 @@ pub(crate) use self::video::VideoTaskRouteAccess;
 #[cfg(test)]
 pub(crate) use super::data::GatewayDataState;
 use super::provider_transport::provider_transport_snapshot_looks_refreshed;
-pub(crate) use super::provider_transport::ProviderTransportSnapshotCacheKey;

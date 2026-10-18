@@ -7,6 +7,14 @@ pub struct ProviderTransportSnapshotCacheKey {
     key_id: String,
 }
 
+impl aether_cache::CacheWeight for ProviderTransportSnapshotCacheKey {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.provider_id.capacity() + self.endpoint_id.capacity() + self.key_id.capacity(),
+        )
+    }
+}
+
 impl ProviderTransportSnapshotCacheKey {
     pub fn new(provider_id: &str, endpoint_id: &str, key_id: &str) -> Option<Self> {
         let provider_id = provider_id.trim();
