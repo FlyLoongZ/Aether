@@ -36,4 +36,4 @@ pub(crate) use overview_total::{OverviewTotalCache, OverviewTotalRead};
 pub(crate) use scheduler_affinity::{
     SchedulerAffinityCache, SchedulerAffinitySnapshotEntry, SchedulerAffinityTarget,
 };
-pub(crate) use system_config::{SystemConfigCache, SystemConfigInflightRegistration};
+pub(crate) use system_config::SystemConfigCache;
