@@ -588,10 +588,7 @@ async fn stale_system_config_reads_return_before_background_refresh_finishes() {
 
     tokio::time::timeout(Duration::from_secs(1), async {
         loop {
-            if state
-                .system_config_cache
-                .get_with_age("site_name", max_staleness)
-                .map(|(value, _)| value)
+            if state.system_config_cache.peek("site_name", max_staleness)
                 == Some(Some(json!("new")))
             {
                 break;

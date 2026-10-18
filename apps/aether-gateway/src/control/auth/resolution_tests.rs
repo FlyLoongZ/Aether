@@ -132,7 +132,7 @@ async fn postgres_auth_config_nodes(
 }
 
 #[tokio::test]
-async fn strong_system_config_read_bypasses_app_and_data_caches() {
+async fn strong_system_config_read_bypasses_the_app_cache() {
     let nodes =
         postgres_auth_config_nodes(Arc::new(InMemoryAuthApiKeySnapshotRepository::seed([]))).await;
     let key = format!("test.auth.strong-read.{}", uuid::Uuid::new_v4());
@@ -168,16 +168,6 @@ async fn strong_system_config_read_bypasses_app_and_data_caches() {
             .expect("stale app config read should succeed"),
         Some(old_value.clone()),
         "node-local AppState cache should still contain the old value"
-    );
-    assert_eq!(
-        nodes
-            .first
-            .data
-            .find_system_config_value(&key)
-            .await
-            .expect("stale data config read should succeed"),
-        Some(old_value),
-        "node-local data cache should still contain the old value"
     );
     assert_eq!(
         nodes

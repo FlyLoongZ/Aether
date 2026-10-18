@@ -1,5 +1,7 @@
 use std::sync::{Arc, Mutex};
 
+use axum::http::{HeaderMap, HeaderValue};
+
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };

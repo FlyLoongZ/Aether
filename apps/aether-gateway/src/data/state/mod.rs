@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::fmt;
 use std::future::Future;
 use std::sync::Arc;
-use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -15,7 +13,7 @@ use crate::provider_transport::{
     read_provider_transport_snapshot, GatewayProviderTransportSnapshot,
 };
 use crate::video_tasks::LocalVideoTaskReadResponse;
-use aether_cache::{value_weight, CacheWeight, ExpiringMap, OnceMap, OnceMapError};
+use aether_cache::{value_weight, CacheWeight, OnceMap, OnceMapError};
 use aether_data::repository::announcements::{
     AnnouncementListQuery, AnnouncementReadRepository, AnnouncementWriteRepository,
     CreateAnnouncementRecord, StoredAnnouncement, StoredAnnouncementPage, UpdateAnnouncementRecord,
@@ -207,28 +205,7 @@ pub(crate) struct GatewayDataState {
     wallet_writer: Option<Arc<dyn WalletWriteRepository>>,
     settlement_writer: Option<Arc<dyn SettlementWriteRepository>>,
     system_config_values: Option<Arc<RwLock<BTreeMap<String, StoredSystemConfigEntry>>>>,
-    system_config_value_cache: Arc<SystemConfigValueCacheState>,
     billing_model_context_cache: Arc<BillingModelContextCacheState>,
-}
-
-pub(super) struct SystemConfigValueCacheState {
-    pub(super) entries: ExpiringMap<String, Option<serde_json::Value>>,
-    pub(super) inflight: std::sync::Mutex<HashMap<String, Arc<SystemConfigValueInflightState>>>,
-    pub(super) mutation: std::sync::Mutex<()>,
-    pub(super) admission: Arc<tokio::sync::Semaphore>,
-}
-
-pub(super) struct SystemConfigValueInflightState {
-    pub(super) notify: Arc<tokio::sync::Notify>,
-    pub(super) completion: OnceLock<SystemConfigValueInflightCompletion>,
-}
-
-#[derive(Clone)]
-pub(super) enum SystemConfigValueInflightCompletion {
-    Loaded,
-    Failed(DataLayerError),
-    Cancelled,
-    Invalidated,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
