@@ -373,7 +373,7 @@ mod tests {
                 api_key_is_standalone: false,
             },
             requested_model: "claude-sonnet-4-5".to_string(),
-            auth_snapshot: sample_auth_snapshot(),
+            auth_snapshot: std::sync::Arc::new(sample_auth_snapshot()),
             required_capabilities: None,
             request_auth_channel: None,
             client_surface: None,

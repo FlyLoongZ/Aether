@@ -1483,8 +1483,17 @@ async fn quota_refresh_strong_read_bypasses_stale_provider_catalog_cache() {
         }
     }));
 
+    // The whole-catalog snapshot only answers for providers it has loaded, so the
+    // fixture has to seed the owning provider for the stale-read assertion below.
+    let provider = StoredProviderCatalogProvider::new(
+        "provider-antigravity-stale-cache".to_string(),
+        "Antigravity stale cache".to_string(),
+        None,
+        "antigravity".to_string(),
+    )
+    .expect("provider should build");
     let repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![],
+        vec![provider],
         vec![],
         vec![key],
     ));

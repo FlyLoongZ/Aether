@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use aether_data::repository::auth::{AuthApiKeyLookupKey, ResolvedAuthApiKeySnapshotReader};
 
@@ -30,7 +31,7 @@ impl AppState {
         user_id: &str,
         api_key_id: &str,
         now_unix_secs: u64,
-    ) -> Result<Option<GatewayAuthApiKeySnapshot>, GatewayError> {
+    ) -> Result<Option<Arc<GatewayAuthApiKeySnapshot>>, GatewayError> {
         let cache_key = AuthSnapshotCacheKey::user_api_key_ids(user_id, api_key_id);
         if cache_key.is_empty() {
             return Ok(None);
@@ -42,8 +43,9 @@ impl AppState {
                 || async move {
                     let _permit = self.acquire_auth_snapshot_load_gate().await?;
                     self.data
-                        .read_auth_api_key_snapshot(user_id, api_key_id, now_unix_secs)
+                        .read_auth_api_key_snapshot_strong(user_id, api_key_id, now_unix_secs)
                         .await
+                        .map(|snapshot| snapshot.map(Arc::new))
                         .map_err(|err| GatewayError::Internal(err.to_string()))
                 },
             )
@@ -55,12 +57,12 @@ impl AppState {
         &self,
         key_hash: &str,
         now_unix_secs: u64,
-    ) -> Result<Option<GatewayAuthApiKeySnapshot>, GatewayError> {
+    ) -> Result<Option<Arc<GatewayAuthApiKeySnapshot>>, GatewayError> {
         let cache_key = AuthSnapshotCacheKey::key_hash(key_hash);
         if cache_key.is_empty() {
             return Ok(None);
         }
-        let cache_generation = self.auth_snapshot_cache.generation();
+        let read_started_at = std::time::Instant::now();
         let snapshot = self
             .auth_snapshot_cache
             .get_or_load(
@@ -69,18 +71,19 @@ impl AppState {
                 || async move {
                     let _permit = self.acquire_auth_snapshot_load_gate().await?;
                     self.data
-                        .read_auth_api_key_snapshot_by_key_hash(key_hash, now_unix_secs)
+                        .read_auth_api_key_snapshot_by_key_hash_strong(key_hash, now_unix_secs)
                         .await
+                        .map(|snapshot| snapshot.map(Arc::new))
                         .map_err(|err| GatewayError::Internal(err.to_string()))
                 },
             )
             .await?;
         if let Some(snapshot) = snapshot.as_ref() {
-            self.auth_snapshot_cache.insert_if_generation(
+            self.auth_snapshot_cache.insert_if_not_invalidated_since(
                 AuthSnapshotCacheKey::user_api_key_ids(&snapshot.user_id, &snapshot.api_key_id),
-                Some(snapshot.clone()),
+                Some(Arc::clone(snapshot)),
                 AUTH_API_KEY_SNAPSHOT_RUNTIME_CACHE_TTL,
-                cache_generation,
+                read_started_at,
             );
         }
         Ok(snapshot)

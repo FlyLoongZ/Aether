@@ -1,3 +1,4 @@
+use aether_cache::{optional_strings_weight, value_weight, CacheWeight};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -797,6 +798,24 @@ pub struct StoredUserGroup {
     pub rate_limit_mode: String,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl CacheWeight for StoredUserGroup {
+    fn cache_weight(&self) -> usize {
+        value_weight::<Self>(
+            self.id.capacity()
+                + self.name.capacity()
+                + self.normalized_name.capacity()
+                + self.description.as_ref().map_or(0, String::capacity)
+                + self.allowed_providers_mode.capacity()
+                + self.allowed_api_formats_mode.capacity()
+                + self.allowed_models_mode.capacity()
+                + self.rate_limit_mode.capacity()
+                + optional_strings_weight(self.allowed_providers.as_ref())
+                + optional_strings_weight(self.allowed_api_formats.as_ref())
+                + optional_strings_weight(self.allowed_models.as_ref()),
+        )
+    }
 }
 
 impl StoredUserGroup {

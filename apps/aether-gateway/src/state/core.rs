@@ -415,11 +415,29 @@ impl AppState {
             overview_total_cache: Arc::new(OverviewTotalCache::default()),
             system_config_cache: Arc::new(SystemConfigCache::default()),
             endpoint_response_header_rules_cache: Arc::new(JsonValueCache::default()),
-            candidate_row_page_cache: Arc::new(crate::cache::CandidateRowPageCache::default()),
-            candidate_page_cache: Arc::new(crate::cache::CandidatePageCache::default()),
-            candidate_resolved_page_cache: Arc::new(
-                crate::cache::CandidateResolvedPageCache::default(),
-            ),
+            candidate_row_page_cache: Arc::new(crate::cache::ValueCache::with_observer(
+                aether_cache::CacheObserver::new()
+                    .on_hit(crate::cache::record_candidate_row_page_cache_hit)
+                    .on_miss(crate::cache::record_candidate_row_page_cache_miss)
+                    .on_load(crate::cache::record_candidate_row_page_cache_load)
+                    .on_follower_wait(crate::cache::record_candidate_row_page_cache_follower_wait),
+            )),
+            candidate_page_cache: Arc::new(crate::cache::ValueCache::with_observer(
+                aether_cache::CacheObserver::new()
+                    .on_hit(crate::cache::record_candidate_page_cache_hit)
+                    .on_miss(crate::cache::record_candidate_page_cache_miss)
+                    .on_load(crate::cache::record_candidate_page_cache_load)
+                    .on_follower_wait(crate::cache::record_candidate_page_cache_follower_wait),
+            )),
+            candidate_resolved_page_cache: Arc::new(crate::cache::ValueCache::with_observer(
+                aether_cache::CacheObserver::new()
+                    .on_hit(crate::cache::record_candidate_page_resolve_cache_hit)
+                    .on_miss(crate::cache::record_candidate_page_resolve_cache_miss)
+                    .on_load(crate::cache::record_candidate_page_resolve_cache_load)
+                    .on_follower_wait(
+                        crate::cache::record_candidate_page_resolve_cache_follower_wait,
+                    ),
+            )),
             chat_pii_redaction_runtime_config_cache:
                 crate::privacy::new_chat_pii_redaction_runtime_config_cache(),
             fallback_metrics: Arc::new(fallback_metrics::GatewayFallbackMetrics::default()),

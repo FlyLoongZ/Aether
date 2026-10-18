@@ -8,7 +8,7 @@ impl<'a> PlannerAppState<'a> {
         user_id: &str,
         api_key_id: &str,
         now_unix_secs: u64,
-    ) -> Result<Option<GatewayAuthApiKeySnapshot>, GatewayError> {
+    ) -> Result<Option<std::sync::Arc<GatewayAuthApiKeySnapshot>>, GatewayError> {
         self.app()
             .read_cached_auth_api_key_snapshot(user_id, api_key_id, now_unix_secs)
             .await

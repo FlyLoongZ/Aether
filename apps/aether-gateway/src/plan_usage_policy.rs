@@ -166,6 +166,24 @@ pub(crate) struct EffectivePlanUsagePolicy {
     valid_until_unix_secs: Option<u64>,
 }
 
+impl aether_cache::CacheWeight for EffectivePlanUsagePolicy {
+    fn cache_weight(&self) -> usize {
+        let rules = self
+            .request_rules
+            .iter()
+            .map(|rule| rule.identity.capacity())
+            .sum::<usize>()
+            + self
+                .cost_rules
+                .iter()
+                .map(|rule| rule.identity.capacity())
+                .sum::<usize>()
+            + (self.request_rules.capacity() * std::mem::size_of::<EffectiveRequestRule>())
+            + (self.cost_rules.capacity() * std::mem::size_of::<EffectiveCostRule>());
+        aether_cache::value_weight::<Self>(rules)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct EffectiveRequestRule {
     identity: String,

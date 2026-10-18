@@ -1,3 +1,4 @@
+use aether_cache::{value_weight, CacheWeight};
 use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -10,6 +11,12 @@ pub struct StoredProviderQuotaSnapshot {
     pub quota_last_reset_at_unix_secs: Option<u64>,
     pub quota_expires_at_unix_secs: Option<u64>,
     pub is_active: bool,
+}
+
+impl CacheWeight for StoredProviderQuotaSnapshot {
+    fn cache_weight(&self) -> usize {
+        value_weight::<Self>(self.provider_id.capacity() + self.billing_type.capacity())
+    }
 }
 
 impl StoredProviderQuotaSnapshot {

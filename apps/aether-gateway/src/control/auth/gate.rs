@@ -499,7 +499,7 @@ async fn validate_execution_plan_pricing_for_unavailable_estimate_inner(
     );
     let cache = state.auth_request_cost_upper_bound_cache.clone();
     cache
-        .get_or_load_once_stale_while_revalidating(
+        .get_or_load_revalidating(
             cache_key,
             ttl,
             AUTH_CAPACITY_CACHE_STALE_TTL,
@@ -532,7 +532,6 @@ async fn validate_execution_plan_pricing_for_unavailable_estimate_inner(
                     Ok::<Option<f64>, GatewayError>(Some(0.0))
                 }
             },
-            crate::cache::CacheLoadObserver::default(),
         )
         .await?;
     Ok(())
