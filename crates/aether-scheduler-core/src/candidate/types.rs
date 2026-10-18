@@ -29,6 +29,33 @@ pub struct SchedulerMinimalCandidateSelectionCandidate {
     pub mapping_matched_model: Option<String>,
 }
 
+impl aether_cache::CacheWeight for SchedulerMinimalCandidateSelectionCandidate {
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.provider_id.capacity()
+                + self.provider_name.capacity()
+                + self.provider_type.capacity()
+                + self.endpoint_id.capacity()
+                + self.endpoint_api_format.capacity()
+                + self.key_id.capacity()
+                + self.key_name.capacity()
+                + self.key_auth_type.capacity()
+                + self.model_id.capacity()
+                + self.global_model_id.capacity()
+                + self.global_model_name.capacity()
+                + self.selected_provider_model_name.capacity()
+                + self
+                    .mapping_matched_model
+                    .as_ref()
+                    .map_or(0, String::capacity)
+                + self
+                    .key_capabilities
+                    .as_ref()
+                    .map_or(0, aether_cache::CacheWeight::cache_weight),
+        )
+    }
+}
+
 pub struct EnumerateMinimalCandidateSelectionInput<'a> {
     pub rows: Vec<StoredMinimalCandidateSelectionRow>,
     pub normalized_api_format: &'a str,
