@@ -8,6 +8,35 @@ pub struct AiCandidatePreselectionOutcome<Candidate, Skipped> {
     pub skipped_candidates: Vec<Skipped>,
 }
 
+impl<Candidate, Skipped> aether_cache::CacheWeight
+    for AiCandidatePreselectionOutcome<Candidate, Skipped>
+where
+    Candidate: aether_cache::CacheWeight,
+    Skipped: aether_cache::CacheWeight,
+{
+    fn cache_weight(&self) -> usize {
+        aether_cache::value_weight::<Self>(
+            self.candidates
+                .capacity()
+                .saturating_mul(std::mem::size_of::<Candidate>())
+                + self
+                    .candidates
+                    .iter()
+                    .map(aether_cache::CacheWeight::cache_weight)
+                    .sum::<usize>()
+                + self
+                    .skipped_candidates
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<Skipped>())
+                + self
+                    .skipped_candidates
+                    .iter()
+                    .map(aether_cache::CacheWeight::cache_weight)
+                    .sum::<usize>(),
+        )
+    }
+}
+
 #[async_trait]
 pub trait AiCandidatePreselectionPort: Send + Sync {
     type Candidate: Send;

@@ -114,7 +114,6 @@ pub struct SchedulerRankingOutcome {
     pub promoted_by: Option<&'static str>,
     pub demoted_by: Option<&'static str>,
 }
-
 impl aether_cache::CacheWeight for SchedulerRankingOutcome {
     fn cache_weight(&self) -> usize {
         // Fixed-shape record; the two labels are `'static` strings.

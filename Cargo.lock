@@ -91,6 +91,7 @@ name = "aether-ai-serving"
 version = "0.1.0"
 dependencies = [
  "aether-ai-formats",
+ "aether-cache",
  "aether-contracts",
  "aether-data-contracts",
  "aether-pool-core",
@@ -179,6 +180,7 @@ name = "aether-data-contracts"
 version = "0.1.0"
 dependencies = [
  "aether-ai-formats",
+ "aether-cache",
  "aether-contracts",
  "aether-routing-core",
  "async-trait",
@@ -495,6 +497,7 @@ name = "aether-provider-transport"
 version = "0.1.0"
 dependencies = [
  "aether-ai-formats",
+ "aether-cache",
  "aether-contracts",
  "aether-crypto",
  "aether-data-contracts",
@@ -573,6 +576,7 @@ name = "aether-scheduler-core"
 version = "0.1.0"
 dependencies = [
  "aether-ai-formats",
+ "aether-cache",
  "aether-contracts",
  "aether-data-contracts",
  "aether-wallet",

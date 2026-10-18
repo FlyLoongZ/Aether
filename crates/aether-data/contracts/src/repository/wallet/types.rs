@@ -1,3 +1,4 @@
+use aether_cache::{value_weight, CacheWeight};
 use async_trait::async_trait;
 
 const WALLET_REDACTED_DEBUG_VALUE: &str = "[REDACTED]";
@@ -40,6 +41,19 @@ pub struct StoredWalletSnapshot {
 pub struct InitializeAuthWalletOutcome {
     pub wallet: StoredWalletSnapshot,
     pub created: bool,
+}
+
+impl CacheWeight for StoredWalletSnapshot {
+    fn cache_weight(&self) -> usize {
+        value_weight::<Self>(
+            self.id.capacity()
+                + self.user_id.as_ref().map_or(0, String::capacity)
+                + self.api_key_id.as_ref().map_or(0, String::capacity)
+                + self.limit_mode.capacity()
+                + self.currency.capacity()
+                + self.status.capacity(),
+        )
+    }
 }
 
 impl StoredWalletSnapshot {

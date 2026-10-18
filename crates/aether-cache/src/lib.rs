@@ -23,7 +23,6 @@ mod gate;
 mod namespace;
 mod once_map;
 mod snapshot;
-mod ttl_map;
 mod weight;
 
 pub use budget::CacheBudget;
@@ -32,5 +31,3 @@ pub use namespace::CacheKeyNamespace;
 pub use once_map::{Admission, CacheObserver, OnceMap, OnceMapBuilder, OnceMapError, PublishedMap};
 pub use snapshot::Snapshot;
 pub use weight::{optional_strings_weight, value_weight, vec_weight, CacheWeight};
-
-pub use ttl_map::{ExpiringMap, ExpiringMapFreshEntry};

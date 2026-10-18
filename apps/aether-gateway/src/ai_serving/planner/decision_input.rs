@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use aether_ai_serving::{run_ai_authenticated_decision_input, AiAuthenticatedDecisionInputPort};
@@ -19,7 +20,6 @@ use crate::ai_serving::{
     GatewayCredentialCarrier, GatewayProviderTransportSnapshot, PlannerAppState,
     CODEX_RESPONSES_LITE_HEADER, OPENAI_MEMORIES_SYNC_PLAN_KIND,
 };
-use crate::cache::CacheLoadObserver;
 use crate::client_session_affinity::client_session_affinity_from_api_request;
 use crate::clock::current_unix_secs;
 use crate::routing::{
@@ -45,7 +45,7 @@ const INVALID_ROUTING_PROVIDER_HEADERS_MESSAGE: &str =
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedLocalDecisionAuthInput {
     pub(crate) auth_context: ExecutionRuntimeAuthContext,
-    pub(crate) auth_snapshot: GatewayAuthApiKeySnapshot,
+    pub(crate) auth_snapshot: Arc<GatewayAuthApiKeySnapshot>,
     pub(crate) required_capabilities: Option<serde_json::Value>,
     pub(crate) model_directive_policy: crate::system_features::ModelDirectivePolicySnapshot,
 }
@@ -54,7 +54,7 @@ pub(crate) struct ResolvedLocalDecisionAuthInput {
 pub(crate) struct LocalRequestedModelDecisionInput {
     pub(crate) auth_context: ExecutionRuntimeAuthContext,
     pub(crate) requested_model: String,
-    pub(crate) auth_snapshot: GatewayAuthApiKeySnapshot,
+    pub(crate) auth_snapshot: Arc<GatewayAuthApiKeySnapshot>,
     pub(crate) required_capabilities: Option<serde_json::Value>,
     pub(crate) request_auth_channel: Option<String>,
     pub(crate) client_surface: Option<ClientSurface>,
@@ -446,7 +446,7 @@ fn apply_provider_outbound_request_policies_to_decision(
 struct GatewayAuthenticatedDecisionInputPort<'a> {
     state: PlannerAppState<'a>,
     now_unix_secs: u64,
-    auth_snapshot_override: Option<GatewayAuthApiKeySnapshot>,
+    auth_snapshot_override: Option<Arc<GatewayAuthApiKeySnapshot>>,
     model_directive_policy: &'a crate::system_features::ModelDirectivePolicySnapshot,
     model_directive_base_model: Option<String>,
 }
@@ -454,7 +454,7 @@ struct GatewayAuthenticatedDecisionInputPort<'a> {
 #[async_trait]
 impl AiAuthenticatedDecisionInputPort for GatewayAuthenticatedDecisionInputPort<'_> {
     type AuthContext = ExecutionRuntimeAuthContext;
-    type AuthSnapshot = GatewayAuthApiKeySnapshot;
+    type AuthSnapshot = Arc<GatewayAuthApiKeySnapshot>;
     type RequiredCapabilities = serde_json::Value;
     type ResolvedInput = ResolvedLocalDecisionAuthInput;
     type Error = GatewayError;
@@ -613,7 +613,7 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
             let group_selection_started_at = std::time::Instant::now();
             let selection = state
                 .routing_group_selection_cache
-                .get_or_load_once_stale_while_revalidating(
+                .get_or_load_revalidating(
                     selection_cache_key,
                     ROUTING_GROUP_SELECTION_CACHE_TTL,
                     ROUTING_GROUP_SELECTION_CACHE_STALE_TTL,
@@ -665,7 +665,6 @@ pub(crate) async fn attach_routing_policy_to_local_requested_model_input(
                             Ok::<_, GatewayError>(Some(selection))
                         }
                     },
-                    CacheLoadObserver::default(),
                 )
                 .await?
                 .unwrap_or_default();
@@ -890,7 +889,7 @@ pub(crate) async fn resolve_local_authenticated_decision_input(
 pub(crate) async fn resolve_local_authenticated_decision_input_with_snapshot(
     state: &AppState,
     auth_context: ExecutionRuntimeAuthContext,
-    auth_snapshot_override: Option<GatewayAuthApiKeySnapshot>,
+    auth_snapshot_override: Option<Arc<GatewayAuthApiKeySnapshot>>,
     requested_model: Option<&str>,
     requested_model_api_format: Option<&str>,
     explicit_required_capabilities: Option<&serde_json::Value>,

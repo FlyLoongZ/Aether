@@ -12,7 +12,7 @@ pub(crate) use auth_api_key_last_used::AuthApiKeyLastUsedCache;
 pub(crate) use auth_context::{is_negative_auth_context, AuthContextCache, AUTH_CONTEXT_CACHE_TTL};
 pub(crate) use auth_runtime::{
     AuthApiKeyFeatureCacheKey, AuthApiKeyIdentityCacheKey, AuthSnapshotCache, AuthSnapshotCacheKey,
-    CacheLoadObserver, JsonValueCache, ValueCache,
+    JsonValueCache, ValueCache,
 };
 pub(crate) use candidate_page::{
     candidate_page_cache_metric_samples, candidate_page_cache_stale_ttl,
