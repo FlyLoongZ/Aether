@@ -7,3 +7,6 @@ repository.workspace = true
 description = "Shared in-memory cache primitives for Aether Rust services"
 
 [dependencies]
+bytes.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
