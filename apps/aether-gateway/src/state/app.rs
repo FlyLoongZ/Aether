@@ -33,9 +33,8 @@ pub(crate) use super::{
     AdminWalletPaymentOrderRecord, AdminWalletRefundRecord, AdminWalletTransactionRecord,
 };
 use super::{
-    CachedProviderTransportSnapshot, FrontdoorCorsConfig, LocalExecutionRuntimeMissDiagnostic,
-    LocalProviderDeleteTaskState, ProviderTransportSnapshotCacheKey,
-    ProviderTransportSnapshotFlight,
+    FrontdoorCorsConfig, LocalExecutionRuntimeMissDiagnostic, LocalProviderDeleteTaskState,
+    ProviderTransportSnapshotCache, ProviderTransportSnapshotCacheKey,
 };
 
 const MIN_REQUEST_BODY_READ_TIMEOUT_MS: u64 = 1_000;
@@ -435,11 +434,7 @@ pub struct AppState {
     pub(crate) request_candidate_queue: Option<Arc<RequestCandidateQueueRuntime>>,
     pub(crate) frontdoor_cors: Option<Arc<FrontdoorCorsConfig>>,
     pub(crate) frontdoor_user_rpm: Arc<FrontdoorUserRpmLimiter>,
-    pub(crate) provider_transport_snapshot_cache:
-        Arc<DashMap<ProviderTransportSnapshotCacheKey, CachedProviderTransportSnapshot>>,
-    pub(crate) provider_transport_snapshot_cache_generation: Arc<AtomicU64>,
-    pub(crate) provider_transport_snapshot_inflight:
-        Arc<DashMap<ProviderTransportSnapshotCacheKey, Arc<ProviderTransportSnapshotFlight>>>,
+    pub(crate) provider_transport_snapshot_cache: Arc<ProviderTransportSnapshotCache>,
     pub(crate) provider_key_rpm_resets: Arc<StdMutex<HashMap<String, u64>>>,
     pub(crate) local_execution_runtime_miss_diagnostics:
         Arc<DashMap<String, LocalExecutionRuntimeMissDiagnostic>>,

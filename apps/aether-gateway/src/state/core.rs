@@ -458,9 +458,9 @@ impl AppState {
             frontdoor_user_rpm: Arc::new(FrontdoorUserRpmLimiter::new(
                 FrontdoorUserRpmConfig::default(),
             )),
-            provider_transport_snapshot_cache: Arc::new(DashMap::new()),
-            provider_transport_snapshot_cache_generation: Arc::new(AtomicU64::new(0)),
-            provider_transport_snapshot_inflight: Arc::new(DashMap::new()),
+            provider_transport_snapshot_cache: Arc::new(
+                crate::state::ProviderTransportSnapshotCache::new(),
+            ),
             provider_key_rpm_resets: Arc::new(StdMutex::new(HashMap::new())),
             local_execution_runtime_miss_diagnostics: Arc::new(DashMap::new()),
             admin_monitoring_error_stats_reset_at: Arc::new(StdMutex::new(None)),

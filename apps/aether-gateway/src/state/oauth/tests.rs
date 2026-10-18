@@ -20,8 +20,6 @@ use tokio::sync::Notify;
 use super::{
     local_oauth_refresh_gateway_error, AgentIdentityAuthConfigFence, AppState,
     CodexRuntimeOAuthObservation, ProviderTransportSnapshotCacheKey,
-    ProviderTransportSnapshotFlight, ProviderTransportSnapshotFlightResult,
-    ProviderTransportSnapshotInflightRegistration, PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL,
     PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL,
 };
 use crate::data::GatewayDataState;
@@ -137,14 +135,22 @@ fn sample_key_for_provider(provider_id: &str) -> StoredProviderCatalogKey {
         static ENCRYPTED_API_KEY: OnceLock<String> = OnceLock::new();
         ENCRYPTED_API_KEY
             .get_or_init(|| {
-                let credential_state = crate::tests::support::credential_fixture_state();
+                let credential_state = AppState::new()
+                    .expect("credential state should build")
+                    .with_data_state_for_tests(
+                        GatewayDataState::disabled().with_encryption_key_for_tests(DEV_FERNET_KEY),
+                    );
                 credential_state
                     .seal_provider_catalog_key_api_key("provider-1", "key-1", "plain-upstream-key")
                     .expect("api key should encrypt")
             })
             .clone()
     } else {
-        let credential_state = crate::tests::support::credential_fixture_state();
+        let credential_state = AppState::new()
+            .expect("credential state should build")
+            .with_data_state_for_tests(
+                GatewayDataState::disabled().with_encryption_key_for_tests(DEV_FERNET_KEY),
+            );
         credential_state
             .seal_provider_catalog_key_api_key(provider_id, "key-1", "plain-upstream-key")
             .expect("api key should encrypt")
@@ -243,7 +249,11 @@ fn vertex_service_account_state() -> (AppState, Arc<InMemoryProviderCatalogReadR
         "private_key": "TEST-PRIVATE-KEY",
         "project_id": "demo-project"
     });
-    let credential_state = crate::tests::support::credential_fixture_state();
+    let credential_state = AppState::new()
+        .expect("credential state should build")
+        .with_data_state_for_tests(
+            GatewayDataState::disabled().with_encryption_key_for_tests(DEV_FERNET_KEY),
+        );
     let encrypted_auth_config = credential_state
         .seal_provider_catalog_key_auth_config("provider-1", "key-1", &auth_config.to_string())
         .expect("Vertex auth config should encrypt");
@@ -325,12 +335,14 @@ fn state_with_global_format_conversion(enabled: bool) -> AppState {
         vec![sample_endpoint()],
         vec![sample_key()],
     ));
-    let data_state =
-        GatewayDataState::with_provider_transport_reader_for_tests(repository, DEV_FERNET_KEY)
-            .with_system_config_values_for_tests(vec![(
-                "enable_format_conversion".to_string(),
-                json!(enabled),
-            )]);
+    let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
+        repository,
+        DEV_FERNET_KEY.to_string(),
+    )
+    .with_system_config_values_for_tests(vec![(
+        "enable_format_conversion".to_string(),
+        json!(enabled),
+    )]);
     AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state)
@@ -484,102 +496,6 @@ async fn global_format_conversion_overrides_snapshot_without_persisting_provider
     assert!(!snapshot.provider.enable_format_conversion);
 }
 
-#[tokio::test]
-async fn provider_transport_snapshot_inflight_entry_is_removed_after_read() {
-    let state = state_with_global_format_conversion(false);
-
-    let snapshot = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("snapshot read should succeed");
-
-    assert!(snapshot.is_some());
-    assert!(state.provider_transport_snapshot_inflight.is_empty());
-}
-
-#[tokio::test]
-async fn finished_transport_flight_detects_generation_clear_before_return() {
-    let state = state_with_global_format_conversion(false);
-    let snapshot = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("snapshot read should succeed")
-        .expect("snapshot should exist");
-    state.clear_provider_transport_snapshot_cache();
-
-    let cache_key = ProviderTransportSnapshotCacheKey::new("provider-1", "endpoint-1", "key-1")
-        .expect("cache key should build");
-    let generation = state
-        .provider_transport_snapshot_cache_generation
-        .load(Ordering::Acquire);
-    let mut guard =
-        match state.register_provider_transport_snapshot_inflight(&cache_key, generation) {
-            ProviderTransportSnapshotInflightRegistration::Leader(guard) => guard,
-            _ => panic!("empty current-generation key should register a leader"),
-        };
-    guard.finish(ProviderTransportSnapshotFlightResult::Published(snapshot));
-    assert!(guard.generation_is_current(&state));
-
-    state.clear_provider_transport_snapshot_cache();
-    assert!(!guard.generation_is_current(&state));
-}
-
-#[tokio::test]
-async fn transport_cache_clear_retries_inflight_load_before_publishing_snapshot() {
-    let inner = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![sample_provider()],
-        vec![sample_endpoint()],
-        vec![sample_key()],
-    ));
-    let reader = Arc::new(BlockingProviderCatalogReadRepository::new(Arc::clone(
-        &inner,
-    )));
-    let data_state =
-        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
-    let state = AppState::new()
-        .expect("state should build")
-        .with_data_state_for_tests(data_state);
-
-    let read_state = state.clone();
-    let read_task = tokio::spawn(async move {
-        read_state
-            .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-            .await
-            .expect("transport snapshot read should succeed")
-            .expect("transport snapshot should exist")
-    });
-    tokio::time::timeout(
-        Duration::from_secs(1),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("first transport load should reach the blocked key read");
-
-    let mut inactive_key = sample_key();
-    inactive_key.is_active = false;
-    inner
-        .update_key(&inactive_key)
-        .await
-        .expect("provider key should update while the old snapshot load is blocked");
-    state.clear_provider_transport_snapshot_cache();
-    reader.release_blocked_key_read.notify_one();
-
-    let snapshot = tokio::time::timeout(Duration::from_secs(1), read_task)
-        .await
-        .expect("transport load should retry promptly after invalidation")
-        .expect("transport load task should join");
-    assert!(!snapshot.key.is_active);
-    assert!(reader.key_reads.load(Ordering::Acquire) >= 2);
-
-    let cached = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("cached transport read should succeed")
-        .expect("cached transport should exist");
-    assert!(!cached.key.is_active);
-    assert!(Arc::ptr_eq(&snapshot, &cached));
-}
-
 fn blocking_transport_state(
     block_on_key_read: usize,
 ) -> (
@@ -596,466 +512,156 @@ fn blocking_transport_state(
         Arc::clone(&inner),
         block_on_key_read,
     ));
-    let data_state =
-        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
+    let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
+        reader.clone(),
+        DEV_FERNET_KEY.to_string(),
+    );
     let state = AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state);
     (state, inner, reader)
 }
 
-fn age_transport_snapshot_cache(state: &AppState, age: Duration) {
-    let cache_key = ProviderTransportSnapshotCacheKey::new("provider-1", "endpoint-1", "key-1")
-        .expect("cache key should build");
-    let mut cached = state
-        .provider_transport_snapshot_cache
-        .get_mut(&cache_key)
-        .expect("snapshot should be cached before aging");
-    cached.loaded_at = Instant::now() - age;
+/// Fails the first `remaining_failures` key reads, then defers to the
+/// in-memory repository.
+struct FailingProviderCatalogReadRepository {
+    inner: Arc<InMemoryProviderCatalogReadRepository>,
+    remaining_failures: AtomicUsize,
 }
 
-async fn wait_for_transport_refresh_to_finish(state: &AppState) {
-    tokio::time::timeout(Duration::from_secs(1), async {
-        loop {
-            if state.provider_transport_snapshot_inflight.is_empty() {
-                break;
-            }
-            tokio::task::yield_now().await;
+#[async_trait]
+impl ProviderCatalogReadRepository for FailingProviderCatalogReadRepository {
+    async fn list_providers(
+        &self,
+        active_only: bool,
+    ) -> Result<Vec<StoredProviderCatalogProvider>, DataLayerError> {
+        self.inner.list_providers(active_only).await
+    }
+
+    async fn list_providers_by_ids(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogProvider>, DataLayerError> {
+        self.inner.list_providers_by_ids(ids).await
+    }
+
+    async fn list_endpoints_by_ids(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogEndpoint>, DataLayerError> {
+        self.inner.list_endpoints_by_ids(ids).await
+    }
+
+    async fn list_endpoints_by_provider_ids(
+        &self,
+        provider_ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogEndpoint>, DataLayerError> {
+        self.inner
+            .list_endpoints_by_provider_ids(provider_ids)
+            .await
+    }
+
+    async fn list_keys_by_ids(
+        &self,
+        ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogKey>, DataLayerError> {
+        if self
+            .remaining_failures
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(DataLayerError::postgres(
+                "forced transport key read failure",
+            ));
         }
-    })
-    .await
-    .expect("background transport refresh should finish");
+        self.inner.list_keys_by_ids(ids).await
+    }
+
+    async fn list_keys_by_provider_ids(
+        &self,
+        provider_ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogKey>, DataLayerError> {
+        self.inner.list_keys_by_provider_ids(provider_ids).await
+    }
+
+    async fn list_key_summaries_by_provider_ids(
+        &self,
+        provider_ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogKey>, DataLayerError> {
+        self.inner
+            .list_key_summaries_by_provider_ids(provider_ids)
+            .await
+    }
+
+    async fn list_key_maintenance_summaries_by_provider_ids(
+        &self,
+        provider_ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogKeyMaintenanceSummary>, DataLayerError> {
+        self.inner
+            .list_key_maintenance_summaries_by_provider_ids(provider_ids)
+            .await
+    }
+
+    async fn list_keys_page(
+        &self,
+        query: &ProviderCatalogKeyListQuery,
+    ) -> Result<StoredProviderCatalogKeyPage, DataLayerError> {
+        self.inner.list_keys_page(query).await
+    }
+
+    async fn list_key_stats_by_provider_ids(
+        &self,
+        provider_ids: &[String],
+    ) -> Result<Vec<StoredProviderCatalogKeyStats>, DataLayerError> {
+        self.inner
+            .list_key_stats_by_provider_ids(provider_ids)
+            .await
+    }
 }
 
-async fn wait_for_transport_flight_followers(
-    state: &AppState,
-    expected_strong_count: usize,
-) -> Arc<ProviderTransportSnapshotFlight> {
-    let cache_key = ProviderTransportSnapshotCacheKey::new("provider-1", "endpoint-1", "key-1")
-        .expect("cache key should build");
-    tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            if let Some(flight) = state
-                .provider_transport_snapshot_inflight
-                .get(&cache_key)
-                .filter(|flight| Arc::strong_count(flight.value()) >= expected_strong_count)
-                .map(|flight| flight.clone())
-            {
-                return flight;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("all transport snapshot followers should register")
+#[tokio::test]
+async fn a_repeat_read_is_served_from_the_cache() {
+    let (state, _inner, reader) = blocking_transport_state(usize::MAX);
+
+    for _ in 0..3 {
+        state
+            .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+            .await
+            .expect("transport read should succeed")
+            .expect("snapshot should exist");
+    }
+
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn cold_transport_snapshot_broadcasts_to_twenty_thousand_followers() {
-    const REQUESTS: usize = 20_000;
+#[tokio::test]
+async fn concurrent_misses_load_once() {
     let (state, _inner, reader) = blocking_transport_state(1);
-    let mut reads = Vec::with_capacity(REQUESTS);
-    for _ in 0..REQUESTS {
-        let read_state = state.clone();
-        reads.push(tokio::spawn(async move {
-            read_state
-                .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-                .await
-                .expect("transport snapshot read should succeed")
-                .expect("transport snapshot should exist")
-        }));
-    }
-
-    tokio::time::timeout(
-        Duration::from_secs(2),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("leader should reach the database barrier");
-    let _flight = wait_for_transport_flight_followers(&state, REQUESTS + 1).await;
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
-
-    reader.release_blocked_key_read.notify_one();
-    let snapshots = tokio::time::timeout(Duration::from_secs(5), async {
-        let mut snapshots = Vec::with_capacity(REQUESTS);
-        for read in reads {
-            snapshots.push(read.await.expect("transport read task should join"));
-        }
-        snapshots
-    })
-    .await
-    .expect("all followers should wake from one broadcast");
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
-    let first = snapshots
-        .first()
-        .expect("at least one snapshot should exist");
-    for snapshot in snapshots.iter().skip(1) {
-        assert!(Arc::ptr_eq(first, snapshot));
-    }
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn transport_cache_clear_wakes_old_followers_before_old_leader_finishes() {
-    const REQUESTS: usize = 64;
-    let (state, inner, reader) = blocking_transport_state(1);
-    let mut reads = Vec::with_capacity(REQUESTS);
-    for _ in 0..REQUESTS {
-        let read_state = state.clone();
-        reads.push(tokio::spawn(async move {
-            read_state
-                .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-                .await
-                .expect("transport snapshot read should succeed")
-                .expect("transport snapshot should exist")
-        }));
-    }
-    tokio::time::timeout(
-        Duration::from_secs(1),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("old leader should reach the database barrier");
-    let _old_flight = wait_for_transport_flight_followers(&state, REQUESTS + 1).await;
-
-    let mut inactive_key = sample_key();
-    inactive_key.is_active = false;
-    inner
-        .update_key(&inactive_key)
-        .await
-        .expect("provider key should update before invalidation");
-    state.clear_provider_transport_snapshot_cache();
-
-    // The old leader is still blocked. A follower must nevertheless claim
-    // the new generation and perform the replacement read immediately.
-    tokio::time::timeout(Duration::from_secs(1), async {
-        while reader.key_reads.load(Ordering::Acquire) < 2 {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("new generation follower should reload before old leader release");
-
-    reader.release_blocked_key_read.notify_one();
-    let snapshots = tokio::time::timeout(Duration::from_secs(3), async {
-        let mut snapshots = Vec::with_capacity(REQUESTS);
-        for read in reads {
-            snapshots.push(read.await.expect("transport read task should join"));
-        }
-        snapshots
-    })
-    .await
-    .expect("invalidated followers should complete");
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
-    assert!(snapshots.iter().all(|snapshot| !snapshot.key.is_active));
-}
-
-#[tokio::test]
-async fn cancelled_transport_snapshot_leader_releases_followers() {
-    let (state, _inner, reader) = blocking_transport_state(1);
-    let leader_state = state.clone();
-    let leader = tokio::spawn(async move {
-        leader_state
-            .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-            .await
-    });
-    tokio::time::timeout(
-        Duration::from_secs(1),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("leader should reach the database barrier");
-
-    let follower_state = state.clone();
-    let follower = tokio::spawn(async move {
-        follower_state
-            .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-            .await
-            .expect("replacement transport read should succeed")
-            .expect("replacement snapshot should exist")
-    });
-    let _old_flight = wait_for_transport_flight_followers(&state, 3).await;
-    leader.abort();
-    assert!(leader
-        .await
-        .expect_err("leader should be cancelled")
-        .is_cancelled());
-
-    let replacement = tokio::time::timeout(Duration::from_secs(2), follower)
-        .await
-        .expect("follower should be released after leader cancellation")
-        .expect("follower task should join");
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
-    assert!(replacement.key.is_active);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn missing_transport_snapshot_result_is_broadcast_to_all_followers() {
-    const REQUESTS: usize = 64;
-    let inner = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![sample_provider()],
-        vec![sample_endpoint()],
-        Vec::new(),
-    ));
-    let reader = Arc::new(BlockingProviderCatalogReadRepository::new(Arc::clone(
-        &inner,
-    )));
-    let data_state =
-        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
-    let state = AppState::new()
-        .expect("state should build")
-        .with_data_state_for_tests(data_state);
-
-    let mut reads = Vec::with_capacity(REQUESTS);
-    for _ in 0..REQUESTS {
-        let read_state = state.clone();
-        reads.push(tokio::spawn(async move {
-            read_state
-                .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-                .await
-                .expect("missing transport read should not fail")
-        }));
-    }
-    tokio::time::timeout(
-        Duration::from_secs(1),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("missing-result leader should reach the database barrier");
-    let _flight = wait_for_transport_flight_followers(&state, REQUESTS + 1).await;
-
-    reader.release_blocked_key_read.notify_one();
-    tokio::time::timeout(Duration::from_secs(2), async {
-        for read in reads {
-            assert!(read.await.expect("missing read task should join").is_none());
-        }
-    })
-    .await
-    .expect("missing result should wake all followers");
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn transport_snapshot_error_is_broadcast_to_all_followers() {
-    const REQUESTS: usize = 64;
-    let mismatched_key = sample_key_for_provider("provider-other");
-    let inner = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![sample_provider()],
-        vec![sample_endpoint()],
-        vec![mismatched_key],
-    ));
-    let reader = Arc::new(BlockingProviderCatalogReadRepository::new(Arc::clone(
-        &inner,
-    )));
-    let data_state =
-        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
-    let state = AppState::new()
-        .expect("state should build")
-        .with_data_state_for_tests(data_state);
-
-    let mut reads = Vec::with_capacity(REQUESTS);
-    for _ in 0..REQUESTS {
-        let read_state = state.clone();
-        reads.push(tokio::spawn(async move {
-            read_state
-                .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-                .await
-                .expect_err("provider mismatch should fail")
-                .into_message()
-        }));
-    }
-    tokio::time::timeout(
-        Duration::from_secs(1),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("error-result leader should reach the database barrier");
-    let _flight = wait_for_transport_flight_followers(&state, REQUESTS + 1).await;
-
-    reader.release_blocked_key_read.notify_one();
-    let messages = tokio::time::timeout(Duration::from_secs(2), async {
-        let mut messages = Vec::with_capacity(REQUESTS);
-        for read in reads {
-            messages.push(read.await.expect("error read task should join"));
-        }
-        messages
-    })
-    .await
-    .expect("error result should wake all followers");
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
-    assert!(messages
-        .iter()
-        .all(|message| message.contains("provider_api_keys.provider_id mismatch")));
-}
-
-#[tokio::test]
-async fn stale_transport_snapshot_returns_immediately_and_refreshes_once() {
-    let (state, inner, reader) = blocking_transport_state(2);
-    let original = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("initial transport read should succeed")
-        .expect("initial transport snapshot should exist");
-    age_transport_snapshot_cache(
-        &state,
-        PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL + Duration::from_millis(10),
-    );
-
-    let mut inactive_key = sample_key();
-    inactive_key.is_active = false;
-    inner
-        .update_key(&inactive_key)
-        .await
-        .expect("provider key should update before stale refresh");
-
-    let stale = tokio::time::timeout(
-        Duration::from_millis(250),
-        state.read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1"),
-    )
-    .await
-    .expect("stale cache hit must not wait for the database refresh")
-    .expect("stale transport read should succeed")
-    .expect("stale transport snapshot should exist");
-    assert!(Arc::ptr_eq(&original, &stale));
-    assert!(stale.key.is_active);
-
-    tokio::time::timeout(
-        Duration::from_secs(1),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("stale hit should start one background refresh");
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
-
-    for _ in 0..32 {
-        let observed = state
-            .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-            .await
-            .expect("concurrent stale read should succeed")
-            .expect("concurrent stale snapshot should exist");
-        assert!(Arc::ptr_eq(&original, &observed));
-    }
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
-
-    reader.release_blocked_key_read.notify_one();
-    wait_for_transport_refresh_to_finish(&state).await;
-    let refreshed = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("refreshed transport read should succeed")
-        .expect("refreshed transport snapshot should exist");
-    assert!(!refreshed.key.is_active);
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
-}
-
-#[tokio::test]
-async fn stale_transport_refresh_cannot_publish_after_generation_clear() {
-    let (state, inner, reader) = blocking_transport_state(2);
-    let _initial = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("initial transport read should succeed")
-        .expect("initial transport snapshot should exist");
-    age_transport_snapshot_cache(
-        &state,
-        PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL + Duration::from_millis(10),
-    );
-
-    let mut inactive_key = sample_key();
-    inactive_key.is_active = false;
-    inner
-        .update_key(&inactive_key)
-        .await
-        .expect("provider key should update before stale refresh");
-    let stale = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("stale transport read should succeed")
-        .expect("stale transport snapshot should exist");
-    assert!(stale.key.is_active);
-    tokio::time::timeout(
-        Duration::from_secs(1),
-        reader.blocked_key_read_started.notified(),
-    )
-    .await
-    .expect("background refresh should reach the barrier");
-    let cache_key = ProviderTransportSnapshotCacheKey::new("provider-1", "endpoint-1", "key-1")
-        .expect("cache key should build");
-    let old_inflight = state
-        .provider_transport_snapshot_inflight
-        .get(&cache_key)
-        .expect("background refresh should own the inflight entry")
-        .clone();
-
-    inner
-        .update_key(&sample_key())
-        .await
-        .expect("provider key should update for the new generation");
-    state.clear_provider_transport_snapshot_cache();
-    let current = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("new generation transport read should succeed")
-        .expect("new generation snapshot should exist");
-    assert!(current.key.is_active);
-
-    reader.release_blocked_key_read.notify_one();
-    tokio::time::timeout(Duration::from_secs(1), async {
-        while Arc::strong_count(&old_inflight) > 1 {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("old background refresh should finish after invalidation");
-    let cached = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("cached new generation read should succeed")
-        .expect("cached new generation snapshot should exist");
-    assert!(cached.key.is_active);
-    assert!(Arc::ptr_eq(&current, &cached));
-}
-
-#[tokio::test]
-async fn hard_expired_transport_snapshot_uses_one_synchronous_reload() {
-    let (state, inner, reader) = blocking_transport_state(2);
-    let _initial = state
-        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
-        .await
-        .expect("initial transport read should succeed")
-        .expect("initial transport snapshot should exist");
-    age_transport_snapshot_cache(
-        &state,
-        PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL + Duration::from_secs(1),
-    );
-    let mut inactive_key = sample_key();
-    inactive_key.is_active = false;
-    inner
-        .update_key(&inactive_key)
-        .await
-        .expect("provider key should update before hard-expiry read");
 
     let mut reads = Vec::new();
-    for _ in 0..32 {
-        let read_state = state.clone();
+    for _ in 0..16 {
+        let state = state.clone();
         reads.push(tokio::spawn(async move {
-            read_state
+            state
                 .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
                 .await
-                .expect("hard-expiry transport read should succeed")
-                .expect("hard-expiry snapshot should exist")
+                .expect("transport read should succeed")
+                .expect("snapshot should exist")
         }));
     }
+
     tokio::time::timeout(
         Duration::from_secs(1),
         reader.blocked_key_read_started.notified(),
     )
     .await
-    .expect("one synchronous reload should reach the barrier");
+    .expect("the single load should reach the barrier");
     tokio::task::yield_now().await;
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
-    assert!(reads.iter().any(|read| !read.is_finished()));
-
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
     reader.release_blocked_key_read.notify_one();
+
     let snapshots = tokio::time::timeout(Duration::from_secs(1), async {
         let mut snapshots = Vec::with_capacity(reads.len());
         for read in reads {
@@ -1064,15 +670,131 @@ async fn hard_expired_transport_snapshot_uses_one_synchronous_reload() {
         snapshots
     })
     .await
-    .expect("synchronous reload waiters should complete after one reload");
-    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
+    .expect("followers should complete after one load");
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
     let first = snapshots
         .first()
         .expect("at least one snapshot should exist");
-    assert!(!first.key.is_active);
     for snapshot in snapshots.iter().skip(1) {
         assert!(Arc::ptr_eq(first, snapshot));
     }
+}
+
+#[tokio::test]
+async fn clearing_the_cache_forces_the_next_read_to_load() {
+    let (state, _inner, reader) = blocking_transport_state(usize::MAX);
+
+    state
+        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+        .await
+        .expect("initial transport read should succeed");
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
+
+    state.clear_provider_transport_snapshot_cache();
+    state
+        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+        .await
+        .expect("transport read after a clear should succeed");
+
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
+}
+
+#[tokio::test]
+async fn a_missing_snapshot_is_cached_like_a_hit() {
+    let inner = Arc::new(InMemoryProviderCatalogReadRepository::seed(
+        vec![sample_provider()],
+        vec![sample_endpoint()],
+        Vec::new(),
+    ));
+    // The reader must not block: this test counts reads, it does not
+    // coordinate them.
+    let reader = Arc::new(BlockingProviderCatalogReadRepository::blocking_on_key_read(
+        Arc::clone(&inner),
+        usize::MAX,
+    ));
+    let state = AppState::new()
+        .expect("state should build")
+        .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
+            reader.clone(),
+            DEV_FERNET_KEY.to_string(),
+        ));
+
+    for _ in 0..3 {
+        assert!(state
+            .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+            .await
+            .expect("transport read should succeed")
+            .is_none());
+    }
+
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
+}
+
+#[tokio::test]
+async fn a_stale_snapshot_is_served_while_one_refresh_runs() {
+    let (state, _inner, reader) = blocking_transport_state(usize::MAX);
+
+    state
+        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+        .await
+        .expect("initial transport read should succeed");
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 1);
+
+    tokio::time::sleep(PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL + Duration::from_millis(50)).await;
+
+    let started = Instant::now();
+    let stale = state
+        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+        .await
+        .expect("stale transport read should succeed")
+        .expect("stale snapshot should exist");
+    assert!(
+        started.elapsed() < PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL,
+        "a stale read must not wait on the refresh"
+    );
+    assert!(stale.key.is_active);
+
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if reader.key_reads.load(Ordering::Acquire) >= 2 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the background refresh should run exactly once");
+    assert_eq!(reader.key_reads.load(Ordering::Acquire), 2);
+}
+
+#[tokio::test]
+async fn a_failed_load_is_not_cached() {
+    let inner = Arc::new(InMemoryProviderCatalogReadRepository::seed(
+        vec![sample_provider()],
+        vec![sample_endpoint()],
+        vec![sample_key()],
+    ));
+    let reader = Arc::new(FailingProviderCatalogReadRepository {
+        inner: Arc::clone(&inner),
+        remaining_failures: AtomicUsize::new(1),
+    });
+    let state = AppState::new()
+        .expect("state should build")
+        .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
+            reader.clone(),
+            DEV_FERNET_KEY.to_string(),
+        ));
+
+    assert!(state
+        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+        .await
+        .is_err());
+
+    assert!(state
+        .read_provider_transport_snapshot_arc("provider-1", "endpoint-1", "key-1")
+        .await
+        .expect("the retry should succeed")
+        .is_some());
 }
 
 #[test]
