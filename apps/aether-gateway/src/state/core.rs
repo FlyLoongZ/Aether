@@ -37,8 +37,7 @@ use super::super::async_task::{
 use super::super::cache::{
     AuthApiKeyLastUsedCache, AuthContextCache, AuthSnapshotCache, DashboardResponseCache,
     DirectPlanBypassCache, JsonValueCache, OverviewTotalCache, SchedulerAffinityCache,
-    SchedulerAffinitySnapshotEntry, SchedulerAffinityTarget, SystemConfigCache,
-    SystemConfigInflightRegistration, ValueCache,
+    SchedulerAffinitySnapshotEntry, SchedulerAffinityTarget, SystemConfigCache, ValueCache,
 };
 use super::super::data::{GatewayDataConfig, GatewayDataState};
 use super::super::fallback_metrics;
@@ -287,7 +286,7 @@ impl AppState {
         self.invalidate_auth_context_cache();
         self.candidate_row_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
-        self.system_config_cache.clear();
+        self.system_config_cache.invalidate_all();
         self.frontdoor_user_rpm.clear_system_default_cache();
         let data = Arc::new(
             (*data)
@@ -848,71 +847,26 @@ impl AppState {
         max_staleness: Duration,
     ) -> Result<Option<serde_json::Value>, GatewayError> {
         let max_staleness = max_staleness.max(fresh_ttl);
-        if let Some((value, age)) = self.system_config_cache.get_with_age(key, max_staleness) {
-            if age > fresh_ttl {
-                self.spawn_system_config_refresh(key, max_staleness);
-            }
-            return Ok(value);
-        }
-
-        loop {
-            match self.system_config_cache.register_load(key) {
-                SystemConfigInflightRegistration::Bypass => {
-                    return self
-                        .data
-                        .find_system_config_value(key)
-                        .await
-                        .map_err(|err| GatewayError::Internal(err.to_string()));
-                }
-                SystemConfigInflightRegistration::Follower(waiter) => {
-                    waiter.wait().await?;
-                    if let Some((value, _age)) =
-                        self.system_config_cache.get_with_age(key, max_staleness)
-                    {
-                        return Ok(value);
-                    }
-                }
-                SystemConfigInflightRegistration::Leader(guard) => {
-                    let value = match self.data.find_system_config_value(key).await {
-                        Ok(value) => value,
-                        Err(error) => {
-                            let error = GatewayError::Internal(error.to_string());
-                            guard.fail(error.clone());
-                            return Err(error);
-                        }
-                    };
-                    self.system_config_cache.insert_if_generation(
-                        key.to_string(),
-                        value.clone(),
-                        max_staleness,
-                        guard.generation(),
-                    );
-                    return Ok(value);
-                }
-            }
-        }
-    }
-
-    fn spawn_system_config_refresh(&self, key: &str, max_staleness: Duration) {
-        let Some(guard) = self.system_config_cache.try_register_owned_leader(key) else {
-            return;
-        };
-        let key = key.to_string();
-        let cache = Arc::clone(&self.system_config_cache);
         let data = Arc::clone(&self.data);
-        let generation = guard.generation();
-        tokio::spawn(async move {
-            match data.find_system_config_value(&key).await {
-                Ok(value) => {
-                    cache.insert_if_generation(key, value, max_staleness, generation);
-                }
-                Err(error) => {
-                    guard.fail(GatewayError::Internal(error.to_string()));
-                    warn!(error = %crate::error::redact_error_detail(&error), "background system config refresh failed");
-                }
-            }
-            drop(guard);
-        });
+        let cache_key = key.to_string();
+        let load = |data: Arc<GatewayDataState>, key: String| async move {
+            data.find_system_config_value(&key)
+                .await
+                .map_err(|err| GatewayError::Internal(err.to_string()))
+        };
+        self.system_config_cache
+            .get_or_load(
+                cache_key.clone(),
+                fresh_ttl,
+                max_staleness,
+                {
+                    let data = Arc::clone(&data);
+                    let cache_key = cache_key.clone();
+                    move || load(data, cache_key)
+                },
+                move || load(data, cache_key),
+            )
+            .await
     }
 
     pub(crate) async fn upsert_system_config_json_value(
@@ -961,7 +915,7 @@ impl AppState {
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))?;
         self.system_config_cache
-            .insert(key.to_string(), None, SYSTEM_CONFIG_CACHE_MAX_STALENESS);
+            .publish(key.to_string(), None, SYSTEM_CONFIG_CACHE_MAX_STALENESS);
         if deleted && system_config_key_affects_scheduler(key) {
             self.invalidate_scheduler_affinity_cache();
         }
@@ -1044,7 +998,7 @@ impl AppState {
 
     fn remember_system_config_write(&self, key: &str, value: Option<serde_json::Value>) {
         self.system_config_cache
-            .insert(key.to_string(), value, SYSTEM_CONFIG_CACHE_MAX_STALENESS);
+            .publish(key.to_string(), value, SYSTEM_CONFIG_CACHE_MAX_STALENESS);
         if system_config_key_affects_scheduler(key) {
             self.invalidate_scheduler_affinity_cache();
         }
@@ -1089,7 +1043,7 @@ impl AppState {
                 | aether_data::repository::system::AdminSystemPurgeTarget::Usage
                 | aether_data::repository::system::AdminSystemPurgeTarget::Stats
         ) {
-            self.system_config_cache.clear();
+            self.system_config_cache.invalidate_all();
             self.invalidate_provider_routing_caches();
         }
         Ok(summary)

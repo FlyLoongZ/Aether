@@ -1,9 +1,10 @@
 use aether_scheduler_core::{
     build_scheduler_affinity_cache_key_for_api_key_id_with_client_session, candidate_affinity_hash,
-    matches_affinity_target, ClientSessionAffinity, SchedulerAffinityTarget,
+    candidate_key, matches_affinity_target, ClientSessionAffinity, SchedulerAffinityTarget,
 };
 
 use crate::data::auth::GatewayAuthApiKeySnapshot;
+use crate::scheduler::affinity::SCHEDULER_AFFINITY_TTL;
 
 use super::{SchedulerMinimalCandidateSelectionCandidate, SchedulerRuntimeState};
 

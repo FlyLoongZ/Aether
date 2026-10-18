@@ -244,10 +244,7 @@ impl<'a> TransferTestPort<'a> {
 
     /// Every attempt fails and preserves the next status code, so the loop
     /// has to decide which one the client finally receives.
-    fn with_retry_fallbacks(
-        state: &'a AppState,
-        statuses: impl IntoIterator<Item = u16>,
-    ) -> Self {
+    fn with_retry_fallbacks(state: &'a AppState, statuses: impl IntoIterator<Item = u16>) -> Self {
         let mut port = Self::new(state);
         port.fallback_statuses = StdMutex::new(statuses.into_iter().collect());
         port
@@ -1588,7 +1585,7 @@ async fn stream_candidate_target_admission_timeout_continues_without_duplicate_r
         ))
     ));
     assert!(writer.records.lock().await.is_empty());
-}
+
     #[tokio::test]
     async fn exhaustion_returns_the_last_preserved_upstream_error() {
         let state = AppState::new().unwrap();
