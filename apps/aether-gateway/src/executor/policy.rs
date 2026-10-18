@@ -92,3 +92,9 @@ pub(crate) fn should_skip_direct_plan(state: &AppState, cache_key: &str) -> bool
         .direct_plan_bypass_cache
         .should_skip(cache_key, DIRECT_PLAN_BYPASS_TTL)
 }
+
+pub(crate) fn mark_direct_plan_bypass(state: &AppState, cache_key: String) {
+    state
+        .direct_plan_bypass_cache
+        .mark(cache_key, DIRECT_PLAN_BYPASS_TTL);
+}

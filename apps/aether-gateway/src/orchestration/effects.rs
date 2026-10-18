@@ -4,7 +4,7 @@ use std::sync::{Arc, LazyLock, Mutex as StdMutex, Weak};
 use std::time::Duration;
 
 use aether_admin::provider::quota as admin_provider_quota_pure;
-use aether_cache::ExpiringMap;
+use aether_cache::Gate;
 use aether_contracts::{ExecutionPlan, ExecutionTelemetry};
 use aether_data_contracts::repository::pool_scores::{
     PoolMemberHardState, PoolMemberIdentity, PoolMemberScheduleFeedback,
@@ -55,9 +55,6 @@ use crate::scheduler::affinity::{
 };
 use crate::AppState;
 
-const POOL_SCORE_FEEDBACK_GATE_MAX_ENTRIES: usize = 50_000;
-const HEALTH_SUCCESS_PERSIST_GATE_MAX_ENTRIES: usize = 50_000;
-const ADAPTIVE_SUCCESS_PERSIST_GATE_MAX_ENTRIES: usize = 50_000;
 const POOL_SCORE_SUCCESS_FEEDBACK_MIN_INTERVAL_ENV: &str =
     "AETHER_GATEWAY_POOL_SCORE_SUCCESS_FEEDBACK_MIN_INTERVAL_SECS";
 const POOL_SCORE_FAILURE_FEEDBACK_MIN_INTERVAL_ENV: &str =
@@ -158,12 +155,9 @@ impl ProviderKeyEffectLockPool {
     }
 }
 
-static POOL_SCORE_FEEDBACK_GATE: LazyLock<ExpiringMap<String, ()>> =
-    LazyLock::new(ExpiringMap::new);
-static HEALTH_SUCCESS_PERSIST_GATE: LazyLock<ExpiringMap<String, ()>> =
-    LazyLock::new(ExpiringMap::new);
-static ADAPTIVE_SUCCESS_PERSIST_GATE: LazyLock<ExpiringMap<String, u64>> =
-    LazyLock::new(ExpiringMap::new);
+static POOL_SCORE_FEEDBACK_GATE: LazyLock<Gate<String>> = LazyLock::new(Gate::new);
+static HEALTH_SUCCESS_PERSIST_GATE: LazyLock<Gate<String>> = LazyLock::new(Gate::new);
+static ADAPTIVE_SUCCESS_PERSIST_GATE: LazyLock<Gate<String, u64>> = LazyLock::new(Gate::new);
 static ADAPTIVE_SUCCESS_PERSIST_GATE_NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
 static PROVIDER_KEY_EFFECT_LOCKS: LazyLock<ProviderKeyEffectLockPool> =
     LazyLock::new(ProviderKeyEffectLockPool::default);
@@ -1211,11 +1205,10 @@ fn provider_key_adaptive_success_persist_gate_admit(key_id: &str) -> Option<u64>
     }
     let token = ADAPTIVE_SUCCESS_PERSIST_GATE_NEXT_TOKEN.fetch_add(1, Ordering::Relaxed);
     ADAPTIVE_SUCCESS_PERSIST_GATE
-        .insert_if_absent_fresh(
+        .try_enter(
             provider_key_adaptive_success_persist_gate_key(key_id),
-            token,
             interval,
-            ADAPTIVE_SUCCESS_PERSIST_GATE_MAX_ENTRIES,
+            token,
         )
         .then_some(token)
 }
@@ -1227,14 +1220,14 @@ fn provider_key_adaptive_success_persist_gate_admission_is_current(
     if cfg!(test) || ADAPTIVE_SUCCESS_PERSIST_MIN_INTERVAL.is_zero() {
         return true;
     }
-    ADAPTIVE_SUCCESS_PERSIST_GATE.get_fresh(
+    ADAPTIVE_SUCCESS_PERSIST_GATE.peek(
         &provider_key_adaptive_success_persist_gate_key(key_id),
         *ADAPTIVE_SUCCESS_PERSIST_MIN_INTERVAL,
     ) == Some(token)
 }
 
 fn provider_key_adaptive_success_persist_gate_reset(key_id: &str) {
-    ADAPTIVE_SUCCESS_PERSIST_GATE.remove(&provider_key_adaptive_success_persist_gate_key(key_id));
+    ADAPTIVE_SUCCESS_PERSIST_GATE.release(&provider_key_adaptive_success_persist_gate_key(key_id));
 }
 
 fn provider_key_adaptive_success_persist_gate_key(key_id: &str) -> String {
@@ -1462,17 +1455,12 @@ fn provider_key_health_success_persist_gate_allows(
         return true;
     }
     let key = provider_key_health_success_persist_gate_key(key_id, api_format);
-    HEALTH_SUCCESS_PERSIST_GATE.insert_if_absent_fresh(
-        key,
-        (),
-        min_interval,
-        HEALTH_SUCCESS_PERSIST_GATE_MAX_ENTRIES,
-    )
+    HEALTH_SUCCESS_PERSIST_GATE.enter(key, min_interval)
 }
 
 fn provider_key_health_success_persist_gate_reset(key_id: &str, api_format: &str) {
     let key = provider_key_health_success_persist_gate_key(key_id, api_format);
-    HEALTH_SUCCESS_PERSIST_GATE.remove(&key);
+    HEALTH_SUCCESS_PERSIST_GATE.release(&key);
 }
 
 fn provider_key_health_success_persist_gate_key(key_id: &str, api_format: &str) -> String {
@@ -1867,12 +1855,8 @@ fn local_candidate_failure_should_invalidate_affinity_for_provider(
 
     // Only `retry_action` and `failure_scope` are read here, so the exhaustion
     // switch is irrelevant to this decision.
-    let disposition = classify_failure_disposition(
-        provider_api_format,
-        classification,
-        status_code,
-        true,
-    );
+    let disposition =
+        classify_failure_disposition(provider_api_format, classification, status_code, true);
     !(disposition.retry_action == crate::orchestration::FailureRetryAction::Stop
         && disposition.failure_scope == FailureScope::None)
 }
@@ -2034,11 +2018,7 @@ fn pool_score_feedback_gate_allows(
         return true;
     }
     let key = pool_score_feedback_gate_key(plan, succeeded, hard_state, score_delta);
-    if POOL_SCORE_FEEDBACK_GATE.contains_fresh(&key, min_interval) {
-        return false;
-    }
-    POOL_SCORE_FEEDBACK_GATE.insert(key, (), min_interval, POOL_SCORE_FEEDBACK_GATE_MAX_ENTRIES);
-    true
+    POOL_SCORE_FEEDBACK_GATE.enter(key, min_interval)
 }
 
 fn pool_score_hard_state_for_status(
