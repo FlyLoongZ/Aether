@@ -1024,7 +1024,7 @@ impl AppState {
         // wallet mutation is visible immediately when refresh-on-hit is off.
         self.data.clear_auth_api_key_read_cache();
         self.background_data.clear_auth_api_key_read_cache();
-        self.auth_context_cache.clear();
+        self.auth_context_cache.invalidate_all();
         self.auth_snapshot_cache.clear();
         self.user_model_capability_settings_cache.clear();
         self.user_feature_settings_cache.clear();

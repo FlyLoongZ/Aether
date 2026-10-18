@@ -1296,14 +1296,14 @@ mod tests {
             .expect("group should create")
             .expect("group should exist");
 
-        let cache_key = "auth-context-cache-key".to_string();
+        let cache_key = "auth-context-cache-key";
         let ttl = Duration::from_secs(60);
         state
             .auth_context_cache
-            .insert(cache_key.clone(), cached_auth_context(), ttl, 10);
+            .publish(cache_key, cached_auth_context(), ttl);
         assert!(state
             .auth_context_cache
-            .get_fresh(&cache_key, ttl)
+            .peek_within(cache_key, ttl, ttl)
             .is_some());
 
         state
@@ -1314,7 +1314,7 @@ mod tests {
 
         assert!(state
             .auth_context_cache
-            .get_fresh(&cache_key, ttl)
+            .peek_within(cache_key, ttl, ttl)
             .is_none());
     }
 }
