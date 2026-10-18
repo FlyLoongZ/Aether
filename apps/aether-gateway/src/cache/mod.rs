@@ -29,7 +29,10 @@ pub(crate) use candidate_page::{
     CandidatePageSnapshot, CandidateResolvedPageCache, CandidateResolvedPageCacheKey,
     CandidateResolvedPageSnapshot, CandidateRowPageCache, CandidateRowPageCacheKey,
 };
-pub(crate) use dashboard_response::DashboardResponseCache;
+pub(crate) use dashboard_response::{
+    DashboardResponseCache, DASHBOARD_DAILY_CACHE_TTL, DASHBOARD_PROVIDER_STATUS_CACHE_TTL,
+    DASHBOARD_STATS_CACHE_TTL,
+};
 pub(crate) use direct_plan_bypass::DirectPlanBypassCache;
 pub(crate) use overview_total::{OverviewTotalCache, OverviewTotalRead};
 pub(crate) use scheduler_affinity::{
