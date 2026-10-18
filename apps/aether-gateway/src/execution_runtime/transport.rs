@@ -84,8 +84,6 @@ const DIRECT_REQWEST_HTTP1_TARGET_STREAMS_PER_CLIENT_ENV: &str =
     "AETHER_GATEWAY_DIRECT_REQWEST_HTTP1_TARGET_STREAMS_PER_CLIENT";
 const DIRECT_REQWEST_STREAM_HTTP_MODE_ENV: &str = "AETHER_GATEWAY_DIRECT_REQWEST_STREAM_HTTP_MODE";
 const DIRECT_REQWEST_CACHE_PER_ORIGIN_ENV: &str = "AETHER_GATEWAY_DIRECT_REQWEST_CACHE_PER_ORIGIN";
-const DIRECT_REQWEST_CACHE_MAX_ENTRIES_ENV: &str =
-    "AETHER_GATEWAY_DIRECT_REQWEST_CACHE_MAX_ENTRIES";
 const DIRECT_H2C_FAST_PATH_ENV: &str = "AETHER_GATEWAY_DIRECT_H2C_FAST_PATH";
 const DIRECT_H2C_CLIENT_SHARDS_ENV: &str = "AETHER_GATEWAY_DIRECT_H2C_CLIENT_SHARDS";
 const DIRECT_H2C_POOL_MAX_IDLE_PER_HOST_ENV: &str =
@@ -117,10 +115,12 @@ const DEFAULT_DIRECT_REQWEST_SYNC_WARM_CLIENTS: usize = 4;
 const MAX_DIRECT_REQWEST_SYNC_WARM_CLIENTS: usize = 16;
 const MAX_DIRECT_H2C_CLIENT_SHARDS: usize = 512;
 const MAX_DIRECT_REQWEST_H2_CLIENT_SHARDS: usize = 2048;
-// This bounds distinct cached transport configurations, not request concurrency,
-// HTTP/2 streams, or the number of clients/shards within an active entry.
-const DEFAULT_DIRECT_REQWEST_CACHE_MAX_ENTRIES: usize = 1024;
-const MAX_DIRECT_REQWEST_CACHE_MAX_ENTRIES: usize = 16_384;
+// One entry owns a few `reqwest::Client` pools, so its footprint is dominated
+// by connection state rather than by the key. A budget over that estimate keeps
+// this cache in the same unit as the rest of the gateway's caches instead of
+// carrying a second, differently-shaped cap.
+const DIRECT_REQWEST_CLIENT_ENTRY_ESTIMATED_BYTES: usize = 64 * 1024;
+const DIRECT_REQWEST_CLIENT_CACHE_CAPACITY_BYTES: usize = 64 * 1024 * 1024;
 
 type DirectHyperH2cRequestBody = Full<Bytes>;
 type DirectHyperH2cClient =
@@ -2915,7 +2915,11 @@ fn prewarm_direct_reqwest_client_cache(
         let entry =
             DirectReqwestClientCacheEntry::new(clients, target_len, target_len > initial_len);
         let warm_key = (target_len > initial_len).then(|| cache_key.clone());
-        evict_direct_reqwest_client_cache_for_insert(&mut cache, &cache_key);
+        evict_direct_reqwest_client_cache_for_insert(
+            &mut cache,
+            &cache_key,
+            direct_reqwest_client_cache_max_entries(),
+        );
         cache.insert(cache_key, entry);
         if let Some(warm_key) = warm_key {
             warm_after_unlock = Some((warm_key, proxy_url, initial_len, target_len));
@@ -3003,7 +3007,11 @@ fn cached_direct_reqwest_client(
         record_direct_reqwest_client_protocol_selection(&cache_key);
         let client = entry.select();
         let warm_key = (target_len > initial_len).then(|| cache_key.clone());
-        evict_direct_reqwest_client_cache_for_insert(&mut cache, &cache_key);
+        evict_direct_reqwest_client_cache_for_insert(
+            &mut cache,
+            &cache_key,
+            direct_reqwest_client_cache_max_entries(),
+        );
         cache.insert(cache_key, entry);
         if let Some(warm_key) = warm_key {
             warm_after_unlock = Some((warm_key, proxy_url, initial_len, target_len));
@@ -3124,19 +3132,18 @@ fn next_direct_reqwest_client_cache_clock() -> u64 {
 }
 
 fn direct_reqwest_client_cache_max_entries() -> usize {
-    env_positive_usize(DIRECT_REQWEST_CACHE_MAX_ENTRIES_ENV)
-        .unwrap_or(DEFAULT_DIRECT_REQWEST_CACHE_MAX_ENTRIES)
-        .clamp(1, MAX_DIRECT_REQWEST_CACHE_MAX_ENTRIES)
+    (DIRECT_REQWEST_CLIENT_CACHE_CAPACITY_BYTES / DIRECT_REQWEST_CLIENT_ENTRY_ESTIMATED_BYTES)
+        .max(1)
 }
 
 fn evict_direct_reqwest_client_cache_for_insert(
     cache: &mut HashMap<DirectReqwestClientCacheKey, DirectReqwestClientCacheEntry>,
     incoming: &DirectReqwestClientCacheKey,
+    max_entries: usize,
 ) {
     if cache.contains_key(incoming) {
         return;
     }
-    let max_entries = direct_reqwest_client_cache_max_entries();
     while cache.len() >= max_entries {
         let Some(oldest_key) = cache
             .iter()
