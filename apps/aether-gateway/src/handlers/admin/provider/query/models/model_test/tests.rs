@@ -638,6 +638,40 @@ fn provider_query_search_success_requires_non_empty_output() {
 }
 
 #[test]
+fn provider_query_error_response_body_keeps_json_and_plain_text() {
+    fn result(json_body: Option<Value>, raw: Option<&str>) -> aether_contracts::ExecutionResult {
+        aether_contracts::ExecutionResult {
+            request_id: "provider-error-body-test".to_string(),
+            candidate_id: Some("candidate-0".to_string()),
+            status_code: 502,
+            headers: BTreeMap::new(),
+            response_observation: None,
+            body: Some(aether_contracts::ResponseBody {
+                json_body,
+                body_bytes_b64: raw
+                    .map(|text| base64::engine::general_purpose::STANDARD.encode(text.as_bytes())),
+            }),
+            telemetry: None,
+            error: None,
+        }
+    }
+
+    assert_eq!(
+        provider_query_error_response_body(&result(
+            Some(json!({"error": {"message": "model not found"}})),
+            None
+        )),
+        Some(json!({"error": {"message": "model not found"}}))
+    );
+    assert_eq!(
+        provider_query_error_response_body(&result(None, Some("  <html>bad gateway</html>  "))),
+        Some(json!("<html>bad gateway</html>"))
+    );
+    assert!(provider_query_error_response_body(&result(None, Some("   "))).is_none());
+    assert!(provider_query_error_response_body(&result(None, None)).is_none());
+}
+
+#[test]
 fn provider_query_embedding_test_request_body_defaults_to_embedding_input() {
     let payload = json!({"message": "hello from embedding"});
 
