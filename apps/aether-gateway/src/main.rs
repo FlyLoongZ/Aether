@@ -2022,6 +2022,7 @@ fn validate_deployment_topology(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    aether_gateway::ensure_rustls_crypto_provider();
     let _log_shutdown = aether_runtime::LogShutdownGuard::new();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

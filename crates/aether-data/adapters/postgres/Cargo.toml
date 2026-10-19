@@ -15,7 +15,7 @@ async-trait.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
 futures-util.workspace = true
-sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls", "chrono", "migrate", "macros"] }
+sqlx = { workspace = true, features = ["postgres", "chrono", "migrate", "macros"] }
 serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
