@@ -19,7 +19,6 @@ test-support = ["dep:aether-wallet"]
 aether-ai-formats.workspace = true
 aether-data-contracts.workspace = true
 aether-data-postgres = { workspace = true, optional = true }
-aether-cache.workspace = true
 aether-wallet = { workspace = true, optional = true }
 async-trait.workspace = true
 chrono.workspace = true
@@ -28,11 +27,9 @@ futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-sqlx = { workspace = true, features = ["bigdecimal", "migrate", "macros"] }
-thiserror.workspace = true
+sqlx = { workspace = true, features = ["migrate", "macros"] }
 tokio.workspace = true
 tracing.workspace = true
-url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
