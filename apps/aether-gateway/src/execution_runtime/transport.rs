@@ -4065,9 +4065,9 @@ fn apply_transport_profile(
         return builder;
     }
 
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    crate::ensure_rustls_crypto_provider();
 
-    builder.use_preconfigured_tls(build_best_effort_transport_tls_config(
+    builder.tls_backend_preconfigured(build_best_effort_transport_tls_config(
         transport_profile_http1_only(transport_profile),
     ))
 }
@@ -4085,9 +4085,9 @@ fn apply_transport_profile_cache_key(
         return builder;
     }
 
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    crate::ensure_rustls_crypto_provider();
 
-    builder.use_preconfigured_tls(build_best_effort_transport_tls_config(http1_only))
+    builder.tls_backend_preconfigured(build_best_effort_transport_tls_config(http1_only))
 }
 
 fn build_best_effort_transport_tls_config(http1_only: bool) -> rustls::ClientConfig {

@@ -312,7 +312,7 @@ fn wrap_base64(value: &str) -> String {
 }
 
 fn build_tls_config() -> std::sync::Arc<rustls::ClientConfig> {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    crate::ensure_rustls_crypto_provider();
     let root_store =
         rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
     let config = rustls::ClientConfig::builder()

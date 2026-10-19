@@ -78,7 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    aether_gateway::ensure_rustls_crypto_provider();
 
     init_service_runtime(ServiceRuntimeConfig::new(
         "aether-execution-runtime-harness",

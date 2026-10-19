@@ -9,7 +9,7 @@ pub fn apply_http_client_config(
     config: &HttpClientConfig,
 ) -> reqwest::ClientBuilder {
     if config.use_rustls_tls {
-        builder = builder.use_rustls_tls();
+        builder = builder.tls_backend_rustls();
     }
     if let Some(timeout_ms) = config.connect_timeout_ms {
         builder = builder.connect_timeout(Duration::from_millis(timeout_ms));

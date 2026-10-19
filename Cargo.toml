@@ -114,10 +114,10 @@ http = "1"
 object_store = { version = "0.14.1", default-features = false, features = ["aws"] }
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 percent-encoding = "2"
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "http2", "socks"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls", "http2", "socks", "query", "form"] }
 redis = { version = "0.28", default-features = false, features = ["tokio-comp", "script", "streams", "connection-manager"] }
 regex = "1"
-rustls = { version = "0.23", features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "logging", "prefer-post-quantum", "std", "tls12"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
@@ -125,7 +125,7 @@ serde_path_to_error = "0.1"
 sha2 = "0.10"
 socket2 = "0.6"
 tar = "0.4"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "chrono"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "chrono"] }
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["codec", "io-util"] }

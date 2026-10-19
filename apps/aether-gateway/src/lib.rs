@@ -86,6 +86,7 @@ mod system_features;
 mod task_runtime;
 #[cfg(feature = "testkit")]
 pub mod testkit;
+mod tls;
 mod tokio_metrics;
 mod upstream_admission;
 mod usage;
@@ -134,6 +135,7 @@ pub(crate) use self::state::{
     LocalMutationOutcome, LocalProviderDeleteTaskState,
 };
 pub use self::state::{AppState, FrontdoorCorsConfig};
+pub use self::tls::ensure_rustls_crypto_provider;
 pub use self::usage::UsageRuntimeConfig;
 
 use axum::http::header::{HeaderName, HeaderValue};
