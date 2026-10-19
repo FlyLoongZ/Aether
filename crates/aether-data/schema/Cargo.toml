@@ -7,7 +7,7 @@ repository.workspace = true
 description = "Logical schema parser and SQL generator for Aether data storage"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
-toml = "0.8"
+toml.workspace = true

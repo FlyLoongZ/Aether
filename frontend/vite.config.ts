@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
             // 工具库
             'utils-vendor': ['axios', 'marked', 'dompurify'],
             // 图表库
-            'chart-vendor': ['chart.js', 'vue-chartjs'],
+            'chart-vendor': ['chart.js'],
           },
         },
       },

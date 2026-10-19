@@ -48,28 +48,27 @@ aether-wallet.workspace = true
 aes-gcm.workspace = true
 async-stream.workspace = true
 async-trait.workspace = true
-axum = { version = "0.8", features = ["ws"] }
+axum = { workspace = true, features = ["ws"] }
 base64.workspace = true
 bcrypt.workspace = true
 brotli.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
-clap = { version = "4", features = ["derive", "env"] }
-dashmap = "6"
+clap = { workspace = true, features = ["env"] }
+dashmap.workspace = true
 flate2.workspace = true
 futures-util.workspace = true
 hmac.workspace = true
 http.workspace = true
-http-body = "1"
-http-body-util = "0.1"
-hyper = { version = "1", features = ["client", "server", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["client-legacy", "client-pool", "server-auto", "service", "tokio"] }
-ldap3 = { version = "0.12.1", default-features = false, features = ["sync", "tls-rustls-aws-lc-rs"] }
-libc = "0.2"
-md-5 = "0.10"
+http-body.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util = { workspace = true, features = ["client-legacy", "client-pool", "server-auto", "service"] }
+ldap3.workspace = true
+libc.workspace = true
+md-5.workspace = true
 object_store.workspace = true
-parking_lot = "0.12"
 percent-encoding.workspace = true
 regex.workspace = true
 reqwest.workspace = true
@@ -77,18 +76,16 @@ rustls.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 semver.workspace = true
-sha1 = "0.10"
-sha2 = { workspace = true, features = ["oid"] }
+sha2.workspace = true
 socket2.workspace = true
 tar.workspace = true
 sqlx = { workspace = true, features = ["postgres", "migrate"] }
-sysinfo = "0.32"
+sysinfo.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
-tokio-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
-tower = { version = "0.5", features = ["util"] }
-tower-http = { version = "0.6", features = ["fs", "compression-gzip", "set-header"] }
+tower.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
@@ -106,4 +103,5 @@ aether-data = { workspace = true, features = ["all-drivers", "test-support"] }
 aether-testkit = { workspace = true, features = ["postgres"] }
 aether-test-support.workspace = true
 aws-lc-rs.workspace = true
+tokio-tungstenite.workspace = true
 tracing-subscriber.workspace = true

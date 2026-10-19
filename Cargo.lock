@@ -71,14 +71,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aether-admission-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "aether-ai-formats"
 version = "0.1.0"
 dependencies = [
@@ -89,7 +81,6 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "sha1",
  "sha2",
  "url",
  "uuid",
@@ -106,7 +97,6 @@ dependencies = [
  "aether-scheduler-core",
  "async-trait",
  "base64 0.22.1",
- "http",
  "serde",
  "serde_json",
  "tokio",
@@ -135,15 +125,11 @@ version = "0.1.0"
 name = "aether-contracts"
 version = "0.1.0"
 dependencies = [
- "aes-gcm",
  "base64 0.22.1",
- "bytes",
- "flate2",
  "hmac",
  "serde",
  "serde_json",
  "sha2",
- "thiserror 2.0.18",
  "url",
 ]
 
@@ -167,7 +153,6 @@ name = "aether-data"
 version = "0.1.0"
 dependencies = [
  "aether-ai-formats",
- "aether-cache",
  "aether-data-contracts",
  "aether-data-postgres",
  "aether-wallet",
@@ -179,10 +164,8 @@ dependencies = [
  "serde_json",
  "sha2",
  "sqlx",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
- "url",
  "uuid",
 ]
 
@@ -250,7 +233,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "serde",
- "serde_json",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -314,7 +296,6 @@ dependencies = [
  "libc",
  "md-5 0.10.6",
  "object_store",
- "parking_lot",
  "percent-encoding",
  "regex",
  "reqwest",
@@ -322,7 +303,6 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "sha1",
  "sha2",
  "socket2",
  "sqlx",
@@ -416,7 +396,6 @@ dependencies = [
  "aether-runtime",
  "aether-runtime-state",
  "aether-testkit",
- "arc-swap",
  "async-stream",
  "axum",
  "futures-util",
@@ -482,7 +461,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "thiserror 2.0.18",
  "tokio",
  "url",
  "uuid",
@@ -494,14 +472,6 @@ version = "0.1.0"
 dependencies = [
  "aether-data-contracts",
  "serde_json",
-]
-
-[[package]]
-name = "aether-provider-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -650,17 +620,8 @@ dependencies = [
  "aether-runtime",
  "aether-runtime-state",
  "axum",
- "http",
  "sqlx",
  "tokio",
-]
-
-[[package]]
-name = "aether-usage-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1448,25 +1409,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "crossbeam-deque"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dd111b7b7f7d55b72c0a6ae361660ee5853c9af73f70c3c2ef6858b950e2e51"
-dependencies = [
- "crossbeam-epoch",
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-epoch"
-version = "0.9.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
-dependencies = [
- "crossbeam-utils",
 ]
 
 [[package]]
@@ -3298,26 +3240,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
-name = "rayon"
-version = "1.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "368f01d005bf8fd9b1206fb6fa653e6c4a81ceb1466406b81792d87c5677a58f"
-dependencies = [
- "either",
- "rayon-core",
-]
-
-[[package]]
-name = "rayon-core"
-version = "1.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
-dependencies = [
- "crossbeam-deque",
- "crossbeam-utils",
-]
-
-[[package]]
 name = "redis"
 version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4146,7 +4068,6 @@ dependencies = [
  "libc",
  "memchr",
  "ntapi",
- "rayon",
  "windows",
 ]
 
