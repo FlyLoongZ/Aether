@@ -2,7 +2,6 @@
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use axum::{body::Body, extract::Request};
@@ -17,100 +16,6 @@ use tokio_util::sync::CancellationToken;
 use tower::{Service as _, ServiceExt as _};
 use tracing::{debug, info, warn};
 
-/// Coordinates the connection-level deadline that covers protocol detection and
-/// the first request header block. Hyper's HTTP/1 timer starts only after the
-/// auto protocol detector has finished, while HTTP/2 has no equivalent header
-/// timer. Keeping this gate outside the parser closes that initial gap without
-/// imposing a deadline on request or response bodies.
-#[derive(Clone)]
-struct GatewayFirstRequestGate {
-    seen: Arc<AtomicBool>,
-    notify: Arc<tokio::sync::Notify>,
-}
-
-impl GatewayFirstRequestGate {
-    fn new() -> Self {
-        Self {
-            seen: Arc::new(AtomicBool::new(false)),
-            notify: Arc::new(tokio::sync::Notify::new()),
-        }
-    }
-
-    fn mark_seen(&self) {
-        if !self.seen.swap(true, Ordering::Release) {
-            self.notify.notify_one();
-        }
-    }
-
-    fn is_seen(&self) -> bool {
-        self.seen.load(Ordering::Acquire)
-    }
-}
-
-#[derive(Clone)]
-struct GatewayFirstRequestService<S> {
-    inner: S,
-    gate: GatewayFirstRequestGate,
-}
-
-impl<S, Request> tower::Service<Request> for GatewayFirstRequestService<S>
-where
-    S: tower::Service<Request>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Request) -> Self::Future {
-        self.gate.mark_seen();
-        self.inner.call(request)
-    }
-}
-
-/// Drive one Hyper connection while enforcing the deadline for its first
-/// request. This is kept generic so the timeout behavior can be regression
-/// tested independently from the listener and application state.
-async fn drive_gateway_connection<F, E>(
-    connection: F,
-    first_request_gate: GatewayFirstRequestGate,
-    first_request_timeout: std::time::Duration,
-) -> Result<(), E>
-where
-    F: std::future::Future<Output = Result<(), E>>,
-{
-    if first_request_gate.is_seen() {
-        return connection.await;
-    }
-
-    let mut connection = Box::pin(connection);
-    let first_request_timeout = tokio::time::sleep(first_request_timeout);
-    tokio::pin!(first_request_timeout);
-    let first_request_notified = first_request_gate.notify.notified();
-    tokio::pin!(first_request_notified);
-
-    tokio::select! {
-        result = &mut connection => result,
-        _ = &mut first_request_timeout => {
-            if first_request_gate.is_seen() {
-                (&mut connection).await
-            } else {
-                tracing::debug!(
-                    "gateway connection closed before the first request header completed"
-                );
-                Ok(())
-            }
-        }
-        _ = &mut first_request_notified => (&mut connection).await,
-    }
-}
-
 use aether_crypto::warm_python_fernet_secret;
 use aether_data::{DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
 use aether_gateway::{
@@ -119,7 +24,10 @@ use aether_gateway::{
     FrontdoorCorsConfig, FrontdoorUserRpmConfig, GatewayDataConfig, UsageRuntimeConfig,
     VideoTaskTruthSourceMode,
 };
-use aether_gateway_frontdoor::{http_connection_limit, HttpConnectionBudget};
+use aether_gateway_frontdoor::{
+    drive_first_request_connection, http_connection_limit, FirstRequestService,
+    HttpConnectionBudget,
+};
 use aether_runtime::{
     init_service_runtime, FileLoggingConfig, LogDestination, LogFormat, LogRotation,
     ServiceRuntimeConfig,
@@ -1845,11 +1753,8 @@ async fn serve_gateway_listener(
             .await
             .unwrap_or_else(|err| match err {})
             .map_request(|req: Request<Incoming>| req.map(Body::new));
-        let first_request_gate = GatewayFirstRequestGate::new();
-        let hyper_service = TowerToHyperService::new(GatewayFirstRequestService {
-            inner: tower_service,
-            gate: first_request_gate.clone(),
-        });
+        let (first_request_service, first_request_gate) = FirstRequestService::new(tower_service);
+        let hyper_service = TowerToHyperService::new(first_request_service);
         let io = TokioIo::new(io);
 
         let shutdown = shutdown.clone();
@@ -1897,10 +1802,11 @@ async fn serve_gateway_listener(
             let connection_result = tokio::select! {
                 biased;
                 _ = connection_budget.wait_for_forced_close() => Ok(()),
-                result = drive_gateway_connection(
+                result = drive_first_request_connection(
                     draining_connection,
                     first_request_gate,
                     std::time::Duration::from_millis(http_header_read_timeout_ms),
+                    Some("gateway connection closed before the first request header completed"),
                 ) => result,
             };
             if let Err(err) = connection_result {
@@ -3876,13 +3782,14 @@ mod tests {
 
     #[tokio::test]
     async fn first_request_gate_closes_a_connection_that_never_reaches_service() {
-        let gate = super::GatewayFirstRequestGate::new();
+        let gate = aether_gateway_frontdoor::FirstRequestGate::new();
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(1),
-            super::drive_gateway_connection(
+            super::drive_first_request_connection(
                 std::future::pending::<Result<(), ()>>(),
                 gate,
                 std::time::Duration::from_millis(5),
+                None,
             ),
         )
         .await
@@ -3892,7 +3799,7 @@ mod tests {
 
     #[tokio::test]
     async fn first_request_gate_does_not_deadline_a_streaming_connection() {
-        let gate = super::GatewayFirstRequestGate::new();
+        let gate = aether_gateway_frontdoor::FirstRequestGate::new();
         gate.mark_seen();
         // Model a body that remains active after request headers arrive.
         let connection = async {
@@ -3900,8 +3807,13 @@ mod tests {
             Ok::<(), ()>(())
         };
         let result = tokio::time::timeout(std::time::Duration::from_secs(1), async move {
-            super::drive_gateway_connection(connection, gate, std::time::Duration::from_millis(5))
-                .await
+            super::drive_first_request_connection(
+                connection,
+                gate,
+                std::time::Duration::from_millis(5),
+                None,
+            )
+            .await
         })
         .await
         .expect("streaming connection should finish");
@@ -3921,10 +3833,10 @@ mod tests {
                 .write_all(prefix)
                 .await
                 .expect("fixture prefix should be writable");
-            let gate = super::GatewayFirstRequestGate::new();
             let service = tower::service_fn(|_request: HyperRequest<HyperIncoming>| async {
                 Ok::<_, Infallible>(HyperResponse::new(Full::new(Bytes::from_static(b"ok"))))
             });
+            let (first_request_service, gate) = super::FirstRequestService::new(service);
             let mut builder = HyperServerBuilder::new(TokioExecutor::new());
             builder
                 .http1()
@@ -3944,16 +3856,14 @@ mod tests {
 
             let result = tokio::time::timeout(
                 std::time::Duration::from_secs(1),
-                super::drive_gateway_connection(
+                super::drive_first_request_connection(
                     builder.serve_connection_with_upgrades(
                         TokioIo::new(server),
-                        super::TowerToHyperService::new(super::GatewayFirstRequestService {
-                            inner: service,
-                            gate: gate.clone(),
-                        }),
+                        super::TowerToHyperService::new(first_request_service),
                     ),
                     gate,
                     std::time::Duration::from_millis(5),
+                    None,
                 ),
             )
             .await
@@ -3975,7 +3885,6 @@ mod tests {
     #[tokio::test]
     async fn first_request_deadline_does_not_cut_off_a_delayed_http1_body() {
         let (mut client, server) = tokio::io::duplex(16 * 1024);
-        let gate = super::GatewayFirstRequestGate::new();
         let (headers_seen_tx, mut headers_seen_rx) = tokio::sync::mpsc::unbounded_channel();
         let service = tower::service_fn(move |request: HyperRequest<HyperIncoming>| {
             let _ = headers_seen_tx.send(());
@@ -3989,6 +3898,7 @@ mod tests {
                 Ok::<_, Infallible>(HyperResponse::new(Full::new(body)))
             }
         });
+        let (first_request_service, gate) = super::FirstRequestService::new(service);
         let mut builder = HyperServerBuilder::new(TokioExecutor::new());
         builder
             .http1()
@@ -4003,16 +3913,14 @@ mod tests {
             .max_header_list_size(super::MIN_GATEWAY_HTTP_HEADER_MAX_BYTES as u32);
 
         let server_task = tokio::spawn(async move {
-            super::drive_gateway_connection(
+            super::drive_first_request_connection(
                 builder.serve_connection_with_upgrades(
                     TokioIo::new(server),
-                    super::TowerToHyperService::new(super::GatewayFirstRequestService {
-                        inner: service,
-                        gate: gate.clone(),
-                    }),
+                    super::TowerToHyperService::new(first_request_service),
                 ),
                 gate,
                 std::time::Duration::from_millis(20),
+                None,
             )
             .await
         });

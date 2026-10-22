@@ -1,5 +1,4 @@
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -18,7 +17,10 @@ use tower::{Service as _, ServiceExt};
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::warn;
 
-use aether_gateway_frontdoor::{http_connection_limit, HttpConnectionBudget};
+use aether_gateway_frontdoor::{
+    drive_first_request_connection, http_connection_limit, FirstRequestService,
+    HttpConnectionBudget,
+};
 use aether_runtime::{prometheus_response, ConcurrencyError};
 use aether_runtime_state::RuntimeSemaphoreError;
 
@@ -32,89 +34,6 @@ const DEFAULT_TCP_HTTP2_MAX_CONCURRENT_STREAMS: u32 = 16_384;
 const DEFAULT_TCP_HTTP_HEADER_READ_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_TCP_HTTP_HEADER_MAX_BYTES: usize = 64 * 1024;
 const DEFAULT_TCP_HTTP_MAX_HEADERS: usize = 256;
-
-#[derive(Clone)]
-struct FirstRequestGate {
-    seen: Arc<AtomicBool>,
-    notify: Arc<tokio::sync::Notify>,
-}
-
-impl FirstRequestGate {
-    fn new() -> Self {
-        Self {
-            seen: Arc::new(AtomicBool::new(false)),
-            notify: Arc::new(tokio::sync::Notify::new()),
-        }
-    }
-
-    fn mark_seen(&self) {
-        if !self.seen.swap(true, Ordering::Release) {
-            self.notify.notify_one();
-        }
-    }
-
-    fn is_seen(&self) -> bool {
-        self.seen.load(Ordering::Acquire)
-    }
-}
-
-#[derive(Clone)]
-struct FirstRequestService<S> {
-    inner: S,
-    gate: FirstRequestGate,
-}
-
-impl<S, Req> tower::Service<Req> for FirstRequestService<S>
-where
-    S: tower::Service<Req>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Req) -> Self::Future {
-        self.gate.mark_seen();
-        self.inner.call(request)
-    }
-}
-
-async fn drive_first_request_gate<F, E>(
-    connection: F,
-    gate: FirstRequestGate,
-    timeout: Duration,
-) -> Result<(), E>
-where
-    F: std::future::Future<Output = Result<(), E>>,
-{
-    if gate.is_seen() {
-        return connection.await;
-    }
-
-    let mut connection = Box::pin(connection);
-    let timeout = tokio::time::sleep(timeout);
-    tokio::pin!(timeout);
-    let notified = gate.notify.notified();
-    tokio::pin!(notified);
-
-    tokio::select! {
-        result = &mut connection => result,
-        _ = &mut timeout => {
-            if gate.is_seen() {
-                (&mut connection).await
-            } else {
-                Ok(())
-            }
-        }
-        _ = &mut notified => (&mut connection).await,
-    }
-}
 
 pub fn build_router() -> Result<Router, reqwest::Error> {
     Ok(build_router_with_state(AppState::new()?))
@@ -268,11 +187,8 @@ pub async fn serve_tcp(bind: &str) -> Result<(), Box<dyn std::error::Error>> {
             .await
             .unwrap_or_else(|err| match err {})
             .map_request(|request: http::Request<Incoming>| request.map(Body::new));
-        let first_request_gate = FirstRequestGate::new();
-        let hyper_service = TowerToHyperService::new(FirstRequestService {
-            inner: tower_service,
-            gate: first_request_gate.clone(),
-        });
+        let (first_request_service, first_request_gate) = FirstRequestService::new(tower_service);
+        let hyper_service = TowerToHyperService::new(first_request_service);
         let io = TokioIo::new(io);
 
         tokio::spawn(async move {
@@ -290,10 +206,11 @@ pub async fn serve_tcp(bind: &str) -> Result<(), Box<dyn std::error::Error>> {
                 .max_concurrent_streams(DEFAULT_TCP_HTTP2_MAX_CONCURRENT_STREAMS)
                 .max_header_list_size(DEFAULT_TCP_HTTP_HEADER_MAX_BYTES as u32);
 
-            let result = drive_first_request_gate(
+            let result = drive_first_request_connection(
                 builder.serve_connection_with_upgrades(io, hyper_service),
                 first_request_gate,
                 DEFAULT_TCP_HTTP_HEADER_READ_TIMEOUT,
+                None,
             )
             .await;
             if let Err(error) = result {
