@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 mod memory;
 
 pub use aether_data_contracts::repository::auth::{
@@ -11,4 +12,5 @@ pub use aether_data_contracts::repository::auth::{
 };
 #[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxAuthApiKeySnapshotReadRepository;
+#[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryAuthApiKeySnapshotRepository;

@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 mod memory;
 
 #[allow(unused_imports)]
@@ -10,4 +11,5 @@ pub(crate) use aether_data_contracts::repository::background_tasks::{
 
 #[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxBackgroundTaskRepository;
+#[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryBackgroundTaskRepository;

@@ -11,13 +11,16 @@ build = "build.rs"
 default = ["postgres"]
 postgres = ["dep:aether-data-postgres", "sqlx/postgres"]
 all-drivers = ["postgres"]
+# In-memory repositories are test doubles. They stay out of production builds;
+# test targets opt in through dev-dependencies.
+test-support = ["dep:aether-wallet"]
 
 [dependencies]
 aether-ai-formats.workspace = true
 aether-data-contracts.workspace = true
 aether-data-postgres = { workspace = true, optional = true }
 aether-cache.workspace = true
-aether-wallet.workspace = true
+aether-wallet = { workspace = true, optional = true }
 async-trait.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
@@ -31,3 +34,9 @@ tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+# The in-memory quota repository is a test double behind `cfg(test)` and needs
+# the wallet types. `test-support` gates the same module for downstream test
+# targets, while this dev-dependency keeps `cargo test -p aether-data` building.
+aether-wallet.workspace = true

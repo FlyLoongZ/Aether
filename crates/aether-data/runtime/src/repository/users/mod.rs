@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 mod memory;
 
 pub use aether_data_contracts::repository::users::{
@@ -13,4 +14,5 @@ pub use aether_data_contracts::repository::users::{
 };
 #[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxUserReadRepository;
+#[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryUserReadRepository;
