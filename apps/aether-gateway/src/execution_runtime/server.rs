@@ -1,13 +1,15 @@
 use std::io;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use aether_contracts::ExecutionPlan;
+use aether_gateway_frontdoor::{
+    drive_first_request_connection, FirstRequestGate, FirstRequestService,
+};
 use aether_runtime::{
     maybe_hold_axum_response_permit, prometheus_response, service_up_sample, AdmissionPermit,
     ConcurrencyError, ConcurrencyGate, ConcurrencySnapshot, MetricKind, MetricLabel, MetricSample,
@@ -46,101 +48,6 @@ const EXECUTION_RUNTIME_HTTP_HEADER_READ_TIMEOUT: Duration = Duration::from_secs
 const EXECUTION_RUNTIME_HTTP_HEADER_MAX_BYTES: usize = 64 * 1024;
 const EXECUTION_RUNTIME_HTTP_MAX_HEADERS: usize = 256;
 const EXECUTION_RUNTIME_REQUEST_BODY_HARD_LIMIT_BYTES: usize = 256 * 1024 * 1024;
-
-/// Coordinates the connection-level deadline that covers protocol detection
-/// and the first request header block. Hyper's HTTP/1 timer starts only after
-/// the auto protocol detector has finished, while HTTP/2 has no equivalent
-/// header timer. Keeping this gate outside the parser closes that initial gap
-/// without imposing a deadline on request or response bodies.
-#[derive(Clone)]
-struct ExecutionRuntimeFirstRequestGate {
-    seen: Arc<AtomicBool>,
-    notify: Arc<tokio::sync::Notify>,
-}
-
-impl ExecutionRuntimeFirstRequestGate {
-    fn new() -> Self {
-        Self {
-            seen: Arc::new(AtomicBool::new(false)),
-            notify: Arc::new(tokio::sync::Notify::new()),
-        }
-    }
-
-    fn mark_seen(&self) {
-        if !self.seen.swap(true, Ordering::Release) {
-            self.notify.notify_one();
-        }
-    }
-
-    fn is_seen(&self) -> bool {
-        self.seen.load(Ordering::Acquire)
-    }
-}
-
-#[derive(Clone)]
-struct ExecutionRuntimeFirstRequestService<S> {
-    inner: S,
-    gate: ExecutionRuntimeFirstRequestGate,
-}
-
-impl<S, Req> tower::Service<Req> for ExecutionRuntimeFirstRequestService<S>
-where
-    S: tower::Service<Req>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(
-        &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, request: Req) -> Self::Future {
-        self.gate.mark_seen();
-        self.inner.call(request)
-    }
-}
-
-/// Drive one Hyper connection while enforcing the deadline for its first
-/// request.  The timeout is deliberately limited to protocol detection and
-/// initial headers; after `gate.mark_seen()` body and response streaming are
-/// not interrupted by this helper.
-async fn drive_execution_runtime_connection<F, E>(
-    connection: F,
-    gate: ExecutionRuntimeFirstRequestGate,
-    timeout: Duration,
-) -> Result<(), E>
-where
-    F: std::future::Future<Output = Result<(), E>>,
-{
-    if gate.is_seen() {
-        return connection.await;
-    }
-
-    let mut connection = Box::pin(connection);
-    let timeout = tokio::time::sleep(timeout);
-    tokio::pin!(timeout);
-    let notified = gate.notify.notified();
-    tokio::pin!(notified);
-
-    tokio::select! {
-        result = &mut connection => result,
-        _ = &mut timeout => {
-            if gate.is_seen() {
-                (&mut connection).await
-            } else {
-                tracing::debug!(
-                    "execution runtime connection closed before the first request header completed"
-                );
-                Ok(())
-            }
-        }
-        _ = &mut notified => (&mut connection).await,
-    }
-}
 
 fn execution_runtime_http_builder() -> HyperServerBuilder<TokioExecutor> {
     let mut builder = HyperServerBuilder::new(TokioExecutor::new());
@@ -301,19 +208,19 @@ pub async fn serve_execution_runtime_tcp(
             .await
             .unwrap_or_else(|error| match error {})
             .map_request(|request: http::Request<Incoming>| request.map(Body::new));
-        let first_request_gate = ExecutionRuntimeFirstRequestGate::new();
-        let hyper_service = TowerToHyperService::new(ExecutionRuntimeFirstRequestService {
-            inner: tower_service,
-            gate: first_request_gate.clone(),
-        });
+        let (first_request_service, first_request_gate) = FirstRequestService::new(tower_service);
+        let hyper_service = TowerToHyperService::new(first_request_service);
         let io = TokioIo::new(io);
 
         tokio::spawn(async move {
             let builder = execution_runtime_http_builder();
-            let result = drive_execution_runtime_connection(
+            let result = drive_first_request_connection(
                 builder.serve_connection_with_upgrades(io, hyper_service),
                 first_request_gate,
                 EXECUTION_RUNTIME_HTTP_HEADER_READ_TIMEOUT,
+                Some(
+                    "execution runtime connection closed before the first request header completed",
+                ),
             )
             .await;
             if let Err(error) = result {
@@ -359,19 +266,19 @@ pub async fn serve_execution_runtime_unix(
             .await
             .unwrap_or_else(|error| match error {})
             .map_request(|request: http::Request<Incoming>| request.map(Body::new));
-        let first_request_gate = ExecutionRuntimeFirstRequestGate::new();
-        let hyper_service = TowerToHyperService::new(ExecutionRuntimeFirstRequestService {
-            inner: tower_service,
-            gate: first_request_gate.clone(),
-        });
+        let (first_request_service, first_request_gate) = FirstRequestService::new(tower_service);
+        let hyper_service = TowerToHyperService::new(first_request_service);
         let io = TokioIo::new(io);
 
         tokio::spawn(async move {
             let builder = execution_runtime_http_builder();
-            let result = drive_execution_runtime_connection(
+            let result = drive_first_request_connection(
                 builder.serve_connection_with_upgrades(io, hyper_service),
                 first_request_gate,
                 EXECUTION_RUNTIME_HTTP_HEADER_READ_TIMEOUT,
+                Some(
+                    "execution runtime connection closed before the first request header completed",
+                ),
             )
             .await;
             if let Err(error) = result {
@@ -1039,27 +946,23 @@ mod tests {
                 .await
                 .expect("fixture prefix should be writable");
 
-            let gate = super::ExecutionRuntimeFirstRequestGate::new();
             let service = service_fn(|_request: HyperRequest<HyperIncoming>| async {
                 Ok::<_, Infallible>(HyperResponse::new(Full::new(bytes::Bytes::from_static(
                     b"ok",
                 ))))
             });
             let builder = super::execution_runtime_http_builder();
+            let (first_request_service, gate) = super::FirstRequestService::new(service);
             let result = tokio::time::timeout(
                 std::time::Duration::from_secs(1),
-                super::drive_execution_runtime_connection(
+                super::drive_first_request_connection(
                     builder.serve_connection_with_upgrades(
                         TokioIo::new(server),
-                        super::TowerToHyperService::new(
-                            super::ExecutionRuntimeFirstRequestService {
-                                inner: service,
-                                gate: gate.clone(),
-                            },
-                        ),
+                        super::TowerToHyperService::new(first_request_service),
                     ),
                     gate,
                     std::time::Duration::from_millis(5),
+                    None,
                 ),
             )
             .await
@@ -1078,7 +981,6 @@ mod tests {
     #[tokio::test]
     async fn execution_runtime_first_request_deadline_does_not_cut_off_body_streaming() {
         let (mut client, server) = tokio::io::duplex(16 * 1024);
-        let gate = super::ExecutionRuntimeFirstRequestGate::new();
         let (headers_seen_tx, mut headers_seen_rx) = tokio::sync::mpsc::unbounded_channel();
         let service = service_fn(move |request: HyperRequest<HyperIncoming>| {
             let _ = headers_seen_tx.send(());
@@ -1092,18 +994,17 @@ mod tests {
                 Ok::<_, Infallible>(HyperResponse::new(Full::new(body)))
             }
         });
+        let (first_request_service, gate) = super::FirstRequestService::new(service);
         let builder = super::execution_runtime_http_builder();
         let server_task = tokio::spawn(async move {
-            super::drive_execution_runtime_connection(
+            super::drive_first_request_connection(
                 builder.serve_connection_with_upgrades(
                     TokioIo::new(server),
-                    super::TowerToHyperService::new(super::ExecutionRuntimeFirstRequestService {
-                        inner: service,
-                        gate: gate.clone(),
-                    }),
+                    super::TowerToHyperService::new(first_request_service),
                 ),
                 gate,
                 std::time::Duration::from_millis(20),
+                None,
             )
             .await
         });
