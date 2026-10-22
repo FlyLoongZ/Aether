@@ -9,7 +9,6 @@ description = "Usage runtime shared types and queue primitives extracted from ae
 [dependencies]
 aether-ai-formats.workspace = true
 aether-contracts.workspace = true
-aether-data.workspace = true
 aether-data-contracts.workspace = true
 aether-runtime-state.workspace = true
 async-trait.workspace = true
@@ -19,3 +18,6 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+aether-data = { workspace = true, features = ["test-support"] }

@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 mod memory;
 
 #[allow(unused_imports)]
@@ -41,6 +42,7 @@ pub mod cleanup {
 }
 #[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxUsageReadRepository;
+#[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryUsageReadRepository;
 
 #[cfg(test)]

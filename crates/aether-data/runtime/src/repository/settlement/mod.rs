@@ -1,7 +1,9 @@
+#[cfg(any(test, feature = "test-support"))]
 mod memory;
 pub use aether_data_contracts::repository::settlement::*;
 #[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxSettlementRepository;
+#[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemorySettlementRepository;
 
 #[cfg(test)]

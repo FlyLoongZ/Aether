@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 mod memory;
 
 pub use aether_data_contracts::repository::management_tokens::{
@@ -8,4 +9,5 @@ pub use aether_data_contracts::repository::management_tokens::{
 };
 #[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxManagementTokenRepository;
+#[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryManagementTokenRepository;
