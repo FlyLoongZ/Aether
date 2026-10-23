@@ -274,7 +274,7 @@ pub(crate) async fn build_admin_update_provider_record(
         }
     }
     if target_provider_type != "codex" {
-        remove_codex_fingerprint_config(&mut config_map);
+        super::remove_codex_fingerprint_config(&mut config_map);
     }
 
     for (field_name, payload_value) in [
@@ -383,47 +383,4 @@ pub(crate) async fn build_admin_update_provider_record(
         .ok()
         .map(|duration| duration.as_secs());
     Ok(updated)
-}
-
-fn remove_codex_fingerprint_config(config_map: &mut serde_json::Map<String, serde_json::Value>) {
-    let namespace = crate::provider_transport::CODEX_FINGERPRINT_CONFIG_NAMESPACE;
-    let key = crate::provider_transport::CODEX_FINGERPRINT_ENABLED_CONFIG_KEY;
-    let mut remove_namespace = false;
-    if let Some(codex_config) = config_map
-        .get_mut(namespace)
-        .and_then(|value| value.as_object_mut())
-    {
-        codex_config.remove(key);
-        remove_namespace = codex_config.is_empty();
-    }
-    if remove_namespace {
-        config_map.remove(namespace);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    #[test]
-    fn removing_fingerprint_setting_preserves_other_codex_config() {
-        let mut config = json!({
-            "codex": {
-                "fingerprint_convergence_enabled": true,
-                "pass_through_cyber_flag_interrupt": true
-            },
-            "other": {"kept": true}
-        })
-        .as_object()
-        .expect("config object")
-        .clone();
-
-        super::remove_codex_fingerprint_config(&mut config);
-
-        assert_eq!(
-            config["codex"],
-            json!({"pass_through_cyber_flag_interrupt": true})
-        );
-        assert_eq!(config["other"], json!({"kept": true}));
-    }
 }
