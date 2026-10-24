@@ -1,9 +1,6 @@
 use super::*;
 use crate::handlers::admin::provider::oauth::errors::build_internal_control_error_response;
-use aether_contracts::{
-    ExecutionPlan, ExecutionResult, ExecutionTimeouts, ProxySnapshot, RequestBody,
-    EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER,
-};
+use aether_contracts::{ProxySnapshot, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER};
 use aether_data::repository::provider_oauth::{
     build_provider_oauth_batch_task_status_payload, provider_oauth_batch_task_secret_purpose,
     provider_oauth_batch_task_storage_key, provider_oauth_device_session_secret_purpose,
@@ -12,16 +9,13 @@ use aether_data::repository::provider_oauth::{
     PROVIDER_OAUTH_BATCH_TASK_TTL_SECS, PROVIDER_OAUTH_STATE_TTL_SECS,
 };
 use axum::http;
-use flate2::read::{DeflateDecoder, GzDecoder};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::io::Read;
 use url::Url;
 
 const KIRO_IDC_AMZ_USER_AGENT: &str = "aws-sdk-js/3.738.0 ua/2.1 os/other lang/js md/browser#unknown_unknown api/sso-oidc#3.738.0 m/E KiroIDE";
-const ADMIN_PROVIDER_OAUTH_TIMEOUT_MS: u64 = 30_000;
-const ADMIN_PROVIDER_OAUTH_PROXY_TIMEOUT_MS: u64 = 60_000;
-const ADMIN_PROVIDER_OAUTH_RESPONSE_BODY_LIMIT_BYTES: usize = 4 * 1024 * 1024;
 const ADMIN_PROVIDER_OAUTH_STATE_SECRET_PURPOSE: &str = "provider-oauth-state";
 const ADMIN_PROVIDER_OAUTH_STATE_MAX_CLOCK_SKEW_SECS: u64 = 60;
 
@@ -802,14 +796,6 @@ impl<'a> AdminAppState<'a> {
     }
 }
 
-fn admin_provider_oauth_timeout_ms(proxy: Option<&ProxySnapshot>) -> u64 {
-    if proxy.is_some() {
-        ADMIN_PROVIDER_OAUTH_PROXY_TIMEOUT_MS
-    } else {
-        ADMIN_PROVIDER_OAUTH_TIMEOUT_MS
-    }
-}
-
 fn maybe_insert_host_header(
     mut headers: reqwest::header::HeaderMap,
     host: &str,
@@ -843,81 +829,7 @@ fn admin_provider_oauth_execution_headers(
     headers
 }
 
-fn admin_provider_oauth_execution_json_body(result: &ExecutionResult) -> Option<serde_json::Value> {
-    result
-        .body
-        .as_ref()
-        .and_then(|body| body.json_body.clone())
-        .or_else(|| {
-            result
-                .body
-                .as_ref()
-                .and_then(|body| admin_provider_oauth_execution_body_bytes(&result.headers, body))
-                .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        })
-}
-
-fn admin_provider_oauth_execution_body_text(result: &ExecutionResult) -> String {
-    result
-        .body
-        .as_ref()
-        .and_then(|body| admin_provider_oauth_execution_body_bytes(&result.headers, body))
-        .map(|bytes| String::from_utf8_lossy(&bytes).to_string())
-        .or_else(|| {
-            result
-                .body
-                .as_ref()
-                .and_then(|body| body.json_body.as_ref())
-                .and_then(|value| serde_json::to_string(value).ok())
-        })
-        .unwrap_or_default()
-}
-
-fn admin_provider_oauth_execution_body_bytes(
-    headers: &BTreeMap<String, String>,
-    body: &aether_contracts::ResponseBody,
-) -> Option<Vec<u8>> {
-    let bytes = body.body_bytes_b64.as_deref().and_then(|value| {
-        crate::execution_runtime::transport::decode_base64_body_with_limit(
-            value,
-            ADMIN_PROVIDER_OAUTH_RESPONSE_BODY_LIMIT_BYTES,
-        )
-        .ok()
-    })?;
-    admin_provider_oauth_decode_response_bytes(
-        &bytes,
-        headers.get("content-encoding").map(String::as_str),
-    )
-    .or(Some(bytes))
-}
-
-fn admin_provider_oauth_decode_response_bytes(
-    bytes: &[u8],
-    content_encoding: Option<&str>,
-) -> Option<Vec<u8>> {
-    let encoding = content_encoding
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_ascii_lowercase());
-    match encoding.as_deref() {
-        Some("gzip") => {
-            let mut decoder = GzDecoder::new(bytes);
-            read_admin_provider_oauth_decoder_with_limit(
-                &mut decoder,
-                ADMIN_PROVIDER_OAUTH_RESPONSE_BODY_LIMIT_BYTES,
-            )
-        }
-        Some("deflate") => {
-            let mut decoder = DeflateDecoder::new(bytes);
-            read_admin_provider_oauth_decoder_with_limit(
-                &mut decoder,
-                ADMIN_PROVIDER_OAUTH_RESPONSE_BODY_LIMIT_BYTES,
-            )
-        }
-        _ => None,
-    }
-}
-
+#[cfg(test)]
 fn read_admin_provider_oauth_decoder_with_limit(
     decoder: &mut impl Read,
     limit_bytes: usize,
@@ -929,10 +841,6 @@ fn read_admin_provider_oauth_decoder_with_limit(
     let mut out = Vec::new();
     limited.read_to_end(&mut out).ok()?;
     (out.len() <= limit_bytes).then_some(out)
-}
-
-fn admin_provider_oauth_gateway_error_message(error: GatewayError) -> String {
-    error.into_message()
 }
 
 #[cfg(test)]

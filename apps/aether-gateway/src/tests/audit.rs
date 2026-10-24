@@ -24,7 +24,7 @@ use sha2::{Digest, Sha256};
 use super::{
     any, authenticated_operational_client, json, start_authenticated_operational_server,
     start_server, AppState, Json, Request, Router, StatusCode, UsageRuntimeConfig,
-    CONTROL_CANDIDATE_ID_HEADER, CONTROL_REQUEST_ID_HEADER, TRACE_ID_HEADER,
+    CONTROL_REQUEST_ID_HEADER, TRACE_ID_HEADER,
 };
 
 fn hash_api_key(value: &str) -> String {

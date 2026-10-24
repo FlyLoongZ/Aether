@@ -342,7 +342,8 @@ async fn handle_oauth_bind_start(
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
 ) -> Response<Body> {
-    let Some(provider_type) = user_oauth_provider_from_path(&request_context.request_path, "bind")
+    let Some(_provider_typee) =
+        user_oauth_provider_from_path(&request_context.request_path, "bind")
     else {
         return build_auth_error_response(
             http::StatusCode::NOT_FOUND,

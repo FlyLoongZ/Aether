@@ -33,7 +33,9 @@ use axum::body::{Body, Bytes};
 use axum::http::Response;
 use base64::Engine as _;
 use futures_util::stream::{self as futures_stream, BoxStream};
-use futures_util::{Stream, StreamExt, TryStreamExt};
+#[cfg(test)]
+use futures_util::TryStreamExt;
+use futures_util::{Stream, StreamExt};
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tokio::io::{AsyncRead, ReadBuf};
@@ -75,8 +77,10 @@ use crate::ai_serving::api::{
 };
 use crate::ai_serving::is_openai_responses_family_format;
 use crate::ai_serving::record_local_runtime_candidate_skip_reason;
+#[cfg(test)]
+pub(crate) use crate::api::response::build_client_response;
 use crate::api::response::{
-    attach_control_metadata_headers, build_client_response, build_client_response_from_parts,
+    attach_control_metadata_headers, build_client_response_from_parts,
     build_client_response_from_parts_with_mutator,
 };
 use crate::clock::current_unix_ms as current_request_candidate_unix_ms;
@@ -101,8 +105,8 @@ use crate::execution_runtime::stream_read_timeout::{
     await_stream_idle_read, resolve_stream_idle_timeout, stream_idle_timeout_message,
 };
 use crate::execution_runtime::submission::{
-    resolve_core_error_background_report_kind, resolve_local_sync_error_status_code,
-    strip_utf8_bom_and_ws, submit_local_core_error_or_sync_finalize,
+    resolve_local_sync_error_status_code, strip_utf8_bom_and_ws,
+    submit_local_core_error_or_sync_finalize,
 };
 use crate::execution_runtime::transport::{
     decode_base64_body_with_limit, direct_upstream_response_byte_stream, format_hyper_error_chain,
@@ -513,6 +517,7 @@ async fn record_sync_terminal_usage_with_handoff_after_spawn<F>(
     }
 }
 
+#[cfg(test)]
 fn build_stream_sync_payload(
     trace_id: &str,
     report_kind: String,
@@ -1963,10 +1968,6 @@ impl DirectPassthroughFinalizer {
             .expect("direct passthrough finalizer core should exist")
     }
 
-    fn stream_started_at(&self) -> Instant {
-        self.core().stream_started_at
-    }
-
     fn ttfb_observed(&self) -> bool {
         self.core()
             .usage_stream_telemetry
@@ -2945,7 +2946,7 @@ async fn record_stream_pending_lifecycle(
 }
 
 fn should_defer_stream_pending_for_direct_inline(
-    state: &AppState,
+    _state: &AppState,
     plan: &ExecutionPlan,
     plan_kind: &str,
     report_context: Option<&Value>,
@@ -2954,7 +2955,7 @@ fn should_defer_stream_pending_for_direct_inline(
         return false;
     }
     #[cfg(test)]
-    if state
+    if _state
         .execution_runtime_override_base_url()
         .is_some_and(|value| !value.trim().is_empty())
     {
@@ -3005,8 +3006,6 @@ async fn execute_stream_from_direct_passthrough(
     pending_recorded: bool,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let DirectUpstreamStreamExecution {
-        request_id: _,
-        candidate_id: _,
         status_code,
         mut headers,
         upstream_content_length: _,
@@ -3217,7 +3216,7 @@ async fn execute_stream_from_direct_passthrough(
         "frontdoor_to_stream_response_ready",
     );
     let stage_trace_for_report = stage_trace;
-    let request_id_for_report = request_id.clone();
+    let _request_id_for_report = request_id.clone();
     let request_id_for_report_log = request_id_for_log.clone();
     let candidate_id_for_report = candidate_id.clone();
     let provider_pool_in_flight_guard_for_report = in_flight_guard;
@@ -5532,6 +5531,7 @@ fn sse_data_payload_is_terminal(data: &str) -> bool {
         })
 }
 
+#[cfg(test)]
 fn stream_chunk_contains_sse_done(chunk: &[u8]) -> bool {
     let mut tracker = ClientVisibleStreamCompletionTracker::default();
     tracker.observe_chunk(chunk)
@@ -5957,6 +5957,7 @@ where
     Ok(None)
 }
 
+#[cfg(test)]
 async fn execute_stream_from_frame_stream(
     state: &AppState,
     plan: ExecutionPlan,
@@ -7324,7 +7325,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
 
     let request_id = request_id.to_string();
     let candidate_id = candidate_id.map(ToOwned::to_owned);
-    let (tx, mut rx) = mpsc::channel::<Result<Bytes, IoError>>(16);
+    let (tx, rx) = mpsc::channel::<Result<Bytes, IoError>>(16);
     let state_for_report = state.clone();
     let trace_id_owned = trace_id.to_string();
     let headers_for_report = headers.clone();
@@ -7339,7 +7340,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
     let initial_reached_eof = reached_eof;
     let direct_stream_finalize_kind_owned = direct_stream_finalize_kind;
     let candidate_started_unix_secs_for_report = candidate_started_unix_secs;
-    let request_id_for_report = request_id.clone();
+    let _request_id_for_report = request_id.clone();
     let request_id_for_report_log = short_request_id(&request_id);
     let candidate_id_for_report = candidate_id.clone();
     let candidate_index_for_report = candidate_index.clone();
@@ -8569,7 +8570,7 @@ mod tests {
     };
     use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
     use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-    use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
+
     use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::candidates::{
         PublicHealthStatusCount, PublicHealthTimelineBucket, RequestCandidateReadRepository,
@@ -8595,7 +8596,7 @@ mod tests {
     use async_stream::stream;
     use async_trait::async_trait;
     use axum::body::{to_bytes, Body, Bytes};
-    use axum::extract::ws::Message;
+
     use axum::extract::Request;
     use axum::routing::any;
     use axum::{
@@ -8604,12 +8605,11 @@ mod tests {
     use base64::Engine as _;
     use futures_util::StreamExt as _;
     use serde_json::{json, Value};
-    use tokio::sync::{mpsc, watch, Notify};
+    use tokio::sync::{mpsc, Notify};
 
     use super::{
-        activate_post_stop_frame_read_budget, build_direct_execution_frame_stream,
-        build_sse_body_stream, build_stream_failure_report, build_stream_sync_payload,
-        client_format_allows_proxy_generated_sse_control_blocks,
+        activate_post_stop_frame_read_budget, build_sse_body_stream, build_stream_failure_report,
+        build_stream_sync_payload, client_format_allows_proxy_generated_sse_control_blocks,
         direct_upstream_response_byte_stream, encode_terminal_sse_error_event_for_plan,
         ensure_stream_terminal_summary_for_missing_observed_finish,
         execute_execution_runtime_stream, execute_in_process_stream_with_oauth_retry,
@@ -8618,7 +8618,6 @@ mod tests {
         merge_stream_terminal_summary, normalize_declared_stream_response_headers,
         parse_direct_passthrough_mode, prefetch_direct_stream_error_body,
         prefetched_openai_responses_body_has_output_boundary,
-        record_sync_terminal_usage_with_handoff,
         record_sync_terminal_usage_with_handoff_after_spawn,
         resolve_provider_stream_error_status_code, select_direct_anthropic_prefetch_wait,
         should_limit_direct_finalize_prefetch, should_normalize_declared_stream_response_headers,

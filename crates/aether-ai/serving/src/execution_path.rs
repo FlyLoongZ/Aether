@@ -24,7 +24,6 @@ pub enum AiSyncExecutionStep {
     LocalStandardFamily,
     LocalSameFormatProvider,
     LocalGeminiFiles,
-    RemoteDecision,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,7 +35,6 @@ pub enum AiStreamExecutionStep {
     LocalStandardFamily,
     LocalSameFormatProvider,
     LocalGeminiFiles,
-    RemoteDecision,
 }
 
 pub const DEFAULT_STREAM_EXECUTION_STEPS: &[AiStreamExecutionStep] = &[
@@ -47,7 +45,6 @@ pub const DEFAULT_STREAM_EXECUTION_STEPS: &[AiStreamExecutionStep] = &[
     AiStreamExecutionStep::LocalStandardFamily,
     AiStreamExecutionStep::LocalSameFormatProvider,
     AiStreamExecutionStep::LocalGeminiFiles,
-    AiStreamExecutionStep::RemoteDecision,
 ];
 
 #[async_trait]
@@ -121,7 +118,6 @@ where
             AiSyncExecutionStep::LocalStandardFamily,
             AiSyncExecutionStep::LocalSameFormatProvider,
             AiSyncExecutionStep::LocalGeminiFiles,
-            AiSyncExecutionStep::RemoteDecision,
         ] {
             if let Some(response) =
                 absorb_sync_step(port, step, &mut deferred, &mut exhausted).await?
@@ -367,7 +363,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn sync_path_runs_scheduler_steps_before_remote_and_fallback() {
+    async fn sync_path_runs_scheduler_steps_before_fallback() {
         let port = TestSyncPort {
             scheduler_supported: true,
             ..TestSyncPort::default()
@@ -387,7 +383,6 @@ mod tests {
                 "LocalStandardFamily",
                 "LocalSameFormatProvider",
                 "LocalGeminiFiles",
-                "RemoteDecision",
                 "Fallback:RemoteDecisionMiss",
             ]
         );
@@ -421,7 +416,6 @@ mod tests {
                 "LocalStandardFamily",
                 "LocalSameFormatProvider",
                 "LocalGeminiFiles",
-                "RemoteDecision",
             ]
         );
     }
@@ -567,7 +561,6 @@ mod tests {
                 "LocalStandardFamily",
                 "LocalSameFormatProvider",
                 "LocalGeminiFiles",
-                "RemoteDecision",
             ]
         );
     }

@@ -4,8 +4,7 @@ use super::{
     build_internal_gateway_header_map, build_internal_gateway_passthrough_payload,
     build_internal_gateway_proxy_public_response, build_internal_gateway_request_parts,
     build_internal_gateway_resolve_payload, build_internal_gateway_uri,
-    build_management_token_payload, internal_finalize_report_kind_is_supported,
-    maybe_build_internal_finalize_video_response,
+    internal_finalize_report_kind_is_supported, maybe_build_internal_finalize_video_response,
 };
 use crate::ai_serving::api;
 use crate::constants::{
@@ -277,7 +276,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         .as_object()
                         .map(|value| value.is_empty())
                         .unwrap_or(false);
-                let Some(mut resolved) = crate::control::resolve_control_route(
+                let Some(resolved) = crate::control::resolve_control_route(
                     state,
                     &parts.method,
                     &parts.uri,
@@ -363,13 +362,13 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     .as_deref()
                     .unwrap_or(request_context.trace_id.as_str())
                     .to_string();
-                let body_is_empty = payload.body_base64.is_none()
+                let _body_is_emptyy = payload.body_base64.is_none()
                     && payload
                         .body_json
                         .as_object()
                         .map(|value| value.is_empty())
                         .unwrap_or(false);
-                let Some(mut resolved) = crate::control::resolve_control_route(
+                let Some(resolved) = crate::control::resolve_control_route(
                     state,
                     &parts.method,
                     &parts.uri,
@@ -460,7 +459,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         .as_object()
                         .map(|value| value.is_empty())
                         .unwrap_or(false);
-                let Some(mut resolved) = crate::control::resolve_control_route(
+                let Some(resolved) = crate::control::resolve_control_route(
                     state,
                     &parts.method,
                     &parts.uri,
@@ -540,7 +539,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     .as_deref()
                     .unwrap_or(request_context.trace_id.as_str())
                     .to_string();
-                let Some(mut resolved) = crate::control::resolve_control_route(
+                let Some(resolved) = crate::control::resolve_control_route(
                     state,
                     &parts.method,
                     &parts.uri,
@@ -626,7 +625,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         .as_object()
                         .map(|value| value.is_empty())
                         .unwrap_or(false);
-                let Some(mut resolved) = crate::control::resolve_control_route(
+                let Some(resolved) = crate::control::resolve_control_route(
                     state,
                     &parts.method,
                     &parts.uri,
@@ -709,7 +708,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     .as_deref()
                     .unwrap_or(request_context.trace_id.as_str())
                     .to_string();
-                let Some(mut resolved) = crate::control::resolve_control_route(
+                let Some(resolved) = crate::control::resolve_control_route(
                     state,
                     &parts.method,
                     &parts.uri,

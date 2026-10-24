@@ -15,9 +15,9 @@ use crate::async_task::{
     list_video_tasks,
 };
 use crate::audit::{get_auth_api_key_snapshot, get_decision_trace, get_request_candidate_trace};
-use crate::hooks::{get_request_audit_bundle, get_request_usage_audit};
 use crate::router::metrics;
 use crate::state::AppState;
+use crate::usage::http::{get_request_audit_bundle, get_request_usage_audit};
 
 #[derive(Clone, Copy)]
 struct OperationalPermission {

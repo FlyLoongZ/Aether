@@ -115,7 +115,7 @@ async fn gateway_locally_denies_sync_ai_control_execute_when_opted_in_and_execut
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -250,7 +250,7 @@ async fn gateway_locally_denies_stream_ai_control_execute_when_opted_in_and_exec
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -397,7 +397,7 @@ async fn gateway_does_not_proxy_control_execute_over_http_when_opted_in_and_exec
 
     let execution_runtime = Router::new();
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_execution_runtime_override(execution_runtime_url);
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -538,7 +538,7 @@ async fn gateway_does_not_proxy_control_execute_over_http_when_opted_in_and_exec
 
     let execution_runtime = Router::new();
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_execution_runtime_override(execution_runtime_url);
     let (gateway_url, gateway_handle) = start_server(gateway).await;

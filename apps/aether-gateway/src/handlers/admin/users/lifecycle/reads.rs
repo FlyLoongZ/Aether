@@ -1,4 +1,4 @@
-use super::super::{build_admin_users_bad_request_response, format_optional_datetime_iso8601};
+use super::super::build_admin_users_bad_request_response;
 use super::support::{
     admin_user_id_from_detail_path, build_admin_user_export_payload,
     build_admin_user_payload_with_groups, find_admin_export_user,

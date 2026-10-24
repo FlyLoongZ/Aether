@@ -1,9 +1,8 @@
 use super::shared::{
     build_provider_quota_execution_plan, build_quota_snapshot_payload,
     default_provider_quota_execution_timeouts, execute_provider_quota_plan,
-    extract_execution_error_message, oauth_refresh_auto_removed_result,
-    persist_provider_quota_refresh_state, quota_key_auto_removed,
-    quota_refresh_success_invalid_state, ProviderQuotaExecutionOutcome,
+    oauth_refresh_auto_removed_result, persist_provider_quota_refresh_state,
+    quota_key_auto_removed, quota_refresh_success_invalid_state, ProviderQuotaExecutionOutcome,
 };
 use crate::handlers::admin::request::{AdminAppState, AdminGatewayProviderTransportSnapshot};
 use crate::GatewayError;

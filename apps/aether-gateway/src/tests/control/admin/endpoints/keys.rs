@@ -213,7 +213,7 @@ async fn gateway_handles_admin_provider_keys_locally_with_trusted_admin_principa
         vec![key_a, key_b],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -615,7 +615,7 @@ async fn gateway_creates_admin_provider_key_locally_with_trusted_admin_principal
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1235,7 +1235,7 @@ async fn gateway_reveals_admin_provider_key_locally_with_trusted_admin_principal
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1305,7 +1305,7 @@ async fn gateway_exports_admin_provider_key_locally_with_trusted_admin_principal
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1378,7 +1378,7 @@ async fn gateway_exports_admin_provider_key_access_token_when_refresh_token_is_m
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1450,7 +1450,7 @@ async fn gateway_export_does_not_emit_access_token_from_imported_authorization_h
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1738,7 +1738,7 @@ async fn gateway_clears_admin_provider_key_oauth_invalid_locally_with_trusted_ad
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1822,7 +1822,7 @@ async fn gateway_noops_admin_provider_key_oauth_invalid_clear_when_marker_absent
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1887,7 +1887,7 @@ async fn gateway_updates_admin_provider_key_locally_with_trusted_admin_principal
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2660,7 +2660,7 @@ async fn gateway_rejects_admin_provider_key_update_when_api_key_duplicates_exist
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2726,7 +2726,7 @@ async fn gateway_deletes_admin_provider_key_locally_with_trusted_admin_principal
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2800,7 +2800,7 @@ async fn gateway_batch_deletes_admin_provider_keys_locally_with_trusted_admin_pr
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2935,7 +2935,7 @@ async fn gateway_handles_admin_keys_grouped_by_format_locally_with_trusted_admin
         vec![key_a, key_b, key_agent],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

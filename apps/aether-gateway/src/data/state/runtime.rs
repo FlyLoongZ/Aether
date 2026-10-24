@@ -18,25 +18,25 @@ use super::{
     DisableAdminRedeemCodeBatchInput, DisableAdminRedeemCodeInput, FailAdminWalletRefundInput,
     FailWalletRechargeCheckoutInput, GatewayDataState, GatewayProviderTransportSnapshot,
     LocalVideoTaskReadResponse, PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigRecord,
-    PaymentGatewayConfigWriteInput, PaymentGatewaySecretCasUpdate,
-    PrepareAdminUserWalletBalanceBatchInput, PrepareAdminUserWalletBalanceBatchOutcome,
-    ProcessAdminWalletRefundInput, ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome,
-    ReclaimWalletRechargeCheckoutInput, ReconcileUsagePolicyCostInput, RedeemWalletCodeInput,
-    RedeemWalletCodeOutcome, ReleaseUsagePolicyRequestAdmissionInput, RequestAuditBundle,
-    RequestCandidateTrace, ReserveUsagePolicyCostInput, ReserveUsagePolicyCostOutcome,
-    ReserveUsagePolicyRequestInput, ReserveUsagePolicyRequestOutcome, StoredAdminAuditLogPage,
-    StoredAdminPaymentCallbackPage, StoredAdminPaymentOrder, StoredAdminPaymentOrderPage,
-    StoredAdminRedeemCodeBatch, StoredAdminRedeemCodeBatchPage, StoredAdminRedeemCodePage,
-    StoredAdminUserWalletBalanceBatch, StoredAdminWalletLedgerPage, StoredAdminWalletListPage,
-    StoredAdminWalletRefund, StoredAdminWalletRefundPage, StoredAdminWalletRefundRequestPage,
-    StoredAdminWalletTransaction, StoredAdminWalletTransactionPage, StoredAnnouncement,
-    StoredAnnouncementPage, StoredBackgroundTaskEvent, StoredBackgroundTaskRun,
-    StoredBackgroundTaskRunPage, StoredBillingModelContext, StoredProviderQuotaSnapshot,
-    StoredProviderUsageSummary, StoredRequestUsageAudit, StoredSuspiciousActivity,
-    StoredUsagePolicyCostReservation, StoredUsagePolicyRequestAdmission, StoredUsageSettlement,
-    StoredUserAuditLogPage, StoredUserAuthRecord, StoredUserExportRow, StoredUserSummary,
-    StoredVideoTask, StoredWalletDailyUsageLedger, StoredWalletDailyUsageLedgerPage,
-    StoredWalletSnapshot, UpdateAdminWalletRefundGatewayInput, UpdateAnnouncementRecord,
+    PaymentGatewaySecretCasUpdate, PrepareAdminUserWalletBalanceBatchInput,
+    PrepareAdminUserWalletBalanceBatchOutcome, ProcessAdminWalletRefundInput,
+    ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome, ReclaimWalletRechargeCheckoutInput,
+    ReconcileUsagePolicyCostInput, RedeemWalletCodeInput, RedeemWalletCodeOutcome,
+    ReleaseUsagePolicyRequestAdmissionInput, RequestAuditBundle, RequestCandidateTrace,
+    ReserveUsagePolicyCostInput, ReserveUsagePolicyCostOutcome, ReserveUsagePolicyRequestInput,
+    ReserveUsagePolicyRequestOutcome, StoredAdminAuditLogPage, StoredAdminPaymentCallbackPage,
+    StoredAdminPaymentOrder, StoredAdminPaymentOrderPage, StoredAdminRedeemCodeBatch,
+    StoredAdminRedeemCodeBatchPage, StoredAdminRedeemCodePage, StoredAdminWalletLedgerPage,
+    StoredAdminWalletListPage, StoredAdminWalletRefund, StoredAdminWalletRefundPage,
+    StoredAdminWalletRefundRequestPage, StoredAdminWalletTransaction,
+    StoredAdminWalletTransactionPage, StoredAnnouncement, StoredAnnouncementPage,
+    StoredBackgroundTaskEvent, StoredBackgroundTaskRun, StoredBackgroundTaskRunPage,
+    StoredBillingModelContext, StoredProviderQuotaSnapshot, StoredProviderUsageSummary,
+    StoredRequestUsageAudit, StoredSuspiciousActivity, StoredUsagePolicyCostReservation,
+    StoredUsagePolicyRequestAdmission, StoredUsageSettlement, StoredUserAuditLogPage,
+    StoredUserAuthRecord, StoredUserExportRow, StoredUserSummary, StoredVideoTask,
+    StoredWalletDailyUsageLedger, StoredWalletDailyUsageLedgerPage, StoredWalletSnapshot,
+    UpdateAdminWalletRefundGatewayInput, UpdateAnnouncementRecord,
     UpdateWalletRechargeCheckoutInput, UpsertBackgroundTaskEvent, UpsertBackgroundTaskRun,
     UpsertUsageRecord, UpsertVideoTask, UsageSettlementInput, UserDailyQuotaAvailabilityRecord,
     UserPlanEntitlementRecord, VideoTaskLookupKey, VideoTaskModelCount, VideoTaskQueryFilter,
@@ -54,9 +54,9 @@ use aether_data_contracts::repository::usage::{
     UsageDailyHeatmapQuery,
 };
 use aether_runtime_state::RuntimeQueueStore;
-use aether_video_tasks_core::{
-    read_data_backed_video_task_response, read_data_backed_video_task_response_for_user,
-};
+#[cfg(test)]
+use aether_video_tasks_core::read_data_backed_video_task_response;
+use aether_video_tasks_core::read_data_backed_video_task_response_for_user;
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
 
@@ -1462,16 +1462,6 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn find_provider_quotas_by_provider_ids(
-        &self,
-        provider_ids: &[String],
-    ) -> Result<Vec<StoredProviderQuotaSnapshot>, DataLayerError> {
-        match &self.provider_quota_reader {
-            Some(repository) => repository.find_by_provider_ids(provider_ids).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
     #[allow(dead_code)]
 
     pub(crate) async fn upsert_usage(
@@ -2129,40 +2119,6 @@ impl GatewayDataState {
         match &self.usage_reader {
             Some(repository) => repository.list_recent_usage_audits(user_id, limit).await,
             None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn summarize_usage_total_tokens_by_api_key_ids(
-        &self,
-        api_key_ids: &[String],
-    ) -> Result<std::collections::BTreeMap<String, u64>, DataLayerError> {
-        match &self.usage_reader {
-            Some(repository) => {
-                repository
-                    .summarize_total_tokens_by_api_key_ids(api_key_ids)
-                    .await
-            }
-            None => Ok(std::collections::BTreeMap::new()),
-        }
-    }
-
-    pub(crate) async fn summarize_usage_by_provider_api_key_ids(
-        &self,
-        provider_api_key_ids: &[String],
-    ) -> Result<
-        std::collections::BTreeMap<
-            String,
-            aether_data_contracts::repository::usage::StoredProviderApiKeyUsageSummary,
-        >,
-        DataLayerError,
-    > {
-        match &self.usage_reader {
-            Some(repository) => {
-                repository
-                    .summarize_usage_by_provider_api_key_ids(provider_api_key_ids)
-                    .await
-            }
-            None => Ok(std::collections::BTreeMap::new()),
         }
     }
 
@@ -2911,16 +2867,6 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn upsert_payment_gateway_config(
-        &self,
-        input: &PaymentGatewayConfigWriteInput,
-    ) -> Result<AdminBillingMutationOutcome<PaymentGatewayConfigRecord>, DataLayerError> {
-        match &self.billing_reader {
-            Some(repository) => repository.upsert_payment_gateway_config(input).await,
-            None => Ok(AdminBillingMutationOutcome::Unavailable),
-        }
-    }
-
     pub(crate) async fn list_provider_expenses(
         &self,
         query: &ProviderExpenseQuery,
@@ -3118,6 +3064,7 @@ impl GatewayDataState {
         read_provider_transport_snapshot(self, provider_id, endpoint_id, key_id).await
     }
 
+    #[cfg(test)]
     pub(crate) async fn read_video_task_response(
         &self,
         route_family: Option<&str>,

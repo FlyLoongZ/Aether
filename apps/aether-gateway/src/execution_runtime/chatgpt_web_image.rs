@@ -3660,6 +3660,7 @@ fn execution_result_bytes_with_limit(
         .unwrap_or_else(|| Ok(Vec::new()))
 }
 
+#[cfg(test)]
 fn execution_result_body_bytes_lossy(result: &ExecutionResult) -> Vec<u8> {
     execution_result_bytes(result).unwrap_or_default()
 }
@@ -4191,7 +4192,6 @@ mod tests {
     use axum::extract::Request;
     use axum::routing::any;
     use axum::Router;
-    use futures_util::StreamExt as _;
     use http::{Method, StatusCode};
 
     use crate::data::GatewayDataState;

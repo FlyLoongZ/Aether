@@ -124,6 +124,7 @@ pub(crate) async fn try_acquire_admin_system_import_lease(
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn release_admin_system_import_lease(app: &AppState, lock: &RuntimeLockLease) {
     match app.runtime_state().lock_release(lock).await {
         Ok(true) => {}

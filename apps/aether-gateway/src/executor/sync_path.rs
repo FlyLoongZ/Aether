@@ -26,9 +26,8 @@ use super::{
     maybe_execute_sync_via_local_openai_responses_decision,
     maybe_execute_sync_via_local_same_format_provider_decision,
     maybe_execute_sync_via_local_standard_decision, maybe_execute_sync_via_local_video_decision,
-    maybe_execute_sync_via_plan_fallback, maybe_execute_sync_via_remote_decision,
-    parse_local_request_body, should_skip_direct_plan, LocalExecutionRequestOutcome,
-    ProviderTransferTracker,
+    maybe_execute_sync_via_plan_fallback, parse_local_request_body, should_skip_direct_plan,
+    LocalExecutionRequestOutcome, ProviderTransferTracker,
 };
 
 pub(crate) async fn maybe_execute_via_sync_decision_path(
@@ -226,22 +225,6 @@ impl AiSyncExecutionPathPort for GatewaySyncExecutionPathPort<'_> {
                     &self.transfer_tracker,
                 )
                 .await?
-            }
-            AiSyncExecutionStep::RemoteDecision => {
-                if let Some(response) = maybe_execute_sync_via_remote_decision(
-                    self.state,
-                    self.parts,
-                    self.trace_id,
-                    self.decision,
-                    self.body_json,
-                    self.plan_kind,
-                )
-                .await?
-                {
-                    LocalExecutionRequestOutcome::Responded(response)
-                } else {
-                    LocalExecutionRequestOutcome::NoPath
-                }
             }
         };
         Ok(to_ai_serving_outcome(outcome))

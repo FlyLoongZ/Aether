@@ -14,17 +14,6 @@ pub(crate) enum VideoTaskRouteAccess {
 }
 
 impl AppState {
-    pub(crate) async fn read_data_backed_video_task_response(
-        &self,
-        route_family: Option<&str>,
-        request_path: &str,
-    ) -> Result<Option<video_tasks::LocalVideoTaskReadResponse>, GatewayError> {
-        self.data
-            .read_video_task_response(route_family, request_path)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn read_data_backed_video_task_response_for_user(
         &self,
         route_family: Option<&str>,
@@ -43,16 +32,6 @@ impl AppState {
     ) -> Result<Option<StoredVideoTask>, GatewayError> {
         self.data
             .find_video_task(VideoTaskLookupKey::Id(task_id))
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn find_video_task_by_short_id(
-        &self,
-        short_id: &str,
-    ) -> Result<Option<StoredVideoTask>, GatewayError> {
-        self.data
-            .find_video_task(VideoTaskLookupKey::ShortId(short_id))
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }

@@ -24,8 +24,6 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::warn;
 
-use crate::LocalMutationOutcome;
-
 #[derive(Deserialize)]
 struct ManualProxyNodeCreateRequest {
     name: String,
@@ -73,12 +71,6 @@ fn manual_proxy_connectivity_probe_url_override() -> &'static std::sync::RwLock<
     OVERRIDE.get_or_init(|| std::sync::RwLock::new(None))
 }
 
-#[cfg(test)]
-fn manual_proxy_connectivity_probe_url_override_lock() -> &'static std::sync::Mutex<()> {
-    static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-    LOCK.get_or_init(|| std::sync::Mutex::new(()))
-}
-
 fn proxy_connectivity_probe_url() -> String {
     #[cfg(test)]
     if let Some(url) = manual_proxy_connectivity_probe_url_override()
@@ -92,36 +84,11 @@ fn proxy_connectivity_probe_url() -> String {
     DEFAULT_PROXY_CONNECTIVITY_PROBE_URL.to_string()
 }
 
-#[cfg(test)]
-pub(crate) struct ProxyConnectivityProbeUrlOverrideGuard(std::sync::MutexGuard<'static, ()>);
-
-#[cfg(test)]
-pub(crate) fn override_proxy_connectivity_probe_url_for_tests(
-    url: impl Into<String>,
-) -> ProxyConnectivityProbeUrlOverrideGuard {
-    let guard = manual_proxy_connectivity_probe_url_override_lock()
-        .lock()
-        .expect("probe url override lock should acquire");
-    *manual_proxy_connectivity_probe_url_override()
-        .write()
-        .expect("probe url override lock should write") = Some(url.into());
-    ProxyConnectivityProbeUrlOverrideGuard(guard)
-}
-
-#[cfg(test)]
-impl Drop for ProxyConnectivityProbeUrlOverrideGuard {
-    fn drop(&mut self) {
-        *manual_proxy_connectivity_probe_url_override()
-            .write()
-            .expect("probe url override lock should write") = None;
-    }
-}
-
 pub(crate) async fn maybe_build_local_admin_proxy_nodes_response(
     state: &AdminAppState<'_>,
     request_context: &AdminRequestContext<'_>,
-    headers: &http::HeaderMap,
-    remote_addr: &std::net::SocketAddr,
+    _headerss: &http::HeaderMap,
+    _remote_addrr: &std::net::SocketAddr,
     request_body: Option<&Bytes>,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let Some(decision) = request_context.decision() else {
@@ -328,8 +295,6 @@ fn build_admin_proxy_node_detail_payload(
 #[derive(Debug, Clone)]
 struct NormalizedManualProxyEndpoint {
     proxy_url: String,
-    host: String,
-    port: u16,
     node_ip: String,
     node_port: i32,
 }
@@ -462,28 +427,6 @@ where
     }
 
     Ok(cleanup)
-}
-
-#[cfg(test)]
-pub(crate) async fn clear_proxy_node_references_with_cache_failure_for_tests(
-    app: &crate::AppState,
-    node_id: &str,
-) -> Result<Value, GatewayError> {
-    let state = AdminAppState::new(app);
-    let cleanup = clear_proxy_node_references_before_delete_with_cache(&state, node_id, async {
-        Err(GatewayError::Internal(
-            "injected cache delete failure".to_string(),
-        ))
-    })
-    .await?;
-    Ok(json!({
-        "cleared_system_proxy": cleanup.cleared_system_proxy,
-        "cleared_external_models_proxy": cleanup.cleared_external_models_proxy,
-        "external_models_cache_clear_succeeded": cleanup.external_models_cache_clear_succeeded,
-        "cleared_providers": cleanup.cleared_providers,
-        "cleared_endpoints": cleanup.cleared_endpoints,
-        "cleared_keys": cleanup.cleared_keys,
-    }))
 }
 
 fn build_delete_proxy_node_message(cleanup: &DeletedProxyNodeCleanup) -> String {
@@ -821,20 +764,6 @@ fn parse_json_body<T: DeserializeOwned>(request_body: Option<&Bytes>) -> Result<
         .map_err(|_| bad_request_response(JSON_OBJECT_REQUIRED_DETAIL))
 }
 
-fn parse_json_object_body(
-    request_body: Option<&Bytes>,
-) -> Result<serde_json::Map<String, Value>, Response<Body>> {
-    let Some(request_body) = request_body else {
-        return Err(bad_request_response("请求体不能为空"));
-    };
-    let raw_value = serde_json::from_slice::<Value>(request_body)
-        .map_err(|_| bad_request_response(JSON_OBJECT_REQUIRED_DETAIL))?;
-    raw_value
-        .as_object()
-        .cloned()
-        .ok_or_else(|| bad_request_response(JSON_OBJECT_REQUIRED_DETAIL))
-}
-
 fn normalize_manual_proxy_endpoint(
     proxy_url: &str,
 ) -> Result<NormalizedManualProxyEndpoint, Response<Body>> {
@@ -890,15 +819,9 @@ fn parse_manual_proxy_endpoint(
 
     Ok(NormalizedManualProxyEndpoint {
         proxy_url: proxy_url.to_string(),
-        host,
-        port,
         node_ip,
         node_port: i32::from(port),
     })
-}
-
-fn validate_node_id(value: &str) -> Result<String, Response<Body>> {
-    normalize_required_string(value, "node_id", 36)
 }
 
 fn normalize_required_string(
@@ -936,14 +859,6 @@ fn normalize_optional_string(
         )));
     }
     Ok(Some(normalized.to_string()))
-}
-
-fn normalize_ip_address(value: &str) -> Result<String, Response<Body>> {
-    let normalized = value.trim();
-    normalized
-        .parse::<std::net::IpAddr>()
-        .map(|ip| ip.to_string())
-        .map_err(|_| bad_request_response("ip 必须是合法的 IPv4/IPv6 地址"))
 }
 
 fn sanitize_proxy_error(detail: &str) -> String {
@@ -1062,48 +977,6 @@ fn format_proxy_probe_status_error(status: reqwest::StatusCode, _body: &str) -> 
     // The body is controlled by the probe target and may echo proxy
     // credentials or contain private upstream diagnostics.
     format!("代理探测返回 HTTP {}", status.as_u16())
-}
-
-fn validate_optional_counter(value: Option<i64>, field: &str) -> Result<(), Response<Body>> {
-    if value.is_some_and(|value| value < 0) {
-        return Err(bad_request_response(format!("{field} 必须是非负整数")));
-    }
-    Ok(())
-}
-
-fn validate_optional_i32_range(
-    value: i32,
-    field: &str,
-    min: i32,
-    max: i32,
-) -> Result<i32, Response<Body>> {
-    if !(min..=max).contains(&value) {
-        return Err(bad_request_response(format!(
-            "{field} 必须在 {min}-{max} 范围内"
-        )));
-    }
-    Ok(value)
-}
-
-fn validate_json_i32_range(
-    value: &Value,
-    field: &str,
-    min: i32,
-    max: i32,
-) -> Result<i32, Response<Body>> {
-    let Some(raw) = value.as_i64() else {
-        return Err(bad_request_response(format!("{field} 必须是整数")));
-    };
-    let parsed =
-        i32::try_from(raw).map_err(|_| bad_request_response(format!("{field} 超出范围")))?;
-    validate_optional_i32_range(parsed, field, min, max)
-}
-
-fn validate_optional_object(value: Option<&Value>, field: &str) -> Result<(), Response<Body>> {
-    if value.is_some_and(|value| !value.is_object()) {
-        return Err(bad_request_response(format!("{field} 必须是 JSON 对象")));
-    }
-    Ok(())
 }
 
 fn bad_request_response(detail: impl Into<String>) -> Response<Body> {

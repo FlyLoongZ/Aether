@@ -1,8 +1,6 @@
 use crate::api::ai::public_api_format_local_path;
 use crate::handlers::shared::{query_param_value, unix_ms_to_rfc3339, unix_secs_to_rfc3339};
-use crate::provider_key_auth::{
-    provider_key_configured_api_formats, provider_key_effective_api_formats,
-};
+use crate::provider_key_auth::provider_key_effective_api_formats;
 use crate::AppState;
 use aether_data_contracts::repository::candidates::{
     sanitize_request_candidate_error_type, PublicHealthTimelineBucket, RequestCandidateStatus,
@@ -11,9 +9,7 @@ use aether_data_contracts::repository::candidates::{
 use aether_data_contracts::repository::global_models::{
     PublicCatalogModelListQuery, PublicCatalogModelSearchQuery, StoredPublicCatalogModel,
 };
-use aether_data_contracts::repository::provider_catalog::{
-    StoredProviderCatalogKey, StoredProviderCatalogProvider,
-};
+use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogProvider;
 use aether_data_contracts::repository::usage::{
     StoredRequestUsageAudit, StoredUsageBreakdownSummaryRow, StoredUsageHealthTimelineRow,
     UsageAuditListQuery, UsageBreakdownGroupBy, UsageBreakdownSummaryQuery,
@@ -546,10 +542,6 @@ pub(crate) struct ModelHealthMonitorOptions {
 
 const API_FORMAT_HEALTH_TIMELINE_SEGMENTS: u32 = 60;
 const MODEL_HEALTH_TIMELINE_SEGMENTS: u32 = 60;
-
-pub(crate) fn provider_key_api_formats(key: &StoredProviderCatalogKey) -> Vec<String> {
-    provider_key_configured_api_formats(key)
-}
 
 pub(crate) async fn build_public_providers_payload(
     state: &AppState,
@@ -1632,7 +1624,7 @@ async fn build_related_health_items<F, G>(
     since_unix_secs: u64,
     now_unix_secs: u64,
     related_limit: usize,
-    per_item_limit: usize,
+    _per_item_limitt: usize,
     kind: &'static str,
     build_events_query: F,
     build_display_meta: G,

@@ -1,9 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use aether_ai_serving::UPSTREAM_IS_STREAM_KEY;
-use aether_billing::{
-    normalize_input_tokens_for_billing, normalize_total_input_context_for_cache_hit_rate,
-};
+use aether_billing::normalize_input_tokens_for_billing;
 use aether_data_contracts::repository::{
     candidates::{RequestCandidateStatus, StoredRequestCandidate},
     usage::{
@@ -210,23 +208,6 @@ fn users_me_usage_cache_creation_tokens(item: &StoredRequestUsageAudit) -> u64 {
     }
 }
 
-fn users_me_usage_total_input_context(item: &StoredRequestUsageAudit) -> u64 {
-    let api_format = item
-        .endpoint_api_format
-        .as_deref()
-        .or(item.api_format.as_deref());
-    let input_tokens = i64::try_from(item.input_tokens).unwrap_or(i64::MAX);
-    let cache_creation_tokens =
-        i64::try_from(users_me_usage_cache_creation_tokens(item)).unwrap_or(i64::MAX);
-    let cache_read_tokens = i64::try_from(item.cache_read_input_tokens).unwrap_or(i64::MAX);
-    normalize_total_input_context_for_cache_hit_rate(
-        api_format,
-        input_tokens,
-        cache_creation_tokens,
-        cache_read_tokens,
-    ) as u64
-}
-
 fn users_me_usage_effective_input_tokens(item: &StoredRequestUsageAudit) -> u64 {
     let api_format = item
         .endpoint_api_format
@@ -242,11 +223,6 @@ fn users_me_usage_effective_input_tokens(item: &StoredRequestUsageAudit) -> u64 
         cache_creation_tokens,
         cache_read_tokens,
     ) as u64
-}
-
-fn users_me_usage_effective_unix_secs(item: &StoredRequestUsageAudit) -> u64 {
-    item.finalized_at_unix_secs
-        .unwrap_or(item.created_at_unix_ms)
 }
 
 fn users_me_usage_cache_hit_rate(total_input_context: u64, cache_read_tokens: u64) -> f64 {

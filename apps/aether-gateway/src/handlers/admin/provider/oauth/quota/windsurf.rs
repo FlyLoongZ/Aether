@@ -288,7 +288,7 @@ pub(crate) async fn refresh_windsurf_provider_quota_locally(
                                     )
                                 })
                         }
-                        ProviderQuotaExecutionOutcome::Response(model_result) => {
+                        ProviderQuotaExecutionOutcome::Response(_model_resultt) => {
                             append_windsurf_probe_warning(
                                 &mut metadata,
                                 "model_configs",
@@ -327,7 +327,7 @@ pub(crate) async fn refresh_windsurf_provider_quota_locally(
                                     )
                                 })
                         }
-                        ProviderQuotaExecutionOutcome::Response(rate_limit_result) => {
+                        ProviderQuotaExecutionOutcome::Response(_rate_limit_resultt) => {
                             append_windsurf_probe_warning(
                                 &mut metadata,
                                 "rate_limit",

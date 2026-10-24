@@ -1,4 +1,6 @@
+#[cfg(test)]
 use chrono::{DateTime, Utc};
+#[cfg(test)]
 use serde_json::json;
 
 use super::payment_shared::{
@@ -6,12 +8,14 @@ use super::payment_shared::{
     NormalizedPaymentCallbackRequest, PaymentCallbackRequest,
 };
 
+#[cfg(test)]
 pub(crate) struct CreateCheckoutSessionInput {
     pub(crate) order_no: String,
     pub(crate) amount_usd: f64,
     pub(crate) expires_at: DateTime<Utc>,
 }
 
+#[cfg(test)]
 pub(crate) struct CreateCheckoutSessionOutput {
     pub(crate) gateway_order_id: String,
     pub(crate) gateway_response: serde_json::Value,
@@ -29,8 +33,10 @@ pub(crate) struct VerifyCallbackOutcome {
 }
 
 pub(crate) trait PaymentGatewayAdapter: Sync {
+    #[cfg(test)]
     fn payment_method(&self) -> &'static str;
 
+    #[cfg(test)]
     fn create_checkout_session(
         &self,
         input: &CreateCheckoutSessionInput,
@@ -76,10 +82,12 @@ static WECHAT_ADAPTER: WechatAdapter = WechatAdapter;
 static MANUAL_ADAPTER: ManualAdapter = ManualAdapter;
 
 impl PaymentGatewayAdapter for AlipayAdapter {
+    #[cfg(test)]
     fn payment_method(&self) -> &'static str {
         "alipay"
     }
 
+    #[cfg(test)]
     fn create_checkout_session(
         &self,
         input: &CreateCheckoutSessionInput,
@@ -102,10 +110,12 @@ impl PaymentGatewayAdapter for AlipayAdapter {
 }
 
 impl PaymentGatewayAdapter for WechatAdapter {
+    #[cfg(test)]
     fn payment_method(&self) -> &'static str {
         "wechat"
     }
 
+    #[cfg(test)]
     fn create_checkout_session(
         &self,
         input: &CreateCheckoutSessionInput,
@@ -128,10 +138,12 @@ impl PaymentGatewayAdapter for WechatAdapter {
 }
 
 impl PaymentGatewayAdapter for ManualAdapter {
+    #[cfg(test)]
     fn payment_method(&self) -> &'static str {
         "manual"
     }
 
+    #[cfg(test)]
     fn create_checkout_session(
         &self,
         input: &CreateCheckoutSessionInput,

@@ -5,10 +5,9 @@ use tracing::warn;
 use crate::ai_serving::planner::candidate_materialization::{
     build_local_execution_candidate_attempt_source_with_serving,
     mark_skipped_local_execution_candidate,
-    mark_skipped_local_execution_candidate_with_failure_diagnostic,
-    materialize_local_execution_candidates_with_serving, LocalCandidateResolutionMode,
-    LocalExecutionCandidateAttemptSource,
+    mark_skipped_local_execution_candidate_with_failure_diagnostic, LocalCandidateResolutionMode,
 };
+
 use crate::ai_serving::planner::candidate_metadata::{
     build_local_execution_candidate_metadata,
     build_local_execution_candidate_metadata_for_candidate, LocalExecutionCandidateMetadataParts,
@@ -22,7 +21,7 @@ use crate::ai_serving::planner::materialization_policy::{
 };
 use crate::ai_serving::{
     resolve_local_decision_execution_runtime_auth_context, CandidateFailureDiagnostic,
-    ExecutionRuntimeAuthContext, GatewayControlDecision, PlannerAppState,
+    GatewayControlDecision, PlannerAppState,
 };
 use crate::client_session_affinity::client_session_affinity_from_parts;
 use crate::clock::current_unix_secs;
@@ -87,82 +86,6 @@ pub(super) async fn resolve_local_gemini_files_decision_input(
     )
     .await?;
     Ok(Some(input))
-}
-
-pub(super) async fn materialize_local_gemini_files_candidate_attempts(
-    state: &AppState,
-    trace_id: &str,
-    input: &LocalGeminiFilesDecisionInput,
-) -> Result<Vec<LocalGeminiFilesCandidateAttempt>, GatewayError> {
-    let planner_state = PlannerAppState::new(state);
-    let persistence_policy = build_local_candidate_persistence_policy(
-        &input.auth_context,
-        input.required_capabilities.as_ref(),
-        LocalCandidatePersistencePolicyKind::GeminiFilesDecision,
-    );
-    let candidates = planner_state
-        .list_selectable_candidates_for_required_capability_without_requested_model(
-            GEMINI_FILES_CANDIDATE_API_FORMAT,
-            GEMINI_FILES_REQUIRED_CAPABILITY,
-            false,
-            Some(&input.auth_snapshot),
-            input.client_session_affinity.as_ref(),
-            current_unix_secs(),
-            crate::ai_serving::planner::candidate_ranking::scheduler_ordering_config_for_routing_policy(
-                input.routing_policy.as_ref(),
-            ),
-        )
-        .await?;
-    let outcome = materialize_local_execution_candidates_with_serving(
-        planner_state,
-        trace_id,
-        GEMINI_FILES_CLIENT_API_FORMAT,
-        None,
-        Some(&input.auth_snapshot),
-        input.client_session_affinity.as_ref(),
-        input.required_capabilities.as_ref(),
-        input.routing_policy.as_ref(),
-        None,
-        input.request_auth_channel.as_deref(),
-        persistence_policy,
-        candidates,
-        Vec::new(),
-        LocalCandidateResolutionMode::WithoutTransportPairGate,
-        |eligible| {
-            let mut extra_fields = serde_json::Map::new();
-            extra_fields.insert(
-                "candidate_api_format".to_string(),
-                json!(GEMINI_FILES_CANDIDATE_API_FORMAT),
-            );
-            Some(build_local_execution_candidate_metadata(
-                LocalExecutionCandidateMetadataParts {
-                    eligible,
-                    provider_api_format: GEMINI_FILES_CLIENT_API_FORMAT,
-                    client_api_format: GEMINI_FILES_CLIENT_API_FORMAT,
-                    extra_fields,
-                },
-            ))
-        },
-        |mut skipped_candidate| {
-            let mut extra_fields = serde_json::Map::new();
-            extra_fields.insert(
-                "candidate_api_format".to_string(),
-                json!(GEMINI_FILES_CANDIDATE_API_FORMAT),
-            );
-            skipped_candidate.extra_data =
-                Some(build_local_execution_candidate_metadata_for_candidate(
-                    &skipped_candidate.candidate,
-                    skipped_candidate.transport_ref(),
-                    GEMINI_FILES_CLIENT_API_FORMAT,
-                    GEMINI_FILES_CLIENT_API_FORMAT,
-                    extra_fields,
-                ));
-            skipped_candidate
-        },
-    )
-    .await;
-
-    Ok(outcome.attempts)
 }
 
 pub(super) async fn build_local_gemini_files_candidate_attempt_source<'a>(

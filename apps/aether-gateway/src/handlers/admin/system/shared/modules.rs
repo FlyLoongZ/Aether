@@ -239,18 +239,6 @@ fn admin_module_available(module: &AdminModuleDefinition) -> bool {
     module_available_from_env(module.env_key, module.default_available)
 }
 
-pub(crate) fn oauth_module_config_is_valid(
-    providers: &[aether_data::repository::auth_modules::StoredOAuthProviderModuleConfig],
-) -> bool {
-    admin_system_kernel::oauth_module_config_is_valid(providers)
-}
-
-pub(crate) fn ldap_module_config_is_valid(
-    config: Option<&aether_data::repository::auth_modules::StoredLdapModuleConfig>,
-) -> bool {
-    crate::handlers::shared::ldap_module_config_is_valid(config)
-}
-
 pub(crate) async fn build_admin_module_runtime_state(
     state: &AdminAppState<'_>,
 ) -> Result<AdminModuleRuntimeState, GatewayError> {

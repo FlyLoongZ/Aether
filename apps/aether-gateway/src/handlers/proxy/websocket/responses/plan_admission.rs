@@ -5,7 +5,6 @@
 //! provider retries reuse the permit stored on that logical turn.
 
 use axum::extract::ws::WebSocket;
-use std::time::Duration;
 
 use crate::handlers::proxy::websocket::session::{CLOSE_INTERNAL_ERROR, CLOSE_TRY_AGAIN};
 use crate::handlers::proxy::websocket::transport::{
@@ -64,30 +63,6 @@ pub(super) fn responses_websocket_plan_admission_close(
 ) -> (u16, &'static str) {
     let mapped = map_plan_admission_error(error);
     (mapped.close_code, mapped.close_reason)
-}
-
-pub(super) async fn wait_for_admission_permit_loss(
-    permit: Option<&aether_runtime::AdmissionPermit>,
-) {
-    wait_for_admission_permit_loss_with_interval(permit, Duration::from_secs(1)).await;
-}
-
-async fn wait_for_admission_permit_loss_with_interval(
-    permit: Option<&aether_runtime::AdmissionPermit>,
-    health_poll_interval: Duration,
-) {
-    let Some(permit) = permit else {
-        std::future::pending::<()>().await;
-        return;
-    };
-    let mut health = tokio::time::interval(health_poll_interval);
-    health.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    loop {
-        health.tick().await;
-        if !permit.is_healthy() {
-            return;
-        }
-    }
 }
 
 pub(super) async fn terminate_responses_websocket_for_plan_permit_loss(

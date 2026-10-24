@@ -9,10 +9,8 @@ use super::{
 use crate::data::GatewayDataState;
 use crate::tests::{
     any, build_router, build_router_with_state, build_state_with_execution_runtime_override, json,
-    start_server, strip_sse_keepalive_comments, AppState, Arc, Body, HeaderValue, Json, Mutex,
-    Request, Response, Router, StatusCode, CONTROL_ACTION_PROXY_PUBLIC, CONTROL_EXECUTED_HEADER,
-    EXECUTION_PATH_EXECUTION_RUNTIME_STREAM, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
-    EXECUTION_PATH_HEADER,
+    start_server, AppState, Arc, Body, HeaderValue, Json, Mutex, Request, Response, Router,
+    StatusCode, CONTROL_ACTION_PROXY_PUBLIC, CONTROL_EXECUTED_HEADER,
 };
 use aether_data::repository::billing::InMemoryBillingReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
@@ -358,7 +356,7 @@ async fn gateway_handles_internal_gateway_resolve_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -421,7 +419,7 @@ async fn gateway_returns_internal_gateway_proxy_public_action_without_proxying_u
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -462,7 +460,7 @@ async fn gateway_returns_internal_gateway_plan_sync_proxy_public_action_without_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -568,7 +566,7 @@ async fn gateway_handles_internal_gateway_execute_sync_locally_impl() {
     ));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
 
-    let (fallback_probe_url, fallback_probe_handle) = start_server(fallback_probe).await;
+    let (_fallback_probe_url, fallback_probe_handle) = start_server(fallback_probe).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_state(
         build_state_with_execution_runtime_override(execution_runtime_url)
@@ -635,7 +633,7 @@ async fn gateway_returns_internal_gateway_execute_stream_proxy_public_action_wit
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -736,7 +734,7 @@ async fn gateway_handles_internal_gateway_execute_stream_locally() {
     ));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
 
-    let (fallback_probe_url, fallback_probe_handle) = start_server(fallback_probe).await;
+    let (_fallback_probe_url, fallback_probe_handle) = start_server(fallback_probe).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_state(
         build_state_with_execution_runtime_override(execution_runtime_url)
@@ -808,7 +806,7 @@ async fn gateway_handles_internal_gateway_resolve_locally() {
         unrestricted_models_snapshot("key-internal-resolve", "user-internal-resolve"),
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("state should build")
@@ -866,7 +864,7 @@ async fn gateway_handles_internal_gateway_auth_context_locally() {
         unrestricted_models_snapshot("key-internal-auth-context", "user-internal-auth-context"),
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("state should build")
@@ -917,7 +915,7 @@ async fn gateway_handles_internal_gateway_report_sync_locally() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(internal_report_planner_state());
     let (gateway_url, gateway_handle) = start_server(gateway).await;
     let client = reqwest::Client::new();
@@ -978,7 +976,7 @@ async fn gateway_handles_internal_gateway_report_stream_locally() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(internal_report_planner_state());
     let (gateway_url, gateway_handle) = start_server(gateway).await;
     let client = reqwest::Client::new();
@@ -1214,7 +1212,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_locally() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(internal_report_planner_state());
     let (gateway_url, gateway_handle) = start_server(gateway).await;
     let client = reqwest::Client::new();
@@ -1285,7 +1283,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_openai_video_locally() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(internal_video_create_planner_state(
         "openai:video",
         "sora-2",
@@ -1369,7 +1367,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_gemini_video_locally() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway =
         build_router_with_state(internal_video_create_planner_state("gemini:video", "veo-3"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1447,7 +1445,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_openai_video_delete_loca
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = internal_video_followup_planner_state(
         "openai:video",
         "video-delete-123",
@@ -1529,7 +1527,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_gemini_video_cancel_loca
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = internal_video_followup_planner_state(
         "gemini:video",
         "gemini-cancel-task-record",
@@ -1604,7 +1602,7 @@ async fn gateway_rejects_internal_gateway_finalize_sync_unknown_kind_locally() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1678,7 +1676,7 @@ async fn gateway_handles_internal_gateway_decision_sync_locally_with_supplied_au
     ));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1784,7 +1782,7 @@ async fn gateway_internal_decision_sync_revalidates_supplied_auth_context_wallet
         .expect("wallet should build"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1853,7 +1851,7 @@ async fn gateway_returns_internal_gateway_decision_sync_fallback_with_resolved_a
         unrestricted_models_snapshot("api-key-fallback-1", "user-fallback-1"),
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1935,7 +1933,7 @@ async fn gateway_handles_internal_gateway_decision_stream_locally_with_supplied_
     ));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2030,7 +2028,7 @@ async fn gateway_handles_internal_gateway_plan_sync_locally_with_supplied_auth_c
     ));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2122,7 +2120,7 @@ async fn gateway_handles_internal_gateway_plan_stream_locally_with_supplied_auth
     ));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

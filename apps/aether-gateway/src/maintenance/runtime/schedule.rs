@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use aether_data_contracts::DataLayerError;
-use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc, Weekday};
+use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use tracing::warn;
 

@@ -32,7 +32,7 @@ async fn gateway_exposes_frontdoor_manifest_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_execution_runtime_override("http://127.0.0.1:19091");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -204,7 +204,7 @@ async fn gateway_reports_local_control_plane_as_configured_without_external_cont
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_execution_runtime_override("http://127.0.0.1:19091");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -254,7 +254,7 @@ async fn gateway_reports_execution_runtime_as_configured_without_execution_runti
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -295,7 +295,7 @@ async fn gateway_handles_cors_preflight_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("state should build")
         .with_frontdoor_cors_config(

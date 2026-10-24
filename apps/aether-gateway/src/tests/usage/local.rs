@@ -54,7 +54,7 @@ async fn wait_for_usage_status<T>(
 where
     T: UsageReadRepository + ?Sized,
 {
-    let mut stored = None;
+    let mut stored;
     // Usage terminal events are written on a shared background runtime; under full-suite parallel
     // load they can lag noticeably behind the request/response assertion path.
     let timeout = std::time::Duration::from_secs(60);
@@ -247,7 +247,7 @@ async fn gateway_handles_local_openai_chat_sync_report_with_local_reporting_when
         vec![sample_local_openai_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url)
@@ -1318,7 +1318,7 @@ async fn gateway_records_failed_usage_for_claude_runtime_miss_without_execution_
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, _upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url)
@@ -1537,7 +1537,7 @@ async fn gateway_handles_local_openai_chat_stream_report_with_local_reporting_wh
         vec![sample_local_openai_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url)

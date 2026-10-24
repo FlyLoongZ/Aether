@@ -1,4 +1,5 @@
-pub(crate) use aether_usage_runtime::{build_usage_queue_worker, write_event_record};
+#[cfg(test)]
+pub(crate) use aether_usage_runtime::write_event_record;
 
 #[cfg(test)]
 mod tests {

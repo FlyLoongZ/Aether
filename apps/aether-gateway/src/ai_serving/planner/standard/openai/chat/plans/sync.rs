@@ -8,9 +8,7 @@ use super::super::{
     GatewayError, LocalOpenAiChatCandidateAttempt, LocalOpenAiChatCandidateAttemptSource,
     LocalOpenAiChatDecisionInput,
 };
-use super::diagnostic::{
-    set_local_openai_chat_candidate_evaluation_diagnostic, set_local_openai_chat_miss_diagnostic,
-};
+use super::diagnostic::set_local_openai_chat_candidate_evaluation_diagnostic;
 use super::openai_chat_upstream_is_stream_for_candidate;
 use super::resolve::resolve_local_openai_chat_decision_input;
 use crate::ai_serving::planner::candidate_materialization::LocalExecutionAttemptSource;
@@ -180,53 +178,4 @@ impl LocalOpenAiChatSyncAttemptSource<'_> {
             }
         }
     }
-}
-
-pub(crate) async fn build_local_openai_chat_sync_plan_and_reports(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    body_json: &serde_json::Value,
-    plan_kind: &str,
-) -> Result<Vec<AiSyncAttempt>, GatewayError> {
-    if plan_kind != OPENAI_CHAT_SYNC_PLAN_KIND {
-        return Ok(Vec::new());
-    }
-
-    let Some(input) = resolve_local_openai_chat_decision_input(
-        state, parts, trace_id, decision, body_json, plan_kind, true,
-    )
-    .await?
-    else {
-        return Ok(Vec::new());
-    };
-
-    let Some((mut attempt_source, candidate_count)) = build_local_openai_chat_sync_attempt_source(
-        state, parts, trace_id, decision, body_json, plan_kind,
-    )
-    .await?
-    else {
-        set_local_openai_chat_candidate_evaluation_diagnostic(
-            state,
-            trace_id,
-            decision,
-            plan_kind,
-            Some(input.requested_model.as_str()),
-            0,
-        );
-        return Ok(Vec::new());
-    };
-
-    let mut plans = Vec::new();
-    while let Some(attempt) = attempt_source.next_execution_attempt().await? {
-        plans.push(attempt);
-        if plans.len() >= candidate_count {
-            break;
-        }
-    }
-
-    apply_local_runtime_candidate_terminal_reason(state, trace_id, "no_local_sync_plans");
-
-    Ok(plans)
 }

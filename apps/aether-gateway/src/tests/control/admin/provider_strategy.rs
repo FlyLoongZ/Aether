@@ -12,8 +12,7 @@ use serde_json::json;
 
 use super::super::{build_router_with_state, sample_provider, start_server, AppState};
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
 
@@ -37,7 +36,7 @@ async fn assert_provider_strategy_route_returns_local_503(
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -84,7 +83,7 @@ async fn gateway_handles_admin_provider_strategy_list_locally_with_trusted_admin
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -171,76 +170,6 @@ async fn gateway_handles_admin_provider_strategy_quota_locally_returns_service_u
     )
     .await;
 }
-async fn gateway_resets_admin_provider_strategy_quota_locally_with_trusted_admin_principal() {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        "/api/admin/provider-strategy/providers/provider-openai/quota",
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("unexpected upstream hit"))
-            }
-        }),
-    );
-
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![
-            sample_provider("provider-openai", "openai", 10).with_billing_fields(
-                Some("monthly_quota".to_string()),
-                Some(100.0),
-                Some(12.5),
-                Some(30),
-                Some(1_711_000_000),
-                Some(1_711_000_000 + 30 * 24 * 60 * 60),
-            ),
-        ],
-        vec![],
-        vec![],
-    ));
-
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
-    let gateway = build_router_with_state(
-        AppState::new()
-            .expect("gateway should build")
-            .with_data_state_for_tests(
-                GatewayDataState::with_provider_catalog_repository_for_tests(Arc::clone(
-                    &provider_catalog_repository,
-                )),
-            ),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .delete(format!(
-            "{gateway_url}/api/admin/provider-strategy/providers/provider-openai/quota"
-        ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["provider_name"], "openai");
-    assert_eq!(payload["previous_used"], 12.5);
-    assert_eq!(payload["current_used"], 0.0);
-
-    let updated = provider_catalog_repository
-        .list_providers_by_ids(&["provider-openai".to_string()])
-        .await
-        .expect("provider query should succeed");
-    assert_eq!(updated[0].monthly_used_usd, Some(0.0));
-    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
-
-    gateway_handle.abort();
-    upstream_handle.abort();
-}
-
 #[tokio::test]
 async fn gateway_updates_admin_provider_strategy_billing_locally_with_trusted_admin_principal() {
     let upstream_hits = Arc::new(Mutex::new(0usize));
@@ -271,7 +200,7 @@ async fn gateway_updates_admin_provider_strategy_billing_locally_with_trusted_ad
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -391,7 +320,7 @@ async fn gateway_syncs_admin_provider_strategy_monthly_usage_from_reset_window_l
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -489,7 +418,7 @@ async fn gateway_reads_admin_provider_strategy_stats_locally_with_trusted_admin_
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -578,7 +507,7 @@ async fn gateway_rounds_admin_provider_strategy_stats_total_cost_locally() {
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

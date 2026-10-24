@@ -18,10 +18,7 @@ use aether_data_contracts::repository::{
     provider_catalog::StoredProviderCatalogKey,
     usage::StoredRequestUsageAudit,
 };
-use axum::{
-    body::Body,
-    response::{IntoResponse, Response},
-};
+use axum::{body::Body, response::Response};
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use tracing::debug;

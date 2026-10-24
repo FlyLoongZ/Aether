@@ -11,5 +11,4 @@ pub(crate) use super::super::admin::provider::pool::runtime::{
 pub(crate) use super::super::admin::provider::shared::support::{
     admin_provider_pool_quota_probe_active_members_key, AdminProviderPoolConfig,
     AdminProviderPoolRuntimeState, AdminProviderPoolSchedulingPreset,
-    AdminProviderPoolUnschedulableRule, ADMIN_PROVIDER_POOL_SCAN_BATCH,
 };

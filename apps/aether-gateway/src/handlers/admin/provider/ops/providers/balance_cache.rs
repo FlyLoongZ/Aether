@@ -519,29 +519,6 @@ async fn finish_refresh_provider(refresh_key: &str) {
         .remove(refresh_key);
 }
 
-fn admin_provider_ops_action_response(
-    total_available: f64,
-    extra: serde_json::Map<String, Value>,
-) -> Value {
-    json!({
-        "status": "success",
-        "action_type": "query_balance",
-        "data": {
-            "total_granted": Value::Null,
-            "total_used": Value::Null,
-            "total_available": total_available,
-            "expires_at": Value::Null,
-            "currency": "USD",
-            "extra": extra,
-        },
-        "message": Value::Null,
-        "executed_at": chrono::Utc::now()
-            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-        "response_time_ms": Value::Null,
-        "cache_ttl_seconds": ADMIN_PROVIDER_OPS_BALANCE_CACHE_TTL_SECS,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::{

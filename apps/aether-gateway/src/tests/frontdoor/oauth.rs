@@ -107,7 +107,7 @@ async fn gateway_serves_oauth_public_providers_locally_without_hitting_upstream(
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -141,7 +141,7 @@ async fn gateway_accepts_oauth_authorize_device_id_header_without_hitting_upstre
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -186,7 +186,7 @@ async fn gateway_blocks_configured_oauth_provider_when_oauth_module_disabled() {
                 serde_json::json!(false),
             )]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -254,7 +254,7 @@ async fn gateway_serves_configured_oauth_provider_when_oauth_module_enabled() {
                 serde_json::json!(true),
             )]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -357,7 +357,7 @@ async fn gateway_rejects_oauth_callback_without_browser_binding_without_consumin
         .await
         .expect("wrong-cookie state should save");
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(state.clone());
     let (gateway_url, gateway_handle) = start_server(gateway).await;
     let client = reqwest::Client::builder()
@@ -487,7 +487,7 @@ async fn gateway_keeps_parallel_oauth_login_cookies_independent_and_clears_only_
             MemoryRuntimeStateConfig::default(),
         )));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(state);
     let (gateway_url, gateway_handle) = start_server(gateway).await;
     let client = reqwest::Client::builder()
@@ -610,7 +610,7 @@ async fn gateway_requires_auth_for_oauth_user_bindable_providers_without_hitting
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -740,7 +740,7 @@ async fn gateway_requires_auth_for_oauth_user_bind_token_without_hitting_upstrea
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

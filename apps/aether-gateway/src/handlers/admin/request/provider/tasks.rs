@@ -50,10 +50,6 @@ impl<'a> AdminAppState<'a> {
         .await
     }
 
-    pub(crate) fn put_provider_delete_task(&self, task: crate::LocalProviderDeleteTaskState) {
-        self.app.put_provider_delete_task(task)
-    }
-
     pub(crate) async fn run_admin_provider_delete_task(
         &self,
         provider_id: &str,

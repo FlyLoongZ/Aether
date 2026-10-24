@@ -12,41 +12,15 @@ use aether_data_contracts::repository::usage::{
 };
 
 use aether_data::repository::auth::AuthApiKeyReadRepository;
-use aether_data::repository::management_tokens::{
-    InMemoryManagementTokenRepository, ManagementTokenReadRepository,
-    ManagementTokenWriteRepository, StoredManagementToken, StoredManagementTokenUserSummary,
-    StoredManagementTokenWithUser,
-};
-use aether_data::repository::proxy_nodes::{ProxyNodeReadRepository, ProxyNodeWriteRepository};
 use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
-use aether_data::repository::users::{
-    InMemoryUserReadRepository, StoredUserAuthRecord, UserReadRepository,
-};
 use aether_data_contracts::repository::routing_profiles::{
     StoredRoutingGroup, StoredRoutingGroupBinding, StoredRoutingGroupVersion,
 };
 use aether_routing_core::RoutingGroupConfig;
-use sha2::{Digest, Sha256};
 
 use super::{GatewayDataConfig, GatewayDataState};
 
 impl GatewayDataState {
-    pub(crate) fn with_proxy_node_repository_for_testkit<T>(
-        repository: Arc<T>,
-        encryption_key: impl Into<String>,
-    ) -> Self
-    where
-        T: ProxyNodeReadRepository + ProxyNodeWriteRepository + 'static,
-    {
-        let proxy_node_reader: Arc<dyn ProxyNodeReadRepository> = repository.clone();
-        let proxy_node_writer: Arc<dyn ProxyNodeWriteRepository> = repository;
-        let mut state = Self::disabled();
-        state.config = GatewayDataConfig::disabled().with_encryption_key(encryption_key);
-        state.proxy_node_reader = Some(proxy_node_reader);
-        state.proxy_node_writer = Some(proxy_node_writer);
-        state
-    }
-
     pub(crate) fn with_openai_chat_pressure_repositories_for_testkit<T, U, V>(
         auth_api_key_repository: Arc<dyn AuthApiKeyReadRepository>,
         candidate_selection_repository: Arc<dyn MinimalCandidateSelectionReadRepository>,

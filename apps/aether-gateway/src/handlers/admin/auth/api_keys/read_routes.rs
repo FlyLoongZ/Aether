@@ -125,7 +125,7 @@ pub(super) async fn build_admin_api_key_detail_response(
     };
 
     if query_param_bool(request_context.query_string(), "include_key", false) {
-        let Some(ciphertext) = record
+        let Some(_ciphertextt) = record
             .key_encrypted
             .as_deref()
             .map(str::trim)

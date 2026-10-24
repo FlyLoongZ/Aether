@@ -205,16 +205,6 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn upsert_gemini_file_mapping(
-        &self,
-        record: UpsertGeminiFileMappingRecord,
-    ) -> Result<Option<StoredGeminiFileMapping>, DataLayerError> {
-        match &self.gemini_file_mapping_writer {
-            Some(repository) => repository.upsert(record).await.map(Some),
-            None => Ok(None),
-        }
-    }
-
     pub(crate) async fn upsert_gemini_file_mapping_if_owner_matches(
         &self,
         record: UpsertGeminiFileMappingRecord,
@@ -235,16 +225,6 @@ impl GatewayDataState {
                 items: Vec::new(),
                 total: 0,
             }),
-        }
-    }
-
-    pub(crate) async fn find_gemini_file_mapping_by_file_name(
-        &self,
-        file_name: &str,
-    ) -> Result<Option<StoredGeminiFileMapping>, DataLayerError> {
-        match &self.gemini_file_mapping_reader {
-            Some(repository) => repository.find_by_file_name(file_name).await,
-            None => Ok(None),
         }
     }
 
@@ -293,31 +273,6 @@ impl GatewayDataState {
                 expired_mappings: 0,
                 by_mime_type: Vec::new(),
             }),
-        }
-    }
-
-    pub(crate) async fn delete_gemini_file_mapping_by_file_name(
-        &self,
-        file_name: &str,
-    ) -> Result<bool, DataLayerError> {
-        match &self.gemini_file_mapping_writer {
-            Some(repository) => repository.delete_by_file_name(file_name).await,
-            None => Ok(false),
-        }
-    }
-
-    pub(crate) async fn delete_gemini_file_mapping_by_file_name_for_user(
-        &self,
-        file_name: &str,
-        user_id: &str,
-    ) -> Result<bool, DataLayerError> {
-        match &self.gemini_file_mapping_writer {
-            Some(repository) => {
-                repository
-                    .delete_by_file_name_for_user(file_name, user_id)
-                    .await
-            }
-            None => Ok(false),
         }
     }
 

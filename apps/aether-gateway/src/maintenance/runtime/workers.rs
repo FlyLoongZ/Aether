@@ -19,7 +19,6 @@ use super::{
     run_wallet_daily_usage_aggregation_once, AUDIT_LOG_CLEANUP_INTERVAL,
     GEMINI_FILE_MAPPING_CLEANUP_INTERVAL, OAUTH_TOKEN_REFRESH_INTERVAL, PENDING_CLEANUP_INTERVAL,
     POOL_MONITOR_INTERVAL, PROVIDER_CHECKIN_DEFAULT_TIME, PROVIDER_QUOTA_ALERT_INTERVAL,
-    PROXY_NODE_METRICS_CLEANUP_HOUR, PROXY_NODE_METRICS_CLEANUP_MINUTE,
     REQUEST_CANDIDATE_CLEANUP_INTERVAL, USAGE_CLEANUP_HOUR, USAGE_CLEANUP_MINUTE,
     WALLET_DAILY_USAGE_AGGREGATION_HOUR, WALLET_DAILY_USAGE_AGGREGATION_MINUTE,
 };
@@ -335,20 +334,6 @@ pub(crate) fn spawn_usage_counter_flush_worker(
             }
         },
     ))
-}
-
-pub(crate) fn spawn_usage_counter_flush_worker_with_config(
-    data: Arc<GatewayDataState>,
-    metrics: Arc<UsageCounterFlushRuntimeMetrics>,
-    config: UsageCounterFlushWorkerConfig,
-) -> Option<tokio::task::JoinHandle<()>> {
-    if !data.has_usage_counter_flush_backend() {
-        return None;
-    }
-
-    Some(tokio::spawn(run_usage_counter_flush_worker_loop(
-        data, metrics, config,
-    )))
 }
 
 async fn run_usage_counter_flush_worker_loop(

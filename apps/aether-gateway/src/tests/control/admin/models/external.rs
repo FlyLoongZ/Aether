@@ -1,16 +1,13 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
 use axum::body::Body;
-use axum::extract::ws::Message;
 use axum::routing::any;
 use axum::{extract::Request, Router};
 use base64::Engine as _;
 use http::StatusCode;
 use serde_json::json;
-use tokio::sync::watch;
 
 use super::super::super::{build_router_with_state, sample_proxy_node, start_server, AppState};
 use crate::constants::{
@@ -499,7 +496,7 @@ async fn gateway_clears_admin_external_models_cache_locally_with_trusted_admin_p
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

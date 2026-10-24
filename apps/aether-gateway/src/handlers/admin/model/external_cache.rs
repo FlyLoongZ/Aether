@@ -157,6 +157,7 @@ fn is_official_external_models_catalog_url(url: &url::Url) -> bool {
         && url.fragment().is_none()
 }
 
+#[cfg(test)]
 async fn resolve_admin_external_models_source(
     raw_url: &str,
     allow_insecure_test_target: bool,

@@ -161,6 +161,7 @@ impl RequestDiagnostics {
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn scope_request_diagnostics<F>(future: F) -> F::Output
 where
     F: Future,

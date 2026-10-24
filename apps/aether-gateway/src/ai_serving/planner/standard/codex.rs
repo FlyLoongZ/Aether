@@ -2,10 +2,11 @@
 #[path = "codex/tests.rs"]
 mod tests;
 
-pub(crate) use crate::ai_serving::{
-    apply_codex_openai_responses_identity_headers, apply_codex_openai_responses_special_body_edits,
-    apply_codex_openai_special_headers,
-};
+#[cfg(test)]
+pub(crate) use crate::ai_serving::apply_codex_openai_responses_identity_headers;
+#[cfg(test)]
+pub(crate) use crate::ai_serving::apply_codex_openai_responses_special_body_edits;
+pub(crate) use crate::ai_serving::apply_codex_openai_special_headers;
 
 pub(crate) fn codex_model_capabilities_for_transport(
     transport: &crate::ai_serving::GatewayProviderTransportSnapshot,

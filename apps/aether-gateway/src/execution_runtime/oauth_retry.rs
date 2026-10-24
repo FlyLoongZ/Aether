@@ -69,7 +69,7 @@ pub(crate) async fn refresh_oauth_plan_auth_for_retry(
             state
                 .capture_agent_identity_auth_config_fence(&transport)
                 .await,
-            Ok(AgentIdentityAuthConfigFence::Current(_))
+            Ok(AgentIdentityAuthConfigFence::Current)
         ) {
             return false;
         }

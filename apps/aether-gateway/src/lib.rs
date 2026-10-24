@@ -1,10 +1,5 @@
 #![recursion_limit = "256"]
 #![allow(
-    dead_code,
-    unused_assignments,
-    unused_imports,
-    unused_mut,
-    unused_variables,
     clippy::bool_assert_comparison,
     clippy::collapsible_if,
     clippy::empty_line_after_outer_attr,
@@ -51,7 +46,6 @@ mod fallback_metrics;
 mod frontdoor_loop_guard;
 mod handlers;
 mod headers;
-mod hooks;
 mod image_capabilities;
 mod important_notification;
 mod internal_gateway_auth;
@@ -96,13 +90,9 @@ pub use cli_client_profile::ClientProfileSyncGuard;
 
 pub use self::ai_serving::api::{codex_client_originator, codex_client_user_agent};
 pub(crate) use self::ai_serving::api::{
-    AiControlPlanRequest, EXECUTION_RUNTIME_STREAM_DECISION_ACTION,
-    EXECUTION_RUNTIME_SYNC_DECISION_ACTION, GEMINI_FILES_DOWNLOAD_PLAN_KIND,
-    OPENAI_VIDEO_CONTENT_PLAN_KIND,
+    GEMINI_FILES_DOWNLOAD_PLAN_KIND, OPENAI_VIDEO_CONTENT_PLAN_KIND,
 };
-pub(crate) use self::ai_serving::{
-    AiExecutionDecision, AiExecutionPlanPayload, AiStreamAttempt, AiSyncAttempt,
-};
+pub(crate) use self::ai_serving::{AiExecutionDecision, AiExecutionPlanPayload};
 pub use self::async_task::VideoTaskTruthSourceMode;
 pub use self::backup::{
     apply_restored_backup, restore_backup_json, BackupApplyError, BackupDecryptionKey,

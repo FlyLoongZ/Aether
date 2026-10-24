@@ -61,13 +61,6 @@ pub(crate) fn admin_provider_ops_action_route_parts(
     }
 }
 
-pub(crate) fn is_admin_provider_ops_batch_balance_root(request_path: &str) -> bool {
-    matches!(
-        request_path,
-        "/api/admin/provider-ops/batch/balance" | "/api/admin/provider-ops/batch/balance/"
-    )
-}
-
 fn provider_ops_provider_id_for_suffix(request_path: &str, suffix: &str) -> Option<String> {
     request_path
         .strip_prefix("/api/admin/provider-ops/providers/")?

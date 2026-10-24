@@ -51,15 +51,16 @@ pub const fn fatal_relay_policy(signal: FatalRelaySignal) -> FatalRelayPolicy {
     }
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpstreamFrameKind {
     Other,
     Started,
     Terminal,
-    Close,
     InvalidText,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpstreamFrameAction {
     Continue,
@@ -71,13 +72,12 @@ pub enum UpstreamFrameAction {
 /// frame and a non-terminal close both finalize the active turn before the
 /// client socket is closed; a valid terminal event finalizes the turn but is
 /// still eligible for the normal downstream forwarding path.
+#[cfg(test)]
 pub const fn classify_upstream_frame(kind: UpstreamFrameKind) -> UpstreamFrameAction {
     match kind {
         UpstreamFrameKind::Other | UpstreamFrameKind::Started => UpstreamFrameAction::Continue,
         UpstreamFrameKind::Terminal => UpstreamFrameAction::FinalizeTurn,
-        UpstreamFrameKind::Close | UpstreamFrameKind::InvalidText => {
-            UpstreamFrameAction::FinalizeAndClose
-        }
+        UpstreamFrameKind::InvalidText => UpstreamFrameAction::FinalizeAndClose,
     }
 }
 

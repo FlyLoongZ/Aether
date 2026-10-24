@@ -17,7 +17,6 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde_json::json;
 
 pub(super) async fn maybe_build_local_admin_global_models_read_response(
     state: &AdminAppState<'_>,

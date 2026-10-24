@@ -11,6 +11,7 @@ use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogProvider,
 };
 
+#[cfg(test)]
 pub(crate) fn provider_oauth_runtime_endpoint_for_provider(
     provider_type: &str,
     endpoints: &[StoredProviderCatalogEndpoint],

@@ -22,16 +22,12 @@ use aether_data_contracts::repository::provider_catalog::{
 use aether_runtime_state::RuntimeLockLease;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use dashmap::{mapref::entry::Entry as DashMapEntry, DashMap};
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use aether_crypto::{
-    decrypt_python_fernet_ciphertext, encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY,
-};
 
 const LOCAL_OAUTH_HTTP_TIMEOUT_MS: u64 = 30_000;
 const LOCAL_OAUTH_RESPONSE_BODY_LIMIT_BYTES: usize = 4 * 1024 * 1024;
@@ -91,7 +87,7 @@ enum ProviderTransportSnapshotInflightRegistration {
 
 pub(crate) enum AgentIdentityAuthConfigFence {
     NotAgentIdentity,
-    Current(String),
+    Current,
     StaleGeneration,
 }
 
@@ -1208,21 +1204,6 @@ impl AppState {
         false
     }
 
-    pub(crate) fn take_provider_oauth_state_for_tests(&self, _key: &str) -> Option<String> {
-        #[cfg(test)]
-        {
-            return self.provider_oauth_state_store.as_ref().and_then(|store| {
-                store
-                    .lock()
-                    .expect("provider oauth state store should lock")
-                    .remove(_key)
-            });
-        }
-
-        #[allow(unreachable_code)]
-        None
-    }
-
     pub(crate) fn save_provider_oauth_device_session_for_tests(
         &self,
         _key: &str,
@@ -1242,6 +1223,7 @@ impl AppState {
         false
     }
 
+    #[cfg(test)]
     pub(crate) fn load_provider_oauth_device_session_for_tests(
         &self,
         _key: &str,
@@ -1283,6 +1265,7 @@ impl AppState {
         false
     }
 
+    #[cfg(test)]
     pub(crate) fn load_provider_oauth_batch_task_for_tests(&self, _key: &str) -> Option<String> {
         #[cfg(test)]
         {
@@ -1885,7 +1868,7 @@ impl AppState {
             .capture_provider_transport_auth_config_fence(transport)
             .await?
         {
-            Some(ciphertext) => Ok(AgentIdentityAuthConfigFence::Current(ciphertext)),
+            Some(_) => Ok(AgentIdentityAuthConfigFence::Current),
             None => Ok(AgentIdentityAuthConfigFence::StaleGeneration),
         }
     }
@@ -1990,75 +1973,6 @@ impl AppState {
                 provider_type: provider.provider_type,
             },
         }))
-    }
-
-    pub(crate) async fn mark_provider_catalog_key_oauth_invalid(
-        &self,
-        key_id: &str,
-        provider_type: &str,
-        invalid_reason: &str,
-    ) -> Result<bool, GatewayError> {
-        let invalid_reason = invalid_reason.trim();
-        if invalid_reason.is_empty() {
-            return Ok(false);
-        }
-
-        let Some(mut latest_key) = self
-            .data
-            .list_provider_catalog_keys_by_ids(&[key_id.to_string()])
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))?
-            .into_iter()
-            .next()
-        else {
-            return Ok(false);
-        };
-
-        if !provider_key_is_oauth_managed(&latest_key, provider_type) {
-            return Ok(false);
-        }
-
-        let now_unix_secs = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .ok()
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
-        let (oauth_invalid_at_unix_secs, oauth_invalid_reason) = merge_runtime_oauth_invalid_state(
-            provider_type,
-            &latest_key,
-            invalid_reason,
-            now_unix_secs,
-        );
-        if oauth_invalid_at_unix_secs == latest_key.oauth_invalid_at_unix_secs
-            && oauth_invalid_reason == latest_key.oauth_invalid_reason
-        {
-            return Ok(false);
-        }
-
-        latest_key.oauth_invalid_at_unix_secs = oauth_invalid_at_unix_secs;
-        latest_key.oauth_invalid_reason = oauth_invalid_reason;
-        latest_key.updated_at_unix_secs = Some(now_unix_secs);
-        let current_status_snapshot = latest_key.status_snapshot.take();
-        latest_key.status_snapshot =
-            sync_provider_key_oauth_status_snapshot(current_status_snapshot, &latest_key);
-        let mut updated = self
-            .update_provider_catalog_key_oauth_runtime_state(
-                key_id,
-                latest_key.oauth_invalid_at_unix_secs,
-                latest_key.oauth_invalid_reason.as_deref(),
-                latest_key.updated_at_unix_secs,
-            )
-            .await?;
-        if updated {
-            updated = self
-                .update_provider_catalog_key_status_snapshot(
-                    &provider_key_oauth_status_snapshot_update(&latest_key),
-                )
-                .await?;
-            self.clear_provider_transport_snapshot_cache();
-            let _ = self.invalidate_local_oauth_refresh_entry(key_id).await;
-        }
-        Ok(updated)
     }
 
     pub(crate) async fn mark_provider_transport_oauth_invalid_fenced(

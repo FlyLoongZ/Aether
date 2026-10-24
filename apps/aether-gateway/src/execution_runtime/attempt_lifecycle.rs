@@ -36,8 +36,6 @@ use aether_contracts::{ExecutionPlan, ExecutionStreamTerminalSummary, ExecutionT
 use aether_data_contracts::repository::candidates::RequestCandidateStatus;
 use aether_data_contracts::repository::usage::UsageBodyCaptureState;
 use aether_scheduler_core::SchedulerRequestCandidateStatusUpdate;
-#[cfg(test)]
-use aether_usage_runtime::DEFAULT_USAGE_RESPONSE_BODY_CAPTURE_LIMIT_BYTES;
 use aether_usage_runtime::{
     build_lifecycle_usage_seed, build_stream_terminal_usage_payload_seed,
     build_terminal_usage_context_seed, stream_report_represents_failure,
@@ -225,6 +223,7 @@ pub(crate) enum AttemptProviderEffect {
 }
 
 impl AttemptProviderEffect {
+    #[cfg(test)]
     /// 把「每个分支都必须释放 lease」这条不变量显式化，便于测试锁住
     /// 「没进任何分支导致 lease 泄漏」这类回归。
     const fn releases_pool_key_lease(self) -> bool {
@@ -366,6 +365,7 @@ pub(crate) const fn classify_attempt_settlement(
 /// HTTP 接线时用 `Unbounded` 即保持它现在的语义。
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum AttemptStageGuard {
+    #[cfg_attr(not(test), allow(dead_code))]
     Unbounded,
     Bounded(Duration),
 }

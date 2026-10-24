@@ -2,8 +2,8 @@ use super::{
     AdminBillingCollectorRecord, AdminBillingCollectorWriteInput, AdminBillingMutationOutcome,
     AdminBillingPresetApplyResult, AdminBillingRuleRecord, AdminBillingRuleWriteInput, AppState,
     BillingPlanRecord, BillingPlanWriteInput, GatewayError, LocalMutationOutcome,
-    PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigRecord, PaymentGatewayConfigWriteInput,
-    PaymentGatewaySecretCasUpdate, UserDailyQuotaAvailabilityRecord, UserPlanEntitlementRecord,
+    PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigRecord, PaymentGatewaySecretCasUpdate,
+    UserDailyQuotaAvailabilityRecord, UserPlanEntitlementRecord,
 };
 
 const PAYMENT_GATEWAY_SECRET_MIGRATION_MAX_ATTEMPTS: usize = 8;
@@ -513,17 +513,6 @@ impl AppState {
     ) -> Result<LocalMutationOutcome<PaymentGatewayConfigRecord>, GatewayError> {
         self.data
             .compare_and_swap_payment_gateway_config(input)
-            .await
-            .map(local_mutation_outcome)
-            .map_err(data_error)
-    }
-
-    pub(crate) async fn upsert_payment_gateway_config(
-        &self,
-        input: &PaymentGatewayConfigWriteInput,
-    ) -> Result<LocalMutationOutcome<PaymentGatewayConfigRecord>, GatewayError> {
-        self.data
-            .upsert_payment_gateway_config(input)
             .await
             .map(local_mutation_outcome)
             .map_err(data_error)

@@ -50,7 +50,7 @@ pub(crate) async fn maybe_build_local_same_format_provider_decision_payload_for_
     let spec_metadata = local_same_format_provider_spec_metadata(spec);
     let LocalSameFormatProviderCandidateAttempt {
         eligible,
-        candidate_index,
+        candidate_index: _,
         candidate_id,
         ..
     } = &attempt;

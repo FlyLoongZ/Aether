@@ -66,32 +66,6 @@ pub(in super::super) async fn admin_provider_ops_execute_json_request(
     admin_provider_ops_execution_json_response(&result)
 }
 
-pub(in super::super) async fn admin_provider_ops_execute_proxy_json_request(
-    state: &AdminAppState<'_>,
-    request_id: &str,
-    method: reqwest::Method,
-    url: &str,
-    headers: &reqwest::header::HeaderMap,
-    json_body: Option<Value>,
-    proxy_snapshot: &ProxySnapshot,
-) -> Result<(http::StatusCode, Value), String> {
-    match admin_provider_ops_execute_json_request(
-        state,
-        request_id,
-        method,
-        url,
-        headers,
-        json_body,
-        Some(proxy_snapshot),
-    )
-    .await
-    {
-        Ok(result) => Ok(result),
-        Err(AdminProviderOpsExecuteJsonError::InvalidJson(message))
-        | Err(AdminProviderOpsExecuteJsonError::Transport(message)) => Err(message),
-    }
-}
-
 pub(super) async fn admin_provider_ops_execute_get_text(
     state: &AdminAppState<'_>,
     request_id: &str,

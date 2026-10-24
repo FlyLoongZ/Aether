@@ -1,15 +1,14 @@
 use super::{
-    ActivateManagementTokenIfMatches, AuthApiKeyLookupKey, CompareAndSwapLdapConfigResult,
-    CreateManagementTokenRecord, DataLayerError, GatewayAuthApiKeySnapshot, GatewayDataState,
-    InitializeAuthWalletOutcome, LdapBindPasswordUpdate, ManagementTokenCounterDelta,
-    ManagementTokenListQuery, ProxyNodeCounterDelta, ProxyNodeManualCreateMutation,
-    ProxyNodeManualUpdateMutation, ProxyNodeTrafficMutation, RegenerateManagementTokenSecret,
-    StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot, StoredLdapModuleConfig,
-    StoredManagementToken, StoredManagementTokenListPage, StoredManagementTokenWithUser,
-    StoredOAuthProviderConfig, StoredOAuthProviderModuleConfig, StoredProxyNode,
-    StoredUserAuthRecord, StoredUserOAuthLinkSummary, StoredUserPreferenceRecord,
-    StoredUserSessionRecord, StoredWalletSnapshot, UpdateManagementTokenRecord,
-    UpsertOAuthProviderConfigRecord,
+    AuthApiKeyLookupKey, CompareAndSwapLdapConfigResult, CreateManagementTokenRecord,
+    DataLayerError, GatewayAuthApiKeySnapshot, GatewayDataState, InitializeAuthWalletOutcome,
+    LdapBindPasswordUpdate, ManagementTokenCounterDelta, ManagementTokenListQuery,
+    ProxyNodeCounterDelta, ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation,
+    ProxyNodeTrafficMutation, RegenerateManagementTokenSecret, StoredAuthApiKeyExportRecord,
+    StoredAuthApiKeySnapshot, StoredLdapModuleConfig, StoredManagementToken,
+    StoredManagementTokenListPage, StoredManagementTokenWithUser, StoredOAuthProviderConfig,
+    StoredOAuthProviderModuleConfig, StoredProxyNode, StoredUserAuthRecord,
+    StoredUserOAuthLinkSummary, StoredUserPreferenceRecord, StoredUserSessionRecord,
+    StoredWalletSnapshot, UpdateManagementTokenRecord, UpsertOAuthProviderConfigRecord,
 };
 use crate::LocalMutationOutcome;
 use aether_data::repository::auth::ResolvedAuthApiKeySnapshotReader;
@@ -281,19 +280,6 @@ impl GatewayDataState {
         repository.list_user_oauth_links(user_id).await
     }
 
-    pub(crate) async fn find_oauth_linked_user(
-        &self,
-        provider_type: &str,
-        provider_user_id: &str,
-    ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-        let Some(repository) = self.user_reader.as_ref() else {
-            return Ok(None);
-        };
-        repository
-            .find_oauth_linked_user(provider_type, provider_user_id)
-            .await
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn resolve_enabled_oauth_linked_user(
         &self,
@@ -323,30 +309,6 @@ impl GatewayDataState {
             .await
     }
 
-    pub(crate) async fn touch_oauth_link(
-        &self,
-        provider_type: &str,
-        provider_user_id: &str,
-        provider_username: Option<&str>,
-        provider_email: Option<&str>,
-        extra_data: Option<serde_json::Value>,
-        touched_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<bool, DataLayerError> {
-        let Some(repository) = self.user_reader.as_ref() else {
-            return Ok(false);
-        };
-        repository
-            .touch_oauth_link(
-                provider_type,
-                provider_user_id,
-                provider_username,
-                provider_email,
-                extra_data,
-                touched_at,
-            )
-            .await
-    }
-
     pub(crate) async fn create_oauth_auth_user(
         &self,
         email: Option<String>,
@@ -360,42 +322,6 @@ impl GatewayDataState {
         repository
             .create_oauth_auth_user(email, email_verified, username, created_at)
             .await
-    }
-
-    pub(crate) async fn find_oauth_link_owner(
-        &self,
-        provider_type: &str,
-        provider_user_id: &str,
-    ) -> Result<Option<String>, DataLayerError> {
-        let Some(repository) = self.user_reader.as_ref() else {
-            return Ok(None);
-        };
-        repository
-            .find_oauth_link_owner(provider_type, provider_user_id)
-            .await
-    }
-
-    pub(crate) async fn has_user_oauth_provider_link(
-        &self,
-        user_id: &str,
-        provider_type: &str,
-    ) -> Result<bool, DataLayerError> {
-        let Some(repository) = self.user_reader.as_ref() else {
-            return Ok(false);
-        };
-        repository
-            .has_user_oauth_provider_link(user_id, provider_type)
-            .await
-    }
-
-    pub(crate) async fn count_user_oauth_links(
-        &self,
-        user_id: &str,
-    ) -> Result<u64, DataLayerError> {
-        let Some(repository) = self.user_reader.as_ref() else {
-            return Ok(0);
-        };
-        repository.count_user_oauth_links(user_id).await
     }
 
     pub(crate) async fn has_oauth_links_for_provider(
@@ -635,20 +561,6 @@ impl GatewayDataState {
             .await
     }
 
-    pub(crate) async fn update_local_auth_user_password_hash(
-        &self,
-        user_id: &str,
-        password_hash: String,
-        updated_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-        let Some(repository) = self.user_reader.as_ref() else {
-            return Ok(None);
-        };
-        repository
-            .update_local_auth_user_password_hash(user_id, password_hash, updated_at)
-            .await
-    }
-
     pub(crate) async fn restore_local_auth_user_password_hash_if_matches(
         &self,
         user_id: &str,
@@ -820,31 +732,6 @@ impl GatewayDataState {
         repository
             .touch_auth_user_last_login(user_id, logged_in_at)
             .await
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn get_or_create_ldap_auth_user(
-        &self,
-        email: String,
-        username: String,
-        ldap_dn: Option<String>,
-        ldap_username: Option<String>,
-        logged_in_at: chrono::DateTime<chrono::Utc>,
-        initial_gift_usd: f64,
-        unlimited: bool,
-    ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-        Ok(self
-            .get_or_create_ldap_auth_user_with_wallet_outcome(
-                email,
-                username,
-                ldap_dn,
-                ldap_username,
-                logged_in_at,
-                initial_gift_usd,
-                unlimited,
-            )
-            .await?
-            .map(|result| result.user))
     }
 
     pub(crate) async fn get_or_create_ldap_auth_user_with_wallet_outcome(
@@ -1192,14 +1079,6 @@ impl GatewayDataState {
             .await
     }
 
-    pub(crate) async fn rollback_provisional_auth_user(
-        &self,
-        user_id: &str,
-    ) -> Result<bool, DataLayerError> {
-        self.rollback_provisional_auth_user_with_wallet(user_id, None)
-            .await
-    }
-
     /// Check for every wallet that can still keep a user-owned account alive.
     ///
     /// API-key wallets do not carry the owning user id themselves, so a direct
@@ -1395,28 +1274,6 @@ impl GatewayDataState {
             ));
         }
         Ok(Some((user, initialized.wallet, initialized.created)))
-    }
-
-    pub(crate) async fn register_local_auth_user(
-        &self,
-        email: Option<String>,
-        email_verified: bool,
-        username: String,
-        password_hash: String,
-        initial_gift_usd: f64,
-        unlimited: bool,
-    ) -> Result<Option<(StoredUserAuthRecord, StoredWalletSnapshot)>, DataLayerError> {
-        Ok(self
-            .register_local_auth_user_with_wallet_outcome(
-                email,
-                email_verified,
-                username,
-                password_hash,
-                initial_gift_usd,
-                unlimited,
-            )
-            .await?
-            .map(|(user, wallet, _created)| (user, wallet)))
     }
 
     pub(crate) async fn touch_user_session(
@@ -1947,34 +1804,6 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn activate_management_token_if_matches(
-        &self,
-        mutation: &ActivateManagementTokenIfMatches,
-    ) -> Result<bool, DataLayerError> {
-        match &self.management_token_writer {
-            Some(repository) => {
-                repository
-                    .activate_management_token_if_matches(mutation)
-                    .await
-            }
-            None => Ok(false),
-        }
-    }
-
-    pub(crate) async fn delete_inactive_management_token_if_matches(
-        &self,
-        mutation: &ActivateManagementTokenIfMatches,
-    ) -> Result<bool, DataLayerError> {
-        match &self.management_token_writer {
-            Some(repository) => {
-                repository
-                    .delete_inactive_management_token_if_matches(mutation)
-                    .await
-            }
-            None => Ok(false),
-        }
-    }
-
     pub(crate) async fn regenerate_management_token_secret(
         &self,
         mutation: &RegenerateManagementTokenSecret,
@@ -2410,6 +2239,7 @@ impl GatewayDataState {
         }
     }
 
+    #[cfg(test)]
     pub(crate) async fn set_user_api_key_feature_settings(
         &self,
         user_id: &str,
@@ -2420,26 +2250,6 @@ impl GatewayDataState {
             Some(repository) => {
                 repository
                     .set_user_api_key_feature_settings(user_id, api_key_id, feature_settings)
-                    .await
-            }
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn set_user_api_key_feature_settings_if_unlocked(
-        &self,
-        user_id: &str,
-        api_key_id: &str,
-        feature_settings: Option<serde_json::Value>,
-    ) -> Result<Option<StoredAuthApiKeyExportRecord>, DataLayerError> {
-        match &self.auth_api_key_writer {
-            Some(repository) => {
-                repository
-                    .set_user_api_key_feature_settings_if_unlocked(
-                        user_id,
-                        api_key_id,
-                        feature_settings,
-                    )
                     .await
             }
             None => Ok(None),
@@ -3116,7 +2926,7 @@ mod tests {
         );
 
         assert!(state
-            .rollback_provisional_auth_user("no-wallet-user")
+            .rollback_provisional_auth_user_with_wallet("no-wallet-user", None)
             .await
             .expect("confirmed wallet absence should allow rollback"));
         assert!(user_repository

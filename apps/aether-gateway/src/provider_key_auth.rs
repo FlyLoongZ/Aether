@@ -1,9 +1,7 @@
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
 };
-use aether_provider_transport::provider_types::{
-    fixed_provider_key_inherits_api_formats, provider_type_is_fixed,
-};
+use aether_provider_transport::provider_types::fixed_provider_key_inherits_api_formats;
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 

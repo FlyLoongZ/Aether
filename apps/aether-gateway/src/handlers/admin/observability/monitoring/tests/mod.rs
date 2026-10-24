@@ -4,26 +4,14 @@ use crate::control::GatewayPublicRequestContext;
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::AppState;
 use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-use aether_data_contracts::repository::{
-    candidates::{RequestCandidateStatus, StoredRequestCandidate},
-    provider_catalog::{
-        StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
-    },
-    usage::StoredRequestUsageAudit,
-};
 use axum::body::to_bytes;
 use serde_json::json;
 use std::sync::Arc;
 
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
-};
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
+use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data::repository::users::{
-    InMemoryUserReadRepository, StoredUserAuthRecord, StoredUserExportRow,
-};
+use aether_data::repository::users::InMemoryUserReadRepository;
 
 mod basics;
 

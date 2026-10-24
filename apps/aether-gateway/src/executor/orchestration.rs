@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::io::Error as IoError;
 use std::pin::Pin;
@@ -17,24 +17,19 @@ use crate::ai_serving::api::{
     build_local_image_stream_attempt_source_for_kind,
     build_local_image_sync_attempt_source_for_kind,
     build_local_openai_chat_stream_attempt_source_for_kind,
-    build_local_openai_chat_stream_plan_and_reports_for_kind,
     build_local_openai_chat_sync_attempt_source_for_kind,
-    build_local_openai_chat_sync_plan_and_reports_for_kind,
     build_local_openai_responses_stream_attempt_source_for_kind,
-    build_local_openai_responses_stream_plan_and_reports_for_kind,
     build_local_openai_responses_sync_attempt_source_for_kind,
-    build_local_openai_responses_sync_plan_and_reports_for_kind,
-    build_local_same_format_stream_attempt_source, build_local_same_format_stream_plan_and_reports,
-    build_local_same_format_sync_attempt_source, build_local_same_format_sync_plan_and_reports,
+    build_local_same_format_stream_attempt_source, build_local_same_format_sync_attempt_source,
     build_local_video_sync_attempt_source_for_kind, build_standard_family_stream_attempt_source,
     build_standard_family_sync_attempt_source, parse_direct_request_body,
     resolve_claude_stream_spec, resolve_claude_sync_spec, resolve_gemini_stream_spec,
     resolve_gemini_sync_spec, resolve_local_same_format_stream_spec,
     resolve_local_same_format_sync_spec, set_local_openai_chat_execution_exhausted_diagnostic,
     set_local_openai_image_execution_exhausted_diagnostic, AiStreamAttempt, AiSyncAttempt,
-    LocalCoreSyncErrorKind, LocalStandardSpec, EXECUTION_RUNTIME_STREAM_DECISION_ACTION,
-    EXECUTION_RUNTIME_SYNC_DECISION_ACTION,
+    LocalCoreSyncErrorKind, LocalStandardSpec,
 };
+
 use crate::ai_serving::LocalExecutionAttemptSource;
 use crate::api::response::{
     attach_control_metadata_headers, build_client_response_from_parts_with_mutator,
@@ -45,8 +40,10 @@ use crate::execution_runtime::sync::{
     build_openai_image_sync_json_whitespace_heartbeat_stream,
     build_sync_json_whitespace_heartbeat_stream,
 };
+#[cfg(test)]
+pub(crate) use crate::executor::candidate_loop::execute_sync_attempt_source;
 use crate::executor::candidate_loop::{
-    execute_stream_attempt_source_with_transfer_tracker, execute_sync_attempt_source,
+    execute_stream_attempt_source_with_transfer_tracker,
     execute_sync_attempt_source_with_transfer_tracker,
     execute_sync_plan_and_reports_with_transfer_tracker, ProviderTransferTracker,
 };
@@ -56,7 +53,9 @@ use crate::executor::{
 };
 use crate::request_diagnostics::{current_request_diagnostics, scope_request_diagnostics_with};
 use crate::stage_metrics::observe_gateway_stage_ms;
-use crate::{AiExecutionDecision, AppState, GatewayError};
+use crate::{AppState, GatewayError};
+#[cfg(test)]
+pub(crate) use std::collections::VecDeque;
 
 const OPENAI_IMAGE_SYNC_HEARTBEAT_INTERNAL_ERROR_STATUS: u16 = 502;
 const OPENAI_IMAGE_SYNC_HEARTBEAT_EXHAUSTED_STATUS: u16 = 503;
@@ -1550,22 +1549,11 @@ pub(crate) fn maybe_execute_stream_request<'a>(
     })
 }
 
-pub(crate) fn planner_decision_action(action: &str) -> bool {
-    matches!(
-        action,
-        EXECUTION_RUNTIME_SYNC_DECISION_ACTION | EXECUTION_RUNTIME_STREAM_DECISION_ACTION
-    )
-}
-
 pub(crate) fn parse_local_request_body(
     parts: &http::request::Parts,
     body_bytes: &axum::body::Bytes,
 ) -> Option<(serde_json::Value, Option<String>)> {
     parse_direct_request_body(parts, body_bytes)
-}
-
-pub(crate) fn decision_payload_is_direct_execution(payload: &AiExecutionDecision) -> bool {
-    planner_decision_action(payload.action.as_str())
 }
 
 #[cfg(test)]

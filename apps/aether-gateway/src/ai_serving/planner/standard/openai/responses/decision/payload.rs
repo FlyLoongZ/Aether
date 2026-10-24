@@ -246,7 +246,6 @@ pub(crate) async fn maybe_build_local_openai_responses_decision_payload_for_cand
         upstream_url,
         execution_strategy,
         conversion_mode,
-        is_antigravity: _,
         envelope_name: _,
         upstream_is_stream,
         transport,

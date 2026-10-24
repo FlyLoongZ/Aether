@@ -4,7 +4,6 @@ use aether_data_contracts::repository::provider_catalog::{
 };
 use axum::{body::Body, response::Response};
 use serde_json::{Map, Value};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(super) enum RefreshDispatch<T> {
     Continue(T),
@@ -61,19 +60,4 @@ pub(super) fn auth_config_has_refresh_token(auth_config: &Map<String, Value>) ->
         .and_then(Value::as_str)
         .map(str::trim)
         .is_some_and(|value| !value.is_empty())
-}
-
-pub(super) fn key_is_account_blocked(key: &StoredProviderCatalogKey, block_prefix: &str) -> bool {
-    key.oauth_invalid_reason
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|value| value.starts_with(block_prefix))
-}
-
-pub(super) fn unix_now_secs() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .ok()
-        .map(|duration| duration.as_secs())
-        .unwrap_or(0)
 }

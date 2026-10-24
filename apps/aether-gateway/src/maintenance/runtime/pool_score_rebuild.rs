@@ -383,13 +383,6 @@ pub(crate) async fn perform_pool_score_rebuild_once_with_config(
     Ok(summary)
 }
 
-pub(crate) async fn perform_pool_score_rebuild_once(
-    state: &AppState,
-) -> Result<PoolScoreRebuildRunSummary, GatewayError> {
-    perform_pool_score_rebuild_once_with_config(state, PoolScoreRebuildWorkerConfig::from_env())
-        .await
-}
-
 pub(crate) fn spawn_pool_score_rebuild_worker(
     state: AppState,
 ) -> Option<tokio::task::JoinHandle<()>> {

@@ -2,7 +2,6 @@ use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::GatewayError;
 use axum::{
     body::{Body, Bytes},
-    http,
     response::Response,
 };
 const ADMIN_AWS_REGIONS: &[&str] = &[

@@ -20,9 +20,9 @@ use aether_routing_core::RoutingExecutionPolicy;
 
 use self::decision::maybe_build_local_video_create_decision_payload_for_candidate;
 use self::support::{
-    build_local_video_create_candidate_attempt_source, list_local_video_create_candidate_attempts,
-    resolve_local_video_create_decision_input, LocalVideoCreateCandidateAttempt,
-    LocalVideoCreateCandidateAttemptSource, LocalVideoCreateDecisionInput,
+    build_local_video_create_candidate_attempt_source, resolve_local_video_create_decision_input,
+    LocalVideoCreateCandidateAttempt, LocalVideoCreateCandidateAttemptSource,
+    LocalVideoCreateDecisionInput,
 };
 
 pub(crate) struct LocalVideoCreateSyncAttemptSource<'a> {
@@ -33,21 +33,6 @@ pub(crate) struct LocalVideoCreateSyncAttemptSource<'a> {
     input: LocalVideoCreateDecisionInput,
     spec: LocalVideoCreateSpec,
     candidates: LocalVideoCreateCandidateAttemptSource<'a>,
-}
-
-pub(crate) async fn build_local_video_sync_plan_and_reports_for_kind(
-    state: &AppState,
-    parts: &http::request::Parts,
-    body_json: &serde_json::Value,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-) -> Result<Vec<AiSyncAttempt>, GatewayError> {
-    let Some(spec) = resolve_sync_spec(plan_kind) else {
-        return Ok(Vec::new());
-    };
-
-    build_local_sync_plan_and_reports(state, parts, body_json, trace_id, decision, spec).await
 }
 
 pub(crate) async fn build_local_video_sync_attempt_source_for_kind<'a>(
@@ -229,62 +214,4 @@ pub(crate) async fn maybe_build_sync_local_video_decision_payload(
     }
 
     Ok(None)
-}
-
-async fn build_local_sync_plan_and_reports(
-    state: &AppState,
-    parts: &http::request::Parts,
-    body_json: &serde_json::Value,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    spec: LocalVideoCreateSpec,
-) -> Result<Vec<AiSyncAttempt>, GatewayError> {
-    let spec_metadata = local_video_create_spec_metadata(spec);
-    let Some(input) = resolve_local_video_create_decision_input(
-        state, parts, trace_id, decision, body_json, spec,
-    )
-    .await?
-    else {
-        return Ok(Vec::new());
-    };
-    let body_json = input.effective_body_json(body_json);
-
-    let Some((mut source, _)) = build_local_video_create_candidate_attempt_source(
-        state,
-        trace_id,
-        &input,
-        body_json,
-        spec_metadata.api_format,
-        spec_metadata.decision_kind,
-    )
-    .await?
-    else {
-        return Ok(Vec::new());
-    };
-
-    let mut plans = Vec::new();
-    while let Some(attempt) = source.next_attempt().await? {
-        let Some(payload) = maybe_build_local_video_create_decision_payload_for_candidate(
-            state, parts, body_json, trace_id, &input, attempt, spec,
-        )
-        .await?
-        else {
-            continue;
-        };
-
-        match build_passthrough_sync_plan_from_decision(parts, payload) {
-            Ok(Some(value)) => plans.push(value),
-            Ok(None) => {}
-            Err(err) => {
-                warn!(
-                    trace_id = %trace_id,
-                    decision_kind = spec_metadata.decision_kind,
-                    error = ?err,
-                    "gateway local video sync decision plan build failed"
-                );
-            }
-        }
-    }
-
-    Ok(plans)
 }

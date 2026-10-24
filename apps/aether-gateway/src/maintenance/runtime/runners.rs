@@ -10,9 +10,8 @@ use crate::{AppState, GatewayError};
 use super::cleanup_runs::cleanup_data_layer_error_category;
 use super::{
     cleanup_audit_logs_once, cleanup_expired_gemini_file_mappings_once,
-    cleanup_request_candidates_once, cleanup_stale_pending_requests_once, now_unix_secs,
-    perform_automatic_usage_cleanup_once, perform_db_maintenance_once,
-    perform_manual_usage_cleanup_once, perform_provider_checkin_once,
+    cleanup_stale_pending_requests_once, now_unix_secs, perform_automatic_usage_cleanup_once,
+    perform_db_maintenance_once, perform_manual_usage_cleanup_once, perform_provider_checkin_once,
     perform_stats_aggregation_once, perform_stats_hourly_aggregation_once,
     perform_wallet_daily_usage_aggregation_once, record_admin_cleanup_run,
     record_completed_cleanup_run, record_failed_cleanup_run, summarize_database_pool,
@@ -239,70 +238,6 @@ pub(crate) async fn start_manual_usage_cleanup_task(
         actor_user_id,
     ));
     Ok(record)
-}
-
-pub(crate) async fn run_manual_usage_cleanup_once(
-    data: &GatewayDataState,
-    options: ManualUsageCleanupOptions,
-    actor_user_id: Option<String>,
-) -> Result<aether_data_contracts::repository::usage::UsageCleanupSummary, ManualUsageCleanupError>
-{
-    use super::USAGE_CLEANUP_KIND;
-
-    let started_at = Instant::now();
-    let started_at_unix_secs = now_unix_secs();
-    let summary = match perform_manual_usage_cleanup_once(data, options).await {
-        Ok(summary) => summary,
-        Err(err) => {
-            record_failed_cleanup_run(
-                data,
-                USAGE_CLEANUP_KIND,
-                "manual",
-                started_at_unix_secs,
-                started_at,
-                &err,
-            )
-            .await;
-            return Err(ManualUsageCleanupError::DataLayer(err));
-        }
-    };
-    let total = usage_cleanup_total(summary);
-    let message = manual_usage_cleanup_completed_message(options, total);
-    record_completed_cleanup_run(
-        data,
-        USAGE_CLEANUP_KIND,
-        "manual",
-        started_at_unix_secs,
-        started_at,
-        json!({
-            "body_cleaned": summary.body_cleaned,
-            "header_cleaned": summary.header_cleaned,
-            "keys_cleaned": summary.keys_cleaned,
-            "records_deleted": summary.records_deleted,
-            "cost_reservations_deleted": summary.cost_reservations_deleted,
-            "request_admissions_deleted": summary.request_admissions_deleted,
-            "mode": options.mode.as_str(),
-            "requested_older_than_days": options.requested_older_than_days,
-            "targets": options.targets,
-            "actor_user_id": actor_user_id,
-        }),
-        message,
-    )
-    .await;
-    info!(
-        event_name = "usage_cleanup_manual_completed",
-        log_type = "ops",
-        worker = "usage_cleanup",
-        trigger = "manual",
-        mode = options.mode.as_str(),
-        requested_older_than_days = options.requested_older_than_days,
-        actor_user_id = actor_user_id.as_deref(),
-        total_affected = total,
-        cost_reservations_deleted = summary.cost_reservations_deleted,
-        request_admissions_deleted = summary.request_admissions_deleted,
-        "gateway finished manual usage cleanup"
-    );
-    Ok(summary)
 }
 
 async fn run_manual_usage_cleanup_task(

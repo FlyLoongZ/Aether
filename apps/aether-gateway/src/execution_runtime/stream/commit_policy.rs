@@ -126,6 +126,7 @@ impl StreamCommitPolicy {
         matches!(self, Self::FirstAnthropicSemanticEvent { .. })
     }
 
+    #[cfg(test)]
     pub(super) const fn is_gemini(self) -> bool {
         matches!(self, Self::FirstGeminiSemanticEvent { .. })
     }
@@ -182,6 +183,7 @@ impl StreamCommitGate {
         }
     }
 
+    #[cfg(test)]
     pub(super) const fn state(&self) -> StreamCommitState {
         self.state
     }

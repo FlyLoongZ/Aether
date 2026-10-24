@@ -1129,14 +1129,12 @@ where
                 for tool_call in native_tool_calls[native_before..].iter().cloned() {
                     on_event(WindsurfPollEvent::NativeToolCall(tool_call))?;
                 }
-                if emit_windsurf_step_text_deltas(
+                emit_windsurf_step_text_deltas(
                     &final_steps,
                     &mut yielded_by_step,
                     true,
                     |delta| on_event(WindsurfPollEvent::TextDelta(delta)),
-                )? {
-                    saw_text = true;
-                }
+                )?;
                 break;
             }
         } else {
@@ -1627,7 +1625,7 @@ async fn windsurf_warmup_unary(
     match windsurf_grpc_unary(port, csrf_token, stage, payload, timeout).await {
         Ok(_) => Ok(()),
         Err(err) if is_windsurf_cascade_transport_error(&err) => Err(err),
-        Err(err) => {
+        Err(_errr) => {
             if stage == "UpdateWorkspaceTrust" {
                 warn!(
                     event_name = "windsurf_workspace_trust_update_failed",
@@ -1927,19 +1925,14 @@ fn detect_windsurf_request_with_native_bridge_flags(
     })
 }
 
+#[cfg(test)]
 fn build_cascade_message_text(body: &Value) -> Option<String> {
     build_cascade_message_text_with_dialect(body, ToolDialect::OpenAiJsonXml)
 }
 
+#[cfg(test)]
 fn build_cascade_message_text_with_dialect(body: &Value, dialect: ToolDialect) -> Option<String> {
     build_cascade_message_with_options(body, dialect, None).map(|(text, _)| text)
-}
-
-fn build_cascade_message_with_dialect(
-    body: &Value,
-    dialect: ToolDialect,
-) -> Option<(String, Vec<CascadeImage>)> {
-    build_cascade_message_with_options(body, dialect, None)
 }
 
 fn build_cascade_message_with_options(
@@ -3379,6 +3372,7 @@ fn env_flag(name: &str) -> bool {
         .is_some_and(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
 }
 
+#[cfg(test)]
 fn build_openai_chat_sse_body(
     request_id: &str,
     model: &str,
@@ -3414,14 +3408,6 @@ fn sse_finish_frame_with_reason(request_id: &str, model: &str, finish_reason: &s
     let mut body = Vec::new();
     let _ = append_sse_json_chunk(&mut body, request_id, model, None, Some(finish_reason));
     raw_sse_data_frame(&body)
-}
-
-fn sse_tool_call_frames(
-    request_id: &str,
-    model: &str,
-    tool_calls: &[WindsurfToolCall],
-) -> Vec<StreamFrame> {
-    sse_tool_call_frames_from_index(request_id, model, 0, tool_calls)
 }
 
 fn sse_tool_call_frames_from_index(

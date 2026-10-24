@@ -5,7 +5,6 @@ use hmac::{Hmac, Mac};
 use md5::{Digest, Md5};
 use serde_json::json;
 use sha2::Sha256;
-use tracing::warn;
 
 use super::{payment_shared::payment_callback_payload_hash, AppState, GatewayPublicRequestContext};
 

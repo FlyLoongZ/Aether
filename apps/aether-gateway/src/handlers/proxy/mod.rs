@@ -13,17 +13,10 @@ pub(crate) use self::websocket::live::{live_websocket, maybe_handle_live_http};
 pub(crate) use self::websocket::realtime::realtime_websocket;
 pub(crate) use self::websocket::responses::responses_websocket;
 use super::internal::resolve_local_proxy_execution_path;
-pub(crate) use super::public::matches_model_mapping_for_models;
-use crate::ai_serving::api::{
-    aggregate_claude_stream_sync_response, aggregate_gemini_stream_sync_response,
-    aggregate_openai_chat_stream_sync_response, aggregate_openai_responses_stream_sync_response,
-    maybe_bridge_standard_sync_json_to_stream,
-};
 use crate::api::response::{
-    build_client_response, build_client_response_from_parts, build_local_auth_rejection_response,
-    build_local_http_error_response, build_local_http_error_response_with_request_path,
-    build_local_overloaded_response, build_local_plan_usage_limited_response,
-    build_local_user_rpm_limited_response,
+    build_local_auth_rejection_response, build_local_http_error_response,
+    build_local_http_error_response_with_request_path, build_local_overloaded_response,
+    build_local_plan_usage_limited_response, build_local_user_rpm_limited_response,
 };
 use crate::constants::{
     CONTROL_CANDIDATE_ID_HEADER, DEPENDENCY_REASON_HEADER, EXECUTION_PATH_CONTROL_EXECUTE_STREAM,
@@ -35,11 +28,9 @@ use crate::constants::{
     EXECUTION_PATH_LOCAL_INVALID_REQUEST, EXECUTION_PATH_LOCAL_OVERLOADED,
     EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED, EXECUTION_PATH_LOCAL_RATE_LIMITED,
     EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH,
-    EXECUTION_RUNTIME_LOOP_GUARD_HEADER, FORWARDED_FOR_HEADER, FORWARDED_HOST_HEADER,
-    FORWARDED_PROTO_HEADER, GATEWAY_HEADER, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
-    TRACE_ID_HEADER, TRUSTED_AUTH_ACCESS_ALLOWED_HEADER, TRUSTED_AUTH_API_KEY_ID_HEADER,
-    TRUSTED_AUTH_BALANCE_HEADER, TRUSTED_AUTH_USER_ID_HEADER,
+    EXECUTION_RUNTIME_LOOP_GUARD_HEADER, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
 };
+
 use crate::control::{
     allows_control_execute_emergency, maybe_execute_via_control, request_model_local_rejection,
     should_buffer_request_for_local_auth, trusted_auth_local_rejection, GatewayControlDecision,
@@ -57,12 +48,10 @@ use crate::frontdoor_loop_guard::{
 use crate::handlers::shared::{
     build_admin_proxy_auth_required_response, build_unhandled_admin_proxy_response, ip_rules_allow,
     local_proxy_route_requires_buffered_body, request_enables_control_execute,
-    sanitize_upstream_path_and_query, should_strip_forwarded_provider_credential_header,
-    should_strip_forwarded_trusted_admin_header,
 };
+
 use crate::headers::{
     effective_client_ip, extract_or_generate_trace_id, request_origin_from_headers_and_remote_addr,
-    should_skip_request_header,
 };
 use crate::router::RequestAdmissionError;
 use crate::scheduler::candidate::{
@@ -113,8 +102,6 @@ const PROVIDER_KEY_CAPACITY_LIMIT_SKIP_REASONS: &[&str] = &[
 const LOCAL_EXECUTION_PLANNING_TIMEOUT_DETAIL: &str =
     "当前 AI 请求在本地执行规划阶段超时，请稍后重试";
 const EXECUTION_PATH_CODEX_LIVE_CALL: &str = "codex_live_call";
-const MANAGEMENT_TOKEN_PREFIX: &str = "ae-";
-const LEGACY_MANAGEMENT_TOKEN_PREFIX: &str = "ae_";
 fn finalize_request_body_buffer_rejection(
     state: &AppState,
     request_context: &GatewayPublicRequestContext,
@@ -207,14 +194,6 @@ fn local_execution_outcome_label(outcome: &LocalExecutionRequestOutcome) -> &'st
 fn request_hits_execution_loop_guard(parts: &http::request::Parts) -> bool {
     request_has_execution_runtime_loop_guard(&parts.headers)
         && frontdoor_self_loop_public_ai_path(parts.uri.path())
-}
-
-fn execution_runtime_candidate_header_value(decision: &GatewayControlDecision) -> &'static str {
-    if decision.is_execution_runtime_candidate() {
-        "true"
-    } else {
-        "false"
-    }
 }
 
 fn api_key_remote_ip_allowed(ip_rules: Option<&[String]>, remote_ip: std::net::IpAddr) -> bool {
@@ -752,9 +731,9 @@ async fn proxy_request_inner(
     } else {
         None
     };
-    let method = request_context.request_method.clone();
+    let _methodd = request_context.request_method.clone();
     let request_path_and_query = request_context.request_path_and_query();
-    let path_and_query = request_path_and_query.as_str();
+    let _path_and_queryy = request_path_and_query.as_str();
     let control_decision = request_context.control_decision.as_ref();
     if let Some(response) = maybe_build_local_internal_proxy_response(
         &state,
@@ -2777,6 +2756,4 @@ mod tests {
 #[path = "finalize.rs"]
 mod finalize;
 
-use self::finalize::{
-    finalize_gateway_response, finalize_gateway_response_with_context, request_wants_stream,
-};
+use self::finalize::{finalize_gateway_response, finalize_gateway_response_with_context};

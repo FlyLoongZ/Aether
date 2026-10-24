@@ -12,15 +12,14 @@ use aether_test_support::ManagedRedisServer;
 
 use super::super::super::send_request;
 use super::super::{build_router_with_state, start_server, AppState};
-use crate::admin_api::{
-    maybe_build_local_admin_security_response, AdminAppState, AdminRequestContext,
-};
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
     GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
     TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::control::resolve_public_request_context;
+use crate::handlers::admin::auth::security::maybe_build_local_admin_security_response;
+use crate::handlers::admin::{AdminAppState, AdminRequestContext};
 
 #[tokio::test]
 async fn gateway_blocks_blacklisted_ip_before_routing() {

@@ -227,6 +227,7 @@ impl AiCandidateResolutionPort for GatewayLocalCandidateResolutionPort<'_> {
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn resolve_and_rank_local_execution_candidates(
     state: PlannerAppState<'_>,
     candidates: Vec<SchedulerMinimalCandidateSelectionCandidate>,
@@ -255,38 +256,6 @@ pub(crate) async fn resolve_and_rank_local_execution_candidates(
         None,
         request_auth_channel,
         AiCandidateResolutionMode::Standard,
-    )
-    .await
-}
-
-pub(crate) async fn resolve_and_rank_local_execution_candidates_without_transport_pair_gate(
-    state: PlannerAppState<'_>,
-    candidates: Vec<SchedulerMinimalCandidateSelectionCandidate>,
-    client_api_format: &str,
-    requested_model: Option<&str>,
-    auth_snapshot: Option<&GatewayAuthApiKeySnapshot>,
-    client_session_affinity: Option<&ClientSessionAffinity>,
-    required_capabilities: Option<&serde_json::Value>,
-    routing_policy: Option<&ResolvedRoutingPolicy>,
-    _sticky_session_token: Option<&str>,
-    request_auth_channel: Option<&str>,
-) -> (
-    Vec<EligibleLocalExecutionCandidate>,
-    Vec<SkippedLocalExecutionCandidate>,
-) {
-    let requested_model = requested_model.map(str::trim);
-    resolve_and_rank_local_execution_candidates_with_mode(
-        state,
-        candidates,
-        client_api_format,
-        requested_model,
-        auth_snapshot,
-        client_session_affinity,
-        required_capabilities,
-        routing_policy,
-        None,
-        request_auth_channel,
-        AiCandidateResolutionMode::WithoutTransportPairGate,
     )
     .await
 }
@@ -324,6 +293,7 @@ pub(crate) async fn resolve_and_rank_logical_local_execution_candidates(
     .await
 }
 
+#[cfg(test)]
 async fn resolve_and_rank_local_execution_candidates_with_mode(
     state: PlannerAppState<'_>,
     candidates: Vec<SchedulerMinimalCandidateSelectionCandidate>,

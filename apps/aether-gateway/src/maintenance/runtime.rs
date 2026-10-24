@@ -2,9 +2,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use chrono::Weekday;
 
-use crate::admin_api::admin_provider_ops_local_action_response;
 use crate::data::GatewayDataState;
-use crate::{AppState, GatewayError};
 
 #[path = "runtime/account_self_check.rs"]
 mod account_self_check;
@@ -51,50 +49,37 @@ mod usage_counter_flush;
 mod wallet_daily_usage;
 #[path = "runtime/workers.rs"]
 mod workers;
-pub(crate) use account_self_check::{
-    perform_account_self_check_once, perform_account_self_check_once_with_config,
-    select_account_self_check_key_ids, spawn_account_self_check_worker, AccountSelfCheckRunSummary,
-    AccountSelfCheckWorkerConfig,
-};
+#[cfg(test)]
+pub(crate) use crate::AppState;
+pub(crate) use account_self_check::spawn_account_self_check_worker;
 pub(crate) use aether_data_contracts::repository::usage::{
     UsageCleanupSummary, UsageCleanupWindow,
 };
 use audit_cleanup::*;
 pub(crate) use cleanup_runs::{
     list_admin_cleanup_run_records, record_admin_cleanup_run, record_completed_cleanup_run,
-    record_failed_cleanup_run, start_admin_request_body_cleanup_task,
-    start_admin_system_purge_task, AdminCleanupRunRecord, AdminCleanupTaskKind, USAGE_CLEANUP_KIND,
+    record_failed_cleanup_run, start_admin_system_purge_task, AdminCleanupRunRecord,
+    AdminCleanupTaskKind, USAGE_CLEANUP_KIND,
 };
 use config::*;
 use db_maintenance::*;
-pub(crate) use fixed_provider_reconciliation::{
-    perform_fixed_provider_reconciliation_once, spawn_fixed_provider_reconciliation_task,
-};
-pub(crate) use oauth_token_refresh::{
-    perform_oauth_token_refresh_once, OAuthTokenRefreshRunSummary,
-};
+pub(crate) use fixed_provider_reconciliation::spawn_fixed_provider_reconciliation_task;
+pub(crate) use oauth_token_refresh::perform_oauth_token_refresh_once;
 use pending_cleanup::*;
 pub(crate) use pool_quota_probe::{
-    perform_pool_quota_probe_once, perform_pool_quota_probe_once_for_provider_with_config,
-    perform_pool_quota_probe_once_with_config, pool_quota_probe_target_count,
-    select_pool_quota_probe_key_ids, spawn_pool_quota_probe_replenish_for_request,
-    spawn_pool_quota_probe_worker, PoolQuotaProbeReplenishCoordinator, PoolQuotaProbeRunSummary,
-    PoolQuotaProbeWorkerConfig,
+    spawn_pool_quota_probe_replenish_for_request, spawn_pool_quota_probe_worker,
+    PoolQuotaProbeReplenishCoordinator, PoolQuotaProbeWorkerConfig,
 };
 pub(crate) use pool_score_rebuild::{
-    ensure_provider_key_pool_scores_for_keys, perform_pool_score_rebuild_once,
-    perform_pool_score_rebuild_once_with_config, spawn_pool_score_rebuild_worker,
-    PoolScoreRebuildRunSummary, PoolScoreRebuildWorkerConfig,
+    ensure_provider_key_pool_scores_for_keys, spawn_pool_score_rebuild_worker,
 };
-pub(crate) use provider_checkin::{perform_provider_checkin_once, ProviderCheckinRunSummary};
-pub(crate) use provider_quota_alert::{
-    perform_provider_quota_alert_once, ProviderQuotaAlertRunSummary,
-};
+pub(crate) use provider_checkin::perform_provider_checkin_once;
+#[cfg(test)]
+pub(crate) use provider_checkin::ProviderCheckinRunSummary;
+pub(crate) use provider_quota_alert::perform_provider_quota_alert_once;
 use request_candidate_cleanup::*;
 use runners::*;
-pub(crate) use runners::{
-    run_manual_usage_cleanup_once, start_manual_usage_cleanup_task, ManualUsageCleanupError,
-};
+pub(crate) use runners::{start_manual_usage_cleanup_task, ManualUsageCleanupError};
 use schedule::*;
 use stats_daily::*;
 use stats_hourly::*;
@@ -109,19 +94,9 @@ pub(crate) use usage_counter_flush::{
 use wallet_daily_usage::*;
 pub(crate) use workers::*;
 
-pub(super) fn postgres_error(
-    error: impl std::fmt::Display,
-) -> aether_data_contracts::DataLayerError {
-    aether_data_contracts::DataLayerError::postgres(error)
-}
-
 const AUDIT_LOG_CLEANUP_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const GEMINI_FILE_MAPPING_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const PENDING_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
-const PROXY_NODE_METRICS_CLEANUP_HOUR: u32 = 2;
-const PROXY_NODE_METRICS_CLEANUP_MINUTE: u32 = 10;
-const PROXY_NODE_STALE_MIN_GRACE_SECS: u64 = 15;
-const PROXY_NODE_STALE_MISSED_HEARTBEATS: u64 = 3;
 const POOL_MONITOR_INTERVAL: Duration = Duration::from_secs(5 * 60);
 const OAUTH_TOKEN_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 const PROVIDER_CHECKIN_CONCURRENCY: usize = 3;

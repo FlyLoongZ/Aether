@@ -7,9 +7,9 @@ use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepo
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskStatus, VideoTaskWriteRepository,
 };
-use axum::body::{to_bytes, Body, Bytes};
+use axum::body::{to_bytes, Body};
 use axum::response::Response;
-use axum::routing::{any, get, post};
+use axum::routing::any;
 use axum::{extract::Request, Json, Router};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use serde_json::json;
@@ -18,9 +18,6 @@ use super::super::{
     build_router_with_state, build_state_with_execution_runtime_override, sample_bound_key,
     sample_endpoint, sample_provider, start_server, AppState,
 };
-use crate::admin_api::{
-    maybe_build_local_admin_video_tasks_response, AdminAppState, AdminRequestContext,
-};
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
     GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
@@ -28,6 +25,8 @@ use crate::constants::{
 };
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
+use crate::handlers::admin::features::video_tasks::maybe_build_local_admin_video_tasks_response;
+use crate::handlers::admin::{AdminAppState, AdminRequestContext};
 
 fn trusted_admin_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
@@ -193,7 +192,7 @@ async fn gateway_handles_admin_video_tasks_list_locally_with_trusted_admin_princ
         DEVELOPMENT_ENCRYPTION_KEY,
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -294,7 +293,7 @@ async fn gateway_handles_admin_video_tasks_stats_locally_with_trusted_admin_prin
         .await
         .expect("task should upsert");
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -376,7 +375,7 @@ async fn gateway_handles_admin_video_task_detail_locally_with_trusted_admin_prin
         DEVELOPMENT_ENCRYPTION_KEY,
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -620,7 +619,7 @@ async fn gateway_cancels_admin_video_task_locally_with_trusted_admin_principal()
             )],
         ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_state(
         build_state_with_execution_runtime_override(execution_runtime_url)

@@ -526,10 +526,11 @@ fn now_unix_secs() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{build_failed_poll_update, stored_task_to_upsert, VideoTaskRefreshError};
-    use crate::video_tasks::{
-        LocalVideoTaskPersistence, LocalVideoTaskSnapshot, LocalVideoTaskStatus,
-        LocalVideoTaskTransport, OpenAiVideoTaskSeed,
+    use crate::video_tasks::types::{
+        LocalVideoTaskPersistence, LocalVideoTaskStatus, LocalVideoTaskTransport,
+        OpenAiVideoTaskSeed,
     };
+    use crate::video_tasks::LocalVideoTaskSnapshot;
     use aether_data_contracts::repository::video_tasks::{StoredVideoTask, VideoTaskStatus};
     use serde_json::json;
     use std::collections::BTreeMap;

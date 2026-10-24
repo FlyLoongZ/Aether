@@ -26,7 +26,7 @@ use axum::body::Body;
 use axum::http::{self, header::HeaderName, header::HeaderValue, Response};
 use axum::response::IntoResponse;
 use axum::Json;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::collections::BTreeMap;
 
 fn insert_execution_runtime_candidate_fields(

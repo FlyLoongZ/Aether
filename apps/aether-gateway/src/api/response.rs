@@ -74,6 +74,7 @@ fn apply_gateway_browser_security_headers(headers: &mut http::HeaderMap) {
     );
 }
 
+#[cfg(test)]
 pub(crate) fn build_client_response(
     upstream_response: reqwest::Response,
     trace_id: &str,
@@ -91,6 +92,7 @@ pub(crate) fn build_client_response(
     )
 }
 
+#[cfg(test)]
 fn collect_safe_response_headers(headers: &http::HeaderMap) -> BTreeMap<String, String> {
     let connection_declared = aether_http::connection_declared_header_names(
         headers

@@ -1,14 +1,12 @@
-use std::collections::BTreeMap;
-
 use aether_contracts::{ExecutionPlan, ExecutionTimeouts, ProxySnapshot, RequestBody};
-use serde_json::{json, Map, Value};
-use uuid::Uuid;
 
+use super::types::{
+    GeminiVideoTaskSeed, LocalVideoTaskPersistence, LocalVideoTaskSeed, LocalVideoTaskStatus,
+    LocalVideoTaskTransport, OpenAiVideoTaskSeed,
+};
 use super::{
-    GatewayControlAuthContext, GeminiVideoTaskSeed, LocalVideoTaskContentAction,
-    LocalVideoTaskPersistence, LocalVideoTaskSeed, LocalVideoTaskSnapshot, LocalVideoTaskStatus,
-    LocalVideoTaskTransport, OpenAiVideoTaskSeed, VideoTaskService, VideoTaskSyncReportMode,
-    VideoTaskTruthSourceMode,
+    GatewayControlAuthContext, LocalVideoTaskContentAction, LocalVideoTaskSnapshot,
+    VideoTaskService, VideoTaskSyncReportMode, VideoTaskTruthSourceMode,
 };
 
 mod fixtures;

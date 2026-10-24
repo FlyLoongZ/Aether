@@ -536,6 +536,7 @@ pub(super) fn planned_request_uses_codex_responses_lite(
 /// the binding's retained normalizer is replayed instead. That keeps model
 /// directives, endpoint body rules and the Codex body contract applied on every
 /// turn rather than only on the one that bound the socket.
+#[cfg(test)]
 pub(super) fn normalize_followup_response_create(
     event: &Value,
     provider_model: &str,

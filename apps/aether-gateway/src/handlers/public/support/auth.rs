@@ -1,9 +1,9 @@
 pub(super) use super::{
-    build_unhandled_public_support_response, decrypt_catalog_secret_with_fallbacks,
-    decrypt_or_migrate_ldap_bind_password, decrypt_or_migrate_system_config_secret,
-    escape_admin_email_template_html, ldap_module_config_is_valid, module_available_from_env,
-    read_admin_email_template_payload, render_admin_email_template_html, system_config_bool,
-    system_config_string, AppState, GatewayError, GatewayPublicRequestContext,
+    build_unhandled_public_support_response, decrypt_or_migrate_ldap_bind_password,
+    decrypt_or_migrate_system_config_secret, escape_admin_email_template_html,
+    ldap_module_config_is_valid, module_available_from_env, read_admin_email_template_payload,
+    render_admin_email_template_html, system_config_bool, system_config_string, AppState,
+    GatewayError, GatewayPublicRequestContext,
 };
 pub(super) use axum::{
     body::Body,
@@ -76,17 +76,6 @@ fn system_config_f64(value: Option<&serde_json::Value>, default: f64) -> f64 {
     }
 }
 
-fn system_config_u16(value: Option<&serde_json::Value>, default: u16) -> u16 {
-    match value {
-        Some(serde_json::Value::Number(value)) => value
-            .as_u64()
-            .and_then(|value| u16::try_from(value).ok())
-            .unwrap_or(default),
-        Some(serde_json::Value::String(value)) => value.trim().parse::<u16>().unwrap_or(default),
-        _ => default,
-    }
-}
-
 fn system_config_string_list(value: Option<&serde_json::Value>) -> Vec<String> {
     match value {
         Some(serde_json::Value::Array(items)) => items
@@ -131,7 +120,7 @@ async fn verify_auth_password(
 
 async fn handle_auth_login(
     state: &AppState,
-    request_context: &GatewayPublicRequestContext,
+    _request_contextt: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
     client_ip: std::net::IpAddr,
     request_body: Option<&axum::body::Bytes>,

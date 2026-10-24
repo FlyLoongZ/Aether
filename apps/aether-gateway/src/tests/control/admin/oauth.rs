@@ -1,8 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use aether_contracts::{
-    ExecutionPlan, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER, EXECUTION_REQUEST_HTTP1_ONLY_HEADER,
-};
+use aether_contracts::{ExecutionPlan, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER};
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::background_tasks::InMemoryBackgroundTaskRepository;
 use aether_data::repository::management_tokens::{
@@ -25,7 +23,7 @@ use aether_data_contracts::repository::provider_catalog::{
 };
 use axum::body::{to_bytes, Body, Bytes};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{any, delete, get, patch, post, put};
+use axum::routing::{any, get, post};
 use axum::{extract::Request, Json, Router};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use serde_json::{json, Value};
@@ -34,9 +32,6 @@ use super::super::{
     build_router_with_state, build_state_with_execution_runtime_override, hash_management_token,
     sample_bound_key, sample_endpoint, sample_key, sample_management_token,
     sample_oauth_provider_config, sample_provider, sample_proxy_node, start_server, AppState,
-};
-use crate::admin_api::{
-    maybe_build_local_admin_provider_oauth_response, AdminAppState, AdminRequestContext,
 };
 use crate::ai_serving::{
     build_provider_key_pool_score_upsert, provider_key_pool_score_id, provider_key_pool_score_scope,
@@ -48,6 +43,8 @@ use crate::constants::{
 };
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
+use crate::handlers::admin::provider::oauth::dispatch::maybe_build_local_admin_provider_oauth_response;
+use crate::handlers::admin::{AdminAppState, AdminRequestContext};
 
 const ADMIN_OAUTH_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
@@ -310,7 +307,7 @@ async fn gateway_handles_admin_provider_oauth_supported_types_locally_with_trust
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1585,7 +1582,7 @@ async fn gateway_handles_admin_provider_oauth_device_authorize_locally_with_trus
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (oidc_url, oidc_handle) = start_server(oidc_server).await;
     let state = AppState::new()
         .expect("gateway should build")
@@ -1806,7 +1803,7 @@ async fn gateway_handles_admin_provider_oauth_device_poll_locally_with_trusted_a
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let state = AppState::new()
         .expect("gateway should build")
@@ -2283,7 +2280,7 @@ async fn gateway_revalidates_kiro_device_poll_via_idc_refresh_and_backfills_emai
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let (usage_url, usage_handle) = start_server(usage_server).await;
     let state = AppState::new()
@@ -2745,7 +2742,7 @@ async fn gateway_handles_admin_provider_oauth_start_key_locally_with_trusted_adm
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2823,7 +2820,7 @@ async fn gateway_handles_admin_provider_oauth_start_provider_locally_with_truste
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2893,7 +2890,7 @@ async fn gateway_handles_admin_provider_oauth_batch_import_task_status_locally_w
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -3152,7 +3149,7 @@ async fn gateway_batch_imports_admin_provider_oauth_locally_with_trusted_admin_p
         vec![existing_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -3416,7 +3413,7 @@ async fn gateway_starts_admin_provider_oauth_batch_import_task_locally_with_trus
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -3562,7 +3559,7 @@ async fn gateway_updates_admin_provider_oauth_batch_import_task_progress_impl() 
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -3823,7 +3820,7 @@ async fn gateway_completes_admin_provider_oauth_key_locally_with_trusted_admin_p
     let pool_score_repository =
         Arc::new(InMemoryPoolMemberScoreRepository::seed(vec![invalid_score]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -4075,7 +4072,7 @@ async fn gateway_completes_admin_provider_oauth_provider_locally_with_trusted_ad
         vec![existing_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -4474,7 +4471,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_locally_with_trusted
         vec![existing_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -5013,7 +5010,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_over_active_expired_
         vec![existing_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -5829,7 +5826,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_locally_with_trusted_ad
         vec![existing_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (refresh_url, refresh_handle) = start_server(refresh_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -5973,7 +5970,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_over_active_expired_dup
         vec![existing_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (refresh_url, refresh_handle) = start_server(refresh_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -6296,7 +6293,7 @@ async fn gateway_starts_admin_provider_oauth_kiro_batch_import_task_locally_with
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (refresh_url, refresh_handle) = start_server(refresh_server).await;
     let gateway = build_router_with_state(
         AppState::new()
@@ -6667,7 +6664,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_with_trusted_admin_p
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (token_url, token_handle) = start_server(token_server).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let oauth_refresh =
@@ -8778,7 +8775,7 @@ async fn gateway_handles_admin_provider_oauth_unavailable_routes_locally_with_tr
         }
     }));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -8894,7 +8891,7 @@ async fn gateway_handles_admin_oauth_supported_types_locally_with_trusted_admin_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -8947,7 +8944,7 @@ async fn gateway_handles_admin_oauth_provider_list_locally_with_trusted_admin_pr
     let repository = Arc::new(InMemoryOAuthProviderRepository::seed(vec![
         sample_oauth_provider_config("linuxdo"),
     ]));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -9002,7 +8999,7 @@ async fn gateway_upserts_admin_oauth_provider_locally_with_trusted_admin_princip
     );
 
     let repository = Arc::new(InMemoryOAuthProviderRepository::default());
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -9258,7 +9255,7 @@ async fn gateway_rejects_custom_oidc_without_allowed_domains_impl() {
     );
 
     let repository = Arc::new(InMemoryOAuthProviderRepository::default());
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -9328,7 +9325,7 @@ async fn gateway_upserts_custom_oidc_with_allowed_domains_impl() {
     );
 
     let repository = Arc::new(InMemoryOAuthProviderRepository::default());
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -9415,7 +9412,7 @@ async fn gateway_upserts_multiple_custom_oidc_configs_impl() {
     }));
 
     let repository = Arc::new(InMemoryOAuthProviderRepository::default());
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -9667,7 +9664,7 @@ async fn gateway_deletes_admin_oauth_provider_locally_with_trusted_admin_princip
     let repository = Arc::new(InMemoryOAuthProviderRepository::seed(vec![
         sample_oauth_provider_config("linuxdo"),
     ]));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -9806,7 +9803,7 @@ async fn gateway_handles_admin_management_token_detail_locally_with_trusted_admi
         sample_management_token("mt-admin-1", "user-1", "alice", true),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -10262,7 +10259,7 @@ async fn gateway_deletes_admin_management_token_locally_with_trusted_admin_princ
         sample_management_token("mt-admin-1", "user-1", "alice", true),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -10326,7 +10323,7 @@ async fn gateway_toggles_admin_management_token_locally_with_trusted_admin_princ
         sample_management_token("mt-admin-1", "user-1", "alice", true),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -10423,7 +10420,7 @@ async fn gateway_rejects_partial_management_token_for_admin_management_token_rou
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(state.with_data_state_for_tests(
         GatewayDataState::with_management_token_repository_for_tests(repository),
     ));

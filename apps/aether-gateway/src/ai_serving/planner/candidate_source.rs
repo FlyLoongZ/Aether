@@ -30,9 +30,8 @@ use crate::cache::{
 use crate::clock::request_distribution_seed;
 use crate::data::candidate_selection::{
     read_api_format_rows_fallback_page, read_requested_model_rows_fast_path_page,
-    requested_model_candidate_names, MinimalCandidateSelectionRowSource,
-    RequestedModelCandidateRowsPage, REQUESTED_MODEL_CANDIDATE_PAGE_SIZE,
-    REQUESTED_MODEL_MAX_SCANNED_ROWS,
+    requested_model_candidate_names, RequestedModelCandidateRowsPage,
+    REQUESTED_MODEL_CANDIDATE_PAGE_SIZE, REQUESTED_MODEL_MAX_SCANNED_ROWS,
 };
 use crate::scheduler::candidate::SchedulerSkippedCandidate;
 use crate::scheduler::config::{SchedulerOrderingConfig, SchedulerSchedulingMode};

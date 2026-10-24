@@ -147,6 +147,7 @@ pub(crate) enum GatewayError {
         trace_id: String,
         message: String,
     },
+    #[allow(dead_code)]
     ControlUnavailable {
         trace_id: String,
         message: String,

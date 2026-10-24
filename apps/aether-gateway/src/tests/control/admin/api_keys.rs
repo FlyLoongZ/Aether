@@ -17,8 +17,7 @@ use sha2::{Digest, Sha256};
 
 use super::super::{build_router_with_state, start_server, AppState};
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
 
@@ -203,7 +202,7 @@ fn sample_usage_row(
 
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_list_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys").await;
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![
@@ -284,7 +283,7 @@ async fn gateway_handles_admin_api_keys_list_locally_with_trusted_admin_principa
 
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_detail_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys/key-1").await;
     let mut export = sample_standalone_export_record("key-1", "user-1", "sk-key-1-plaintext", true);
     export.total_tokens = 77;
@@ -393,7 +392,7 @@ async fn gateway_includes_usage_summary_when_admin_api_keys_list_requests_it() {
 
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_full_key_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys/key-1").await;
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -441,7 +440,7 @@ async fn gateway_handles_admin_api_keys_full_key_locally_with_trusted_admin_prin
 
 #[tokio::test]
 async fn gateway_handles_admin_api_key_install_session_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys/key-1/install-sessions").await;
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -578,7 +577,7 @@ async fn gateway_handles_admin_api_key_install_session_locally_with_trusted_admi
 
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_create_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys").await;
     let repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::seed(Vec::<(
         Option<String>,
@@ -655,7 +654,7 @@ async fn gateway_handles_admin_api_keys_create_locally_with_trusted_admin_princi
 
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_update_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys/key-123").await;
     let repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -728,7 +727,7 @@ async fn gateway_handles_admin_api_keys_update_locally_with_trusted_admin_princi
 
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_toggle_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys/key-123").await;
     let repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -774,7 +773,7 @@ async fn gateway_handles_admin_api_keys_toggle_locally_with_trusted_admin_princi
 
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_delete_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_api_keys_upstream("/api/admin/api-keys/key-123").await;
     let repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(

@@ -1,10 +1,9 @@
 use aether_contracts::{ProxySnapshot, PROXY_NODE_GENERATION_EXTRA_KEY};
 use aether_crypto::looks_like_python_fernet_ciphertext;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use std::future::Future;
 
 use super::AppState;
-use crate::data::GatewayDataState;
 use crate::handlers::shared::{
     open_runtime_secret_payload_with_encryption_key, runtime_secret_payload_is_sealed,
     seal_runtime_secret_payload_with_encryption_key,

@@ -33,6 +33,7 @@ pub(super) struct ResponsesWebSocketTurnControl {
     pub(super) auth_snapshot: Option<GatewayAuthApiKeySnapshot>,
     pub(super) rpm_bypassed: bool,
     // Shared across transparent retries and owned by LogicalTurn, not the socket.
+    #[allow(dead_code)]
     pub(super) activity: std::sync::Arc<crate::request_activity::RequestActivityGuard>,
 }
 

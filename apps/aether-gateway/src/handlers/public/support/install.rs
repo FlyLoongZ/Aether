@@ -194,7 +194,7 @@ async fn resolve_current_install_session_api_key(
     {
         return Ok(None);
     }
-    let Some(ciphertext) = record
+    let Some(_ciphertextt) = record
         .key_encrypted
         .as_deref()
         .map(str::trim)
@@ -696,7 +696,7 @@ pub(crate) async fn build_api_key_install_session_response(
             )
         }
     }
-    let Some(ciphertext) = record
+    let Some(_ciphertextt) = record
         .key_encrypted
         .as_deref()
         .map(str::trim)

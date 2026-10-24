@@ -28,6 +28,7 @@ impl BackupScope {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn route_kind(self) -> &'static str {
         match self {
             Self::Config => "config_export",

@@ -1,10 +1,11 @@
+#[cfg(test)]
+use aether_ai_serving::AiAvailableCandidatePersistencePort;
 use aether_ai_serving::{
     ai_candidate_extra_data_with_ranking, ai_should_persist_available_candidate_for_pool_key,
-    ai_should_persist_skipped_candidate_for_pool_membership,
-    run_ai_available_candidate_persistence, run_ai_candidate_materialization,
-    run_ai_skipped_candidate_persistence, AiAvailableCandidatePersistencePort,
-    AiCandidateMaterializationOutcome, AiCandidateMaterializationPort,
-    AiCandidatePreselectionOutcome, AiSkippedCandidatePersistencePort,
+    ai_should_persist_skipped_candidate_for_pool_membership, run_ai_candidate_materialization,
+    run_ai_skipped_candidate_persistence, AiCandidateMaterializationOutcome,
+    AiCandidateMaterializationPort, AiCandidatePreselectionOutcome,
+    AiSkippedCandidatePersistencePort,
 };
 use aether_dispatch_core::{DispatchSequence, DispatchSequenceItem};
 use aether_routing_core::{
@@ -21,7 +22,6 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
-use tracing::warn;
 use uuid::Uuid;
 
 use crate::ai_serving::planner::candidate_affinity_cache::remember_scheduler_affinity_for_candidate_with_routing_policy_at_epoch;
@@ -339,6 +339,8 @@ impl PoolGroupExhaustionPersistenceContext {
     }
 }
 
+#[cfg(test)]
+pub(crate) use aether_ai_serving::run_ai_available_candidate_persistence;
 pub(crate) use aether_ai_serving::AiCandidateResolutionMode as LocalCandidateResolutionMode;
 
 struct GatewayLocalCandidateMaterializationPort<'a, F, G> {
@@ -359,6 +361,7 @@ struct GatewayLocalCandidateMaterializationPort<'a, F, G> {
     decorate_skipped_candidate: G,
 }
 
+#[cfg(test)]
 struct GatewayAvailableCandidatePersistencePort<'a, F> {
     state: PlannerAppState<'a>,
     trace_id: &'a str,
@@ -477,6 +480,7 @@ where
     }
 }
 
+#[cfg(test)]
 #[async_trait]
 impl<F> AiAvailableCandidatePersistencePort for GatewayAvailableCandidatePersistencePort<'_, F>
 where
@@ -1244,7 +1248,7 @@ async fn pop_attempt_from_items(
 }
 
 async fn scheduler_cache_affinity_enabled(
-    state: PlannerAppState<'_>,
+    _statee: PlannerAppState<'_>,
     routing_policy: Option<&ResolvedRoutingPolicy>,
 ) -> bool {
     scheduler_ordering_config_for_routing_policy(routing_policy).scheduling_mode
@@ -1460,6 +1464,7 @@ fn should_persist_skipped_local_candidate(candidate: &SkippedLocalExecutionCandi
 }
 
 #[allow(clippy::too_many_arguments)]
+#[cfg(test)]
 pub(crate) async fn persist_available_local_execution_candidates<F>(
     state: PlannerAppState<'_>,
     trace_id: &str,
@@ -1488,29 +1493,6 @@ where
         Ok(attempts) => attempts,
         Err(error) => match error {},
     }
-}
-
-pub(crate) async fn persist_available_local_execution_candidates_with_context<F>(
-    state: PlannerAppState<'_>,
-    trace_id: &str,
-    context: LocalAvailableCandidatePersistenceContext<'_>,
-    candidates: Vec<EligibleLocalExecutionCandidate>,
-    build_extra_data: F,
-) -> Vec<LocalExecutionCandidateAttempt>
-where
-    F: Fn(&EligibleLocalExecutionCandidate) -> Option<Value> + Send + Sync,
-{
-    persist_available_local_execution_candidates(
-        state,
-        trace_id,
-        context.user_id,
-        context.api_key_id,
-        context.required_capabilities,
-        candidates,
-        context.error_context,
-        build_extra_data,
-    )
-    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1659,6 +1641,7 @@ where
     }]
 }
 
+#[cfg(test)]
 fn available_candidate_extra_data_with_dispatch_ref<F>(
     candidate: &EligibleLocalExecutionCandidate,
     build_extra_data: &F,

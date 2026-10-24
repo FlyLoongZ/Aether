@@ -4,13 +4,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aether_data_contracts::repository::pool_scores::{
-    ListPoolMemberProbeCandidatesQuery, ListPoolMemberScoresQuery, PoolMemberHardState,
-    PoolMemberIdentity, PoolMemberProbeAttempt, PoolMemberProbeResult, PoolMemberProbeStatus,
-    StoredPoolMemberScore, POOL_KIND_PROVIDER_KEY_POOL,
+    ListPoolMemberScoresQuery, PoolMemberHardState, PoolMemberIdentity, PoolMemberProbeAttempt,
+    PoolMemberProbeResult, PoolMemberProbeStatus, StoredPoolMemberScore,
+    POOL_KIND_PROVIDER_KEY_POOL,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+#[cfg(test)]
 use aether_provider_pool::provider_pool_quota_metadata_updated_at;
 use aether_runtime_state::{RuntimeLockLease, RuntimeState};
 use futures_util::{stream, StreamExt};
@@ -43,7 +44,6 @@ const POOL_QUOTA_PROBE_PROVIDER_SCORE_READ_LIMIT: usize = 100_000;
 const POOL_QUOTA_PROBE_DEFAULT_GLOBAL_CONCURRENCY: usize = 16;
 const POOL_QUOTA_PROBE_PROVIDER_LOCK_TTL_MS: u64 = 30_000;
 const POOL_QUOTA_PROBE_BURST_TRIGGER_LOCK_TTL_MS: u64 = 30_000;
-const POOL_QUOTA_PROBE_BURST_PENDING_PREFIX: &str = "ap:quota_probe:burst_pending";
 const POOL_QUOTA_PROBE_BURST_PENDING_TTL_SECONDS: u64 = 30;
 const POOL_QUOTA_PROBE_BURST_RETRY_GUARD_SECONDS: u64 = 15;
 const POOL_QUOTA_PROBE_AUTO_MIN_INTERVAL_SECONDS: u64 = 30;
@@ -319,6 +319,7 @@ fn parse_probe_stamp(raw_value: Option<&str>) -> Option<u64> {
     Some(parsed as u64)
 }
 
+#[cfg(test)]
 pub(crate) fn pool_quota_probe_target_count(
     total_active_keys: usize,
     target_percent: Option<f64>,
@@ -465,6 +466,7 @@ fn score_last_self_check_success_at(score: &StoredPoolMemberScore) -> Option<u64
         .flatten()
 }
 
+#[cfg(test)]
 pub(crate) fn select_pool_quota_probe_key_ids(
     keys: &[StoredProviderCatalogKey],
     provider_type: &str,
@@ -494,49 +496,6 @@ pub(crate) fn select_pool_quota_probe_key_ids(
         stale.truncate(limit);
     }
     stale.into_iter().map(|(_, key_id)| key_id).collect()
-}
-
-async fn select_score_probe_key_ids(
-    state: &AppState,
-    provider_id: &str,
-    now_ts: u64,
-    interval_seconds: u64,
-    limit: usize,
-) -> Vec<String> {
-    if limit == 0 {
-        return Vec::new();
-    }
-    let stale_before_unix_secs = now_ts.saturating_sub(interval_seconds);
-    let query = ListPoolMemberProbeCandidatesQuery {
-        pool_kind: POOL_KIND_PROVIDER_KEY_POOL.to_string(),
-        pool_id: provider_id.to_string(),
-        capability: None,
-        stale_before_unix_secs,
-        limit: limit.saturating_mul(4).max(limit),
-    };
-    let scores = match state.data.list_pool_member_probe_candidates(&query).await {
-        Ok(scores) => scores,
-        Err(err) => {
-            debug!(
-                provider_id,
-                error = ?err,
-                "gateway pool quota probe: failed to read score probe candidates"
-            );
-            return Vec::new();
-        }
-    };
-    let mut selected = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
-    for score in scores {
-        if !seen.insert(score.member_id.clone()) {
-            continue;
-        }
-        selected.push(score.member_id);
-        if selected.len() >= limit {
-            break;
-        }
-    }
-    selected
 }
 
 async fn load_provider_key_account_scores(
@@ -1111,7 +1070,7 @@ async fn select_keys_for_provider(
             })
             .cloned()
             .collect::<Vec<_>>();
-        let mut selected_ids = select_pool_quota_probe_ids_for_active_target(
+        let selected_ids = select_pool_quota_probe_ids_for_active_target(
             &probe_eligible_key_ids,
             &active_member_ids,
             &scores_by_key,
@@ -1730,12 +1689,6 @@ pub(crate) async fn perform_pool_quota_probe_once_with_config(
     Ok(summary)
 }
 
-pub(crate) async fn perform_pool_quota_probe_once(
-    state: &AppState,
-) -> Result<PoolQuotaProbeRunSummary, GatewayError> {
-    perform_pool_quota_probe_once_with_config(state, PoolQuotaProbeWorkerConfig::from_env()).await
-}
-
 async fn perform_pool_quota_probe_once_for_provider_with_mode(
     state: &AppState,
     provider_id: &str,
@@ -1810,20 +1763,6 @@ async fn perform_pool_quota_probe_once_for_provider_with_mode(
         failed: provider_summary.failed,
         auto_removed: provider_summary.auto_removed,
     })
-}
-
-pub(crate) async fn perform_pool_quota_probe_once_for_provider_with_config(
-    state: &AppState,
-    provider_id: &str,
-    config: PoolQuotaProbeWorkerConfig,
-) -> Result<PoolQuotaProbeRunSummary, GatewayError> {
-    perform_pool_quota_probe_once_for_provider_with_mode(
-        state,
-        provider_id,
-        config,
-        PoolQuotaProbeMode::Base,
-    )
-    .await
 }
 
 pub(crate) fn spawn_pool_quota_probe_replenish_for_request(

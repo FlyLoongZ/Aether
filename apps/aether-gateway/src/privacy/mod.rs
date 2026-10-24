@@ -213,6 +213,7 @@ impl RedactionSessionConfig {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn default_ttl(hmac_key: impl Into<Vec<u8>>, now_unix_secs: u64) -> Self {
         Self::new(hmac_key, DEFAULT_REDACTION_TTL_SECONDS, now_unix_secs)
     }
@@ -225,11 +226,6 @@ impl RedactionSessionConfig {
         self.bucket()
             .saturating_add(1)
             .saturating_mul(self.ttl_seconds)
-    }
-
-    pub(crate) fn with_enabled_kinds(mut self, enabled_kinds: HashSet<RedactionKind>) -> Self {
-        self.enabled_kinds = Some(enabled_kinds);
-        self
     }
 
     fn with_sentinel_namespace(mut self, namespace: impl Into<String>) -> Self {
@@ -377,11 +373,13 @@ impl RedactionSession {
         .is_empty()
     }
 
+    #[cfg(test)]
     pub(crate) fn redact_text(&mut self, input: &str) -> RedactedText {
         self.redact_text_internal(input, None)
             .expect("unlimited redaction scan should not fail")
     }
 
+    #[cfg(test)]
     fn redact_text_checked(
         &mut self,
         input: &str,
@@ -439,6 +437,7 @@ impl RedactionSession {
         })
     }
 
+    #[cfg(test)]
     fn redact_text_internal(
         &mut self,
         input: &str,
@@ -489,6 +488,7 @@ impl RedactionSession {
         self.mappings.len()
     }
 
+    #[cfg(test)]
     pub(crate) fn sentinel_for_original(&self, original: &str) -> Option<&str> {
         self.mappings
             .values()
@@ -500,6 +500,7 @@ impl RedactionSession {
         self.mappings.values()
     }
 
+    #[cfg(test)]
     fn restore_text(&self, input: &str) -> Result<RestoredText, GatewayError> {
         let matcher = SentinelMatcher::new(self);
         let mut budget = RestoreExpansionBudget::new(MAX_SYNC_RESTORE_EXPANSION_BYTES);
@@ -697,12 +698,14 @@ impl fmt::Debug for RedactionSession {
     }
 }
 
+#[cfg(test)]
 pub(crate) struct MaskedChatRequest {
     pub(crate) body: Vec<u8>,
     pub(crate) session: RedactionSession,
     pub(crate) redacted: bool,
 }
 
+#[cfg(test)]
 impl fmt::Debug for MaskedChatRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -774,6 +777,7 @@ pub(crate) struct RedactionSessionSlot {
 }
 
 impl RedactionSessionSlot {
+    #[cfg(test)]
     pub(crate) fn put(&self, session: RedactionSession) {
         *self
             .session
@@ -786,21 +790,6 @@ impl RedactionSessionSlot {
             .lock()
             .expect("redaction session candidate slot should lock")
             .insert(candidate_id.to_string(), session);
-    }
-
-    pub(crate) fn clear(&self) {
-        *self
-            .session
-            .lock()
-            .expect("redaction session slot should lock") = None;
-        self.sessions_by_candidate
-            .lock()
-            .expect("redaction session candidate slot should lock")
-            .clear();
-        self.request_redactions
-            .lock()
-            .expect("redaction request cache slot should lock")
-            .clear();
     }
 
     pub(crate) fn take(&self) -> Option<RedactionSession> {
@@ -875,10 +864,6 @@ pub(crate) struct RedactionExecutionCandidateId(String);
 impl RedactionExecutionCandidateId {
     pub(crate) fn new(candidate_id: impl Into<String>) -> Self {
         Self(candidate_id.into())
-    }
-
-    pub(crate) fn as_str(&self) -> &str {
-        self.0.as_str()
     }
 }
 
@@ -1457,6 +1442,7 @@ pub(crate) fn build_redaction_session_config(
         .with_rules(runtime_config.rules.clone())
 }
 
+#[cfg(test)]
 pub(crate) fn mask_chat_request_json_with_options(
     body: &[u8],
     config: RedactionSessionConfig,
@@ -1466,6 +1452,7 @@ pub(crate) fn mask_chat_request_json_with_options(
         .expect("chat redaction masking should be infallible")
 }
 
+#[cfg(test)]
 pub(crate) fn mask_chat_request_json(
     body: &[u8],
     config: RedactionSessionConfig,
@@ -1473,6 +1460,7 @@ pub(crate) fn mask_chat_request_json(
     mask_chat_request_json_with_options(body, config, MaskChatRequestOptions::runtime())
 }
 
+#[cfg(test)]
 pub(crate) fn try_mask_chat_request_json_with_options(
     body: &[u8],
     config: RedactionSessionConfig,
@@ -1486,6 +1474,7 @@ pub(crate) fn try_mask_chat_request_json_with_options(
     )
 }
 
+#[cfg(test)]
 pub(crate) async fn try_mask_chat_request_json_with_cache_options(
     body: &[u8],
     config: RedactionSessionConfig,
@@ -1502,6 +1491,7 @@ pub(crate) async fn try_mask_chat_request_json_with_cache_options(
     .await
 }
 
+#[cfg(test)]
 pub(crate) fn try_mask_chat_pii_request_json_with_options(
     body: &[u8],
     format: ChatPiiRedactionRequestFormat,
@@ -1540,6 +1530,7 @@ pub(crate) fn try_mask_chat_pii_request_json_with_options(
     })
 }
 
+#[cfg(test)]
 pub(crate) async fn try_mask_chat_pii_request_json_with_cache_options(
     body: &[u8],
     format: ChatPiiRedactionRequestFormat,
@@ -1686,6 +1677,7 @@ fn json_value_has_redaction_candidate(value: &Value, session: &RedactionSession)
     }
 }
 
+#[cfg(test)]
 fn mask_request_value(
     format: ChatPiiRedactionRequestFormat,
     value: &mut Value,
@@ -1733,11 +1725,12 @@ async fn mask_request_value_async(
     }
 }
 
+#[cfg(test)]
 fn mask_openai_chat_request_value(
     value: &mut Value,
     session: &mut RedactionSession,
     scan_state: &mut RedactionScanState,
-    options: MaskChatRequestOptions,
+    _optionss: MaskChatRequestOptions,
 ) -> Result<bool, Infallible> {
     let Some(messages) = value.get_mut("messages").and_then(Value::as_array_mut) else {
         return Ok(false);
@@ -1757,7 +1750,7 @@ async fn mask_openai_chat_request_value_async(
     value: &mut Value,
     session: &mut RedactionSession,
     scan_state: &mut RedactionScanState,
-    options: MaskChatRequestOptions,
+    _optionss: MaskChatRequestOptions,
     cache: Option<&RedisRedactionMappingCache<'_>>,
 ) -> Result<bool, RedactionMaskError> {
     let Some(messages) = value.get_mut("messages").and_then(Value::as_array_mut) else {
@@ -1981,6 +1974,7 @@ fn response_textish_type(raw_type: Option<&str>) -> bool {
     )
 }
 
+#[cfg(test)]
 fn mask_chat_message_value(
     message: &mut Value,
     session: &mut RedactionSession,
@@ -2002,6 +1996,7 @@ fn mask_chat_message_value(
     Ok(redacted)
 }
 
+#[cfg(test)]
 fn mask_chat_content_value(
     content: &mut Value,
     session: &mut RedactionSession,
@@ -2020,6 +2015,7 @@ fn mask_chat_content_value(
     }
 }
 
+#[cfg(test)]
 fn mask_chat_content_part(
     part: &mut Value,
     session: &mut RedactionSession,
@@ -2037,6 +2033,7 @@ fn mask_chat_content_part(
     mask_json_string(text, session, scan_state)
 }
 
+#[cfg(test)]
 fn mask_tool_call_arguments(
     tool_call: &mut Value,
     session: &mut RedactionSession,
@@ -2051,6 +2048,7 @@ fn mask_tool_call_arguments(
     mask_json_string(arguments, session, scan_state)
 }
 
+#[cfg(test)]
 fn mask_claude_messages_request_value(
     value: &mut Value,
     session: &mut RedactionSession,
@@ -2070,6 +2068,7 @@ fn mask_claude_messages_request_value(
     Ok(redacted)
 }
 
+#[cfg(test)]
 fn mask_claude_text_content_value(
     value: &mut Value,
     session: &mut RedactionSession,
@@ -2088,6 +2087,7 @@ fn mask_claude_text_content_value(
     }
 }
 
+#[cfg(test)]
 fn mask_claude_content_part(
     part: &mut Value,
     session: &mut RedactionSession,
@@ -2119,6 +2119,7 @@ fn mask_claude_content_part(
     }
 }
 
+#[cfg(test)]
 fn mask_openai_responses_request_value(
     value: &mut Value,
     session: &mut RedactionSession,
@@ -2134,6 +2135,7 @@ fn mask_openai_responses_request_value(
     Ok(redacted)
 }
 
+#[cfg(test)]
 fn mask_openai_search_request_value(
     value: &mut Value,
     session: &mut RedactionSession,
@@ -2159,6 +2161,7 @@ fn mask_openai_search_request_value(
     Ok(redacted)
 }
 
+#[cfg(test)]
 fn mask_openai_responses_input_value(
     value: &mut Value,
     session: &mut RedactionSession,
@@ -2177,6 +2180,7 @@ fn mask_openai_responses_input_value(
     }
 }
 
+#[cfg(test)]
 fn mask_openai_responses_input_item(
     item: &mut Value,
     session: &mut RedactionSession,
@@ -2212,6 +2216,7 @@ fn mask_openai_responses_input_item(
     Ok(redacted)
 }
 
+#[cfg(test)]
 fn mask_openai_responses_content_value(
     content: &mut Value,
     session: &mut RedactionSession,
@@ -2230,6 +2235,7 @@ fn mask_openai_responses_content_value(
     }
 }
 
+#[cfg(test)]
 fn mask_openai_responses_content_part(
     part: &mut Value,
     session: &mut RedactionSession,
@@ -2247,6 +2253,7 @@ fn mask_openai_responses_content_part(
     mask_json_string(text, session, scan_state)
 }
 
+#[cfg(test)]
 fn mask_json_string(
     text: &mut String,
     session: &mut RedactionSession,
@@ -2604,6 +2611,7 @@ impl fmt::Debug for RestoredSyncResponseBody {
     }
 }
 
+#[cfg(test)]
 struct RestoredText {
     text: String,
     restored: bool,
@@ -2851,6 +2859,7 @@ pub(crate) fn restore_json_strings_with_budget(
 /// boolean result.  The bounded implementation remains the source of truth;
 /// failures are treated as "not restored" so callers cannot accidentally emit
 /// a partially restored value.
+#[cfg(test)]
 pub(crate) fn restore_json_strings(value: &mut Value, session: &RedactionSession) -> bool {
     let mut budget = RestoreExpansionBudget::new(MAX_SYNC_RESTORE_EXPANSION_BYTES);
     restore_json_strings_with_budget(value, session, &mut budget).unwrap_or(false)
@@ -3743,16 +3752,6 @@ impl<'a> RedisRedactionMappingCache<'a> {
         }
     }
 
-    pub(crate) fn with_key_prefix(
-        runtime_state: &'a RuntimeState,
-        key_prefix: impl Into<String>,
-    ) -> Self {
-        Self {
-            runtime_state,
-            key_prefix: key_prefix.into(),
-        }
-    }
-
     pub(crate) async fn store(
         &self,
         record: &RedactionCacheRecord,
@@ -3803,18 +3802,6 @@ impl<'a> RedisRedactionMappingCache<'a> {
             value.len() <= MAX_CACHE_SENTINEL_BYTES
                 && sentinel_matches_rule_label(namespace, rule_label, value)
         }))
-    }
-
-    pub(crate) async fn load(
-        &self,
-        sentinel: &str,
-    ) -> Result<Option<RedactionCacheRecord>, DataLayerError> {
-        let raw = self.get_string(&self.reverse_cache_key(sentinel)).await?;
-        raw.map(|value| {
-            serde_json::from_str::<RedactionCacheRecord>(&value)
-                .map_err(|err| DataLayerError::UnexpectedValue(err.to_string()))
-        })
-        .transpose()
     }
 
     async fn get_string(&self, key: &str) -> Result<Option<String>, DataLayerError> {
@@ -4124,7 +4111,7 @@ fn push_compiled_rule_candidates(
     input: &str,
     rule: &CompiledRedactionRule,
     candidates: &mut Vec<Candidate>,
-    mut probe: Option<&mut DetectorProbe>,
+    probe: Option<&mut DetectorProbe>,
 ) {
     for matched in rule.regex.find_iter(input) {
         let value = matched.as_str();
@@ -4580,42 +4567,6 @@ fn redaction_candidate_is_valid(kind: RedactionKind, value: &str) -> bool {
 fn normalized_value_cache_digest(normalized_value: &str) -> String {
     let digest = sha2::Sha256::digest(normalized_value.as_bytes());
     base32_no_pad(&digest[..HMAC96_BYTES])
-}
-
-fn parse_enabled_redaction_kinds(value: Option<&Value>) -> HashSet<RedactionKind> {
-    let Some(values) = value.and_then(Value::as_array) else {
-        return default_enabled_redaction_kinds();
-    };
-    values
-        .iter()
-        .filter_map(Value::as_str)
-        .flat_map(redaction_kinds_for_entity)
-        .collect::<HashSet<_>>()
-}
-
-fn default_enabled_redaction_kinds() -> HashSet<RedactionKind> {
-    [
-        RedactionKind::Email,
-        RedactionKind::ChinaMobile,
-        RedactionKind::ChinaLandline,
-        RedactionKind::Phone,
-        RedactionKind::ChinaResidentId,
-        RedactionKind::PaymentCard,
-        RedactionKind::Ipv4,
-        RedactionKind::Ipv6,
-        RedactionKind::OpenAiKey,
-        RedactionKind::AnthropicKey,
-        RedactionKind::GitHubToken,
-        RedactionKind::SlackToken,
-        RedactionKind::AwsKey,
-        RedactionKind::ApiKey,
-        RedactionKind::AccessToken,
-        RedactionKind::SecretKey,
-        RedactionKind::BearerToken,
-        RedactionKind::Jwt,
-    ]
-    .into_iter()
-    .collect()
 }
 
 fn redaction_kinds_for_entity(entity: &str) -> impl Iterator<Item = RedactionKind> {

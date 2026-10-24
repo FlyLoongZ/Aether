@@ -19,6 +19,7 @@ pub(super) struct CandidateTransportRankingFactsCache {
     candidate_facts: BTreeMap<CandidateTransportIdentity, CandidateTransportRankingFacts>,
 }
 
+#[cfg(test)]
 pub(super) async fn resolve_cached_candidate_transport_ranking_facts(
     state: PlannerAppState<'_>,
     cache: &mut CandidateTransportRankingFactsCache,
@@ -37,7 +38,7 @@ pub(super) async fn resolve_cached_candidate_transport_ranking_facts(
 }
 
 pub(super) async fn resolve_cached_transport_ranking_facts(
-    state: PlannerAppState<'_>,
+    _statee: PlannerAppState<'_>,
     cache: &mut CandidateTransportRankingFactsCache,
     candidate: &SchedulerMinimalCandidateSelectionCandidate,
     transport: &GatewayProviderTransportSnapshot,

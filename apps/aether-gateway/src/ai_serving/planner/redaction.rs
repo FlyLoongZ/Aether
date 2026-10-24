@@ -65,6 +65,7 @@ pub(crate) fn request_identity_response_encoding_when_redacted(
 /// to a diagnostic event. Endpoint query parameters remain untouched on the
 /// wire, but they can contain API keys or signed tokens and must not reach
 /// logs.
+#[cfg(test)]
 pub(crate) fn sanitize_upstream_url_for_log(raw: &str) -> String {
     if let Ok(mut url) = url::Url::parse(raw) {
         if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {

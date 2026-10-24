@@ -13,6 +13,7 @@ use super::{
     validate_final_openai_provider_request,
 };
 
+#[cfg(test)]
 pub(crate) fn build_local_openai_responses_request_body(
     body_json: &Value,
     mapped_model: &str,
@@ -171,6 +172,7 @@ fn build_local_openai_responses_request_body_with_codex_model_capabilities_and_w
     Some(provider_request_body)
 }
 
+#[cfg(test)]
 pub(crate) fn build_cross_format_openai_responses_request_body(
     body_json: &Value,
     mapped_model: &str,

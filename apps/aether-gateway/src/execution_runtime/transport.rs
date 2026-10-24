@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::error::Error as _;
 use std::future::Future;
 use std::io::Read;
@@ -35,7 +35,9 @@ use hyper::body::Incoming as HyperIncomingBody;
 use hyper::client::conn::http2::SendRequest as HyperH2cSendRequest;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client as HyperLegacyClient;
-use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+#[cfg(test)]
+use hyper_util::rt::TokioTimer;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::redirect::Policy;
 use serde::Serialize;
@@ -51,9 +53,7 @@ use crate::ai_serving::api::extract_provider_private_stream_error_body;
 use crate::execution_runtime::remote_compat::execute_sync_plan_via_remote_execution_runtime;
 use crate::execution_runtime::stream_read_timeout::resolve_stream_idle_timeout;
 use crate::execution_runtime::windsurf::maybe_execute_windsurf_sync;
-use crate::frontdoor_loop_guard::{
-    configured_gateway_frontdoor_base_url, gateway_frontdoor_self_loop_guard_error,
-};
+use crate::frontdoor_loop_guard::gateway_frontdoor_self_loop_guard_error;
 use crate::stage_metrics::observe_gateway_stage_ms;
 use crate::upstream_admission::UpstreamTargetAdmissionPermit;
 use crate::{AppState, GatewayError};
@@ -72,7 +72,9 @@ const MAX_SCOPED_RESPONSE_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 // A remote execution result is JSON and may carry both the parsed JSON body
 // and the original bytes.  Keep room for base64 expansion, the second body
 // representation, and bounded response metadata while retaining a hard cap.
+#[cfg(test)]
 const MAX_EXECUTION_RESULT_ENVELOPE_BYTES: usize = 256 * 1024 * 1024;
+#[cfg(test)]
 const EXECUTION_RESULT_ENVELOPE_METADATA_BYTES: usize = 8 * 1024 * 1024;
 const DIRECT_REQWEST_H2_CLIENT_SHARDS_ENV: &str = "AETHER_GATEWAY_DIRECT_REQWEST_H2_CLIENT_SHARDS";
 const DIRECT_REQWEST_CLIENT_SHARDS_ENV: &str = "AETHER_GATEWAY_DIRECT_REQWEST_CLIENT_SHARDS";
@@ -200,6 +202,7 @@ impl DirectReqwestClientCacheEntry {
 
 struct DirectHyperH2cClientCacheEntry {
     clients: Vec<DirectHyperH2cClient>,
+    #[cfg_attr(not(test), allow(dead_code))]
     next: AtomicU64,
     target_len: usize,
 }
@@ -329,6 +332,7 @@ impl Drop for DirectHyperH2cSenderLease {
 }
 
 impl DirectHyperH2cClientCacheEntry {
+    #[cfg(test)]
     fn new(clients: Vec<DirectHyperH2cClient>, target_len: usize) -> Self {
         Self {
             clients,
@@ -337,6 +341,7 @@ impl DirectHyperH2cClientCacheEntry {
         }
     }
 
+    #[cfg(test)]
     fn select(&self) -> DirectHyperH2cClient {
         if self.clients.len() <= 1 {
             return self
@@ -774,6 +779,7 @@ pub(crate) fn format_hyper_error_chain(err: &dyn std::error::Error) -> String {
 
 #[derive(Error)]
 pub(crate) enum ExecutionRuntimeTransportError {
+    #[allow(dead_code)]
     #[error("request body must contain json_body or body_bytes_b64")]
     RequestBodyRequired,
     #[error("request body must not contain both json_body and body_bytes_b64")]
@@ -1083,6 +1089,7 @@ pub(crate) fn json_value_fits_serialized_limit(value: &Value, limit_bytes: usize
 /// representation at the same time, so the limit is larger than either body
 /// limit.  It remains capped even when the raw-body cap is explicitly
 /// disabled (`usize::MAX`).
+#[cfg(test)]
 pub(crate) fn execution_result_envelope_limit_bytes(decoded_body_limit: usize) -> usize {
     maximum_base64_len_for_decoded_limit(decoded_body_limit)
         .saturating_add(decoded_body_limit)
@@ -1187,8 +1194,6 @@ pub(crate) fn direct_upstream_response_byte_stream(
 }
 
 pub(crate) struct DirectUpstreamStreamExecution {
-    pub(crate) request_id: String,
-    pub(crate) candidate_id: Option<String>,
     pub(crate) status_code: u16,
     pub(crate) headers: BTreeMap<String, String>,
     /// The upstream length is retained for stream classification only.  The
@@ -1319,8 +1324,6 @@ impl DirectSyncExecutionRuntime {
         let stream_summary_report_context = build_stream_summary_report_context(plan);
 
         Ok(DirectUpstreamStreamExecution {
-            request_id: plan.request_id.clone(),
-            candidate_id: plan.candidate_id.clone(),
             status_code,
             headers,
             upstream_content_length,
@@ -1625,11 +1628,6 @@ impl DirectHttpResponse {
             DirectHttpResponse::BrowserWreq(response) => response.headers().get("content-length"),
         }?;
         value.to_str().ok()?.trim().parse::<u64>().ok()
-    }
-
-    pub(crate) async fn bytes(self) -> Result<Bytes, ExecutionRuntimeTransportError> {
-        self.bytes_with_limit(crate::headers::max_internal_buffered_body_bytes())
-            .await
     }
 
     pub(crate) async fn bytes_with_limit(
@@ -2231,6 +2229,7 @@ async fn connect_direct_h2c_sender_on_current_runtime(
     Ok(sender)
 }
 
+#[cfg(test)]
 fn cached_direct_h2c_client(
     request_url: &str,
     timeouts: Option<&aether_contracts::ExecutionTimeouts>,
@@ -2280,6 +2279,7 @@ fn cached_direct_h2c_client(
     Ok(build_direct_h2c_client_from_cache_key(&cache_key))
 }
 
+#[cfg(test)]
 fn build_direct_h2c_client_from_cache_key(
     cache_key: &DirectHyperH2cClientCacheKey,
 ) -> DirectHyperH2cClient {
@@ -3109,14 +3109,6 @@ fn spawn_direct_reqwest_client_cache_warm(
     true
 }
 
-fn mark_direct_reqwest_client_cache_warming(cache_key: &DirectReqwestClientCacheKey) {
-    if let Ok(mut cache) = DIRECT_REQWEST_CLIENT_CACHE.lock() {
-        if let Some(entry) = cache.get_mut(cache_key) {
-            entry.warming = true;
-        }
-    }
-}
-
 fn mark_direct_reqwest_client_cache_not_warming(cache_key: &DirectReqwestClientCacheKey) {
     if let Ok(mut cache) = DIRECT_REQWEST_CLIENT_CACHE.lock() {
         if let Some(entry) = cache.get_mut(cache_key) {
@@ -3250,24 +3242,6 @@ fn direct_reqwest_transport_profile_cache_key(
 
 fn stable_json_cache_key(value: Option<&Value>) -> Option<String> {
     value.and_then(|value| serde_json::to_string(value).ok())
-}
-
-fn build_direct_reqwest_client_cache_entry_from_cache_key(
-    cache_key: &DirectReqwestClientCacheKey,
-    proxy_url: Option<&str>,
-) -> Result<DirectReqwestClientCacheEntry, ExecutionRuntimeTransportError> {
-    let shard_count = direct_reqwest_client_shard_count(cache_key);
-    let mut clients = Vec::with_capacity(shard_count);
-    for _ in 0..shard_count {
-        clients.push(build_direct_reqwest_client_from_cache_key(
-            cache_key, proxy_url,
-        )?);
-    }
-    Ok(DirectReqwestClientCacheEntry::new(
-        clients,
-        shard_count,
-        false,
-    ))
 }
 
 fn direct_reqwest_client_shard_count(cache_key: &DirectReqwestClientCacheKey) -> usize {
@@ -4016,19 +3990,6 @@ fn browser_transport_profile_name(profile: &ResolvedTransportProfile) -> String 
         .unwrap_or_else(|| "chrome136".to_string())
 }
 
-fn insert_browser_control_header(
-    headers: &mut HeaderMap,
-    name: &'static str,
-    value: &str,
-) -> Result<(), ExecutionRuntimeTransportError> {
-    headers.insert(
-        HeaderName::from_static(name),
-        HeaderValue::from_str(value)
-            .map_err(|_| ExecutionRuntimeTransportError::InvalidHeaderValue(name.to_string()))?,
-    );
-    Ok(())
-}
-
 fn transport_profile_http1_only(transport_profile: Option<&ResolvedTransportProfile>) -> bool {
     transport_profile
         .map(|profile| {
@@ -4051,25 +4012,6 @@ fn transport_profile_h2c_prior_knowledge(
                 .eq_ignore_ascii_case(TRANSPORT_HTTP_MODE_H2C_PRIOR_KNOWLEDGE)
         })
         .unwrap_or(false)
-}
-
-fn apply_transport_profile(
-    builder: reqwest::ClientBuilder,
-    transport_profile: Option<&ResolvedTransportProfile>,
-) -> reqwest::ClientBuilder {
-    let Some(profile) = transport_profile else {
-        return builder;
-    };
-    let profile_id = profile.profile_id.trim();
-    if profile_id.is_empty() || transport_profile_h2c_prior_knowledge(Some(profile)) {
-        return builder;
-    }
-
-    crate::ensure_rustls_crypto_provider();
-
-    builder.tls_backend_preconfigured(build_best_effort_transport_tls_config(
-        transport_profile_http1_only(transport_profile),
-    ))
 }
 
 fn apply_transport_profile_cache_key(
@@ -4271,10 +4213,6 @@ fn parse_execution_transport_bool(value: &str) -> Option<bool> {
     }
 }
 
-fn is_false(value: &bool) -> bool {
-    !*value
-}
-
 fn header_map_to_string_map(headers: &HeaderMap) -> BTreeMap<String, String> {
     headers
         .iter()
@@ -4317,23 +4255,6 @@ pub(crate) fn collect_response_headers(headers: &HeaderMap) -> BTreeMap<String, 
                 && !connection_declared.contains(&name.to_ascii_lowercase())
         })
         .collect()
-}
-
-fn execution_header_for_log<'a>(
-    headers: &'a BTreeMap<String, String>,
-    name: &str,
-) -> Option<&'a str> {
-    headers
-        .iter()
-        .find(|(header_name, _)| header_name.eq_ignore_ascii_case(name))
-        .map(|(_, value)| value.as_str())
-}
-
-fn execution_log_url_host(url: &str) -> String {
-    url::Url::parse(url)
-        .ok()
-        .and_then(|url| url.host_str().map(ToOwned::to_owned))
-        .unwrap_or_else(|| "-".to_string())
 }
 
 pub(crate) fn validate_execution_upstream_url(
@@ -4508,42 +4429,37 @@ mod tests {
     use aether_contracts::{
         ExecutionPlan, ExecutionResponseBodyMode, ExecutionTimeouts, ProxySnapshot, RequestBody,
         ResolvedTransportProfile, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER,
-        EXECUTION_REQUEST_HTTP1_ONLY_HEADER, EXECUTION_RESPONSE_BODY_MODE_HEADER,
-        PROXY_NODE_GENERATION_EXTRA_KEY, TRANSPORT_BACKEND_BROWSER_WREQ,
-        TRANSPORT_BACKEND_REQWEST_RUSTLS, TRANSPORT_HTTP_MODE_AUTO,
+        EXECUTION_RESPONSE_BODY_MODE_HEADER, PROXY_NODE_GENERATION_EXTRA_KEY,
+        TRANSPORT_BACKEND_BROWSER_WREQ, TRANSPORT_BACKEND_REQWEST_RUSTLS, TRANSPORT_HTTP_MODE_AUTO,
         TRANSPORT_HTTP_MODE_H2C_PRIOR_KNOWLEDGE, TRANSPORT_HTTP_MODE_HTTP1_ONLY,
     };
-    use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+
     use aether_data::repository::proxy_nodes::{
         InMemoryProxyNodeRepository, ProxyNodeReadRepository, StoredProxyNode,
     };
     use axum::body::{Body, Bytes};
-    use axum::extract::ws::Message;
-    use axum::extract::Path;
+
     use axum::http::HeaderMap as AxumHeaderMap;
     use axum::routing::{any, post};
     use axum::{Json, Router};
     use base64::Engine as _;
     use serde_json::json;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::sync::watch;
 
     use super::{
         append_upstream_response_body_chunk_with_limit, build_browser_wreq_client, build_client,
-        build_execution_response_body, build_request_headers, collect_response_headers,
-        decode_base64_body_with_limit, decode_response_body_bytes_with_limit,
-        effective_response_body_limit_bytes, execute_sync_plan,
+        build_execution_response_body, build_request_headers, decode_base64_body_with_limit,
+        decode_response_body_bytes_with_limit, effective_response_body_limit_bytes,
         execution_plan_response_body_limit_bytes, execution_response_body_mode,
         execution_result_envelope_limit_bytes, http_uris_have_same_origin,
         json_value_fits_serialized_limit, maximum_base64_len_for_decoded_limit,
         record_manual_proxy_request_failure, record_manual_proxy_request_outcome,
         record_manual_proxy_request_success, record_manual_proxy_stream_error,
         reqwest_urls_have_same_origin, resolve_execution_transport_controls,
-        resolve_non_stream_total_timeout, resolve_proxy_url, resolve_stream_first_byte_timeout,
-        response_body_is_json, safe_redirect_decision, validate_execution_upstream_url,
-        with_upstream_response_body_limit, DirectSyncExecutionRuntime,
-        ExecutionRuntimeTransportError, ExecutionTransportControls, SafeRedirectDecision,
-        UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
+        resolve_non_stream_total_timeout, resolve_proxy_url, response_body_is_json,
+        safe_redirect_decision, validate_execution_upstream_url, with_upstream_response_body_limit,
+        DirectSyncExecutionRuntime, ExecutionRuntimeTransportError, ExecutionTransportControls,
+        SafeRedirectDecision, UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
         EXECUTION_RESPONSE_BODY_LIMIT_HEADER, MAX_SAFE_REDIRECTS,
         MAX_SCOPED_RESPONSE_BODY_LIMIT_BYTES, MIN_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
     };
@@ -4557,8 +4473,7 @@ mod tests {
     use crate::AppState;
 
     const LOCAL_HTTP_SUCCESS_TIMEOUT_MS: u64 = 15_000;
-    const RELAY_TEST_SECRET: &str = "relay-test-secret-at-least-32-bytes";
-
+    #[cfg(test)]
     #[test]
     fn execution_upstream_url_accepts_http_and_https_with_safe_targets() {
         for allowed in [
@@ -5369,12 +5284,7 @@ mod tests {
         TestEnvVarGuard { key, previous }
     }
 
-    fn unset_test_env_var(key: &'static str) -> TestEnvVarGuard {
-        let previous = std::env::var(key).ok();
-        std::env::remove_var(key);
-        TestEnvVarGuard { key, previous }
-    }
-
+    #[cfg(test)]
     fn direct_reqwest_env_lock() -> &'static tokio::sync::Mutex<()> {
         static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
         &LOCK
@@ -6404,18 +6314,7 @@ mod tests {
         assert!(super::manual_proxy_node_binding(Some(&proxy)).is_none());
     }
 
-    fn decode_relay_envelope(body: &[u8]) -> (serde_json::Value, Vec<u8>) {
-        assert!(
-            body.len() >= 4,
-            "relay body must contain meta length prefix"
-        );
-        let meta_len = u32::from_be_bytes([body[0], body[1], body[2], body[3]]) as usize;
-        let meta_end = 4 + meta_len;
-        let meta = serde_json::from_slice::<serde_json::Value>(&body[4..meta_end])
-            .expect("relay meta should decode");
-        (meta, body[meta_end..].to_vec())
-    }
-
+    #[cfg(test)]
     #[tokio::test]
     async fn direct_sync_execution_runtime_preserves_upstream_status_and_json_body() {
         let listener = crate::test_support::bind_loopback_listener()

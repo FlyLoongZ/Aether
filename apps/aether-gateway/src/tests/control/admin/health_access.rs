@@ -11,7 +11,7 @@ use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadReposi
 use aether_data_contracts::repository::candidates::RequestCandidateStatus;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
 use axum::body::Body;
-use axum::routing::{any, get, patch, put};
+use axum::routing::any;
 use axum::{extract::Request, Router};
 use http::StatusCode;
 use serde_json::json;
@@ -298,7 +298,7 @@ async fn gateway_returns_service_unavailable_for_admin_health_api_formats_when_r
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -379,7 +379,7 @@ async fn gateway_handles_admin_health_api_formats_locally_with_trusted_admin_pri
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -441,7 +441,7 @@ async fn gateway_returns_service_unavailable_for_admin_health_summary_when_reade
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -524,7 +524,7 @@ async fn gateway_handles_admin_health_summary_locally_with_trusted_admin_princip
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -608,7 +608,7 @@ async fn gateway_handles_admin_key_health_locally_with_trusted_admin_principal()
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -783,7 +783,7 @@ async fn gateway_recovers_admin_key_health_locally_with_trusted_admin_principal(
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -896,7 +896,7 @@ async fn gateway_recovers_all_admin_key_health_locally_with_trusted_admin_princi
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1012,7 +1012,7 @@ async fn gateway_handles_admin_health_status_locally_with_trusted_admin_principa
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1098,7 +1098,7 @@ async fn gateway_handles_admin_modules_status_locally_with_trusted_admin_princip
             ("smtp_from_email".to_string(), json!("ops@example.com")),
         ]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1200,7 +1200,7 @@ async fn gateway_handles_admin_modules_status_locally_with_bearer_admin_session(
             ("smtp_from_email".to_string(), json!("ops@example.com")),
         ]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(data_state);
@@ -1257,7 +1257,7 @@ async fn gateway_handles_admin_module_status_detail_locally_with_trusted_admin_p
             json!(true),
         )]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1312,7 +1312,7 @@ async fn gateway_handles_chat_pii_redaction_module_status_detail_locally_with_tr
             json!(true),
         )]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1365,7 +1365,7 @@ async fn gateway_sets_admin_module_enabled_locally_with_trusted_admin_principal(
     let data_state = GatewayDataState::with_auth_module_reader_for_tests(auth_module_repository)
         .with_system_config_values_for_tests(Vec::<(String, serde_json::Value)>::new());
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1524,7 +1524,7 @@ async fn gateway_handles_admin_management_tokens_locally_with_trusted_admin_prin
         sample_management_token("mt-admin-2", "user-2", "bob", false),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

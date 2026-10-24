@@ -353,14 +353,6 @@ pub(crate) fn record_openai_chat_stream_target_select_selected_rank(rank: usize)
     OPENAI_CHAT_STREAM_TARGET_SELECT_SELECTED_RANK_SUM.fetch_add(rank as u64, Ordering::Relaxed);
 }
 
-pub(crate) fn record_openai_chat_model_directive_cache_hit() {
-    OPENAI_CHAT_MODEL_DIRECTIVE_CACHE_HIT_TOTAL.fetch_add(1, Ordering::Relaxed);
-}
-
-pub(crate) fn record_openai_chat_model_directive_cache_miss() {
-    OPENAI_CHAT_MODEL_DIRECTIVE_CACHE_MISS_TOTAL.fetch_add(1, Ordering::Relaxed);
-}
-
 pub(crate) fn record_chat_pii_redaction_request_cache_hit() {
     CHAT_PII_REDACTION_REQUEST_CACHE_HIT_TOTAL.fetch_add(1, Ordering::Relaxed);
 }

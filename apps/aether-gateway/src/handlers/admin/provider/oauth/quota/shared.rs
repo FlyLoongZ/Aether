@@ -1,6 +1,3 @@
-use crate::handlers::admin::provider::shared::payloads::{
-    OAUTH_ACCOUNT_BLOCK_PREFIX, OAUTH_REFRESH_FAILED_PREFIX,
-};
 use crate::handlers::admin::request::{
     AdminAppState, AdminGatewayProviderTransportSnapshot, AdminLocalOAuthRefreshError,
 };
@@ -41,6 +38,7 @@ pub(crate) struct CodexAccountResetFence {
     pub generation: u64,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CodexAccountResetFenceInstall {
     Owned(CodexAccountResetFence),
@@ -124,10 +122,6 @@ pub(crate) fn provider_auto_remove_quota_exhausted_keys(
     config: Option<&serde_json::Value>,
 ) -> bool {
     admin_provider_quota_pure::provider_auto_remove_quota_exhausted_keys(config)
-}
-
-pub(super) fn should_auto_remove_structured_reason(reason: Option<&str>) -> bool {
-    admin_provider_quota_pure::should_auto_remove_structured_reason(reason)
 }
 
 pub(crate) fn should_auto_remove_oauth_invalid_key(
@@ -218,18 +212,6 @@ pub(crate) fn provider_quota_refresh_endpoint_for_provider(
 pub(crate) fn provider_quota_refresh_missing_endpoint_message(provider_type: &str) -> String {
     ProviderPoolService::with_builtin_adapters()
         .quota_refresh_missing_endpoint_message(provider_type)
-}
-
-pub(super) fn coerce_json_u64(value: &serde_json::Value) -> Option<u64> {
-    admin_provider_quota_pure::coerce_json_u64(value)
-}
-
-pub(super) fn coerce_json_f64(value: &serde_json::Value) -> Option<f64> {
-    admin_provider_quota_pure::coerce_json_f64(value)
-}
-
-pub(super) fn coerce_json_bool(value: &serde_json::Value) -> Option<bool> {
-    admin_provider_quota_pure::coerce_json_bool(value)
 }
 
 fn merge_upstream_metadata(
@@ -779,6 +761,7 @@ pub(crate) async fn complete_codex_account_reset(
     Ok(None)
 }
 
+#[cfg(test)]
 pub(crate) async fn persist_codex_account_reset_fence(
     state: &AdminAppState<'_>,
     key_id: &str,
@@ -952,10 +935,6 @@ pub(crate) async fn persist_codex_account_reset_fence(
         }
     }
     Ok(None)
-}
-
-pub(super) fn coerce_json_string(value: Option<&serde_json::Value>) -> Option<String> {
-    admin_provider_quota_pure::coerce_json_string(value)
 }
 
 pub(super) fn build_quota_snapshot_payload(

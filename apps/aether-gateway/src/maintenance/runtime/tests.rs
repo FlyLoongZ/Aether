@@ -1,18 +1,13 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::settlement::{
     InMemorySettlementRepository, ReserveUsagePolicyCostInput, ReserveUsagePolicyRequestInput,
     SettlementWriteRepository, UsagePolicyCostWindow, UsagePolicyRequestWindow,
 };
-use aether_runtime::bounded_queue;
-use axum::extract::ws::Message;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use serde_json::json;
-use tokio::sync::watch;
 
 use super::{
     cleanup_audit_logs_with, next_daily_run_after, next_db_maintenance_run_after,
@@ -20,7 +15,7 @@ use super::{
     pending_cleanup_batch_size, pending_cleanup_timeout_minutes,
     perform_automatic_usage_cleanup_once, perform_manual_usage_cleanup_once,
     plan_pending_cleanup_batch, provider_checkin_schedule, run_db_maintenance_with,
-    spawn_account_self_check_worker, spawn_audit_cleanup_worker, spawn_db_maintenance_worker,
+    spawn_audit_cleanup_worker, spawn_db_maintenance_worker,
     spawn_fixed_provider_reconciliation_task, spawn_oauth_token_refresh_worker,
     spawn_pending_cleanup_worker, spawn_pool_monitor_worker, spawn_pool_quota_probe_worker,
     spawn_provider_checkin_worker, spawn_stats_aggregation_worker,

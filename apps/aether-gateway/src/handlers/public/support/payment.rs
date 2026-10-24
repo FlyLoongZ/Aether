@@ -30,7 +30,6 @@ use self::payment_repository::{
     process_payment_callback_input_with_wallet_repository,
     reconcile_payment_callback_referral_rewards,
 };
-use self::payment_shared::NormalizedPaymentCallbackRequest;
 
 const PAYMENT_CALLBACK_STORAGE_UNAVAILABLE_DETAIL: &str = "支付回调存储暂不可用";
 const PAYMENT_CALLBACK_PROCESSING_FAILED_DETAIL: &str = "支付回调处理失败";

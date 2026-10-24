@@ -74,13 +74,6 @@ impl<'a> AdminAppState<'a> {
         self.app.read_admin_system_stats().await
     }
 
-    pub(crate) async fn purge_admin_system_data(
-        &self,
-        target: aether_data::repository::system::AdminSystemPurgeTarget,
-    ) -> Result<aether_data::repository::system::AdminSystemPurgeSummary, GatewayError> {
-        self.app.purge_admin_system_data(target).await
-    }
-
     pub(crate) async fn export_admin_system_usage_aggregates(
         &self,
     ) -> Result<aether_data::repository::system::AdminSystemUsageAggregateSnapshot, GatewayError>
@@ -105,12 +98,6 @@ impl<'a> AdminAppState<'a> {
         &self,
     ) -> Result<crate::maintenance::AdminSystemCleanupSummary, GatewayError> {
         self.app.run_admin_system_cleanup_once().await
-    }
-
-    pub(crate) async fn rebuild_admin_stats_once(
-        &self,
-    ) -> Result<crate::maintenance::AdminStatsRebuildSummary, GatewayError> {
-        self.app.rebuild_admin_stats_once().await
     }
 
     pub(crate) async fn find_proxy_node(

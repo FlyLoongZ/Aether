@@ -134,6 +134,7 @@ pub(in super::super) enum ControlDecisionAuthResolution {
     Resolved(GatewayControlDecision),
 }
 
+#[cfg(test)]
 pub(in super::super) async fn resolve_control_decision_auth(
     state: &AppState,
     headers: &http::HeaderMap,
@@ -746,20 +747,6 @@ async fn resolve_data_backed_auth_context_cached(
     }
 }
 
-pub(crate) async fn refresh_execution_runtime_auth_context(
-    state: &AppState,
-    auth_context: GatewayControlAuthContext,
-    auth_endpoint_signature: Option<&str>,
-) -> Result<GatewayControlAuthContext, GatewayError> {
-    refresh_execution_runtime_auth_context_with_snapshot(
-        state,
-        auth_context,
-        auth_endpoint_signature,
-    )
-    .await
-    .map(|(auth_context, _)| auth_context)
-}
-
 /// Strongly refreshes the long-lived execution authorization context and
 /// returns the exact API-key snapshot that produced it.
 ///
@@ -895,9 +882,9 @@ fn auth_context_cache_max_entries() -> usize {
     })
 }
 
-fn auth_context_cache_refresh_interval(state: &AppState) -> Duration {
+fn auth_context_cache_refresh_interval(_state: &AppState) -> Duration {
     #[cfg(test)]
-    if let Some(interval) = state.auth_context_cache.refresh_interval_for_tests() {
+    if let Some(interval) = _state.auth_context_cache.refresh_interval_for_tests() {
         return interval;
     }
 
@@ -955,6 +942,7 @@ fn apply_resolved_auth_context_to_decision(
     }
 }
 
+#[cfg(test)]
 pub(super) async fn resolve_data_backed_auth_context(
     state: &AppState,
     headers: &http::HeaderMap,

@@ -28,8 +28,8 @@ use super::{
     maybe_execute_stream_via_local_openai_responses_decision,
     maybe_execute_stream_via_local_same_format_provider_decision,
     maybe_execute_stream_via_local_standard_decision, maybe_execute_stream_via_plan_fallback,
-    maybe_execute_stream_via_remote_decision, parse_local_request_body, should_skip_direct_plan,
-    LocalExecutionRequestOutcome, ProviderTransferTracker,
+    parse_local_request_body, should_skip_direct_plan, LocalExecutionRequestOutcome,
+    ProviderTransferTracker,
 };
 
 pub(crate) async fn maybe_execute_via_stream_decision_path(
@@ -183,14 +183,6 @@ async fn execute_openai_chat_stream_fast_path(
         LocalExecutionRequestOutcome::NoPath => {}
     }
 
-    if let Some(response) = maybe_execute_stream_via_remote_decision(
-        state, parts, trace_id, decision, body_json, plan_kind,
-    )
-    .await?
-    {
-        return Ok(LocalExecutionRequestOutcome::Responded(response));
-    }
-
     let fallback_started_at = std::time::Instant::now();
     let fallback_outcome = maybe_execute_stream_via_plan_fallback(
         state,
@@ -328,22 +320,6 @@ impl AiStreamExecutionPathPort for GatewayStreamExecutionPathPort<'_> {
                 )
                 .await?
             }
-            AiStreamExecutionStep::RemoteDecision => {
-                if let Some(response) = maybe_execute_stream_via_remote_decision(
-                    self.state,
-                    self.parts,
-                    self.trace_id,
-                    self.decision,
-                    self.body_json,
-                    self.plan_kind,
-                )
-                .await?
-                {
-                    LocalExecutionRequestOutcome::Responded(response)
-                } else {
-                    LocalExecutionRequestOutcome::NoPath
-                }
-            }
         };
         observe_gateway_stage_ms(
             "stream_path_step",
@@ -377,31 +353,19 @@ impl AiStreamExecutionPathPort for GatewayStreamExecutionPathPort<'_> {
     }
 }
 
-const STREAM_STEPS_VIDEO_CONTENT: &[AiStreamExecutionStep] = &[
-    AiStreamExecutionStep::LocalVideoContent,
-    AiStreamExecutionStep::RemoteDecision,
-];
-const STREAM_STEPS_OPENAI_IMAGE: &[AiStreamExecutionStep] = &[
-    AiStreamExecutionStep::LocalImage,
-    AiStreamExecutionStep::RemoteDecision,
-];
-const STREAM_STEPS_OPENAI_CHAT: &[AiStreamExecutionStep] = &[
-    AiStreamExecutionStep::LocalOpenAiChat,
-    AiStreamExecutionStep::RemoteDecision,
-];
-const STREAM_STEPS_OPENAI_RESPONSES: &[AiStreamExecutionStep] = &[
-    AiStreamExecutionStep::LocalOpenAiResponses,
-    AiStreamExecutionStep::RemoteDecision,
-];
+const STREAM_STEPS_VIDEO_CONTENT: &[AiStreamExecutionStep] =
+    &[AiStreamExecutionStep::LocalVideoContent];
+const STREAM_STEPS_OPENAI_IMAGE: &[AiStreamExecutionStep] = &[AiStreamExecutionStep::LocalImage];
+const STREAM_STEPS_OPENAI_CHAT: &[AiStreamExecutionStep] =
+    &[AiStreamExecutionStep::LocalOpenAiChat];
+const STREAM_STEPS_OPENAI_RESPONSES: &[AiStreamExecutionStep] =
+    &[AiStreamExecutionStep::LocalOpenAiResponses];
 const STREAM_STEPS_STANDARD_TEXT: &[AiStreamExecutionStep] = &[
     AiStreamExecutionStep::LocalStandardFamily,
     AiStreamExecutionStep::LocalSameFormatProvider,
-    AiStreamExecutionStep::RemoteDecision,
 ];
-const STREAM_STEPS_GEMINI_FILES: &[AiStreamExecutionStep] = &[
-    AiStreamExecutionStep::LocalGeminiFiles,
-    AiStreamExecutionStep::RemoteDecision,
-];
+const STREAM_STEPS_GEMINI_FILES: &[AiStreamExecutionStep] =
+    &[AiStreamExecutionStep::LocalGeminiFiles];
 
 fn stream_execution_steps_for_plan_kind(plan_kind: &str) -> &'static [AiStreamExecutionStep] {
     match plan_kind {
@@ -429,7 +393,6 @@ fn stream_path_stage_name(step: AiStreamExecutionStep) -> &'static str {
         AiStreamExecutionStep::LocalStandardFamily => "stream_path_step_standard_family",
         AiStreamExecutionStep::LocalSameFormatProvider => "stream_path_step_same_format_provider",
         AiStreamExecutionStep::LocalGeminiFiles => "stream_path_step_gemini_files",
-        AiStreamExecutionStep::RemoteDecision => "stream_path_step_remote_decision",
     }
 }
 

@@ -131,10 +131,12 @@ impl PlanUsageReservationContext {
         self.token.as_ref()
     }
 
+    #[cfg(test)]
     pub(crate) fn policy(&self) -> &EffectivePlanUsagePolicy {
         self.policy_snapshot.policy()
     }
 
+    #[cfg(test)]
     pub(crate) const fn admitted_at_unix_secs(&self) -> u64 {
         self.policy_snapshot.admitted_at_unix_secs
     }

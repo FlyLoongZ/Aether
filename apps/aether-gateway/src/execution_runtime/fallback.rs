@@ -1,5 +1,4 @@
 use aether_contracts::{ExecutionPlan, ExecutionResult};
-use serde_json::Value;
 
 use crate::orchestration::{
     resolve_local_failover_analysis_for_attempt, LocalFailoverAnalysis,
@@ -24,6 +23,7 @@ pub(super) fn openai_image_success_disables_local_success_failover(
             .eq_ignore_ascii_case("openai:image")
 }
 
+#[cfg(test)]
 pub(crate) async fn should_retry_next_local_candidate_sync(
     state: &AppState,
     plan: &ExecutionPlan,
@@ -82,6 +82,7 @@ pub(crate) async fn analyze_local_candidate_failover_sync(
     .await
 }
 
+#[cfg(test)]
 pub(crate) async fn should_stop_local_candidate_failover_sync(
     state: &AppState,
     plan: &ExecutionPlan,
@@ -228,6 +229,7 @@ pub(crate) async fn should_retry_next_local_candidate_stream(
     )
 }
 
+#[cfg(test)]
 pub(crate) async fn should_stop_local_candidate_failover_stream(
     state: &AppState,
     plan: &ExecutionPlan,
@@ -271,24 +273,6 @@ pub(crate) async fn resolve_local_candidate_failover_analysis_stream(
         response_text,
     )
     .await
-}
-
-pub(crate) async fn resolve_local_candidate_failover_decision_stream(
-    state: &AppState,
-    plan: &ExecutionPlan,
-    report_context: Option<&serde_json::Value>,
-    status_code: u16,
-    response_text: Option<&str>,
-) -> LocalFailoverDecision {
-    resolve_local_candidate_failover_analysis_stream(
-        state,
-        plan,
-        report_context,
-        status_code,
-        response_text,
-    )
-    .await
-    .decision
 }
 
 pub(crate) fn local_failover_response_text(

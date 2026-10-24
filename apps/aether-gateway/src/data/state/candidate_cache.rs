@@ -314,6 +314,7 @@ impl<'a> InflightGuard<'a> {
         }
     }
 
+    #[cfg(test)]
     fn epoch(&self) -> u64 {
         self.state.epoch
     }

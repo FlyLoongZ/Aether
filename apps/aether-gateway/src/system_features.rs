@@ -7,10 +7,12 @@ use tracing::warn;
 use crate::ai_serving::{
     default_model_directive_mapping_patch, default_model_directive_suffixes,
     model_directive_builtin_suffix_supported_for_source_model,
-    model_directive_suffix_has_builtin_mapping, parse_model_directive,
-    parse_model_directive_with_suffixes, ReasoningEffort, ServiceTier, MODEL_DIRECTIVE_API_FORMATS,
+    model_directive_suffix_has_builtin_mapping, parse_model_directive_with_suffixes,
+    ReasoningEffort, ServiceTier, MODEL_DIRECTIVE_API_FORMATS,
 };
 
+#[cfg(test)]
+pub(crate) use crate::ai_serving::parse_model_directive;
 use crate::handlers::shared::system_config_bool;
 use crate::state::AppState;
 
@@ -222,6 +224,7 @@ pub(crate) struct ReasoningModelDirectiveResolution {
 }
 
 impl ReasoningModelDirectiveResolution {
+    #[cfg(test)]
     pub(crate) fn enabled(&self) -> bool {
         self.enabled
     }
@@ -307,6 +310,7 @@ impl ReasoningModelDirectiveSettings {
     }
 }
 
+#[cfg(test)]
 fn model_directive_suffixes_from_model(model: &str) -> Option<Vec<String>> {
     Some(
         parse_model_directive(model)?
@@ -347,10 +351,12 @@ fn normalize_reasoning_mappings(
     normalized
 }
 
+#[cfg(test)]
 fn default_reasoning_mapping(api_format: &str, suffix: &str) -> Option<serde_json::Value> {
     default_reasoning_mapping_for_model(api_format, "", suffix)
 }
 
+#[cfg(test)]
 fn default_reasoning_mapping_for_model(
     api_format: &str,
     model: &str,

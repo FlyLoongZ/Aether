@@ -1,7 +1,7 @@
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::candidate_selection::{
     StoredApiFormatCandidateRowsQuery, StoredMinimalCandidateSelectionRow,
-    StoredPoolKeyCandidateRowsQuery, StoredRequestedModelCandidateRowsQuery,
+    StoredRequestedModelCandidateRowsQuery,
 };
 use aether_scheduler_core::{
     auth_constraints_allow_api_format, collect_global_model_names_for_required_capability,
@@ -17,18 +17,6 @@ use super::auth::GatewayAuthApiKeySnapshot;
 
 #[async_trait]
 pub(crate) trait MinimalCandidateSelectionRowSource {
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_global_model(
-        &self,
-        api_format: &str,
-        global_model_name: &str,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>;
-
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model(
-        &self,
-        api_format: &str,
-        requested_model_name: &str,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>;
-
     async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
         &self,
         query: &StoredRequestedModelCandidateRowsQuery,
@@ -51,11 +39,6 @@ pub(crate) trait MinimalCandidateSelectionRowSource {
             .take(query.limit as usize)
             .collect())
     }
-
-    async fn read_pool_key_candidate_rows_for_group(
-        &self,
-        query: &StoredPoolKeyCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>;
 
     /// Returns the canonical global model name when `model_name` is one, so the
     /// caller can keep provider-side aliases out of a request that names a
@@ -303,6 +286,7 @@ pub(crate) async fn read_api_format_rows_fallback_page(
     })
 }
 
+#[cfg(test)]
 pub(crate) async fn enumerate_minimal_candidate_selection_with_required_capabilities(
     state: &(impl MinimalCandidateSelectionRowSource + Sync),
     api_format: &str,
@@ -478,9 +462,7 @@ mod tests {
         MinimalCandidateSelectionRowSource, StoredMinimalCandidateSelectionRow,
     };
     use aether_data::DataLayerError;
-    use aether_data_contracts::repository::candidate_selection::{
-        StoredPoolKeyCandidateRowsQuery, StoredRequestedModelCandidateRowsQuery,
-    };
+    use aether_data_contracts::repository::candidate_selection::StoredRequestedModelCandidateRowsQuery;
     use async_trait::async_trait;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -507,22 +489,6 @@ mod tests {
 
     #[async_trait]
     impl MinimalCandidateSelectionRowSource for CountingSelectionSource {
-        async fn read_minimal_candidate_selection_rows_for_api_format_and_global_model(
-            &self,
-            _api_format: &str,
-            _global_model_name: &str,
-        ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            Ok(Vec::new())
-        }
-
-        async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model(
-            &self,
-            _api_format: &str,
-            _requested_model_name: &str,
-        ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            Ok(Vec::new())
-        }
-
         async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
             &self,
             query: &StoredRequestedModelCandidateRowsQuery,
@@ -543,13 +509,6 @@ mod tests {
         ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
             self.fallback_calls.fetch_add(1, Ordering::SeqCst);
             Ok(self.fallback_rows.clone())
-        }
-
-        async fn read_pool_key_candidate_rows_for_group(
-            &self,
-            _query: &StoredPoolKeyCandidateRowsQuery,
-        ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            Ok(Vec::new())
         }
     }
 

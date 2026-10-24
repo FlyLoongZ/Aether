@@ -3,9 +3,6 @@ pub(crate) const FRONTDOOR_MANIFEST_VERSION: &str = "aether.frontdoor/v1alpha1";
 pub(crate) const FRONTDOOR_MANIFEST_PATH: &str = "/.well-known/aether/frontdoor.json";
 pub(crate) const INTERNAL_FRONTDOOR_MANIFEST_PATH: &str = "/_gateway/frontdoor/manifest";
 pub(crate) const READYZ_PATH: &str = "/readyz";
-pub(crate) const FORWARDED_HOST_HEADER: &str = "x-forwarded-host";
-pub(crate) const FORWARDED_FOR_HEADER: &str = "x-forwarded-for";
-pub(crate) const FORWARDED_PROTO_HEADER: &str = "x-forwarded-proto";
 pub(crate) const GATEWAY_HEADER: &str = "x-aether-gateway";
 pub(crate) const EXECUTION_PATH_HEADER: &str = "x-aether-execution-path";
 pub(crate) const DEPENDENCY_REASON_HEADER: &str = "x-aether-dependency-reason";
@@ -59,13 +56,10 @@ pub(crate) const TRUSTED_ADMIN_USER_ROLE_HEADER: &str = "x-aether-admin-user-rol
 pub(crate) const TRUSTED_ADMIN_SESSION_ID_HEADER: &str = "x-aether-admin-session-id";
 pub(crate) const TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER: &str =
     "x-aether-admin-management-token-id";
-pub(crate) const TRUSTED_RATE_LIMIT_PREFLIGHT_HEADER: &str = "x-aether-rate-limit-preflight";
 pub(crate) const DEFAULT_USER_GROUP_CONFIG_KEY: &str = "default_user_group_id";
 pub(crate) const ANTIGRAVITY_BEARER_BRIDGE_CONFIG_KEY: &str = "module.antigravity.bearer_bridge";
 pub(crate) const BUILTIN_DEFAULT_USER_GROUP_ID: &str = "00000000-0000-0000-0000-000000000001";
 
-pub(crate) const FRONTDOOR_REPLACEABLE_ROUTE_GROUPS: &[&str] = &["frontdoor_compat_router"];
-pub(crate) const FRONTDOOR_REPLACEABLE_MIDDLEWARE_GROUPS: &[&str] = &["cors"];
 pub(crate) const INTERNAL_GATEWAY_ROUTE_GROUPS: &[&str] = &["internal_gateway_router"];
 pub(crate) const INTERNAL_GATEWAY_PATH_PREFIXES: &[&str] = &["/api/internal/gateway"];
 pub(crate) const RUST_FRONTDOOR_OWNED_ROUTE_PATTERNS: &[&str] = &[

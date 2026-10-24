@@ -27,9 +27,12 @@ use super::super::rate_limit::FrontdoorUserRpmLimiter;
 use super::super::request_candidate_queue::RequestCandidateQueueRuntime;
 use super::super::task_runtime::TaskSupervisorMetrics;
 use super::super::{provider_transport, usage};
-use super::{
+#[cfg(test)]
+pub(crate) use super::{
     AdminBillingCollectorRecord, AdminBillingRuleRecord, AdminPaymentCallbackRecord,
     AdminWalletPaymentOrderRecord, AdminWalletRefundRecord, AdminWalletTransactionRecord,
+};
+use super::{
     CachedProviderTransportSnapshot, FrontdoorCorsConfig, LocalExecutionRuntimeMissDiagnostic,
     LocalProviderDeleteTaskState, ProviderTransportSnapshotCacheKey,
     ProviderTransportSnapshotFlight,
@@ -143,27 +146,6 @@ impl FrontdoorRuntimeGuardConfig {
             candidate_planning_gate_limit: candidate_planning_gate_limit_from_env(),
             upstream_execution_gate_limit: upstream_execution_gate_limit_from_env(),
             upstream_target_gate_limit: upstream_target_gate_limit_from_env(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn for_tests(
-        request_body_read_timeout: Option<Duration>,
-        local_execution_planning_timeout: Duration,
-    ) -> Self {
-        Self {
-            request_body_read_timeout,
-            request_body_buffer_budget_bytes: DEFAULT_REQUEST_BODY_BUFFER_BUDGET_MB * 1024 * 1024,
-            request_body_buffer_budget_permits: DEFAULT_REQUEST_BODY_BUFFER_BUDGET_MB * 16,
-            local_execution_planning_timeout,
-            internal_gate_queue_budget: Duration::from_millis(
-                DEFAULT_INTERNAL_GATE_QUEUE_BUDGET_MS,
-            ),
-            auth_capacity_cache_ttl: Duration::from_millis(DEFAULT_AUTH_CAPACITY_CACHE_TTL_MS),
-            auth_snapshot_load_gate_limit: Some(DEFAULT_AUTH_SNAPSHOT_LOAD_GATE_LIMIT),
-            candidate_planning_gate_limit: Some(DEFAULT_CANDIDATE_PLANNING_GATE_LIMIT),
-            upstream_execution_gate_limit: Some(DEFAULT_UPSTREAM_EXECUTION_GATE_LIMIT),
-            upstream_target_gate_limit: Some(DEFAULT_UPSTREAM_TARGET_GATE_LIMIT),
         }
     }
 }
@@ -405,7 +387,6 @@ pub struct AppState {
     pub(crate) distributed_request_gate: Option<Arc<RuntimeSemaphore>>,
     pub(crate) distributed_websocket_connection_gate: Option<Arc<RuntimeSemaphore>>,
     pub(crate) client: reqwest::Client,
-    pub(crate) owner_forward_client: reqwest::Client,
     pub(crate) auth_context_cache: Arc<AuthContextCache>,
     pub(crate) auth_snapshot_cache: Arc<AuthSnapshotCache>,
     pub(crate) admin_security_blacklist_cache: Arc<ValueCache<String, bool>>,

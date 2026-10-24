@@ -1,6 +1,5 @@
 use super::super::super::duplicates::{
-    acquire_codex_oauth_account_locks, find_duplicate_provider_oauth_key,
-    release_codex_oauth_account_locks,
+    acquire_codex_oauth_account_locks, release_codex_oauth_account_locks,
 };
 use super::super::super::errors::build_internal_control_error_response;
 use super::super::super::provisioning::{

@@ -60,6 +60,7 @@ pub(crate) fn install_codex_fingerprint_context_slot(parts: &mut Parts) {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn ensure_codex_fingerprint_context(
     parts: &mut Parts,
     body_json: &Value,

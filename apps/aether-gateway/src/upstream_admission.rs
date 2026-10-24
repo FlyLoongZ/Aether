@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use aether_contracts::ExecutionPlan;
-use aether_runtime::{
-    ConcurrencyError, ConcurrencyGate, ConcurrencyPermit, MetricKind, MetricLabel, MetricSample,
-};
+#[cfg(test)]
+use aether_runtime::ConcurrencyError;
+use aether_runtime::{ConcurrencyGate, ConcurrencyPermit, MetricKind, MetricLabel, MetricSample};
 use dashmap::DashMap;
 use sha2::{Digest as _, Sha256};
 use tokio::time::timeout;
@@ -137,6 +137,7 @@ impl UpstreamTargetAdmission {
         Ok(Some(UpstreamTargetAdmissionPermit { _permit: permit }))
     }
 
+    #[cfg(test)]
     pub(crate) fn try_acquire_for_plan(
         &self,
         plan: &ExecutionPlan,
@@ -161,6 +162,7 @@ impl UpstreamTargetAdmission {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn snapshot_for_plan(
         &self,
         plan: &ExecutionPlan,
@@ -197,10 +199,6 @@ impl UpstreamTargetAdmission {
             .entry(target.to_string())
             .or_insert_with(|| Arc::new(UpstreamTargetGate::new(limit)));
         gate.raw_seen();
-    }
-
-    pub(crate) fn limit(&self) -> Option<usize> {
-        self.limit
     }
 
     pub(crate) fn metric_samples(&self) -> Vec<MetricSample> {

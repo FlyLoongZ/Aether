@@ -201,10 +201,8 @@ pub(super) fn is_standard_responses_event(event: &Value) -> bool {
 mod tests {
     use serde_json::json;
 
-    use super::{
-        resolve_responses_websocket_adapter, ResponsesWebSocketProtocolAdapter,
-        ResponsesWebSocketRelayDirective,
-    };
+    use super::{resolve_responses_websocket_adapter, ResponsesWebSocketRelayDirective};
+
     use crate::orchestration::ResponsesWebSocketAdapter;
 
     #[test]

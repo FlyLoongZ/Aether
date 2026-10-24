@@ -23,16 +23,6 @@ pub(crate) struct SchedulerAffinitySnapshotEntry {
 }
 
 impl SchedulerAffinityCache {
-    pub(crate) fn get_fresh(
-        &self,
-        cache_key: &str,
-        ttl: Duration,
-    ) -> Option<SchedulerAffinityTarget> {
-        self.entries
-            .get_fresh(&cache_key.to_string(), ttl)
-            .map(|value| value.target)
-    }
-
     pub(crate) fn get_fresh_for_epoch(
         &self,
         cache_key: &str,
@@ -41,17 +31,6 @@ impl SchedulerAffinityCache {
     ) -> Option<SchedulerAffinityTarget> {
         let value = self.entries.get_fresh(&cache_key.to_string(), ttl)?;
         (value.epoch == epoch).then_some(value.target)
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn insert(
-        &self,
-        cache_key: String,
-        target: SchedulerAffinityTarget,
-        ttl: Duration,
-        max_entries: usize,
-    ) {
-        self.insert_for_epoch(cache_key, target, ttl, max_entries, 0);
     }
 
     pub(crate) fn insert_for_epoch(

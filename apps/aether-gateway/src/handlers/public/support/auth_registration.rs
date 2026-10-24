@@ -228,7 +228,7 @@ async fn validate_auth_email_suffix(
 
 pub(super) async fn handle_auth_send_verification_code(
     state: &AppState,
-    headers: &http::HeaderMap,
+    _headerss: &http::HeaderMap,
     client_ip: IpAddr,
     request_body: Option<&axum::body::Bytes>,
 ) -> Response<Body> {

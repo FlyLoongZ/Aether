@@ -47,7 +47,6 @@ pub(super) struct AdminStandaloneApiKeyUpdateRequest {
     pub(super) ip_rules: Option<Option<Vec<String>>>,
     pub(super) rate_limit: Option<i32>,
     pub(super) concurrent_limit: Option<i32>,
-    pub(super) initial_balance_usd: Option<f64>,
     pub(super) unlimited_balance: Option<bool>,
     pub(super) expire_days: Option<i32>,
     pub(super) expires_at: Option<String>,

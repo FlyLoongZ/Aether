@@ -6,6 +6,7 @@ pub(crate) fn admin_wallet_build_order_no(now: chrono::DateTime<chrono::Utc>) ->
     )
 }
 
+#[cfg(test)]
 pub(crate) fn admin_payment_gateway_response_map(
     value: Option<serde_json::Value>,
 ) -> serde_json::Map<String, serde_json::Value> {

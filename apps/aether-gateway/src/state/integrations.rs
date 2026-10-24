@@ -432,13 +432,6 @@ impl ModelFetchRuntimeState for AppState {
         AppState::read_provider_transport_snapshot(self, provider_id, endpoint_id, key_id).await
     }
 
-    async fn execute_execution_runtime_sync_plan(
-        &self,
-        plan: &ExecutionPlan,
-    ) -> Result<ExecutionResult, GatewayError> {
-        execution_runtime::execute_execution_runtime_sync_plan(self, None, plan).await
-    }
-
     async fn read_recent_codex_catalog_client_version(
         &self,
         provider_id: &str,
@@ -673,37 +666,5 @@ impl SchedulerRuntimeState for AppState {
         ttl: Duration,
     ) -> Option<SchedulerAffinityTarget> {
         AppState::read_scheduler_affinity_target(self, cache_key, ttl)
-    }
-
-    fn scheduler_affinity_epoch(&self) -> u64 {
-        AppState::scheduler_affinity_epoch(self)
-    }
-
-    fn remember_scheduler_affinity_target(
-        &self,
-        cache_key: &str,
-        target: SchedulerAffinityTarget,
-        ttl: Duration,
-        max_entries: usize,
-    ) {
-        AppState::remember_scheduler_affinity_target(self, cache_key, target, ttl, max_entries);
-    }
-
-    fn remember_scheduler_affinity_target_for_epoch(
-        &self,
-        cache_key: &str,
-        target: SchedulerAffinityTarget,
-        ttl: Duration,
-        max_entries: usize,
-        expected_epoch: Option<u64>,
-    ) -> bool {
-        AppState::remember_scheduler_affinity_target_for_epoch(
-            self,
-            cache_key,
-            target,
-            ttl,
-            max_entries,
-            expected_epoch,
-        )
     }
 }

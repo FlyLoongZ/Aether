@@ -99,15 +99,6 @@ impl<'a> AdminAppState<'a> {
         self.app.count_distinct_video_task_users(filter).await
     }
 
-    pub(crate) async fn read_video_task_page(
-        &self,
-        filter: &aether_data_contracts::repository::video_tasks::VideoTaskQueryFilter,
-        page: usize,
-        page_size: usize,
-    ) -> Result<crate::async_task::VideoTaskPageResponse, GatewayError> {
-        crate::async_task::read_video_task_page(self.app, filter, page, page_size).await
-    }
-
     pub(crate) async fn read_video_task_page_summary(
         &self,
         filter: &aether_data_contracts::repository::video_tasks::VideoTaskQueryFilter,

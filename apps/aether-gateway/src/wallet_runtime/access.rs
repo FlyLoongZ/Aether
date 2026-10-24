@@ -9,6 +9,7 @@ use crate::{AppState, GatewayError};
 
 const DAILY_QUOTA_EPSILON_USD: f64 = 0.000_000_01;
 
+#[cfg(test)]
 pub(crate) async fn resolve_wallet_auth_gate(
     state: &AppState,
     auth_snapshot: &GatewayAuthApiKeySnapshot,

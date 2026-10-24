@@ -103,9 +103,6 @@ enum AccountSelfCheckOutcome {
         status_code: Option<u16>,
         category: &'static str,
     },
-    Skipped {
-        category: &'static str,
-    },
 }
 
 impl AccountSelfCheckOutcome {
@@ -115,7 +112,6 @@ impl AccountSelfCheckOutcome {
             Self::Blocked { .. } => "blocked",
             Self::AutoRemoved { .. } => "auto_removed",
             Self::Failed { .. } => "failed",
-            Self::Skipped { .. } => "skipped",
         }
     }
 
@@ -125,7 +121,6 @@ impl AccountSelfCheckOutcome {
             | Self::Blocked { status_code, .. }
             | Self::AutoRemoved { status_code, .. }
             | Self::Failed { status_code, .. } => *status_code,
-            Self::Skipped { .. } => None,
         }
     }
 
@@ -134,7 +129,7 @@ impl AccountSelfCheckOutcome {
             Self::Success { .. } => "quota_refresh_succeeded",
             Self::Blocked { .. } => "account_blocked",
             Self::AutoRemoved { .. } => "account_auto_removed",
-            Self::Failed { category, .. } | Self::Skipped { category } => category,
+            Self::Failed { category, .. } => category,
         }
     }
 }
@@ -529,11 +524,6 @@ async fn record_score_probe_result_for_key(
             Some(PoolMemberHardState::Cooldown),
             PoolMemberProbeStatus::Failed,
         ),
-        AccountSelfCheckOutcome::Skipped { .. } => (
-            false,
-            Some(PoolMemberHardState::Unknown),
-            PoolMemberProbeStatus::Never,
-        ),
     };
     let result = PoolMemberProbeResult {
         identity: PoolMemberIdentity::provider_api_key(provider_id.to_string(), key_id.to_string()),
@@ -612,9 +602,6 @@ fn update_summary_from_outcome(
         }
         AccountSelfCheckOutcome::Failed { .. } => {
             summary.failed = summary.failed.saturating_add(1);
-        }
-        AccountSelfCheckOutcome::Skipped { .. } => {
-            summary.skipped = summary.skipped.saturating_add(1);
         }
     }
 }
@@ -757,13 +744,6 @@ pub(crate) async fn perform_account_self_check_once_with_config(
     }
 
     Ok(summary)
-}
-
-pub(crate) async fn perform_account_self_check_once(
-    state: &AppState,
-) -> Result<AccountSelfCheckRunSummary, GatewayError> {
-    perform_account_self_check_once_with_config(state, AccountSelfCheckWorkerConfig::from_env())
-        .await
 }
 
 pub(crate) fn spawn_account_self_check_worker(

@@ -10,25 +10,6 @@ use aether_data_contracts::repository::global_models::{
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogProvider;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(super) fn admin_provider_model_effective_input_price(
-    model: &StoredAdminProviderModel,
-) -> Option<f64> {
-    admin_provider_models_pure::admin_provider_model_effective_input_price(model)
-}
-
-pub(super) fn admin_provider_model_effective_output_price(
-    model: &StoredAdminProviderModel,
-) -> Option<f64> {
-    admin_provider_models_pure::admin_provider_model_effective_output_price(model)
-}
-
-pub(super) fn admin_provider_model_effective_capability(
-    model: &StoredAdminProviderModel,
-    capability: &str,
-) -> bool {
-    admin_provider_models_pure::admin_provider_model_effective_capability(model, capability)
-}
-
 pub(super) fn build_admin_provider_model_response(
     provider: &StoredProviderCatalogProvider,
     model: &StoredAdminProviderModel,

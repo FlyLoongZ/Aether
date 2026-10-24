@@ -1,3 +1,4 @@
+#[cfg(test)]
 use super::wallet::admin_payment_gateway_response_map;
 use crate::{AdminWalletMutationOutcome, AdminWalletPaymentOrderRecord, AppState, GatewayError};
 

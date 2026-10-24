@@ -529,7 +529,7 @@ fn url_with_query(base: &str, params: &BTreeMap<String, String>) -> Result<Strin
 }
 
 async fn alipay_post_typed(
-    state: &AppState,
+    _statee: &AppState,
     config: &DirectGatewayConfig,
     params: &BTreeMap<String, String>,
 ) -> Result<Value, DirectPaymentRequestError> {
@@ -976,7 +976,7 @@ fn wxpay_authorization(
 }
 
 async fn wxpay_post_json(
-    state: &AppState,
+    _statee: &AppState,
     config: &DirectGatewayConfig,
     canonical_url: &str,
     body: Value,
@@ -1671,7 +1671,7 @@ pub(crate) async fn refund_direct_gateway_order(
                 None,
             )?;
             let value = alipay_post(state, &config, &params).await?;
-            let response = alipay_response_success(&value, "alipay_trade_refund_response")?;
+            let _responsee = alipay_response_success(&value, "alipay_trade_refund_response")?;
             // Alipay's `trade_no` identifies the original payment transaction,
             // not this refund. `out_request_no` is the merchant-scoped,
             // idempotent refund identifier and is what we persist.

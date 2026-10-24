@@ -97,8 +97,4 @@ impl ProviderOAuthRepository {
         refresh_provider_oauth_account_state_after_update(state, provider, key_id, proxy_override)
             .await
     }
-
-    pub(crate) fn clear_transport_cache_after_write(state: &AdminAppState<'_>) {
-        state.app().clear_provider_transport_snapshot_cache();
-    }
 }

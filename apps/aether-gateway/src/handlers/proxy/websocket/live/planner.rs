@@ -357,6 +357,7 @@ async fn plan_live_candidate_inner(
     }))
 }
 
+#[cfg(test)]
 pub(super) fn direct_live_websocket_url(
     candidate: &PlannedLiveCandidate,
 ) -> Result<String, LiveProtocolError> {

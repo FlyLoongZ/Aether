@@ -1,7 +1,7 @@
 pub(super) use super::{
     build_auth_error_response, build_auth_json_response, build_auth_wallet_summary_payload,
     query_param_value, resolve_authenticated_local_user, unix_secs_to_rfc3339, AppState,
-    GatewayError, GatewayPublicRequestContext,
+    GatewayPublicRequestContext,
 };
 pub(super) use axum::{body::Body, http, response::Response};
 
@@ -39,15 +39,16 @@ use self::reads::{
     parse_wallet_limit, parse_wallet_offset, wallet_fixed_offset,
     wallet_transaction_payload_from_record,
 };
-pub(crate) use self::recharge::{
-    direct_gateway_channels, prepare_billing_gateway_response_for_storage,
-    prepare_wallet_gateway_response_for_storage, resolve_direct_gateway_channel,
-    sanitize_wallet_gateway_response, wallet_payment_instructions_from_checkout,
-    wallet_payment_instructions_from_stored,
-};
+#[cfg(test)]
+pub(crate) use self::recharge::prepare_wallet_gateway_response_for_storage;
 use self::recharge::{
     handle_wallet_create_recharge, handle_wallet_recharge_detail, handle_wallet_recharge_list,
     handle_wallet_recharge_options, wallet_recharge_detail_path_matches,
+};
+pub(crate) use self::recharge::{
+    prepare_billing_gateway_response_for_storage, resolve_direct_gateway_channel,
+    sanitize_wallet_gateway_response, wallet_payment_instructions_from_checkout,
+    wallet_payment_instructions_from_stored,
 };
 use self::redeem::handle_wallet_redeem;
 use self::refunds::{

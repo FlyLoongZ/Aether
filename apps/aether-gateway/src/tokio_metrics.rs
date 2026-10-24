@@ -61,7 +61,7 @@ fn gauge(name: &'static str, help: &'static str, value: u64) -> MetricSample {
     MetricSample::new(name, help, MetricKind::Gauge, value)
 }
 
-fn u64_from_usize(value: usize) -> u64 {
+pub(crate) fn u64_from_usize(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 

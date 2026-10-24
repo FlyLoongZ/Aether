@@ -1,6 +1,3 @@
-use super::cache_config::{
-    ADMIN_MONITORING_CACHE_AFFINITY_REDIS_REQUIRED_DETAIL, ADMIN_MONITORING_REDIS_REQUIRED_DETAIL,
-};
 use crate::handlers::admin::shared::query_param_value;
 use axum::{
     body::Body,
@@ -107,22 +104,6 @@ pub(super) fn admin_monitoring_cache_affinity_delete_params_from_path(
         segments[2].trim().to_string(),
         segments[3].trim().to_string(),
     ))
-}
-
-pub(super) fn admin_monitoring_cache_affinity_unavailable_response() -> Response<Body> {
-    (
-        http::StatusCode::SERVICE_UNAVAILABLE,
-        Json(json!({ "detail": ADMIN_MONITORING_CACHE_AFFINITY_REDIS_REQUIRED_DETAIL })),
-    )
-        .into_response()
-}
-
-pub(super) fn admin_monitoring_redis_unavailable_response() -> Response<Body> {
-    (
-        http::StatusCode::SERVICE_UNAVAILABLE,
-        Json(json!({ "detail": ADMIN_MONITORING_REDIS_REQUIRED_DETAIL })),
-    )
-        .into_response()
 }
 
 pub(super) fn admin_monitoring_cache_affinity_not_found_response(

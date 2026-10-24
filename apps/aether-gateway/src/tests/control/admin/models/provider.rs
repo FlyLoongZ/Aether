@@ -3,9 +3,8 @@ use std::sync::{Arc, Mutex};
 use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::quota::InMemoryProviderQuotaRepository;
-use aether_data_contracts::repository::{
-    global_models::{AdminProviderModelListQuery, GlobalModelReadRepository},
-    quota::StoredProviderQuotaSnapshot,
+use aether_data_contracts::repository::global_models::{
+    AdminProviderModelListQuery, GlobalModelReadRepository,
 };
 use axum::body::Body;
 use axum::routing::any;
@@ -18,8 +17,7 @@ use super::super::super::{
     sample_provider, start_server, AppState,
 };
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
 
@@ -55,7 +53,7 @@ async fn gateway_handles_admin_provider_models_locally_with_trusted_admin_princi
     );
     let quota_repository = Arc::new(InMemoryProviderQuotaRepository::seed(vec![]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -134,7 +132,7 @@ async fn gateway_handles_admin_provider_model_detail_locally_with_trusted_admin_
     );
     let quota_repository = Arc::new(InMemoryProviderQuotaRepository::seed(vec![]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -209,7 +207,7 @@ async fn gateway_creates_admin_provider_model_locally_with_trusted_admin_princip
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -310,7 +308,7 @@ async fn gateway_updates_and_deletes_admin_provider_model_locally_with_trusted_a
             )]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -415,7 +413,7 @@ async fn gateway_batch_creates_admin_provider_models_locally_with_trusted_admin_
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -506,7 +504,7 @@ async fn gateway_handles_admin_provider_available_source_models_locally_with_tru
             .with_admin_provider_models(vec![primary_model, alternate_model]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -595,7 +593,7 @@ async fn gateway_assigns_and_imports_admin_provider_models_locally_with_trusted_
             )]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

@@ -1183,7 +1183,7 @@ impl MemoryRuntimeBackend {
 
         let previous_sequence = self
             .queue_seq
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |sequence| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |sequence| {
                 sequence.checked_add(1)
             })
             .map_err(|_| {

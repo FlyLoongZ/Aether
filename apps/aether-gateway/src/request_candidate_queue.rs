@@ -2436,20 +2436,6 @@ fn request_candidate_status_is_priority(status: RequestCandidateStatus) -> bool 
     request_candidate_status_is_active(status) || request_candidate_status_is_terminal(status)
 }
 
-#[cfg(test)]
-fn request_candidate_status_discriminant(status: RequestCandidateStatus) -> u8 {
-    match status {
-        RequestCandidateStatus::Available => 0,
-        RequestCandidateStatus::Unused => 1,
-        RequestCandidateStatus::Pending => 2,
-        RequestCandidateStatus::Streaming => 3,
-        RequestCandidateStatus::Success => 4,
-        RequestCandidateStatus::Failed => 5,
-        RequestCandidateStatus::Cancelled => 6,
-        RequestCandidateStatus::Skipped => 7,
-    }
-}
-
 fn take_if_some<T>(target: &mut Option<T>, incoming: Option<T>) {
     if incoming.is_some() {
         *target = incoming;
@@ -2501,7 +2487,7 @@ fn decrement_atomic_usize(value: &AtomicUsize) {
 }
 
 fn decrement_atomic_usize_by(value: &AtomicUsize, amount: usize) {
-    let _ = value.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+    let _ = value.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
         Some(current.saturating_sub(amount))
     });
 }

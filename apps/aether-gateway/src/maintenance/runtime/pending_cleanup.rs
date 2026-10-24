@@ -1,11 +1,11 @@
-use std::collections::HashSet;
-
 use chrono::Utc;
 
 use crate::data::GatewayDataState;
 use aether_data_contracts::DataLayerError;
 
 use super::{pending_cleanup_batch_size, pending_cleanup_timeout_minutes};
+#[cfg(test)]
+pub(crate) use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct PendingCleanupSummary {
@@ -13,6 +13,7 @@ pub(crate) struct PendingCleanupSummary {
     pub(crate) recovered: usize,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct StalePendingUsageRow {
     pub(super) id: String,
@@ -21,6 +22,7 @@ pub(super) struct StalePendingUsageRow {
     pub(super) billing_status: String,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct FailedPendingUsageRow {
     pub(super) id: String,
@@ -28,6 +30,7 @@ pub(super) struct FailedPendingUsageRow {
     pub(super) should_void_billing: bool,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct PendingCleanupBatchPlan {
     pub(super) recovered_usage_ids: Vec<String>,
@@ -62,6 +65,7 @@ pub(crate) async fn cleanup_stale_pending_requests_once(
     })
 }
 
+#[cfg(test)]
 pub(super) fn plan_pending_cleanup_batch(
     stale_rows: Vec<StalePendingUsageRow>,
     completed_request_ids: &HashSet<String>,

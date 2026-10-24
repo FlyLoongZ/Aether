@@ -3,6 +3,7 @@ use crate::handlers::admin::shared::build_admin_usage_counter_health_payload;
 use crate::handlers::admin::system::shared::update::{
     current_self_update_blocker, self_update_supported,
 };
+#[cfg(not(test))]
 use crate::handlers::admin::system::shared::update_client::{
     build_direct_update_http_client, build_update_http_client, has_explicit_update_proxy_env,
     update_github_token_from_env,
@@ -11,7 +12,6 @@ use crate::handlers::shared::{system_config_bool, system_config_string};
 use crate::GatewayError;
 use aether_admin::system::{
     build_admin_api_formats_payload as build_admin_api_formats_payload_pure,
-    build_admin_system_check_update_payload as build_admin_system_check_update_payload_pure,
     build_admin_system_check_update_payload_with_release, build_admin_system_releases_payload,
     build_admin_system_settings_payload as build_admin_system_settings_payload_pure,
     build_admin_system_settings_updated_payload,
@@ -25,10 +25,13 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::time::Duration;
 
+#[cfg(not(test))]
 const AETHER_RELEASES_API_URL: &str =
     "https://api.github.com/repos/fawney19/Aether/releases?per_page=20";
 const AETHER_RELEASE_TAG_URL_BASE: &str = "https://github.com/fawney19/Aether/releases/tag";
+#[cfg(not(test))]
 const MAX_GITHUB_RELEASES_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+#[cfg(test)]
 const SOURCE_BUILD_UPDATE_BLOCKER: &str = "当前为源码构建，请使用 git pull 后重新编译。";
 const SOURCE_BUILD_RELEASE_BLOCKER: &str = "当前为源码构建，请手动切换到对应标签后重新编译。";
 
@@ -41,10 +44,6 @@ pub(crate) fn current_aether_version() -> String {
         .filter(|version| !version.is_empty())
         .unwrap_or(env!("CARGO_PKG_VERSION"))
         .to_string()
-}
-
-pub(crate) fn build_admin_system_check_update_payload() -> serde_json::Value {
-    build_admin_system_check_update_payload_pure(current_aether_version())
 }
 
 pub(crate) fn build_admin_system_check_update_payload_from_release(
@@ -479,7 +478,6 @@ struct GitHubReleaseAsset {
 #[derive(Debug, Deserialize)]
 struct GitHubRelease {
     tag_name: String,
-    html_url: String,
     #[serde(default)]
     body: Option<String>,
     #[serde(default)]

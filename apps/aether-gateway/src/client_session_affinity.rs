@@ -109,6 +109,7 @@ struct OpenAiPythonSdkSessionScopeAdapter;
 struct AnthropicJsSdkSessionScopeAdapter;
 struct AnthropicPythonSdkSessionScopeAdapter;
 
+#[cfg(test)]
 pub(crate) fn client_session_affinity_from_request(
     headers: &http::HeaderMap,
     body_json: Option<&Value>,

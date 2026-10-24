@@ -13,7 +13,7 @@ use crate::handlers::shared::provider_pool::admin_provider_pool_config_from_conf
 use crate::scheduler::config::{SchedulerOrderingConfig, SchedulerSchedulingMode};
 use aether_scheduler_core::{
     matches_affinity_target, ClientSessionAffinity, SchedulerAffinityTarget,
-    SchedulerMinimalCandidateSelectionCandidate, SchedulerPriorityMode, SchedulerRankableCandidate,
+    SchedulerMinimalCandidateSelectionCandidate, SchedulerRankableCandidate,
     SchedulerRankingContext, SchedulerRankingOutcome,
 };
 
@@ -394,7 +394,7 @@ mod tests {
             "keep_priority_on_conversion".to_string(),
             json!(true),
         )]);
-        let state = AppState::new()
+        let _state = AppState::new()
             .expect("state should build")
             .with_data_state_for_tests(data_state);
         let policy = aether_routing_core::ResolvedRoutingPolicy {
@@ -467,10 +467,6 @@ mod tests {
         assert_eq!(overlaid.key_global_priority_for_format, Some(4));
     }
 
-    fn sample_provider() -> StoredProviderCatalogProvider {
-        sample_provider_with_options("provider-1", false, 0)
-    }
-
     fn sample_provider_with_options(
         id: &str,
         keep_priority_on_conversion: bool,
@@ -506,10 +502,6 @@ mod tests {
         .with_routing_fields(provider_priority)
     }
 
-    fn sample_endpoint(id: &str) -> StoredProviderCatalogEndpoint {
-        sample_endpoint_for_provider("provider-1", id, "openai:chat")
-    }
-
     fn sample_endpoint_for_provider(
         provider_id: &str,
         id: &str,
@@ -541,10 +533,6 @@ mod tests {
             None,
         )
         .expect("endpoint transport should build")
-    }
-
-    fn sample_key(id: &str, node_id: &str) -> StoredProviderCatalogKey {
-        sample_key_for_provider("provider-1", id, node_id)
     }
 
     fn sample_key_for_provider(

@@ -1,8 +1,7 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json,
     next_non_keepalive_chunk, start_server, strip_sse_keepalive_comments, to_bytes, Arc, Body,
-    Bytes, HeaderName, HeaderValue, Json, Mutex, Request, Response, Router, StatusCode,
-    TRACE_ID_HEADER,
+    Bytes, HeaderValue, Json, Mutex, Request, Response, Router, StatusCode, TRACE_ID_HEADER,
 };
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{
@@ -498,7 +497,7 @@ async fn gateway_executes_kiro_claude_cli_stream_via_local_provider_catalog_cand
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url.clone())
     .with_data_state_for_tests(
@@ -971,7 +970,7 @@ async fn gateway_executes_claude_cli_stream_via_local_decision_gate_without_wait
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url.clone())
     .with_data_state_for_tests(
@@ -1488,7 +1487,7 @@ async fn gateway_executes_claude_code_cli_stream_via_local_decision_gate_with_lo
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url.clone())
     .with_data_state_for_tests(
@@ -1984,7 +1983,7 @@ async fn gateway_executes_claude_chat_stream_via_local_decision_gate_with_local_
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url.clone())
     .with_data_state_for_tests(

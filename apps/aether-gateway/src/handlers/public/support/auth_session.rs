@@ -264,7 +264,7 @@ pub(crate) async fn handle_auth_me(
 
 pub(super) async fn handle_auth_refresh(
     state: &AppState,
-    request_context: &GatewayPublicRequestContext,
+    _request_contextt: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
 ) -> Response<Body> {
     if crate::headers::header_value_str(headers, http::header::CONTENT_LENGTH.as_str())

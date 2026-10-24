@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use aether_cache::ExpiringMap;
@@ -11,6 +10,8 @@ use tracing::warn;
 use crate::control::GatewayControlDecision;
 use crate::stage_metrics::observe_gateway_stage_ms;
 use crate::{AppState, GatewayError};
+#[cfg(test)]
+use std::sync::Mutex as StdMutex;
 
 const SYSTEM_RPM_CONFIG_KEY: &str = "rate_limit_per_minute";
 const SYSTEM_RPM_CONFIG_CACHE_TTL: Duration = Duration::from_secs(15);

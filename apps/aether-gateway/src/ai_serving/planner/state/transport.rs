@@ -17,17 +17,6 @@ impl<'a> PlannerAppState<'a> {
             .await
     }
 
-    pub(crate) async fn read_provider_transport_snapshot(
-        self,
-        provider_id: &str,
-        endpoint_id: &str,
-        key_id: &str,
-    ) -> Result<Option<GatewayProviderTransportSnapshot>, GatewayError> {
-        self.app()
-            .read_provider_transport_snapshot(provider_id, endpoint_id, key_id)
-            .await
-    }
-
     pub(crate) async fn resolve_local_oauth_request_auth(
         self,
         transport: &GatewayProviderTransportSnapshot,

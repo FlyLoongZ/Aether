@@ -10,37 +10,6 @@ use crate::scheduler::config::SchedulerOrderingConfig;
 use crate::GatewayError;
 
 impl<'a> PlannerAppState<'a> {
-    /// `ordering_config` is the immutable scheduler snapshot derived from the
-    /// request's resolved routing policy.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn list_selectable_candidates(
-        self,
-        api_format: &str,
-        global_model_name: &str,
-        require_streaming: bool,
-        required_capabilities: Option<&serde_json::Value>,
-        auth_snapshot: Option<&GatewayAuthApiKeySnapshot>,
-        client_session_affinity: Option<&ClientSessionAffinity>,
-        now_unix_secs: u64,
-        enable_model_directives: bool,
-        ordering_config: SchedulerOrderingConfig,
-    ) -> Result<Vec<SchedulerMinimalCandidateSelectionCandidate>, GatewayError> {
-        crate::scheduler::candidate::list_selectable_candidates(
-            self.app().data.as_ref(),
-            self.app(),
-            api_format,
-            global_model_name,
-            require_streaming,
-            required_capabilities,
-            auth_snapshot,
-            client_session_affinity,
-            now_unix_secs,
-            enable_model_directives,
-            ordering_config,
-        )
-        .await
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn list_selectable_candidates_with_skip_reasons(
         self,

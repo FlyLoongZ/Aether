@@ -62,6 +62,7 @@ const POOL_SCORE_SCHEDULE_INTEREST_MIN_INTERVAL_SECS: u64 = 60;
 
 type PoolCatalogKeyContext = PoolMemberSignals;
 
+#[cfg(test)]
 pub(crate) async fn apply_local_execution_pool_scheduler(
     state: PlannerAppState<'_>,
     candidates: Vec<EligibleLocalExecutionCandidate>,
@@ -221,6 +222,7 @@ async fn schedule_pool_page_candidates(
     (scheduled, skipped)
 }
 
+#[cfg(test)]
 async fn remove_active_probe_members_for_request(
     state: PlannerAppState<'_>,
     evicted_members_by_provider: &BTreeMap<String, BTreeSet<String>>,
@@ -332,6 +334,7 @@ fn active_probe_member_is_unschedulable_for_request(
     })
 }
 
+#[cfg(test)]
 async fn expand_pool_group_candidate(
     state: PlannerAppState<'_>,
     group: EligibleLocalExecutionCandidate,
@@ -408,6 +411,7 @@ impl<'a> PoolKeyCursor<'a> {
         self.group.candidate.endpoint_id.as_str()
     }
 
+    #[cfg(test)]
     pub(crate) fn new(
         state: PlannerAppState<'a>,
         group: EligibleLocalExecutionCandidate,
@@ -512,16 +516,13 @@ impl<'a> PoolKeyCursor<'a> {
 
     pub(crate) async fn next_key(&mut self) -> Option<EligibleLocalExecutionCandidate> {
         let started_at = std::time::Instant::now();
-        let mut observed = false;
         loop {
             if let Some(candidate) = self.next_queued_candidate().await {
                 self.returned_key_count = self.returned_key_count.saturating_add(1);
-                if !observed {
-                    observe_gateway_stage_ms(
-                        "pool_cursor_next_key",
-                        started_at.elapsed().as_millis() as u64,
-                    );
-                }
+                observe_gateway_stage_ms(
+                    "pool_cursor_next_key",
+                    started_at.elapsed().as_millis() as u64,
+                );
                 return Some(candidate);
             }
 
@@ -534,13 +535,10 @@ impl<'a> PoolKeyCursor<'a> {
             }
 
             if !self.refill_queued_candidates().await {
-                if !observed {
-                    observe_gateway_stage_ms(
-                        "pool_cursor_next_key",
-                        started_at.elapsed().as_millis() as u64,
-                    );
-                    observed = true;
-                }
+                observe_gateway_stage_ms(
+                    "pool_cursor_next_key",
+                    started_at.elapsed().as_millis() as u64,
+                );
                 return None;
             }
         }
@@ -1644,6 +1642,7 @@ fn pool_oauth_reason_has_tag(reason: &str, tag: &str) -> bool {
         .any(|line| line.starts_with(tag))
 }
 
+#[cfg(test)]
 fn apply_local_execution_pool_scheduler_with_runtime_map(
     candidates: Vec<EligibleLocalExecutionCandidate>,
     runtime_by_provider: &BTreeMap<String, AdminProviderPoolRuntimeState>,
@@ -1667,6 +1666,7 @@ struct PoolSchedulerApplyOutcome {
     active_probe_evicted_members_by_provider: BTreeMap<String, BTreeSet<String>>,
 }
 
+#[cfg(test)]
 fn apply_local_execution_pool_scheduler_with_runtime_map_outcome(
     candidates: Vec<EligibleLocalExecutionCandidate>,
     runtime_by_provider: &BTreeMap<String, AdminProviderPoolRuntimeState>,

@@ -703,15 +703,14 @@ fn ldap_bind_password_error(message: &str) -> GatewayError {
 #[cfg(test)]
 mod tests {
     use super::{
-        bark_device_key_binding, decrypt_bark_device_key_v2, decrypt_ldap_bind_password_v2,
-        decrypt_ldap_bind_password_v3, decrypt_or_migrate_bark_device_key,
-        decrypt_or_migrate_ldap_bind_password, decrypt_or_migrate_smtp_password,
-        decrypt_or_migrate_system_config_secret,
+        bark_device_key_binding, decrypt_bark_device_key_v2, decrypt_ldap_bind_password_v3,
+        decrypt_or_migrate_bark_device_key, decrypt_or_migrate_ldap_bind_password,
+        decrypt_or_migrate_smtp_password, decrypt_or_migrate_system_config_secret,
         decrypt_or_migrate_system_config_secret_with_before_compare, decrypt_system_config_secret,
         encrypt_bark_device_key, encrypt_ldap_bind_password, encrypt_smtp_password,
         encrypt_system_config_secret, ldap_module_config_is_valid,
-        normalize_ldap_transport_server_url, smtp_password_binding, LDAP_BIND_PASSWORD_V2_PREFIX,
-        LDAP_BIND_PASSWORD_V3_PREFIX, SMTP_PASSWORD_V3_PREFIX, SYSTEM_CONFIG_SECRET_V2_PREFIX,
+        normalize_ldap_transport_server_url, smtp_password_binding, LDAP_BIND_PASSWORD_V3_PREFIX,
+        SMTP_PASSWORD_V3_PREFIX, SYSTEM_CONFIG_SECRET_V2_PREFIX,
     };
     use crate::data::GatewayDataState;
     use crate::AppState;

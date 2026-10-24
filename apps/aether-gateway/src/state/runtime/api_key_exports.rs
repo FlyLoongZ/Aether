@@ -498,6 +498,7 @@ impl AppState {
         Ok(api_key)
     }
 
+    #[cfg(test)]
     pub(crate) async fn set_user_api_key_feature_settings(
         &self,
         user_id: &str,
@@ -508,24 +509,6 @@ impl AppState {
         let api_key = self
             .data
             .set_user_api_key_feature_settings(user_id, api_key_id, feature_settings)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))?;
-        if api_key.is_some() {
-            self.invalidate_auth_context_cache();
-        }
-        Ok(api_key)
-    }
-
-    pub(crate) async fn set_user_api_key_feature_settings_if_unlocked(
-        &self,
-        user_id: &str,
-        api_key_id: &str,
-        feature_settings: Option<serde_json::Value>,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
-    {
-        let api_key = self
-            .data
-            .set_user_api_key_feature_settings_if_unlocked(user_id, api_key_id, feature_settings)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))?;
         if api_key.is_some() {

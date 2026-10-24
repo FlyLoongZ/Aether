@@ -1,19 +1,6 @@
 use crate::{AppState, GatewayError};
 
 impl AppState {
-    pub(crate) async fn upsert_gemini_file_mapping(
-        &self,
-        record: aether_data::repository::gemini_file_mappings::UpsertGeminiFileMappingRecord,
-    ) -> Result<
-        Option<aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
-        GatewayError,
-    > {
-        self.data
-            .upsert_gemini_file_mapping(record)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn upsert_gemini_file_mapping_if_owner_matches(
         &self,
         record: aether_data::repository::gemini_file_mappings::UpsertGeminiFileMappingRecord,
@@ -36,19 +23,6 @@ impl AppState {
     > {
         self.data
             .list_gemini_file_mappings(query)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn find_gemini_file_mapping_by_file_name(
-        &self,
-        file_name: &str,
-    ) -> Result<
-        Option<aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
-        GatewayError,
-    > {
-        self.data
-            .find_gemini_file_mapping_by_file_name(file_name)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
@@ -91,27 +65,6 @@ impl AppState {
     {
         self.data
             .summarize_gemini_file_mappings(now_unix_secs)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn delete_gemini_file_mapping_by_file_name(
-        &self,
-        file_name: &str,
-    ) -> Result<bool, GatewayError> {
-        self.data
-            .delete_gemini_file_mapping_by_file_name(file_name)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn delete_gemini_file_mapping_by_file_name_for_user(
-        &self,
-        file_name: &str,
-        user_id: &str,
-    ) -> Result<bool, GatewayError> {
-        self.data
-            .delete_gemini_file_mapping_by_file_name_for_user(file_name, user_id)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }

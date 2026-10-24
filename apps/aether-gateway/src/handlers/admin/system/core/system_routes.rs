@@ -24,14 +24,18 @@ use crate::handlers::admin::system::shared::update::{
     self_update_supported, start_admin_system_rollback_task, start_admin_system_update_task,
 };
 use crate::handlers::admin::system::{
-    execute_admin_system_import_exclusively, release_admin_system_import_lease,
-    try_acquire_admin_system_import_lease, AdminSystemImportLockError,
+    execute_admin_system_import_exclusively, AdminSystemImportLockError,
+};
+#[cfg(test)]
+pub(crate) use crate::handlers::admin::system::{
+    release_admin_system_import_lease, try_acquire_admin_system_import_lease,
 };
 use crate::important_notification::build_important_notification_test_payload;
 use crate::maintenance::{ManualUsageCleanupMode, ManualUsageCleanupOptions};
 use crate::GatewayError;
 use aether_data_contracts::repository::usage::UsageCleanupTargets;
-use aether_runtime_state::RuntimeLockLease;
+#[cfg(test)]
+pub(crate) use aether_runtime_state::RuntimeLockLease;
 use axum::{
     body::{Body, Bytes},
     http,
@@ -1147,6 +1151,7 @@ fn sensitive_system_export_response(mut response: Response<Body>) -> Response<Bo
     response
 }
 
+#[cfg(test)]
 async fn acquire_admin_system_import_lock(
     state: &AdminAppState<'_>,
 ) -> Result<RuntimeLockLease, Response<Body>> {
@@ -1191,6 +1196,7 @@ fn admin_system_import_lock_error_response(error: AdminSystemImportLockError) ->
     }
 }
 
+#[cfg(test)]
 async fn release_admin_system_import_lock(state: &AdminAppState<'_>, lock: &RuntimeLockLease) {
     release_admin_system_import_lease(state.app(), lock).await;
 }

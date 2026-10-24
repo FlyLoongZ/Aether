@@ -363,11 +363,13 @@ pub(crate) struct AuthSnapshotCache {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum AuthSnapshotCacheKey {
+    #[cfg(test)]
     KeyHash(String),
     UserApiKeyIds(AuthApiKeyIdentityCacheKey),
 }
 
 impl AuthSnapshotCacheKey {
+    #[cfg(test)]
     pub(crate) fn key_hash(key_hash: &str) -> Self {
         Self::KeyHash(key_hash.trim().to_string())
     }
@@ -378,6 +380,7 @@ impl AuthSnapshotCacheKey {
 
     pub(crate) fn is_empty(&self) -> bool {
         match self {
+            #[cfg(test)]
             Self::KeyHash(key_hash) => key_hash.is_empty(),
             Self::UserApiKeyIds(key) => key.is_empty(),
         }
@@ -385,6 +388,7 @@ impl AuthSnapshotCacheKey {
 }
 
 impl AuthSnapshotCache {
+    #[cfg(test)]
     pub(crate) fn generation(&self) -> u64 {
         self.singleflight.generation()
     }
@@ -492,15 +496,6 @@ where
 {
     pub(crate) fn get(&self, key: &K, ttl: Duration) -> Option<Option<Value>> {
         self.entries.get_fresh(key, ttl)
-    }
-
-    pub(crate) fn insert(&self, key: K, value: Option<Value>, ttl: Duration) {
-        let Ok(_mutation) = self.mutation.lock() else {
-            return;
-        };
-        self.entries
-            .insert(key, value, ttl, AUTH_RUNTIME_CACHE_MAX_ENTRIES);
-        self.singleflight.clear();
     }
 
     fn insert_if_generation(&self, key: K, value: Option<Value>, ttl: Duration, generation: u64) {

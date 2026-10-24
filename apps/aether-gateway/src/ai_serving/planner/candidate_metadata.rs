@@ -1,8 +1,7 @@
 use aether_ai_serving::{
-    append_ai_execution_contract_fields_to_value, append_ai_ranking_metadata_to_object,
-    build_ai_candidate_metadata_from_candidate,
+    append_ai_execution_contract_fields_to_value, build_ai_candidate_metadata_from_candidate,
 };
-use aether_scheduler_core::{SchedulerMinimalCandidateSelectionCandidate, SchedulerRankingOutcome};
+use aether_scheduler_core::SchedulerMinimalCandidateSelectionCandidate;
 use serde_json::{Map, Value};
 
 use crate::ai_serving::planner::candidate_resolution::EligibleLocalExecutionCandidate;
@@ -15,13 +14,6 @@ pub(crate) struct LocalExecutionCandidateMetadataParts<'a> {
     pub(crate) provider_api_format: &'a str,
     pub(crate) client_api_format: &'a str,
     pub(crate) extra_fields: Map<String, Value>,
-}
-
-pub(crate) fn append_ranking_metadata_to_object(
-    object: &mut Map<String, Value>,
-    ranking: &SchedulerRankingOutcome,
-) {
-    append_ai_ranking_metadata_to_object(object, ranking);
 }
 
 pub(crate) fn build_local_execution_candidate_metadata(
@@ -108,11 +100,11 @@ mod tests {
         build_local_execution_candidate_contract_metadata_for_candidate,
         build_local_execution_candidate_metadata_for_candidate,
     };
-    use crate::ai_serving::transport::snapshot::{
+    use crate::ai_serving::{ConversionMode, ExecutionStrategy, GatewayProviderTransportSnapshot};
+    use crate::provider_transport::snapshot::{
         GatewayProviderTransportEndpoint, GatewayProviderTransportKey,
         GatewayProviderTransportProvider,
     };
-    use crate::ai_serving::{ConversionMode, ExecutionStrategy, GatewayProviderTransportSnapshot};
     use aether_scheduler_core::SchedulerMinimalCandidateSelectionCandidate;
     use serde_json::{json, Value};
 

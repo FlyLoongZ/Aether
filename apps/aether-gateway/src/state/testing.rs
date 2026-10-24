@@ -6,9 +6,7 @@ use aether_contracts::{ExecutionPlan, ExecutionResult};
 use aether_data_contracts::repository::candidates::RequestCandidateReadRepository;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
 use aether_data_contracts::repository::usage::{UsageReadRepository, UsageRepository};
-use aether_data_contracts::repository::video_tasks::{
-    VideoTaskReadRepository, VideoTaskRepository,
-};
+use aether_data_contracts::repository::video_tasks::VideoTaskRepository;
 use hmac::Mac;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -39,19 +37,6 @@ fn auth_email_storage_key_digest_for_tests(domain: &str, parts: &[&str]) -> Stri
 
 #[cfg(test)]
 impl AppState {
-    pub(crate) fn with_internal_gateway_auth_secret_for_tests(mut self, secret: &str) -> Self {
-        self.internal_gateway_auth = Arc::new(
-            crate::internal_gateway_auth::InternalGatewayAuthConfig::with_secret_for_tests(secret),
-        );
-        self
-    }
-
-    pub(crate) fn without_internal_gateway_for_tests(mut self) -> Self {
-        self.internal_gateway_auth =
-            Arc::new(crate::internal_gateway_auth::InternalGatewayAuthConfig::disabled_for_tests());
-        self
-    }
-
     pub(crate) fn with_data_state_for_tests(mut self, data_state: GatewayDataState) -> Self {
         // Request-execution fixtures provide candidate and provider data but
         // bypass the production startup bootstrap that creates the enabled
@@ -92,16 +77,6 @@ impl AppState {
         config: FrontdoorRuntimeGuardConfig,
     ) -> Self {
         self.frontdoor_runtime_guards = Arc::new(config);
-        self
-    }
-
-    pub(crate) fn with_video_task_data_reader_for_tests(
-        mut self,
-        repository: Arc<dyn VideoTaskReadRepository>,
-    ) -> Self {
-        self.replace_data_state(Arc::new(
-            GatewayDataState::with_video_task_reader_for_tests(repository),
-        ));
         self
     }
 
@@ -186,30 +161,11 @@ impl AppState {
         self
     }
 
-    pub(crate) fn with_frontdoor_system_default_rpm_for_tests(mut self, limit: u32) -> Self {
-        self.frontdoor_user_rpm = Arc::new(
-            (*self.frontdoor_user_rpm)
-                .clone()
-                .with_system_default_limit_for_tests(limit),
-        );
-        self
-    }
-
     pub(crate) fn with_usage_data_reader_for_tests(
         mut self,
         repository: Arc<dyn UsageReadRepository>,
     ) -> Self {
         self.replace_data_state(Arc::new(GatewayDataState::with_usage_reader_for_tests(
-            repository,
-        )));
-        self
-    }
-
-    pub(crate) fn with_user_data_reader_for_tests(
-        mut self,
-        repository: Arc<dyn aether_data::repository::users::UserReadRepository>,
-    ) -> Self {
-        self.replace_data_state(Arc::new(GatewayDataState::with_user_reader_for_tests(
             repository,
         )));
         self

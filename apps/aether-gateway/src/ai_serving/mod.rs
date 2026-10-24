@@ -7,10 +7,9 @@ mod pure;
 mod response_history;
 pub(crate) mod transport;
 
-use axum::body::Body;
-use axum::http::{Response, Uri};
+use axum::http::Uri;
 
-use crate::{usage::GatewaySyncReportRequest, AppState, GatewayError};
+use crate::{AppState, GatewayError};
 
 pub(crate) use self::adaptation::{
     maybe_build_provider_private_stream_normalizer, ProviderPrivateStreamNormalizer,
@@ -25,35 +24,27 @@ pub(crate) use self::finalize::internal::{
     SyncToStreamBridgeOutcome,
 };
 pub(crate) use self::planner::openai_responses_reasoning_replay_policy;
+#[cfg(test)]
 pub(crate) use self::planner::{
-    apply_local_runtime_candidate_terminal_reason, build_gemini_stream_plan_from_decision,
-    build_gemini_sync_plan_from_decision, build_local_gemini_files_stream_attempt_source_for_kind,
-    build_local_gemini_files_stream_plan_and_reports_for_kind,
-    build_local_gemini_files_sync_attempt_source_for_kind,
-    build_local_gemini_files_sync_plan_and_reports_for_kind,
-    build_local_image_stream_attempt_source_for_kind,
-    build_local_image_stream_plan_and_reports_for_kind,
-    build_local_image_sync_attempt_source_for_kind,
-    build_local_image_sync_plan_and_reports_for_kind,
-    build_local_openai_chat_stream_attempt_source_for_kind,
-    build_local_openai_chat_stream_plan_and_reports_for_kind,
-    build_local_openai_chat_sync_attempt_source_for_kind,
-    build_local_openai_chat_sync_plan_and_reports_for_kind,
-    build_local_openai_responses_stream_attempt_source_for_kind,
-    build_local_openai_responses_stream_plan_and_reports_for_kind,
-    build_local_openai_responses_sync_attempt_source_for_kind,
-    build_local_openai_responses_sync_plan_and_reports_for_kind,
-    build_local_same_format_stream_attempt_source, build_local_same_format_stream_plan_and_reports,
-    build_local_same_format_sync_attempt_source, build_local_same_format_sync_plan_and_reports,
-    build_local_video_sync_attempt_source_for_kind,
-    build_local_video_sync_plan_and_reports_for_kind,
-    build_openai_responses_stream_plan_from_decision,
+    build_gemini_stream_plan_from_decision, build_gemini_sync_plan_from_decision,
     build_openai_responses_sync_plan_from_decision, build_passthrough_sync_plan_from_decision,
-    build_provider_key_pool_score_upsert, build_standard_family_stream_attempt_source,
-    build_standard_family_stream_plan_and_reports, build_standard_family_sync_attempt_source,
-    build_standard_family_sync_plan_and_reports, build_standard_stream_plan_from_decision,
-    build_standard_sync_plan_from_decision, candidate_auth_channel_skip_reason,
-    codex_model_capabilities_for_transport, extract_pool_sticky_session_token,
+};
+pub(crate) use self::planner::{
+    build_local_gemini_files_stream_attempt_source_for_kind,
+    build_local_gemini_files_sync_attempt_source_for_kind,
+    build_local_image_stream_attempt_source_for_kind,
+    build_local_image_sync_attempt_source_for_kind,
+    build_local_openai_chat_stream_attempt_source_for_kind,
+    build_local_openai_chat_sync_attempt_source_for_kind,
+    build_local_openai_responses_stream_attempt_source_for_kind,
+    build_local_openai_responses_sync_attempt_source_for_kind,
+    build_local_same_format_stream_attempt_source, build_local_same_format_sync_attempt_source,
+    build_local_video_sync_attempt_source_for_kind,
+    build_openai_responses_stream_plan_from_decision, build_provider_key_pool_score_upsert,
+    build_standard_family_stream_attempt_source, build_standard_family_sync_attempt_source,
+    build_standard_stream_plan_from_decision, build_standard_sync_plan_from_decision,
+    candidate_auth_channel_skip_reason, codex_model_capabilities_for_transport,
+    extract_pool_sticky_session_token,
     maybe_build_pinned_stream_local_same_format_provider_decision_payload,
     maybe_build_responses_websocket_decision, maybe_build_stream_decision_payload,
     maybe_build_stream_plan_payload, maybe_build_sync_decision_payload,
@@ -61,25 +52,26 @@ pub(crate) use self::planner::{
     provider_key_pool_score_scope, read_candidate_transport_snapshot,
     record_local_runtime_candidate_skip_reason, resolve_provider_chat_pii_redaction,
     resolve_upstream_is_stream_for_provider, set_local_openai_chat_execution_exhausted_diagnostic,
-    set_local_openai_image_execution_exhausted_diagnostic, validate_final_openai_provider_request,
-    CandidateFailureDiagnostic, CandidateFailureDiagnosticKind, EligibleLocalExecutionCandidate,
-    GatewayAuthApiKeySnapshot, GatewayProviderTransportSnapshot, LocalExecutionAttemptSource,
-    LocalExecutionCandidateKind, LocalResolvedOAuthRequestAuth, PlannerAppState,
-    ResponsesWebSocketBodyNormalization, ResponsesWebSocketDecision,
+    set_local_openai_image_execution_exhausted_diagnostic, CandidateFailureDiagnostic,
+    EligibleLocalExecutionCandidate, GatewayAuthApiKeySnapshot, GatewayProviderTransportSnapshot,
+    LocalExecutionAttemptSource, LocalExecutionCandidateKind, LocalResolvedOAuthRequestAuth,
+    PlannerAppState, ResponsesWebSocketBodyNormalization, ResponsesWebSocketDecision,
     ResponsesWebSocketPinnedCandidate, SkippedLocalExecutionCandidate,
 };
+
+#[cfg(test)]
+pub(crate) use self::planner::apply_local_runtime_candidate_terminal_reason;
 pub(crate) use self::pure::*;
 pub(crate) use self::response_history::{
     hydrate_openai_response_history, persist_converted_response_history,
     persist_response_history_record,
 };
 pub(crate) use self::transport::{
-    append_transport_diagnostics_to_value, build_request_trace_proxy_value,
-    candidate_common_transport_skip_reason, candidate_transport_pair_skip_reason,
-    request_conversion_direct_auth, request_conversion_enabled_for_transport,
-    request_conversion_transport_supported, request_conversion_transport_unsupported_reason,
-    request_pair_allowed_for_transport, request_pair_direct_auth,
-    request_pair_transport_unsupported_reason, CandidateTransportPolicyFacts,
+    build_request_trace_proxy_value, candidate_common_transport_skip_reason,
+    candidate_transport_pair_skip_reason, request_conversion_direct_auth,
+    request_conversion_transport_unsupported_reason, request_pair_allowed_for_transport,
+    request_pair_direct_auth, request_pair_transport_unsupported_reason,
+    CandidateTransportPolicyFacts,
 };
 pub(crate) use crate::control::{GatewayControlDecision, GatewayCredentialCarrier};
 pub(crate) use crate::execution_runtime::{ConversionMode, ExecutionStrategy};
@@ -91,28 +83,6 @@ pub(crate) use aether_ai_serving::{
     generic_decision_missing_exact_provider_request as generic_decision_missing_exact_provider_request_impl,
     AiExecutionDecision, AiExecutionPlanPayload, AiStreamAttempt, AiSyncAttempt,
 };
-
-pub(crate) fn build_provider_transport_request_url(
-    transport: &GatewayProviderTransportSnapshot,
-    provider_api_format: &str,
-    mapped_model: Option<&str>,
-    upstream_is_stream: bool,
-    request_query: Option<&str>,
-    kiro_api_region: Option<&str>,
-    api_operation: Option<ApiOperation>,
-) -> Option<String> {
-    self::transport::build_transport_request_url(
-        transport,
-        self::transport::TransportRequestUrlParams {
-            provider_api_format,
-            mapped_model,
-            upstream_is_stream,
-            request_query,
-            kiro_api_region,
-            api_operation,
-        },
-    )
-}
 
 pub(crate) fn build_provider_transport_request_url_for_request_body(
     transport: &GatewayProviderTransportSnapshot,
@@ -225,12 +195,4 @@ pub(crate) fn generic_decision_missing_exact_provider_request(
         "gateway generic decision missing exact provider request; falling back to plan"
     );
     true
-}
-
-pub(crate) fn maybe_build_local_sync_finalize_response(
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    payload: &GatewaySyncReportRequest,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    crate::execution_runtime::maybe_build_local_sync_finalize_response(trace_id, decision, payload)
 }

@@ -7482,7 +7482,7 @@ mod tests {
             self.enrichment_calls.fetch_add(1, Ordering::AcqRel);
             if self
                 .enrichment_failures
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                     remaining.checked_sub(1)
                 })
                 .is_ok()
@@ -7783,7 +7783,7 @@ mod tests {
         ) -> Result<(), DataLayerError> {
             if self
                 .remaining_first_byte_panics
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                     (remaining > 0).then(|| remaining - 1)
                 })
                 .is_ok()
@@ -7821,7 +7821,7 @@ mod tests {
             }
             if self
                 .remaining_pending_panics
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                     (remaining > 0).then(|| remaining - 1)
                 })
                 .is_ok()
@@ -7830,7 +7830,7 @@ mod tests {
             }
             if self
                 .remaining_pending_failures
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                     (remaining > 0).then(|| remaining - 1)
                 })
                 .is_ok()
@@ -8023,7 +8023,7 @@ mod tests {
             self.policy_reads.fetch_add(1, Ordering::AcqRel);
             if self
                 .remaining_policy_panics
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
                     (remaining > 0).then(|| remaining - 1)
                 })
                 .is_ok()
@@ -8042,7 +8042,7 @@ mod tests {
         ) -> Result<Option<StoredRequestUsageAudit>, DataLayerError> {
             let should_panic = self
                 .remaining_panics
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                     (current > 0).then(|| current - 1)
                 })
                 .is_ok();
@@ -8540,7 +8540,7 @@ mod tests {
             }
             let failed = self
                 .remaining_failures
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                     (current > 0).then(|| current - 1)
                 })
                 .is_ok();

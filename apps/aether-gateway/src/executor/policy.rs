@@ -2,17 +2,20 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::time::Duration;
 
+#[cfg(test)]
 use aether_contracts::ExecutionPlan;
 use axum::body::Bytes;
 
 use crate::control::GatewayControlDecision;
 use crate::headers::header_value_str;
+#[cfg(test)]
 use crate::provider_transport::provider_types::is_codex_cli_backend_url;
-use crate::{AiExecutionDecision, AppState};
+#[cfg(test)]
+use crate::AiExecutionDecision;
+use crate::AppState;
 
 pub(crate) const DIRECT_PLAN_BYPASS_TTL: Duration = Duration::from_secs(30);
-pub(crate) const DIRECT_PLAN_BYPASS_MAX_ENTRIES: usize = 512;
-
+#[cfg(test)]
 pub(crate) fn should_bypass_execution_runtime_decision(payload: &AiExecutionDecision) -> bool {
     let provider_api_format = payload
         .provider_api_format
@@ -33,6 +36,7 @@ pub(crate) fn should_bypass_execution_runtime_decision(payload: &AiExecutionDeci
         .is_some_and(is_codex_cli_backend_url)
 }
 
+#[cfg(test)]
 pub(crate) fn should_bypass_execution_runtime_plan(plan: &ExecutionPlan) -> bool {
     if !crate::ai_serving::is_openai_responses_family_format(&plan.provider_api_format) {
         return false;
@@ -87,12 +91,4 @@ pub(crate) fn should_skip_direct_plan(state: &AppState, cache_key: &str) -> bool
     state
         .direct_plan_bypass_cache
         .should_skip(cache_key, DIRECT_PLAN_BYPASS_TTL)
-}
-
-pub(crate) fn mark_direct_plan_bypass(state: &AppState, cache_key: String) {
-    state.direct_plan_bypass_cache.mark(
-        cache_key,
-        DIRECT_PLAN_BYPASS_TTL,
-        DIRECT_PLAN_BYPASS_MAX_ENTRIES,
-    );
 }

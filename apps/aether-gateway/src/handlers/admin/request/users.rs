@@ -220,14 +220,6 @@ impl<'a> AdminAppState<'a> {
         self.app.effective_default_user_group_id().await
     }
 
-    pub(crate) async fn add_user_to_group(
-        &self,
-        group_id: &str,
-        user_id: &str,
-    ) -> Result<bool, GatewayError> {
-        self.app.add_user_to_group(group_id, user_id).await
-    }
-
     pub(crate) async fn add_all_users_to_group(&self, group_id: &str) -> Result<(), GatewayError> {
         self.app.add_all_users_to_group(group_id).await
     }
@@ -393,17 +385,6 @@ impl<'a> AdminAppState<'a> {
                 expected_feature_settings,
                 restored_feature_settings,
             )
-            .await
-    }
-
-    pub(crate) async fn update_local_auth_user_password_hash(
-        &self,
-        user_id: &str,
-        password_hash: String,
-        updated_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
-        self.app
-            .update_local_auth_user_password_hash(user_id, password_hash, updated_at)
             .await
     }
 
@@ -671,15 +652,6 @@ impl<'a> AdminAppState<'a> {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    pub(crate) async fn resolve_auth_api_key_snapshots_by_ids(
-        &self,
-        api_key_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeySnapshot>, GatewayError> {
-        self.app
-            .resolve_auth_api_key_snapshots_by_ids(api_key_ids)
-            .await
-    }
-
     pub(crate) async fn resolve_auth_api_key_names_by_ids(
         &self,
         api_key_ids: &[String],
@@ -870,18 +842,6 @@ impl<'a> AdminAppState<'a> {
             .await
     }
 
-    pub(crate) async fn set_user_api_key_feature_settings(
-        &self,
-        user_id: &str,
-        api_key_id: &str,
-        feature_settings: Option<serde_json::Value>,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
-    {
-        self.app
-            .set_user_api_key_feature_settings(user_id, api_key_id, feature_settings)
-            .await
-    }
-
     pub(crate) async fn set_api_key_usage_totals(
         &self,
         api_key_id: &str,
@@ -924,15 +884,6 @@ impl<'a> AdminAppState<'a> {
         user_ids: &[String],
     ) -> Result<Vec<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app.list_wallet_snapshots_by_user_ids(user_ids).await
-    }
-
-    pub(crate) async fn summarize_usage_total_tokens_by_api_key_ids(
-        &self,
-        api_key_ids: &[String],
-    ) -> Result<std::collections::BTreeMap<String, u64>, GatewayError> {
-        self.app
-            .summarize_usage_total_tokens_by_api_key_ids(api_key_ids)
-            .await
     }
 
     pub(crate) async fn summarize_usage_totals_by_user_ids(

@@ -99,6 +99,7 @@ async fn admin_oauth_endpoint_reachable(
     false
 }
 
+#[cfg(test)]
 async fn resolve_public_admin_oauth_endpoint(
     url: &reqwest::Url,
 ) -> Result<(String, Vec<SocketAddr>), ()> {
