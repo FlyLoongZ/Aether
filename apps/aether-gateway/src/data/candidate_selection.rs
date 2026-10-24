@@ -73,7 +73,20 @@ pub(crate) async fn resolve_reserved_global_model_name(
 }
 
 pub(crate) const REQUESTED_MODEL_CANDIDATE_PAGE_SIZE: u32 = 256;
-pub(crate) const REQUESTED_MODEL_MAX_SCANNED_ROWS: u32 = 2048;
+/// How many rows one api format may collect before the search for a requested
+/// name gives up.
+///
+/// The unit is deliberately the rows the plan collected — matching the query
+/// shape's own predicate, after the alias is known — and not the rows the
+/// storage scanned. A storage-side "rows examined" counter cannot be
+/// compared across backends (the in-memory repository examines every row, the
+/// SQL one examines whatever the index chose), so a budget denominated in it
+/// would mean something different depending on which backend answered.
+///
+/// Elasticsearch's `terminate_after` draws the line in the same place: it
+/// counts collected documents, before sorting, and documents that the count is
+/// a per-shard collection budget rather than a scan estimate.
+pub(crate) const REQUESTED_MODEL_MAX_COLLECTED_ROWS: u32 = 2048;
 
 /// One window of candidate rows read from the data layer.
 ///
@@ -217,9 +230,9 @@ async fn read_requested_model_rows_fast_path(
         }
         let mut offset = 0;
         let mut scanned = 0;
-        while scanned < REQUESTED_MODEL_MAX_SCANNED_ROWS {
-            let limit =
-                REQUESTED_MODEL_CANDIDATE_PAGE_SIZE.min(REQUESTED_MODEL_MAX_SCANNED_ROWS - scanned);
+        while scanned < REQUESTED_MODEL_MAX_COLLECTED_ROWS {
+            let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE
+                .min(REQUESTED_MODEL_MAX_COLLECTED_ROWS - scanned);
             let page = state
                 .read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
                     &StoredRequestedModelCandidateRowsQuery {
@@ -622,7 +635,7 @@ mod tests {
     #[tokio::test]
     async fn requested_model_rows_fast_path_stops_at_scan_limit() {
         let mut rows = Vec::new();
-        for index in 0..(super::REQUESTED_MODEL_MAX_SCANNED_ROWS + 5) {
+        for index in 0..(super::REQUESTED_MODEL_MAX_COLLECTED_ROWS + 5) {
             let mut row = sample_row("gpt-5");
             row.provider_id = format!("provider-{index}");
             row.endpoint_id = format!("endpoint-{index}");
@@ -639,11 +652,11 @@ mod tests {
 
         assert_eq!(
             result.1.len(),
-            super::REQUESTED_MODEL_MAX_SCANNED_ROWS as usize
+            super::REQUESTED_MODEL_MAX_COLLECTED_ROWS as usize
         );
         assert_eq!(
             source.fast_calls.load(Ordering::SeqCst),
-            (super::REQUESTED_MODEL_MAX_SCANNED_ROWS / super::REQUESTED_MODEL_CANDIDATE_PAGE_SIZE)
+            (super::REQUESTED_MODEL_MAX_COLLECTED_ROWS / super::REQUESTED_MODEL_CANDIDATE_PAGE_SIZE)
                 as usize
         );
         assert_eq!(source.fallback_calls.load(Ordering::SeqCst), 0);

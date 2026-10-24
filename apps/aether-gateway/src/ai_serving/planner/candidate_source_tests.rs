@@ -647,7 +647,7 @@ async fn routing_policy_collects_candidate_pages_before_final_ranking() {
 #[tokio::test]
 async fn routing_fallback_uses_bounded_api_format_pages() {
     let repository = Arc::new(PagedFallbackRepository::new(
-        REQUESTED_MODEL_MAX_SCANNED_ROWS + REQUESTED_MODEL_CANDIDATE_PAGE_SIZE,
+        REQUESTED_MODEL_MAX_COLLECTED_ROWS + REQUESTED_MODEL_CANDIDATE_PAGE_SIZE,
     ));
     let app = AppState::new()
         .expect("gateway state should build")
@@ -701,7 +701,10 @@ async fn routing_fallback_uses_bounded_api_format_pages() {
         .expect("routing fallback candidates should be present")
         .candidates;
 
-    assert_eq!(candidates.len(), REQUESTED_MODEL_MAX_SCANNED_ROWS as usize);
+    assert_eq!(
+        candidates.len(),
+        REQUESTED_MODEL_MAX_COLLECTED_ROWS as usize
+    );
     assert!(cursor
         .next_page()
         .await
@@ -714,7 +717,7 @@ async fn routing_fallback_uses_bounded_api_format_pages() {
         .collect::<Vec<_>>();
     assert_eq!(
         page_queries.len(),
-        (REQUESTED_MODEL_MAX_SCANNED_ROWS / REQUESTED_MODEL_CANDIDATE_PAGE_SIZE) as usize
+        (REQUESTED_MODEL_MAX_COLLECTED_ROWS / REQUESTED_MODEL_CANDIDATE_PAGE_SIZE) as usize
     );
     for (index, query) in page_queries.iter().enumerate() {
         assert_eq!(query.limit, REQUESTED_MODEL_CANDIDATE_PAGE_SIZE);
