@@ -269,9 +269,6 @@ async fn gateway_handles_admin_monitoring_system_status_locally_with_trusted_adm
     assert_eq!(payload["today_stats"]["requests"], json!(2));
     assert_eq!(payload["today_stats"]["tokens"], json!(30));
     assert_eq!(payload["today_stats"]["cost_usd"], json!("$0.3500"));
-    assert_eq!(payload["tunnel"]["proxy_connections"], json!(0));
-    assert_eq!(payload["tunnel"]["nodes"], json!(0));
-    assert_eq!(payload["tunnel"]["active_streams"], json!(0));
     assert_eq!(payload["recent_errors"], json!(1));
     assert_eq!(payload["usage_counter"]["status"], json!("idle"));
     assert_eq!(payload["usage_counter"]["outbox_pending_rows"], json!(0));

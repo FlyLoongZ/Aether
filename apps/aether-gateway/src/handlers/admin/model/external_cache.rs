@@ -375,7 +375,7 @@ pub(crate) async fn acquire_admin_external_models_config_mutation_lock(
         .runtime_state()
         .lock_try_acquire(
             ADMIN_EXTERNAL_MODELS_CONFIG_MUTATION_LOCK_KEY,
-            state.app().tunnel.local_instance_id(),
+            state.app().local_instance_id(),
             ADMIN_EXTERNAL_MODELS_CONFIG_MUTATION_LOCK_TTL,
         )
         .await

@@ -13,9 +13,7 @@ use crate::execution_runtime::{
     maybe_build_local_video_success_outcome, resolve_local_sync_error_background_report_kind,
     resolve_local_sync_success_background_report_kind, LocalVideoSyncSuccessBuild,
 };
-use crate::handlers::shared::{
-    unix_secs_to_rfc3339, InternalTunnelHeartbeatRequest, InternalTunnelNodeStatusRequest,
-};
+use crate::handlers::shared::unix_secs_to_rfc3339;
 use crate::video_tasks::{
     build_internal_finalize_video_plan, build_local_sync_finalize_request_path,
 };
@@ -23,7 +21,6 @@ use crate::{AppState, GatewayError};
 use aether_data::repository::management_tokens::{
     StoredManagementToken, StoredManagementTokenUserSummary,
 };
-use aether_data::repository::proxy_nodes::StoredProxyNode;
 use aether_usage_runtime::{infer_internal_finalize_signature, resolve_internal_finalize_route};
 use axum::body::Body;
 use axum::http::{self, header::HeaderName, header::HeaderValue, Response};
@@ -380,106 +377,6 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
     }
 
     Ok(None)
-}
-
-pub(crate) fn build_internal_tunnel_heartbeat_ack(
-    node: &StoredProxyNode,
-    heartbeat_id: u64,
-) -> serde_json::Value {
-    let mut payload = serde_json::Map::new();
-    payload.insert("heartbeat_id".to_string(), json!(heartbeat_id));
-    if let Some(remote_config) = node.remote_config.as_ref() {
-        payload.insert("remote_config".to_string(), remote_config.clone());
-        payload.insert("config_version".to_string(), json!(node.config_version));
-        if let Some(upgrade_to) = remote_config
-            .as_object()
-            .and_then(|value| value.get("upgrade_to"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            payload.insert("upgrade_to".to_string(), json!(upgrade_to));
-        }
-    }
-    serde_json::Value::Object(payload)
-}
-
-pub(crate) fn parse_internal_tunnel_heartbeat_request(
-    request_body: &[u8],
-) -> Result<InternalTunnelHeartbeatRequest, Response<Body>> {
-    let payload =
-        serde_json::from_slice::<InternalTunnelHeartbeatRequest>(request_body).map_err(|_| {
-            build_internal_control_error_response(
-                http::StatusCode::BAD_REQUEST,
-                "invalid heartbeat payload",
-            )
-        })?;
-
-    let node_id = payload.node_id.trim();
-    if node_id.is_empty()
-        || node_id.len() > 36
-        || payload.heartbeat_id == 0
-        || crate::tunnel::validate_tunnel_heartbeat_session_id(&payload.heartbeat_session_id)
-            .is_err()
-    {
-        return Err(build_internal_control_error_response(
-            http::StatusCode::BAD_REQUEST,
-            "invalid heartbeat payload",
-        ));
-    }
-    if payload
-        .heartbeat_interval
-        .is_some_and(|value| !(5..=600).contains(&value))
-        || payload.active_connections.is_some_and(|value| value < 0)
-        || payload.total_requests.is_some_and(|value| value < 0)
-        || payload.window_total_requests.is_some_and(|value| value < 0)
-        || payload.avg_latency_ms.is_some_and(|value| value < 0.0)
-        || payload.failed_requests.is_some_and(|value| value < 0)
-        || payload
-            .window_failed_requests
-            .is_some_and(|value| value < 0)
-        || payload.dns_failures.is_some_and(|value| value < 0)
-        || payload.window_dns_failures.is_some_and(|value| value < 0)
-        || payload.stream_errors.is_some_and(|value| value < 0)
-        || payload.window_stream_errors.is_some_and(|value| value < 0)
-        || payload
-            .proxy_version
-            .as_deref()
-            .is_some_and(|value: &str| value.chars().count() > 20)
-        || payload
-            .proxy_metadata
-            .as_ref()
-            .is_some_and(|value: &serde_json::Value| !value.is_object())
-    {
-        return Err(build_internal_control_error_response(
-            http::StatusCode::BAD_REQUEST,
-            "invalid heartbeat payload",
-        ));
-    }
-
-    Ok(payload)
-}
-
-pub(crate) fn parse_internal_tunnel_node_status_request(
-    request_body: &[u8],
-) -> Result<InternalTunnelNodeStatusRequest, Response<Body>> {
-    let payload =
-        serde_json::from_slice::<InternalTunnelNodeStatusRequest>(request_body).map_err(|_| {
-            build_internal_control_error_response(
-                http::StatusCode::BAD_REQUEST,
-                "invalid node-status payload",
-            )
-        })?;
-
-    let node_id = payload.node_id.trim();
-    if node_id.is_empty() || node_id.len() > 36 || payload.conn_count < 0 {
-        return Err(build_internal_control_error_response(
-            http::StatusCode::BAD_REQUEST,
-            "invalid node-status payload",
-        ));
-    }
-
-    Ok(payload)
 }
 
 fn build_management_token_user_payload(

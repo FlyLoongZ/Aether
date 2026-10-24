@@ -11,7 +11,6 @@ use std::sync::{Arc, LazyLock, Mutex as StdMutex, OnceLock, RwLock as StdRwLock}
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
-use aether_contracts::tunnel::MAX_TUNNEL_RELAY_META_LEN;
 use aether_contracts::{
     ExecutionPlan, ExecutionResponseBodyMode, ExecutionResponseObservation, ExecutionResult,
     ExecutionTelemetry, ProxySnapshot, ResolvedTransportProfile, ResponseBody,
@@ -56,19 +55,14 @@ use crate::frontdoor_loop_guard::{
     configured_gateway_frontdoor_base_url, gateway_frontdoor_self_loop_guard_error,
 };
 use crate::stage_metrics::observe_gateway_stage_ms;
-use crate::tunnel::{self, tunnel_protocol};
 use crate::upstream_admission::UpstreamTargetAdmissionPermit;
 use crate::{AppState, GatewayError};
 
-const HUB_RELAY_CONTENT_TYPE: &str = "application/vnd.aether.tunnel-envelope";
-const HUB_RELAY_ERROR_HEADER: &str = "x-aether-tunnel-error";
 const MAX_SAFE_REDIRECTS: usize = 10;
 const MAX_UPSTREAM_ERROR_DETAIL_BYTES: usize = 2_048;
-const DEFAULT_TUNNEL_TIMEOUT_MS: u64 = 60_000;
 const DEFAULT_STREAM_FIRST_BYTE_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_NON_STREAM_TOTAL_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_CODEX_COMPACT_TOTAL_TIMEOUT_MS: u64 = 1_200_000;
-const MIN_TUNNEL_TIMEOUT_SECS: u64 = 1;
 const EXECUTION_RESPONSE_BODY_LIMIT_HEADER: &str = "x-aether-execution-response-body-limit-bytes";
 const LEGACY_EXECUTION_REQUEST_ACCEPT_INVALID_CERTS_HEADER: &str =
     "x-aether-execution-accept-invalid-certs";
@@ -1154,29 +1148,6 @@ impl Write for LimitedJsonWriter {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct RelayRequestMeta {
-    provider_id: String,
-    endpoint_id: String,
-    key_id: String,
-    method: String,
-    url: String,
-    headers: BTreeMap<String, String>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    request_timeout_ms: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stream_first_byte_timeout_ms: Option<u64>,
-    timeout: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    follow_redirects: Option<bool>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    http1_only: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    transport_profile: Option<ResolvedTransportProfile>,
-}
-
 #[derive(Debug, Clone, Default)]
 pub(crate) struct DirectSyncExecutionRuntime;
 
@@ -1186,18 +1157,10 @@ pub(crate) struct ExecutionTransportControls {
     http1_only: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct TunnelTimeoutMetadata {
-    request_timeout_ms: Option<u64>,
-    stream_first_byte_timeout_ms: Option<u64>,
-    legacy_timeout_secs: u64,
-}
-
 pub(crate) enum DirectUpstreamResponse {
     Reqwest(reqwest::Response),
     HyperH2c(hyper::Response<HyperIncomingBody>),
     BrowserWreq(wreq::Response),
-    LocalTunnel(tunnel::DirectRelayResponse),
 }
 
 pub(crate) fn direct_upstream_response_byte_stream(
@@ -1218,19 +1181,6 @@ pub(crate) fn direct_upstream_response_byte_stream(
             .bytes_stream()
             .map(|item| item.map_err(|err| format_wreq_upstream_request_error(&err)))
             .boxed(),
-        DirectUpstreamResponse::LocalTunnel(mut response) => async_stream::stream! {
-            loop {
-                match response.next_chunk().await {
-                    Ok(Some(chunk)) => yield Ok(chunk),
-                    Ok(None) => break,
-                    Err(err) => {
-                        yield Err(err);
-                        break;
-                    }
-                }
-            }
-        }
-        .boxed(),
     };
     let upstream = futures_util::stream::iter(prefetched_body).chain(response_stream);
     crate::execution_runtime::stream_read_timeout::skip_empty_upstream_chunks(upstream).boxed()
@@ -1422,12 +1372,6 @@ pub(crate) async fn execute_sync_plan_with_report_context(
         }
     }
 
-    if resolve_local_tunnel_node_id(state, plan.proxy.as_ref()).is_some() {
-        return execute_sync_plan_via_local_tunnel(state, plan, report_context)
-            .await
-            .map_err(|err| GatewayError::Internal(safe_transport_error_message(&err)));
-    }
-
     match super::grok::maybe_execute_grok_sync(plan, report_context).await {
         Ok(Some(result)) => {
             record_manual_proxy_request_outcome(state, plan, result.status_code).await;
@@ -1473,70 +1417,6 @@ pub(crate) async fn execute_sync_plan_with_report_context(
             Err(GatewayError::Internal(safe_transport_error_message(&err)))
         }
     }
-}
-
-pub(crate) async fn execute_stream_plan_via_local_tunnel(
-    state: &AppState,
-    plan: &ExecutionPlan,
-) -> Result<Option<DirectUpstreamStreamExecution>, ExecutionRuntimeTransportError> {
-    let Some(node_id) = resolve_local_tunnel_node_id(state, plan.proxy.as_ref()) else {
-        return Ok(None);
-    };
-
-    validate_execution_upstream_url(plan.url.as_str())?;
-    if let Some(detail) = gateway_frontdoor_self_loop_guard_error(plan.url.as_str()) {
-        return Err(ExecutionRuntimeTransportError::UpstreamRequest(detail));
-    }
-
-    let body_bytes = build_request_body(plan)?;
-    let transport_controls = resolve_execution_transport_controls(&plan.headers);
-    let headers = build_request_headers(
-        &plan.headers,
-        plan.content_encoding.as_deref(),
-        plan.body.body_bytes_b64.is_some(),
-    )?;
-    let started_at = Instant::now();
-    let request_started_at_unix_ms = crate::clock::current_unix_ms();
-    let request_order_id = uuid::Uuid::now_v7().to_string();
-    let response = state
-        .tunnel
-        .open_direct_relay_stream(
-            &node_id,
-            build_direct_tunnel_request_meta(plan, &headers, transport_controls),
-            Bytes::from(body_bytes),
-        )
-        .await
-        .map_err(ExecutionRuntimeTransportError::RelayError)?;
-    let status_code = response.status();
-    let upstream_content_length = response
-        .headers()
-        .iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
-        .and_then(|(_, value)| value.trim().parse::<u64>().ok());
-    let headers = collect_tunnel_response_headers(response.headers());
-    let response_headers_observed_at_unix_ms = crate::clock::current_unix_ms();
-
-    Ok(Some(DirectUpstreamStreamExecution {
-        request_id: plan.request_id.clone(),
-        candidate_id: plan.candidate_id.clone(),
-        status_code,
-        headers,
-        upstream_content_length,
-        provider_api_format: plan.provider_api_format.clone(),
-        stream_summary_report_context: build_stream_summary_report_context(plan),
-        prefetched_body: VecDeque::new(),
-        stream_precommit_committed: false,
-        response: DirectUpstreamResponse::LocalTunnel(response),
-        started_at,
-        response_observation: ExecutionResponseObservation {
-            request_started_at_unix_ms,
-            response_headers_observed_at_unix_ms,
-            request_order_id,
-        },
-        stream_first_byte_timeout: resolve_stream_first_byte_timeout(plan),
-        stream_idle_timeout: resolve_stream_idle_timeout(plan),
-        upstream_target_permit: None,
-    }))
 }
 
 fn build_stream_summary_report_context(plan: &ExecutionPlan) -> Value {
@@ -1602,7 +1482,7 @@ async fn record_manual_proxy_traffic(
 
 fn manual_proxy_node_binding(proxy: Option<&ProxySnapshot>) -> Option<(String, String)> {
     let proxy = proxy?;
-    if proxy.enabled == Some(false) || resolve_tunnel_node_id(Some(proxy)).is_some() {
+    if proxy.enabled == Some(false) {
         return None;
     }
     let node_id = proxy
@@ -1620,212 +1500,6 @@ fn manual_proxy_node_binding(proxy: Option<&ProxySnapshot>) -> Option<(String, S
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)?;
     Some((node_id, expected_tunnel_generation))
-}
-
-async fn execute_sync_plan_via_local_tunnel(
-    state: &AppState,
-    plan: &ExecutionPlan,
-    report_context: Option<&serde_json::Value>,
-) -> Result<ExecutionResult, ExecutionRuntimeTransportError> {
-    with_non_stream_total_timeout(
-        plan,
-        execute_sync_plan_via_local_tunnel_inner(state, plan, report_context),
-    )
-    .await
-}
-
-async fn execute_sync_plan_via_local_tunnel_inner(
-    state: &AppState,
-    plan: &ExecutionPlan,
-    report_context: Option<&serde_json::Value>,
-) -> Result<ExecutionResult, ExecutionRuntimeTransportError> {
-    let node_id = resolve_local_tunnel_node_id(state, plan.proxy.as_ref()).ok_or_else(|| {
-        ExecutionRuntimeTransportError::RelayError("local tunnel node unavailable".to_string())
-    })?;
-    validate_execution_upstream_url(plan.url.as_str())?;
-    if let Some(detail) = gateway_frontdoor_self_loop_guard_error(plan.url.as_str()) {
-        return Err(ExecutionRuntimeTransportError::UpstreamRequest(detail));
-    }
-
-    let body_bytes = build_request_body(plan)?;
-    let response_body_limit_bytes = execution_plan_response_body_limit_bytes(plan);
-    let transport_controls = resolve_execution_transport_controls(&plan.headers);
-    let headers = build_request_headers(
-        &plan.headers,
-        plan.content_encoding.as_deref(),
-        plan.body.body_bytes_b64.is_some(),
-    )?;
-    let timeout_secs = resolve_relay_timeout_seconds(plan);
-    tracing::info!(
-        request_id = %plan.request_id,
-        provider_id = %plan.provider_id,
-        endpoint_id = %plan.endpoint_id,
-        key_id = %plan.key_id,
-        method = %plan.method,
-        upstream_host = %execution_log_url_host(plan.url.as_str()),
-        node_id = %node_id,
-        path = "local_tunnel",
-        body_bytes_len = body_bytes.len(),
-        timeout_secs,
-        follow_redirects = ?transport_controls.follow_redirects,
-        http1_only = transport_controls.http1_only,
-        "gateway execution runtime local tunnel request prepared"
-    );
-    let started_at = Instant::now();
-    let request_started_at_unix_ms = crate::clock::current_unix_ms();
-    let request_order_id = uuid::Uuid::now_v7().to_string();
-    let mut response = state
-        .tunnel
-        .open_direct_relay_stream(
-            &node_id,
-            build_direct_tunnel_request_meta(plan, &headers, transport_controls),
-            Bytes::from(body_bytes),
-        )
-        .await
-        .map_err(ExecutionRuntimeTransportError::RelayError)?;
-    let ttfb_ms = started_at.elapsed().as_millis() as u64;
-    let response_headers_observed_at_unix_ms = crate::clock::current_unix_ms();
-    let status_code = response.status();
-    let headers = collect_tunnel_response_headers(response.headers());
-    let response_observation = ExecutionResponseObservation {
-        request_started_at_unix_ms,
-        response_headers_observed_at_unix_ms,
-        request_order_id,
-    };
-    crate::orchestration::spawn_local_oauth_success_effect(
-        state.clone(),
-        plan,
-        report_context,
-        crate::orchestration::LocalOAuthSuccessEffect {
-            status_code,
-            request_started_at_unix_ms: Some(response_observation.request_started_at_unix_ms),
-            request_order_id: Some(&response_observation.request_order_id),
-        },
-    );
-    let proxy_timing = execution_header_for_log(&headers, "x-proxy-timing").unwrap_or("-");
-    let (body_bytes, stream_ttfb_ms) =
-        collect_local_tunnel_response_body(response, plan, started_at, response_body_limit_bytes)
-            .await?;
-    let decoded_body_bytes =
-        decode_response_body_bytes_with_limit(&headers, &body_bytes, response_body_limit_bytes)?;
-    let elapsed_ms = started_at.elapsed().as_millis() as u64;
-    let upstream_bytes = body_bytes.len() as u64;
-    if status_code >= 400 {
-        tracing::warn!(
-            request_id = %plan.request_id,
-            provider_id = %plan.provider_id,
-            endpoint_id = %plan.endpoint_id,
-            key_id = %plan.key_id,
-            method = %plan.method,
-            upstream_host = %execution_log_url_host(plan.url.as_str()),
-            node_id = %node_id,
-            path = "local_tunnel",
-            status_code,
-            elapsed_ms,
-            upstream_bytes,
-            proxy_timing,
-            "gateway execution runtime local tunnel response returned error"
-        );
-    } else {
-        tracing::info!(
-            request_id = %plan.request_id,
-            provider_id = %plan.provider_id,
-            endpoint_id = %plan.endpoint_id,
-            key_id = %plan.key_id,
-            method = %plan.method,
-            upstream_host = %execution_log_url_host(plan.url.as_str()),
-            node_id = %node_id,
-            path = "local_tunnel",
-            status_code,
-            elapsed_ms,
-            upstream_bytes,
-            proxy_timing,
-            "gateway execution runtime local tunnel response received"
-        );
-    }
-
-    let body = build_execution_response_body(
-        &headers,
-        &body_bytes,
-        decoded_body_bytes.as_ref(),
-        plan.stream,
-        execution_response_body_mode(plan),
-    )?;
-
-    Ok(ExecutionResult {
-        request_id: plan.request_id.clone(),
-        candidate_id: plan.candidate_id.clone(),
-        status_code,
-        headers,
-        response_observation: Some(response_observation),
-        body,
-        telemetry: Some(ExecutionTelemetry {
-            ttfb_ms: stream_ttfb_ms.or(Some(ttfb_ms)),
-            elapsed_ms: Some(elapsed_ms),
-            upstream_bytes: Some(upstream_bytes),
-        }),
-        error: None,
-    })
-}
-
-async fn collect_local_tunnel_response_body(
-    mut response: tunnel::DirectRelayResponse,
-    plan: &ExecutionPlan,
-    started_at: Instant,
-    response_body_limit_bytes: usize,
-) -> Result<(Vec<u8>, Option<u64>), ExecutionRuntimeTransportError> {
-    let mut body_bytes = Vec::new();
-    let mut first_byte_ms = None;
-    let first_byte_timeout = plan
-        .stream
-        .then(|| resolve_stream_first_byte_timeout(plan))
-        .flatten();
-
-    loop {
-        let item = if first_byte_ms.is_none() && plan.stream {
-            await_stream_body_first_item(response.next_chunk(), started_at, first_byte_timeout)
-                .await?
-        } else {
-            response.next_chunk().await
-        }
-        .map_err(ExecutionRuntimeTransportError::UpstreamRequest)?;
-        let Some(chunk) = item else {
-            break;
-        };
-        if plan.stream && first_byte_ms.is_none() && !chunk.is_empty() {
-            first_byte_ms = Some(started_at.elapsed().as_millis() as u64);
-        }
-        append_upstream_response_body_chunk_with_limit(
-            &mut body_bytes,
-            &chunk,
-            response_body_limit_bytes,
-        )?;
-    }
-
-    Ok((body_bytes, first_byte_ms))
-}
-
-fn build_direct_tunnel_request_meta(
-    plan: &ExecutionPlan,
-    headers: &HeaderMap,
-    transport_controls: ExecutionTransportControls,
-) -> tunnel_protocol::RequestMeta {
-    let timeout_metadata = resolve_tunnel_timeout_metadata(plan);
-    tunnel_protocol::RequestMeta {
-        provider_id: Some(plan.provider_id.clone()),
-        endpoint_id: Some(plan.endpoint_id.clone()),
-        key_id: Some(plan.key_id.clone()),
-        method: plan.method.clone(),
-        url: plan.url.clone(),
-        headers: header_map_to_string_map(headers).into_iter().collect(),
-        stream: plan.stream,
-        request_timeout_ms: timeout_metadata.request_timeout_ms,
-        stream_first_byte_timeout_ms: timeout_metadata.stream_first_byte_timeout_ms,
-        timeout: timeout_metadata.legacy_timeout_secs,
-        follow_redirects: transport_controls.follow_redirects,
-        http1_only: transport_controls.http1_only,
-        transport_profile: plan.transport_profile.clone(),
-    }
 }
 
 pub(crate) async fn send_request(
@@ -1876,21 +1550,6 @@ async fn send_request_inner(
             apply_request_total_timeout,
         )
         .await;
-    }
-
-    if let Some(node_id) = resolve_tunnel_node_id(plan.proxy.as_ref()) {
-        return send_via_tunnel_relay(
-            plan,
-            method,
-            headers,
-            body_bytes,
-            &node_id,
-            total_timeout,
-            stream_first_byte_timeout,
-            transport_controls,
-        )
-        .await
-        .map(DirectHttpResponse::Reqwest);
     }
 
     let direct_transport_controls =
@@ -2928,257 +2587,6 @@ async fn send_via_browser_wreq_transport(
         .map(DirectHttpResponse::BrowserWreq)
 }
 
-async fn send_via_tunnel_relay(
-    plan: &ExecutionPlan,
-    method: reqwest::Method,
-    headers: HeaderMap,
-    body_bytes: Vec<u8>,
-    node_id: &str,
-    total_timeout: Option<Duration>,
-    stream_first_byte_timeout: Option<Duration>,
-    transport_controls: ExecutionTransportControls,
-) -> Result<reqwest::Response, ExecutionRuntimeTransportError> {
-    let relay_url = build_relay_url(plan.proxy.as_ref(), node_id)?;
-    let (relay_host, relay_addresses) = resolve_relay_target_addresses(&relay_url).await?;
-    let client = build_relay_client_with_pinned_target(
-        plan.timeouts.as_ref(),
-        Some((&relay_host, &relay_addresses)),
-    )?;
-    let timeout_metadata = resolve_tunnel_timeout_metadata(plan);
-    let timeout_secs = timeout_metadata.legacy_timeout_secs;
-    let envelope = build_relay_envelope(
-        RelayRequestMeta {
-            provider_id: plan.provider_id.clone(),
-            endpoint_id: plan.endpoint_id.clone(),
-            key_id: plan.key_id.clone(),
-            method: method.as_str().to_string(),
-            url: plan.url.clone(),
-            headers: header_map_to_string_map(&headers),
-            stream: plan.stream,
-            request_timeout_ms: timeout_metadata.request_timeout_ms,
-            stream_first_byte_timeout_ms: timeout_metadata.stream_first_byte_timeout_ms,
-            timeout: timeout_secs,
-            follow_redirects: transport_controls.follow_redirects,
-            http1_only: transport_controls.http1_only,
-            transport_profile: plan.transport_profile.clone(),
-        },
-        &body_bytes,
-    )?;
-    tracing::info!(
-        request_id = %plan.request_id,
-        provider_id = %plan.provider_id,
-        endpoint_id = %plan.endpoint_id,
-        key_id = %plan.key_id,
-        method = %method,
-        upstream_host = %execution_log_url_host(plan.url.as_str()),
-        relay_host = %execution_log_url_host(relay_url.as_str()),
-        node_id,
-        path = "tunnel_relay",
-        body_bytes_len = body_bytes.len(),
-        envelope_bytes_len = envelope.body.len(),
-        timeout_secs,
-        follow_redirects = ?transport_controls.follow_redirects,
-        http1_only = transport_controls.http1_only,
-        "gateway execution runtime tunnel relay request prepared"
-    );
-
-    let relay_auth = resolve_tunnel_owner_instance_id(plan.proxy.as_ref())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(tunnel::resolve_tunnel_instance_id);
-    let relay_auth = tunnel::build_relay_auth_headers_from_environment(
-        &relay_auth,
-        node_id,
-        envelope.metadata_envelope(),
-        envelope.request_body(),
-    )
-    .map_err(ExecutionRuntimeTransportError::RelayError)?;
-    let mut request = relay_auth.apply(
-        client
-            .request(reqwest::Method::POST, relay_url)
-            .header(reqwest::header::CONTENT_TYPE, HUB_RELAY_CONTENT_TYPE)
-            .body(envelope.body),
-    );
-    if !plan.stream {
-        if let Some(timeout) = total_timeout {
-            request = request.timeout(timeout);
-        }
-    }
-
-    let first_byte_timeout = if plan.stream {
-        stream_first_byte_timeout.or_else(|| resolve_tunnel_first_byte_timeout(plan))
-    } else {
-        None
-    };
-
-    let started_at = Instant::now();
-    let response = send_relay_request(request, first_byte_timeout)
-        .await
-        .map_err(ExecutionRuntimeTransportError::RelayError)?;
-    let elapsed_ms = started_at.elapsed().as_millis() as u64;
-    let status_code = response.status().as_u16();
-    let proxy_timing = response
-        .headers()
-        .get("x-proxy-timing")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("-");
-    if status_code >= 400 {
-        tracing::warn!(
-            request_id = %plan.request_id,
-            provider_id = %plan.provider_id,
-            endpoint_id = %plan.endpoint_id,
-            key_id = %plan.key_id,
-            method = %method,
-            upstream_host = %execution_log_url_host(plan.url.as_str()),
-            node_id,
-            path = "tunnel_relay",
-            status_code,
-            elapsed_ms,
-            proxy_timing,
-            "gateway execution runtime tunnel relay response returned error"
-        );
-    } else {
-        tracing::info!(
-            request_id = %plan.request_id,
-            provider_id = %plan.provider_id,
-            endpoint_id = %plan.endpoint_id,
-            key_id = %plan.key_id,
-            method = %method,
-            upstream_host = %execution_log_url_host(plan.url.as_str()),
-            node_id,
-            path = "tunnel_relay",
-            status_code,
-            elapsed_ms,
-            proxy_timing,
-            "gateway execution runtime tunnel relay response received"
-        );
-    }
-
-    if let Some(raw_kind) = response
-        .headers()
-        .get(HUB_RELAY_ERROR_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_owned)
-    {
-        let kind = sanitize_relay_error_kind(&raw_kind);
-        tracing::warn!(
-            request_id = %plan.request_id,
-            provider_id = %plan.provider_id,
-            endpoint_id = %plan.endpoint_id,
-            key_id = %plan.key_id,
-            method = %method,
-            upstream_host = %execution_log_url_host(plan.url.as_str()),
-            node_id,
-            path = "tunnel_relay",
-            status_code,
-            elapsed_ms,
-            error_kind = %kind,
-            "gateway execution runtime tunnel relay returned relay error"
-        );
-        let response_body_limit_bytes = execution_plan_response_body_limit_bytes(plan);
-        let drain_timeout = stream_first_byte_timeout.or(total_timeout);
-        let drain =
-            collect_reqwest_stream_body(response, Instant::now(), None, response_body_limit_bytes);
-        let drain_result = if let Some(timeout) = drain_timeout {
-            match tokio::time::timeout(timeout, drain).await {
-                Ok(result) => result,
-                Err(_) => Err(ExecutionRuntimeTransportError::UpstreamRequest(
-                    "tunnel relay error body drain timeout".to_string(),
-                )),
-            }
-        } else {
-            // There is no configured budget to drain an untrusted error body;
-            // dropping the response cancels the body stream instead of waiting
-            // indefinitely for a peer that never terminates it.
-            drop(drain);
-            Err(ExecutionRuntimeTransportError::UpstreamRequest(
-                "tunnel relay error body drain skipped".to_string(),
-            ))
-        };
-        match drain_result {
-            Ok((body, _)) => {
-                // Consume the bounded body so the connection can be reused,
-                // but never propagate relay/upstream text across the error
-                // boundary.  The body length is sufficient for diagnostics.
-                tracing::debug!(
-                    error_kind = %kind,
-                    error_body_bytes = body.len(),
-                    "discarded tunnel relay error body"
-                );
-            }
-            Err(error) => {
-                tracing::debug!(
-                    error_kind = %kind,
-                    drain_error_kind = %relay_body_drain_error_kind(&error),
-                    "failed to consume tunnel relay error body"
-                );
-            }
-        }
-        return Err(ExecutionRuntimeTransportError::RelayError(format!(
-            "hub relay error: {kind}"
-        )));
-    }
-
-    Ok(response)
-}
-
-fn relay_body_drain_error_kind(error: &ExecutionRuntimeTransportError) -> &'static str {
-    match error {
-        ExecutionRuntimeTransportError::UpstreamResponseTooLarge { .. } => "too_large",
-        ExecutionRuntimeTransportError::UpstreamRequest(_) => "request",
-        _ => "unknown",
-    }
-}
-
-async fn send_relay_request(
-    request: reqwest::RequestBuilder,
-    first_byte_timeout: Option<Duration>,
-) -> Result<reqwest::Response, String> {
-    if let Some(timeout) = first_byte_timeout {
-        return match tokio::time::timeout(timeout, request.send()).await {
-            Ok(Ok(response)) => Ok(response),
-            Ok(Err(error)) => Err(format_relay_request_error(&error)),
-            Err(_) => Err("tunnel relay first byte timeout".to_string()),
-        };
-    }
-
-    request
-        .send()
-        .await
-        .map_err(|error| format_relay_request_error(&error))
-}
-
-fn sanitize_relay_error_kind(raw_kind: &str) -> String {
-    // The relay is outside this process' trust boundary.  Do not merely strip
-    // punctuation: a value such as `https://user:secret@example.invalid`
-    // would still carry the secret after character filtering.  Relay errors
-    // are a small protocol enum, so only accept the categories emitted by the
-    // embedded relay and collapse everything else to a stable value.
-    let normalized = raw_kind.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        "overloaded" | "forbidden" | "connect" | "relay" | "timeout" => normalized,
-        _ => "unknown".to_string(),
-    }
-}
-
-fn format_relay_request_error(error: &reqwest::Error) -> String {
-    let kind = if error.is_timeout() {
-        "timeout"
-    } else if error.is_connect() {
-        "connect"
-    } else if error.is_request() {
-        "request"
-    } else if error.is_redirect() {
-        "redirect"
-    } else if error.is_body() {
-        "body"
-    } else if error.is_decode() {
-        "decode"
-    } else {
-        "unknown"
-    };
-    format!("tunnel relay request failed [kind={kind}]")
-}
-
 pub(crate) fn build_request_body(
     plan: &ExecutionPlan,
 ) -> Result<Vec<u8>, ExecutionRuntimeTransportError> {
@@ -3225,199 +2633,6 @@ fn gzip_bytes(body_bytes: &[u8]) -> Result<Vec<u8>, ExecutionRuntimeTransportErr
 fn zstd_bytes(body_bytes: &[u8]) -> Result<Vec<u8>, ExecutionRuntimeTransportError> {
     zstd::stream::encode_all(std::io::Cursor::new(body_bytes), 3)
         .map_err(|err| ExecutionRuntimeTransportError::RelayError(err.to_string()))
-}
-
-fn build_relay_client(
-    timeouts: Option<&aether_contracts::ExecutionTimeouts>,
-) -> Result<reqwest::Client, ExecutionRuntimeTransportError> {
-    build_relay_client_with_pinned_target(timeouts, None)
-}
-
-fn build_relay_client_with_pinned_target(
-    timeouts: Option<&aether_contracts::ExecutionTimeouts>,
-    pinned_target: Option<(&str, &[SocketAddr])>,
-) -> Result<reqwest::Client, ExecutionRuntimeTransportError> {
-    let builder = apply_http_client_config(
-        reqwest::Client::builder()
-            .no_proxy()
-            .redirect(Policy::none()),
-        &HttpClientConfig {
-            connect_timeout_ms: timeouts.and_then(|timeouts| timeouts.connect_ms),
-            use_rustls_tls: false,
-            ..HttpClientConfig::default()
-        },
-    );
-    let builder = if let Some((host, addresses)) = pinned_target {
-        builder.resolve_to_addrs(host, addresses)
-    } else {
-        builder
-    };
-    builder
-        .build()
-        .map_err(ExecutionRuntimeTransportError::ClientBuild)
-}
-
-async fn resolve_relay_target_addresses(
-    relay_url: &str,
-) -> Result<(String, Vec<SocketAddr>), ExecutionRuntimeTransportError> {
-    let url = reqwest::Url::parse(relay_url).map_err(|_| {
-        ExecutionRuntimeTransportError::RelayError("invalid tunnel relay URL".to_string())
-    })?;
-    validate_relay_target_url(&url)?;
-    let host = url.host_str().ok_or_else(|| {
-        ExecutionRuntimeTransportError::RelayError("tunnel relay URL has no host".to_string())
-    })?;
-    let port = url.port_or_known_default().ok_or_else(|| {
-        ExecutionRuntimeTransportError::RelayError("tunnel relay URL has no port".to_string())
-    })?;
-    let addresses = resolve_execution_target_addresses_with_policy(host, port, false)
-        .await
-        .map_err(|error| match error.kind() {
-            std::io::ErrorKind::PermissionDenied => ExecutionRuntimeTransportError::RelayError(
-                "tunnel relay DNS resolution returned a private or reserved address".to_string(),
-            ),
-            std::io::ErrorKind::NotFound => ExecutionRuntimeTransportError::RelayError(
-                "tunnel relay DNS resolution returned no addresses".to_string(),
-            ),
-            _ => ExecutionRuntimeTransportError::RelayError(
-                "tunnel relay DNS resolution failed".to_string(),
-            ),
-        })?;
-    Ok((host.to_string(), addresses))
-}
-
-fn validate_relay_target_url(url: &url::Url) -> Result<(), ExecutionRuntimeTransportError> {
-    tunnel::validate_tunnel_relay_transport_url(url)
-        .map_err(ExecutionRuntimeTransportError::RelayError)?;
-    if url.query().is_some() || url.fragment().is_some() {
-        return Err(ExecutionRuntimeTransportError::RelayError(
-            "tunnel relay URL must not include a query or fragment".to_string(),
-        ));
-    }
-
-    let host = url.host_str().ok_or_else(|| {
-        ExecutionRuntimeTransportError::RelayError("tunnel relay URL has no host".to_string())
-    })?;
-    let explicit_loopback = dns_host_explicitly_allows_loopback(host);
-    // Relay credentials and envelopes must never be sent to a private target.
-    // Local relays are an explicit exception, and are intentionally plain HTTP
-    // so an operator cannot mistake a loopback TLS endpoint for a trusted peer.
-    if explicit_loopback && url.scheme() != "http" {
-        return Err(ExecutionRuntimeTransportError::RelayError(
-            "loopback tunnel relay URL must use HTTP".to_string(),
-        ));
-    }
-    if let Some(ip) = match url.host() {
-        Some(url::Host::Ipv4(address)) => Some(IpAddr::V4(address)),
-        Some(url::Host::Ipv6(address)) => Some(IpAddr::V6(address)),
-        _ => None,
-    } {
-        if is_private_or_reserved_ip(ip) && !(url.scheme() == "http" && ip.is_loopback()) {
-            return Err(ExecutionRuntimeTransportError::RelayError(
-                "tunnel relay URL must not target a private or reserved address".to_string(),
-            ));
-        }
-    }
-    Ok(())
-}
-
-struct RelayEnvelope {
-    body: Vec<u8>,
-    metadata_len: usize,
-}
-
-impl RelayEnvelope {
-    fn metadata_envelope(&self) -> &[u8] {
-        &self.body[..self.metadata_len]
-    }
-
-    fn request_body(&self) -> &[u8] {
-        &self.body[self.metadata_len..]
-    }
-}
-
-fn build_relay_envelope(
-    meta: RelayRequestMeta,
-    body_bytes: &[u8],
-) -> Result<RelayEnvelope, ExecutionRuntimeTransportError> {
-    let meta_bytes =
-        serialize_serializable_with_limit(&meta, MAX_TUNNEL_RELAY_META_LEN).map_err(|error| {
-            match error {
-                ExecutionRuntimeTransportError::BodyTooLarge { .. } => {
-                    ExecutionRuntimeTransportError::RelayError(
-                        "tunnel relay metadata exceeds configured limit".to_string(),
-                    )
-                }
-                other => other,
-            }
-        })?;
-    let metadata_len_u32 = u32::try_from(meta_bytes.len()).map_err(|_| {
-        ExecutionRuntimeTransportError::RelayError("tunnel relay metadata too large".to_string())
-    })?;
-    let envelope_capacity = 4usize
-        .checked_add(meta_bytes.len())
-        .and_then(|value| value.checked_add(body_bytes.len()))
-        .ok_or_else(|| {
-            ExecutionRuntimeTransportError::RelayError(
-                "tunnel relay envelope too large".to_string(),
-            )
-        })?;
-    let mut envelope = Vec::with_capacity(envelope_capacity);
-    envelope.extend_from_slice(&metadata_len_u32.to_be_bytes());
-    envelope.extend_from_slice(&meta_bytes);
-    let metadata_len = envelope.len();
-    envelope.extend_from_slice(body_bytes);
-    Ok(RelayEnvelope {
-        body: envelope,
-        metadata_len,
-    })
-}
-
-fn build_relay_url(
-    proxy: Option<&ProxySnapshot>,
-    node_id: &str,
-) -> Result<String, ExecutionRuntimeTransportError> {
-    let base_url = proxy
-        .and_then(resolve_tunnel_base_url_from_proxy)
-        .or_else(|| std::env::var("AETHER_TUNNEL_BASE_URL").ok())
-        .unwrap_or_else(configured_gateway_frontdoor_base_url);
-    let relay_url = tunnel::build_tunnel_owner_relay_url(&base_url, node_id)
-        .map_err(ExecutionRuntimeTransportError::RelayError)?;
-    let parsed = reqwest::Url::parse(&relay_url).map_err(|_| {
-        ExecutionRuntimeTransportError::RelayError("invalid tunnel relay URL".to_string())
-    })?;
-    validate_relay_target_url(&parsed)?;
-    Ok(relay_url)
-}
-
-fn resolve_tunnel_base_url_from_proxy(proxy: &ProxySnapshot) -> Option<String> {
-    let extra = proxy.extra.as_ref()?;
-    let value = extra.get("tunnel_base_url")?.as_str()?.trim();
-    if !value.is_empty() {
-        return Some(value.to_string());
-    }
-    None
-}
-
-fn resolve_tunnel_owner_instance_id(proxy: Option<&ProxySnapshot>) -> Option<&str> {
-    proxy?
-        .extra
-        .as_ref()?
-        .get("tunnel_owner_instance_id")?
-        .as_str()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-}
-
-fn resolve_relay_timeout_seconds(plan: &ExecutionPlan) -> u64 {
-    resolve_tunnel_timeout_metadata(plan).legacy_timeout_secs
-}
-
-fn resolve_tunnel_first_byte_timeout(plan: &ExecutionPlan) -> Option<Duration> {
-    plan.stream.then(|| {
-        resolve_stream_first_byte_timeout(plan)
-            .unwrap_or_else(|| Duration::from_millis(DEFAULT_TUNNEL_TIMEOUT_MS))
-    })
 }
 
 pub(crate) fn resolve_non_stream_total_timeout_for_request(
@@ -3552,74 +2767,6 @@ pub(crate) fn stream_first_byte_timeout_message(timeout: Duration) -> String {
     )
 }
 
-fn resolve_tunnel_timeout_metadata(plan: &ExecutionPlan) -> TunnelTimeoutMetadata {
-    let request_timeout_ms = if plan.stream {
-        None
-    } else {
-        resolve_non_stream_total_timeout(plan)
-            .map(|timeout| u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX))
-    };
-    let stream_first_byte_timeout_ms = if plan.stream {
-        resolve_stream_first_byte_timeout(plan)
-            .map(|timeout| u64::try_from(timeout.as_millis()).unwrap_or(u64::MAX))
-    } else {
-        plan.timeouts
-            .as_ref()
-            .and_then(|timeouts| timeouts.first_byte_ms)
-    };
-    let legacy_timeout_ms = if plan.stream {
-        stream_first_byte_timeout_ms.unwrap_or(DEFAULT_TUNNEL_TIMEOUT_MS)
-    } else {
-        request_timeout_ms.unwrap_or(DEFAULT_NON_STREAM_TOTAL_TIMEOUT_MS)
-    };
-
-    TunnelTimeoutMetadata {
-        request_timeout_ms,
-        stream_first_byte_timeout_ms,
-        legacy_timeout_secs: timeout_ms_to_secs(legacy_timeout_ms),
-    }
-}
-
-fn timeout_ms_to_secs(ms: u64) -> u64 {
-    let secs = ms.div_ceil(1_000);
-    secs.clamp(
-        MIN_TUNNEL_TIMEOUT_SECS,
-        aether_contracts::MAX_EXECUTION_REQUEST_TIMEOUT_SECS,
-    )
-}
-
-fn resolve_tunnel_node_id(proxy: Option<&ProxySnapshot>) -> Option<String> {
-    let proxy = proxy?;
-    if proxy.enabled == Some(false) {
-        return None;
-    }
-
-    let proxy_mode = proxy
-        .mode
-        .as_deref()
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
-    let node_id = proxy.node_id.as_deref().map(str::trim).unwrap_or_default();
-    let has_node_id = !node_id.is_empty();
-    let has_proxy_url = proxy
-        .url
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|url| !url.is_empty());
-
-    if has_node_id && (proxy_mode == "tunnel" || !has_proxy_url) {
-        return Some(node_id.to_string());
-    }
-
-    None
-}
-
-fn resolve_local_tunnel_node_id(state: &AppState, proxy: Option<&ProxySnapshot>) -> Option<String> {
-    let node_id = resolve_tunnel_node_id(proxy)?;
-    state.tunnel.has_local_proxy(&node_id).then_some(node_id)
-}
-
 fn build_client(
     request_url: &str,
     key_id: &str,
@@ -3695,10 +2842,6 @@ fn try_prewarm_direct_reqwest_client_cache_for_plan(
     if transport_profile_uses_browser_wreq(plan.transport_profile.as_ref()) {
         return Ok(false);
     }
-    if resolve_tunnel_node_id(plan.proxy.as_ref()).is_some() {
-        return Ok(false);
-    }
-
     let transport_controls = direct_reqwest_effective_transport_controls(
         plan,
         resolve_execution_transport_controls(&plan.headers),
@@ -5174,23 +4317,6 @@ pub(crate) fn collect_response_headers(headers: &HeaderMap) -> BTreeMap<String, 
             !crate::headers::should_skip_response_header(name)
                 && !connection_declared.contains(&name.to_ascii_lowercase())
         })
-        .collect()
-}
-
-fn collect_tunnel_response_headers(headers: &[(String, String)]) -> BTreeMap<String, String> {
-    let connection_declared = aether_http::connection_declared_header_names(
-        headers
-            .iter()
-            .filter(|(name, _)| name.eq_ignore_ascii_case(http::header::CONNECTION.as_str()))
-            .map(|(_, value)| value.as_str()),
-    );
-    headers
-        .iter()
-        .filter(|(name, _)| {
-            !crate::headers::should_skip_response_header(name)
-                && !connection_declared.contains(&name.to_ascii_lowercase())
-        })
-        .map(|(name, value)| (name.to_ascii_lowercase(), value.clone()))
         .collect()
 }
 

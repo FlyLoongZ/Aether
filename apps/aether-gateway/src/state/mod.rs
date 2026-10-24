@@ -10,6 +10,7 @@ mod catalog_credentials;
 mod catalog_proxy;
 mod core;
 mod cors;
+mod instance;
 mod integrations;
 mod oauth;
 mod proxy;
@@ -41,14 +42,12 @@ pub(crate) use self::cache::{
     PROVIDER_TRANSPORT_SNAPSHOT_CACHE_STALE_TTL, PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL,
 };
 pub use self::cors::FrontdoorCorsConfig;
+pub(crate) use self::instance::resolve_gateway_instance_id;
 pub(crate) use self::oauth::{
     provider_transport_context_allows_credential_rotation, AgentIdentityAuthConfigFence,
     CodexRuntimeOAuthObservation, ProviderTransportCredentialFence,
 };
-pub(crate) use self::proxy::{
-    decrypt_or_migrate_proxy_tunnel_psk, decrypt_or_migrate_proxy_tunnel_psk_binding,
-    unavailable_proxy_snapshot,
-};
+pub(crate) use self::proxy::unavailable_proxy_snapshot;
 pub(crate) use self::types::{
     AdminWalletMutationOutcome, GatewayAdminPaymentCallbackView, GatewayUserPreferenceView,
     GatewayUserSessionView, LocalExecutionRuntimeMissDiagnostic, LocalMutationOutcome,

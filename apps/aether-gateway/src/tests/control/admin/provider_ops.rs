@@ -1374,9 +1374,6 @@ async fn gateway_verifies_admin_provider_ops_locally_for_anyrouter_proxy_mode_im
     let mut manual_node = sample_proxy_node("proxy-node-manual");
     manual_node.name = "alpha-manual".to_string();
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
     manual_node.proxy_password = Some("supersecret".to_string());
@@ -1526,9 +1523,6 @@ async fn gateway_verifies_admin_provider_ops_sub2api_proxy_mode_via_execution_ru
     let mut manual_node = sample_proxy_node("proxy-node-sub2api");
     manual_node.name = "sub2api-manual".to_string();
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
@@ -1817,9 +1811,6 @@ async fn gateway_verifies_admin_provider_ops_locally_for_new_api_proxy_node_mode
     let mut manual_node = sample_proxy_node("proxy-node-manual");
     manual_node.name = "alpha-manual".to_string();
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
     manual_node.proxy_password = Some("supersecret".to_string());
@@ -2923,9 +2914,6 @@ async fn gateway_handles_admin_provider_ops_balance_locally_for_generic_api_prox
     let mut manual_node = sample_proxy_node("proxy-node-manual");
     manual_node.name = "alpha-manual".to_string();
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
     manual_node.proxy_password = Some("supersecret".to_string());
@@ -3328,9 +3316,6 @@ async fn gateway_handles_admin_provider_ops_checkin_locally_for_generic_api_prox
     let mut manual_node = sample_proxy_node("proxy-node-manual");
     manual_node.name = "alpha-manual".to_string();
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
     manual_node.proxy_password = Some("supersecret".to_string());

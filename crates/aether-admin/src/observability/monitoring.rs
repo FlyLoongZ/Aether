@@ -794,9 +794,6 @@ pub fn build_admin_monitoring_system_status_payload_response(
     today_requests: usize,
     today_tokens: u64,
     today_cost: f64,
-    proxy_connections: usize,
-    nodes: usize,
-    active_streams: usize,
     path_prefixes: &[&str],
     recent_errors: usize,
     usage_counter: Value,
@@ -819,11 +816,6 @@ pub fn build_admin_monitoring_system_status_payload_response(
             "requests": today_requests,
             "tokens": today_tokens,
             "cost_usd": format!("${today_cost:.4}"),
-        },
-        "tunnel": {
-            "proxy_connections": proxy_connections,
-            "nodes": nodes,
-            "active_streams": active_streams,
         },
         "internal_gateway": {
             "status": "rust_native_control_plane",

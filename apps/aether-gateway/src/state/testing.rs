@@ -95,50 +95,6 @@ impl AppState {
         self
     }
 
-    pub(crate) fn with_tunnel_identity_for_tests(
-        mut self,
-        instance_id: &str,
-        relay_base_url: Option<&str>,
-    ) -> Self {
-        self.tunnel = crate::tunnel::EmbeddedTunnelState::with_data_and_directory(
-            Arc::clone(&self.data),
-            crate::tunnel::TunnelAttachmentDirectory::for_tests(instance_id, relay_base_url, 90),
-        );
-        self
-    }
-
-    pub(crate) fn with_tunnel_identity_and_relay_secret_for_tests(
-        mut self,
-        instance_id: &str,
-        relay_base_url: Option<&str>,
-        relay_auth_secret: &str,
-    ) -> Self {
-        self.tunnel = crate::tunnel::EmbeddedTunnelState::with_data_and_directory_for_tests(
-            Arc::clone(&self.data),
-            crate::tunnel::TunnelAttachmentDirectory::for_tests(instance_id, relay_base_url, 90),
-            relay_auth_secret,
-        );
-        self
-    }
-
-    pub(crate) fn with_tunnel_identity_runtime_state_and_relay_secret_for_tests(
-        mut self,
-        instance_id: &str,
-        relay_base_url: Option<&str>,
-        runtime_state: Arc<aether_runtime_state::RuntimeState>,
-        relay_auth_secret: &str,
-    ) -> Self {
-        self.tunnel =
-            crate::tunnel::EmbeddedTunnelState::with_data_identity_runtime_state_and_relay_secret_for_tests(
-                Arc::clone(&self.data),
-                instance_id,
-                relay_base_url,
-                runtime_state,
-                relay_auth_secret,
-            );
-        self
-    }
-
     pub(crate) fn with_video_task_data_reader_for_tests(
         mut self,
         repository: Arc<dyn VideoTaskReadRepository>,

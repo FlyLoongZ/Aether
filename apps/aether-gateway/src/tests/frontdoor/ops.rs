@@ -126,18 +126,6 @@ async fn gateway_exposes_frontdoor_manifest_without_proxying_upstream() {
         .any(|value| value == "/api/internal/gateway/{path...}"));
     assert!(owned_routes
         .iter()
-        .any(|value| value == "/api/internal/proxy-tunnel"));
-    assert!(owned_routes
-        .iter()
-        .any(|value| value == "/api/internal/tunnel/heartbeat"));
-    assert!(owned_routes
-        .iter()
-        .any(|value| value == "/api/internal/tunnel/node-status"));
-    assert!(owned_routes
-        .iter()
-        .any(|value| value == "/api/internal/tunnel/relay/{node_id}"));
-    assert!(owned_routes
-        .iter()
         .any(|value| value == "/api/capabilities/user-configurable"));
     assert!(owned_routes
         .iter()

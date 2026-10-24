@@ -2,7 +2,6 @@ use aether_scheduler_core::{
     apply_scheduler_candidate_ranking, requested_capability_priority_for_candidate,
     SchedulerMinimalCandidateSelectionCandidate, SchedulerPriorityMode, SchedulerRankableCandidate,
     SchedulerRankingContext, SchedulerRankingMode, SchedulerRankingOutcome,
-    SchedulerTunnelAffinityBucket,
 };
 use async_trait::async_trait;
 
@@ -28,7 +27,6 @@ pub struct AiRankableCandidateParts<'a> {
     pub provider_api_format: &'a str,
     pub required_capabilities: Option<&'a serde_json::Value>,
     pub cached_affinity_match: bool,
-    pub tunnel_bucket: SchedulerTunnelAffinityBucket,
     pub keep_priority_on_conversion: bool,
 }
 
@@ -88,7 +86,6 @@ pub fn build_ai_rankable_candidate(
             parts.candidate,
         ))
         .with_cached_affinity_match(parts.cached_affinity_match)
-        .with_tunnel_bucket(parts.tunnel_bucket)
         .with_format_state(
             !is_same_format && !parts.keep_priority_on_conversion,
             format_preference,
@@ -232,7 +229,6 @@ mod tests {
                 capability_priority: (0, 0),
                 cached_affinity_match,
                 affinity_hash: None,
-                tunnel_bucket: Default::default(),
                 demote_cross_format: false,
                 format_preference: (0, 0),
                 health_bucket: None,

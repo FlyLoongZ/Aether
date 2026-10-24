@@ -5,7 +5,6 @@ use crate::constants::{
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
 use crate::headers::header_value_str;
-use crate::tunnel::TUNNEL_ROUTE_FAMILY;
 use axum::http::{self, HeaderName};
 use chrono::{SecondsFormat, Utc};
 use url::form_urlencoded;
@@ -445,23 +444,22 @@ pub(crate) fn internal_proxy_local_requires_buffered_body(
                     decision.route_family.as_deref(),
                     decision.route_kind.as_deref()
                 ),
-                (Some(TUNNEL_ROUTE_FAMILY), Some("heartbeat" | "node_status"))
-                    | (
-                        Some("internal_gateway"),
-                        Some(
-                            "resolve"
-                                | "auth_context"
-                                | "decision_sync"
-                                | "decision_stream"
-                                | "execute_sync"
-                                | "execute_stream"
-                                | "plan_sync"
-                                | "plan_stream"
-                                | "report_sync"
-                                | "report_stream"
-                                | "finalize_sync"
-                        )
+                (
+                    Some("internal_gateway"),
+                    Some(
+                        "resolve"
+                            | "auth_context"
+                            | "decision_sync"
+                            | "decision_stream"
+                            | "execute_sync"
+                            | "execute_stream"
+                            | "plan_sync"
+                            | "plan_stream"
+                            | "report_sync"
+                            | "report_stream"
+                            | "finalize_sync"
                     )
+                )
             )
         })
 }

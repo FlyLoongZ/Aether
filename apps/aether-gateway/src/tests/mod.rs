@@ -17,7 +17,6 @@ mod control;
 mod files;
 mod frontdoor;
 mod operational_auth;
-mod proxy;
 mod usage;
 mod video;
 

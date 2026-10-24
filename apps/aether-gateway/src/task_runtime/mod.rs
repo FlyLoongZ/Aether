@@ -131,7 +131,7 @@ where
 {
     let runtime_state = app.runtime_state.clone();
     let metrics = app.task_supervisor_metrics.clone();
-    let owner = app.tunnel.local_instance_id().to_string();
+    let owner = app.local_instance_id().to_string();
     aether_gateway_workers::spawn_singleton_worker_with_context(
         runtime_state,
         metrics,
@@ -665,7 +665,7 @@ pub(crate) async fn submit_provider_delete_task(
             status: BackgroundTaskStatus::Queued,
             attempt: 1,
             max_attempts,
-            owner_instance: Some(app.tunnel.local_instance_id().to_string()),
+            owner_instance: Some(app.local_instance_id().to_string()),
             progress_percent: 0,
             progress_message: Some("delete task queued".to_string()),
             payload_json: Some(serde_json::json!({ "provider_id": provider_id.clone() })),
@@ -694,7 +694,7 @@ pub(crate) async fn submit_provider_delete_task(
         let lock_ttl = std::time::Duration::from_secs(PROVIDER_DELETE_LOCK_TTL_SECS);
         let lock = app
             .runtime_state
-            .lock_try_acquire(&lock_key, app.tunnel.local_instance_id(), lock_ttl)
+            .lock_try_acquire(&lock_key, app.local_instance_id(), lock_ttl)
             .await
             .ok()
             .flatten();
@@ -931,7 +931,7 @@ mod worker_boot_run_id_tests {
                     GatewayDataState::disabled()
                         .with_background_task_repository_for_tests(repository.clone()),
                 )
-                .with_tunnel_identity_for_tests(gateway_instance_id, None)
+                .with_instance_id(gateway_instance_id)
         };
 
         spawn_record_worker_boot(

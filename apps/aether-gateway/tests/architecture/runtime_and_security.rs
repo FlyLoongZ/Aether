@@ -52,19 +52,6 @@ fn gateway_production_body_collection_stays_bounded() {
 }
 
 #[test]
-fn tunnel_node_status_delivery_stays_bounded() {
-    let source = read_workspace_file("apps/aether-gateway/src/tunnel/embedded/hub.rs");
-    assert!(
-        !source.contains("unbounded_channel::<NodeStatusEvent>"),
-        "tunnel node status delivery must not use an unbounded channel"
-    );
-    assert!(
-        source.contains("bounded_queue::<NodeStatusEvent>"),
-        "tunnel node status delivery must use the tracked bounded queue"
-    );
-}
-
-#[test]
 fn gateway_small_runtime_shims_stay_deleted() {
     for path in [
         "apps/aether-gateway/src/hooks/audit.rs",
@@ -157,7 +144,6 @@ fn runtime_state_owns_redis_runtime_boundaries() {
     let mut violations = Vec::new();
     for root in [
         "apps/aether-gateway/src",
-        "apps/aether-tunnel/src",
         "crates/aether-admin/src",
         "crates/aether-billing/src",
         "crates/aether-model-fetch/src",
@@ -195,7 +181,6 @@ fn runtime_state_owns_redis_runtime_boundaries() {
     let mut dependency_violations = Vec::new();
     for manifest in [
         "apps/aether-gateway/Cargo.toml",
-        "apps/aether-tunnel/Cargo.toml",
         "crates/aether-admin/Cargo.toml",
         "crates/aether-billing/Cargo.toml",
         "crates/aether-model-fetch/Cargo.toml",
@@ -1495,23 +1480,6 @@ fn usage_reporting_does_not_log_raw_report_context() {
     assert!(
         !source.contains("report_context = ?payload.report_context"),
         "usage/reporting/mod.rs should not log raw report_context"
-    );
-}
-
-#[test]
-fn proxy_registration_client_does_not_log_raw_management_response_body() {
-    let source = read_workspace_file("apps/aether-tunnel/src/registration/client.rs");
-    assert!(
-        !source.contains("error!(body = %text"),
-        "registration/client.rs should not log raw management response bodies"
-    );
-    assert!(
-        !source.contains("register failed (HTTP {}): {}"),
-        "registration/client.rs should not bubble raw register response bodies into logs"
-    );
-    assert!(
-        !source.contains("unregister failed: {}"),
-        "registration/client.rs should not bubble raw unregister response bodies into logs"
     );
 }
 

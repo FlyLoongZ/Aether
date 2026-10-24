@@ -67,21 +67,11 @@ where
             format!("video-test-{node_id}"),
             "127.0.0.1".to_string(),
             1,
-            true,
             "online".to_string(),
-            30,
-            0,
-            0,
-            0,
-            0,
-            0,
-            false,
-            false,
-            1,
         )
         .expect("video test proxy node should build")
         .with_manual_proxy_fields(Some(proxy_url.to_string()), None, None)
-        .with_tunnel_generation(format!("video-test-generation-{node_id}"))
+        .with_node_generation(format!("video-test-generation-{node_id}"))
     });
     Arc::new(InMemoryProxyNodeRepository::seed(nodes))
 }

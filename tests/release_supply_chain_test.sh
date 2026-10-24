@@ -5,7 +5,6 @@ REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 COMPOSE_FILE="${REPO_ROOT}/docker-compose.yml"
 RELEASE_WORKFLOW="${REPO_ROOT}/.github/workflows/release.yml"
 NIGHTLY_WORKFLOW="${REPO_ROOT}/.github/workflows/nightly.yml"
-TUNNEL_RELEASE_WORKFLOW="${REPO_ROOT}/.github/workflows/build-tunnel.yml"
 APP_DOCKERFILE="${REPO_ROOT}/Dockerfile.app"
 
 fail_test() {
@@ -69,16 +68,6 @@ assert_line "${NIGHTLY_WORKFLOW}" \
     '            if [[ "${asset_name}" == aether-nightly-*.tar.gz && ! -f "release-assets/${asset_name}" ]]; then'
 assert_line "${NIGHTLY_WORKFLOW}" \
     '              gh release delete-asset "${RELEASE_TAG}" "${asset_name}" \'
-
-assert_line "${TUNNEL_RELEASE_WORKFLOW}" "      attestations: write"
-assert_line "${TUNNEL_RELEASE_WORKFLOW}" "      id-token: write"
-assert_line "${TUNNEL_RELEASE_WORKFLOW}" \
-    "        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2"
-assert_line "${TUNNEL_RELEASE_WORKFLOW}" "            artifacts/SHA256SUMS.txt"
-assert_line "${TUNNEL_RELEASE_WORKFLOW}" \
-    "            artifacts/AETHER_TUNNEL_RELEASE_PROVENANCE.sigstore.json"
-assert_line "${TUNNEL_RELEASE_WORKFLOW}" \
-    "          tar czf ../../../aether-tunnel-\${{ matrix.name }}.tar.gz aether-tunnel.exe"
 
 if grep -ERq '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]+[^[:space:]#]+@[^0-9a-f[:space:]][^[:space:]]*([[:space:]#]|$)' \
     "${REPO_ROOT}/.github/workflows"; then

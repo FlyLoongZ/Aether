@@ -383,6 +383,7 @@ pub struct AppState {
     #[cfg(test)]
     pub(crate) execution_runtime_sync_override: Option<TestExecutionRuntimeSyncOverride>,
     pub(crate) data: Arc<GatewayDataState>,
+    pub(crate) instance_id: Arc<str>,
     pub(crate) background_data: Arc<GatewayDataState>,
     pub(crate) background_data_isolated: bool,
     pub(crate) runtime_state: Arc<RuntimeState>,
@@ -453,7 +454,6 @@ pub struct AppState {
     pub(crate) request_candidate_queue: Option<Arc<RequestCandidateQueueRuntime>>,
     pub(crate) frontdoor_cors: Option<Arc<FrontdoorCorsConfig>>,
     pub(crate) frontdoor_user_rpm: Arc<FrontdoorUserRpmLimiter>,
-    pub(crate) tunnel: crate::tunnel::EmbeddedTunnelState,
     pub(crate) provider_transport_snapshot_cache:
         Arc<DashMap<ProviderTransportSnapshotCacheKey, CachedProviderTransportSnapshot>>,
     pub(crate) provider_transport_snapshot_cache_generation: Arc<AtomicU64>,

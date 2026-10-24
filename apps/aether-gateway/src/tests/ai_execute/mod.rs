@@ -48,21 +48,11 @@ where
             format!("ai-execute-{node_id}"),
             "127.0.0.1".to_string(),
             1,
-            true,
             "online".to_string(),
-            30,
-            0,
-            0,
-            0,
-            0,
-            0,
-            false,
-            false,
-            1,
         )
         .expect("ai_execute proxy node should build")
         .with_manual_proxy_fields(Some("http://127.0.0.1:1".to_string()), None, None)
-        .with_tunnel_generation(format!("ai-execute-generation-{node_id}"))
+        .with_node_generation(format!("ai-execute-generation-{node_id}"))
     });
     Arc::new(InMemoryProxyNodeRepository::seed(nodes))
 }

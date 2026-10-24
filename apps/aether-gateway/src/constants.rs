@@ -14,11 +14,6 @@ pub(crate) const EXECUTION_RUNTIME_LOOP_GUARD_VALUE: &str = "local-runtime";
 pub(crate) const EXECUTION_RUNTIME_LOOP_GUARD_VIA_TOKEN: &str = "aether-execution-runtime";
 pub(crate) const LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER: &str =
     "x-aether-local-execution-runtime-miss-reason";
-pub(crate) const TUNNEL_AFFINITY_FORWARDED_BY_HEADER: &str =
-    "x-aether-tunnel-affinity-forwarded-by";
-pub(crate) const TUNNEL_AFFINITY_OWNER_INSTANCE_HEADER: &str =
-    "x-aether-tunnel-affinity-owner-instance-id";
-pub(crate) const TUNNEL_AFFINITY_NODE_ID_HEADER: &str = "x-aether-tunnel-affinity-node-id";
 pub(crate) const EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH: &str = "public_proxy_passthrough";
 pub(crate) const EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED: &str =
     "local_proxy_passthrough_removed";
@@ -109,10 +104,6 @@ pub(crate) const RUST_FRONTDOOR_OWNED_ROUTE_PATTERNS: &[&str] = &[
     "/api/capabilities/user-configurable",
     "/api/capabilities/model/{path...}",
     "/api/internal/gateway/{path...}",
-    "/api/internal/proxy-tunnel",
-    "/api/internal/tunnel/heartbeat",
-    "/api/internal/tunnel/node-status",
-    "/api/internal/tunnel/relay/{node_id}",
     "/v1/models",
     "/v1/models/{path...}",
     "/v1beta/models",

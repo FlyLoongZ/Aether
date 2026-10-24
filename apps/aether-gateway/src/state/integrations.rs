@@ -260,25 +260,6 @@ fn extract_antigravity_load_code_assist_project_id(value: &Value) -> Option<Stri
 }
 
 #[async_trait]
-impl provider_transport::TransportTunnelAffinityLookup for AppState {
-    async fn lookup_tunnel_attachment_owner(
-        &self,
-        node_id: &str,
-    ) -> Result<Option<provider_transport::TransportTunnelAttachmentOwner>, String> {
-        self.tunnel
-            .lookup_attachment_owner(self.data.as_ref(), node_id)
-            .await
-            .map(|owner| {
-                owner.map(|owner| provider_transport::TransportTunnelAttachmentOwner {
-                    gateway_instance_id: owner.gateway_instance_id,
-                    relay_base_url: owner.relay_base_url,
-                    observed_at_unix_secs: owner.observed_at_unix_secs,
-                })
-            })
-    }
-}
-
-#[async_trait]
 impl provider_transport::VideoTaskTransportSnapshotLookup for AppState {
     async fn read_video_task_provider_transport_snapshot(
         &self,
