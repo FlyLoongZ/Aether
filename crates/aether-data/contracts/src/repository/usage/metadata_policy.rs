@@ -370,7 +370,8 @@ fn insert_client_family(source: &Map<String, Value>, target: &mut Map<String, Va
             source
                 .get("user_agent")
                 .and_then(Value::as_str)
-                .and_then(infer_client_family_from_user_agent)
+                .and_then(infer_known_client_family)
+                .map(str::to_string)
         });
     insert_owned_string(target, "client_family", value);
 }
@@ -407,60 +408,97 @@ fn sanitize_client_family(value: &str) -> Option<String> {
     )
 }
 
-fn infer_client_family_from_user_agent(value: &str) -> Option<String> {
-    let normalized = value.trim().to_ascii_lowercase();
-    let family = if normalized.starts_with("codex_vscode") {
-        "codex_vscode"
-    } else if normalized.starts_with("codex") {
-        "codex"
-    } else if normalized.contains("claude-code") || normalized.contains("claude_code") {
-        "claude_code"
-    } else if normalized.contains("opencode") {
-        "opencode"
-    } else if normalized.contains("geminicli") || normalized.contains("gemini-cli") {
-        "gemini_cli"
-    } else if normalized.contains("qwencode") {
-        "qwen_code"
-    } else if normalized.contains("roo-code") || normalized.contains("roocode") {
-        "roo_code"
-    } else if normalized.contains("kilo-code") || normalized.contains("kilocode") {
-        "kilocode"
-    } else if normalized.contains("cherrystudio") || normalized.contains("cherry-studio") {
-        "cherrystudio"
-    } else if normalized.contains("openui-agent-manager") || normalized.contains("openui") {
-        "openui"
-    } else if normalized.contains("cursor") {
-        "cursor"
-    } else if normalized.contains("windsurf") {
-        "windsurf"
-    } else if normalized.contains("continue") {
-        "continue"
-    } else if normalized.contains("cline") {
-        "cline"
-    } else if normalized.contains("aider") {
-        "aider"
-    } else if normalized.contains("langchain") {
-        "langchain"
-    } else if normalized.contains("llamaindex") || normalized.contains("llama-index") {
-        "llamaindex"
-    } else if normalized.starts_with("openai/js") {
-        "openai_js_sdk"
-    } else if normalized.starts_with("openai/python") {
-        "openai_python_sdk"
-    } else if normalized.starts_with("anthropic/js")
-        || normalized.contains("anthropic-sdk-typescript")
-    {
-        "anthropic_js_sdk"
-    } else if normalized.starts_with("anthropic/python")
-        || normalized.contains("anthropic-sdk-python")
-    {
-        "anthropic_python_sdk"
-    } else if normalized.contains("/js ") || normalized.contains("/python ") {
-        "sdk"
-    } else {
+/// Infer a client family label from a `User-Agent` header value.
+///
+/// Shared by gateway public usage responses, admin observability payloads and
+/// usage metadata policy so all three surfaces classify agents identically.
+/// Infer a client family label from a `User-Agent` header value.
+///
+/// Unrecognised non-empty agents collapse to `"unknown"` so gateway
+/// responses keep a stable bucket.
+pub fn infer_client_family(user_agent: &str) -> Option<&'static str> {
+    if user_agent.trim().is_empty() {
         return None;
-    };
-    Some(family.to_string())
+    }
+    Some(infer_known_client_family(user_agent).unwrap_or("unknown"))
+}
+
+/// Like [`infer_client_family`] but returns `None` for unrecognised agents.
+///
+/// Usage metadata policy uses this to skip writing a `client_family` bucket
+/// when the agent carries no recognised signature.
+pub fn infer_known_client_family(user_agent: &str) -> Option<&'static str> {
+    let normalized = user_agent.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return None;
+    }
+    if normalized.starts_with("codex_vscode") {
+        return Some("codex_vscode");
+    }
+    if normalized.starts_with("codex") {
+        return Some("codex");
+    }
+    if normalized.contains("claude-code") || normalized.contains("claude_code") {
+        return Some("claude_code");
+    }
+    if normalized.contains("opencode") {
+        return Some("opencode");
+    }
+    if normalized.contains("geminicli") || normalized.contains("gemini-cli") {
+        return Some("gemini_cli");
+    }
+    if normalized.contains("qwencode") {
+        return Some("qwen_code");
+    }
+    if normalized.contains("roo-code") || normalized.contains("roocode") {
+        return Some("roo_code");
+    }
+    if normalized.contains("kilo-code") || normalized.contains("kilocode") {
+        return Some("kilocode");
+    }
+    if normalized.contains("cherrystudio") || normalized.contains("cherry-studio") {
+        return Some("cherrystudio");
+    }
+    if normalized.contains("openui-agent-manager") || normalized.contains("openui") {
+        return Some("openui");
+    }
+    if normalized.contains("cursor") {
+        return Some("cursor");
+    }
+    if normalized.contains("windsurf") {
+        return Some("windsurf");
+    }
+    if normalized.contains("continue") {
+        return Some("continue");
+    }
+    if normalized.contains("cline") {
+        return Some("cline");
+    }
+    if normalized.contains("aider") {
+        return Some("aider");
+    }
+    if normalized.contains("langchain") {
+        return Some("langchain");
+    }
+    if normalized.contains("llamaindex") || normalized.contains("llama-index") {
+        return Some("llamaindex");
+    }
+    if normalized.starts_with("openai/js") {
+        return Some("openai_js_sdk");
+    }
+    if normalized.starts_with("openai/python") {
+        return Some("openai_python_sdk");
+    }
+    if normalized.starts_with("anthropic/js") || normalized.contains("anthropic-sdk-typescript") {
+        return Some("anthropic_js_sdk");
+    }
+    if normalized.starts_with("anthropic/python") || normalized.contains("anthropic-sdk-python") {
+        return Some("anthropic_python_sdk");
+    }
+    if normalized.contains("/js ") || normalized.contains("/python ") {
+        return Some("sdk");
+    }
+    None
 }
 
 fn sanitize_websocket_transport(value: &str) -> Option<String> {
