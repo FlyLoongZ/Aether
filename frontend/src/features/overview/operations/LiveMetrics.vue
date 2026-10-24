@@ -181,7 +181,6 @@ const groups = computed(() => {
   if (!m) return []
   const runtime = [
     { title: t('请求准入', 'Request admission'), icon: Activity, items: [{ label: t('本机处理中', 'Node in flight'), value: count(m.local.inFlight) }, { label: t('本机可用许可', 'Node available permits'), value: count(m.local.availablePermits) }, { label: t('全局处理中', 'Global in flight'), value: count(m.distributed.inFlight) }, { label: t('全局可用许可', 'Global available permits'), value: count(m.distributed.availablePermits) }] },
-    { title: t('代理通道', 'Proxy tunnels'), icon: Network, items: [{ label: t('连接数', 'Connections'), value: count(m.tunnel.proxyConnections) }, { label: t('活跃流', 'Active streams'), value: count(m.tunnel.activeStreams) }, { label: t('队列深度', 'Queue depth'), value: count(m.tunnel.outboundQueueDepthTotal) }, { label: t('队列容量', 'Queue capacity'), value: count(m.tunnel.outboundQueueCapacityTotal) }] },
     { title: t('用量写入', 'Usage writes'), icon: ListTodo, items: [{ label: t('待确认', 'Awaiting acknowledgement'), value: count(m.usageQueue.groupPending) }, { label: t('待消费', 'Awaiting delivery'), value: count(m.usageQueue.groupLag) }, { label: t('死信', 'Dead letters'), value: count(m.usageQueue.dlqLength) }, { label: t('最旧待处理 (ms)', 'Oldest pending (ms)'), value: count(m.usageQueue.oldestPendingIdleMs) }] },
   ]
   if (!props.resources) return runtime

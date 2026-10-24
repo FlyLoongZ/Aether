@@ -1048,9 +1048,6 @@ export const MOCK_SYSTEM_CONFIGS: Array<{ key: string; value: unknown; descripti
   { key: 'backup_s3_schedule_weekday', value: 1, description: 'S3 备份星期' },
   { key: 'backup_s3_schedule_month_day', value: 1, description: 'S3 备份月日' },
   { key: 'backup_s3_retention_count', value: 7, description: 'S3 备份保留份数' },
-  { key: 'proxy_node_metrics_1m_retention_days', value: 30, description: '代理节点 1m 指标保留天数' },
-  { key: 'proxy_node_metrics_1h_retention_days', value: 180, description: '代理节点 1h 指标保留天数' },
-  { key: 'proxy_node_metrics_cleanup_batch_size', value: 5000, description: '代理节点指标每批次清理条数' }
 ]
 
 const MOCK_MODULE_DEFINITIONS: Array<Omit<ModuleStatus, 'active' | 'health'> & { health?: ModuleStatus['health'] }> = [

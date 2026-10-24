@@ -58,7 +58,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             let loaded = load_schema_sources(schema_dir)?;
             check_generated_dir(&loaded, output_dir)?;
-            aether_data_schema::check_required_tables(&loaded.schema, &require_tables_from)?;
+            // The baseline is a historical starting point: migrations retire
+            // some of its definitions, so the coverage check must ignore those
+            // instead of forcing the baseline to be rewritten.
+            aether_data_schema::check_required_tables_excluding_retired(
+                &loaded.schema,
+                &require_tables_from,
+            )?;
         }
         Command::Print { schema_dir, driver } => {
             let schema = load_schema_sources(schema_dir)?.schema;

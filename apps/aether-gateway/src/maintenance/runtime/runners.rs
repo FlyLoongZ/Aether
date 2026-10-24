@@ -9,16 +9,13 @@ use crate::{AppState, GatewayError};
 
 use super::cleanup_runs::cleanup_data_layer_error_category;
 use super::{
-    advance_proxy_upgrade_rollout_once, cleanup_audit_logs_once,
-    cleanup_expired_gemini_file_mappings_once, cleanup_proxy_node_metrics_once,
-    cleanup_request_candidates_once, cleanup_stale_pending_requests_once,
-    cleanup_stale_proxy_nodes_once, collect_proxy_upgrade_rollout_probes, now_unix_secs,
+    cleanup_audit_logs_once, cleanup_expired_gemini_file_mappings_once,
+    cleanup_request_candidates_once, cleanup_stale_pending_requests_once, now_unix_secs,
     perform_automatic_usage_cleanup_once, perform_db_maintenance_once,
     perform_manual_usage_cleanup_once, perform_provider_checkin_once,
     perform_stats_aggregation_once, perform_stats_hourly_aggregation_once,
     perform_wallet_daily_usage_aggregation_once, record_admin_cleanup_run,
-    record_completed_cleanup_run, record_failed_cleanup_run,
-    record_proxy_upgrade_traffic_success_for_generation, summarize_database_pool,
+    record_completed_cleanup_run, record_failed_cleanup_run, summarize_database_pool,
     AdminCleanupRunRecord, ManualUsageCleanupOptions,
 };
 
@@ -73,63 +70,6 @@ pub(super) async fn run_gemini_file_mapping_cleanup_once(
             worker = "gemini_file_mapping_cleanup",
             deleted,
             "gateway deleted expired gemini file mappings"
-        );
-    }
-    Ok(())
-}
-
-pub(super) async fn run_proxy_node_stale_cleanup_once(
-    data: &GatewayDataState,
-) -> Result<(), DataLayerError> {
-    let stale_marked = cleanup_stale_proxy_nodes_once(data).await?;
-    if stale_marked > 0 {
-        info!(
-            event_name = "proxy_node_stale_cleanup_completed",
-            log_type = "ops",
-            worker = "proxy_node_stale_cleanup",
-            stale_marked,
-            "gateway marked stale proxy nodes offline"
-        );
-    }
-    Ok(())
-}
-
-pub(super) async fn run_proxy_node_metrics_cleanup_once(
-    data: &GatewayDataState,
-) -> Result<(), DataLayerError> {
-    let summary = cleanup_proxy_node_metrics_once(data).await?;
-    if summary.deleted_1m_rows > 0 || summary.deleted_1h_rows > 0 {
-        info!(
-            event_name = "proxy_node_metrics_cleanup_completed",
-            log_type = "ops",
-            worker = "proxy_node_metrics_cleanup",
-            deleted_1m_rows = summary.deleted_1m_rows,
-            deleted_1h_rows = summary.deleted_1h_rows,
-            "gateway deleted expired proxy node metrics buckets"
-        );
-    }
-    Ok(())
-}
-
-pub(super) async fn run_proxy_upgrade_rollout_once(state: &AppState) -> Result<(), DataLayerError> {
-    let mut summary = advance_proxy_upgrade_rollout_once(&state.data).await?;
-    let probe_recorded = false;
-    if probe_recorded {
-        summary = advance_proxy_upgrade_rollout_once(&state.data).await?;
-    }
-    if summary.updated > 0 || !summary.pending_node_ids.is_empty() || !summary.version.is_empty() {
-        info!(
-            event_name = "proxy_upgrade_rollout_checked",
-            log_type = "ops",
-            worker = "proxy_upgrade_rollout",
-            version = %summary.version,
-            updated = summary.updated,
-            blocked = summary.blocked,
-            pending = summary.pending_node_ids.len(),
-            completed = summary.completed,
-            remaining = summary.remaining,
-            rollout_active = summary.rollout_active,
-            "gateway checked proxy upgrade rollout"
         );
     }
     Ok(())

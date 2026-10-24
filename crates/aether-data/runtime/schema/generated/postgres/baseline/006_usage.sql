@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS public.usage_counter_deltas (
     request_id character varying(128) NOT NULL,
     kind character varying(64) NOT NULL,
     target_id text NOT NULL,
-    target_tunnel_generation character varying(64),
+    target_node_generation character varying(64),
     request_count_delta bigint DEFAULT 0 NOT NULL,
     total_requests_delta bigint DEFAULT 0 NOT NULL,
     success_count_delta bigint DEFAULT 0 NOT NULL,

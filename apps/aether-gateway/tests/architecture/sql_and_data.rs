@@ -971,11 +971,8 @@ fn proxy_node_repositories_are_owned_by_contracts_and_driver_adapters() {
         read_workspace_file("crates/aether-data/contracts/src/repository/proxy_nodes.rs");
     for required in [
         "pub struct StoredProxyNode",
-        "pub struct ProxyNodeHeartbeatMutation",
-        "pub struct StoredProxyNodeMetricsBucket",
         "pub trait ProxyNodeReadRepository",
         "pub trait ProxyNodeWriteRepository",
-        "pub fn build_tunnel_metrics_sample",
     ] {
         assert!(
             contracts.contains(required),
@@ -1002,7 +999,6 @@ fn proxy_node_repositories_are_owned_by_contracts_and_driver_adapters() {
             format!("pub struct {repository}"),
             format!("impl ProxyNodeReadRepository for {repository}"),
             format!("impl ProxyNodeWriteRepository for {repository}"),
-            "proxy_node_metrics_1m".to_string(),
             "sqlx::".to_string(),
         ] {
             assert!(
@@ -1787,8 +1783,8 @@ fn lifecycle_driver_export_operations_are_partitioned() {
 
 #[test]
 fn testkit_does_not_copy_aether_business_schema_sql() {
-    let owner_relay_baseline = read_workspace_file(
-        "crates/aether-testing/integration/src/bin/multi_instance_owner_relay_baseline.rs",
+    let usage_counter_baseline = read_workspace_file(
+        "crates/aether-testing/integration/src/bin/usage_counter_hotspot_baseline.rs",
     );
     for forbidden in [
         "CREATE TYPE proxynodestatus",
@@ -1799,13 +1795,13 @@ fn testkit_does_not_copy_aether_business_schema_sql() {
         "sqlx::{Connection, Executor, PgConnection}",
     ] {
         assert!(
-            !owner_relay_baseline.contains(forbidden),
-            "owner relay baseline should use aether-data schema bootstrap instead of copying business schema SQL via {forbidden}"
+            !usage_counter_baseline.contains(forbidden),
+            "usage counter baseline should use aether-data schema bootstrap instead of copying business schema SQL via {forbidden}"
         );
     }
     assert!(
-        owner_relay_baseline.contains("prepare_aether_postgres_schema(&postgres_url).await?"),
-        "owner relay baseline should prepare business schema through aether-testkit's aether-data helper"
+        usage_counter_baseline.contains("prepare_aether_postgres_schema(&database_url).await?"),
+        "usage counter baseline should prepare business schema through aether-testkit's aether-data helper"
     );
 
     let postgres_testkit = read_workspace_file("crates/aether-testing/testkit/src/postgres.rs");

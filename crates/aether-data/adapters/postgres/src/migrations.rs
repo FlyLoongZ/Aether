@@ -481,7 +481,7 @@ mod tests {
     }
 
     #[test]
-    fn tunnel_generation_backfill_does_not_require_pgcrypto() {
+    fn node_generation_backfill_does_not_require_pgcrypto() {
         let migration = POSTGRES_MIGRATOR
             .iter()
             .find(|migration| migration.version == 20260831010000)

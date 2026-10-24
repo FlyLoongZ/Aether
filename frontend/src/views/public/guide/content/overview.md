@@ -99,14 +99,10 @@ make dev
 
 ## 代理配置
 
-1. **Aether-Proxy**
-   Rust实现, 超小资源占有, 适合性能低的vps直接使用。
-   [https://github.com/fawney19/Aether/tree/main/aether-tunnel](https://github.com/fawney19/Aether/tree/main/aether-tunnel)
+1. **代理节点**
+   在模块管理中, 开启代理模块后可以添加和使用 HTTP/SOCKS 手动代理节点。
 
-2. **代理节点**
-   在模块管理中, 开启代理模块后可以添加和使用代理功能, 包括手动添加和Aether-Proxy自动连接。
-
-3. **多级代理**
+2. **多级代理**
    优先级: Key代理 > 提供商代理 > 全局代理
    - 全局代理 - 系统配置
    - 提供商代理 - 提供商配置

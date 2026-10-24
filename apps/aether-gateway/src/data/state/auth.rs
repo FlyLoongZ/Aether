@@ -2,16 +2,14 @@ use super::{
     ActivateManagementTokenIfMatches, AuthApiKeyLookupKey, CompareAndSwapLdapConfigResult,
     CreateManagementTokenRecord, DataLayerError, GatewayAuthApiKeySnapshot, GatewayDataState,
     InitializeAuthWalletOutcome, LdapBindPasswordUpdate, ManagementTokenCounterDelta,
-    ManagementTokenListQuery, ProxyNodeCounterDelta, ProxyNodeHeartbeatMutation,
-    ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation, ProxyNodeRegistrationMutation,
-    ProxyNodeRemoteConfigMutation, ProxyNodeTrafficMutation, ProxyNodeTunnelStatusMutation,
-    RegenerateManagementTokenSecret, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
-    StoredLdapModuleConfig, StoredManagementToken, StoredManagementTokenListPage,
-    StoredManagementTokenWithUser, StoredOAuthProviderConfig, StoredOAuthProviderModuleConfig,
-    StoredProxyFleetMetricsBucket, StoredProxyNode, StoredProxyNodeEvent,
-    StoredProxyNodeMetricsBucket, StoredUserAuthRecord, StoredUserOAuthLinkSummary,
-    StoredUserPreferenceRecord, StoredUserSessionRecord, StoredWalletSnapshot,
-    UpdateManagementTokenRecord, UpsertOAuthProviderConfigRecord,
+    ManagementTokenListQuery, ProxyNodeCounterDelta, ProxyNodeManualCreateMutation,
+    ProxyNodeManualUpdateMutation, ProxyNodeTrafficMutation, RegenerateManagementTokenSecret,
+    StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot, StoredLdapModuleConfig,
+    StoredManagementToken, StoredManagementTokenListPage, StoredManagementTokenWithUser,
+    StoredOAuthProviderConfig, StoredOAuthProviderModuleConfig, StoredProxyNode,
+    StoredUserAuthRecord, StoredUserOAuthLinkSummary, StoredUserPreferenceRecord,
+    StoredUserSessionRecord, StoredWalletSnapshot, UpdateManagementTokenRecord,
+    UpsertOAuthProviderConfigRecord,
 };
 use crate::LocalMutationOutcome;
 use aether_data::repository::auth::ResolvedAuthApiKeySnapshotReader;
@@ -1846,77 +1844,6 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn list_proxy_node_events(
-        &self,
-        node_id: &str,
-        limit: usize,
-    ) -> Result<Vec<StoredProxyNodeEvent>, DataLayerError> {
-        match &self.proxy_node_reader {
-            Some(repository) => repository.list_proxy_node_events(node_id, limit).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn list_proxy_node_events_filtered(
-        &self,
-        node_id: &str,
-        query: &super::ProxyNodeEventQuery,
-    ) -> Result<Vec<StoredProxyNodeEvent>, DataLayerError> {
-        match &self.proxy_node_reader {
-            Some(repository) => {
-                repository
-                    .list_proxy_node_events_filtered(node_id, query)
-                    .await
-            }
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn list_proxy_node_metrics(
-        &self,
-        node_id: &str,
-        step: super::ProxyNodeMetricsStep,
-        from_unix_secs: u64,
-        to_unix_secs: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredProxyNodeMetricsBucket>, DataLayerError> {
-        match &self.proxy_node_reader {
-            Some(repository) => {
-                repository
-                    .list_proxy_node_metrics(node_id, step, from_unix_secs, to_unix_secs, limit)
-                    .await
-            }
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn list_proxy_fleet_metrics(
-        &self,
-        step: super::ProxyNodeMetricsStep,
-        from_unix_secs: u64,
-        to_unix_secs: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredProxyFleetMetricsBucket>, DataLayerError> {
-        match &self.proxy_node_reader {
-            Some(repository) => {
-                repository
-                    .list_proxy_fleet_metrics(step, from_unix_secs, to_unix_secs, limit)
-                    .await
-            }
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn register_proxy_node(
-        &self,
-        mutation: &ProxyNodeRegistrationMutation,
-    ) -> Result<Option<StoredProxyNode>, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => repository.register_node(mutation).await.map(Some),
-            None => Ok(None),
-        }
-    }
-
     pub(crate) async fn compare_and_set_proxy_node_password(
         &self,
         node_id: &str,
@@ -1927,22 +1854,6 @@ impl GatewayDataState {
             Some(repository) => {
                 repository
                     .compare_and_set_proxy_password(node_id, expected, replacement)
-                    .await
-            }
-            None => Ok(false),
-        }
-    }
-
-    pub(crate) async fn compare_and_set_proxy_node_metadata(
-        &self,
-        node_id: &str,
-        expected: &serde_json::Value,
-        replacement: &serde_json::Value,
-    ) -> Result<bool, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => {
-                repository
-                    .compare_and_set_proxy_metadata(node_id, expected, replacement)
                     .await
             }
             None => Ok(false),
@@ -1969,45 +1880,6 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn reset_stale_proxy_node_tunnel_statuses(
-        &self,
-    ) -> Result<usize, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => repository.reset_stale_tunnel_statuses().await,
-            None => Ok(0),
-        }
-    }
-
-    pub(crate) async fn cleanup_proxy_node_metrics(
-        &self,
-        retain_1m_from_unix_secs: u64,
-        retain_1h_from_unix_secs: u64,
-        delete_limit: usize,
-    ) -> Result<super::ProxyNodeMetricsCleanupSummary, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => {
-                repository
-                    .cleanup_proxy_node_metrics(
-                        retain_1m_from_unix_secs,
-                        retain_1h_from_unix_secs,
-                        delete_limit,
-                    )
-                    .await
-            }
-            None => Ok(super::ProxyNodeMetricsCleanupSummary::default()),
-        }
-    }
-
-    pub(crate) async fn apply_proxy_node_heartbeat(
-        &self,
-        mutation: &ProxyNodeHeartbeatMutation,
-    ) -> Result<Option<StoredProxyNode>, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => repository.apply_heartbeat(mutation).await,
-            None => Ok(None),
-        }
-    }
-
     pub(crate) async fn record_proxy_node_traffic(
         &self,
         mutation: &ProxyNodeTrafficMutation,
@@ -2016,7 +1888,7 @@ impl GatewayDataState {
             let enqueued = repository
                 .enqueue_proxy_node_counter_delta(ProxyNodeCounterDelta {
                     node_id: mutation.node_id.clone(),
-                    expected_tunnel_generation: mutation.expected_tunnel_generation.clone(),
+                    expected_node_generation: mutation.expected_node_generation.clone(),
                     total_requests_delta: mutation.total_requests_delta,
                     failed_requests_delta: mutation.failed_requests_delta,
                     dns_failures_delta: mutation.dns_failures_delta,
@@ -2034,42 +1906,12 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn update_proxy_node_tunnel_status(
-        &self,
-        mutation: &ProxyNodeTunnelStatusMutation,
-    ) -> Result<Option<StoredProxyNode>, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => repository.update_tunnel_status(mutation).await,
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn unregister_proxy_node(
-        &self,
-        node_id: &str,
-    ) -> Result<Option<StoredProxyNode>, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => repository.unregister_node(node_id).await,
-            None => Ok(None),
-        }
-    }
-
     pub(crate) async fn delete_proxy_node(
         &self,
         node_id: &str,
     ) -> Result<Option<StoredProxyNode>, DataLayerError> {
         match &self.proxy_node_writer {
             Some(repository) => repository.delete_node(node_id).await,
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn update_proxy_node_remote_config(
-        &self,
-        mutation: &ProxyNodeRemoteConfigMutation,
-    ) -> Result<Option<StoredProxyNode>, DataLayerError> {
-        match &self.proxy_node_writer {
-            Some(repository) => repository.update_remote_config(mutation).await,
             None => Ok(None),
         }
     }

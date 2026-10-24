@@ -330,7 +330,7 @@ async fn enqueue_aux_counter_deltas(
 fn proxy_delta_for_index(index: usize) -> ProxyNodeCounterDelta {
     ProxyNodeCounterDelta {
         node_id: PROXY_NODE_ID.to_string(),
-        expected_tunnel_generation: Some(PROXY_NODE_TUNNEL_GENERATION.to_string()),
+        expected_node_generation: Some(PROXY_NODE_TUNNEL_GENERATION.to_string()),
         total_requests_delta: 1,
         failed_requests_delta: if index.is_multiple_of(10) { 1 } else { 0 },
         dns_failures_delta: if index.is_multiple_of(25) { 1 } else { 0 },
@@ -464,7 +464,7 @@ ON CONFLICT (id) DO UPDATE SET
     sqlx::query(
         r#"
 INSERT INTO proxy_nodes (
-  id, tunnel_generation, name, ip, port, status, total_requests, failed_requests,
+  id, node_generation, name, ip, port, status, total_requests, failed_requests,
   dns_failures, stream_errors
 )
 VALUES (

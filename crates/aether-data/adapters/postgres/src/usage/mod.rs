@@ -1646,7 +1646,7 @@ INSERT INTO usage_counter_deltas (
   request_id,
   kind,
   target_id,
-  target_tunnel_generation,
+  target_node_generation,
   request_count_delta,
   total_requests_delta,
   success_count_delta,
@@ -1671,7 +1671,7 @@ INSERT INTO usage_counter_deltas (
   request_id,
   kind,
   target_id,
-  target_tunnel_generation,
+  target_node_generation,
   request_count_delta,
   total_requests_delta,
   success_count_delta,
@@ -1704,7 +1704,7 @@ SELECT
   delta.id,
   delta.kind,
   delta.target_id,
-  delta.target_tunnel_generation,
+  delta.target_node_generation,
   delta.request_count_delta,
   delta.total_requests_delta,
   delta.success_count_delta,
@@ -1817,7 +1817,7 @@ SET
   stream_errors = stream_errors + GREATEST($5::bigint, 0),
   updated_at = NOW()
 WHERE id = $1
-  AND tunnel_generation = $6
+  AND node_generation = $6
 "#;
 
 const APPLY_MANAGEMENT_TOKEN_COUNTER_DELTA_SQL: &str = r#"
@@ -10250,11 +10250,11 @@ RETURNING
                         apply_provider_monthly_usage_delta_in_tx(tx, provider_id.as_str(), *delta)
                             .await?;
                     }
-                    for ((node_id, tunnel_generation), delta) in &aggregates.proxy_nodes {
+                    for ((node_id, node_generation), delta) in &aggregates.proxy_nodes {
                         apply_proxy_node_counter_delta_in_tx(
                             tx,
                             node_id.as_str(),
-                            tunnel_generation.as_str(),
+                            node_generation.as_str(),
                             delta,
                         )
                         .await?;
@@ -10292,8 +10292,8 @@ RETURNING
         if delta.is_noop() {
             return Ok(false);
         }
-        let Some(expected_tunnel_generation) = delta
-            .expected_tunnel_generation
+        let Some(expected_node_generation) = delta
+            .expected_node_generation
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -10313,15 +10313,15 @@ RETURNING
                     // outbox rows before updating proxy_nodes. The generation
                     // is persisted in the outbox row and checked again by the
                     // flush UPDATE, so id reuse can only retire this delta.
-                    let tunnel_generation: Option<String> = sqlx::query_scalar(
-                        "SELECT tunnel_generation FROM proxy_nodes WHERE id = $1 AND tunnel_generation = $2 LIMIT 1",
+                    let node_generation: Option<String> = sqlx::query_scalar(
+                        "SELECT node_generation FROM proxy_nodes WHERE id = $1 AND node_generation = $2 LIMIT 1",
                     )
                     .bind(&node_id)
-                    .bind(&expected_tunnel_generation)
+                    .bind(&expected_node_generation)
                     .fetch_optional(&mut **tx)
                     .await
                     .map_postgres_err()?;
-                    let Some(_tunnel_generation) = tunnel_generation
+                    let Some(_node_generation) = node_generation
                         .as_deref()
                         .map(str::trim)
                         .filter(|value| !value.is_empty())
@@ -10335,7 +10335,7 @@ RETURNING
                             request_id: &request_id,
                             kind: USAGE_COUNTER_KIND_PROXY_NODE,
                             target_id: &node_id,
-                            target_tunnel_generation: Some(&expected_tunnel_generation),
+                            target_node_generation: Some(&expected_node_generation),
                             request_count_delta: 0,
                             total_requests_delta: delta.total_requests_delta,
                             success_count_delta: 0,
@@ -10386,7 +10386,7 @@ RETURNING
                             request_id: &request_id,
                             kind: USAGE_COUNTER_KIND_MANAGEMENT_TOKEN,
                             target_id: &token_id,
-                            target_tunnel_generation: None,
+                            target_node_generation: None,
                             request_count_delta: delta.usage_count_delta,
                             total_requests_delta: 0,
                             success_count_delta: 0,
@@ -10428,7 +10428,7 @@ RETURNING
                             request_id: &request_id,
                             kind: USAGE_COUNTER_KIND_API_KEY_LAST_USED,
                             target_id: &api_key_id,
-                            target_tunnel_generation: None,
+                            target_node_generation: None,
                             request_count_delta: 0,
                             total_requests_delta: 0,
                             success_count_delta: 0,
@@ -11343,7 +11343,7 @@ fn prepare_first_byte_provider_contribution_transitions(
                 request_id: &transition.request_id,
                 kind: USAGE_COUNTER_KIND_PROVIDER_API_KEY,
                 target_id: &transition.key_id,
-                target_tunnel_generation: None,
+                target_node_generation: None,
                 request_count_delta: transition.delta.request_count,
                 total_requests_delta: 0,
                 success_count_delta: transition.delta.success_count,
@@ -11406,7 +11406,7 @@ struct UsageCounterDeltaRow {
     id: String,
     kind: String,
     target_id: String,
-    target_tunnel_generation: Option<String>,
+    target_node_generation: Option<String>,
     request_count_delta: i64,
     total_requests_delta: i64,
     success_count_delta: i64,
@@ -11498,8 +11498,8 @@ impl UsageCounterDeltaAggregates {
                     *entry += row.total_cost_usd_delta;
                 }
                 USAGE_COUNTER_KIND_PROXY_NODE => {
-                    let Some(tunnel_generation) = row
-                        .target_tunnel_generation
+                    let Some(node_generation) = row
+                        .target_node_generation
                         .as_deref()
                         .map(str::trim)
                         .filter(|value| !value.is_empty())
@@ -11509,11 +11509,11 @@ impl UsageCounterDeltaAggregates {
                         // without applying them to a reused node id.
                         continue;
                     };
-                    let aggregate_key = (row.target_id.clone(), tunnel_generation.clone());
+                    let aggregate_key = (row.target_id.clone(), node_generation.clone());
                     let entry = aggregates.proxy_nodes.entry(aggregate_key).or_insert(
                         ProxyNodeCounterDelta {
                             node_id: row.target_id.clone(),
-                            expected_tunnel_generation: Some(tunnel_generation),
+                            expected_node_generation: Some(node_generation),
                             total_requests_delta: 0,
                             failed_requests_delta: 0,
                             dns_failures_delta: 0,
@@ -11644,7 +11644,7 @@ async fn enqueue_api_key_usage_delta_in_tx(
             request_id,
             kind: USAGE_COUNTER_KIND_API_KEY,
             target_id: api_key_id,
-            target_tunnel_generation: None,
+            target_node_generation: None,
             request_count_delta: 0,
             total_requests_delta: delta.total_requests,
             success_count_delta: 0,
@@ -11679,7 +11679,7 @@ async fn enqueue_model_usage_delta_in_tx(
             request_id,
             kind: USAGE_COUNTER_KIND_MODEL,
             target_id: model,
-            target_tunnel_generation: None,
+            target_node_generation: None,
             request_count_delta: delta.request_count,
             total_requests_delta: 0,
             success_count_delta: 0,
@@ -11719,7 +11719,7 @@ async fn enqueue_provider_api_key_usage_delta_in_tx(
             request_id,
             kind: USAGE_COUNTER_KIND_PROVIDER_API_KEY,
             target_id: key_id,
-            target_tunnel_generation: None,
+            target_node_generation: None,
             request_count_delta: delta.request_count,
             total_requests_delta: 0,
             success_count_delta: delta.success_count,
@@ -11743,7 +11743,7 @@ struct UsageCounterDeltaInsert<'a> {
     request_id: &'a str,
     kind: &'a str,
     target_id: &'a str,
-    target_tunnel_generation: Option<&'a str>,
+    target_node_generation: Option<&'a str>,
     request_count_delta: i64,
     total_requests_delta: i64,
     success_count_delta: i64,
@@ -11766,7 +11766,7 @@ struct PreparedUsageCounterDeltaInsert {
     request_id: String,
     kind: String,
     target_id: String,
-    target_tunnel_generation: Option<String>,
+    target_node_generation: Option<String>,
     request_count_delta: i64,
     total_requests_delta: i64,
     success_count_delta: i64,
@@ -11818,8 +11818,8 @@ fn prepare_usage_counter_delta_insert(
         request_id: request_id.to_string(),
         kind: input.kind.to_string(),
         target_id: target_id.to_string(),
-        target_tunnel_generation: input
-            .target_tunnel_generation
+        target_node_generation: input
+            .target_node_generation
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned),
@@ -11857,7 +11857,7 @@ async fn insert_usage_counter_delta_in_tx(
         .bind(input.request_id)
         .bind(input.kind)
         .bind(input.target_id)
-        .bind(input.target_tunnel_generation)
+        .bind(input.target_node_generation)
         .bind(input.request_count_delta)
         .bind(input.total_requests_delta)
         .bind(input.success_count_delta)
@@ -11890,7 +11890,7 @@ async fn insert_usage_counter_deltas_batch_in_tx(
                 .push_bind(input.request_id.clone())
                 .push_bind(input.kind.clone())
                 .push_bind(input.target_id.clone())
-                .push_bind(input.target_tunnel_generation.clone())
+                .push_bind(input.target_node_generation.clone())
                 .push_bind(input.request_count_delta)
                 .push_bind(input.total_requests_delta)
                 .push_bind(input.success_count_delta)
@@ -11941,8 +11941,8 @@ fn map_usage_counter_delta_row(row: &PgRow) -> Result<UsageCounterDeltaRow, Data
         id: row.try_get::<String, _>("id").map_postgres_err()?,
         kind: row.try_get::<String, _>("kind").map_postgres_err()?,
         target_id: row.try_get::<String, _>("target_id").map_postgres_err()?,
-        target_tunnel_generation: row
-            .try_get::<Option<String>, _>("target_tunnel_generation")
+        target_node_generation: row
+            .try_get::<Option<String>, _>("target_node_generation")
             .map_postgres_err()?,
         request_count_delta: row
             .try_get::<i64, _>("request_count_delta")
@@ -12169,10 +12169,10 @@ async fn apply_provider_monthly_usage_delta_in_tx(
 async fn apply_proxy_node_counter_delta_in_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
     node_id: &str,
-    tunnel_generation: &str,
+    node_generation: &str,
     delta: &ProxyNodeCounterDelta,
 ) -> Result<(), DataLayerError> {
-    if delta.is_noop() || node_id.trim().is_empty() || tunnel_generation.trim().is_empty() {
+    if delta.is_noop() || node_id.trim().is_empty() || node_generation.trim().is_empty() {
         return Ok(());
     }
 
@@ -12182,7 +12182,7 @@ async fn apply_proxy_node_counter_delta_in_tx(
         .bind(delta.failed_requests_delta)
         .bind(delta.dns_failures_delta)
         .bind(delta.stream_errors_delta)
-        .bind(tunnel_generation)
+        .bind(node_generation)
         .execute(&mut **tx)
         .await
         .map_postgres_err()?;

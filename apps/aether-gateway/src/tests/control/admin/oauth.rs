@@ -429,7 +429,6 @@ async fn gateway_authorizes_claude_cookie_without_persisting_cookie_impl() {
     let mut provider = sample_provider("provider-claude", "claude", 10);
     provider.provider_type = "claude_code".to_string();
     provider.proxy = Some(json!({
-        "mode": "tunnel",
         "node_id": "proxy-node-claude",
         "url": "http://proxy.example:8080",
         "enabled": true
@@ -445,11 +444,9 @@ async fn gateway_authorizes_claude_cookie_without_persisting_cookie_impl() {
         vec![endpoint],
         vec![],
     ));
-    let mut tunnel_node = sample_proxy_node("proxy-node-claude");
-    tunnel_node.status = "online".to_string();
-    tunnel_node.tunnel_mode = true;
-    tunnel_node.tunnel_connected = true;
-    let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![tunnel_node]));
+    let mut proxy_node = sample_proxy_node("proxy-node-claude");
+    proxy_node.status = "online".to_string();
+    let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![proxy_node]));
 
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let state = build_state_with_execution_runtime_override(execution_runtime_url)
@@ -458,16 +455,6 @@ async fn gateway_authorizes_claude_cookie_without_persisting_cookie_impl() {
                 provider_catalog_repository.clone(),
             )
             .attach_proxy_node_repository_for_tests(proxy_node_repository)
-            .with_system_config_values_for_tests(vec![(
-                "tunnel.attachments.proxy-node-claude".to_string(),
-                json!({
-                        "gateway_instance_id": "gateway-owner",
-                        "relay_base_url": "http://gateway-owner.internal",
-                        "tunnel_generation": "test-generation-1",
-                        "conn_count": 1,
-                        "observed_at_unix_secs": 4_102_444_800u64,
-                }),
-            )])
             .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
         )
         .with_provider_oauth_token_url_for_tests(
@@ -535,9 +522,8 @@ async fn gateway_authorizes_claude_cookie_without_persisting_cookie_impl() {
         );
         assert_eq!(
             plan.proxy.as_ref().and_then(|proxy| proxy.mode.as_deref()),
-            Some("tunnel")
+            Some("http")
         );
-        assert!(plan.transport_profile.is_none());
     }
     let token_plan = &plans[2];
     assert_eq!(token_plan.request_id, "provider-oauth:exchange-code");
@@ -639,7 +625,6 @@ async fn gateway_batch_authorizes_claude_cookies_as_redacted_task_impl() {
     let mut provider = sample_provider("provider-claude", "claude", 10);
     provider.provider_type = "claude_code".to_string();
     provider.proxy = Some(json!({
-        "mode": "tunnel",
         "node_id": "proxy-node-claude",
         "url": "http://proxy.example:8080",
         "enabled": true
@@ -656,11 +641,9 @@ async fn gateway_batch_authorizes_claude_cookies_as_redacted_task_impl() {
         vec![],
     ));
     let background_task_repository = Arc::new(InMemoryBackgroundTaskRepository::default());
-    let mut tunnel_node = sample_proxy_node("proxy-node-claude");
-    tunnel_node.status = "online".to_string();
-    tunnel_node.tunnel_mode = true;
-    tunnel_node.tunnel_connected = true;
-    let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![tunnel_node]));
+    let mut proxy_node = sample_proxy_node("proxy-node-claude");
+    proxy_node.status = "online".to_string();
+    let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![proxy_node]));
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let state = build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(
@@ -668,16 +651,6 @@ async fn gateway_batch_authorizes_claude_cookies_as_redacted_task_impl() {
                 provider_catalog_repository.clone(),
             )
             .attach_proxy_node_repository_for_tests(proxy_node_repository)
-            .with_system_config_values_for_tests(vec![(
-                "tunnel.attachments.proxy-node-claude".to_string(),
-                json!({
-                        "gateway_instance_id": "gateway-owner",
-                        "relay_base_url": "http://gateway-owner.internal",
-                        "tunnel_generation": "test-generation-1",
-                        "conn_count": 1,
-                        "observed_at_unix_secs": 4_102_444_800u64,
-                }),
-            )])
             .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
             .with_background_task_repository_for_tests(background_task_repository.clone()),
         )
@@ -846,7 +819,7 @@ async fn gateway_batch_authorizes_claude_cookies_as_redacted_task_impl() {
         2
     );
     assert!(plans.iter().all(|plan| {
-        plan.proxy.as_ref().and_then(|proxy| proxy.mode.as_deref()) == Some("tunnel")
+        plan.proxy.as_ref().and_then(|proxy| proxy.mode.as_deref()) == Some("http")
     }));
 
     execution_runtime_handle.abort();
@@ -1328,9 +1301,6 @@ async fn gateway_handles_admin_provider_oauth_device_poll_for_windsurf_one_time_
     ));
     let mut proxy_node = sample_proxy_node("proxy-node-windsurf");
     proxy_node.status = "online".to_string();
-    proxy_node.is_manual = true;
-    proxy_node.tunnel_mode = false;
-    proxy_node.tunnel_connected = false;
     proxy_node.proxy_url = Some("http://proxy.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![proxy_node]));
 
@@ -2661,9 +2631,6 @@ async fn gateway_handles_admin_provider_oauth_device_authorize_via_execution_run
     ));
     let mut manual_node = sample_proxy_node("proxy-node-kiro");
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
@@ -5428,9 +5395,6 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
     ));
     let mut manual_node = sample_proxy_node("proxy-node-codex-import");
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
@@ -5551,15 +5515,9 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
     ));
     let mut provider_node = sample_proxy_node("proxy-node-codex-provider");
     provider_node.status = "online".to_string();
-    provider_node.is_manual = true;
-    provider_node.tunnel_mode = false;
-    provider_node.tunnel_connected = false;
     provider_node.proxy_url = Some("http://proxy-provider.example:8080".to_string());
     let mut system_node = sample_proxy_node("proxy-node-codex-system");
     system_node.status = "online".to_string();
-    system_node.is_manual = true;
-    system_node.tunnel_mode = false;
-    system_node.tunnel_connected = false;
     system_node.proxy_url = Some("http://proxy-system.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![
         provider_node,
@@ -5678,9 +5636,6 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
     ));
     let mut manual_node = sample_proxy_node("proxy-node-codex-system");
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
@@ -6207,9 +6162,6 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_via_execution_runtime_p
     ));
     let mut manual_node = sample_proxy_node("proxy-node-kiro-batch-runtime");
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
@@ -7770,15 +7722,9 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
     ));
     let mut provider_node = sample_proxy_node("proxy-node-provider");
     provider_node.status = "online".to_string();
-    provider_node.is_manual = true;
-    provider_node.tunnel_mode = false;
-    provider_node.tunnel_connected = false;
     provider_node.proxy_url = Some("http://proxy-provider.example:8080".to_string());
     let mut system_node = sample_proxy_node("proxy-node-system");
     system_node.status = "online".to_string();
-    system_node.is_manual = true;
-    system_node.tunnel_mode = false;
-    system_node.tunnel_connected = false;
     system_node.proxy_url = Some("http://proxy-system.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![
         provider_node,
@@ -7850,15 +7796,15 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
 }
 
 #[test]
-fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_refresh_controls() {
+fn gateway_refreshes_admin_provider_oauth_key_via_proxy_node_with_direct_refresh_controls() {
     run_admin_oauth_test(
-        "gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_refresh_controls",
-        gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_refresh_controls_impl,
+        "gateway_refreshes_admin_provider_oauth_key_via_proxy_node_with_direct_refresh_controls",
+        gateway_refreshes_admin_provider_oauth_key_via_proxy_node_with_direct_refresh_controls_impl,
     );
 }
 
-async fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_refresh_controls_impl()
-{
+async fn gateway_refreshes_admin_provider_oauth_key_via_proxy_node_with_direct_refresh_controls_impl(
+) {
     let execution_plans = Arc::new(Mutex::new(Vec::<ExecutionPlan>::new()));
     let execution_plans_clone = Arc::clone(&execution_plans);
     let execution_runtime = Router::new().route(
@@ -7909,10 +7855,8 @@ async fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_ref
     let mut provider = sample_provider("provider-codex", "codex", 10);
     provider.provider_type = "codex".to_string();
     provider.proxy = Some(json!({
-        "mode": "tunnel",
-        "node_id": "proxy-node-tunnel",
+        "node_id": "proxy-node-codex",
         "enabled": true,
-        "tunnel_base_url": "http://gateway-owner.internal"
     }));
     let endpoint = sample_endpoint(
         "endpoint-codex-cli",
@@ -7922,7 +7866,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_ref
     );
 
     let mut key = sample_key(
-        "key-codex-oauth-refresh-tunnel",
+        "key-codex-oauth-refresh-proxy-node",
         "provider-codex",
         "openai:responses",
         "stale-codex-access-token",
@@ -7941,11 +7885,9 @@ async fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_ref
         vec![endpoint],
         vec![key],
     ));
-    let mut tunnel_node = sample_proxy_node("proxy-node-tunnel");
-    tunnel_node.status = "online".to_string();
-    tunnel_node.tunnel_mode = true;
-    tunnel_node.tunnel_connected = true;
-    let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![tunnel_node]));
+    let mut proxy_node = sample_proxy_node("proxy-node-codex");
+    proxy_node.status = "online".to_string();
+    let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![proxy_node]));
 
     let oauth_refresh =
         crate::provider_transport::LocalOAuthRefreshCoordinator::with_adapters_for_tests(vec![
@@ -7963,16 +7905,6 @@ async fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_ref
                     provider_catalog_repository,
                 )
                 .attach_proxy_node_repository_for_tests(proxy_node_repository)
-                .with_system_config_values_for_tests(vec![(
-                    "tunnel.attachments.proxy-node-tunnel".to_string(),
-                    json!({
-                        "gateway_instance_id": "gateway-owner",
-                        "relay_base_url": "http://gateway-owner.internal",
-                        "tunnel_generation": "test-generation-1",
-                        "conn_count": 1,
-                        "observed_at_unix_secs": 4_102_444_800u64,
-                    }),
-                )])
                 .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
@@ -7981,7 +7913,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_ref
 
     let response = reqwest::Client::new()
         .post(format!(
-            "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh-tunnel/refresh"
+            "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh-proxy-node/refresh"
         ))
         .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
@@ -8003,21 +7935,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_tunnel_proxy_with_direct_ref
             .proxy
             .as_ref()
             .and_then(|proxy| proxy.mode.as_deref()),
-        Some("tunnel")
-    );
-    assert_eq!(
-        refresh_plan
-            .headers
-            .get(EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER)
-            .map(String::as_str),
-        Some("true")
-    );
-    assert_eq!(
-        refresh_plan
-            .headers
-            .get(EXECUTION_REQUEST_HTTP1_ONLY_HEADER)
-            .map(String::as_str),
-        Some("true")
+        Some("http")
     );
 
     gateway_handle.abort();
@@ -8357,15 +8275,9 @@ async fn gateway_concurrent_manual_oauth_refresh_reuses_winner_after_lock_wait_i
     ));
     let mut key_node = sample_proxy_node("proxy-node-key");
     key_node.status = "online".to_string();
-    key_node.is_manual = true;
-    key_node.tunnel_mode = false;
-    key_node.tunnel_connected = false;
     key_node.proxy_url = Some("http://proxy-key.example:8080".to_string());
     let mut provider_node = sample_proxy_node("proxy-node-provider");
     provider_node.status = "online".to_string();
-    provider_node.is_manual = true;
-    provider_node.tunnel_mode = false;
-    provider_node.tunnel_connected = false;
     provider_node.proxy_url = Some("http://proxy-provider.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![
         key_node,
@@ -8776,21 +8688,12 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
     ));
     let mut key_node = sample_proxy_node("proxy-node-key");
     key_node.status = "online".to_string();
-    key_node.is_manual = true;
-    key_node.tunnel_mode = false;
-    key_node.tunnel_connected = false;
     key_node.proxy_url = Some("http://proxy-key.example:8080".to_string());
     let mut provider_node = sample_proxy_node("proxy-node-provider");
     provider_node.status = "online".to_string();
-    provider_node.is_manual = true;
-    provider_node.tunnel_mode = false;
-    provider_node.tunnel_connected = false;
     provider_node.proxy_url = Some("http://proxy-provider.example:8080".to_string());
     let mut system_node = sample_proxy_node("proxy-node-system");
     system_node.status = "online".to_string();
-    system_node.is_manual = true;
-    system_node.tunnel_mode = false;
-    system_node.tunnel_connected = false;
     system_node.proxy_url = Some("http://proxy-system.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![
         key_node,

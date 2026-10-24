@@ -10,7 +10,7 @@ export interface ProxyConfig {
   url?: string
   username?: string
   password?: string
-  node_id?: string    // 代理节点 ID（aether-tunnel 注册的节点，与 url 互斥）
+  node_id?: string    // 代理节点 ID（手动代理节点，与 url 互斥）
   enabled?: boolean   // 是否启用代理（false 时保留配置但不使用）
   has_credentials?: boolean // 管理端脱敏响应：代理包含未返回的认证信息
 }

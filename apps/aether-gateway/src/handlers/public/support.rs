@@ -83,7 +83,7 @@ use self::support_ccswitch::maybe_build_local_ccswitch_response;
 use self::support_dashboard::maybe_build_local_dashboard_response;
 pub(crate) use self::support_install::{
     base_url_from_request, build_api_key_install_session_response,
-    build_proxy_node_install_session_response, CreateApiKeyInstallSessionRequest,
+    CreateApiKeyInstallSessionRequest,
 };
 use self::support_install::{
     handle_users_me_api_key_install_session_create, maybe_build_local_install_response,

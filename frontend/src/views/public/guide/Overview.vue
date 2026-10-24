@@ -394,20 +394,7 @@ function copyStep(stepId: string, code: string) {
 
       <div class="space-y-6 mt-6">
         <div>
-          <h3>1. Aether-Proxy</h3>
-          <p>Rust实现, 超小资源占有, 适合性能低的VPS直接使用。</p>
-          <a
-            href="https://github.com/fawney19/Aether/tree/main/aether-tunnel"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-[#cc785c] dark:text-[#d4a27f] hover:underline mt-2 inline-block"
-          >
-            GitHub 仓库 >
-          </a>
-        </div>
-
-        <div>
-          <h3>2. 代理节点</h3>
+          <h3>1. 代理节点</h3>
           <p>在模块管理中，开启代理模块后可以添加和使用代理功能，包括手动添加和 Aether-Proxy 自动连接。</p>
         </div>
 

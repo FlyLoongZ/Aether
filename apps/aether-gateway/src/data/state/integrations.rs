@@ -341,11 +341,8 @@ impl aether_usage_runtime::ManualProxyNodeCounter for GatewayDataState {
         let Some(node) = self.find_proxy_node(node_id).await? else {
             return Ok(());
         };
-        if !node.is_manual {
-            return Ok(());
-        }
-        let expected_tunnel_generation = node.tunnel_generation.trim().to_string();
-        if expected_tunnel_generation.is_empty() {
+        let expected_node_generation = node.node_generation.trim().to_string();
+        if expected_node_generation.is_empty() {
             return Ok(());
         }
 
@@ -353,7 +350,7 @@ impl aether_usage_runtime::ManualProxyNodeCounter for GatewayDataState {
             let enqueued = repository
                 .enqueue_proxy_node_counter_delta(ProxyNodeCounterDelta {
                     node_id: node_id.to_string(),
-                    expected_tunnel_generation: Some(expected_tunnel_generation.clone()),
+                    expected_node_generation: Some(expected_node_generation.clone()),
                     total_requests_delta: total_delta,
                     failed_requests_delta: failed_delta,
                     dns_failures_delta: 0,
@@ -374,7 +371,7 @@ impl aether_usage_runtime::ManualProxyNodeCounter for GatewayDataState {
             let _ = repository
                 .record_traffic(&ProxyNodeTrafficMutation {
                     node_id: node_id.to_string(),
-                    expected_tunnel_generation: Some(expected_tunnel_generation),
+                    expected_node_generation: Some(expected_node_generation),
                     total_requests_delta: total_delta,
                     failed_requests_delta: failed_delta,
                     dns_failures_delta: 0,

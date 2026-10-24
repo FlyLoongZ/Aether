@@ -1,9 +1,6 @@
 use aether_data::repository::{
     auth_modules::{StoredLdapModuleConfig, StoredOAuthProviderModuleConfig},
-    proxy_nodes::{
-        ProxyNodeMetricsStep, StoredProxyFleetMetricsBucket, StoredProxyNode, StoredProxyNodeEvent,
-        StoredProxyNodeMetricsBucket,
-    },
+    proxy_nodes::StoredProxyNode,
     system::StoredSystemConfigEntry,
     wallet::StoredWalletSnapshot,
 };
@@ -626,21 +623,11 @@ pub struct AdminSystemConfigProxyNode {
     #[serde(default)]
     pub region: Option<String>,
     #[serde(default)]
-    pub is_manual: Option<bool>,
-    #[serde(default)]
     pub proxy_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_username: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proxy_password: Option<String>,
-    #[serde(default)]
-    pub tunnel_mode: Option<bool>,
-    #[serde(default)]
-    pub heartbeat_interval: Option<i32>,
-    #[serde(default)]
-    pub remote_config: Option<Value>,
-    #[serde(default)]
-    pub config_version: Option<i32>,
 }
 
 impl std::fmt::Debug for AdminSystemConfigProxyNode {
@@ -652,20 +639,12 @@ impl std::fmt::Debug for AdminSystemConfigProxyNode {
             .field("ip", &self.ip)
             .field("port", &self.port)
             .field("region", &self.region)
-            .field("is_manual", &self.is_manual)
             .field("proxy_url", &self.proxy_url.as_ref().map(|_| "[REDACTED]"))
             .field("proxy_username", &self.proxy_username)
             .field(
                 "proxy_password",
                 &self.proxy_password.as_ref().map(|_| "[REDACTED]"),
             )
-            .field("tunnel_mode", &self.tunnel_mode)
-            .field("heartbeat_interval", &self.heartbeat_interval)
-            .field(
-                "remote_config",
-                &self.remote_config.as_ref().map(|_| "[REDACTED]"),
-            )
-            .field("config_version", &self.config_version)
             .finish()
     }
 }
@@ -2251,9 +2230,6 @@ pub fn admin_system_config_default_value(key: &str) -> Option<serde_json::Value>
         "cleanup_batch_size" => Some(json!(1000)),
         "request_candidates_retention_days" => Some(json!(30)),
         "request_candidates_cleanup_batch_size" => Some(json!(5000)),
-        "proxy_node_metrics_1m_retention_days" => Some(json!(30)),
-        "proxy_node_metrics_1h_retention_days" => Some(json!(180)),
-        "proxy_node_metrics_cleanup_batch_size" => Some(json!(5000)),
         "enable_provider_checkin" => Some(json!(true)),
         "provider_checkin_time" => Some(json!("01:05")),
         "auto_delete_expired_keys" => Some(json!(false)),
@@ -3303,326 +3279,29 @@ pub fn build_admin_proxy_nodes_not_found_response() -> Response<Body> {
 }
 
 pub fn build_admin_proxy_node_payload(node: &StoredProxyNode) -> serde_json::Value {
-    // Keep operational tunnel metadata, but never expose either legacy plaintext
-    // or encrypted credential material through an admin response.
-    let proxy_metadata = redact_admin_proxy_node_metadata(node.proxy_metadata.as_ref());
-    let mut payload = serde_json::Map::from_iter([
-        ("id".to_string(), json!(node.id)),
-        ("name".to_string(), json!(node.name)),
-        ("ip".to_string(), json!(node.ip)),
-        ("port".to_string(), json!(node.port)),
-        ("region".to_string(), json!(node.region)),
-        ("status".to_string(), json!(node.status)),
-        ("is_manual".to_string(), json!(node.is_manual)),
-        ("tunnel_mode".to_string(), json!(node.tunnel_mode)),
-        ("tunnel_connected".to_string(), json!(node.tunnel_connected)),
-        (
-            "tunnel_connected_at".to_string(),
-            json!(node
-                .tunnel_connected_at_unix_secs
-                .and_then(unix_secs_to_rfc3339)),
-        ),
-        ("registered_by".to_string(), json!(node.registered_by)),
-        (
-            "last_heartbeat_at".to_string(),
-            json!(node
-                .last_heartbeat_at_unix_secs
-                .and_then(unix_secs_to_rfc3339)),
-        ),
-        (
-            "heartbeat_interval".to_string(),
-            json!(node.heartbeat_interval),
-        ),
-        (
-            "active_connections".to_string(),
-            json!(node.active_connections),
-        ),
-        ("total_requests".to_string(), json!(node.total_requests)),
-        ("avg_latency_ms".to_string(), json!(node.avg_latency_ms)),
-        ("failed_requests".to_string(), json!(node.failed_requests)),
-        ("dns_failures".to_string(), json!(node.dns_failures)),
-        ("stream_errors".to_string(), json!(node.stream_errors)),
-        ("proxy_metadata".to_string(), json!(proxy_metadata)),
-        ("hardware_info".to_string(), json!(node.hardware_info)),
-        (
-            "estimated_max_concurrency".to_string(),
-            json!(node.estimated_max_concurrency),
-        ),
-        ("remote_config".to_string(), json!(node.remote_config)),
-        ("config_version".to_string(), json!(node.config_version)),
-        (
-            "created_at".to_string(),
-            json!(node.created_at_unix_ms.and_then(unix_secs_to_rfc3339)),
-        ),
-        (
-            "updated_at".to_string(),
-            json!(node.updated_at_unix_secs.and_then(unix_secs_to_rfc3339)),
-        ),
-    ]);
-
-    if node.is_manual {
-        payload.insert("proxy_url".to_string(), json!(node.proxy_url));
-        payload.insert("proxy_username".to_string(), json!(node.proxy_username));
-    }
-    payload.insert(
-        "has_proxy_password".to_string(),
-        json!(node
+    serde_json::json!({
+        "id": node.id,
+        "name": node.name,
+        "ip": node.ip,
+        "port": node.port,
+        "region": node.region,
+        "status": node.status,
+        "registered_by": node.registered_by,
+        "proxy_url": node.proxy_url,
+        "proxy_username": node.proxy_username,
+        "has_proxy_password": node
             .proxy_password
             .as_deref()
-            .is_some_and(|password| !password.is_empty())),
-    );
-
-    serde_json::Value::Object(payload)
-}
-
-fn redact_admin_proxy_node_metadata(
-    metadata: Option<&serde_json::Value>,
-) -> Option<serde_json::Value> {
-    let metadata = metadata?;
-    let mut metadata = metadata.clone();
-    if let Some(tunnel_security) = metadata
-        .as_object_mut()
-        .and_then(|object| object.get_mut("tunnel_security"))
-        .and_then(serde_json::Value::as_object_mut)
-    {
-        tunnel_security.remove("encryption_key");
-        tunnel_security.remove("encryption_key_encrypted");
-    }
-    Some(metadata)
-}
-
-pub fn build_admin_proxy_node_event_payload(event: &StoredProxyNodeEvent) -> serde_json::Value {
-    json!({
-        "id": event.id,
-        "event_type": event.event_type,
-        "detail": event.detail,
-        "event_metadata": event.event_metadata,
-        "created_at": event.created_at_unix_ms.and_then(unix_secs_to_rfc3339),
+            .is_some_and(|password| !password.is_empty()),
+        "last_used_at": node.last_used_at_unix_secs.and_then(unix_secs_to_rfc3339),
+        "total_requests": node.total_requests,
+        "avg_latency_ms": node.avg_latency_ms,
+        "failed_requests": node.failed_requests,
+        "dns_failures": node.dns_failures,
+        "stream_errors": node.stream_errors,
+        "created_at": node.created_at_unix_ms.and_then(unix_secs_to_rfc3339),
+        "updated_at": node.updated_at_unix_secs.and_then(unix_secs_to_rfc3339),
     })
-}
-
-pub fn admin_proxy_node_event_node_id_from_path(request_path: &str) -> Option<&str> {
-    let request_path = request_path.trim_end_matches('/');
-    let node_id = request_path.strip_prefix("/api/admin/proxy-nodes/")?;
-    let node_id = node_id.strip_suffix("/events")?;
-    if node_id.is_empty() || node_id.contains('/') {
-        None
-    } else {
-        Some(node_id)
-    }
-}
-
-pub fn admin_proxy_node_metrics_node_id_from_path(request_path: &str) -> Option<&str> {
-    let request_path = request_path.trim_end_matches('/');
-    let node_id = request_path.strip_prefix("/api/admin/proxy-nodes/")?;
-    let node_id = node_id.strip_suffix("/metrics")?;
-    if node_id.is_empty() || node_id.contains('/') {
-        None
-    } else {
-        Some(node_id)
-    }
-}
-
-pub fn build_admin_proxy_node_metrics_payload_response(
-    step: ProxyNodeMetricsStep,
-    from_unix_secs: u64,
-    to_unix_secs: u64,
-    items: Vec<StoredProxyNodeMetricsBucket>,
-) -> Response<Body> {
-    let summary = summarize_proxy_node_metric_buckets(items.iter().map(|item| {
-        (
-            item.samples,
-            item.uptime_samples,
-            item.active_connections_sum,
-            item.active_connections_max,
-            item.heartbeat_rtt_ms_sum,
-            item.heartbeat_rtt_ms_max,
-            item.connect_errors_delta,
-            item.disconnects_delta,
-            item.error_events_delta,
-            item.ws_in_bytes_delta,
-            item.ws_out_bytes_delta,
-            item.ws_in_frames_delta,
-            item.ws_out_frames_delta,
-        )
-    }));
-    let items = items
-        .into_iter()
-        .map(build_admin_proxy_node_metrics_bucket_payload)
-        .collect::<Vec<_>>();
-    Json(json!({
-        "step": step.as_api_value(),
-        "from": from_unix_secs,
-        "to": to_unix_secs,
-        "items": items,
-        "summary": summary,
-    }))
-    .into_response()
-}
-
-pub fn build_admin_proxy_fleet_metrics_payload_response(
-    step: ProxyNodeMetricsStep,
-    from_unix_secs: u64,
-    to_unix_secs: u64,
-    items: Vec<StoredProxyFleetMetricsBucket>,
-) -> Response<Body> {
-    let summary = summarize_proxy_node_metric_buckets(items.iter().map(|item| {
-        (
-            item.samples,
-            item.uptime_samples,
-            item.active_connections_sum,
-            item.active_connections_max,
-            item.heartbeat_rtt_ms_sum,
-            item.heartbeat_rtt_ms_max,
-            item.connect_errors_delta,
-            item.disconnects_delta,
-            item.error_events_delta,
-            item.ws_in_bytes_delta,
-            item.ws_out_bytes_delta,
-            item.ws_in_frames_delta,
-            item.ws_out_frames_delta,
-        )
-    }));
-    let items = items
-        .into_iter()
-        .map(build_admin_proxy_fleet_metrics_bucket_payload)
-        .collect::<Vec<_>>();
-    Json(json!({
-        "step": step.as_api_value(),
-        "from": from_unix_secs,
-        "to": to_unix_secs,
-        "items": items,
-        "summary": summary,
-    }))
-    .into_response()
-}
-
-fn build_admin_proxy_node_metrics_bucket_payload(
-    item: StoredProxyNodeMetricsBucket,
-) -> serde_json::Value {
-    json!({
-        "node_id": item.node_id,
-        "bucket_start_unix_secs": item.bucket_start_unix_secs,
-        "bucket_start": unix_secs_to_rfc3339(item.bucket_start_unix_secs),
-        "samples": item.samples,
-        "uptime_samples": item.uptime_samples,
-        "uptime_ratio": ratio(item.uptime_samples, item.samples),
-        "active_connections_sum": item.active_connections_sum,
-        "active_connections_max": item.active_connections_max,
-        "active_connections_avg": ratio(item.active_connections_sum, item.samples),
-        "heartbeat_rtt_ms_sum": item.heartbeat_rtt_ms_sum,
-        "heartbeat_rtt_ms_max": item.heartbeat_rtt_ms_max,
-        "heartbeat_rtt_ms_avg": ratio(item.heartbeat_rtt_ms_sum, item.samples),
-        "connect_errors_delta": item.connect_errors_delta,
-        "disconnects_delta": item.disconnects_delta,
-        "error_events_delta": item.error_events_delta,
-        "ws_in_bytes_delta": item.ws_in_bytes_delta,
-        "ws_out_bytes_delta": item.ws_out_bytes_delta,
-        "ws_in_frames_delta": item.ws_in_frames_delta,
-        "ws_out_frames_delta": item.ws_out_frames_delta,
-    })
-}
-
-fn build_admin_proxy_fleet_metrics_bucket_payload(
-    item: StoredProxyFleetMetricsBucket,
-) -> serde_json::Value {
-    json!({
-        "bucket_start_unix_secs": item.bucket_start_unix_secs,
-        "bucket_start": unix_secs_to_rfc3339(item.bucket_start_unix_secs),
-        "samples": item.samples,
-        "uptime_samples": item.uptime_samples,
-        "uptime_ratio": ratio(item.uptime_samples, item.samples),
-        "active_connections_sum": item.active_connections_sum,
-        "active_connections_max": item.active_connections_max,
-        "active_connections_avg": ratio(item.active_connections_sum, item.samples),
-        "heartbeat_rtt_ms_sum": item.heartbeat_rtt_ms_sum,
-        "heartbeat_rtt_ms_max": item.heartbeat_rtt_ms_max,
-        "heartbeat_rtt_ms_avg": ratio(item.heartbeat_rtt_ms_sum, item.samples),
-        "connect_errors_delta": item.connect_errors_delta,
-        "disconnects_delta": item.disconnects_delta,
-        "error_events_delta": item.error_events_delta,
-        "ws_in_bytes_delta": item.ws_in_bytes_delta,
-        "ws_out_bytes_delta": item.ws_out_bytes_delta,
-        "ws_in_frames_delta": item.ws_in_frames_delta,
-        "ws_out_frames_delta": item.ws_out_frames_delta,
-    })
-}
-
-fn summarize_proxy_node_metric_buckets<I>(items: I) -> serde_json::Value
-where
-    I: IntoIterator<
-        Item = (
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-        ),
-    >,
-{
-    let mut samples = 0;
-    let mut uptime_samples = 0;
-    let mut active_connections_sum = 0;
-    let mut active_connections_max = 0;
-    let mut heartbeat_rtt_ms_sum = 0;
-    let mut heartbeat_rtt_ms_max = 0;
-    let mut connect_errors_delta = 0;
-    let mut disconnects_delta = 0;
-    let mut error_events_delta = 0;
-    let mut ws_in_bytes_delta = 0;
-    let mut ws_out_bytes_delta = 0;
-    let mut ws_in_frames_delta = 0;
-    let mut ws_out_frames_delta = 0;
-
-    for item in items {
-        samples += item.0;
-        uptime_samples += item.1;
-        active_connections_sum += item.2;
-        active_connections_max = active_connections_max.max(item.3);
-        heartbeat_rtt_ms_sum += item.4;
-        heartbeat_rtt_ms_max = heartbeat_rtt_ms_max.max(item.5);
-        connect_errors_delta += item.6;
-        disconnects_delta += item.7;
-        error_events_delta += item.8;
-        ws_in_bytes_delta += item.9;
-        ws_out_bytes_delta += item.10;
-        ws_in_frames_delta += item.11;
-        ws_out_frames_delta += item.12;
-    }
-
-    json!({
-        "samples": samples,
-        "uptime_samples": uptime_samples,
-        "uptime_ratio": ratio(uptime_samples, samples),
-        "active_connections_sum": active_connections_sum,
-        "active_connections_max": active_connections_max,
-        "active_connections_avg": ratio(active_connections_sum, samples),
-        "heartbeat_rtt_ms_sum": heartbeat_rtt_ms_sum,
-        "heartbeat_rtt_ms_max": heartbeat_rtt_ms_max,
-        "heartbeat_rtt_ms_avg": ratio(heartbeat_rtt_ms_sum, samples),
-        "connect_errors_delta": connect_errors_delta,
-        "disconnects_delta": disconnects_delta,
-        "error_events_delta": error_events_delta,
-        "ws_in_bytes_delta": ws_in_bytes_delta,
-        "ws_out_bytes_delta": ws_out_bytes_delta,
-        "ws_in_frames_delta": ws_in_frames_delta,
-        "ws_out_frames_delta": ws_out_frames_delta,
-    })
-}
-
-fn ratio(numerator: i64, denominator: i64) -> Option<f64> {
-    if denominator <= 0 {
-        return None;
-    }
-    Some(numerator as f64 / denominator as f64)
 }
 
 pub fn build_admin_proxy_nodes_list_payload_response(
@@ -3638,12 +3317,6 @@ pub fn build_admin_proxy_nodes_list_payload_response(
         "limit": limit,
     }))
     .into_response()
-}
-
-pub fn build_admin_proxy_node_events_payload_response(
-    items: Vec<serde_json::Value>,
-) -> Response<Body> {
-    Json(json!({ "items": items })).into_response()
 }
 
 fn system_config_is_set(value: &serde_json::Value) -> bool {
@@ -3897,23 +3570,13 @@ mod tests {
     }
 
     #[test]
-    fn admin_proxy_node_payload_redacts_tunnel_psk_and_password() {
-        let mut node = StoredProxyNode::new(
+    fn admin_proxy_node_payload_redacts_password() {
+        let node = StoredProxyNode::new(
             "node-1".to_string(),
             "edge-1".to_string(),
             "127.0.0.1".to_string(),
             0,
-            true,
             "online".to_string(),
-            30,
-            0,
-            0,
-            0,
-            0,
-            0,
-            false,
-            false,
-            0,
         )
         .expect("proxy node should build")
         .with_manual_proxy_fields(
@@ -3921,41 +3584,12 @@ mod tests {
             Some("alice".to_string()),
             Some("supersecret".to_string()),
         );
-        node.proxy_metadata = Some(json!({
-            "version": "1.2.3",
-            "tunnel_security": {
-                "mode": "non_tls_required",
-                "encryption_key": "secret-psk",
-                "encryption_key_encrypted": "sealed-secret-psk",
-                "rotation_id": "rotation-1"
-            }
-        }));
 
         let payload = build_admin_proxy_node_payload(&node);
 
         assert_eq!(payload["has_proxy_password"], json!(true));
         assert!(payload.get("proxy_password").is_none());
-        assert_eq!(
-            payload["proxy_metadata"]["tunnel_security"]["mode"],
-            json!("non_tls_required")
-        );
-        assert_eq!(
-            payload["proxy_metadata"]["tunnel_security"]["rotation_id"],
-            json!("rotation-1")
-        );
-        assert!(payload["proxy_metadata"]["tunnel_security"]
-            .get("encryption_key")
-            .is_none());
-        assert!(payload["proxy_metadata"]["tunnel_security"]
-            .get("encryption_key_encrypted")
-            .is_none());
-        assert_eq!(
-            node.proxy_metadata
-                .as_ref()
-                .and_then(|value| value.pointer("/tunnel_security/encryption_key"))
-                .and_then(serde_json::Value::as_str),
-            Some("secret-psk")
-        );
+        assert_eq!(payload["proxy_username"], json!("alice"));
     }
 
     #[test]
