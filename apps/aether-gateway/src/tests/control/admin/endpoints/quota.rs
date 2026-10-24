@@ -1261,9 +1261,6 @@ async fn gateway_refreshes_admin_provider_quota_for_codex_proxy_with_extended_ti
     ));
     let mut manual_node = sample_proxy_node("proxy-node-codex-quota");
     manual_node.status = "online".to_string();
-    manual_node.is_manual = true;
-    manual_node.tunnel_mode = false;
-    manual_node.tunnel_connected = false;
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 

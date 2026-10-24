@@ -71,8 +71,7 @@ pub(crate) use self::normalize::{
     normalize_user_self_feature_settings_update, parse_json_ip_rules,
 };
 pub(crate) use self::payloads::{
-    InternalGatewayAuthContextRequest, InternalGatewayExecuteRequest,
-    InternalGatewayResolveRequest, InternalTunnelHeartbeatRequest, InternalTunnelNodeStatusRequest,
+    InternalGatewayAuthContextRequest, InternalGatewayExecuteRequest, InternalGatewayResolveRequest,
 };
 pub(crate) use self::payment_currency::{
     effective_payment_exchange_rate, normalize_payment_currency, stripe_amount_to_major,

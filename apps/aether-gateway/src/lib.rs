@@ -87,7 +87,6 @@ mod task_runtime;
 #[cfg(feature = "testkit")]
 pub mod testkit;
 mod tokio_metrics;
-mod tunnel;
 mod upstream_admission;
 mod usage;
 mod video_tasks;
@@ -135,79 +134,6 @@ pub(crate) use self::state::{
     LocalMutationOutcome, LocalProviderDeleteTaskState,
 };
 pub use self::state::{AppState, FrontdoorCorsConfig};
-pub use self::tunnel::{
-    build_tunnel_runtime_router_with_state, tunnel_protocol, TunnelConnConfig,
-    TunnelControlPlaneClient, TunnelRuntimeState,
-};
-#[cfg(feature = "testkit")]
-pub fn configure_test_tunnel_security(
-    state: &mut AppState,
-    node_id: &str,
-    tunnel_generation: &str,
-    key: &str,
-) {
-    use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
-    use std::sync::Arc;
-
-    let node = StoredProxyNode::new(
-        node_id.to_string(),
-        "test tunnel node".to_string(),
-        "127.0.0.1".to_string(),
-        0,
-        false,
-        "offline".to_string(),
-        30,
-        0,
-        0,
-        0,
-        0,
-        0,
-        true,
-        false,
-        0,
-    )
-    .expect("test tunnel node should be valid")
-    .with_runtime_fields(
-        None,
-        None,
-        None,
-        None,
-        Some(serde_json::json!({
-            "tunnel_security": {"encryption_key": key}
-        })),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    .with_tunnel_generation(tunnel_generation.to_string());
-    let repository = Arc::new(InMemoryProxyNodeRepository::seed([node]));
-    let data = self::data::GatewayDataState::with_proxy_node_repository_for_testkit(
-        repository,
-        aether_crypto::DEVELOPMENT_ENCRYPTION_KEY,
-    );
-    state.replace_data_state(Arc::new(data));
-}
-#[cfg(feature = "testkit")]
-pub fn configure_test_tunnel_runtime_auth(
-    state: TunnelRuntimeState,
-    node_id: &str,
-    tunnel_generation: &str,
-    raw_management_token: &str,
-) -> Result<TunnelRuntimeState, String> {
-    use std::sync::Arc;
-
-    let data = self::data::GatewayDataState::with_tunnel_management_auth_for_testkit(
-        node_id,
-        tunnel_generation,
-        raw_management_token,
-        aether_crypto::DEVELOPMENT_ENCRYPTION_KEY,
-    )
-    .map_err(|error| format!("failed to configure tunnel harness authentication: {error}"))?;
-    Ok(state.with_data(Arc::new(data)))
-}
 pub use self::usage::UsageRuntimeConfig;
 
 use axum::http::header::{HeaderName, HeaderValue};

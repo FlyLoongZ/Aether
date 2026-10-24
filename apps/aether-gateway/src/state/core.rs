@@ -301,16 +301,8 @@ impl AppState {
         self.candidate_row_page_cache.clear();
         self.candidate_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
-        self.tunnel = crate::tunnel::EmbeddedTunnelState::with_data_and_runtime_state(
-            Arc::clone(&data),
-            self.runtime_state.clone(),
-        );
         self.data = data;
         self.configure_request_candidate_queue_from_env();
-    }
-
-    pub fn force_close_all_tunnel_proxies(&self) -> usize {
-        self.tunnel.request_close_all_proxies()
     }
 
     pub fn new() -> Result<Self, reqwest::Error> {
@@ -378,6 +370,7 @@ impl AppState {
             #[cfg(test)]
             execution_runtime_sync_override: None,
             data: Arc::clone(&data),
+            instance_id: Arc::from(crate::state::resolve_gateway_instance_id()),
             background_data: Arc::clone(&data),
             background_data_isolated: false,
             runtime_state: runtime_state.clone(),
@@ -464,10 +457,6 @@ impl AppState {
             frontdoor_user_rpm: Arc::new(FrontdoorUserRpmLimiter::new(
                 FrontdoorUserRpmConfig::default(),
             )),
-            tunnel: crate::tunnel::EmbeddedTunnelState::with_data_and_runtime_state(
-                data,
-                runtime_state.clone(),
-            ),
             provider_transport_snapshot_cache: Arc::new(DashMap::new()),
             provider_transport_snapshot_cache_generation: Arc::new(AtomicU64::new(0)),
             provider_transport_snapshot_inflight: Arc::new(DashMap::new()),
@@ -585,19 +574,15 @@ impl AppState {
         Ok(self)
     }
 
-    pub fn with_tunnel_identity(
-        mut self,
-        instance_id: impl Into<String>,
-        relay_base_url: Option<impl Into<String>>,
-    ) -> Self {
-        self.tunnel = crate::tunnel::EmbeddedTunnelState::with_data_identity_and_runtime_state(
-            Arc::clone(&self.data),
-            instance_id,
-            relay_base_url,
-            90,
-            self.runtime_state.clone(),
-        );
+    /// Override the instance id that identifies this gateway process in
+    /// background-task ownership, locks and distributed leases.
+    pub fn with_instance_id(mut self, instance_id: impl Into<String>) -> Self {
+        self.instance_id = Arc::from(instance_id.into());
         self
+    }
+
+    pub(crate) fn local_instance_id(&self) -> &str {
+        &self.instance_id
     }
 
     pub fn with_video_task_truth_source_mode(mut self, mode: VideoTaskTruthSourceMode) -> Self {
@@ -706,10 +691,6 @@ impl AppState {
             (*self.background_data)
                 .clone()
                 .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
-        );
-        self.tunnel = crate::tunnel::EmbeddedTunnelState::with_data_and_runtime_state(
-            Arc::clone(&self.data),
-            self.runtime_state.clone(),
         );
         self
     }
@@ -1241,13 +1222,6 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    pub(crate) async fn register_proxy_node(
-        &self,
-        mutation: &aether_data::repository::proxy_nodes::ProxyNodeRegistrationMutation,
-    ) -> Result<Option<StoredProxyNode>, GatewayError> {
-        self.register_proxy_node_with_bound_secrets(mutation).await
-    }
-
     pub(crate) async fn create_manual_proxy_node(
         &self,
         mutation: &ProxyNodeManualCreateMutation,
@@ -1317,9 +1291,6 @@ impl AppState {
         &self,
         mutation: &ProxyNodeHeartbeatMutation,
     ) -> Result<Option<StoredProxyNode>, GatewayError> {
-        crate::state::decrypt_or_migrate_proxy_tunnel_psk(&self.data, &mutation.node_id)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))?;
         self.data
             .apply_proxy_node_heartbeat(mutation)
             .await
@@ -1922,7 +1893,6 @@ impl AppState {
         ]);
         samples.extend(crate::cache::candidate_page_cache_metric_samples());
         samples.extend(crate::stage_metrics::gateway_stage_metric_samples());
-        samples.extend(self.tunnel.metric_samples());
         samples.extend(self.fallback_metrics.metric_samples());
         samples.extend(self.process_resource_monitor.metric_samples());
         samples.extend(crate::allocator_metrics::gateway_allocator_metric_samples());

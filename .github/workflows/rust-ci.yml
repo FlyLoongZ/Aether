@@ -36,7 +36,6 @@ on:
       - "tests/deploy_*_test.sh"
       - "tests/update_*_test.sh"
       - "tests/release_supply_chain_test.sh"
-      - "tests/tunnel_installer_config_security_test.sh"
       - ".github/workflows/*.yml"
       - ".github/workflows/*.yaml"
   pull_request:
@@ -64,7 +63,6 @@ on:
       - "tests/deploy_*_test.sh"
       - "tests/update_*_test.sh"
       - "tests/release_supply_chain_test.sh"
-      - "tests/tunnel_installer_config_security_test.sh"
       - ".github/workflows/*.yml"
       - ".github/workflows/*.yaml"
 
@@ -170,7 +168,6 @@ jobs:
           bash tests/install_source_trust_test.sh
           bash tests/release_supply_chain_test.sh
           bash tests/update_compose_safety_test.sh
-          bash tests/tunnel_installer_config_security_test.sh
 
   fmt:
     name: Format

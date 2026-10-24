@@ -48,7 +48,6 @@ fn compare_cache_affinity(
         .then_with(|| compare_cross_format_demotion(left, right))
         .then_with(|| compare_demoted_format_preference(left, right))
         .then_with(|| compare_candidate_priority_slot(left, right, context.priority_mode))
-        .then(left.tunnel_bucket.cmp(&right.tunnel_bucket))
         .then_with(|| compare_format_preference(left, right))
         .then_with(|| compare_health(left, right, context.include_health))
         .then_with(|| compare_affinity_or_seeded_hash(left, right, context.load_balance_seed))

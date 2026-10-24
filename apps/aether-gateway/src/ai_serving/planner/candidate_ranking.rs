@@ -102,7 +102,6 @@ impl AiCandidateRankingPort for GatewayLocalCandidateRankingPort<'_> {
             provider_api_format: candidate.provider_api_format.as_str(),
             required_capabilities: self.required_capabilities,
             cached_affinity_match,
-            tunnel_bucket: ranking_facts.tunnel_bucket,
             keep_priority_on_conversion: ranking_facts.keep_priority_on_conversion,
         }))
     }
@@ -280,7 +279,6 @@ mod tests {
     };
     use crate::data::auth::GatewayAuthApiKeySnapshot;
     use crate::data::GatewayDataState;
-    use crate::tunnel::TunnelAttachmentRecord;
     use crate::{scheduler::affinity::SCHEDULER_AFFINITY_TTL, AppState};
     use aether_data::repository::auth::StoredAuthApiKeySnapshot;
 
@@ -315,7 +313,6 @@ mod tests {
                 provider_api_format: candidate.endpoint_api_format.as_str(),
                 required_capabilities,
                 cached_affinity_match: false,
-                tunnel_bucket: ranking_facts.tunnel_bucket,
                 keep_priority_on_conversion: ranking_facts.keep_priority_on_conversion,
             }));
         }
@@ -601,16 +598,11 @@ mod tests {
             None,
             Some(json!({
                 "enabled": true,
-                "mode": "tunnel",
                 "node_id": node_id,
             })),
             None,
         )
         .expect("key transport should build")
-    }
-
-    fn tunnel_attachment_key(node_id: &str) -> String {
-        format!("tunnel.attachments.{node_id}")
     }
 
     fn current_unix_secs() -> u64 {
@@ -678,94 +670,6 @@ mod tests {
             supports_streaming: true,
             mapping_matched_model: None,
         }
-    }
-
-    #[tokio::test]
-    async fn local_execution_ranking_keeps_provider_priority_before_tunnel_affinity() {
-        let provider_catalog = InMemoryProviderCatalogReadRepository::seed(
-            vec![
-                sample_provider_with_options("provider-priority", false, 0),
-                sample_provider_with_options("provider-local-tunnel", false, 10),
-            ],
-            vec![
-                sample_endpoint_for_provider(
-                    "provider-priority",
-                    "endpoint-priority",
-                    "openai:chat",
-                ),
-                sample_endpoint_for_provider(
-                    "provider-local-tunnel",
-                    "endpoint-local-tunnel",
-                    "openai:chat",
-                ),
-            ],
-            vec![
-                sample_key_for_provider("provider-priority", "key-priority", "node-remote"),
-                sample_key_for_provider("provider-local-tunnel", "key-local-tunnel", "node-local"),
-            ],
-        );
-        let observed_at_unix_secs = current_unix_secs();
-        let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
-            std::sync::Arc::new(provider_catalog),
-            DEVELOPMENT_ENCRYPTION_KEY,
-        )
-        .with_system_config_values_for_tests(vec![
-            ("provider_priority_mode".to_string(), json!("provider")),
-            (
-                tunnel_attachment_key("node-remote"),
-                serde_json::to_value(TunnelAttachmentRecord {
-                    gateway_instance_id: "gateway-b".to_string(),
-                    relay_base_url: "http://gateway-b:8080".to_string(),
-                    tunnel_generation: "test-generation-remote".to_string(),
-                    conn_count: 1,
-                    observed_at_unix_secs,
-                })
-                .expect("remote attachment should serialize"),
-            ),
-            (
-                tunnel_attachment_key("node-local"),
-                serde_json::to_value(TunnelAttachmentRecord {
-                    gateway_instance_id: "gateway-a".to_string(),
-                    relay_base_url: "http://gateway-a:8080".to_string(),
-                    tunnel_generation: "test-generation-local".to_string(),
-                    conn_count: 1,
-                    observed_at_unix_secs,
-                })
-                .expect("local attachment should serialize"),
-            ),
-        ]);
-        let state = AppState::new()
-            .expect("state should build")
-            .with_data_state_for_tests(data_state)
-            .with_tunnel_identity_for_tests("gateway-a", Some("http://gateway-a:8080"));
-
-        let ranked = rank_local_execution_candidates(
-            PlannerAppState::new(&state),
-            vec![
-                sample_priority_candidate(
-                    "provider-local-tunnel",
-                    "endpoint-local-tunnel",
-                    "key-local-tunnel",
-                    "openai:chat",
-                    Some(10),
-                    10,
-                ),
-                sample_priority_candidate(
-                    "provider-priority",
-                    "endpoint-priority",
-                    "key-priority",
-                    "openai:chat",
-                    Some(0),
-                    0,
-                ),
-            ],
-            "openai:chat",
-            None,
-        )
-        .await;
-
-        assert_eq!(ranked[0].provider_id, "provider-priority");
-        assert_eq!(ranked[1].provider_id, "provider-local-tunnel");
     }
 
     #[tokio::test]

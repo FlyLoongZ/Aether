@@ -11,8 +11,7 @@ pub struct GatewayHarnessConfig {
     pub data_config: Option<GatewayDataConfig>,
     pub max_in_flight_requests: Option<usize>,
     pub distributed_request_gate: Option<RuntimeSemaphore>,
-    pub tunnel_instance_id: Option<String>,
-    pub tunnel_relay_base_url: Option<String>,
+    pub instance_id: Option<String>,
 }
 
 impl GatewayHarnessConfig {
@@ -22,8 +21,7 @@ impl GatewayHarnessConfig {
             data_config: None,
             max_in_flight_requests: None,
             distributed_request_gate: None,
-            tunnel_instance_id: None,
-            tunnel_relay_base_url: None,
+            instance_id: None,
         }
     }
 }
@@ -59,8 +57,8 @@ impl GatewayHarness {
                 )]),
             )?,
         };
-        if let Some(instance_id) = config.tunnel_instance_id {
-            state = state.with_tunnel_identity(instance_id, config.tunnel_relay_base_url);
+        if let Some(instance_id) = config.instance_id {
+            state = state.with_instance_id(instance_id);
         }
         if let Some(limit) = config.max_in_flight_requests {
             state = state.with_request_concurrency_limit(limit);

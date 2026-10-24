@@ -113,57 +113,7 @@ pub(super) async fn run_proxy_node_metrics_cleanup_once(
 
 pub(super) async fn run_proxy_upgrade_rollout_once(state: &AppState) -> Result<(), DataLayerError> {
     let mut summary = advance_proxy_upgrade_rollout_once(&state.data).await?;
-    let probes = collect_proxy_upgrade_rollout_probes(&state.data).await?;
-    let mut probe_recorded = false;
-    for probe in probes {
-        match state
-            .tunnel
-            .probe_node_url_routed(state, &probe.node_id, &probe.url, probe.timeout_secs)
-            .await
-        {
-            Ok(status) if (200..300).contains(&status) => {
-                let _ = record_proxy_upgrade_traffic_success_for_generation(
-                    &state.data,
-                    &probe.node_id,
-                    &probe.tunnel_generation,
-                )
-                .await?;
-                probe_recorded = true;
-                info!(
-                    event_name = "proxy_upgrade_rollout_probe_succeeded",
-                    log_type = "ops",
-                    worker = "proxy_upgrade_rollout",
-                    node_id = %probe.node_id,
-                    probe_origin = %crate::handlers::shared::security_log_url_origin(&probe.url),
-                    status,
-                    "gateway confirmed proxy upgrade health probe"
-                );
-            }
-            Ok(status) => {
-                warn!(
-                    event_name = "proxy_upgrade_rollout_probe_unhealthy",
-                    log_type = "ops",
-                    worker = "proxy_upgrade_rollout",
-                    node_id = %probe.node_id,
-                    probe_origin = %crate::handlers::shared::security_log_url_origin(&probe.url),
-                    status,
-                    "gateway proxy upgrade health probe returned non-success status"
-                );
-            }
-            Err(error) => {
-                warn!(
-                    event_name = "proxy_upgrade_rollout_probe_failed",
-                    log_type = "ops",
-                    worker = "proxy_upgrade_rollout",
-                    node_id = %probe.node_id,
-                    probe_origin = %crate::handlers::shared::security_log_url_origin(&probe.url),
-                    error = %error,
-                    "gateway proxy upgrade health probe failed"
-                );
-            }
-        }
-    }
-
+    let probe_recorded = false;
     if probe_recorded {
         summary = advance_proxy_upgrade_rollout_once(&state.data).await?;
     }

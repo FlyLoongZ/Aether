@@ -419,8 +419,10 @@ mod tests {
             assert!(should_skip_upstream_complete_passthrough_header(header));
         }
         assert!(!should_skip_request_header("x-request-id"));
-        // The tunnel relay re-uses `should_skip_request_header` to carry trace
-        // ids between gateway instances, so that shared filter must keep it.
+        // `should_skip_request_header` is the shared hop-by-hop filter used by
+        // the execution runtime when copying plan headers; it must keep the
+        // trace id so intra-gateway hops stay traceable. Only the two upstream
+        // passthrough filters above drop it before a model request leaves.
         assert!(!should_skip_request_header("x-trace-id"));
     }
 

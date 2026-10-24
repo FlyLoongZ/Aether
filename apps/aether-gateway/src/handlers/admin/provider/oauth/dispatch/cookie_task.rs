@@ -146,7 +146,7 @@ pub(super) async fn handle_admin_provider_oauth_start_cookie_task(
             status: BackgroundTaskStatus::Queued,
             attempt: 1,
             max_attempts,
-            owner_instance: Some(state.app().tunnel.local_instance_id().to_string()),
+            owner_instance: Some(state.app().local_instance_id().to_string()),
             progress_percent: 0,
             progress_message: Some("Claude Cookie authorization queued".to_string()),
             payload_json: Some(json!({

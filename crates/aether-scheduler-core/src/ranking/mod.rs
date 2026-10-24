@@ -7,12 +7,10 @@ mod types;
 use modes::compare_rankable_candidates;
 use priority::candidate_priority_slot;
 use reasons::{demoted_by as ranking_demoted_by, promoted_by as ranking_promoted_by};
-pub use reasons::{
-    RANKING_REASON_CACHED_AFFINITY, RANKING_REASON_CROSS_FORMAT, RANKING_REASON_LOCAL_TUNNEL,
-};
+pub use reasons::{RANKING_REASON_CACHED_AFFINITY, RANKING_REASON_CROSS_FORMAT};
 pub use types::{
     SchedulerRankableCandidate, SchedulerRankingContext, SchedulerRankingMode,
-    SchedulerRankingOutcome, SchedulerTunnelAffinityBucket,
+    SchedulerRankingOutcome,
 };
 
 fn compare_candidate_identity_for_ranking(
@@ -100,7 +98,7 @@ fn apply_order<T>(items: &mut [T], sorted_old_indices: Vec<usize>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SchedulerPriorityMode, SchedulerTunnelAffinityBucket};
+    use crate::SchedulerPriorityMode;
 
     fn candidate(
         id: &str,
@@ -119,7 +117,6 @@ mod tests {
             capability_priority: (0, 0),
             cached_affinity_match: false,
             affinity_hash: None,
-            tunnel_bucket: SchedulerTunnelAffinityBucket::Neutral,
             demote_cross_format: false,
             format_preference: (0, 0),
             health_bucket: None,
@@ -249,28 +246,6 @@ mod tests {
         assert_eq!(
             outcomes[0].promoted_by,
             Some(RANKING_REASON_CACHED_AFFINITY)
-        );
-    }
-
-    #[test]
-    fn cache_affinity_without_cache_hit_keeps_priority_before_tunnel() {
-        let mut higher_priority = candidate("higher", 0, 0, Some(0));
-        higher_priority.tunnel_bucket = SchedulerTunnelAffinityBucket::RemoteTunnel;
-
-        let mut lower_priority = candidate("lower", 10, 0, Some(10));
-        lower_priority.tunnel_bucket = SchedulerTunnelAffinityBucket::LocalTunnel;
-
-        assert_eq!(
-            ranked_ids(
-                &[lower_priority, higher_priority],
-                SchedulerRankingContext {
-                    priority_mode: SchedulerPriorityMode::Provider,
-                    ranking_mode: SchedulerRankingMode::CacheAffinity,
-                    include_health: false,
-                    load_balance_seed: 0,
-                },
-            ),
-            vec!["provider-higher", "provider-lower"]
         );
     }
 

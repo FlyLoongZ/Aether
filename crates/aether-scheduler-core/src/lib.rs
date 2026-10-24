@@ -55,8 +55,8 @@ pub use model::{
 pub use provider::{build_provider_concurrent_limit_map, should_skip_provider_quota};
 pub use ranking::{
     apply_scheduler_candidate_ranking, SchedulerRankableCandidate, SchedulerRankingContext,
-    SchedulerRankingMode, SchedulerRankingOutcome, SchedulerTunnelAffinityBucket,
-    RANKING_REASON_CACHED_AFFINITY, RANKING_REASON_CROSS_FORMAT, RANKING_REASON_LOCAL_TUNNEL,
+    SchedulerRankingMode, SchedulerRankingOutcome, RANKING_REASON_CACHED_AFFINITY,
+    RANKING_REASON_CROSS_FORMAT,
 };
 pub use request_candidate::{
     build_execution_request_candidate_seed, build_local_request_candidate_status_record,

@@ -24,7 +24,7 @@ pub(crate) async fn perform_fixed_provider_reconciliation_once(
         .runtime_state
         .lock_try_acquire(
             FIXED_PROVIDER_RECONCILIATION_LOCK_KEY,
-            state.tunnel.local_instance_id(),
+            state.local_instance_id(),
             FIXED_PROVIDER_RECONCILIATION_LOCK_TTL,
         )
         .await

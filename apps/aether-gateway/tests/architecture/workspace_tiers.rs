@@ -97,19 +97,6 @@ fn gateway_runtime_components_keep_focused_dependency_surfaces() {
         ],
     );
     assert_manifest_excludes(
-        "crates/aether-gateway/tunnel/Cargo.toml",
-        &[
-            "axum",
-            "sqlx",
-            "redis",
-            "reqwest",
-            "wreq",
-            "aether-data",
-            "aether-provider-transport",
-            "aether-gateway-workers",
-        ],
-    );
-    assert_manifest_excludes(
         "crates/aether-testing/loadtools/Cargo.toml",
         &[
             "aether-gateway",
@@ -122,21 +109,42 @@ fn gateway_runtime_components_keep_focused_dependency_surfaces() {
 }
 
 #[test]
-fn tunnel_binary_uses_shared_tunnel_boundary_without_gateway_runtime_dependency() {
-    let manifest = read_workspace_file("apps/aether-tunnel/Cargo.toml");
-    let dependencies = manifest
-        .split_once("[dependencies]")
-        .expect("tunnel manifest should declare dependencies")
-        .1
-        .split("[dev-dependencies]")
-        .next()
-        .expect("normal dependency section should exist");
+fn tunnel_feature_is_removed() {
+    for removed_path in [
+        "apps/aether-tunnel",
+        "crates/aether-gateway/tunnel",
+        "apps/aether-gateway/src/tunnel",
+    ] {
+        assert!(
+            !workspace_file_exists(removed_path),
+            "removed tunnel component {removed_path} must not reappear"
+        );
+    }
 
-    assert!(dependencies.contains("aether-gateway-tunnel.workspace = true"));
-    assert!(!dependencies.contains("aether-gateway.workspace = true"));
+    let workspace = read_workspace_file("Cargo.toml");
+    let gateway_manifest = read_workspace_file("apps/aether-gateway/Cargo.toml");
+    for forbidden in [
+        "apps/aether-tunnel",
+        "aether-tunnel",
+        "aether_gateway_tunnel",
+    ] {
+        assert!(
+            !workspace.contains(forbidden) && !gateway_manifest.contains(forbidden),
+            "workspace must not reference removed tunnel component {forbidden}"
+        );
+    }
 
-    let protocol_facade = read_workspace_file("apps/aether-tunnel/src/tunnel/protocol.rs");
-    assert!(protocol_facade.contains("aether_gateway_tunnel::protocol::*"));
+    let gateway_lib = read_workspace_file("apps/aether-gateway/src/lib.rs");
+    assert!(
+        !gateway_lib.contains("mod tunnel") && !gateway_lib.contains("crate::tunnel"),
+        "gateway must not declare a tunnel module"
+    );
+
+    let env_example = read_workspace_file(".env.example");
+    assert!(
+        !env_example.contains("AETHER_TUNNEL_"),
+        ".env.example must not expose removed AETHER_TUNNEL_* variables"
+    );
 }
 
 #[test]
@@ -168,15 +176,6 @@ fn data_query_helpers_belong_to_adapters_not_the_runtime_facade() {
 
     let query_helpers = read_workspace_file("crates/aether-data/query/src/lib.rs");
     assert!(query_helpers.contains("Postgres"));
-}
-
-#[test]
-fn gateway_tunnel_protocol_path_is_a_thin_compatibility_facade() {
-    let source = read_workspace_file("apps/aether-gateway/src/tunnel/embedded/protocol.rs");
-    assert_eq!(
-        source.trim(),
-        "pub use aether_gateway_tunnel::embedded::protocol::*;"
-    );
 }
 
 #[test]
@@ -232,7 +231,7 @@ fn testkit_gateway_harness_is_opt_in() {
 
     let testkit_lib =
         read_workspace_file("crates/aether-testing/testkit/src/lib.rs").replace("\r\n", "\n");
-    for module in ["execution_runtime", "gateway", "tunnel"] {
+    for module in ["execution_runtime", "gateway"] {
         assert!(
             testkit_lib.contains(&format!("#[cfg(feature = \"gateway\")]\nmod {module};")),
             "aether-testkit::{module} should be feature-gated"

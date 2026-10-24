@@ -1,4 +1,4 @@
-use aether_contracts::tunnel_security::TUNNEL_SECURITY_NON_TLS_REQUIRED;
+const TUNNEL_SECURITY_NON_TLS_REQUIRED: &str = "non_tls_required";
 use async_trait::async_trait;
 use serde_json::Value;
 

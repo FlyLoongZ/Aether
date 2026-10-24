@@ -38,8 +38,7 @@ use crate::constants::{
     EXECUTION_RUNTIME_LOOP_GUARD_HEADER, FORWARDED_FOR_HEADER, FORWARDED_HOST_HEADER,
     FORWARDED_PROTO_HEADER, GATEWAY_HEADER, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
     TRACE_ID_HEADER, TRUSTED_AUTH_ACCESS_ALLOWED_HEADER, TRUSTED_AUTH_API_KEY_ID_HEADER,
-    TRUSTED_AUTH_BALANCE_HEADER, TRUSTED_AUTH_USER_ID_HEADER, TUNNEL_AFFINITY_FORWARDED_BY_HEADER,
-    TUNNEL_AFFINITY_NODE_ID_HEADER, TUNNEL_AFFINITY_OWNER_INSTANCE_HEADER,
+    TRUSTED_AUTH_BALANCE_HEADER, TRUSTED_AUTH_USER_ID_HEADER,
 };
 use crate::control::{
     allows_control_execute_emergency, maybe_execute_via_control, request_model_local_rejection,
@@ -113,7 +112,6 @@ const PROVIDER_KEY_CAPACITY_LIMIT_SKIP_REASONS: &[&str] = &[
 ];
 const LOCAL_EXECUTION_PLANNING_TIMEOUT_DETAIL: &str =
     "当前 AI 请求在本地执行规划阶段超时，请稍后重试";
-const EXECUTION_PATH_TUNNEL_AFFINITY_FORWARD: &str = "tunnel_affinity_forward";
 const EXECUTION_PATH_CODEX_LIVE_CALL: &str = "codex_live_call";
 const MANAGEMENT_TOKEN_PREFIX: &str = "ae-";
 const LEGACY_MANAGEMENT_TOKEN_PREFIX: &str = "ae_";
@@ -278,375 +276,6 @@ async fn maybe_promote_management_token_admin_principal(
     Ok(())
 }
 
-async fn maybe_forward_public_request_to_tunnel_owner(
-    state: &AppState,
-    remote_addr: &std::net::SocketAddr,
-    request_context: &GatewayPublicRequestContext,
-    parts: &http::request::Parts,
-    buffered_body: Option<&Bytes>,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    let Some(decision) = request_context.control_decision.as_ref() else {
-        return Ok(None);
-    };
-    if decision.route_class.as_deref() != Some("ai_public")
-        || !decision.is_execution_runtime_candidate()
-    {
-        return Ok(None);
-    }
-    if parts
-        .headers
-        .get(TUNNEL_AFFINITY_FORWARDED_BY_HEADER)
-        .and_then(|value| value.to_str().ok())
-        .map(str::trim)
-        .is_some_and(|value| !value.is_empty())
-    {
-        return Ok(None);
-    }
-
-    let Some(auth_context) = decision.auth_context.as_ref().filter(|auth_context| {
-        auth_context.access_allowed && !auth_context.api_key_id.trim().is_empty()
-    }) else {
-        return Ok(None);
-    };
-    let Some(api_format) = decision
-        .auth_endpoint_signature
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-    let empty_body = Bytes::new();
-    let Some(requested_model) = crate::control::extract_requested_model(
-        decision,
-        &parts.uri,
-        &parts.headers,
-        buffered_body.unwrap_or(&empty_body),
-    ) else {
-        return Ok(None);
-    };
-    let body_json = buffered_body.and_then(|body| {
-        let body =
-            crate::headers::decoded_request_body_bytes(&parts.headers, body.as_ref()).ok()?;
-        serde_json::from_slice::<serde_json::Value>(body.as_ref()).ok()
-    });
-    let empty_body_json = serde_json::Value::Null;
-    let affinity_context = match crate::ai_serving::resolve_tunnel_scheduler_affinity_context(
-        state,
-        parts,
-        decision,
-        requested_model,
-        body_json.as_ref().unwrap_or(&empty_body_json),
-        api_format,
-    )
-    .await
-    {
-        Ok(Some(context)) => context,
-        Ok(None) => return Ok(None),
-        Err(err) => {
-            warn!(
-                trace_id = %request_context.trace_id,
-                error = ?err,
-                "gateway failed to resolve routing policy while checking tunnel affinity forwarding"
-            );
-            return Ok(None);
-        }
-    };
-    let target = if let Some(policy_context) = affinity_context.policy_context.as_ref() {
-        crate::scheduler::affinity::read_cached_scheduler_affinity_target_with_policy_context(
-            state,
-            &auth_context.api_key_id,
-            affinity_context.client_session_affinity.as_ref(),
-            api_format,
-            &affinity_context.requested_model,
-            policy_context,
-        )
-    } else {
-        return Ok(None);
-    };
-    let Some(target) = target else {
-        return Ok(None);
-    };
-    if !routing_overlay_allows_affinity_target(affinity_context.routing_overlay.as_ref(), &target) {
-        return Ok(None);
-    }
-
-    let transport = match state
-        .read_provider_transport_snapshot(&target.provider_id, &target.endpoint_id, &target.key_id)
-        .await
-    {
-        Ok(Some(transport)) => transport,
-        Ok(None) => return Ok(None),
-        Err(err) => {
-            warn!(
-                trace_id = %request_context.trace_id,
-                provider_id = %target.provider_id,
-                endpoint_id = %target.endpoint_id,
-                key_id = %target.key_id,
-                error = ?err,
-                "gateway failed to read provider transport for tunnel affinity forward"
-            );
-            return Ok(None);
-        }
-    };
-
-    let Some(proxy) = state
-        .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
-        .await
-    else {
-        return Ok(None);
-    };
-    if proxy.enabled == Some(false) {
-        return Ok(None);
-    }
-    let Some(node_id) = proxy
-        .node_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-    if state.tunnel.has_local_proxy(node_id) {
-        return Ok(None);
-    }
-
-    let Some(owner) = state
-        .tunnel
-        .lookup_attachment_owner(state.data.as_ref(), node_id)
-        .await
-        .map_err(GatewayError::Internal)?
-    else {
-        return Ok(None);
-    };
-    if owner.gateway_instance_id == state.tunnel.local_instance_id() {
-        return Ok(None);
-    }
-
-    let sanitized_path_and_query = sanitize_upstream_path_and_query(
-        Some(decision),
-        parts
-            .uri
-            .path_and_query()
-            .map(|value| value.as_str())
-            .unwrap_or("/"),
-    );
-    let affinity_uri = sanitized_path_and_query
-        .parse::<http::Uri>()
-        .map_err(|error| {
-            GatewayError::Internal(format!("invalid sanitized tunnel affinity URI: {error}"))
-        })?;
-    let owner_url =
-        crate::tunnel::build_tunnel_affinity_forward_url(&owner.relay_base_url, &affinity_uri)
-            .map_err(GatewayError::Internal)?;
-    let is_stream =
-        owner_forward_request_is_stream(parts, decision, buffered_body.unwrap_or(&empty_body));
-    let transport_timeouts =
-        crate::provider_transport::resolve_transport_execution_timeouts(&transport);
-    let non_stream_timeout =
-        crate::execution_runtime::transport::resolve_non_stream_total_timeout_for_request(
-            is_stream,
-            &transport.endpoint.api_format,
-            transport_timeouts.as_ref(),
-        );
-    let stream_first_byte_timeout =
-        crate::execution_runtime::transport::resolve_stream_first_byte_timeout_for_request(
-            is_stream,
-            transport_timeouts.as_ref(),
-        );
-    let mut forwarded_headers = http::HeaderMap::new();
-    let connection_declared = aether_http::connection_declared_header_names(
-        parts
-            .headers
-            .get_all(http::header::CONNECTION)
-            .iter()
-            .filter_map(|value| value.to_str().ok()),
-    );
-    for (name, value) in &parts.headers {
-        if should_skip_request_header(name.as_str())
-            || name == http::header::HOST
-            || connection_declared.contains(&name.as_str().to_ascii_lowercase())
-        {
-            continue;
-        }
-        if should_strip_forwarded_provider_credential_header(Some(decision), name) {
-            continue;
-        }
-        if matches!(name.as_str(), "cookie" | "cookie2") {
-            continue;
-        }
-        if name.as_str() == "x-real-ip" {
-            continue;
-        }
-        if should_strip_forwarded_trusted_admin_header(Some(decision), name) {
-            continue;
-        }
-        if should_strip_tunnel_affinity_forward_header(name) {
-            continue;
-        }
-        forwarded_headers.append(name.clone(), value.clone());
-    }
-    if let Some(host) = request_context.host_header.as_deref() {
-        insert_tunnel_affinity_forward_header(&mut forwarded_headers, FORWARDED_HOST_HEADER, host)?;
-    }
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        FORWARDED_FOR_HEADER,
-        &effective_client_ip(&parts.headers, remote_addr).to_string(),
-    )?;
-    insert_tunnel_affinity_forward_header(&mut forwarded_headers, FORWARDED_PROTO_HEADER, "http")?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        TRACE_ID_HEADER,
-        &request_context.trace_id,
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        GATEWAY_HEADER,
-        "rust-phase3b-affinity",
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        aether_contracts::tunnel::TUNNEL_RELAY_FORWARDED_BY_HEADER,
-        state.tunnel.local_instance_id(),
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        TUNNEL_AFFINITY_FORWARDED_BY_HEADER,
-        state.tunnel.local_instance_id(),
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        TUNNEL_AFFINITY_OWNER_INSTANCE_HEADER,
-        owner.gateway_instance_id.as_str(),
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        TUNNEL_AFFINITY_NODE_ID_HEADER,
-        node_id,
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        TRUSTED_AUTH_USER_ID_HEADER,
-        &auth_context.user_id,
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        TRUSTED_AUTH_API_KEY_ID_HEADER,
-        &auth_context.api_key_id,
-    )?;
-    insert_tunnel_affinity_forward_header(
-        &mut forwarded_headers,
-        TRUSTED_AUTH_ACCESS_ALLOWED_HEADER,
-        "true",
-    )?;
-    if let Some(balance_remaining) = auth_context.balance_remaining {
-        insert_tunnel_affinity_forward_header(
-            &mut forwarded_headers,
-            TRUSTED_AUTH_BALANCE_HEADER,
-            &balance_remaining.to_string(),
-        )?;
-    }
-
-    let auth_metadata = crate::tunnel::build_tunnel_affinity_auth_metadata(
-        &parts.method,
-        &affinity_uri,
-        &forwarded_headers,
-    )
-    .map_err(GatewayError::Internal)?;
-    let relay_auth = state
-        .tunnel
-        .build_relay_auth_headers(
-            owner.gateway_instance_id.as_str(),
-            node_id,
-            true,
-            false,
-            &auth_metadata,
-            buffered_body.unwrap_or(&empty_body),
-        )
-        .map_err(GatewayError::Internal)?;
-    relay_auth
-        .apply_to_headers(&mut forwarded_headers)
-        .map_err(GatewayError::Internal)?;
-
-    let owner_client =
-        crate::tunnel::owner_forward_client_for_url(&state.owner_forward_client, &owner_url)
-            .await
-            .map_err(GatewayError::Internal)?;
-    let mut upstream_request = owner_client
-        .request(parts.method.clone(), owner_url)
-        .headers(forwarded_headers);
-    if let Some(timeout) = non_stream_timeout {
-        upstream_request = upstream_request.timeout(timeout);
-    }
-
-    let upstream_response = crate::tunnel::send_owner_forward_request(
-        upstream_request.body(buffered_body.cloned().unwrap_or_default()),
-        stream_first_byte_timeout,
-    )
-    .await
-    .map_err(|message| GatewayError::UpstreamUnavailable {
-        trace_id: request_context.trace_id.clone(),
-        message: format!("owner gateway affinity forward failed: {message}"),
-    })?;
-
-    let mut response = build_sync_aware_affinity_forward_response(
-        request_context,
-        &parts.headers,
-        buffered_body,
-        decision,
-        upstream_response,
-    )
-    .await?;
-    response.headers_mut().insert(
-        HeaderName::from_static(TUNNEL_AFFINITY_OWNER_INSTANCE_HEADER),
-        HeaderValue::from_str(owner.gateway_instance_id.as_str())
-            .map_err(|err| GatewayError::Internal(err.to_string()))?,
-    );
-    Ok(Some(response))
-}
-
-fn should_strip_tunnel_affinity_forward_header(name: &http::HeaderName) -> bool {
-    crate::tunnel::is_tunnel_relay_auth_header(name.as_str())
-        || matches!(
-            name.as_str(),
-            TUNNEL_AFFINITY_FORWARDED_BY_HEADER
-                | TUNNEL_AFFINITY_OWNER_INSTANCE_HEADER
-                | TUNNEL_AFFINITY_NODE_ID_HEADER
-                | TRUSTED_AUTH_USER_ID_HEADER
-                | TRUSTED_AUTH_API_KEY_ID_HEADER
-                | TRUSTED_AUTH_BALANCE_HEADER
-                | TRUSTED_AUTH_ACCESS_ALLOWED_HEADER
-                | FORWARDED_HOST_HEADER
-                | FORWARDED_FOR_HEADER
-                | FORWARDED_PROTO_HEADER
-        )
-}
-
-fn insert_tunnel_affinity_forward_header(
-    headers: &mut http::HeaderMap,
-    name: &'static str,
-    value: &str,
-) -> Result<(), GatewayError> {
-    let value = HeaderValue::from_str(value).map_err(|error| {
-        GatewayError::Internal(format!(
-            "invalid tunnel affinity forward header {name}: {error}"
-        ))
-    })?;
-    headers.insert(HeaderName::from_static(name), value);
-    Ok(())
-}
-
-fn routing_overlay_allows_affinity_target(
-    routing_overlay: Option<&aether_routing_core::RankingOverlay>,
-    target: &aether_scheduler_core::SchedulerAffinityTarget,
-) -> bool {
-    routing_overlay.is_none_or(|overlay| {
-        overlay.provider_allowed(target.provider_id.as_str())
-            && overlay.key_allowed(target.key_id.as_str())
-    })
-}
-
 fn owner_forward_request_is_stream(
     parts: &http::request::Parts,
     decision: &GatewayControlDecision,
@@ -668,39 +297,6 @@ fn owner_forward_request_is_stream(
         &body_json,
         body_base64.as_deref(),
     )
-}
-
-fn upstream_response_is_sse(headers: &reqwest::header::HeaderMap) -> bool {
-    headers
-        .get(http::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .is_some_and(|value| value.to_ascii_lowercase().contains("text/event-stream"))
-}
-
-fn collect_upstream_response_headers(
-    headers: &reqwest::header::HeaderMap,
-) -> BTreeMap<String, String> {
-    let connection_declared = aether_http::connection_declared_header_names(
-        headers
-            .get_all(http::header::CONNECTION)
-            .iter()
-            .filter_map(|value| value.to_str().ok()),
-    );
-    headers
-        .iter()
-        .filter_map(|(name, value)| {
-            let normalized = name.as_str().to_ascii_lowercase();
-            if crate::headers::should_skip_response_header(&normalized)
-                || connection_declared.contains(&normalized)
-            {
-                return None;
-            }
-            value
-                .to_str()
-                .ok()
-                .map(|value| (normalized, value.to_string()))
-        })
-        .collect()
 }
 
 fn collect_response_headers(headers: &http::HeaderMap) -> BTreeMap<String, String> {
@@ -827,209 +423,6 @@ fn restore_redacted_stream_execution_response(
     Ok(Response::from_parts(parts, Body::from_stream(stream)))
 }
 
-fn aggregate_sync_sse_response_for_client(
-    decision: &GatewayControlDecision,
-    public_path: &str,
-    body: &[u8],
-) -> Option<serde_json::Value> {
-    let api_format = decision
-        .auth_endpoint_signature
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    match api_format.map(crate::ai_serving::normalize_api_format_alias) {
-        Some(value) if value.eq_ignore_ascii_case("openai:chat") => {
-            aggregate_openai_chat_stream_sync_response(body)
-        }
-        Some(value)
-            if value.eq_ignore_ascii_case("openai:responses")
-                || value.eq_ignore_ascii_case("openai:responses:compact") =>
-        {
-            aggregate_openai_responses_stream_sync_response(body)
-        }
-        Some(value) if value.eq_ignore_ascii_case("claude:messages") => {
-            aggregate_claude_stream_sync_response(body)
-        }
-        Some(value) if value.eq_ignore_ascii_case("gemini:generate_content") => {
-            aggregate_gemini_stream_sync_response(body)
-        }
-        _ if public_path == "/v1/chat/completions" => {
-            aggregate_openai_chat_stream_sync_response(body)
-        }
-        _ if public_path == "/v1/responses" || public_path == "/v1/responses/compact" => {
-            aggregate_openai_responses_stream_sync_response(body)
-        }
-        _ if public_path == "/v1/messages" => aggregate_claude_stream_sync_response(body),
-        _ if decision.route_family.as_deref() == Some("gemini")
-            && (public_path.contains(":generateContent")
-                || public_path.contains(":streamGenerateContent")) =>
-        {
-            aggregate_gemini_stream_sync_response(body)
-        }
-        _ => None,
-    }
-}
-
-fn build_sync_json_proxy_response(
-    status_code: u16,
-    upstream_headers: &BTreeMap<String, String>,
-    body_json: &serde_json::Value,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-) -> Result<Response<Body>, GatewayError> {
-    let mut headers = upstream_headers.clone();
-    headers.remove("content-encoding");
-    headers.remove("content-length");
-    headers.insert("content-type".to_string(), "application/json".to_string());
-    let body_bytes =
-        serde_json::to_vec(body_json).map_err(|err| GatewayError::Internal(err.to_string()))?;
-    headers.insert("content-length".to_string(), body_bytes.len().to_string());
-    build_client_response_from_parts(
-        status_code,
-        &headers,
-        Body::from(body_bytes),
-        trace_id,
-        Some(decision),
-    )
-}
-
-fn resolve_affinity_forward_client_api_format(
-    decision: &GatewayControlDecision,
-    public_path: &str,
-) -> Option<&'static str> {
-    let api_format = decision
-        .auth_endpoint_signature
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    match api_format.map(crate::ai_serving::normalize_api_format_alias) {
-        Some(value) if value.eq_ignore_ascii_case("openai:chat") => Some("openai:chat"),
-        Some(value) if value.eq_ignore_ascii_case("openai:responses") => Some("openai:responses"),
-        Some(value) if value.eq_ignore_ascii_case("openai:responses:compact") => {
-            Some("openai:responses:compact")
-        }
-        Some(value) if value.eq_ignore_ascii_case("claude:messages") => Some("claude:messages"),
-        Some(value) if value.eq_ignore_ascii_case("gemini:generate_content") => {
-            Some("gemini:generate_content")
-        }
-        _ if public_path == "/v1/chat/completions" => Some("openai:chat"),
-        _ if public_path == "/v1/responses" => Some("openai:responses"),
-        _ if public_path == "/v1/responses/compact" => Some("openai:responses:compact"),
-        _ if public_path == "/v1/messages" => Some("claude:messages"),
-        _ if decision.route_family.as_deref() == Some("gemini")
-            && (public_path.contains(":generateContent")
-                || public_path.contains(":streamGenerateContent")) =>
-        {
-            Some("gemini:generate_content")
-        }
-        _ => None,
-    }
-}
-
-fn build_stream_sse_proxy_response(
-    status_code: u16,
-    upstream_headers: &BTreeMap<String, String>,
-    sse_body: &[u8],
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-) -> Result<Response<Body>, GatewayError> {
-    let mut headers = upstream_headers.clone();
-    headers.remove("content-encoding");
-    headers.remove("content-length");
-    headers.insert("content-type".to_string(), "text/event-stream".to_string());
-    headers.insert("content-length".to_string(), sse_body.len().to_string());
-    build_client_response_from_parts(
-        status_code,
-        &headers,
-        Body::from(sse_body.to_vec()),
-        trace_id,
-        Some(decision),
-    )
-}
-
-async fn build_sync_aware_affinity_forward_response(
-    request_context: &GatewayPublicRequestContext,
-    request_headers: &http::HeaderMap,
-    buffered_body: Option<&Bytes>,
-    decision: &GatewayControlDecision,
-    upstream_response: reqwest::Response,
-) -> Result<Response<Body>, GatewayError> {
-    let Some(buffered_body) = buffered_body else {
-        return build_client_response(upstream_response, &request_context.trace_id, Some(decision));
-    };
-    let stream_request = request_wants_stream(request_context, request_headers, buffered_body);
-    let upstream_is_sse = upstream_response_is_sse(upstream_response.headers());
-    if (!stream_request && !upstream_is_sse) || (stream_request && upstream_is_sse) {
-        return build_client_response(upstream_response, &request_context.trace_id, Some(decision));
-    }
-
-    let status_code = upstream_response.status().as_u16();
-    let headers = collect_upstream_response_headers(upstream_response.headers());
-    // A response can only be buffered here when the owner-forward path has
-    // to translate between sync JSON and SSE.  Keep the ordinary passthrough
-    // and streaming paths untouched, but never let this protocol bridge trust
-    // an upstream `Content-Length` or allocate without a bound.
-    let body_bytes = aether_http::read_response_bytes_with_limit(
-        upstream_response,
-        crate::headers::max_internal_buffered_body_bytes(),
-    )
-    .await
-    .map_err(|error| {
-        let kind = match error {
-            aether_http::ResponseBodyReadError::TooLarge { .. } => "too_large",
-            aether_http::ResponseBodyReadError::Read(_) => "read",
-        };
-        GatewayError::Internal(format!(
-            "tunnel affinity response body buffering failed ({kind})"
-        ))
-    })?;
-    if stream_request {
-        if (200..300).contains(&status_code) {
-            if let Some(client_api_format) = resolve_affinity_forward_client_api_format(
-                decision,
-                request_context.request_path.as_str(),
-            ) {
-                if let Ok(body_json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
-                    if let Some(outcome) = maybe_bridge_standard_sync_json_to_stream(
-                        &body_json,
-                        client_api_format,
-                        client_api_format,
-                        None,
-                    )? {
-                        return build_stream_sse_proxy_response(
-                            status_code,
-                            &headers,
-                            &outcome.sse_body,
-                            &request_context.trace_id,
-                            decision,
-                        );
-                    }
-                }
-            }
-        }
-    } else if let Some(body_json) = aggregate_sync_sse_response_for_client(
-        decision,
-        request_context.request_path.as_str(),
-        &body_bytes,
-    ) {
-        return build_sync_json_proxy_response(
-            status_code,
-            &headers,
-            &body_json,
-            &request_context.trace_id,
-            decision,
-        );
-    }
-
-    build_client_response_from_parts(
-        status_code,
-        &headers,
-        Body::from(body_bytes),
-        &request_context.trace_id,
-        Some(decision),
-    )
-}
-
 pub(crate) async fn proxy_request(
     State(state): State<AppState>,
     ConnectInfo(remote_addr): ConnectInfo<std::net::SocketAddr>,
@@ -1141,182 +534,9 @@ async fn proxy_request_inner(
     };
     let request_admission_ms = started_at.elapsed().as_millis() as u64;
     observe_gateway_stage_ms("frontdoor_admission", request_admission_ms);
-    let pending_affinity_auth = match state
-        .tunnel
-        .prepare_tunnel_affinity_auth_request(request.method(), request.uri(), request.headers())
-        .await
-    {
-        Ok(context) => context,
-        Err(crate::tunnel::RelayAuthError::Invalid) => {
-            let response = build_local_http_error_response_with_request_path(
-                &trace_id,
-                None,
-                Some(request.uri().path()),
-                http::StatusCode::FORBIDDEN,
-                "invalid tunnel affinity authentication",
-            )?;
-            return Ok(finalize_gateway_response(
-                &state,
-                response,
-                &trace_id,
-                &remote_addr,
-                direct_client_ip,
-                request.method(),
-                request
-                    .uri()
-                    .path_and_query()
-                    .map(|value| value.as_str())
-                    .unwrap_or("/"),
-                None,
-                EXECUTION_PATH_LOCAL_AUTH_DENIED,
-                &started_at,
-                request_permit.take(),
-            ));
-        }
-        Err(crate::tunnel::RelayAuthError::Unavailable) => {
-            let response = build_local_http_error_response_with_request_path(
-                &trace_id,
-                None,
-                Some(request.uri().path()),
-                http::StatusCode::SERVICE_UNAVAILABLE,
-                "tunnel affinity authentication is unavailable",
-            )?;
-            return Ok(finalize_gateway_response(
-                &state,
-                response,
-                &trace_id,
-                &remote_addr,
-                direct_client_ip,
-                request.method(),
-                request
-                    .uri()
-                    .path_and_query()
-                    .map(|value| value.as_str())
-                    .unwrap_or("/"),
-                None,
-                EXECUTION_PATH_LOCAL_AUTH_DENIED,
-                &started_at,
-                request_permit.take(),
-            ));
-        }
-    };
     let (mut parts, body) = request.into_parts();
     let mut request_body = Some(body);
-    let mut authenticated_affinity_body = None;
-    let affinity_auth = if let Some(pending) = pending_affinity_auth {
-        let body = match buffer_and_normalize_request_body(
-            &mut request_body,
-            &mut parts.headers,
-            "tunnel affinity authentication should own request body",
-            &trace_id,
-            &parts.method,
-            parts
-                .uri
-                .path_and_query()
-                .map(|value| value.as_str())
-                .unwrap_or("/"),
-            "tunnel_affinity_auth",
-            RequestBodyBufferPolicy::from_state(&state),
-        )
-        .await
-        {
-            Ok(body) => body,
-            Err(error) => {
-                let response = build_local_http_error_response_with_request_path(
-                    &trace_id,
-                    None,
-                    Some(parts.uri.path()),
-                    error.http_status(),
-                    &error.client_message(),
-                )?;
-                return Ok(finalize_gateway_response(
-                    &state,
-                    response,
-                    &trace_id,
-                    &remote_addr,
-                    direct_client_ip,
-                    &parts.method,
-                    parts
-                        .uri
-                        .path_and_query()
-                        .map(|value| value.as_str())
-                        .unwrap_or("/"),
-                    None,
-                    EXECUTION_PATH_LOCAL_AUTH_DENIED,
-                    &started_at,
-                    request_permit.take(),
-                ));
-            }
-        };
-        match state
-            .tunnel
-            .commit_tunnel_affinity_auth_request(pending, &body)
-            .await
-        {
-            Ok(context) => {
-                authenticated_affinity_body = Some(body);
-                Some(context)
-            }
-            Err(crate::tunnel::RelayAuthError::Invalid) => {
-                let response = build_local_http_error_response_with_request_path(
-                    &trace_id,
-                    None,
-                    Some(parts.uri.path()),
-                    http::StatusCode::FORBIDDEN,
-                    "invalid tunnel affinity authentication",
-                )?;
-                return Ok(finalize_gateway_response(
-                    &state,
-                    response,
-                    &trace_id,
-                    &remote_addr,
-                    direct_client_ip,
-                    &parts.method,
-                    parts
-                        .uri
-                        .path_and_query()
-                        .map(|value| value.as_str())
-                        .unwrap_or("/"),
-                    None,
-                    EXECUTION_PATH_LOCAL_AUTH_DENIED,
-                    &started_at,
-                    request_permit.take(),
-                ));
-            }
-            Err(crate::tunnel::RelayAuthError::Unavailable) => {
-                let response = build_local_http_error_response_with_request_path(
-                    &trace_id,
-                    None,
-                    Some(parts.uri.path()),
-                    http::StatusCode::SERVICE_UNAVAILABLE,
-                    "tunnel affinity authentication is unavailable",
-                )?;
-                return Ok(finalize_gateway_response(
-                    &state,
-                    response,
-                    &trace_id,
-                    &remote_addr,
-                    direct_client_ip,
-                    &parts.method,
-                    parts
-                        .uri
-                        .path_and_query()
-                        .map(|value| value.as_str())
-                        .unwrap_or("/"),
-                    None,
-                    EXECUTION_PATH_LOCAL_AUTH_DENIED,
-                    &started_at,
-                    request_permit.take(),
-                ));
-            }
-        }
-    } else {
-        None
-    };
-    let trusted_affinity_auth = affinity_auth.is_some();
-    let client_ip = affinity_auth
-        .map(|context| context.client_ip)
-        .unwrap_or(direct_client_ip);
+    let client_ip = direct_client_ip;
     match state.admin_security_ip_blacklisted(client_ip).await {
         Ok(true) => {
             warn!(
@@ -1433,25 +653,14 @@ async fn proxy_request_inner(
         ));
     }
     let request_context_started_at = Instant::now();
-    let mut request_context = if trusted_affinity_auth {
-        crate::control::resolve_public_request_context_with_trusted_auth(
-            &state,
-            &parts.method,
-            &parts.uri,
-            &parts.headers,
-            &trace_id,
-        )
-        .await?
-    } else {
-        crate::control::resolve_public_request_context_without_trusted_auth(
-            &state,
-            &parts.method,
-            &parts.uri,
-            &parts.headers,
-            &trace_id,
-        )
-        .await?
-    };
+    let mut request_context = crate::control::resolve_public_request_context_without_trusted_auth(
+        &state,
+        &parts.method,
+        &parts.uri,
+        &parts.headers,
+        &trace_id,
+    )
+    .await?;
     request_context.client_ip = Some(client_ip.to_string());
     maybe_promote_management_token_admin_principal(
         &state,
@@ -1508,40 +717,36 @@ async fn proxy_request_inner(
         );
     }
     let local_proxy_body = if local_proxy_route_requires_buffered_body(&request_context) {
-        if let Some(body) = authenticated_affinity_body.as_ref() {
-            Some(body.clone())
-        } else {
-            let body_buffer_policy =
-                RequestBodyBufferPolicy::for_request_context(&state, &request_context);
-            let stage_started_at = Instant::now();
-            let body = buffer_and_normalize_request_body(
-                &mut request_body,
-                &mut parts.headers,
-                "local proxy body buffering should own request body",
-                &trace_id,
-                &parts.method,
-                &request_context.request_path_and_query(),
-                "local_proxy",
-                body_buffer_policy,
-            )
-            .await;
-            observe_gateway_stage_ms(
-                "frontdoor_body_buffer",
-                stage_started_at.elapsed().as_millis() as u64,
-            );
-            match body {
-                Ok(body) => Some(body),
-                Err(err) => {
-                    return finalize_request_body_buffer_rejection(
-                        &state,
-                        &request_context,
-                        &remote_addr,
-                        &started_at,
-                        &trace_id,
-                        request_permit.take(),
-                        &err,
-                    );
-                }
+        let body_buffer_policy =
+            RequestBodyBufferPolicy::for_request_context(&state, &request_context);
+        let stage_started_at = Instant::now();
+        let body = buffer_and_normalize_request_body(
+            &mut request_body,
+            &mut parts.headers,
+            "local proxy body buffering should own request body",
+            &trace_id,
+            &parts.method,
+            &request_context.request_path_and_query(),
+            "local_proxy",
+            body_buffer_policy,
+        )
+        .await;
+        observe_gateway_stage_ms(
+            "frontdoor_body_buffer",
+            stage_started_at.elapsed().as_millis() as u64,
+        );
+        match body {
+            Ok(body) => Some(body),
+            Err(err) => {
+                return finalize_request_body_buffer_rejection(
+                    &state,
+                    &request_context,
+                    &remote_addr,
+                    &started_at,
+                    &trace_id,
+                    request_permit.take(),
+                    &err,
+                );
             }
         }
     } else {
@@ -1704,72 +909,41 @@ async fn proxy_request_inner(
         && request_enables_control_execute(&parts.headers);
 
     let buffered_body = if should_buffer_body {
-        if let Some(body) = authenticated_affinity_body.as_ref() {
-            Some(body.clone())
-        } else {
-            let body_buffer_policy =
-                RequestBodyBufferPolicy::for_request_context(&state, &request_context);
-            let stage_started_at = Instant::now();
-            let body = buffer_and_normalize_request_body(
-                &mut request_body,
-                &mut parts.headers,
-                "buffered auth/execution runtime path should own request body",
-                &trace_id,
-                &parts.method,
-                &request_context.request_path_and_query(),
-                "auth_execution",
-                body_buffer_policy,
-            )
-            .await;
-            observe_gateway_stage_ms(
-                "frontdoor_body_buffer",
-                stage_started_at.elapsed().as_millis() as u64,
-            );
-            match body {
-                Ok(body) => Some(body),
-                Err(err) => {
-                    return finalize_request_body_buffer_rejection(
-                        &state,
-                        &request_context,
-                        &remote_addr,
-                        &started_at,
-                        &trace_id,
-                        request_permit.take(),
-                        &err,
-                    );
-                }
+        let body_buffer_policy =
+            RequestBodyBufferPolicy::for_request_context(&state, &request_context);
+        let stage_started_at = Instant::now();
+        let body = buffer_and_normalize_request_body(
+            &mut request_body,
+            &mut parts.headers,
+            "buffered auth/execution runtime path should own request body",
+            &trace_id,
+            &parts.method,
+            &request_context.request_path_and_query(),
+            "auth_execution",
+            body_buffer_policy,
+        )
+        .await;
+        observe_gateway_stage_ms(
+            "frontdoor_body_buffer",
+            stage_started_at.elapsed().as_millis() as u64,
+        );
+        match body {
+            Ok(body) => Some(body),
+            Err(err) => {
+                return finalize_request_body_buffer_rejection(
+                    &state,
+                    &request_context,
+                    &remote_addr,
+                    &started_at,
+                    &trace_id,
+                    request_permit.take(),
+                    &err,
+                );
             }
         }
     } else {
         None
     };
-
-    // The first gateway forwards before plan admission. The owner sees the loop guard above,
-    // skips forwarding, and performs admission exactly once before local execution.
-    let owner_forward_started_at = Instant::now();
-    let owner_forward_response = maybe_forward_public_request_to_tunnel_owner(
-        &state,
-        &remote_addr,
-        &request_context,
-        &parts,
-        buffered_body.as_ref(),
-    )
-    .await?;
-    observe_gateway_stage_ms(
-        "frontdoor_owner_forward",
-        owner_forward_started_at.elapsed().as_millis() as u64,
-    );
-    if let Some(response) = owner_forward_response {
-        return Ok(finalize_gateway_response_with_context(
-            &state,
-            response,
-            &remote_addr,
-            &request_context,
-            EXECUTION_PATH_TUNNEL_AFFINITY_FORWARD,
-            &started_at,
-            request_permit.take(),
-        ));
-    }
 
     if let Some(rejection) = trusted_auth_local_rejection(control_decision, &parts.headers) {
         let response =
@@ -2879,8 +2053,8 @@ mod tests {
         diagnostic_is_provider_key_capacity_limited, local_execution_runtime_miss_detail,
         local_execution_runtime_miss_status, owner_forward_request_is_stream,
         restore_redacted_stream_execution_response, restore_redacted_sync_execution_response,
-        routing_overlay_allows_affinity_target, GatewayControlDecision,
-        LocalExecutionRuntimeMissDiagnostic, RequestBodyBufferError, RequestBodyBufferPolicy,
+        GatewayControlDecision, LocalExecutionRuntimeMissDiagnostic, RequestBodyBufferError,
+        RequestBodyBufferPolicy,
     };
     use axum::body::{to_bytes, Body, Bytes};
     use axum::http::{header, HeaderMap, HeaderValue, Method, Response, StatusCode};
@@ -2888,50 +2062,6 @@ mod tests {
     use serde_json::json;
     use std::io::Write;
     use tokio::sync::Semaphore;
-
-    #[test]
-    fn routing_overlay_blocks_disallowed_tunnel_affinity_target() {
-        let target = aether_scheduler_core::SchedulerAffinityTarget {
-            provider_id: "provider-allowed".to_string(),
-            endpoint_id: "endpoint-1".to_string(),
-            key_id: "key-allowed".to_string(),
-        };
-        let matching = aether_routing_core::RankingOverlay {
-            allowed_providers: vec!["provider-allowed".to_string()],
-            allowed_keys: vec!["key-allowed".to_string()],
-            ..aether_routing_core::RankingOverlay::default()
-        };
-        let wrong_provider = aether_routing_core::RankingOverlay {
-            allowed_providers: vec!["provider-other".to_string()],
-            ..matching.clone()
-        };
-        let wrong_key = aether_routing_core::RankingOverlay {
-            allowed_keys: vec!["key-other".to_string()],
-            ..matching.clone()
-        };
-        let disabled_provider = aether_routing_core::RankingOverlay {
-            disabled_providers: vec!["provider-allowed".to_string()],
-            ..matching.clone()
-        };
-
-        assert!(routing_overlay_allows_affinity_target(None, &target));
-        assert!(routing_overlay_allows_affinity_target(
-            Some(&matching),
-            &target
-        ));
-        assert!(!routing_overlay_allows_affinity_target(
-            Some(&wrong_provider),
-            &target
-        ));
-        assert!(!routing_overlay_allows_affinity_target(
-            Some(&wrong_key),
-            &target
-        ));
-        assert!(!routing_overlay_allows_affinity_target(
-            Some(&disabled_provider),
-            &target
-        ));
-    }
 
     #[test]
     fn owner_forward_uses_search_protocol_timeout_semantics() {

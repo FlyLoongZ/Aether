@@ -3630,14 +3630,12 @@ pub fn build_admin_proxy_nodes_list_payload_response(
     total: usize,
     skip: usize,
     limit: usize,
-    rollout: Option<serde_json::Value>,
 ) -> Response<Body> {
     Json(json!({
         "items": items,
         "total": total,
         "skip": skip,
         "limit": limit,
-        "rollout": rollout,
     }))
     .into_response()
 }

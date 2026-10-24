@@ -20,7 +20,7 @@ use aether_data::repository::oauth_providers::{
 };
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::proxy_nodes::{
-    InMemoryProxyNodeRepository, ProxyNodeReadRepository, StoredProxyNode, StoredProxyNodeEvent,
+    InMemoryProxyNodeRepository, ProxyNodeReadRepository, StoredProxyNode,
 };
 use aether_data::repository::quota::InMemoryProviderQuotaRepository;
 use aether_data::repository::users::InMemoryUserReadRepository;
@@ -47,7 +47,6 @@ use serde_json::json;
 
 mod admin;
 mod helpers;
-mod internal;
 mod proxy;
 
 pub(super) use helpers::issue_test_admin_access_token as issue_shared_test_admin_access_token;

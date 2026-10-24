@@ -110,7 +110,7 @@ pub(crate) async fn try_acquire_admin_system_import_lease(
         .runtime_state()
         .lock_try_acquire(
             ADMIN_SYSTEM_IMPORT_LOCK_KEY,
-            app.tunnel.local_instance_id(),
+            app.local_instance_id(),
             ADMIN_SYSTEM_IMPORT_LOCK_TTL,
         )
         .await

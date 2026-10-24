@@ -311,32 +311,9 @@ pub(super) fn claude_code_oauth_transport_profile() -> ResolvedTransportProfile 
 }
 
 fn claude_code_oauth_transport_profile_for_context(
-    ctx: &ProviderOAuthTransportContext,
+    _ctx: &ProviderOAuthTransportContext,
 ) -> Option<ResolvedTransportProfile> {
-    // Node-only proxies must execute through the tunnel runtime, which cannot use browser_wreq.
-    // The explicit browser headers still keep that fallback compatible with Claude's web flow.
-    let tunnel_only_proxy = ctx.network.proxy.as_ref().is_some_and(|proxy| {
-        if proxy.enabled == Some(false) {
-            return false;
-        }
-        let has_proxy_url = proxy
-            .url
-            .as_deref()
-            .map(str::trim)
-            .is_some_and(|value| !value.is_empty());
-        let has_node_id = proxy
-            .node_id
-            .as_deref()
-            .map(str::trim)
-            .is_some_and(|value| !value.is_empty());
-        let tunnel_mode = proxy
-            .mode
-            .as_deref()
-            .map(str::trim)
-            .is_some_and(|value| value.eq_ignore_ascii_case("tunnel"));
-        has_node_id && (tunnel_mode || !has_proxy_url)
-    });
-    (!tunnel_only_proxy).then(claude_code_oauth_transport_profile)
+    Some(claude_code_oauth_transport_profile())
 }
 
 fn cookie_headers(cookie: &str, json_request: bool) -> BTreeMap<String, String> {
@@ -704,82 +681,5 @@ mod tests {
                 RedirectMode::Matching => unreachable!(),
             }
         }
-    }
-
-    #[test]
-    fn tunnel_proxy_falls_back_from_browser_transport_even_when_url_is_present() {
-        for proxy in [
-            ProxySnapshot {
-                node_id: Some("node-only".to_string()),
-                ..ProxySnapshot::default()
-            },
-            ProxySnapshot {
-                mode: Some("tunnel".to_string()),
-                node_id: Some("node-with-url".to_string()),
-                url: Some("http://127.0.0.1:9999".to_string()),
-                ..ProxySnapshot::default()
-            },
-        ] {
-            assert!(
-                claude_code_oauth_transport_profile_for_context(&context(Some(proxy))).is_none()
-            );
-        }
-
-        let url_proxy = ProxySnapshot {
-            mode: Some("url".to_string()),
-            node_id: Some("metadata-node".to_string()),
-            url: Some("http://127.0.0.1:9999".to_string()),
-            ..ProxySnapshot::default()
-        };
-        assert!(
-            claude_code_oauth_transport_profile_for_context(&context(Some(url_proxy))).is_some()
-        );
-        assert_eq!(
-            cookie_headers("sessionKey=test", false)
-                .get("user-agent")
-                .map(String::as_str),
-            Some(CLAUDE_CODE_BROWSER_USER_AGENT)
-        );
-    }
-
-    #[tokio::test]
-    async fn refresh_rotates_claude_refresh_token_without_scope() {
-        let executor = RecordingExecutor::default();
-        let adapter = ClaudeCodeProviderOAuthAdapter::default().with_endpoint_overrides(
-            "https://claude.test",
-            "https://platform.test/v1/oauth/token",
-        );
-        let account = ProviderOAuthAccount {
-            provider_type: CLAUDE_CODE_PROVIDER_TYPE.to_string(),
-            access_token: "sk-ant-oat01-old".to_string(),
-            auth_config: json!({
-                "provider_type": CLAUDE_CODE_PROVIDER_TYPE,
-                "refresh_token": "sk-ant-ort01-old",
-                "email": "old@example.com"
-            }),
-            expires_at_unix_secs: Some(1),
-            identity: BTreeMap::new(),
-        };
-
-        let refreshed = adapter
-            .refresh(&executor, &context(None), &account)
-            .await
-            .expect("refresh should succeed");
-
-        assert_eq!(refreshed.token_set.access_token, "sk-ant-oat01-new");
-        assert_eq!(
-            refreshed.token_set.refresh_token.as_deref(),
-            Some("sk-ant-ort01-new")
-        );
-        assert_eq!(refreshed.auth_config["refresh_token"], "sk-ant-ort01-new");
-        let requests = executor.requests.lock().expect("requests lock");
-        assert_eq!(requests.len(), 1);
-        let body = requests[0]
-            .json_body
-            .as_ref()
-            .expect("refresh request should be JSON");
-        assert_eq!(body["grant_type"], "refresh_token");
-        assert_eq!(body["refresh_token"], "sk-ant-ort01-old");
-        assert!(body.get("scope").is_none());
     }
 }

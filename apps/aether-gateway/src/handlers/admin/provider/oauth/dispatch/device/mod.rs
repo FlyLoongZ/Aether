@@ -11,11 +11,6 @@ use axum::{
     response::Response,
 };
 
-#[cfg(any())]
-pub(super) use self::authorize::handle_admin_provider_oauth_device_authorize;
-#[cfg(any())]
-pub(super) use self::poll::handle_admin_provider_oauth_device_poll;
-
 pub(super) async fn handle_admin_provider_oauth_device_authorize(
     state: &AdminAppState<'_>,
     request_context: &AdminRequestContext<'_>,

@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "apps/aether-tunnel",
     "crates/aether-ai/formats",
     "crates/aether-admin",
     "crates/aether-admission-core",
@@ -31,7 +30,6 @@ members = [
     "crates/aether-gateway/control",
     "crates/aether-gateway/execution",
     "crates/aether-gateway/workers",
-    "crates/aether-gateway/tunnel",
     "crates/aether-testing/loadtools",
     "crates/aether-testing/integration",
     "crates/aether-usage/core",
@@ -84,7 +82,6 @@ aether-gateway-frontdoor = { path = "crates/aether-gateway/frontdoor" }
 aether-gateway-control = { path = "crates/aether-gateway/control" }
 aether-gateway-execution = { path = "crates/aether-gateway/execution" }
 aether-gateway-workers = { path = "crates/aether-gateway/workers" }
-aether-gateway-tunnel = { path = "crates/aether-gateway/tunnel" }
 aether-loadtools = { path = "crates/aether-testing/loadtools" }
 aether-integration-tests = { path = "crates/aether-testing/integration" }
 aether-test-support = { path = "crates/aether-testing/support" }
@@ -92,7 +89,6 @@ aether-usage-core = { path = "crates/aether-usage/core" }
 aether-usage-runtime = { path = "crates/aether-usage/runtime" }
 aether-video-tasks-core = { path = "crates/aether-video-tasks-core" }
 aether-gateway = { path = "apps/aether-gateway" }
-aether-tunnel = { path = "apps/aether-tunnel" }
 aether-http = { path = "crates/aether-http" }
 aether-runtime = { path = "crates/aether-runtime/base" }
 aether-testkit = { path = "crates/aether-testing/testkit" }

@@ -1269,7 +1269,6 @@ fn ai_serving_planner_separates_local_candidate_resolution_from_ranking() {
         "pub(super) struct CandidateTransportRankingFacts {",
         "resolve_cached_candidate_transport_ranking_facts",
         "resolve_cached_transport_ranking_facts",
-        "resolve_transport_proxy_snapshot_with_tunnel_affinity",
     ] {
         assert!(
             candidate_transport_ranking_facts.contains(pattern),

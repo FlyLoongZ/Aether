@@ -1,8 +1,5 @@
 use aether_contracts::{ProxySnapshot, PROXY_NODE_TUNNEL_GENERATION_EXTRA_KEY};
 use aether_crypto::looks_like_python_fernet_ciphertext;
-use aether_data::repository::proxy_nodes::{
-    proxy_node_accepts_new_tunnels, ProxyNodeRegistrationMutation,
-};
 use serde_json::{json, Map, Value};
 use std::future::Future;
 
@@ -12,22 +9,16 @@ use crate::handlers::shared::{
     open_runtime_secret_payload_with_encryption_key, runtime_secret_payload_is_sealed,
     seal_runtime_secret_payload_with_encryption_key,
 };
-use crate::provider_transport::{GatewayProviderTransportSnapshot, TransportTunnelAffinityLookup};
+use crate::provider_transport::GatewayProviderTransportSnapshot;
 use crate::GatewayError;
 
-const TUNNEL_BASE_URL_EXTRA_KEY: &str = "tunnel_base_url";
-const TUNNEL_OWNER_INSTANCE_ID_EXTRA_KEY: &str = "tunnel_owner_instance_id";
-const TUNNEL_OWNER_OBSERVED_AT_EXTRA_KEY: &str = "tunnel_owner_observed_at_unix_secs";
 const PROXY_NODE_PASSWORD_LEGACY_SECRET_PURPOSE: &str = "proxy-node-password";
-const PROXY_TUNNEL_PSK_LEGACY_SECRET_PURPOSE: &str = "proxy-node-tunnel-psk";
 const PROXY_NODE_SECRET_ENVELOPE_FAMILY_PREFIX: &str = "aether-proxy-node-secret-";
 const PROXY_NODE_SECRET_V2_PREFIX: &str = "aether-proxy-node-secret-v2:";
 const RUNTIME_SECRET_ENVELOPE_FAMILY_PREFIX: &str = "aether-runtime-secret-";
 const PROXY_NODE_BOUND_PURPOSE_VERSION: &str = "proxy-node-secret-bound-v2";
 const PROXY_NODE_PASSWORD_SCOPE: &str = "manual-proxy";
 const PROXY_NODE_PASSWORD_FIELD: &str = "password";
-const PROXY_TUNNEL_PSK_SCOPE: &str = "tunnel-security";
-const PROXY_TUNNEL_PSK_FIELD: &str = "pre-shared-key";
 const PROXY_NODE_SECRET_MIGRATION_RETRIES: usize = 8;
 const PROXY_UNAVAILABLE_REASON_EXTRA_KEY: &str = "aether_proxy_unavailable_reason";
 
@@ -44,172 +35,6 @@ pub(crate) fn unavailable_proxy_snapshot(reason: &str) -> ProxySnapshot {
         url: None,
         extra: Some(Value::Object(extra)),
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ProxyTunnelPskBinding {
-    pub key: String,
-    pub tunnel_generation: String,
-}
-
-pub(crate) async fn decrypt_or_migrate_proxy_tunnel_psk(
-    data: &GatewayDataState,
-    node_id: &str,
-) -> Result<Option<String>, aether_data::DataLayerError> {
-    Ok(decrypt_or_migrate_proxy_tunnel_psk_binding(data, node_id)
-        .await?
-        .map(|binding| binding.key))
-}
-
-pub(crate) async fn decrypt_or_migrate_proxy_tunnel_psk_binding(
-    data: &GatewayDataState,
-    node_id: &str,
-) -> Result<Option<ProxyTunnelPskBinding>, aether_data::DataLayerError> {
-    for _ in 0..PROXY_NODE_SECRET_MIGRATION_RETRIES {
-        let Some(node) = data.find_proxy_node(node_id).await? else {
-            return Ok(None);
-        };
-        let persistent_node_id = node.id.clone();
-        let tunnel_generation = node.tunnel_generation.clone();
-        let Some(observed_metadata) = node.proxy_metadata else {
-            return Ok(None);
-        };
-        let encrypted = observed_metadata
-            .pointer("/tunnel_security/encryption_key_encrypted")
-            .map(|value| value.as_str().ok_or_else(proxy_tunnel_psk_storage_error))
-            .transpose()?;
-        let legacy = observed_metadata
-            .pointer("/tunnel_security/encryption_key")
-            .map(|value| value.as_str().ok_or_else(proxy_tunnel_psk_storage_error))
-            .transpose()?;
-
-        if let Some(stored) = encrypted {
-            let (plaintext, replacement_ciphertext) = if proxy_node_secret_is_v2(stored) {
-                (
-                    open_proxy_node_secret_v2_with_encryption_key(
-                        data.encryption_key(),
-                        PROXY_TUNNEL_PSK_SCOPE,
-                        PROXY_TUNNEL_PSK_FIELD,
-                        &persistent_node_id,
-                        stored,
-                    )
-                    .ok_or_else(proxy_tunnel_psk_storage_error)?,
-                    None,
-                )
-            } else if runtime_secret_payload_is_sealed(stored) {
-                let plaintext = open_runtime_secret_payload_with_encryption_key(
-                    data.encryption_key(),
-                    PROXY_TUNNEL_PSK_LEGACY_SECRET_PURPOSE,
-                    stored,
-                )
-                .ok_or_else(proxy_tunnel_psk_storage_error)?;
-                let replacement = seal_proxy_node_secret_v2_with_encryption_key(
-                    data.encryption_key(),
-                    PROXY_TUNNEL_PSK_SCOPE,
-                    PROXY_TUNNEL_PSK_FIELD,
-                    &persistent_node_id,
-                    &plaintext,
-                )
-                .ok_or_else(proxy_tunnel_psk_migration_error)?;
-                (plaintext, Some(replacement))
-            } else {
-                return Err(proxy_tunnel_psk_storage_error());
-            };
-            aether_contracts::tunnel_security::decode_psk(&plaintext)
-                .map_err(|_| proxy_tunnel_psk_storage_error())?;
-            if replacement_ciphertext.is_none() && legacy.is_none() {
-                return Ok(Some(ProxyTunnelPskBinding {
-                    key: plaintext,
-                    tunnel_generation,
-                }));
-            }
-
-            let replacement = proxy_metadata_with_encrypted_tunnel_psk(
-                observed_metadata.clone(),
-                replacement_ciphertext.unwrap_or_else(|| stored.to_string()),
-            )?;
-            if data
-                .compare_and_set_proxy_node_metadata(
-                    &persistent_node_id,
-                    &observed_metadata,
-                    &replacement,
-                )
-                .await?
-            {
-                return Ok(Some(ProxyTunnelPskBinding {
-                    key: plaintext,
-                    tunnel_generation,
-                }));
-            }
-            continue;
-        }
-
-        let Some(legacy) = legacy else {
-            return Ok(None);
-        };
-        if looks_like_python_fernet_ciphertext(legacy)
-            || legacy.starts_with(RUNTIME_SECRET_ENVELOPE_FAMILY_PREFIX)
-            || legacy.starts_with(PROXY_NODE_SECRET_ENVELOPE_FAMILY_PREFIX)
-        {
-            return Err(proxy_tunnel_psk_storage_error());
-        }
-        aether_contracts::tunnel_security::decode_psk(legacy)
-            .map_err(|_| proxy_tunnel_psk_storage_error())?;
-        let encrypted = seal_proxy_node_secret_v2_with_encryption_key(
-            data.encryption_key(),
-            PROXY_TUNNEL_PSK_SCOPE,
-            PROXY_TUNNEL_PSK_FIELD,
-            &persistent_node_id,
-            legacy,
-        )
-        .ok_or_else(proxy_tunnel_psk_migration_error)?;
-        let replacement =
-            proxy_metadata_with_encrypted_tunnel_psk(observed_metadata.clone(), encrypted)?;
-        if data
-            .compare_and_set_proxy_node_metadata(
-                &persistent_node_id,
-                &observed_metadata,
-                &replacement,
-            )
-            .await?
-        {
-            return Ok(Some(ProxyTunnelPskBinding {
-                key: legacy.to_string(),
-                tunnel_generation,
-            }));
-        }
-    }
-
-    Err(proxy_tunnel_psk_migration_error())
-}
-
-fn proxy_metadata_with_encrypted_tunnel_psk(
-    mut metadata: Value,
-    encrypted: String,
-) -> Result<Value, aether_data::DataLayerError> {
-    let tunnel_security = metadata
-        .as_object_mut()
-        .and_then(|metadata| metadata.get_mut("tunnel_security"))
-        .and_then(Value::as_object_mut)
-        .ok_or_else(proxy_tunnel_psk_storage_error)?;
-    tunnel_security.remove("encryption_key");
-    tunnel_security.insert(
-        "encryption_key_encrypted".to_string(),
-        Value::String(encrypted),
-    );
-    Ok(metadata)
-}
-
-fn proxy_tunnel_psk_storage_error() -> aether_data::DataLayerError {
-    aether_data::DataLayerError::UnexpectedValue(
-        "stored proxy tunnel security key cannot be decrypted".to_string(),
-    )
-}
-
-fn proxy_tunnel_psk_migration_error() -> aether_data::DataLayerError {
-    aether_data::DataLayerError::UnexpectedValue(
-        "proxy tunnel security key migration did not stabilize".to_string(),
-    )
 }
 
 fn proxy_node_password_error() -> GatewayError {
@@ -263,119 +88,6 @@ fn incoming_proxy_node_secret_is_ciphertext(value: &str) -> bool {
 }
 
 impl AppState {
-    pub(super) async fn register_proxy_node_with_bound_secrets(
-        &self,
-        mutation: &ProxyNodeRegistrationMutation,
-    ) -> Result<Option<aether_data::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
-        let mut new_node_id = mutation
-            .node_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
-        for _ in 0..PROXY_NODE_SECRET_MIGRATION_RETRIES {
-            let nodes = self
-                .data
-                .list_proxy_nodes()
-                .await
-                .map_err(|err| GatewayError::Internal(err.to_string()))?;
-            let node_id = proxy_node_registration_identity(&nodes, mutation)
-                .unwrap_or_else(|| new_node_id.clone());
-            let protected = self.protect_proxy_node_registration_mutation(&node_id, mutation)?;
-            match self.data.register_proxy_node(&protected).await {
-                Ok(Some(node)) if node.id == node_id => return Ok(Some(node)),
-                Ok(Some(_)) => {
-                    return Err(GatewayError::Internal(
-                        "proxy node repository changed the protected node identity".to_string(),
-                    ));
-                }
-                Ok(None) => return Ok(None),
-                Err(error) => {
-                    let latest = self
-                        .data
-                        .list_proxy_nodes()
-                        .await
-                        .map_err(|err| GatewayError::Internal(err.to_string()))?;
-                    let Some(latest_node_id) = proxy_node_registration_identity(&latest, mutation)
-                    else {
-                        return Err(GatewayError::Internal(error.to_string()));
-                    };
-                    if latest_node_id == node_id {
-                        return Err(GatewayError::Internal(error.to_string()));
-                    }
-                    new_node_id = latest_node_id;
-                }
-            }
-        }
-
-        Err(GatewayError::Internal(
-            "proxy node registration identity did not stabilize".to_string(),
-        ))
-    }
-
-    pub(super) fn protect_proxy_node_registration_mutation(
-        &self,
-        node_id: &str,
-        mutation: &ProxyNodeRegistrationMutation,
-    ) -> Result<ProxyNodeRegistrationMutation, GatewayError> {
-        let mut protected = mutation.clone();
-        protected.node_id = Some(node_id.to_string());
-        let Some(metadata) = protected.proxy_metadata.as_mut() else {
-            return Ok(protected);
-        };
-        let Some(tunnel_security) = metadata
-            .as_object_mut()
-            .and_then(|metadata| metadata.get_mut("tunnel_security"))
-            .and_then(Value::as_object_mut)
-        else {
-            return Ok(protected);
-        };
-        if tunnel_security.contains_key("encryption_key_encrypted") {
-            return Err(GatewayError::Internal(
-                "proxy tunnel security ciphertext must be created by the gateway".to_string(),
-            ));
-        }
-        let plaintext = tunnel_security
-            .remove("encryption_key")
-            .map(|value| {
-                value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
-                    GatewayError::Internal(
-                        "proxy tunnel security key has an invalid stored representation"
-                            .to_string(),
-                    )
-                })
-            })
-            .transpose()?;
-        let Some(plaintext) = plaintext else {
-            return Ok(protected);
-        };
-        if incoming_proxy_node_secret_is_ciphertext(&plaintext) {
-            return Err(GatewayError::Internal(
-                "proxy tunnel security ciphertext must be created by the gateway".to_string(),
-            ));
-        }
-        aether_contracts::tunnel_security::decode_psk(&plaintext).map_err(|_| {
-            GatewayError::Internal("proxy tunnel security key is invalid".to_string())
-        })?;
-        let encrypted = seal_proxy_node_secret_v2_with_encryption_key(
-            self.encryption_key(),
-            PROXY_TUNNEL_PSK_SCOPE,
-            PROXY_TUNNEL_PSK_FIELD,
-            node_id,
-            plaintext.as_str(),
-        )
-        .ok_or_else(|| {
-            GatewayError::Internal("proxy tunnel security encryption is unavailable".to_string())
-        })?;
-        tunnel_security.insert(
-            "encryption_key_encrypted".to_string(),
-            Value::String(encrypted),
-        );
-        Ok(protected)
-    }
-
     pub(super) fn protect_proxy_node_password(
         &self,
         node_id: &str,
@@ -496,49 +208,6 @@ impl AppState {
         let node = self.find_proxy_node(node_id).await.ok().flatten()?;
         if node.status.trim() != "online" {
             return None;
-        }
-        if !proxy_node_accepts_new_tunnels(&node) {
-            return None;
-        }
-        if node.tunnel_mode && node.tunnel_connected {
-            let mut extra = Map::new();
-            let owner = self
-                .lookup_tunnel_attachment_owner(node_id)
-                .await
-                .ok()
-                .flatten();
-            if let Some(owner) = owner {
-                extra.insert(
-                    TUNNEL_BASE_URL_EXTRA_KEY.to_string(),
-                    Value::String(owner.relay_base_url),
-                );
-                extra.insert(
-                    TUNNEL_OWNER_INSTANCE_ID_EXTRA_KEY.to_string(),
-                    Value::String(owner.gateway_instance_id),
-                );
-                extra.insert(
-                    TUNNEL_OWNER_OBSERVED_AT_EXTRA_KEY.to_string(),
-                    json!(owner.observed_at_unix_secs),
-                );
-            } else if !self.tunnel.has_local_proxy(node_id) {
-                return None;
-            }
-            extra.insert(
-                PROXY_NODE_TUNNEL_GENERATION_EXTRA_KEY.to_string(),
-                Value::String(node.tunnel_generation.clone()),
-            );
-            return Some(ProxySnapshot {
-                enabled: Some(true),
-                mode: Some("tunnel".to_string()),
-                node_id: Some(node.id),
-                label: Some(node.name),
-                url: None,
-                extra: if extra.is_empty() {
-                    None
-                } else {
-                    Some(Value::Object(extra))
-                },
-            });
         }
         if !node.is_manual {
             return None;
@@ -664,22 +333,6 @@ impl AppState {
             .await
             .map(|snapshot| (snapshot, "system"))
     }
-}
-
-fn proxy_node_registration_identity(
-    nodes: &[aether_data::repository::proxy_nodes::StoredProxyNode],
-    mutation: &ProxyNodeRegistrationMutation,
-) -> Option<String> {
-    nodes
-        .iter()
-        .filter(|node| !node.is_manual && node.ip == mutation.ip && node.port == mutation.port)
-        .min_by(|left, right| {
-            left.created_at_unix_ms
-                .unwrap_or(u64::MAX)
-                .cmp(&right.created_at_unix_ms.unwrap_or(u64::MAX))
-                .then(left.id.cmp(&right.id))
-        })
-        .map(|node| node.id.clone())
 }
 
 fn proxy_enabled(object: &Map<String, Value>) -> bool {

@@ -4,9 +4,8 @@ use super::{
     build_internal_gateway_header_map, build_internal_gateway_passthrough_payload,
     build_internal_gateway_proxy_public_response, build_internal_gateway_request_parts,
     build_internal_gateway_resolve_payload, build_internal_gateway_uri,
-    build_internal_tunnel_heartbeat_ack, build_management_token_payload,
-    internal_finalize_report_kind_is_supported, maybe_build_internal_finalize_video_response,
-    parse_internal_tunnel_heartbeat_request, parse_internal_tunnel_node_status_request,
+    build_management_token_payload, internal_finalize_report_kind_is_supported,
+    maybe_build_internal_finalize_video_response,
 };
 use crate::ai_serving::api;
 use crate::constants::{
@@ -19,12 +18,7 @@ use crate::execution_runtime::{execute_execution_runtime_stream, execute_executi
 use crate::handlers::shared::{
     InternalGatewayAuthContextRequest, InternalGatewayExecuteRequest, InternalGatewayResolveRequest,
 };
-use crate::tunnel::{claim_tunnel_heartbeat, finish_tunnel_heartbeat_claim};
-use crate::tunnel::{is_tunnel_heartbeat_path, is_tunnel_node_status_path, TUNNEL_ROUTE_FAMILY};
 use crate::{AppState, GatewayError};
-use aether_data::repository::proxy_nodes::{
-    ProxyNodeHeartbeatMutation, ProxyNodeTunnelStatusMutation,
-};
 use axum::body::{Body, Bytes};
 use axum::http::{self, HeaderName, HeaderValue, Response};
 use axum::response::IntoResponse;
@@ -927,181 +921,6 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
             http::StatusCode::FORBIDDEN,
             "loopback access only",
         )));
-    }
-
-    if decision.route_family.as_deref() != Some(TUNNEL_ROUTE_FAMILY)
-        || request_context.request_method != http::Method::POST
-    {
-        return Ok(None);
-    }
-
-    match decision.route_kind.as_deref() {
-        Some("heartbeat") if is_tunnel_heartbeat_path(request_context.request_path.as_str()) => {
-            let Some(request_body) = request_body else {
-                return Ok(Some(build_internal_control_error_response(
-                    http::StatusCode::BAD_REQUEST,
-                    "invalid heartbeat payload",
-                )));
-            };
-            let payload = match parse_internal_tunnel_heartbeat_request(request_body) {
-                Ok(payload) => payload,
-                Err(response) => return Ok(Some(response)),
-            };
-            let node_id = payload.node_id.trim().to_string();
-            let authenticated_generation = match state
-                .tunnel
-                .authenticate_control_plane_request(
-                    request_headers,
-                    request_context.request_method.as_str(),
-                    request_context.request_path.as_str(),
-                    &node_id,
-                    request_body,
-                )
-                .await
-            {
-                Ok(generation) => generation,
-                Err(error) => {
-                    let (status, message) = match error {
-                        crate::tunnel::ControlPlaneAuthError::Unavailable => (
-                            http::StatusCode::SERVICE_UNAVAILABLE,
-                            "tunnel control-plane authentication unavailable",
-                        ),
-                        crate::tunnel::ControlPlaneAuthError::Invalid => (
-                            http::StatusCode::FORBIDDEN,
-                            "invalid tunnel control-plane authentication",
-                        ),
-                    };
-                    return Ok(Some(build_internal_control_error_response(status, message)));
-                }
-            };
-            let claim = match claim_tunnel_heartbeat(
-                state.runtime_state.as_ref(),
-                &node_id,
-                &payload.heartbeat_session_id,
-                payload.heartbeat_id,
-            )
-            .await
-            {
-                Ok(claim) => claim,
-                Err(error) => {
-                    return Ok(Some(build_internal_control_error_response(
-                        http::StatusCode::SERVICE_UNAVAILABLE,
-                        error,
-                    )));
-                }
-            };
-            if claim.is_none() {
-                let response = match state.find_proxy_node(&node_id).await {
-                    Ok(Some(node)) if node.tunnel_generation == authenticated_generation => Json(
-                        build_internal_tunnel_heartbeat_ack(&node, payload.heartbeat_id),
-                    )
-                    .into_response(),
-                    Ok(Some(_)) | Ok(None) => build_internal_control_error_response(
-                        http::StatusCode::FORBIDDEN,
-                        "proxy tunnel credential was revoked",
-                    ),
-                    Err(_) => internal_gateway_data_error_response("heartbeat_duplicate_lookup"),
-                };
-                return Ok(Some(response));
-            }
-            let claim = claim.expect("fresh heartbeat claim should be present");
-            let mutation = ProxyNodeHeartbeatMutation {
-                node_id: node_id.clone(),
-                expected_tunnel_generation: Some(authenticated_generation.clone()),
-                heartbeat_interval: payload.heartbeat_interval,
-                active_connections: payload.active_connections,
-                total_requests_delta: payload.window_total_requests.or(payload.total_requests),
-                avg_latency_ms: payload.avg_latency_ms,
-                failed_requests_delta: payload.window_failed_requests.or(payload.failed_requests),
-                dns_failures_delta: payload.window_dns_failures.or(payload.dns_failures),
-                stream_errors_delta: payload.window_stream_errors.or(payload.stream_errors),
-                proxy_metadata: payload.proxy_metadata,
-                proxy_version: payload.proxy_version,
-            };
-
-            let response = match state.apply_proxy_node_heartbeat(&mutation).await {
-                Ok(Some(node)) => {
-                    finish_tunnel_heartbeat_claim(state.runtime_state.as_ref(), claim).await;
-                    Json(build_internal_tunnel_heartbeat_ack(
-                        &node,
-                        payload.heartbeat_id,
-                    ))
-                    .into_response()
-                }
-                Ok(None) => {
-                    finish_tunnel_heartbeat_claim(state.runtime_state.as_ref(), claim).await;
-                    build_internal_control_error_response(
-                        http::StatusCode::FORBIDDEN,
-                        "proxy tunnel credential was revoked",
-                    )
-                }
-                Err(_) => {
-                    finish_tunnel_heartbeat_claim(state.runtime_state.as_ref(), claim).await;
-                    internal_gateway_data_error_response("heartbeat_sync")
-                }
-            };
-            return Ok(Some(response));
-        }
-        Some("node_status")
-            if is_tunnel_node_status_path(request_context.request_path.as_str()) =>
-        {
-            let Some(request_body) = request_body else {
-                return Ok(Some(build_internal_control_error_response(
-                    http::StatusCode::BAD_REQUEST,
-                    "invalid node-status payload",
-                )));
-            };
-            let payload = match parse_internal_tunnel_node_status_request(request_body) {
-                Ok(payload) => payload,
-                Err(response) => return Ok(Some(response)),
-            };
-            let node_id = payload.node_id.trim().to_string();
-            let authenticated_generation = match state
-                .tunnel
-                .authenticate_control_plane_request(
-                    request_headers,
-                    request_context.request_method.as_str(),
-                    request_context.request_path.as_str(),
-                    &node_id,
-                    request_body,
-                )
-                .await
-            {
-                Ok(generation) => generation,
-                Err(error) => {
-                    let (status, message) = match error {
-                        crate::tunnel::ControlPlaneAuthError::Unavailable => (
-                            http::StatusCode::SERVICE_UNAVAILABLE,
-                            "tunnel control-plane authentication unavailable",
-                        ),
-                        crate::tunnel::ControlPlaneAuthError::Invalid => (
-                            http::StatusCode::FORBIDDEN,
-                            "invalid tunnel control-plane authentication",
-                        ),
-                    };
-                    return Ok(Some(build_internal_control_error_response(status, message)));
-                }
-            };
-            let mutation = ProxyNodeTunnelStatusMutation {
-                node_id,
-                expected_tunnel_generation: Some(authenticated_generation),
-                connected: payload.connected,
-                conn_count: payload.conn_count,
-                detail: None,
-                observed_at_unix_secs: payload.observed_at_unix_secs,
-            };
-
-            let response = match state.update_proxy_node_tunnel_status(&mutation).await {
-                Ok(Some(_)) => Json(json!({ "updated": true })).into_response(),
-                Ok(None) => build_internal_control_error_response(
-                    http::StatusCode::FORBIDDEN,
-                    "proxy tunnel credential was revoked",
-                ),
-                Err(_) => internal_gateway_data_error_response("node_status_sync"),
-            };
-            return Ok(Some(response));
-        }
-        _ => {}
     }
 
     Ok(None)

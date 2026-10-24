@@ -32,7 +32,6 @@ aether-gateway-control.workspace = true
 aether-gateway-execution.workspace = true
 aether-http.workspace = true
 aether-gateway-workers.workspace = true
-aether-gateway-tunnel.workspace = true
 aether-model-fetch.workspace = true
 aether-oauth.workspace = true
 aether-pool-core.workspace = true

@@ -1,5 +1,4 @@
 use super::{classified, ClassifiedRoute};
-use crate::tunnel::{is_tunnel_heartbeat_path, is_tunnel_node_status_path, TUNNEL_ROUTE_FAMILY};
 
 pub(super) fn classify_internal_route(
     method: &http::Method,
@@ -26,22 +25,6 @@ pub(super) fn classify_internal_route(
             "internal_proxy",
             "internal_gateway",
             route_kind,
-            "",
-            false,
-        ))
-    } else if method == http::Method::POST && is_tunnel_heartbeat_path(normalized_path) {
-        Some(classified(
-            "internal_proxy",
-            TUNNEL_ROUTE_FAMILY,
-            "heartbeat",
-            "",
-            false,
-        ))
-    } else if method == http::Method::POST && is_tunnel_node_status_path(normalized_path) {
-        Some(classified(
-            "internal_proxy",
-            TUNNEL_ROUTE_FAMILY,
-            "node_status",
             "",
             false,
         ))

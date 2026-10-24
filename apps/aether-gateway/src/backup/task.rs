@@ -190,7 +190,7 @@ async fn start_s3_backup_task_with_slot(
         status: BackgroundTaskStatus::Queued,
         attempt: 1,
         max_attempts,
-        owner_instance: Some(app.tunnel.local_instance_id().to_string()),
+        owner_instance: Some(app.local_instance_id().to_string()),
         progress_percent: 0,
         progress_message: Some(S3_BACKUP_QUEUED_MESSAGE.to_string()),
         payload_json: Some(s3_backup_task_payload_json(
@@ -572,7 +572,7 @@ async fn acquire_s3_backup_task_lock(
         .runtime_state
         .lock_try_acquire(
             S3_BACKUP_TASK_LOCK_KEY,
-            app.tunnel.local_instance_id(),
+            app.local_instance_id(),
             S3_BACKUP_TASK_LOCK_TTL,
         )
         .await

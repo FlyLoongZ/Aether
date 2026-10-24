@@ -2,34 +2,14 @@ use aether_contracts::{
     ExecutionTimeouts, ProxySnapshot, ResolvedTransportProfile, TRANSPORT_BACKEND_REQWEST_RUSTLS,
     TRANSPORT_HTTP_MODE_AUTO, TRANSPORT_POOL_SCOPE_KEY,
 };
-use async_trait::async_trait;
-use serde_json::{json, Map, Value};
-use tracing::warn;
+use serde_json::{Map, Value};
 
 use crate::claude_code::current_claude_code_transport_identity_profile;
 use crate::grok::grok_browser_resolved_transport_profile_from_auth_config;
 
 use super::snapshot::GatewayProviderTransportSnapshot;
 
-const TUNNEL_BASE_URL_EXTRA_KEY: &str = "tunnel_base_url";
-const TUNNEL_OWNER_INSTANCE_ID_EXTRA_KEY: &str = "tunnel_owner_instance_id";
-const TUNNEL_OWNER_OBSERVED_AT_EXTRA_KEY: &str = "tunnel_owner_observed_at_unix_secs";
 const DEFAULT_PROVIDER_STREAM_FIRST_BYTE_TIMEOUT_SECS: f64 = 30.0;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TransportTunnelAttachmentOwner {
-    pub gateway_instance_id: String,
-    pub relay_base_url: String,
-    pub observed_at_unix_secs: u64,
-}
-
-#[async_trait]
-pub trait TransportTunnelAffinityLookup: Send + Sync {
-    async fn lookup_tunnel_attachment_owner(
-        &self,
-        node_id: &str,
-    ) -> Result<Option<TransportTunnelAttachmentOwner>, String>;
-}
 
 pub fn resolve_transport_execution_timeouts(
     transport: &GatewayProviderTransportSnapshot,
@@ -60,60 +40,6 @@ pub fn resolve_transport_proxy_snapshot(
 ) -> Option<ProxySnapshot> {
     let raw = effective_proxy_config(transport)?;
     proxy_snapshot_from_value(raw)
-}
-
-pub async fn resolve_transport_proxy_snapshot_with_tunnel_affinity(
-    lookup: &dyn TransportTunnelAffinityLookup,
-    transport: &GatewayProviderTransportSnapshot,
-) -> Option<ProxySnapshot> {
-    let mut snapshot = resolve_transport_proxy_snapshot(transport)?;
-    let Some(node_id) = snapshot
-        .node_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
-        return Some(snapshot);
-    };
-
-    let owner = match lookup.lookup_tunnel_attachment_owner(node_id).await {
-        Ok(owner) => owner,
-        Err(error) => {
-            warn!(error = %error, node_id = node_id, "failed to load tunnel attachment owner");
-            None
-        }
-    };
-    let Some(owner) = owner else {
-        return Some(snapshot);
-    };
-
-    let mut extra = snapshot
-        .extra
-        .take()
-        .and_then(|value| value.as_object().cloned())
-        .unwrap_or_default();
-    let configured_tunnel_base_url = extra
-        .get(TUNNEL_BASE_URL_EXTRA_KEY)
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
-    if configured_tunnel_base_url.is_none() {
-        extra.insert(
-            TUNNEL_BASE_URL_EXTRA_KEY.to_string(),
-            Value::String(owner.relay_base_url.clone()),
-        );
-    }
-    extra.insert(
-        TUNNEL_OWNER_INSTANCE_ID_EXTRA_KEY.to_string(),
-        Value::String(owner.gateway_instance_id),
-    );
-    extra.insert(
-        TUNNEL_OWNER_OBSERVED_AT_EXTRA_KEY.to_string(),
-        json!(owner.observed_at_unix_secs),
-    );
-    snapshot.extra = Some(Value::Object(extra));
-    Some(snapshot)
 }
 
 pub fn transport_proxy_is_locally_supported(transport: &GatewayProviderTransportSnapshot) -> bool {
@@ -402,9 +328,7 @@ fn proxy_url_with_auth(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
 
-    use async_trait::async_trait;
     use serde_json::{json, Value};
 
     use super::super::snapshot::{
@@ -414,39 +338,9 @@ mod tests {
     use super::{
         resolve_transport_execution_timeouts, resolve_transport_profile,
         resolve_transport_profile_id, resolve_transport_proxy_snapshot,
-        resolve_transport_proxy_snapshot_with_tunnel_affinity, transport_profile_is_configured,
-        transport_proxy_is_locally_supported, TransportTunnelAffinityLookup,
-        TransportTunnelAttachmentOwner,
+        transport_profile_is_configured, transport_proxy_is_locally_supported,
     };
     use aether_contracts::TRANSPORT_HTTP_MODE_H2C_PRIOR_KNOWLEDGE;
-
-    #[derive(Default)]
-    struct TestTunnelAffinityLookup {
-        owners: BTreeMap<String, TransportTunnelAttachmentOwner>,
-    }
-
-    #[async_trait]
-    impl TransportTunnelAffinityLookup for TestTunnelAffinityLookup {
-        async fn lookup_tunnel_attachment_owner(
-            &self,
-            node_id: &str,
-        ) -> Result<Option<TransportTunnelAttachmentOwner>, String> {
-            Ok(self.owners.get(node_id).cloned())
-        }
-    }
-
-    fn sample_lookup() -> TestTunnelAffinityLookup {
-        let mut owners = BTreeMap::new();
-        owners.insert(
-            "proxy-node-1".to_string(),
-            TransportTunnelAttachmentOwner {
-                gateway_instance_id: "gateway-b".to_string(),
-                relay_base_url: "http://gateway-b.internal".to_string(),
-                observed_at_unix_secs: 4_102_444_800u64,
-            },
-        );
-        TestTunnelAffinityLookup { owners }
-    }
 
     fn sample_transport() -> GatewayProviderTransportSnapshot {
         GatewayProviderTransportSnapshot {
@@ -599,66 +493,6 @@ mod tests {
             Some("http://:legacy-password@proxy.example:8080/")
         );
         assert!(snapshot.extra.is_none());
-    }
-
-    #[tokio::test]
-    async fn enriches_transport_proxy_snapshot_with_tunnel_owner_hint() {
-        let state = sample_lookup();
-
-        let snapshot =
-            resolve_transport_proxy_snapshot_with_tunnel_affinity(&state, &sample_transport())
-                .await
-                .expect("proxy snapshot should resolve");
-
-        assert_eq!(snapshot.node_id.as_deref(), Some("proxy-node-1"));
-        assert_eq!(
-            snapshot
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("tunnel_base_url"))
-                .and_then(Value::as_str),
-            Some("http://gateway-b.internal")
-        );
-        assert_eq!(
-            snapshot
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("tunnel_owner_instance_id"))
-                .and_then(Value::as_str),
-            Some("gateway-b")
-        );
-    }
-
-    #[tokio::test]
-    async fn preserves_explicit_tunnel_base_url_when_owner_hint_exists() {
-        let mut transport = sample_transport();
-        transport.key.proxy = Some(json!({
-            "node_id": "proxy-node-1",
-            "kind": "manual",
-            "tunnel_base_url": "http://configured-gateway.internal",
-        }));
-        let state = sample_lookup();
-
-        let snapshot = resolve_transport_proxy_snapshot_with_tunnel_affinity(&state, &transport)
-            .await
-            .expect("proxy snapshot should resolve");
-
-        assert_eq!(
-            snapshot
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("tunnel_base_url"))
-                .and_then(Value::as_str),
-            Some("http://configured-gateway.internal")
-        );
-        assert_eq!(
-            snapshot
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("tunnel_owner_instance_id"))
-                .and_then(Value::as_str),
-            Some("gateway-b")
-        );
     }
 
     #[test]
