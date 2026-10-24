@@ -54,7 +54,7 @@ pub(crate) use self::identity_oauth_provider_secret::{
 };
 pub(crate) use self::multipart::{
     find_multipart_boundary, find_multipart_boundary_after_crlf, parse_multipart_boundary,
-    MAX_MULTIPART_PARTS, MAX_MULTIPART_PART_HEADER_BYTES,
+    parse_multipart_fields, MultipartField, MAX_MULTIPART_PARTS, MAX_MULTIPART_PART_HEADER_BYTES,
 };
 pub(crate) use self::normalize::{
     deserialize_optional_json_patch, deserialize_optional_string_list_patch,
