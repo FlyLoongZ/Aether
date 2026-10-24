@@ -49,7 +49,7 @@ use crate::frontdoor_loop_guard::{
 use crate::AppState;
 
 const LOCAL_HTTP_SUCCESS_TIMEOUT_MS: u64 = 15_000;
-#[cfg(test)]
+
 #[test]
 fn execution_upstream_url_accepts_http_and_https_with_safe_targets() {
     for allowed in [
@@ -963,8 +963,6 @@ fn direct_upstream_origin_brackets_ipv6_literals() {
 
 #[test]
 fn direct_reqwest_client_cache_evicts_least_recently_used_entry_at_capacity() {
-    let _guard = direct_reqwest_env_lock().blocking_lock();
-    let _capacity = set_test_env_var(super::DIRECT_REQWEST_CACHE_MAX_ENTRIES_ENV, "2");
     let cache_key = |suffix| {
         super::direct_reqwest_client_cache_key(
             "https://api.example.test/v1/messages",
@@ -986,7 +984,7 @@ fn direct_reqwest_client_cache_evicts_least_recently_used_entry_at_capacity() {
     cache.insert(oldest.clone(), oldest_entry);
     cache.insert(recent.clone(), recent_entry);
 
-    super::evict_direct_reqwest_client_cache_for_insert(&mut cache, &incoming);
+    super::evict_direct_reqwest_client_cache_for_insert(&mut cache, &incoming, 2);
 
     assert_eq!(cache.len(), 1);
     assert!(!cache.contains_key(&oldest));
