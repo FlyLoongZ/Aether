@@ -6,10 +6,8 @@ use aether_routing_core::ResolvedRoutingPolicy;
 use aether_runtime::ConcurrencyPermit;
 use aether_scheduler_core::{
     enumerate_minimal_candidate_selection_with_model_directives, normalize_api_format,
-    resolve_requested_global_model_name_with_reserved_global_model,
-    row_supports_requested_model_with_model_directives_and_request_operation,
-    ClientSessionAffinity, EnumerateMinimalCandidateSelectionInput,
-    SchedulerMinimalCandidateSelectionCandidate,
+    resolve_requested_global_model_name_with_reserved_global_model, ClientSessionAffinity,
+    EnumerateMinimalCandidateSelectionInput, SchedulerMinimalCandidateSelectionCandidate,
 };
 use async_trait::async_trait;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -24,8 +22,8 @@ use crate::cache::{
 };
 use crate::clock::request_distribution_seed;
 use crate::data::candidate_selection::{
-    api_format_page_from_rows, requested_model_candidate_names, requested_model_page_from_rows,
-    CandidateScanBudget, RequestedModelCandidateRowsPage, REQUESTED_MODEL_CANDIDATE_PAGE_SIZE,
+    requested_model_candidate_names, requested_model_page_from_rows, CandidateScanBudget,
+    RequestedModelCandidateRowsPage, REQUESTED_MODEL_CANDIDATE_PAGE_SIZE,
     REQUESTED_MODEL_MAX_COLLECTED_ROWS,
 };
 use crate::scheduler::candidate::SchedulerSkippedCandidate;
@@ -380,8 +378,6 @@ pub(crate) struct LocalCandidatePreselectionPageCursor<'a> {
     scan_budget_by_format: BTreeMap<String, CandidateScanBudget>,
     resolved_global_model_names: BTreeMap<String, String>,
     reserved_global_model_names: BTreeMap<String, Option<String>>,
-    fallback_offsets: BTreeMap<String, u32>,
-    fallback_scan_epoch: u32,
     exhausted_api_formats: BTreeSet<String>,
     seen_candidate_keys: BTreeSet<String>,
 }
@@ -461,8 +457,6 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
             scan_budget_by_format: BTreeMap::new(),
             resolved_global_model_names: BTreeMap::new(),
             reserved_global_model_names: BTreeMap::new(),
-            fallback_offsets: BTreeMap::new(),
-            fallback_scan_epoch: 0,
             exhausted_api_formats: BTreeSet::new(),
             seen_candidate_keys: BTreeSet::new(),
         }
@@ -560,8 +554,6 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         self.scan_budget_by_format.clear();
         self.resolved_global_model_names.clear();
         self.reserved_global_model_names.clear();
-        self.fallback_offsets.clear();
-        self.fallback_scan_epoch = self.fallback_scan_epoch.wrapping_add(1);
         self.exhausted_api_formats.clear();
         self.seen_candidate_keys.clear();
         self.pinned_api_format_rows.clear();
@@ -922,10 +914,13 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
                 .requested_name_indexes
                 .entry(normalized_api_format.clone())
                 .or_insert(0);
+            // Every requested name has been walked to the end of the version.
+            // The windows carry the request operation, so they already covered
+            // every row this request could use: there is nothing left to scan.
             let Some(requested_name) = requested_names.get(requested_name_index) else {
-                return self
-                    .next_fallback_page_for_api_format(candidate_api_format, &normalized_api_format)
-                    .await;
+                self.exhausted_api_formats
+                    .insert(normalized_api_format.clone());
+                return Ok(None);
             };
             if requested_name.trim().is_empty() {
                 self.requested_name_indexes
@@ -966,12 +961,9 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
             }
             if page.scanned_rows == 0 {
                 if requested_name_index + 1 >= requested_names.len() {
-                    return self
-                        .next_fallback_page_for_api_format(
-                            candidate_api_format,
-                            &normalized_api_format,
-                        )
-                        .await;
+                    self.exhausted_api_formats
+                        .insert(normalized_api_format.clone());
+                    return Ok(None);
                 }
                 continue;
             }
@@ -989,13 +981,6 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         }
     }
 
-    /// The candidate rows behind one requested-model page.
-    ///
-    /// The data layer already caches this page (five seconds, per query
-    /// shape), so a second application-level page cache here only widened
-    /// staleness without saving a query: it was keyed by the same fields and
-    /// served rows up to its own fallback window while the data layer had
-    /// already refreshed them.
     /// The pinned version of one api format, taken once per request.
     ///
     /// A page sequence is a set of offsets, and an offset only means something
@@ -1030,97 +1015,44 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         limit: u32,
     ) -> Result<RequestedModelCandidateRowsPage, GatewayError> {
         let rows = self.pinned_rows(normalized_api_format).await?;
+        let resolved_global_model_name =
+            if let Some(name) = self.resolved_global_model_names.get(normalized_api_format) {
+                name.clone()
+            } else {
+                // Match precedence and the reserved namespace apply to the
+                // whole version, not whichever aliases fit in the first page.
+                let reserved = self
+                    .reserved_global_model_name(&rows, routing_model)
+                    .await?;
+                let Some(name) = resolve_requested_global_model_name_with_reserved_global_model(
+                    &rows,
+                    routing_model,
+                    normalized_api_format,
+                    false,
+                    self.request_operation.as_deref(),
+                    reserved.as_deref(),
+                ) else {
+                    return Ok(RequestedModelCandidateRowsPage {
+                        rows: Vec::new(),
+                        scanned_rows: 0,
+                        scan_exhausted: true,
+                    });
+                };
+                self.resolved_global_model_names
+                    .insert(normalized_api_format.to_string(), name.clone());
+                name
+            };
         Ok(requested_model_page_from_rows(
             rows.as_slice(),
+            &resolved_global_model_name,
             normalized_api_format,
             routing_model,
             requested_name,
             offset,
             limit,
             false,
+            self.request_operation.as_deref(),
         ))
-    }
-
-    async fn read_api_format_rows_fallback_page_cached(
-        &mut self,
-        normalized_api_format: &str,
-        offset: u32,
-        limit: u32,
-    ) -> Result<RequestedModelCandidateRowsPage, GatewayError> {
-        let rows = self.pinned_rows(normalized_api_format).await?;
-        Ok(api_format_page_from_rows(rows.as_slice(), offset, limit))
-    }
-
-    async fn next_fallback_page_for_api_format(
-        &mut self,
-        candidate_api_format: &str,
-        normalized_api_format: &str,
-    ) -> Result<
-        Option<
-            AiCandidatePreselectionOutcome<
-                SchedulerMinimalCandidateSelectionCandidate,
-                SkippedLocalExecutionCandidate,
-            >,
-        >,
-        GatewayError,
-    > {
-        let routing_model = self.routing_model(candidate_api_format).to_string();
-        loop {
-            let budget = self.scan_budget(normalized_api_format);
-            if budget.is_exhausted() {
-                self.exhausted_api_formats
-                    .insert(normalized_api_format.to_string());
-                return Ok(None);
-            }
-            let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE.min(budget.remaining());
-            let offset = *self
-                .fallback_offsets
-                .get(normalized_api_format)
-                .unwrap_or(&0);
-            let page = self
-                .read_api_format_rows_fallback_page_cached(normalized_api_format, offset, limit)
-                .await?;
-            let page_scanned = page.scanned_rows.min(limit);
-            // Two independent stop conditions: the shape has nothing left, or
-            // this request has walked as far as its budget allows.
-            let scan_ended = page.scan_exhausted || page_scanned < limit;
-            self.fallback_offsets.insert(
-                normalized_api_format.to_string(),
-                offset.saturating_add(page_scanned),
-            );
-            self.charge_scan_budget(normalized_api_format, page_scanned);
-            if scan_ended || self.scan_budget(normalized_api_format).is_exhausted() {
-                self.exhausted_api_formats
-                    .insert(normalized_api_format.to_string());
-            }
-            if page_scanned == 0 {
-                return Ok(None);
-            }
-
-            let rows = page
-                .rows
-                .into_iter()
-                .take(page_scanned as usize)
-                .filter(|row| {
-                    row_supports_requested_model_with_model_directives_and_request_operation(
-                        row,
-                        &routing_model,
-                        normalized_api_format,
-                        false,
-                        self.request_operation.as_deref(),
-                    )
-                })
-                .collect::<Vec<_>>();
-            if let Some(outcome) = self
-                .build_page_outcome_from_rows(candidate_api_format, normalized_api_format, rows)
-                .await?
-            {
-                return Ok(Some(outcome));
-            }
-            if self.exhausted_api_formats.contains(normalized_api_format) {
-                return Ok(None);
-            }
-        }
     }
 
     fn api_format_is_exhausted(&self, candidate_api_format: &str) -> bool {
@@ -1184,27 +1116,15 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
             return Ok(None);
         }
         let routing_model = self.routing_model(candidate_api_format).to_string();
-        let resolved_global_model_name =
-            if let Some(value) = self.resolved_global_model_names.get(normalized_api_format) {
-                value.clone()
-            } else {
-                let reserved_global_model_name = self
-                    .reserved_global_model_name(&rows, &routing_model)
-                    .await?;
-                let Some(value) = resolve_requested_global_model_name_with_reserved_global_model(
-                    &rows,
-                    &routing_model,
-                    normalized_api_format,
-                    false,
-                    self.request_operation.as_deref(),
-                    reserved_global_model_name.as_deref(),
-                ) else {
-                    return Ok(None);
-                };
-                self.resolved_global_model_names
-                    .insert(normalized_api_format.to_string(), value.clone());
-                value
-            };
+        let resolved_global_model_name = self
+            .resolved_global_model_names
+            .get(normalized_api_format)
+            .cloned()
+            .ok_or_else(|| {
+                GatewayError::Internal(
+                    "candidate format was not resolved before paging".to_string(),
+                )
+            })?;
         rows.retain(|row| row.global_model_name == resolved_global_model_name);
         if rows.is_empty() {
             return Ok(None);

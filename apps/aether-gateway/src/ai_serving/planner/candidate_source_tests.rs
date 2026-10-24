@@ -50,17 +50,16 @@ struct EmptyFallbackCountingRepository {
     fallback_reads: AtomicUsize,
 }
 
-struct PagedFallbackRepository {
+/// Hands out one version per api format and records which formats were pinned.
+struct PinnedVersionRepository {
     total_rows: u32,
-    page_queries: Mutex<Vec<StoredApiFormatCandidateRowsQuery>>,
     pin_queries: Mutex<Vec<String>>,
 }
 
-impl PagedFallbackRepository {
+impl PinnedVersionRepository {
     fn new(total_rows: u32) -> Self {
         Self {
             total_rows,
-            page_queries: Mutex::new(Vec::new()),
             pin_queries: Mutex::new(Vec::new()),
         }
     }
@@ -71,22 +70,15 @@ impl PagedFallbackRepository {
             .expect("fallback query lock")
             .clone()
     }
-
-    fn page_queries(&self) -> Vec<StoredApiFormatCandidateRowsQuery> {
-        self.page_queries
-            .lock()
-            .expect("fallback query lock")
-            .clone()
-    }
 }
 
 #[async_trait]
-impl MinimalCandidateSelectionReadRepository for PagedFallbackRepository {
+impl MinimalCandidateSelectionReadRepository for PinnedVersionRepository {
     async fn list_for_exact_api_format(
         &self,
         _api_format: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        panic!("routing fallback must not use the unbounded API-format query")
+        panic!("a scan must page through the pinned version, not ask for it again")
     }
 
     /// The repository hands out one version; the cursor pages through it.
@@ -222,7 +214,7 @@ fn unrestricted_auth_snapshot() -> GatewayAuthApiKeySnapshot {
 }
 
 #[tokio::test]
-async fn empty_fallback_is_scanned_once_and_then_skipped_in_memory() {
+async fn an_exhausted_format_is_not_read_again() {
     let repository = Arc::new(EmptyFallbackCountingRepository::default());
     let data_state =
         GatewayDataState::with_minimal_candidate_selection_reader_for_tests(repository.clone());
@@ -259,8 +251,8 @@ async fn empty_fallback_is_scanned_once_and_then_skipped_in_memory() {
     assert_eq!(repository.fallback_reads(), 1);
     assert!(cursor.api_format_is_exhausted("openai:search"));
 
-    // The second target must not reacquire the gate or rescan the empty
-    // fallback after the format was proven exhausted.
+    // The second target must not reacquire the gate or reload a format that was
+    // already proven to have nothing.
     assert!(cursor
         .next_page()
         .await
@@ -270,7 +262,7 @@ async fn empty_fallback_is_scanned_once_and_then_skipped_in_memory() {
 }
 
 #[tokio::test]
-async fn restart_scan_clears_exhaustion_and_allows_fallback_to_be_read_again() {
+async fn restart_scan_clears_exhaustion_and_drops_the_pinned_version() {
     let repository = Arc::new(EmptyFallbackCountingRepository::default());
     let data_state =
         GatewayDataState::with_minimal_candidate_selection_reader_for_tests(repository.clone());
@@ -380,6 +372,71 @@ async fn a_pinned_version_supplies_every_row_the_request_can_use() {
         .await
         .expect("exhausted formats should finish in memory")
         .is_none());
+}
+
+#[tokio::test]
+async fn paged_preselection_resolves_the_full_version_before_windows_and_budget() {
+    for (requested, broad_count) in [
+        ("requested-alias", REQUESTED_MODEL_CANDIDATE_PAGE_SIZE),
+        ("zzz-target", REQUESTED_MODEL_MAX_COLLECTED_ROWS),
+    ] {
+        let mut rows = (0..broad_count)
+            .map(|index| {
+                let mut row = standard_candidate_row(
+                    &format!("broad-{index:04}"),
+                    "openai:chat",
+                    index as i32,
+                );
+                row.global_model_name = "aaa-general".to_string();
+                row.global_model_id = "global-aaa-general".to_string();
+                row.global_model_mappings = Some(vec![requested.to_string()]);
+                row
+            })
+            .collect::<Vec<_>>();
+        let mut exact = standard_candidate_row("exact-provider", "openai:chat", broad_count as i32);
+        exact.global_model_name = "zzz-target".to_string();
+        exact.global_model_id = "global-zzz-target".to_string();
+        exact.model_provider_model_name = requested.to_string();
+        rows.push(exact);
+        let repository = Arc::new(InMemoryMinimalCandidateSelectionReadRepository::seed(rows));
+        let app = AppState::new().unwrap().with_data_state_for_tests(
+            GatewayDataState::with_minimal_candidate_selection_reader_for_tests(repository),
+        );
+        let auth = unrestricted_auth_snapshot();
+        let directives = crate::system_features::ModelDirectivePolicySnapshot::load(&app).await;
+        let mut cursor = LocalCandidatePreselectionPageCursor::new(
+            PlannerAppState::new(&app),
+            &directives,
+            "openai:chat",
+            requested,
+            None,
+            false,
+            None,
+            &auth,
+            None,
+            None,
+            None,
+            true,
+            LocalCandidatePreselectionKeyMode::ProviderEndpointKeyModelAndApiFormat,
+            false,
+            None,
+        )
+        .await;
+
+        let page = cursor
+            .next_page()
+            .await
+            .unwrap()
+            .expect("exact candidate must be reachable");
+        assert_eq!(page.candidates.len(), 1, "request={requested}");
+        assert_eq!(page.candidates[0].provider_id, "exact-provider");
+        assert_eq!(page.candidates[0].global_model_name, "zzz-target");
+        assert_eq!(
+            cursor.scan_budget("openai:chat").remaining(),
+            REQUESTED_MODEL_MAX_COLLECTED_ROWS - 1
+        );
+        assert!(cursor.next_page().await.unwrap().is_none());
+    }
 }
 
 #[tokio::test]
@@ -641,8 +698,8 @@ async fn routing_policy_collects_candidate_pages_before_final_ranking() {
 }
 
 #[tokio::test]
-async fn routing_fallback_uses_bounded_api_format_pages() {
-    let repository = Arc::new(PagedFallbackRepository::new(
+async fn one_pin_serves_a_scan_that_is_bounded_by_the_row_budget() {
+    let repository = Arc::new(PinnedVersionRepository::new(
         REQUESTED_MODEL_MAX_COLLECTED_ROWS + REQUESTED_MODEL_CANDIDATE_PAGE_SIZE,
     ));
     let app = AppState::new()
@@ -721,10 +778,6 @@ async fn routing_fallback_uses_bounded_api_format_pages() {
         pins.len(),
         pins.iter().collect::<std::collections::BTreeSet<_>>().len(),
         "no api format may be pinned twice in one scan: {pins:?}"
-    );
-    assert!(
-        repository.page_queries().is_empty(),
-        "windows are cut from the version, not asked of the data layer"
     );
 }
 
@@ -1070,7 +1123,7 @@ fn opg_deepseek_row(
 }
 
 #[tokio::test]
-async fn paged_preselection_falls_back_to_format_scan_for_directive_mapping_match() {
+async fn a_directive_mapping_row_is_found_in_the_pinned_version() {
     let repository: Arc<dyn MinimalCandidateSelectionReadRepository> =
         Arc::new(InMemoryMinimalCandidateSelectionReadRepository::seed([
             openai_responses_mapping_row(),
@@ -1110,7 +1163,7 @@ async fn paged_preselection_falls_back_to_format_scan_for_directive_mapping_matc
         .next_page()
         .await
         .expect("preselection should succeed")
-        .expect("mapping fallback should find a provider");
+        .expect("the pinned version should offer the mapping");
 
     assert_eq!(page.skipped_candidates.len(), 0);
     assert_eq!(page.candidates.len(), 1);
