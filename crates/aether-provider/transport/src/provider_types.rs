@@ -42,40 +42,6 @@ pub struct FixedProviderEndpointTemplate {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProviderApiFormatInheritance {
-    None,
-    OAuth,
-    OAuthOrBearer,
-    OAuthOrServiceAccount,
-    OAuthOrConfiguredBearer,
-}
-
-impl ProviderApiFormatInheritance {
-    pub fn key_inherits_api_formats(
-        self,
-        auth_type: &str,
-        decrypted_auth_config: Option<&str>,
-    ) -> bool {
-        let auth_type = auth_type.trim().to_ascii_lowercase();
-        match self {
-            Self::None => false,
-            Self::OAuth => auth_type == "oauth",
-            Self::OAuthOrBearer => auth_type == "oauth" || auth_type == "bearer",
-            Self::OAuthOrServiceAccount => {
-                auth_type == "oauth" || auth_type == "service_account" || auth_type == "vertex_ai"
-            }
-            Self::OAuthOrConfiguredBearer => {
-                auth_type == "oauth"
-                    || auth_type == "bearer"
-                        && decrypted_auth_config
-                            .map(str::trim)
-                            .is_some_and(|value| !value.is_empty())
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderLocalEmbeddingSupport {
     None,
     AnyKnown,
@@ -113,7 +79,6 @@ impl ProviderLocalEmbeddingSupport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProviderRuntimePolicy {
     pub fixed_provider: bool,
-    pub api_format_inheritance: ProviderApiFormatInheritance,
     pub enable_format_conversion_by_default: bool,
     pub allow_auth_channel_mismatch_by_default: bool,
     pub oauth_is_bearer_like: bool,
@@ -127,7 +92,6 @@ impl ProviderRuntimePolicy {
     pub const fn standard() -> Self {
         Self {
             fixed_provider: false,
-            api_format_inheritance: ProviderApiFormatInheritance::None,
             enable_format_conversion_by_default: false,
             allow_auth_channel_mismatch_by_default: false,
             oauth_is_bearer_like: false,
@@ -136,15 +100,6 @@ impl ProviderRuntimePolicy {
             supports_local_same_format_transport: true,
             local_embedding_support: ProviderLocalEmbeddingSupport::None,
         }
-    }
-
-    pub fn key_inherits_api_formats(
-        self,
-        auth_type: &str,
-        decrypted_auth_config: Option<&str>,
-    ) -> bool {
-        self.api_format_inheritance
-            .key_inherits_api_formats(auth_type, decrypted_auth_config)
     }
 
     pub fn supports_local_embedding_transport(self, api_format: &str) -> bool {
@@ -201,7 +156,6 @@ const ALIYUN_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
 
 const CLAUDE_CODE_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuth,
     enable_format_conversion_by_default: true,
     oauth_is_bearer_like: true,
     supports_model_fetch: false,
@@ -211,7 +165,6 @@ const CLAUDE_CODE_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy 
 };
 const CODEX_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuth,
     enable_format_conversion_by_default: true,
     supports_model_fetch: false,
     supports_local_openai_chat_transport: false,
@@ -219,7 +172,6 @@ const CODEX_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
 };
 const CHATGPT_WEB_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuthOrBearer,
     enable_format_conversion_by_default: true,
     oauth_is_bearer_like: true,
     supports_model_fetch: false,
@@ -229,14 +181,12 @@ const CHATGPT_WEB_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy 
 };
 const GEMINI_CLI_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuth,
     oauth_is_bearer_like: true,
     supports_local_openai_chat_transport: false,
     ..STANDARD_RUNTIME_POLICY
 };
 const VERTEX_AI_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuthOrServiceAccount,
     enable_format_conversion_by_default: true,
     supports_model_fetch: false,
     supports_local_openai_chat_transport: false,
@@ -246,7 +196,6 @@ const VERTEX_AI_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
 };
 const ANTIGRAVITY_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuth,
     enable_format_conversion_by_default: true,
     oauth_is_bearer_like: true,
     supports_model_fetch: false,
@@ -256,7 +205,6 @@ const ANTIGRAVITY_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy 
 };
 const GROK_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuth,
     enable_format_conversion_by_default: true,
     supports_model_fetch: false,
     supports_local_openai_chat_transport: false,
@@ -266,7 +214,6 @@ const GROK_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
 
 const WINDSURF_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuthOrBearer,
     enable_format_conversion_by_default: true,
     oauth_is_bearer_like: true,
     supports_model_fetch: false,
@@ -277,7 +224,6 @@ const WINDSURF_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
 
 const XAI_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuthOrBearer,
     enable_format_conversion_by_default: true,
     oauth_is_bearer_like: true,
     supports_model_fetch: false,
@@ -494,13 +440,26 @@ pub fn provider_type_is_fixed(provider_type: &str) -> bool {
     provider_runtime_policy(provider_type).fixed_provider
 }
 
+/// Whether a key with this credential kind may inherit the provider's endpoint
+/// formats.
+///
+/// The answer comes from the shared auth-channel table rather than from a
+/// per-provider policy field, because the candidate gate reads the same table:
+/// a provider whose channel list and inheritance rule disagreed would hand out
+/// routing candidates that its own catalog refuses to display.
 pub fn fixed_provider_key_inherits_api_formats(
     provider_type: &str,
     auth_type: &str,
     decrypted_auth_config: Option<&str>,
 ) -> bool {
-    provider_runtime_policy(provider_type)
-        .key_inherits_api_formats(auth_type, decrypted_auth_config)
+    let auth_config_configured = decrypted_auth_config
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    aether_ai_formats::auth_channel::provider_accepts_auth_type(
+        provider_type,
+        auth_type,
+        auth_config_configured,
+    )
 }
 
 pub fn provider_type_enables_format_conversion_by_default(provider_type: &str) -> bool {
@@ -961,9 +920,17 @@ mod tests {
         assert!(policy.supports_model_fetch);
         assert!(!policy.supports_local_openai_chat_transport);
         assert!(!policy.supports_local_same_format_transport);
-        assert!(policy.key_inherits_api_formats("oauth", None));
-        assert!(policy.key_inherits_api_formats("bearer", Some("{}")));
-        assert!(!policy.key_inherits_api_formats("bearer", None));
+        assert!(fixed_provider_key_inherits_api_formats(
+            "kiro", "oauth", None
+        ));
+        assert!(fixed_provider_key_inherits_api_formats(
+            "kiro",
+            "bearer",
+            Some("{}")
+        ));
+        assert!(!fixed_provider_key_inherits_api_formats(
+            "kiro", "bearer", None
+        ));
 
         assert!(provider_type_allows_auth_channel_mismatch_by_default(
             "kiro"
