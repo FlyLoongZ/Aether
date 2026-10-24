@@ -9,7 +9,7 @@ type = "text_id"
 length = 64
 
 [[table.proxy_nodes.columns]]
-name = "tunnel_generation"
+name = "node_generation"
 type = "text_id"
 length = 64
 
@@ -46,19 +46,11 @@ length = 64
 nullable = true
 
 [[table.proxy_nodes.columns]]
-name = "last_heartbeat_at"
+name = "last_used_at"
 type = "unix_seconds"
 nullable = true
 
-[[table.proxy_nodes.columns]]
-name = "heartbeat_interval"
-type = "int32"
-default = 30
 
-[[table.proxy_nodes.columns]]
-name = "active_connections"
-type = "int32"
-default = 0
 
 [[table.proxy_nodes.columns]]
 name = "total_requests"
@@ -70,10 +62,6 @@ name = "avg_latency_ms"
 type = "float64"
 nullable = true
 
-[[table.proxy_nodes.columns]]
-name = "is_manual"
-type = "bool"
-default = false
 
 [[table.proxy_nodes.columns]]
 name = "proxy_url"
@@ -100,40 +88,12 @@ type = "unix_seconds"
 name = "updated_at"
 type = "unix_seconds"
 
-[[table.proxy_nodes.columns]]
-name = "remote_config"
-type = "json"
-nullable = true
 
-[[table.proxy_nodes.columns]]
-name = "config_version"
-type = "int32"
-default = 0
 
-[[table.proxy_nodes.columns]]
-name = "hardware_info"
-type = "json"
-nullable = true
 
-[[table.proxy_nodes.columns]]
-name = "estimated_max_concurrency"
-type = "int32"
-nullable = true
 
-[[table.proxy_nodes.columns]]
-name = "tunnel_mode"
-type = "bool"
-default = false
 
-[[table.proxy_nodes.columns]]
-name = "tunnel_connected"
-type = "bool"
-default = false
 
-[[table.proxy_nodes.columns]]
-name = "tunnel_connected_at"
-type = "unix_seconds"
-nullable = true
 
 [[table.proxy_nodes.columns]]
 name = "failed_requests"
@@ -150,212 +110,7 @@ name = "stream_errors"
 type = "int64"
 default = 0
 
-[[table.proxy_nodes.columns]]
-name = "proxy_metadata"
-type = "json"
-nullable = true
 
 [[table.proxy_nodes.uniques]]
 name = "uq_proxy_node_ip_port"
 columns = ["ip", "port"]
-
-[table.proxy_node_events]
-domain = "proxy_nodes"
-order = 20
-primary_key = ["id"]
-
-[[table.proxy_node_events.columns]]
-name = "id"
-type = "int64"
-auto_increment = true
-
-[[table.proxy_node_events.columns]]
-name = "node_id"
-type = "text_id"
-length = 64
-
-[[table.proxy_node_events.columns]]
-name = "event_type"
-type = "text"
-length = 64
-
-[[table.proxy_node_events.columns]]
-name = "detail"
-type = "text"
-length = 500
-nullable = true
-
-[[table.proxy_node_events.columns]]
-name = "event_metadata"
-type = "json"
-nullable = true
-
-[[table.proxy_node_events.columns]]
-name = "created_at"
-type = "unix_seconds"
-
-[table.proxy_node_metrics_1m]
-domain = "proxy_nodes"
-order = 30
-primary_key = ["node_id", "bucket_start_unix_secs"]
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "node_id"
-type = "text_id"
-length = 64
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "bucket_start_unix_secs"
-type = "unix_seconds"
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "samples"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "uptime_samples"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "active_connections_sum"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "active_connections_max"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "heartbeat_rtt_ms_sum"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "heartbeat_rtt_ms_max"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "connect_errors_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "disconnects_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "error_events_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "ws_in_bytes_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "ws_out_bytes_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "ws_in_frames_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.columns]]
-name = "ws_out_frames_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1m.indexes]]
-name = "idx_proxy_node_metrics_1m_bucket_start"
-columns = ["bucket_start_unix_secs"]
-
-[table.proxy_node_metrics_1h]
-domain = "proxy_nodes"
-order = 40
-primary_key = ["node_id", "bucket_start_unix_secs"]
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "node_id"
-type = "text_id"
-length = 64
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "bucket_start_unix_secs"
-type = "unix_seconds"
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "samples"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "uptime_samples"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "active_connections_sum"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "active_connections_max"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "heartbeat_rtt_ms_sum"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "heartbeat_rtt_ms_max"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "connect_errors_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "disconnects_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "error_events_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "ws_in_bytes_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "ws_out_bytes_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "ws_in_frames_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.columns]]
-name = "ws_out_frames_delta"
-type = "int64"
-default = 0
-
-[[table.proxy_node_metrics_1h.indexes]]
-name = "idx_proxy_node_metrics_1h_bucket_start"
-columns = ["bucket_start_unix_secs"]

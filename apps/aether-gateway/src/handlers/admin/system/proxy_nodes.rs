@@ -8,21 +8,11 @@ use crate::handlers::admin::model::{
 };
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::query_param_value;
-use crate::maintenance::{
-    cancel_proxy_upgrade_rollout, clear_proxy_upgrade_rollout_conflicts,
-    restore_proxy_upgrade_rollout_skipped_nodes, retry_proxy_upgrade_rollout_node,
-    skip_proxy_upgrade_rollout_node, ProxyUpgradeRolloutProbeConfig,
-};
 use crate::GatewayError;
 use aether_admin::system::{
-    admin_proxy_node_event_node_id_from_path, admin_proxy_node_metrics_node_id_from_path,
     build_admin_proxy_node_payload, build_admin_proxy_nodes_data_unavailable_response,
     build_admin_proxy_nodes_not_found_response,
 };
-use aether_data::repository::management_tokens::{
-    CreateManagementTokenRecord, StoredManagementToken, StoredManagementTokenUserSummary,
-};
-use aether_data::repository::proxy_nodes::{ProxyNodeEventQuery, ProxyNodeMetricsStep};
 use axum::{
     body::{Body, Bytes},
     http,
@@ -32,12 +22,8 @@ use axum::{
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use tracing::warn;
-use uuid::Uuid;
 
-use crate::handlers::public::build_proxy_node_install_session_response;
-use crate::handlers::shared::generate_gateway_secret_plaintext;
 use crate::LocalMutationOutcome;
 
 #[derive(Deserialize)]
@@ -552,57 +538,57 @@ async fn test_proxy_node_connectivity(
     node: &aether_data::repository::proxy_nodes::StoredProxyNode,
 ) -> Value {
     let probe_url = proxy_connectivity_probe_url();
-        let Some(proxy_url) = node.proxy_url.as_deref() else {
+    let Some(proxy_url) = node.proxy_url.as_deref() else {
+        return build_proxy_connectivity_result(
+            &probe_url,
+            PROXY_CONNECTIVITY_TIMEOUT_SECS,
+            false,
+            None,
+            None,
+            Some("手动节点缺少 proxy_url".to_string()),
+        );
+    };
+    let endpoint = match parse_manual_proxy_endpoint(proxy_url, "proxy_url") {
+        Ok(endpoint) => endpoint,
+        Err(detail) => {
             return build_proxy_connectivity_result(
                 &probe_url,
                 PROXY_CONNECTIVITY_TIMEOUT_SECS,
                 false,
                 None,
                 None,
-                Some("手动节点缺少 proxy_url".to_string()),
+                Some(detail),
             );
-        };
-        let endpoint = match parse_manual_proxy_endpoint(proxy_url, "proxy_url") {
-            Ok(endpoint) => endpoint,
-            Err(detail) => {
-                return build_proxy_connectivity_result(
-                    &probe_url,
-                    PROXY_CONNECTIVITY_TIMEOUT_SECS,
-                    false,
-                    None,
-                    None,
-                    Some(detail),
-                );
-            }
-        };
-        let proxy_password = match state.app().decrypt_proxy_node_password(&node.id).await {
-            Ok(password) => password,
-            Err(_) => {
-                return build_proxy_connectivity_result(
-                    &probe_url,
-                    PROXY_CONNECTIVITY_TIMEOUT_SECS,
-                    false,
-                    None,
-                    None,
-                    Some("手动节点密码不可用".to_string()),
-                );
-            }
-        };
-        let Some(proxy_url) = proxy_url_with_auth(
-            &endpoint.proxy_url,
-            node.proxy_username.as_deref(),
-            proxy_password.as_deref(),
-        ) else {
+        }
+    };
+    let proxy_password = match state.app().decrypt_proxy_node_password(&node.id).await {
+        Ok(password) => password,
+        Err(_) => {
             return build_proxy_connectivity_result(
                 &probe_url,
                 PROXY_CONNECTIVITY_TIMEOUT_SECS,
                 false,
                 None,
                 None,
-                Some("手动节点认证配置不可用".to_string()),
+                Some("手动节点密码不可用".to_string()),
             );
-        };
-        return test_manual_proxy_connectivity(&proxy_url).await;
+        }
+    };
+    let Some(proxy_url) = proxy_url_with_auth(
+        &endpoint.proxy_url,
+        node.proxy_username.as_deref(),
+        proxy_password.as_deref(),
+    ) else {
+        return build_proxy_connectivity_result(
+            &probe_url,
+            PROXY_CONNECTIVITY_TIMEOUT_SECS,
+            false,
+            None,
+            None,
+            Some("手动节点认证配置不可用".to_string()),
+        );
+    };
+    return test_manual_proxy_connectivity(&proxy_url).await;
 }
 
 async fn test_manual_proxy_connectivity(proxy_url: &str) -> Value {
@@ -1231,28 +1217,5 @@ mod tests {
             parse_proxy_probe_exit_ip("ip=Bearer upstream-secret\nx=1"),
             None
         );
-    }
-
-    #[tokio::test]
-    async fn proxy_install_internal_error_response_hides_internal_details() {
-        let response = proxy_install_internal_error_response(
-            "secret-bearing operation https://internal.example/token",
-            "Bearer super-secret",
-        );
-
-        assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("internal error response body should be readable");
-        let payload: Value =
-            serde_json::from_slice(&body).expect("internal error response should be JSON");
-
-        assert_eq!(
-            payload,
-            json!({ "detail": PROXY_INSTALL_INTERNAL_ERROR_DETAIL })
-        );
-        let body = String::from_utf8_lossy(&body);
-        assert!(!body.contains("internal.example"));
-        assert!(!body.contains("super-secret"));
     }
 }

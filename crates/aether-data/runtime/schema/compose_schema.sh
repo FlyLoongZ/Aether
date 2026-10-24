@@ -150,12 +150,12 @@ split_postgres_baseline() {
     "004_indexes.sql" \
     "005_foreign_keys.sql" \
     "006_footer.sql"
-  split_fragment "${source}" "${target}" 001_types_and_tables.sql 1 1349
-  split_fragment "${source}" "${target}" 002_defaults.sql 1350 1365
-  split_fragment "${source}" "${target}" 003_constraints.sql 1366 2490
-  split_fragment "${source}" "${target}" 004_indexes.sql 2491 3730
-  split_fragment "${source}" "${target}" 005_foreign_keys.sql 3731 4582
-  split_fragment "${source}" "${target}" 006_footer.sql 4583 EOF
+  split_fragment "${source}" "${target}" 001_types_and_tables.sql 1 1416
+  split_fragment "${source}" "${target}" 002_defaults.sql 1417 1432
+  split_fragment "${source}" "${target}" 003_constraints.sql 1433 2572
+  split_fragment "${source}" "${target}" 004_indexes.sql 2573 3868
+  split_fragment "${source}" "${target}" 005_foreign_keys.sql 3869 4704
+  split_fragment "${source}" "${target}" 006_footer.sql 4705 EOF
 }
 
 check_bootstrap_sources() {

@@ -130,9 +130,6 @@
             :audit-log-retention-days="systemConfig.audit_log_retention_days"
             :request-candidates-retention-days="systemConfig.request_candidates_retention_days"
             :request-candidates-cleanup-batch-size="systemConfig.request_candidates_cleanup_batch_size"
-            :proxy-node-metrics-1m-retention-days="systemConfig.proxy_node_metrics_1m_retention_days"
-            :proxy-node-metrics-1h-retention-days="systemConfig.proxy_node_metrics_1h_retention_days"
-            :proxy-node-metrics-cleanup-batch-size="systemConfig.proxy_node_metrics_cleanup_batch_size"
             :loading="systemConfigLoading || cleanupConfigLoading"
             :has-changes="hasCleanupConfigChanges"
             @save="saveCleanupConfig"
@@ -145,9 +142,6 @@
             @update:audit-log-retention-days="systemConfig.audit_log_retention_days = $event"
             @update:request-candidates-retention-days="systemConfig.request_candidates_retention_days = $event"
             @update:request-candidates-cleanup-batch-size="systemConfig.request_candidates_cleanup_batch_size = $event"
-            @update:proxy-node-metrics-1m-retention-days="systemConfig.proxy_node_metrics_1m_retention_days = $event"
-            @update:proxy-node-metrics-1h-retention-days="systemConfig.proxy_node_metrics_1h_retention_days = $event"
-            @update:proxy-node-metrics-cleanup-batch-size="systemConfig.proxy_node_metrics_cleanup_batch_size = $event"
           />
 
           <!-- 定时任务 -->

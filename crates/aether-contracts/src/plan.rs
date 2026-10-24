@@ -129,7 +129,7 @@ impl fmt::Debug for ProxySnapshot {
 
 /// Reserved internal metadata key used to fence proxy-node mutations against
 /// a node incarnation recreated under the same stable id.
-pub const PROXY_NODE_TUNNEL_GENERATION_EXTRA_KEY: &str = "proxy_node_tunnel_generation";
+pub const PROXY_NODE_GENERATION_EXTRA_KEY: &str = "proxy_node_generation";
 
 pub const TRANSPORT_BACKEND_REQWEST_RUSTLS: &str = "reqwest_rustls";
 pub const TRANSPORT_BACKEND_HYPER_RUSTLS: &str = "hyper_rustls";

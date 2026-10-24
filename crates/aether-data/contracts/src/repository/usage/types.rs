@@ -2868,7 +2868,7 @@ pub struct ProxyNodeCounterDelta {
     /// Counter writes must never silently rebind to a different incarnation
     /// that reused the same node id.
     #[serde(default)]
-    pub expected_tunnel_generation: Option<String>,
+    pub expected_node_generation: Option<String>,
     pub total_requests_delta: i64,
     pub failed_requests_delta: i64,
     pub dns_failures_delta: i64,

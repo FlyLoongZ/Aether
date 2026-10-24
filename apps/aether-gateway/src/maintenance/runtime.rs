@@ -30,12 +30,6 @@ mod pool_score_rebuild;
 mod provider_checkin;
 #[path = "runtime/provider_quota_alert.rs"]
 mod provider_quota_alert;
-#[path = "runtime/proxy_node_metrics_cleanup.rs"]
-mod proxy_node_metrics_cleanup;
-#[path = "runtime/proxy_node_staleness.rs"]
-mod proxy_node_staleness;
-#[path = "runtime/proxy_upgrade_rollout.rs"]
-mod proxy_upgrade_rollout;
 #[path = "runtime/request_candidate_cleanup.rs"]
 mod request_candidate_cleanup;
 #[path = "runtime/runners.rs"]
@@ -96,20 +90,6 @@ pub(crate) use provider_checkin::{perform_provider_checkin_once, ProviderCheckin
 pub(crate) use provider_quota_alert::{
     perform_provider_quota_alert_once, ProviderQuotaAlertRunSummary,
 };
-use proxy_node_metrics_cleanup::*;
-use proxy_node_staleness::*;
-use proxy_upgrade_rollout::*;
-pub(crate) use proxy_upgrade_rollout::{
-    cancel_proxy_upgrade_rollout, clear_proxy_upgrade_rollout_conflicts,
-    collect_proxy_upgrade_rollout_probes, inspect_proxy_upgrade_rollout,
-    record_proxy_upgrade_traffic_success, record_proxy_upgrade_traffic_success_for_generation,
-    restore_proxy_upgrade_rollout_skipped_nodes, retry_proxy_upgrade_rollout_node,
-    skip_proxy_upgrade_rollout_node, start_proxy_upgrade_rollout, ProxyUpgradeRolloutCancelSummary,
-    ProxyUpgradeRolloutConflictClearSummary, ProxyUpgradeRolloutNodeActionSummary,
-    ProxyUpgradeRolloutPendingProbe, ProxyUpgradeRolloutProbeConfig,
-    ProxyUpgradeRolloutSkippedRestoreSummary, ProxyUpgradeRolloutStatus,
-    ProxyUpgradeRolloutSummary, ProxyUpgradeRolloutTrackedNodeState,
-};
 use request_candidate_cleanup::*;
 use runners::*;
 pub(crate) use runners::{
@@ -138,10 +118,8 @@ pub(super) fn postgres_error(
 const AUDIT_LOG_CLEANUP_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const GEMINI_FILE_MAPPING_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const PENDING_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
-const PROXY_NODE_STALE_SWEEP_INTERVAL: Duration = Duration::from_secs(5);
 const PROXY_NODE_METRICS_CLEANUP_HOUR: u32 = 2;
 const PROXY_NODE_METRICS_CLEANUP_MINUTE: u32 = 10;
-const PROXY_UPGRADE_ROLLOUT_INTERVAL: Duration = Duration::from_secs(15);
 const PROXY_NODE_STALE_MIN_GRACE_SECS: u64 = 15;
 const PROXY_NODE_STALE_MISSED_HEARTBEATS: u64 = 3;
 const POOL_MONITOR_INTERVAL: Duration = Duration::from_secs(5 * 60);
@@ -180,8 +158,6 @@ struct UsageCleanupSettings {
 pub(crate) struct AdminSystemCleanupSummary {
     pub(crate) audit_logs_deleted: usize,
     pub(crate) request_candidates_deleted: usize,
-    pub(crate) proxy_node_metrics:
-        aether_data::repository::proxy_nodes::ProxyNodeMetricsCleanupSummary,
     pub(crate) pending_failed: usize,
     pub(crate) pending_recovered: usize,
     pub(crate) usage: UsageCleanupSummary,
@@ -199,14 +175,12 @@ pub(crate) async fn run_admin_system_cleanup_once(
 ) -> Result<AdminSystemCleanupSummary, aether_data::DataLayerError> {
     let audit_logs_deleted = cleanup_audit_logs_once(data).await?;
     let request_candidates_deleted = cleanup_request_candidates_once(data).await?;
-    let proxy_node_metrics = cleanup_proxy_node_metrics_once(data).await?;
     let pending = cleanup_stale_pending_requests_once(data).await?;
     let usage = perform_usage_cleanup_once(data).await?;
 
     Ok(AdminSystemCleanupSummary {
         audit_logs_deleted,
         request_candidates_deleted,
-        proxy_node_metrics,
         pending_failed: pending.failed,
         pending_recovered: pending.recovered,
         usage,

@@ -2128,12 +2128,7 @@ fn validate_deployment_topology(
 
     if env_var_trimmed("AETHER_GATEWAY_INSTANCE_ID").is_none() {
         warn!(
-            "multi-node deployment started without AETHER_GATEWAY_INSTANCE_ID; this is acceptable for stateless frontdoor replicas, but tunnel owner routing should set an explicit per-node instance id"
-        );
-    }
-    if env_var_trimmed("AETHER_TUNNEL_RELAY_BASE_URL").is_none() {
-        warn!(
-            "multi-node deployment started without AETHER_TUNNEL_RELAY_BASE_URL; frontdoor replicas are fine, but proxy tunnel owner relay cannot forward across nodes until a per-node reachable base URL is configured"
+            "multi-node deployment started without AETHER_GATEWAY_INSTANCE_ID; task ownership and distributed locks will fall back to HOSTNAME or the process id"
         );
     }
     if !matches!(
@@ -2480,13 +2475,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     prepare_database_startup_requirements(&state, args.effective_database_mode()).await?;
     state.warm_database_pools().await?;
-    let reset_stale_proxy_nodes = state.reset_stale_proxy_node_tunnel_statuses().await?;
-    if reset_stale_proxy_nodes > 0 {
-        info!(
-            reset_stale_proxy_nodes,
-            "reset stale tunnel-connected proxy nodes on startup"
-        );
-    }
     state.bootstrap_admin_from_env().await?;
     match state.ensure_system_default_routing_group().await {
         Ok(Some(group)) => {

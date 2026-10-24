@@ -832,7 +832,7 @@ name = "target_id"
 type = "text"
 
 [[table.usage_counter_deltas.columns]]
-name = "target_tunnel_generation"
+name = "target_node_generation"
 type = "text"
 length = 64
 nullable = true

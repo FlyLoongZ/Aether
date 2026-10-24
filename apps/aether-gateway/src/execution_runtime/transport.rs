@@ -15,7 +15,7 @@ use aether_contracts::{
     ExecutionPlan, ExecutionResponseBodyMode, ExecutionResponseObservation, ExecutionResult,
     ExecutionTelemetry, ProxySnapshot, ResolvedTransportProfile, ResponseBody,
     EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER, EXECUTION_REQUEST_HTTP1_ONLY_HEADER,
-    EXECUTION_RESPONSE_BODY_MODE_HEADER, PROXY_NODE_TUNNEL_GENERATION_EXTRA_KEY,
+    EXECUTION_RESPONSE_BODY_MODE_HEADER, PROXY_NODE_GENERATION_EXTRA_KEY,
     TRANSPORT_BACKEND_BROWSER_WREQ, TRANSPORT_BACKEND_REQWEST_RUSTLS,
     TRANSPORT_HTTP_MODE_H2C_PRIOR_KNOWLEDGE, TRANSPORT_HTTP_MODE_HTTP1_ONLY,
 };
@@ -1457,14 +1457,13 @@ async fn record_manual_proxy_traffic(
     dns_failures_delta: i64,
     stream_errors_delta: i64,
 ) {
-    let Some((node_id, expected_tunnel_generation)) =
-        manual_proxy_node_binding(plan.proxy.as_ref())
+    let Some((node_id, expected_node_generation)) = manual_proxy_node_binding(plan.proxy.as_ref())
     else {
         return;
     };
     let mutation = ProxyNodeTrafficMutation {
         node_id: node_id.clone(),
-        expected_tunnel_generation: Some(expected_tunnel_generation),
+        expected_node_generation: Some(expected_node_generation),
         total_requests_delta,
         failed_requests_delta,
         dns_failures_delta,
@@ -1491,15 +1490,15 @@ fn manual_proxy_node_binding(proxy: Option<&ProxySnapshot>) -> Option<(String, S
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)?;
-    let expected_tunnel_generation = proxy
+    let expected_node_generation = proxy
         .extra
         .as_ref()
-        .and_then(|extra| extra.get(PROXY_NODE_TUNNEL_GENERATION_EXTRA_KEY))
+        .and_then(|extra| extra.get(PROXY_NODE_GENERATION_EXTRA_KEY))
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)?;
-    Some((node_id, expected_tunnel_generation))
+    Some((node_id, expected_node_generation))
 }
 
 pub(crate) async fn send_request(
@@ -4506,17 +4505,11 @@ mod tests {
     use std::io::{Read, Write};
     use std::sync::{Arc, Mutex};
 
-    use aether_contracts::tunnel::{
-        TUNNEL_RELAY_AUTH_NONCE_HEADER, TUNNEL_RELAY_AUTH_PAYLOAD_HEADER,
-        TUNNEL_RELAY_AUTH_SENDER_HEADER, TUNNEL_RELAY_AUTH_SIGNATURE_HEADER,
-        TUNNEL_RELAY_AUTH_TIMESTAMP_HEADER, TUNNEL_RELAY_OWNER_INSTANCE_HEADER,
-    };
-    use aether_contracts::tunnel_security::TUNNEL_SECURITY_NON_TLS_REQUIRED;
     use aether_contracts::{
         ExecutionPlan, ExecutionResponseBodyMode, ExecutionTimeouts, ProxySnapshot, RequestBody,
         ResolvedTransportProfile, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER,
         EXECUTION_REQUEST_HTTP1_ONLY_HEADER, EXECUTION_RESPONSE_BODY_MODE_HEADER,
-        PROXY_NODE_TUNNEL_GENERATION_EXTRA_KEY, TRANSPORT_BACKEND_BROWSER_WREQ,
+        PROXY_NODE_GENERATION_EXTRA_KEY, TRANSPORT_BACKEND_BROWSER_WREQ,
         TRANSPORT_BACKEND_REQWEST_RUSTLS, TRANSPORT_HTTP_MODE_AUTO,
         TRANSPORT_HTTP_MODE_H2C_PRIOR_KNOWLEDGE, TRANSPORT_HTTP_MODE_HTTP1_ONLY,
     };
@@ -4537,11 +4530,10 @@ mod tests {
 
     use super::{
         append_upstream_response_body_chunk_with_limit, build_browser_wreq_client, build_client,
-        build_direct_tunnel_request_meta, build_execution_response_body, build_relay_client,
-        build_relay_url, build_request_headers, collect_response_headers,
-        collect_tunnel_response_headers, decode_base64_body_with_limit,
-        decode_response_body_bytes_with_limit, effective_response_body_limit_bytes,
-        execute_sync_plan, execution_plan_response_body_limit_bytes, execution_response_body_mode,
+        build_execution_response_body, build_request_headers, collect_response_headers,
+        decode_base64_body_with_limit, decode_response_body_bytes_with_limit,
+        effective_response_body_limit_bytes, execute_sync_plan,
+        execution_plan_response_body_limit_bytes, execution_response_body_mode,
         execution_result_envelope_limit_bytes, http_uris_have_same_origin,
         json_value_fits_serialized_limit, maximum_base64_len_for_decoded_limit,
         record_manual_proxy_request_failure, record_manual_proxy_request_outcome,
@@ -4549,9 +4541,9 @@ mod tests {
         reqwest_urls_have_same_origin, resolve_execution_transport_controls,
         resolve_non_stream_total_timeout, resolve_proxy_url, resolve_stream_first_byte_timeout,
         response_body_is_json, safe_redirect_decision, validate_execution_upstream_url,
-        validate_relay_target_url, with_upstream_response_body_limit, DirectSyncExecutionRuntime,
-        ExecutionRuntimeTransportError, ExecutionTransportControls, RelayRequestMeta,
-        SafeRedirectDecision, UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
+        with_upstream_response_body_limit, DirectSyncExecutionRuntime,
+        ExecutionRuntimeTransportError, ExecutionTransportControls, SafeRedirectDecision,
+        UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
         EXECUTION_RESPONSE_BODY_LIMIT_HEADER, MAX_SAFE_REDIRECTS,
         MAX_SCOPED_RESPONSE_BODY_LIMIT_BYTES, MIN_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
     };
@@ -4562,7 +4554,6 @@ mod tests {
         frontdoor_self_loop_public_ai_path, gateway_frontdoor_self_loop_guard_error_with_port,
         gateway_frontdoor_self_loop_guard_matches_with_port,
     };
-    use crate::tunnel::{tunnel_protocol, TunnelProxyConn};
     use crate::AppState;
 
     const LOCAL_HTTP_SUCCESS_TIMEOUT_MS: u64 = 15_000;
@@ -4770,16 +4761,6 @@ mod tests {
     }
 
     #[test]
-    fn relay_error_kind_accepts_only_protocol_categories() {
-        assert_eq!(super::sanitize_relay_error_kind("TIMEOUT"), "timeout");
-        assert_eq!(super::sanitize_relay_error_kind("upstream"), "unknown");
-        assert_eq!(
-            super::sanitize_relay_error_kind("https://relay-user:secret@example.test"),
-            "unknown"
-        );
-    }
-
-    #[test]
     fn enabled_proxy_without_a_usable_target_is_rejected() {
         let proxy = ProxySnapshot {
             enabled: Some(true),
@@ -4852,70 +4833,6 @@ mod tests {
             SafeRedirectDecision::TooMany
         );
         assert_eq!(safe_redirect_decision(1, false), SafeRedirectDecision::Stop);
-    }
-
-    #[test]
-    fn direct_and_tunnel_response_collectors_strip_upstream_security_headers() {
-        let mut direct = reqwest::header::HeaderMap::new();
-        direct.insert(
-            reqwest::header::SET_COOKIE,
-            reqwest::header::HeaderValue::from_static("session=attacker"),
-        );
-        direct.insert(
-            "x-aether-future-control",
-            reqwest::header::HeaderValue::from_static("attacker"),
-        );
-        direct.insert(
-            reqwest::header::CONTENT_TYPE,
-            reqwest::header::HeaderValue::from_static("application/json"),
-        );
-        direct.append(
-            reqwest::header::CONNECTION,
-            reqwest::header::HeaderValue::from_static("x-first-hop"),
-        );
-        direct.append(
-            reqwest::header::CONNECTION,
-            reqwest::header::HeaderValue::from_static("x-second-hop"),
-        );
-        direct.insert(
-            "x-first-hop",
-            reqwest::header::HeaderValue::from_static("first-secret"),
-        );
-        direct.insert(
-            "x-second-hop",
-            reqwest::header::HeaderValue::from_static("second-secret"),
-        );
-
-        let direct = collect_response_headers(&direct);
-        assert!(!direct.contains_key("set-cookie"));
-        assert!(!direct.contains_key("x-aether-future-control"));
-        assert!(!direct.contains_key("x-first-hop"));
-        assert!(!direct.contains_key("x-second-hop"));
-        assert_eq!(
-            direct.get("content-type").map(String::as_str),
-            Some("application/json")
-        );
-
-        let tunnel = collect_tunnel_response_headers(&[
-            ("Set-Cookie".to_string(), "session=attacker".to_string()),
-            (
-                "X-Aether-Future-Control".to_string(),
-                "attacker".to_string(),
-            ),
-            ("Content-Type".to_string(), "application/json".to_string()),
-            ("Connection".to_string(), "x-first-hop".to_string()),
-            ("connection".to_string(), "x-second-hop".to_string()),
-            ("x-first-hop".to_string(), "first-secret".to_string()),
-            ("x-second-hop".to_string(), "second-secret".to_string()),
-        ]);
-        assert!(!tunnel.contains_key("set-cookie"));
-        assert!(!tunnel.contains_key("x-aether-future-control"));
-        assert!(!tunnel.contains_key("x-first-hop"));
-        assert!(!tunnel.contains_key("x-second-hop"));
-        assert_eq!(
-            tunnel.get("content-type").map(String::as_str),
-            Some("application/json")
-        );
     }
 
     #[test]
@@ -5055,7 +4972,7 @@ mod tests {
 
     #[test]
     fn scoped_response_body_limit_injection_preserves_transport_profile_and_extra() {
-        let mut plan = tunnel_timeout_plan(false);
+        let mut plan = sample_execution_plan(false);
         let original_profile = ResolvedTransportProfile {
             profile_id: "existing-profile".into(),
             backend: TRANSPORT_BACKEND_BROWSER_WREQ.into(),
@@ -5083,7 +5000,7 @@ mod tests {
             DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES
         );
 
-        let unprofiled_plan = tunnel_timeout_plan(false);
+        let unprofiled_plan = sample_execution_plan(false);
         let bounded_unprofiled_plan = with_upstream_response_body_limit(
             &unprofiled_plan,
             DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
@@ -5095,7 +5012,7 @@ mod tests {
             DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES
         );
 
-        let mut shadowed_plan = tunnel_timeout_plan(false);
+        let mut shadowed_plan = sample_execution_plan(false);
         shadowed_plan.headers.insert(
             EXECUTION_RESPONSE_BODY_LIMIT_HEADER.to_ascii_uppercase(),
             "65536".to_string(),
@@ -5117,7 +5034,7 @@ mod tests {
     #[test]
     fn scoped_response_body_limit_parsing_rejects_invalid_values_and_clamps_bounds() {
         let scoped_plan = |raw_limit: &str| {
-            let mut plan = tunnel_timeout_plan(false);
+            let mut plan = sample_execution_plan(false);
             plan.headers.insert(
                 EXECUTION_RESPONSE_BODY_LIMIT_HEADER.to_string(),
                 raw_limit.to_string(),
@@ -5194,7 +5111,7 @@ mod tests {
 
     #[test]
     fn request_body_rejects_ambiguous_json_and_base64_representations() {
-        let mut plan = tunnel_timeout_plan(false);
+        let mut plan = sample_execution_plan(false);
         plan.body = RequestBody {
             json_body: Some(json!({"json": true})),
             body_bytes_b64: Some("e30=".to_string()),
@@ -5222,7 +5139,7 @@ mod tests {
     #[test]
     fn scoped_response_body_wire_limit_rejects_overflow() {
         let bounded_plan = with_upstream_response_body_limit(
-            &tunnel_timeout_plan(false),
+            &sample_execution_plan(false),
             MIN_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
         );
         let limit_bytes = execution_plan_response_body_limit_bytes(&bounded_plan);
@@ -5244,7 +5161,7 @@ mod tests {
     #[test]
     fn scoped_response_body_limit_rejects_gzip_bomb_after_wire_check() {
         let bounded_plan = with_upstream_response_body_limit(
-            &tunnel_timeout_plan(false),
+            &sample_execution_plan(false),
             MIN_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
         );
         let limit_bytes = execution_plan_response_body_limit_bytes(&bounded_plan);
@@ -6339,7 +6256,7 @@ mod tests {
 
     #[test]
     fn response_body_mode_requires_same_format_raw_sync_plan() {
-        let mut plan = tunnel_timeout_plan(false);
+        let mut plan = sample_execution_plan(false);
         plan.headers.insert(
             EXECUTION_RESPONSE_BODY_MODE_HEADER.to_string(),
             ExecutionResponseBodyMode::PreserveBytes
@@ -6370,79 +6287,8 @@ mod tests {
     }
 
     #[test]
-    fn tunnel_request_meta_uses_total_timeout_for_non_stream_requests() {
-        let plan = tunnel_timeout_plan(false);
-        let meta = build_direct_tunnel_request_meta(
-            &plan,
-            &reqwest::header::HeaderMap::new(),
-            ExecutionTransportControls::default(),
-        );
-
-        assert!(!meta.stream);
-        assert_eq!(meta.request_timeout_ms, Some(90_000));
-        assert_eq!(meta.stream_first_byte_timeout_ms, Some(12_345));
-        assert_eq!(meta.timeout, 90);
-    }
-
-    #[test]
-    fn tunnel_request_meta_uses_first_byte_timeout_for_stream_requests() {
-        let plan = tunnel_timeout_plan(true);
-        let meta = build_direct_tunnel_request_meta(
-            &plan,
-            &reqwest::header::HeaderMap::new(),
-            ExecutionTransportControls::default(),
-        );
-
-        assert!(meta.stream);
-        assert_eq!(meta.request_timeout_ms, None);
-        assert_eq!(meta.stream_first_byte_timeout_ms, Some(12_345));
-        assert_eq!(meta.timeout, 13);
-    }
-
-    #[test]
-    fn stream_first_byte_timeout_uses_default_when_unconfigured() {
-        let mut plan = tunnel_timeout_plan(true);
-        plan.timeouts = None;
-
-        let timeout = resolve_stream_first_byte_timeout(&plan)
-            .expect("stream plans should have a first-byte default");
-        let meta = build_direct_tunnel_request_meta(
-            &plan,
-            &reqwest::header::HeaderMap::new(),
-            ExecutionTransportControls::default(),
-        );
-
-        assert_eq!(timeout, std::time::Duration::from_millis(30_000));
-        assert_eq!(meta.request_timeout_ms, None);
-        assert_eq!(meta.stream_first_byte_timeout_ms, Some(30_000));
-        assert_eq!(meta.timeout, 30);
-    }
-
-    #[test]
-    fn stream_first_byte_timeout_ignores_total_timeout() {
-        let mut plan = tunnel_timeout_plan(true);
-        plan.timeouts = Some(ExecutionTimeouts {
-            total_ms: Some(90_000),
-            ..ExecutionTimeouts::default()
-        });
-
-        let timeout = resolve_stream_first_byte_timeout(&plan)
-            .expect("stream plans should have a first-byte default");
-        let meta = build_direct_tunnel_request_meta(
-            &plan,
-            &reqwest::header::HeaderMap::new(),
-            ExecutionTransportControls::default(),
-        );
-
-        assert_eq!(timeout, std::time::Duration::from_millis(30_000));
-        assert_eq!(meta.request_timeout_ms, None);
-        assert_eq!(meta.stream_first_byte_timeout_ms, Some(30_000));
-        assert_eq!(meta.timeout, 30);
-    }
-
-    #[test]
     fn non_stream_total_timeout_defaults_to_provider_request_timeout() {
-        let mut plan = tunnel_timeout_plan(false);
+        let mut plan = sample_execution_plan(false);
         plan.timeouts = None;
 
         let timeout = resolve_non_stream_total_timeout(&plan)
@@ -6451,45 +6297,7 @@ mod tests {
         assert_eq!(timeout, std::time::Duration::from_secs(300));
     }
 
-    #[test]
-    fn codex_compact_uses_the_full_unary_timeout_by_default() {
-        let mut plan = tunnel_timeout_plan(false);
-        plan.provider_api_format = "openai:responses:compact".to_string();
-        plan.timeouts = None;
-
-        let timeout = resolve_non_stream_total_timeout(&plan)
-            .expect("Codex Compact should have a total timeout");
-        let meta = build_direct_tunnel_request_meta(
-            &plan,
-            &reqwest::header::HeaderMap::new(),
-            ExecutionTransportControls::default(),
-        );
-
-        assert_eq!(timeout, std::time::Duration::from_secs(1_200));
-        assert_eq!(meta.request_timeout_ms, Some(1_200_000));
-        assert_eq!(meta.timeout, 1_200);
-    }
-
-    #[test]
-    fn tunnel_request_meta_uses_non_stream_default_instead_of_first_byte_default() {
-        let mut plan = tunnel_timeout_plan(false);
-        plan.timeouts = Some(ExecutionTimeouts {
-            first_byte_ms: Some(30_000),
-            ..ExecutionTimeouts::default()
-        });
-        let meta = build_direct_tunnel_request_meta(
-            &plan,
-            &reqwest::header::HeaderMap::new(),
-            ExecutionTransportControls::default(),
-        );
-
-        assert!(!meta.stream);
-        assert_eq!(meta.request_timeout_ms, Some(300_000));
-        assert_eq!(meta.stream_first_byte_timeout_ms, Some(30_000));
-        assert_eq!(meta.timeout, 300);
-    }
-
-    fn tunnel_timeout_plan(stream: bool) -> ExecutionPlan {
+    fn sample_execution_plan(stream: bool) -> ExecutionPlan {
         ExecutionPlan {
             request_id: "req-timeout".into(),
             candidate_id: None,
@@ -6545,138 +6353,6 @@ mod tests {
         }
     }
 
-    fn tunnel_proxy_snapshot(base_url: String) -> ProxySnapshot {
-        ProxySnapshot {
-            enabled: Some(true),
-            mode: Some("tunnel".into()),
-            node_id: Some("node-1".into()),
-            label: Some("relay-node".into()),
-            url: None,
-            extra: Some(json!({"tunnel_base_url": base_url})),
-        }
-    }
-
-    const LOCAL_TUNNEL_TEST_PSK: &str = "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=";
-    const LOCAL_TUNNEL_TEST_GENERATION: &str = "transport-test-generation-1";
-
-    fn authenticated_local_tunnel_test_state() -> AppState {
-        let node = StoredProxyNode::new(
-            "node-1".to_string(),
-            "Node 1".to_string(),
-            "127.0.0.1".to_string(),
-            0,
-            false,
-            "online".to_string(),
-            30,
-            1,
-            0,
-            0,
-            0,
-            0,
-            true,
-            true,
-            1,
-        )
-        .expect("tunnel node should build")
-        .with_runtime_fields(
-            None,
-            None,
-            None,
-            None,
-            Some(json!({
-                "tunnel_security": {
-                    "mode": TUNNEL_SECURITY_NON_TLS_REQUIRED,
-                    "encryption_key": LOCAL_TUNNEL_TEST_PSK,
-                }
-            })),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .with_tunnel_generation(LOCAL_TUNNEL_TEST_GENERATION.to_string());
-        let data = crate::data::GatewayDataState::with_proxy_node_repository_for_tests(Arc::new(
-            InMemoryProxyNodeRepository::seed([node]),
-        ))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
-        AppState::new()
-            .expect("app state should build")
-            .with_data_state_for_tests(data)
-    }
-
-    async fn recv_tunnel_test_frame(
-        proxy_rx: &mut aether_runtime::BoundedQueueReceiver<Message>,
-        description: &str,
-    ) -> Message {
-        tokio::time::timeout(std::time::Duration::from_secs(5), proxy_rx.recv())
-            .await
-            .unwrap_or_else(|_| panic!("timed out waiting for {description}"))
-            .unwrap_or_else(|| panic!("proxy channel closed before {description}"))
-    }
-
-    #[test]
-    fn execution_tunnel_relay_url_policy_allows_https_and_loopback_http() {
-        let https_proxy = tunnel_proxy_snapshot("https://gateway.example.com/base".to_string());
-        let https_url = build_relay_url(Some(&https_proxy), "node-1")
-            .expect("remote HTTPS relay should be allowed");
-        assert_eq!(
-            https_url,
-            "https://gateway.example.com/base/api/internal/tunnel/relay/node-1"
-        );
-
-        let loopback_proxy = tunnel_proxy_snapshot("http://127.0.0.1:8084".to_string());
-        let loopback_url = build_relay_url(Some(&loopback_proxy), "node-1")
-            .expect("loopback HTTP relay should be allowed");
-        assert_eq!(
-            loopback_url,
-            "http://127.0.0.1:8084/api/internal/tunnel/relay/node-1"
-        );
-    }
-
-    #[test]
-    fn execution_tunnel_relay_url_policy_rejects_remote_http() {
-        let proxy = tunnel_proxy_snapshot("http://gateway.example.com".to_string());
-        let error = build_relay_url(Some(&proxy), "node-1")
-            .expect_err("remote HTTP relay must be rejected");
-
-        assert!(matches!(
-            error,
-            ExecutionRuntimeTransportError::RelayError(message)
-                if message.contains("HTTPS") && message.contains("loopback")
-        ));
-    }
-
-    #[test]
-    fn relay_target_url_policy_rejects_ambiguous_or_private_targets() {
-        for rejected in [
-            "http://relay.example.test",
-            "https://10.0.0.8:8443",
-            "https://127.0.0.1:8443",
-            "http://localhost:8084?token=secret",
-            "http://localhost:8084#fragment",
-            "https://relay-user:relay-password@relay.example.test",
-            "file:///tmp/relay",
-        ] {
-            let url = reqwest::Url::parse(rejected).expect("test URL should parse");
-            assert!(
-                validate_relay_target_url(&url).is_err(),
-                "relay target should be rejected: {rejected}"
-            );
-        }
-
-        for accepted in [
-            "https://relay.example.test:8443/api/internal/tunnel/relay/node-1",
-            "http://localhost:8084/api/internal/tunnel/relay/node-1",
-            "http://127.0.0.1:8084/api/internal/tunnel/relay/node-1",
-        ] {
-            let url = reqwest::Url::parse(accepted).expect("test URL should parse");
-            validate_relay_target_url(&url)
-                .unwrap_or_else(|error| panic!("relay target should pass: {accepted}: {error}"));
-        }
-    }
-
     #[test]
     fn limited_json_body_serialization_rejects_before_growing_to_full_body() {
         let body = json!({"payload": "x".repeat(1024)});
@@ -6689,30 +6365,6 @@ mod tests {
         assert_eq!(encoded, br#"{"ok":true}"#);
     }
 
-    #[test]
-    fn relay_envelope_rejects_oversized_metadata_before_length_cast() {
-        let meta = RelayRequestMeta {
-            provider_id: "provider".to_string(),
-            endpoint_id: "endpoint".to_string(),
-            key_id: "key".to_string(),
-            method: "POST".to_string(),
-            url: "https://relay.example.test".to_string(),
-            headers: BTreeMap::from([("x-large".to_string(), "x".repeat(300 * 1024))]),
-            stream: false,
-            request_timeout_ms: None,
-            stream_first_byte_timeout_ms: None,
-            timeout: 60,
-            follow_redirects: None,
-            http1_only: false,
-            transport_profile: None,
-        };
-        assert!(matches!(
-            super::build_relay_envelope(meta, &[]),
-            Err(ExecutionRuntimeTransportError::RelayError(message))
-                if message.contains("metadata")
-        ));
-    }
-
     fn manual_proxy_snapshot(node_id: &str) -> ProxySnapshot {
         ProxySnapshot {
             enabled: Some(true),
@@ -6721,7 +6373,7 @@ mod tests {
             label: Some("manual-proxy".into()),
             url: Some("http://127.0.0.1:1".into()),
             extra: Some(json!({
-                PROXY_NODE_TUNNEL_GENERATION_EXTRA_KEY: "test-manual-generation"
+                PROXY_NODE_GENERATION_EXTRA_KEY: "test-manual-generation"
             })),
         }
     }
@@ -6732,20 +6384,10 @@ mod tests {
             "manual-proxy".to_string(),
             "127.0.0.1".to_string(),
             1,
-            true,
             "online".to_string(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            false,
-            false,
-            0,
         )
         .expect("manual proxy node should build")
-        .with_tunnel_generation("test-manual-generation".into())
+        .with_node_generation("test-manual-generation".into())
         .with_manual_proxy_fields(Some("http://127.0.0.1:1".into()), None, None)
     }
 
@@ -7751,434 +7393,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn execute_sync_plan_ignores_stream_error_for_tunnel_proxy() {
-        let repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![
-            sample_manual_proxy_node("manual-node-1"),
-        ]));
-        let data = crate::data::GatewayDataState::with_proxy_node_repository_for_tests(Arc::clone(
-            &repository,
-        ));
-        let state = AppState::new()
-            .expect("app state should build")
-            .with_data_state_for_tests(data);
-        let plan = ExecutionPlan {
-            request_id: "req-tunnel-proxy-stream-error".into(),
-            candidate_id: None,
-            provider_name: None,
-            provider_id: "prov-1".into(),
-            endpoint_id: "ep-1".into(),
-            key_id: "key-1".into(),
-            method: "POST".into(),
-            url: "https://example.com/chat".into(),
-            headers: BTreeMap::new(),
-            content_type: None,
-            content_encoding: None,
-            body: RequestBody::from_json(json!({})),
-            stream: true,
-            client_api_format: "openai:chat".into(),
-            provider_api_format: "openai:chat".into(),
-            model_name: None,
-            proxy: Some(tunnel_proxy_snapshot("http://127.0.0.1:1".to_string())),
-            transport_profile: None,
-            timeouts: None,
-        };
-
-        record_manual_proxy_stream_error(&state, &plan).await;
-
-        let node = repository
-            .find_proxy_node("manual-node-1")
-            .await
-            .expect("proxy node lookup should succeed")
-            .expect("manual proxy node should exist");
-        assert_eq!(node.total_requests, 0);
-        assert_eq!(node.failed_requests, 0);
-        assert_eq!(node.stream_errors, 0);
-    }
-
-    #[tokio::test]
-    async fn direct_sync_execution_runtime_supports_tunnel_relay() {
-        let _env_lock = direct_reqwest_env_lock().lock().await;
-        let _relay_secret = set_test_env_var("AETHER_TUNNEL_RELAY_AUTH_SECRET", RELAY_TEST_SECRET);
-        let listener = crate::test_support::bind_loopback_listener()
-            .await
-            .expect("listener should bind");
-        let addr = listener.local_addr().expect("local addr should resolve");
-        let app = Router::new().route(
-            "/api/internal/tunnel/relay/{node_id}",
-            post(
-                |Path(node_id): Path<String>, headers: AxumHeaderMap, body: Bytes| async move {
-                    let (meta, request_body) = decode_relay_envelope(&body);
-                    assert_eq!(node_id, "node-1");
-                    for name in [
-                        TUNNEL_RELAY_AUTH_SENDER_HEADER,
-                        TUNNEL_RELAY_OWNER_INSTANCE_HEADER,
-                        TUNNEL_RELAY_AUTH_TIMESTAMP_HEADER,
-                        TUNNEL_RELAY_AUTH_NONCE_HEADER,
-                        TUNNEL_RELAY_AUTH_PAYLOAD_HEADER,
-                        TUNNEL_RELAY_AUTH_SIGNATURE_HEADER,
-                    ] {
-                        assert!(
-                            headers.contains_key(name),
-                            "missing relay auth header {name}"
-                        );
-                    }
-                    assert_eq!(meta["method"], "POST");
-                    assert_eq!(meta["url"], "https://example.com/chat");
-                    let headers = meta["headers"]
-                        .as_object()
-                        .expect("relay meta headers should be an object");
-                    assert!(
-                        !headers.contains_key(EXECUTION_RUNTIME_LOOP_GUARD_HEADER),
-                        "tunnel relay metadata must not leak internal execution loop guard headers"
-                    );
-                    let via = headers
-                        .get("via")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default();
-                    assert!(
-                    !via.to_ascii_lowercase()
-                        .contains(EXECUTION_RUNTIME_LOOP_GUARD_VIA_TOKEN),
-                    "tunnel relay metadata must not leak internal execution runtime Via markers"
-                );
-                    let request_json: serde_json::Value =
-                        serde_json::from_slice(&request_body).expect("request body should be json");
-                    assert_eq!(request_json["model"], "gpt-4.1");
-                    (
-                        axum::http::StatusCode::OK,
-                        Json(json!({"tunnel": true, "node_id": node_id})),
-                    )
-                },
-            ),
-        );
-        let server = tokio::spawn(async move {
-            axum::serve(listener, app)
-                .await
-                .expect("relay test server should run");
-        });
-
-        let execution_runtime = DirectSyncExecutionRuntime::new();
-        let result = execution_runtime
-            .execute_sync(&ExecutionPlan {
-                request_id: "req-1".into(),
-                candidate_id: None,
-                provider_name: None,
-                provider_id: "prov-1".into(),
-                endpoint_id: "ep-1".into(),
-                key_id: "key-1".into(),
-                method: "POST".into(),
-                url: "https://example.com/chat".into(),
-                headers: BTreeMap::from([("content-type".into(), "application/json".into())]),
-                content_type: Some("application/json".into()),
-                content_encoding: None,
-                body: RequestBody::from_json(json!({"model": "gpt-4.1"})),
-                stream: false,
-                client_api_format: "openai:chat".into(),
-                provider_api_format: "openai:chat".into(),
-                model_name: Some("gpt-4.1".into()),
-                proxy: Some(tunnel_proxy_snapshot(format!("http://{addr}"))),
-                transport_profile: None,
-                timeouts: Some(ExecutionTimeouts {
-                    connect_ms: Some(5_000),
-                    total_ms: Some(LOCAL_HTTP_SUCCESS_TIMEOUT_MS),
-                    ..ExecutionTimeouts::default()
-                }),
-            })
-            .await
-            .expect("tunnel relay execution should succeed");
-
-        server.abort();
-
-        assert_eq!(result.status_code, 200);
-        assert_eq!(
-            result.body.and_then(|body| body.json_body),
-            Some(json!({"tunnel": true, "node_id": "node-1"}))
-        );
-    }
-
-    #[tokio::test]
-    async fn tunnel_relay_client_never_forwards_signed_envelopes_across_redirects() {
-        let redirected_hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let redirected_hits_clone = Arc::clone(&redirected_hits);
-        let redirected_listener = crate::test_support::bind_loopback_listener()
-            .await
-            .expect("redirect target listener should bind");
-        let redirected_addr = redirected_listener
-            .local_addr()
-            .expect("redirect target address should resolve");
-        let redirected_app = Router::new().route(
-            "/captured",
-            post(move || {
-                let hits = Arc::clone(&redirected_hits_clone);
-                async move {
-                    hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    axum::http::StatusCode::OK
-                }
-            }),
-        );
-        let redirected_server = tokio::spawn(async move {
-            axum::serve(redirected_listener, redirected_app)
-                .await
-                .expect("redirect target server should run");
-        });
-
-        let redirect_listener = crate::test_support::bind_loopback_listener()
-            .await
-            .expect("redirect source listener should bind");
-        let redirect_addr = redirect_listener
-            .local_addr()
-            .expect("redirect source address should resolve");
-        let location = format!("http://{redirected_addr}/captured");
-        let redirect_app = Router::new().route(
-            "/relay",
-            post(move || {
-                let location = location.clone();
-                async move {
-                    (
-                        axum::http::StatusCode::TEMPORARY_REDIRECT,
-                        [(axum::http::header::LOCATION, location)],
-                    )
-                }
-            }),
-        );
-        let redirect_server = tokio::spawn(async move {
-            axum::serve(redirect_listener, redirect_app)
-                .await
-                .expect("redirect source server should run");
-        });
-
-        let response = build_relay_client(None)
-            .expect("relay client should build")
-            .post(format!("http://{redirect_addr}/relay"))
-            .header(TUNNEL_RELAY_AUTH_SIGNATURE_HEADER, "sensitive-signature")
-            .body("sensitive-relay-envelope")
-            .send()
-            .await
-            .expect("relay client should return the redirect response");
-
-        assert_eq!(response.status(), reqwest::StatusCode::TEMPORARY_REDIRECT);
-        assert_eq!(redirected_hits.load(std::sync::atomic::Ordering::SeqCst), 0);
-
-        redirect_server.abort();
-        redirected_server.abort();
-    }
-
-    #[tokio::test]
-    async fn direct_sync_execution_runtime_rejects_short_tunnel_relay_secret_before_send() {
-        let _env_lock = direct_reqwest_env_lock().lock().await;
-        let _relay_secret = set_test_env_var("AETHER_TUNNEL_RELAY_AUTH_SECRET", &"x".repeat(31));
-        let execution_runtime = DirectSyncExecutionRuntime::new();
-        let error = execution_runtime
-            .execute_sync(&ExecutionPlan {
-                request_id: "req-short-relay-secret".into(),
-                candidate_id: None,
-                provider_name: None,
-                provider_id: "prov-1".into(),
-                endpoint_id: "ep-1".into(),
-                key_id: "key-1".into(),
-                method: "POST".into(),
-                url: "https://example.com/chat".into(),
-                headers: BTreeMap::from([("content-type".into(), "application/json".into())]),
-                content_type: Some("application/json".into()),
-                content_encoding: None,
-                body: RequestBody::from_json(json!({"model": "gpt-4.1"})),
-                stream: false,
-                client_api_format: "openai:chat".into(),
-                provider_api_format: "openai:chat".into(),
-                model_name: Some("gpt-4.1".into()),
-                proxy: Some(tunnel_proxy_snapshot("http://127.0.0.1:1".to_string())),
-                transport_profile: None,
-                timeouts: Some(ExecutionTimeouts {
-                    connect_ms: Some(5_000),
-                    total_ms: Some(LOCAL_HTTP_SUCCESS_TIMEOUT_MS),
-                    ..ExecutionTimeouts::default()
-                }),
-            })
-            .await
-            .expect_err("short relay secret must fail closed");
-
-        assert!(matches!(
-            error,
-            ExecutionRuntimeTransportError::RelayError(message)
-                if message.contains("at least 32 bytes")
-        ));
-    }
-
-    #[tokio::test]
-    async fn direct_sync_execution_runtime_requires_tunnel_relay_secret_before_send() {
-        let _env_lock = direct_reqwest_env_lock().lock().await;
-        let _relay_secret = unset_test_env_var("AETHER_TUNNEL_RELAY_AUTH_SECRET");
-        let execution_runtime = DirectSyncExecutionRuntime::new();
-        let error = execution_runtime
-            .execute_sync(&ExecutionPlan {
-                request_id: "req-missing-relay-secret".into(),
-                candidate_id: None,
-                provider_name: None,
-                provider_id: "prov-1".into(),
-                endpoint_id: "ep-1".into(),
-                key_id: "key-1".into(),
-                method: "POST".into(),
-                url: "https://example.com/chat".into(),
-                headers: BTreeMap::from([("content-type".into(), "application/json".into())]),
-                content_type: Some("application/json".into()),
-                content_encoding: None,
-                body: RequestBody::from_json(json!({"model": "gpt-4.1"})),
-                stream: false,
-                client_api_format: "openai:chat".into(),
-                provider_api_format: "openai:chat".into(),
-                model_name: Some("gpt-4.1".into()),
-                proxy: Some(tunnel_proxy_snapshot("http://127.0.0.1:1".to_string())),
-                transport_profile: None,
-                timeouts: Some(ExecutionTimeouts {
-                    connect_ms: Some(5_000),
-                    total_ms: Some(LOCAL_HTTP_SUCCESS_TIMEOUT_MS),
-                    ..ExecutionTimeouts::default()
-                }),
-            })
-            .await
-            .expect_err("missing relay secret must fail closed");
-
-        assert!(matches!(
-            error,
-            ExecutionRuntimeTransportError::RelayError(message)
-                if message.contains("AETHER_TUNNEL_RELAY_AUTH_SECRET")
-                    && message.contains("required")
-        ));
-    }
-
-    #[tokio::test]
-    async fn execute_sync_plan_prefers_local_tunnel_stream_over_http_relay_loopback() {
-        let state = authenticated_local_tunnel_test_state();
-        let tunnel_app = state.tunnel.app_state();
-        let (proxy_tx, mut proxy_rx) = aether_runtime::bounded_queue(8);
-        let (proxy_close_tx, _) = watch::channel(false);
-        tunnel_app.hub.register_proxy(Arc::new(
-            TunnelProxyConn::new(
-                701,
-                "node-1".to_string(),
-                "Node 1".to_string(),
-                proxy_tx,
-                proxy_close_tx,
-                16,
-                2,
-            )
-            .with_tunnel_generation(LOCAL_TUNNEL_TEST_GENERATION.to_string())
-            .with_authenticated_key(LOCAL_TUNNEL_TEST_PSK.to_string()),
-        ));
-
-        let plan = ExecutionPlan {
-            request_id: "req-local-tunnel-1".into(),
-            candidate_id: Some("cand-local-tunnel-1".into()),
-            provider_name: Some("openai".into()),
-            provider_id: "prov-1".into(),
-            endpoint_id: "ep-1".into(),
-            key_id: "key-1".into(),
-            method: "POST".into(),
-            url: "https://example.com/chat".into(),
-            headers: BTreeMap::from([("content-type".into(), "application/json".into())]),
-            content_type: Some("application/json".into()),
-            content_encoding: None,
-            body: RequestBody::from_json(json!({"model": "gpt-4.1"})),
-            stream: false,
-            client_api_format: "openai:chat".into(),
-            provider_api_format: "openai:chat".into(),
-            model_name: Some("gpt-4.1".into()),
-            proxy: Some(tunnel_proxy_snapshot("http://127.0.0.1:1".to_string())),
-            transport_profile: None,
-            timeouts: Some(ExecutionTimeouts {
-                connect_ms: Some(5_000),
-                total_ms: Some(LOCAL_HTTP_SUCCESS_TIMEOUT_MS),
-                ..ExecutionTimeouts::default()
-            }),
-        };
-
-        let state_for_task = state.clone();
-        let plan_for_task = plan.clone();
-        let execution_task = tokio::spawn(async move {
-            execute_sync_plan(&state_for_task, Some("trace-local-tunnel"), &plan_for_task).await
-        });
-
-        let request_headers = match recv_tunnel_test_frame(&mut proxy_rx, "headers frame").await {
-            Message::Binary(data) => data,
-            other => panic!("unexpected message: {other:?}"),
-        };
-        let request_header = tunnel_protocol::FrameHeader::parse(&request_headers)
-            .expect("request header frame should parse");
-        assert_eq!(request_header.msg_type, tunnel_protocol::REQUEST_HEADERS);
-        let request_meta_payload =
-            tunnel_protocol::decode_payload(&request_headers, &request_header)
-                .expect("request meta payload should decode");
-        let request_meta =
-            serde_json::from_slice::<tunnel_protocol::RequestMeta>(&request_meta_payload)
-                .expect("request meta should decode");
-        assert_eq!(request_meta.method, "POST");
-        assert_eq!(request_meta.url, "https://example.com/chat");
-
-        let request_body = match recv_tunnel_test_frame(&mut proxy_rx, "body frame").await {
-            Message::Binary(data) => data,
-            other => panic!("unexpected message: {other:?}"),
-        };
-        let request_body_header = tunnel_protocol::FrameHeader::parse(&request_body)
-            .expect("request body frame should parse");
-        assert_eq!(request_body_header.msg_type, tunnel_protocol::REQUEST_BODY);
-        let request_body_payload =
-            tunnel_protocol::decode_payload(&request_body, &request_body_header)
-                .expect("request body payload should decode");
-        let request_json = serde_json::from_slice::<serde_json::Value>(&request_body_payload)
-            .expect("request body should decode");
-        assert_eq!(request_json["model"], "gpt-4.1");
-
-        let response_meta = tunnel_protocol::ResponseMeta {
-            status: 200,
-            headers: vec![("content-type".to_string(), "application/json".to_string())],
-        };
-        let response_payload =
-            serde_json::to_vec(&response_meta).expect("response meta should serialize");
-        let mut response_headers_frame = tunnel_protocol::encode_frame(
-            request_header.stream_id,
-            tunnel_protocol::RESPONSE_HEADERS,
-            0,
-            &response_payload,
-        );
-        tunnel_app
-            .hub
-            .handle_proxy_frame(701, &mut response_headers_frame)
-            .await;
-
-        let mut response_body_frame = tunnel_protocol::encode_frame(
-            request_header.stream_id,
-            tunnel_protocol::RESPONSE_BODY,
-            0,
-            br#"{"local_tunnel":true}"#,
-        );
-        tunnel_app
-            .hub
-            .handle_proxy_frame(701, &mut response_body_frame)
-            .await;
-
-        let mut response_end_frame = tunnel_protocol::encode_frame(
-            request_header.stream_id,
-            tunnel_protocol::STREAM_END,
-            0,
-            &[],
-        );
-        tunnel_app
-            .hub
-            .handle_proxy_frame(701, &mut response_end_frame)
-            .await;
-
-        let result = execution_task
-            .await
-            .expect("execution task should complete")
-            .expect("local tunnel execution should succeed");
-
-        assert_eq!(result.status_code, 200);
-        assert_eq!(
-            result.body.and_then(|body| body.json_body),
-            Some(json!({"local_tunnel": true}))
-        );
-    }
-
-    #[tokio::test]
     async fn direct_sync_execution_runtime_disables_redirects_by_default() {
         let listener = crate::test_support::bind_loopback_listener()
             .await
@@ -8327,93 +7541,6 @@ mod tests {
         assert_eq!(
             result.body.and_then(|body| body.json_body),
             Some(json!({"redirected": true}))
-        );
-    }
-
-    #[tokio::test]
-    async fn direct_sync_execution_runtime_forwards_http1_only_control_to_tunnel_relay() {
-        let _env_lock = direct_reqwest_env_lock().lock().await;
-        let _relay_secret = set_test_env_var("AETHER_TUNNEL_RELAY_AUTH_SECRET", RELAY_TEST_SECRET);
-        let listener = crate::test_support::bind_loopback_listener()
-            .await
-            .expect("listener should bind");
-        let addr = listener.local_addr().expect("local addr should resolve");
-        let app = Router::new().route(
-            "/api/internal/tunnel/relay/{node_id}",
-            post(
-                |Path(node_id): Path<String>, headers: AxumHeaderMap, body: Bytes| async move {
-                    let (meta, request_body) = decode_relay_envelope(&body);
-                    assert_eq!(node_id, "node-1");
-                    assert!(headers.contains_key(TUNNEL_RELAY_AUTH_SIGNATURE_HEADER));
-                    assert_eq!(meta["provider_id"], "prov-1");
-                    assert_eq!(meta["endpoint_id"], "ep-1");
-                    assert_eq!(meta["key_id"], "key-1");
-                    assert_eq!(meta["http1_only"], true);
-                    assert_eq!(meta["follow_redirects"], json!(false));
-                    assert_eq!(meta["transport_profile"]["profile_id"], "relay-profile");
-                    let request_json: serde_json::Value =
-                        serde_json::from_slice(&request_body).expect("request body should be json");
-                    assert_eq!(request_json["model"], "gpt-4.1");
-                    (axum::http::StatusCode::OK, Json(json!({"ok": true})))
-                },
-            ),
-        );
-        let server = tokio::spawn(async move {
-            axum::serve(listener, app)
-                .await
-                .expect("relay test server should run");
-        });
-
-        let execution_runtime = DirectSyncExecutionRuntime::new();
-        let result = execution_runtime
-            .execute_sync(&ExecutionPlan {
-                request_id: "req-relay-http1-1".into(),
-                candidate_id: None,
-                provider_name: Some("provider_ops".into()),
-                provider_id: "prov-1".into(),
-                endpoint_id: "ep-1".into(),
-                key_id: "key-1".into(),
-                method: "POST".into(),
-                url: "https://example.com/chat".into(),
-                headers: BTreeMap::from([
-                    ("content-type".into(), "application/json".into()),
-                    (EXECUTION_REQUEST_HTTP1_ONLY_HEADER.into(), "true".into()),
-                    (
-                        EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER.into(),
-                        "false".into(),
-                    ),
-                ]),
-                content_type: Some("application/json".into()),
-                content_encoding: None,
-                body: RequestBody::from_json(json!({"model": "gpt-4.1"})),
-                stream: false,
-                client_api_format: "provider_ops:verify".into(),
-                provider_api_format: "provider_ops:verify".into(),
-                model_name: Some("verify-auth".into()),
-                proxy: Some(tunnel_proxy_snapshot(format!("http://{addr}"))),
-                transport_profile: Some(ResolvedTransportProfile {
-                    profile_id: "relay-profile".into(),
-                    backend: TRANSPORT_BACKEND_REQWEST_RUSTLS.into(),
-                    http_mode: "auto".into(),
-                    pool_scope: "key".into(),
-                    header_fingerprint: None,
-                    extra: None,
-                }),
-                timeouts: Some(ExecutionTimeouts {
-                    connect_ms: Some(5_000),
-                    total_ms: Some(LOCAL_HTTP_SUCCESS_TIMEOUT_MS),
-                    ..ExecutionTimeouts::default()
-                }),
-            })
-            .await
-            .expect("tunnel relay execution should succeed");
-
-        server.abort();
-
-        assert_eq!(result.status_code, 200);
-        assert_eq!(
-            result.body.and_then(|body| body.json_body),
-            Some(json!({"ok": true}))
         );
     }
 

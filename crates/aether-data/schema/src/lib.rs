@@ -442,9 +442,63 @@ pub fn check_generated_dir(
     Ok(())
 }
 
+/// Tables that a migration retires after the portable baseline snapshot.
+///
+/// `logical/` describes the *current* schema, while
+/// `adapters/postgres/migrations/20260403000000_baseline.sql` stays a faithful
+/// historical starting point so the migration chain keeps replaying from it.
+/// Removals therefore show up as a deliberate divergence instead of forcing the
+/// baseline to be rewritten (which would break every later migration that still
+/// touches the retired definitions).
+pub const RETIRED_BASELINE_TABLES: &[&str] = &["proxy_node_events"];
+
+/// Columns that a migration retires after the portable baseline snapshot.
+/// See [`RETIRED_BASELINE_TABLES`] for why the baseline keeps them.
+pub const RETIRED_BASELINE_COLUMNS: &[(&str, &str)] = &[
+    ("proxy_nodes", "last_heartbeat_at"),
+    ("proxy_nodes", "heartbeat_interval"),
+    ("proxy_nodes", "active_connections"),
+    ("proxy_nodes", "is_manual"),
+    ("proxy_nodes", "remote_config"),
+    ("proxy_nodes", "config_version"),
+    ("proxy_nodes", "hardware_info"),
+    ("proxy_nodes", "estimated_max_concurrency"),
+    ("proxy_nodes", "tunnel_mode"),
+    ("proxy_nodes", "tunnel_connected"),
+    ("proxy_nodes", "tunnel_connected_at"),
+    ("proxy_nodes", "proxy_metadata"),
+];
+
+fn is_retired_baseline_column(table_name: &str, column_name: &str) -> bool {
+    RETIRED_BASELINE_COLUMNS
+        .iter()
+        .any(|(table, column)| *table == table_name && *column == column_name)
+}
+
 pub fn check_required_tables(
     schema: &LogicalSchema,
     sql_paths: &[PathBuf],
+) -> Result<(), SchemaError> {
+    check_required_tables_impl(schema, sql_paths, false)
+}
+
+/// Like [`check_required_tables`] but ignores definitions that a later
+/// migration retires (see [`RETIRED_BASELINE_TABLES`] /
+/// [`RETIRED_BASELINE_COLUMNS`]).
+///
+/// Use this when the inspected SQL is the historical baseline rather than the
+/// current schema.
+pub fn check_required_tables_excluding_retired(
+    schema: &LogicalSchema,
+    sql_paths: &[PathBuf],
+) -> Result<(), SchemaError> {
+    check_required_tables_impl(schema, sql_paths, true)
+}
+
+fn check_required_tables_impl(
+    schema: &LogicalSchema,
+    sql_paths: &[PathBuf],
+    allow_retired: bool,
 ) -> Result<(), SchemaError> {
     for path in sql_paths {
         let text = fs::read_to_string(path).map_err(|source| SchemaError::Read {
@@ -455,6 +509,9 @@ pub fn check_required_tables(
         let mut missing_tables = Vec::new();
         let mut missing_columns = Vec::new();
         for (table_name, required_columns) in required {
+            if allow_retired && RETIRED_BASELINE_TABLES.contains(&table_name.as_str()) {
+                continue;
+            }
             let Some(table) = schema.tables.get(&table_name) else {
                 missing_tables.push(table_name);
                 continue;
@@ -467,6 +524,9 @@ pub fn check_required_tables(
             let missing = required_columns
                 .iter()
                 .filter(|column| !defined_columns.contains(column.as_str()))
+                .filter(|column| {
+                    !(allow_retired && is_retired_baseline_column(&table_name, column.as_str()))
+                })
                 .cloned()
                 .collect::<Vec<_>>();
             if !missing.is_empty() {
@@ -975,7 +1035,55 @@ ALTER TABLE users ADD COLUMN ldap_dn VARCHAR(1024);
             .join("crates/aether-data/adapters/postgres/migrations/20260403000000_baseline.sql")];
 
         let loaded = load_schema_sources(schema_dir).expect("workspace logical schema should load");
-        check_required_tables(&loaded.schema, &required_sql_paths)
+        check_required_tables_excluding_retired(&loaded.schema, &required_sql_paths)
             .expect("portable SQL tables should be defined in logical schema");
+    }
+
+    #[test]
+    fn retired_baseline_shapes_only_survive_in_the_historical_baseline() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest_dir
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+            .expect("crate should live under workspace/crates/aether-data");
+        let loaded =
+            load_schema_sources(workspace.join("crates/aether-data/runtime/schema/logical"))
+                .expect("workspace logical schema should load");
+        let baseline =
+            fs::read_to_string(workspace.join(
+                "crates/aether-data/adapters/postgres/migrations/20260403000000_baseline.sql",
+            ))
+            .expect("baseline migration should be readable");
+        let baseline_shapes = extract_table_shapes(&baseline);
+
+        for table in RETIRED_BASELINE_TABLES {
+            assert!(
+                !loaded.schema.tables.contains_key(*table),
+                "current logical schema must not define retired table {table}"
+            );
+            assert!(
+                baseline_shapes.contains_key(*table),
+                "the baseline must still create {table}; drop it from RETIRED_BASELINE_TABLES instead of trimming history"
+            );
+        }
+        for (table, column) in RETIRED_BASELINE_COLUMNS {
+            let defined = loaded
+                .schema
+                .tables
+                .get(*table)
+                .is_some_and(|definition| definition.columns.iter().any(|c| c.name == *column));
+            assert!(
+                !defined,
+                "current logical schema must not define retired column {table}.{column}"
+            );
+            let present = baseline_shapes
+                .get(*table)
+                .is_some_and(|columns| columns.contains(*column));
+            assert!(
+                present,
+                "the baseline must still declare {table}.{column}; drop it from RETIRED_BASELINE_COLUMNS instead of trimming history"
+            );
+        }
     }
 }

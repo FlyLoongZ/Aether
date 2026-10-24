@@ -65,7 +65,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Activity, CheckCircle2, Cpu, Gauge, Hash, MemoryStick, Radio, TriangleAlert } from 'lucide-vue-next'
+import { Activity, CheckCircle2, Cpu, Gauge, Hash, MemoryStick, TriangleAlert } from 'lucide-vue-next'
 import { overviewApi } from '@/api/overview'
 import { buildGatewayMetricsSummary } from '@/api/monitoring'
 import { Badge } from '@/components/ui'
@@ -112,7 +112,6 @@ const coreMetrics = computed(() => {
     { label: t('请求成功率', 'Success rate'), value: percent(metrics?.success_rate?.value), icon: CheckCircle2, note: recentNote },
     { label: t('失败请求', 'Failed requests'), value: count(metrics?.failed_request_count), icon: TriangleAlert, note: recentNote },
     { label: t('当前并发', 'Concurrent requests'), value: count(runtime.value?.local.inFlight), icon: Gauge, note: nodeNote },
-    { label: t('活跃流', 'Active streams'), value: count(runtime.value?.tunnel.activeStreams), icon: Radio, note: nodeNote },
   ]
 })
 </script>

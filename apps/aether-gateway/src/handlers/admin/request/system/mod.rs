@@ -120,14 +120,6 @@ impl<'a> AdminAppState<'a> {
         self.app.find_proxy_node(node_id).await
     }
 
-    pub(crate) async fn list_proxy_node_events(
-        &self,
-        node_id: &str,
-        limit: usize,
-    ) -> Result<Vec<aether_data::repository::proxy_nodes::StoredProxyNodeEvent>, GatewayError> {
-        self.app.list_proxy_node_events(node_id, limit).await
-    }
-
     pub(crate) async fn read_admin_email_template_payload(
         &self,
         template_type: &str,

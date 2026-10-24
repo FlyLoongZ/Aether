@@ -433,7 +433,6 @@ impl<'a> AdminAppState<'a> {
                 ip: Some(node.ip.clone()),
                 port: Some(node.port),
                 region: node.region.clone(),
-                is_manual: Some(node.is_manual),
                 proxy_url: project_admin_system_export_optional_url(
                     mode,
                     node.proxy_url.as_deref(),
@@ -446,10 +445,6 @@ impl<'a> AdminAppState<'a> {
                     .credentials_are_exported()
                     .then(|| node.proxy_password.clone())
                     .flatten(),
-                tunnel_mode: Some(node.tunnel_mode),
-                heartbeat_interval: Some(node.heartbeat_interval),
-                remote_config: project_admin_system_export_json(mode, node.remote_config.as_ref()),
-                config_version: Some(node.config_version),
             })
             .collect::<Vec<_>>();
 

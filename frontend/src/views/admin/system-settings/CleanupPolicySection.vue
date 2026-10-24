@@ -202,71 +202,6 @@
         </p>
       </div>
 
-      <div>
-        <Label
-          for="proxy-node-metrics-1m-retention-days"
-          class="block text-sm font-medium"
-        >
-          代理 1m 指标保留天数
-        </Label>
-        <Input
-          id="proxy-node-metrics-1m-retention-days"
-          :model-value="proxyNodeMetrics1mRetentionDays"
-          type="number"
-          min="1"
-          max="365"
-          placeholder="30"
-          class="mt-1"
-          @update:model-value="$emit('update:proxyNodeMetrics1mRetentionDays', Number($event))"
-        />
-        <p class="mt-1 text-xs text-muted-foreground">
-          用于代理节点稳定性分钟级图表，后端最少保留 1 天
-        </p>
-      </div>
-
-      <div>
-        <Label
-          for="proxy-node-metrics-1h-retention-days"
-          class="block text-sm font-medium"
-        >
-          代理 1h 指标保留天数
-        </Label>
-        <Input
-          id="proxy-node-metrics-1h-retention-days"
-          :model-value="proxyNodeMetrics1hRetentionDays"
-          type="number"
-          min="1"
-          max="1095"
-          placeholder="180"
-          class="mt-1"
-          @update:model-value="$emit('update:proxyNodeMetrics1hRetentionDays', Number($event))"
-        />
-        <p class="mt-1 text-xs text-muted-foreground">
-          小时级聚合用于长期趋势，不能短于 1m 指标保留天数
-        </p>
-      </div>
-
-      <div>
-        <Label
-          for="proxy-node-metrics-cleanup-batch-size"
-          class="block text-sm font-medium"
-        >
-          代理指标清理批次
-        </Label>
-        <Input
-          id="proxy-node-metrics-cleanup-batch-size"
-          :model-value="proxyNodeMetricsCleanupBatchSize"
-          type="number"
-          min="1"
-          max="50000"
-          placeholder="5000"
-          class="mt-1"
-          @update:model-value="$emit('update:proxyNodeMetricsCleanupBatchSize', Number($event))"
-        />
-        <p class="mt-1 text-xs text-muted-foreground">
-          独立限制 proxy_node_metrics 表的单批删除数量
-        </p>
-      </div>
     </div>
 
     <!-- 清理策略说明 -->
@@ -423,9 +358,6 @@ defineProps<{
   auditLogRetentionDays: number
   requestCandidatesRetentionDays: number
   requestCandidatesCleanupBatchSize: number
-  proxyNodeMetrics1mRetentionDays: number
-  proxyNodeMetrics1hRetentionDays: number
-  proxyNodeMetricsCleanupBatchSize: number
   loading: boolean
   hasChanges: boolean
 }>()
@@ -441,9 +373,6 @@ defineEmits<{
   'update:auditLogRetentionDays': [value: number]
   'update:requestCandidatesRetentionDays': [value: number]
   'update:requestCandidatesCleanupBatchSize': [value: number]
-  'update:proxyNodeMetrics1mRetentionDays': [value: number]
-  'update:proxyNodeMetrics1hRetentionDays': [value: number]
-  'update:proxyNodeMetricsCleanupBatchSize': [value: number]
 }>()
 
 const cleanupRuns = ref<CleanupRunRecord[]>([])

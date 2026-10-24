@@ -92,14 +92,9 @@ export interface ProxyNodeExport {
   ip: string
   port: number
   region?: string | null
-  is_manual: boolean
   proxy_url?: string | null
   proxy_username?: string | null
   proxy_password?: string | null
-  tunnel_mode: boolean
-  heartbeat_interval: number
-  remote_config?: Record<string, unknown> | null
-  config_version: number
 }
 
 // 用户导出数据结构

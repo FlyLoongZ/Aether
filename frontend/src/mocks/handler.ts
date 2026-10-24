@@ -5073,11 +5073,6 @@ mockHandlers['GET /api/admin/monitoring/system-status'] = async () => {
       tokens: 48751234,
       cost_usd: '$182.4631'
     },
-    tunnel: {
-      proxy_connections: 28,
-      nodes: 6,
-      active_streams: 164
-    },
     internal_gateway: {
       status: 'disabled',
       path_prefixes: ['/api/', '/v1/', '/v1beta/', '/_gateway/']
@@ -5257,165 +5252,27 @@ mockHandlers['GET /api/admin/proxy-nodes'] = async () => {
       {
         id: 'proxy-node-1',
         name: 'edge-shanghai-1',
-        ip: '10.8.0.12',
-        port: 8443,
+        ip: '127.0.0.1',
+        port: 8080,
         region: 'cn-east',
         status: 'online',
-        is_manual: false,
-        tunnel_mode: true,
-        tunnel_connected: true,
-        tunnel_connected_at: now,
-        hardware_info: {
-          cpu_cores: 8,
-          total_memory_mb: 16384,
-          os_info: 'linux'
-        },
-        estimated_max_concurrency: 620,
-        remote_config: null,
-        config_version: 12,
-        registered_by: 'agent',
-        last_heartbeat_at: now,
-        heartbeat_interval: 15,
-        active_connections: 82,
+        proxy_url: 'http://127.0.0.1:8080',
+        proxy_username: null,
+        has_proxy_password: false,
+        registered_by: 'admin',
+        last_used_at: now,
         total_requests: 43820,
         avg_latency_ms: 42,
         failed_requests: 34,
         dns_failures: 2,
         stream_errors: 7,
-        proxy_metadata: {
-          resource_usage: {
-            system_cpu_usage_percent: 41.8,
-            process_cpu_usage_percent: 18.4,
-            memory_total_bytes: 17179869184,
-            memory_used_bytes: 9878424780,
-            memory_used_percent: 57.5,
-            process_memory_bytes: 438304768,
-            process_memory_percent: 2.6,
-            process_uptime_secs: 86400
-          }
-        },
-        created_at: now,
-        updated_at: now
-      },
-      {
-        id: 'proxy-node-2',
-        name: 'edge-us-west-1',
-        ip: '10.8.1.18',
-        port: 8443,
-        region: 'us-west',
-        status: 'online',
-        is_manual: false,
-        tunnel_mode: true,
-        tunnel_connected: true,
-        tunnel_connected_at: now,
-        hardware_info: {
-          cpu_cores: 16,
-          total_memory_mb: 32768,
-          os_info: 'linux'
-        },
-        estimated_max_concurrency: 980,
-        remote_config: null,
-        config_version: 9,
-        registered_by: 'agent',
-        last_heartbeat_at: now,
-        heartbeat_interval: 15,
-        active_connections: 94,
-        total_requests: 58340,
-        avg_latency_ms: 58,
-        failed_requests: 52,
-        dns_failures: 1,
-        stream_errors: 9,
-        proxy_metadata: {
-          resource_usage: {
-            system_cpu_usage_percent: 55.2,
-            process_cpu_usage_percent: 22.6,
-            memory_total_bytes: 34359738368,
-            memory_used_bytes: 22333829939,
-            memory_used_percent: 65.0,
-            process_memory_bytes: 612368384,
-            process_memory_percent: 1.8,
-            process_uptime_secs: 172800
-          }
-        },
         created_at: now,
         updated_at: now
       }
     ],
-    total: 2,
+    total: 1,
     skip: 0,
-    limit: 200,
-    rollout: null
-  })
-}
-
-mockHandlers['GET /api/admin/proxy-nodes/metrics/fleet'] = async () => {
-  await delay()
-  requireAdmin()
-  const now = Math.floor(Date.now() / 1000)
-  return createMockResponse({
-    step: '1m',
-    from: now - 3600,
-    to: now,
-    items: [
-      {
-        bucket_start_unix_secs: now - 120,
-        bucket_start: new Date((now - 120) * 1000).toISOString(),
-        samples: 2,
-        uptime_samples: 2,
-        uptime_ratio: 1,
-        active_connections_sum: 168,
-        active_connections_max: 92,
-        active_connections_avg: 84,
-        heartbeat_rtt_ms_sum: 86,
-        heartbeat_rtt_ms_max: 52,
-        heartbeat_rtt_ms_avg: 43,
-        connect_errors_delta: 0,
-        disconnects_delta: 0,
-        error_events_delta: 1,
-        ws_in_bytes_delta: 4849664,
-        ws_out_bytes_delta: 12812288,
-        ws_in_frames_delta: 18320,
-        ws_out_frames_delta: 42110
-      },
-      {
-        bucket_start_unix_secs: now - 60,
-        bucket_start: new Date((now - 60) * 1000).toISOString(),
-        samples: 2,
-        uptime_samples: 2,
-        uptime_ratio: 1,
-        active_connections_sum: 176,
-        active_connections_max: 94,
-        active_connections_avg: 88,
-        heartbeat_rtt_ms_sum: 82,
-        heartbeat_rtt_ms_max: 48,
-        heartbeat_rtt_ms_avg: 41,
-        connect_errors_delta: 0,
-        disconnects_delta: 0,
-        error_events_delta: 0,
-        ws_in_bytes_delta: 5154816,
-        ws_out_bytes_delta: 13996032,
-        ws_in_frames_delta: 19120,
-        ws_out_frames_delta: 44710
-      }
-    ],
-    summary: {
-      samples: 4,
-      uptime_samples: 4,
-      uptime_ratio: 1,
-      active_connections_sum: 344,
-      active_connections_max: 94,
-      active_connections_avg: 86,
-      heartbeat_rtt_ms_sum: 168,
-      heartbeat_rtt_ms_max: 52,
-      heartbeat_rtt_ms_avg: 42,
-      connect_errors_delta: 0,
-      disconnects_delta: 0,
-      error_events_delta: 1,
-      ws_in_bytes_delta: 10004480,
-      ws_out_bytes_delta: 26808320,
-      ws_in_frames_delta: 37440,
-      ws_out_frames_delta: 86820
-    }
+    limit: 200
   })
 }
 
@@ -5449,54 +5306,6 @@ aether_gateway_concurrency_high_watermark{gate="gateway_requests_distributed"} 1
 # HELP aether_gateway_concurrency_rejected_total Number of operations rejected by the concurrency gate.
 # TYPE aether_gateway_concurrency_rejected_total counter
 aether_gateway_concurrency_rejected_total{gate="gateway_requests_distributed"} 11
-# HELP aether_gateway_tunnel_proxy_connections Current number of connected proxy sockets.
-# TYPE aether_gateway_tunnel_proxy_connections gauge
-aether_gateway_tunnel_proxy_connections 28
-# HELP aether_gateway_tunnel_nodes Current number of connected logical nodes.
-# TYPE aether_gateway_tunnel_nodes gauge
-aether_gateway_tunnel_nodes 6
-# HELP aether_gateway_tunnel_active_streams Current number of active local relay streams.
-# TYPE aether_gateway_tunnel_active_streams gauge
-aether_gateway_tunnel_active_streams 164
-# HELP aether_gateway_tunnel_proxy_connections_available Current number of available proxy sockets.
-# TYPE aether_gateway_tunnel_proxy_connections_available gauge
-aether_gateway_tunnel_proxy_connections_available 24
-# HELP aether_gateway_tunnel_proxy_connections_closing Current number of closing proxy sockets.
-# TYPE aether_gateway_tunnel_proxy_connections_closing gauge
-aether_gateway_tunnel_proxy_connections_closing 1
-# HELP aether_gateway_tunnel_proxy_connections_draining Current number of draining proxy sockets.
-# TYPE aether_gateway_tunnel_proxy_connections_draining gauge
-aether_gateway_tunnel_proxy_connections_draining 2
-# HELP aether_gateway_tunnel_proxy_connections_soft_avoid Current number of soft-avoid proxy sockets.
-# TYPE aether_gateway_tunnel_proxy_connections_soft_avoid gauge
-aether_gateway_tunnel_proxy_connections_soft_avoid 3
-# HELP aether_gateway_tunnel_proxy_outbound_queue_depth_total Current outbound queue depth total.
-# TYPE aether_gateway_tunnel_proxy_outbound_queue_depth_total gauge
-aether_gateway_tunnel_proxy_outbound_queue_depth_total 312
-# HELP aether_gateway_tunnel_proxy_outbound_queue_depth_max Current outbound queue max depth.
-# TYPE aether_gateway_tunnel_proxy_outbound_queue_depth_max gauge
-aether_gateway_tunnel_proxy_outbound_queue_depth_max 38
-# HELP aether_gateway_tunnel_proxy_outbound_queue_capacity_total Current outbound queue capacity total.
-# TYPE aether_gateway_tunnel_proxy_outbound_queue_capacity_total gauge
-aether_gateway_tunnel_proxy_outbound_queue_capacity_total 2048
-# HELP aether_gateway_tunnel_proxy_outbound_queue_rejected_full_total Outbound queue full rejections.
-# TYPE aether_gateway_tunnel_proxy_outbound_queue_rejected_full_total counter
-aether_gateway_tunnel_proxy_outbound_queue_rejected_full_total 7
-# HELP aether_gateway_tunnel_proxy_outbound_queue_rejected_closed_total Outbound queue closed rejections.
-# TYPE aether_gateway_tunnel_proxy_outbound_queue_rejected_closed_total counter
-aether_gateway_tunnel_proxy_outbound_queue_rejected_closed_total 2
-# HELP aether_gateway_tunnel_proxy_connection_congested_total Congested proxy selections.
-# TYPE aether_gateway_tunnel_proxy_connection_congested_total counter
-aether_gateway_tunnel_proxy_connection_congested_total 21
-# HELP aether_gateway_tunnel_proxy_soft_avoid_selection_total Soft-avoid proxy selections.
-# TYPE aether_gateway_tunnel_proxy_soft_avoid_selection_total counter
-aether_gateway_tunnel_proxy_soft_avoid_selection_total 18
-# HELP aether_gateway_tunnel_proxy_selection_retry_total Proxy selection retries.
-# TYPE aether_gateway_tunnel_proxy_selection_retry_total counter
-aether_gateway_tunnel_proxy_selection_retry_total 11
-# HELP aether_gateway_tunnel_proxy_selection_unavailable_total Proxy selection unavailable events.
-# TYPE aether_gateway_tunnel_proxy_selection_unavailable_total counter
-aether_gateway_tunnel_proxy_selection_unavailable_total 4
 # HELP aether_gateway_decision_remote_total Number of requests that fell back to Python decision endpoints.
 # TYPE aether_gateway_decision_remote_total counter
 aether_gateway_decision_remote_total{route_kind="chat",reason="local_decision_miss"} 4

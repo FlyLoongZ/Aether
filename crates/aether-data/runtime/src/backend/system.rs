@@ -23,7 +23,6 @@ const ADMIN_CONFIG_PURGE_TABLES: &[&str] = &[
     "provider_api_keys",
     "providers",
     "global_models",
-    "proxy_node_events",
     "proxy_nodes",
     "user_oauth_links",
     "ldap_configs",

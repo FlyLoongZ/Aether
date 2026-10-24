@@ -15,94 +15,7 @@ use super::{
 };
 use crate::{data::GatewayDataState, AppState};
 
-pub(super) const TUNNEL_CONTROL_PLANE_TEST_PSK: &str =
-    "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=";
-pub(super) const TUNNEL_CONTROL_PLANE_TEST_GENERATION: &str = "test-generation-1";
-
-pub(super) fn with_tunnel_control_plane_key(
-    mut node: StoredProxyNode,
-    key: &str,
-) -> StoredProxyNode {
-    let mut metadata = node.proxy_metadata.take().unwrap_or_else(|| json!({}));
-    let metadata = metadata
-        .as_object_mut()
-        .expect("sample proxy metadata should be an object");
-    metadata.insert(
-        "tunnel_security".to_string(),
-        json!({ "encryption_key": key }),
-    );
-    node.proxy_metadata = Some(serde_json::Value::Object(metadata.clone()));
-    node
-}
-
-pub(super) fn authenticated_tunnel_control_plane_request(
-    client: &reqwest::Client,
-    url: String,
-    path: &str,
-    node_id: &str,
-    body: &serde_json::Value,
-) -> reqwest::RequestBuilder {
-    authenticated_tunnel_control_plane_request_for_generation(
-        client,
-        url,
-        path,
-        node_id,
-        TUNNEL_CONTROL_PLANE_TEST_GENERATION,
-        body,
-    )
-}
-
-pub(super) fn authenticated_tunnel_control_plane_request_for_generation(
-    client: &reqwest::Client,
-    url: String,
-    path: &str,
-    node_id: &str,
-    tunnel_generation: &str,
-    body: &serde_json::Value,
-) -> reqwest::RequestBuilder {
-    let body = serde_json::to_vec(body).expect("control-plane payload should encode");
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .expect("system clock")
-        .as_secs();
-    let nonce = uuid::Uuid::new_v4().simple().to_string();
-    let signature =
-        aether_contracts::tunnel_security::sign_tunnel_control_plane_request_for_generation(
-            TUNNEL_CONTROL_PLANE_TEST_PSK,
-            "POST",
-            path,
-            node_id,
-            tunnel_generation,
-            timestamp,
-            &nonce,
-            &body,
-        )
-        .expect("control-plane request should sign");
-    client
-        .post(url)
-        .header("content-type", "application/json")
-        .header(
-            aether_contracts::tunnel_security::TUNNEL_CONTROL_PLANE_NODE_ID_HEADER,
-            node_id,
-        )
-        .header(
-            aether_contracts::tunnel_security::TUNNEL_CONTROL_PLANE_GENERATION_HEADER,
-            tunnel_generation,
-        )
-        .header(
-            aether_contracts::tunnel_security::TUNNEL_CONTROL_PLANE_TIMESTAMP_HEADER,
-            timestamp,
-        )
-        .header(
-            aether_contracts::tunnel_security::TUNNEL_CONTROL_PLANE_NONCE_HEADER,
-            nonce,
-        )
-        .header(
-            aether_contracts::tunnel_security::TUNNEL_CONTROL_PLANE_SIGNATURE_HEADER,
-            signature,
-        )
-        .body(body)
-}
+pub(super) const PROXY_NODE_TEST_GENERATION: &str = "test-generation-1";
 
 pub(super) fn sample_currently_usable_auth_snapshot(
     api_key_id: &str,
@@ -282,36 +195,19 @@ pub(super) fn sample_proxy_node(node_id: &str) -> StoredProxyNode {
         "proxy-node-1".to_string(),
         "127.0.0.1".to_string(),
         0,
-        false,
-        "offline".to_string(),
-        30,
-        0,
-        0,
-        0,
-        0,
-        0,
-        true,
-        false,
-        7,
+        "online".to_string(),
     )
     .expect("proxy node should build")
+    .with_manual_proxy_fields(Some("http://127.0.0.1:1".to_string()), None, None)
     .with_runtime_fields(
         Some("test".to_string()),
         Some("system".to_string()),
         Some(1_710_000_000),
         None,
-        None,
-        None,
-        None,
-        Some(1_710_000_010),
-        Some(json!({
-            "upgrade_to": "1.2.3",
-            "allowed_ports": [443],
-        })),
         Some(1_709_000_000),
         Some(1_710_000_100),
     )
-    .with_tunnel_generation(TUNNEL_CONTROL_PLANE_TEST_GENERATION.to_string())
+    .with_node_generation(PROXY_NODE_TEST_GENERATION.to_string())
 }
 
 pub(super) fn sample_provider_quota(provider_id: &str) -> StoredProviderQuotaSnapshot {

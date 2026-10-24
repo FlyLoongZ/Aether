@@ -5,10 +5,8 @@ use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 use aether_data::repository::proxy_nodes::{
-    ProxyNodeEventQuery, ProxyNodeHeartbeatMutation, ProxyNodeManualCreateMutation,
-    ProxyNodeManualUpdateMutation, ProxyNodeMetricsStep, ProxyNodeTrafficMutation,
-    ProxyNodeTunnelStatusMutation, StoredProxyFleetMetricsBucket, StoredProxyNode,
-    StoredProxyNodeEvent, StoredProxyNodeMetricsBucket,
+    ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation, ProxyNodeTrafficMutation,
+    StoredProxyNode,
 };
 use aether_data_contracts::repository::usage::{
     UsageCounterHealthSnapshot, UsageCounterPendingHealthSnapshot,
@@ -70,9 +68,6 @@ use crate::maintenance::spawn_pool_quota_probe_worker;
 use crate::maintenance::spawn_pool_score_rebuild_worker;
 use crate::maintenance::spawn_provider_checkin_worker;
 use crate::maintenance::spawn_provider_quota_alert_worker;
-use crate::maintenance::spawn_proxy_node_metrics_cleanup_worker;
-use crate::maintenance::spawn_proxy_node_stale_cleanup_worker;
-use crate::maintenance::spawn_proxy_upgrade_rollout_worker;
 use crate::maintenance::spawn_request_candidate_cleanup_worker;
 use crate::maintenance::spawn_stats_aggregation_worker;
 use crate::maintenance::spawn_stats_hourly_aggregation_worker;
@@ -1173,55 +1168,6 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    pub(crate) async fn list_proxy_node_events(
-        &self,
-        node_id: &str,
-        limit: usize,
-    ) -> Result<Vec<StoredProxyNodeEvent>, GatewayError> {
-        self.data
-            .list_proxy_node_events(node_id, limit)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn list_proxy_node_events_filtered(
-        &self,
-        node_id: &str,
-        query: &ProxyNodeEventQuery,
-    ) -> Result<Vec<StoredProxyNodeEvent>, GatewayError> {
-        self.data
-            .list_proxy_node_events_filtered(node_id, query)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn list_proxy_node_metrics(
-        &self,
-        node_id: &str,
-        step: ProxyNodeMetricsStep,
-        from_unix_secs: u64,
-        to_unix_secs: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredProxyNodeMetricsBucket>, GatewayError> {
-        self.data
-            .list_proxy_node_metrics(node_id, step, from_unix_secs, to_unix_secs, limit)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn list_proxy_fleet_metrics(
-        &self,
-        step: ProxyNodeMetricsStep,
-        from_unix_secs: u64,
-        to_unix_secs: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredProxyFleetMetricsBucket>, GatewayError> {
-        self.data
-            .list_proxy_fleet_metrics(step, from_unix_secs, to_unix_secs, limit)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn create_manual_proxy_node(
         &self,
         mutation: &ProxyNodeManualCreateMutation,
@@ -1263,40 +1209,6 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    pub async fn reset_stale_proxy_node_tunnel_statuses(&self) -> std::io::Result<usize> {
-        self.data
-            .reset_stale_proxy_node_tunnel_statuses()
-            .await
-            .map_err(|err| std::io::Error::other(err.to_string()))
-    }
-
-    pub(crate) async fn cleanup_proxy_node_metrics(
-        &self,
-        retain_1m_from_unix_secs: u64,
-        retain_1h_from_unix_secs: u64,
-        delete_limit: usize,
-    ) -> Result<aether_data::repository::proxy_nodes::ProxyNodeMetricsCleanupSummary, GatewayError>
-    {
-        self.data
-            .cleanup_proxy_node_metrics(
-                retain_1m_from_unix_secs,
-                retain_1h_from_unix_secs,
-                delete_limit,
-            )
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn apply_proxy_node_heartbeat(
-        &self,
-        mutation: &ProxyNodeHeartbeatMutation,
-    ) -> Result<Option<StoredProxyNode>, GatewayError> {
-        self.data
-            .apply_proxy_node_heartbeat(mutation)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn record_proxy_node_traffic(
         &self,
         mutation: &ProxyNodeTrafficMutation,
@@ -1307,42 +1219,12 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    pub(crate) async fn unregister_proxy_node(
-        &self,
-        node_id: &str,
-    ) -> Result<Option<StoredProxyNode>, GatewayError> {
-        self.data
-            .unregister_proxy_node(node_id)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn delete_proxy_node(
         &self,
         node_id: &str,
     ) -> Result<Option<StoredProxyNode>, GatewayError> {
         self.data
             .delete_proxy_node(node_id)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn update_proxy_node_remote_config(
-        &self,
-        mutation: &aether_data::repository::proxy_nodes::ProxyNodeRemoteConfigMutation,
-    ) -> Result<Option<StoredProxyNode>, GatewayError> {
-        self.data
-            .update_proxy_node_remote_config(mutation)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn update_proxy_node_tunnel_status(
-        &self,
-        mutation: &ProxyNodeTunnelStatusMutation,
-    ) -> Result<Option<StoredProxyNode>, GatewayError> {
-        self.data
-            .update_proxy_node_tunnel_status(mutation)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
@@ -2310,18 +2192,6 @@ impl AppState {
         supervise_worker(
             crate::task_runtime::TASK_KEY_PENDING_CLEANUP,
             spawn_pending_cleanup_worker(background_state.clone()),
-        );
-        supervise_worker(
-            crate::task_runtime::TASK_KEY_PROXY_NODE_STALE_CLEANUP,
-            spawn_proxy_node_stale_cleanup_worker(background_state.clone()),
-        );
-        supervise_worker(
-            crate::task_runtime::TASK_KEY_PROXY_NODE_METRICS_CLEANUP,
-            spawn_proxy_node_metrics_cleanup_worker(background_state.clone()),
-        );
-        supervise_worker(
-            crate::task_runtime::TASK_KEY_PROXY_UPGRADE_ROLLOUT,
-            spawn_proxy_upgrade_rollout_worker(background_state.clone()),
         );
         supervise_worker(
             crate::task_runtime::TASK_KEY_PROVIDER_CHECKIN,

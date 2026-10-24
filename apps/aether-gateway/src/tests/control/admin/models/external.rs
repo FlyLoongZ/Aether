@@ -12,10 +12,7 @@ use http::StatusCode;
 use serde_json::json;
 use tokio::sync::watch;
 
-use super::super::super::{
-    build_router_with_state, sample_proxy_node, start_server, with_tunnel_control_plane_key,
-    AppState, TUNNEL_CONTROL_PLANE_TEST_GENERATION, TUNNEL_CONTROL_PLANE_TEST_PSK,
-};
+use super::super::super::{build_router_with_state, sample_proxy_node, start_server, AppState};
 use crate::constants::{
     GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
     TRUSTED_ADMIN_USER_ROLE_HEADER,
@@ -24,7 +21,6 @@ use crate::data::GatewayDataState;
 use crate::handlers::admin::{
     set_admin_external_models_source_url_for_tests, ADMIN_EXTERNAL_MODELS_CONFIG_MUTATION_LOCK_KEY,
 };
-use crate::tunnel::{tunnel_protocol, TunnelProxyConn};
 
 fn trusted_admin(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     request
@@ -38,13 +34,8 @@ fn online_manual_proxy_node(node_id: &str, proxy_url: impl Into<String>) -> Stor
     let mut node = sample_proxy_node(node_id);
     node.name = node_id.to_string();
     node.status = "online".to_string();
-    node.is_manual = true;
-    node.tunnel_mode = false;
-    node.tunnel_connected = false;
     node.proxy_url = Some(proxy_url.into());
-    node.last_heartbeat_at_unix_secs = None;
-    node.tunnel_connected_at_unix_secs = None;
-    node.remote_config = None;
+    node.last_used_at_unix_secs = None;
     node
 }
 
@@ -311,162 +302,6 @@ async fn gateway_reports_unavailable_external_models_proxy_and_fails_closed() {
 
     gateway_handle.abort();
     direct_source_handle.abort();
-}
-
-#[tokio::test]
-async fn gateway_fetches_external_models_through_connected_tunnel_node() {
-    let source_url = "https://models.dev.test/api.json";
-    let _guard = set_admin_external_models_source_url_for_tests(source_url);
-
-    let mut tunnel_node = with_tunnel_control_plane_key(
-        sample_proxy_node("tunnel-node"),
-        TUNNEL_CONTROL_PLANE_TEST_PSK,
-    );
-    tunnel_node.name = "Tunnel Node".to_string();
-    tunnel_node.status = "online".to_string();
-    tunnel_node.tunnel_mode = true;
-    tunnel_node.tunnel_connected = true;
-    tunnel_node.remote_config = None;
-    let repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![tunnel_node]));
-    let data_state = GatewayDataState::with_proxy_node_repository_for_tests(repository)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
-        .with_system_config_values_for_tests([(
-            "external_models_proxy_node_id".to_string(),
-            json!("tunnel-node"),
-        )]);
-    let state = AppState::new()
-        .expect("gateway should build")
-        .with_data_state_for_tests(data_state);
-    let tunnel_state = state.tunnel.app_state();
-    let (proxy_tx, mut proxy_rx) = aether_runtime::bounded_queue(8);
-    let (proxy_close_tx, _) = watch::channel(false);
-    tunnel_state.hub.register_proxy(Arc::new(
-        TunnelProxyConn::new(
-            700,
-            "tunnel-node".to_string(),
-            "Tunnel Node".to_string(),
-            proxy_tx,
-            proxy_close_tx,
-            16,
-            2,
-        )
-        .with_tunnel_generation(TUNNEL_CONTROL_PLANE_TEST_GENERATION.to_string())
-        .with_authenticated_key(TUNNEL_CONTROL_PLANE_TEST_PSK.to_string()),
-    ));
-
-    let gateway = build_router_with_state(state);
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-    let request_task = tokio::spawn(async move {
-        trusted_admin(
-            reqwest::Client::new().get(format!("{gateway_url}/api/admin/models/external")),
-        )
-        .send()
-        .await
-    });
-
-    let request_headers = match tokio::time::timeout(Duration::from_secs(5), proxy_rx.recv())
-        .await
-        .expect("headers frame should arrive before timeout")
-        .expect("headers frame should arrive")
-    {
-        Message::Binary(data) => data,
-        other => panic!("unexpected message: {other:?}"),
-    };
-    let request_header =
-        tunnel_protocol::FrameHeader::parse(&request_headers).expect("request header should parse");
-    assert_eq!(request_header.msg_type, tunnel_protocol::REQUEST_HEADERS);
-    let meta_payload = tunnel_protocol::decode_payload(&request_headers, &request_header)
-        .expect("request header payload should decode");
-    let meta: tunnel_protocol::RequestMeta =
-        serde_json::from_slice(&meta_payload).expect("request meta should parse");
-    assert_eq!(meta.method, "GET");
-    assert_eq!(meta.url, source_url);
-    assert_eq!(meta.follow_redirects, Some(false));
-    assert_eq!(
-        meta.headers.get("accept").map(String::as_str),
-        Some("application/json")
-    );
-
-    let request_body = match tokio::time::timeout(Duration::from_secs(5), proxy_rx.recv())
-        .await
-        .expect("body frame should arrive before timeout")
-        .expect("body frame should arrive")
-    {
-        Message::Binary(data) => data,
-        other => panic!("unexpected message: {other:?}"),
-    };
-    let request_body_header =
-        tunnel_protocol::FrameHeader::parse(&request_body).expect("request body should parse");
-    assert_eq!(request_body_header.msg_type, tunnel_protocol::REQUEST_BODY);
-    assert_ne!(
-        request_body_header.flags & tunnel_protocol::FLAG_END_STREAM,
-        0,
-        "catalog request body frame should close the stream"
-    );
-
-    let response_meta = tunnel_protocol::ResponseMeta {
-        status: 200,
-        headers: vec![("content-type".to_string(), "application/json".to_string())],
-    };
-    let response_meta_bytes =
-        serde_json::to_vec(&response_meta).expect("response meta should serialize");
-    let mut response_headers_frame = tunnel_protocol::encode_frame(
-        request_header.stream_id,
-        tunnel_protocol::RESPONSE_HEADERS,
-        0,
-        &response_meta_bytes,
-    );
-    tunnel_state
-        .hub
-        .handle_proxy_frame(700, &mut response_headers_frame)
-        .await;
-
-    let response_payload = serde_json::to_vec(&json!({
-        "tunnel-provider": {
-            "name": "Tunnel",
-            "models": {
-                "tunnel": {
-                    "name": "TUNNEL"
-                }
-            }
-        }
-    }))
-    .expect("response payload should serialize");
-    let mut response_body_frame = tunnel_protocol::encode_frame(
-        request_header.stream_id,
-        tunnel_protocol::RESPONSE_BODY,
-        0,
-        &response_payload,
-    );
-    tunnel_state
-        .hub
-        .handle_proxy_frame(700, &mut response_body_frame)
-        .await;
-
-    let mut response_end_frame = tunnel_protocol::encode_frame(
-        request_header.stream_id,
-        tunnel_protocol::STREAM_END,
-        0,
-        &[],
-    );
-    tunnel_state
-        .hub
-        .handle_proxy_frame(700, &mut response_end_frame)
-        .await;
-
-    let response = tokio::time::timeout(Duration::from_secs(5), request_task)
-        .await
-        .expect("catalog request should complete before timeout")
-        .expect("request task should complete")
-        .expect("catalog request should succeed");
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(
-        payload["tunnel-provider"]["models"]["tunnel"]["name"],
-        "TUNNEL"
-    );
-
-    gateway_handle.abort();
 }
 
 #[tokio::test]

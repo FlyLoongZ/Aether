@@ -23,7 +23,7 @@ describe('operations live throughput', () => {
   it('shows recent throughput and current-node concurrency from a single live snapshot', async () => {
     api.live.mockResolvedValue({ data: {
       metrics: {
-        local: { inFlight: 8 }, tunnel: { activeStreams: 3 },
+        local: { inFlight: 8 },
         process: {
           systemCpuUsageBasisPoints: 2640, systemMemoryUsageBasisPoints: 3750,
           processCpuUsageBasisPoints: 25000, processMemoryBytes: 512 * 1024 ** 2,
@@ -38,7 +38,7 @@ describe('operations live throughput', () => {
     } })
     const root = await mount()
     expect(root.querySelectorAll('[data-operations-hardware] [data-operations-metric]')).toHaveLength(4)
-    expect(root.querySelectorAll('[data-operations-gateway] [data-operations-metric]')).toHaveLength(6)
+    expect(root.querySelectorAll('[data-operations-gateway] [data-operations-metric]')).toHaveLength(5)
     expect(metric(root, '主机 CPU')?.textContent).toContain('26.4%')
     expect(metric(root, '主机内存')?.textContent).toContain('37.5%')
     expect(metric(root, '主机内存')?.textContent).toContain('6 GiB / 16 GiB')
@@ -49,7 +49,6 @@ describe('operations live throughput', () => {
     expect(metric(root, '请求成功率')?.textContent).toContain('95.00%')
     expect(metric(root, '失败请求')?.textContent).toContain('12')
     expect(metric(root, '当前并发')?.textContent).toContain('8')
-    expect(metric(root, '活跃流')?.textContent).toContain('3')
     expect(metric(root, 'RPM')?.textContent).toContain('最近 60 秒')
     expect(metric(root, '当前并发')?.textContent).toContain('当前节点')
     expect(api.live).toHaveBeenCalledTimes(1)
@@ -57,7 +56,7 @@ describe('operations live throughput', () => {
 
   it('keeps unavailable values distinct from measured zeroes', async () => {
     api.live.mockResolvedValue({ data: {
-      metrics: { process: { systemCpuUsageBasisPoints: 0, systemMemoryTotalBytes: 0, systemMemoryUsageBasisPoints: 0 }, local: {}, tunnel: {} },
+      metrics: { process: { systemCpuUsageBasisPoints: 0, systemMemoryTotalBytes: 0, systemMemoryUsageBasisPoints: 0 }, local: {} },
       recent_activity: { data: { requests_per_minute: 0, tokens_per_minute: null, success_rate: { value: null }, failed_request_count: 0 } },
     } })
     const root = await mount()
@@ -65,7 +64,6 @@ describe('operations live throughput', () => {
     expect(metric(root, 'TPM')?.querySelector('span[title]')?.textContent).toBe('-')
     expect(metric(root, '请求成功率')?.querySelector('span[title]')?.textContent).toBe('-')
     expect(metric(root, '当前并发')?.querySelector('span[title]')?.textContent).toBe('-')
-    expect(metric(root, '活跃流')?.querySelector('span[title]')?.textContent).toBe('-')
     expect(metric(root, '主机 CPU')?.querySelector('span[title]')?.textContent).toBe('0%')
     for (const label of ['主机内存', '进程 CPU', '进程内存']) {
       expect(metric(root, label)?.querySelector('span[title]')?.textContent).toBe('-')
