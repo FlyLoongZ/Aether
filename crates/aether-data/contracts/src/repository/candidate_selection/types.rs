@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -146,6 +148,27 @@ pub trait MinimalCandidateSelectionReadRepository: Send + Sync {
         &self,
         api_format: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, crate::DataLayerError>;
+
+    /// One immutable version of every row `api_format` can serve.
+    ///
+    /// A caller that pages through a format must not straddle two versions.
+    /// Offsets only mean something relative to the row set they were cut from,
+    /// so page 2 read from a newer version answers `offset` against a set the
+    /// caller never saw, and rows are silently skipped or repeated. Holding
+    /// this handle for the whole sequence is what makes the version
+    /// unobservable: the rows stay alive past any invalidation, and no second
+    /// read is made to answer the next page.
+    ///
+    /// The default loads the format once. A repository that already keeps such
+    /// a version returns it without copying, which is why this is separate from
+    /// [`Self::list_for_exact_api_format`] rather than an `Arc` there: the
+    /// difference is only visible to a caller that can hold it.
+    async fn pin_api_format_rows(
+        &self,
+        api_format: &str,
+    ) -> Result<Arc<Vec<StoredMinimalCandidateSelectionRow>>, crate::DataLayerError> {
+        Ok(Arc::new(self.list_for_exact_api_format(api_format).await?))
+    }
 
     async fn list_for_exact_api_format_page(
         &self,

@@ -74,6 +74,25 @@ impl GatewayDataState {
         .await
     }
 
+    /// One shared version of a format's rows, handed out as a handle so the
+    /// caller's pages all answer from the rows it started with.
+    pub(crate) async fn pin_minimal_candidate_selection_rows_for_api_format(
+        &self,
+        api_format: &str,
+    ) -> Result<std::sync::Arc<Vec<StoredMinimalCandidateSelectionRow>>, DataLayerError> {
+        crate::request_diagnostics::observe_db_operation(
+            "candidate_selection",
+            self.database_pool_summary(),
+            async {
+                match &self.minimal_candidate_selection_reader {
+                    Some(repository) => repository.pin_api_format_rows(api_format).await,
+                    None => Ok(std::sync::Arc::new(Vec::new())),
+                }
+            },
+        )
+        .await
+    }
+
     pub(crate) async fn list_minimal_candidate_selection_rows_for_api_format_page(
         &self,
         query: &StoredApiFormatCandidateRowsQuery,

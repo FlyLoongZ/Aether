@@ -24,9 +24,9 @@ use crate::cache::{
 };
 use crate::clock::request_distribution_seed;
 use crate::data::candidate_selection::{
-    read_api_format_rows_fallback_page, read_requested_model_rows_fast_path_page,
-    requested_model_candidate_names, CandidateScanBudget, RequestedModelCandidateRowsPage,
-    REQUESTED_MODEL_CANDIDATE_PAGE_SIZE, REQUESTED_MODEL_MAX_COLLECTED_ROWS,
+    api_format_page_from_rows, requested_model_candidate_names, requested_model_page_from_rows,
+    CandidateScanBudget, RequestedModelCandidateRowsPage, REQUESTED_MODEL_CANDIDATE_PAGE_SIZE,
+    REQUESTED_MODEL_MAX_COLLECTED_ROWS,
 };
 use crate::scheduler::candidate::SchedulerSkippedCandidate;
 use crate::scheduler::config::{SchedulerOrderingConfig, SchedulerSchedulingMode};
@@ -370,6 +370,13 @@ pub(crate) struct LocalCandidatePreselectionPageCursor<'a> {
     format_index: usize,
     requested_name_indexes: BTreeMap<String, usize>,
     requested_name_offsets: BTreeMap<String, u32>,
+    /// One version per api format, taken the first time a format is touched.
+    ///
+    /// Every window of that format is cut from these rows, so a page cannot be
+    /// answered from a different version than the page before it. The handle
+    /// outlives any cache invalidation, which is the point: this cursor *is*
+    /// the reader that made the version observable in the first place.
+    pinned_api_format_rows: BTreeMap<String, Arc<Vec<StoredMinimalCandidateSelectionRow>>>,
     scan_budget_by_format: BTreeMap<String, CandidateScanBudget>,
     resolved_global_model_names: BTreeMap<String, String>,
     reserved_global_model_names: BTreeMap<String, Option<String>>,
@@ -450,6 +457,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
             format_index: 0,
             requested_name_indexes: BTreeMap::new(),
             requested_name_offsets: BTreeMap::new(),
+            pinned_api_format_rows: BTreeMap::new(),
             scan_budget_by_format: BTreeMap::new(),
             resolved_global_model_names: BTreeMap::new(),
             reserved_global_model_names: BTreeMap::new(),
@@ -556,6 +564,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         self.fallback_scan_epoch = self.fallback_scan_epoch.wrapping_add(1);
         self.exhausted_api_formats.clear();
         self.seen_candidate_keys.clear();
+        self.pinned_api_format_rows.clear();
         self.priority_page_emitted = false;
         self.deferred_pages_by_format.clear();
     }
@@ -987,41 +996,59 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
     /// staleness without saving a query: it was keyed by the same fields and
     /// served rows up to its own fallback window while the data layer had
     /// already refreshed them.
+    /// The pinned version of one api format, taken once per request.
+    ///
+    /// A page sequence is a set of offsets, and an offset only means something
+    /// relative to the row set it was cut from. Taking the version here — once,
+    /// before the first window — is what lets every later window be a slice of
+    /// the same set.
+    async fn pinned_rows(
+        &mut self,
+        normalized_api_format: &str,
+    ) -> Result<Arc<Vec<StoredMinimalCandidateSelectionRow>>, GatewayError> {
+        if let Some(rows) = self.pinned_api_format_rows.get(normalized_api_format) {
+            return Ok(Arc::clone(rows));
+        }
+        let rows = self
+            .state
+            .app()
+            .data
+            .pin_minimal_candidate_selection_rows_for_api_format(normalized_api_format)
+            .await
+            .map_err(|err| GatewayError::Internal(err.to_string()))?;
+        self.pinned_api_format_rows
+            .insert(normalized_api_format.to_string(), Arc::clone(&rows));
+        Ok(rows)
+    }
+
     async fn read_requested_model_rows_fast_path_page_cached(
-        &self,
+        &mut self,
         normalized_api_format: &str,
         requested_name: &str,
         routing_model: &str,
         offset: u32,
         limit: u32,
     ) -> Result<RequestedModelCandidateRowsPage, GatewayError> {
-        read_requested_model_rows_fast_path_page(
-            self.state.app().data.as_ref(),
+        let rows = self.pinned_rows(normalized_api_format).await?;
+        Ok(requested_model_page_from_rows(
+            rows.as_slice(),
             normalized_api_format,
             routing_model,
             requested_name,
             offset,
             limit,
             false,
-        )
-        .await
-        .map_err(|err| GatewayError::Internal(err.to_string()))
+        ))
     }
 
     async fn read_api_format_rows_fallback_page_cached(
-        &self,
+        &mut self,
         normalized_api_format: &str,
         offset: u32,
         limit: u32,
     ) -> Result<RequestedModelCandidateRowsPage, GatewayError> {
-        read_api_format_rows_fallback_page(
-            self.state.app().data.as_ref(),
-            normalized_api_format,
-            offset,
-            limit,
-        )
-        .await
-        .map_err(|err| GatewayError::Internal(err.to_string()))
+        let rows = self.pinned_rows(normalized_api_format).await?;
+        Ok(api_format_page_from_rows(rows.as_slice(), offset, limit))
     }
 
     async fn next_fallback_page_for_api_format(

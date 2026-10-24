@@ -1,8 +1,5 @@
 use aether_data::DataLayerError;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredApiFormatCandidateRowsQuery, StoredMinimalCandidateSelectionRow,
-    StoredRequestedModelCandidateRowsQuery,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_scheduler_core::{
     auth_constraints_allow_api_format, collect_global_model_names_for_required_capability,
     enumerate_minimal_candidate_selection_with_model_directives, normalize_api_format,
@@ -12,32 +9,30 @@ use aether_scheduler_core::{
 };
 use async_trait::async_trait;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use super::auth::GatewayAuthApiKeySnapshot;
 
 #[async_trait]
 pub(crate) trait MinimalCandidateSelectionRowSource {
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
-        &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>;
-
     async fn read_minimal_candidate_selection_rows_for_api_format(
         &self,
         api_format: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>;
 
-    async fn read_minimal_candidate_selection_rows_for_api_format_page(
+    /// One immutable version of a format's rows, for a caller that pages
+    /// through it. See
+    /// [`aether_data_contracts::repository::candidate_selection::MinimalCandidateSelectionReadRepository::pin_api_format_rows`]
+    /// for why paging needs it; the sources without a snapshot answer by
+    /// reading the format once.
+    async fn pin_minimal_candidate_selection_rows_for_api_format(
         &self,
-        query: &StoredApiFormatCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        Ok(self
-            .read_minimal_candidate_selection_rows_for_api_format(&query.api_format)
-            .await?
-            .into_iter()
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
-            .collect())
+        api_format: &str,
+    ) -> Result<Arc<Vec<StoredMinimalCandidateSelectionRow>>, DataLayerError> {
+        Ok(Arc::new(
+            self.read_minimal_candidate_selection_rows_for_api_format(api_format)
+                .await?,
+        ))
     }
 
     /// Returns the canonical global model name when `model_name` is one, so the
@@ -222,6 +217,13 @@ async fn read_requested_model_rows_fast_path(
     let requested_names =
         requested_model_candidate_names(requested_model_name, enable_model_directives);
 
+    // One version for the whole walk. Every offset below is measured against
+    // these rows, so a concurrent configuration change cannot make one page of
+    // this scan address a set the previous page never saw.
+    let all_rows = state
+        .pin_minimal_candidate_selection_rows_for_api_format(api_format)
+        .await?;
+
     let mut rows = Vec::new();
     let mut seen = BTreeSet::new();
     for requested_name in requested_names {
@@ -233,16 +235,13 @@ async fn read_requested_model_rows_fast_path(
         while scanned < REQUESTED_MODEL_MAX_COLLECTED_ROWS {
             let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE
                 .min(REQUESTED_MODEL_MAX_COLLECTED_ROWS - scanned);
-            let page = state
-                .read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
-                    &StoredRequestedModelCandidateRowsQuery {
-                        api_format: api_format.to_string(),
-                        requested_model_name: requested_name.clone(),
-                        offset,
-                        limit,
-                    },
-                )
-                .await?;
+            let page = requested_name_window_from_rows(
+                all_rows.as_slice(),
+                api_format,
+                &requested_name,
+                offset,
+                limit,
+            );
             if page.is_empty() {
                 break;
             }
@@ -283,63 +282,114 @@ pub(crate) fn requested_model_candidate_names(
     requested_names
 }
 
-pub(crate) async fn read_requested_model_rows_fast_path_page(
-    state: &(impl MinimalCandidateSelectionRowSource + Sync),
+/// One requested-model window, cut from a pinned version.
+///
+/// The predicate is the one the query shape uses — it filters on the alias
+/// being tried, before the request-level filter runs — so the offsets here
+/// address exactly the rows the data layer would have returned for the same
+/// window.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn requested_model_page_from_rows(
+    all_rows: &[StoredMinimalCandidateSelectionRow],
     api_format: &str,
     requested_model_name: &str,
     requested_name: &str,
     offset: u32,
     limit: u32,
     enable_model_directives: bool,
-) -> Result<RequestedModelCandidateRowsPage, DataLayerError> {
+) -> RequestedModelCandidateRowsPage {
     let limit = limit.max(1);
-    let page = state
-        .read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
-            &StoredRequestedModelCandidateRowsQuery {
-                api_format: api_format.to_string(),
-                requested_model_name: requested_name.to_string(),
-                offset,
-                limit,
-            },
-        )
-        .await?;
-    let scanned_rows = page.len() as u32;
+    let window =
+        requested_name_window_from_rows(all_rows, api_format, requested_name, offset, limit);
+    finish_requested_model_window(
+        window,
+        api_format,
+        requested_model_name,
+        limit,
+        enable_model_directives,
+    )
+}
+
+/// The rows the query shape matches for one alias, inside
+/// `[offset, offset + limit)`.
+///
+/// This is the window an offset is measured against, which is why it is a
+/// separate step from the request-level filter: cutting the window after the
+/// request filter would make offsets address rows the caller never sees, and
+/// cutting it before the alias filter would make them address rows the shape
+/// never returned.
+pub(crate) fn requested_name_window_from_rows(
+    all_rows: &[StoredMinimalCandidateSelectionRow],
+    api_format: &str,
+    requested_name: &str,
+    offset: u32,
+    limit: u32,
+) -> Vec<StoredMinimalCandidateSelectionRow> {
+    let limit = limit.max(1);
+    all_rows
+        .iter()
+        .filter(|row| {
+            row_supports_requested_model_with_model_directives(
+                row,
+                requested_name,
+                api_format,
+                false,
+            )
+        })
+        .skip(offset as usize)
+        .take(limit as usize)
+        .cloned()
+        .collect()
+}
+
+fn finish_requested_model_window(
+    window: Vec<StoredMinimalCandidateSelectionRow>,
+    api_format: &str,
+    requested_model_name: &str,
+    limit: u32,
+    enable_model_directives: bool,
+) -> RequestedModelCandidateRowsPage {
+    let scanned_rows = window.len() as u32;
     let scan_exhausted = scanned_rows < limit;
     let rows = filter_rows_for_requested_model(
-        page,
+        window,
         requested_model_name,
         api_format,
         enable_model_directives,
     );
-    Ok(RequestedModelCandidateRowsPage {
+    RequestedModelCandidateRowsPage {
         rows,
         scanned_rows,
         scan_exhausted,
-    })
+    }
 }
 
-pub(crate) async fn read_api_format_rows_fallback_page(
-    state: &(impl MinimalCandidateSelectionRowSource + Sync),
-    api_format: &str,
+/// One api-format window, cut from a pinned version.
+pub(crate) fn api_format_page_from_rows(
+    all_rows: &[StoredMinimalCandidateSelectionRow],
     offset: u32,
     limit: u32,
-) -> Result<RequestedModelCandidateRowsPage, DataLayerError> {
+) -> RequestedModelCandidateRowsPage {
     let limit = limit.max(1);
-    let rows = state
-        .read_minimal_candidate_selection_rows_for_api_format_page(
-            &StoredApiFormatCandidateRowsQuery {
-                api_format: api_format.to_string(),
-                offset,
-                limit,
-            },
-        )
-        .await?;
-    let scanned_rows = rows.len() as u32;
-    Ok(RequestedModelCandidateRowsPage {
-        rows,
+    let window = all_rows
+        .iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .cloned()
+        .collect::<Vec<_>>();
+    finish_api_format_window(window, limit)
+}
+
+fn finish_api_format_window(
+    window: Vec<StoredMinimalCandidateSelectionRow>,
+    limit: u32,
+) -> RequestedModelCandidateRowsPage {
+    let scanned_rows = window.len() as u32;
+    RequestedModelCandidateRowsPage {
+        rows: window,
         scanned_rows,
         scan_exhausted: scanned_rows < limit,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -514,57 +564,56 @@ pub(crate) fn auth_snapshot_constraints(
 #[cfg(test)]
 mod tests {
     use super::{
-        read_requested_model_rows, read_requested_model_rows_fast_path_page,
+        read_requested_model_rows, requested_model_page_from_rows,
         MinimalCandidateSelectionRowSource, StoredMinimalCandidateSelectionRow,
     };
     use aether_data::DataLayerError;
-    use aether_data_contracts::repository::candidate_selection::StoredRequestedModelCandidateRowsQuery;
     use async_trait::async_trait;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
 
+    /// Counts how many times the version behind a format is read. Every window
+    /// a caller pages through is cut from one of these reads.
     struct CountingSelectionSource {
-        fast_rows: Vec<StoredMinimalCandidateSelectionRow>,
-        fallback_rows: Vec<StoredMinimalCandidateSelectionRow>,
-        fast_calls: AtomicUsize,
-        fallback_calls: AtomicUsize,
+        format_rows: Vec<StoredMinimalCandidateSelectionRow>,
+        pins: AtomicUsize,
+        format_reads: AtomicUsize,
     }
 
     impl CountingSelectionSource {
-        fn new(
-            fast_rows: Vec<StoredMinimalCandidateSelectionRow>,
-            fallback_rows: Vec<StoredMinimalCandidateSelectionRow>,
-        ) -> Self {
+        fn new(format_rows: Vec<StoredMinimalCandidateSelectionRow>) -> Self {
             Self {
-                fast_rows,
-                fallback_rows,
-                fast_calls: AtomicUsize::new(0),
-                fallback_calls: AtomicUsize::new(0),
+                format_rows,
+                pins: AtomicUsize::new(0),
+                format_reads: AtomicUsize::new(0),
             }
+        }
+
+        fn pins(&self) -> usize {
+            self.pins.load(Ordering::SeqCst)
+        }
+
+        fn format_reads(&self) -> usize {
+            self.format_reads.load(Ordering::SeqCst)
         }
     }
 
     #[async_trait]
     impl MinimalCandidateSelectionRowSource for CountingSelectionSource {
-        async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
-            &self,
-            query: &StoredRequestedModelCandidateRowsQuery,
-        ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            self.fast_calls.fetch_add(1, Ordering::SeqCst);
-            Ok(self
-                .fast_rows
-                .iter()
-                .skip(query.offset as usize)
-                .take(query.limit as usize)
-                .cloned()
-                .collect())
-        }
-
         async fn read_minimal_candidate_selection_rows_for_api_format(
             &self,
             _api_format: &str,
         ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            self.fallback_calls.fetch_add(1, Ordering::SeqCst);
-            Ok(self.fallback_rows.clone())
+            self.format_reads.fetch_add(1, Ordering::SeqCst);
+            Ok(self.format_rows.clone())
+        }
+
+        async fn pin_minimal_candidate_selection_rows_for_api_format(
+            &self,
+            _api_format: &str,
+        ) -> Result<Arc<Vec<StoredMinimalCandidateSelectionRow>>, DataLayerError> {
+            self.pins.fetch_add(1, Ordering::SeqCst);
+            Ok(Arc::new(self.format_rows.clone()))
         }
     }
 
@@ -603,8 +652,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn requested_model_rows_use_fast_path_without_full_format_scan() {
-        let source = CountingSelectionSource::new(vec![sample_row("gpt-5")], Vec::new());
+    async fn requested_model_rows_are_filtered_from_one_pinned_version() {
+        let source = CountingSelectionSource::new(vec![sample_row("gpt-5")]);
 
         let result = read_requested_model_rows(&source, "openai:chat", "gpt-5", false)
             .await
@@ -613,27 +662,14 @@ mod tests {
 
         assert_eq!(result.0, "gpt-5");
         assert_eq!(result.1.len(), 1);
-        assert_eq!(source.fast_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(source.fallback_calls.load(Ordering::SeqCst), 0);
+        // One version read answers the whole walk, however many windows it
+        // needs: the windows are slices, not queries.
+        assert_eq!(source.pins(), 1);
+        assert_eq!(source.format_reads(), 0);
     }
 
     #[tokio::test]
-    async fn requested_model_rows_fall_back_to_full_format_scan_when_fast_path_misses() {
-        let source = CountingSelectionSource::new(Vec::new(), vec![sample_row("gpt-5")]);
-
-        let result = read_requested_model_rows(&source, "openai:chat", "gpt-5", false)
-            .await
-            .expect("read should succeed")
-            .expect("rows should resolve");
-
-        assert_eq!(result.0, "gpt-5");
-        assert_eq!(result.1.len(), 1);
-        assert_eq!(source.fast_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(source.fallback_calls.load(Ordering::SeqCst), 1);
-    }
-
-    #[tokio::test]
-    async fn requested_model_rows_fast_path_stops_at_scan_limit() {
+    async fn requested_model_rows_walk_stops_at_the_collected_row_limit() {
         let mut rows = Vec::new();
         for index in 0..(super::REQUESTED_MODEL_MAX_COLLECTED_ROWS + 5) {
             let mut row = sample_row("gpt-5");
@@ -643,7 +679,7 @@ mod tests {
             row.model_id = format!("model-{index}");
             rows.push(row);
         }
-        let source = CountingSelectionSource::new(rows, Vec::new());
+        let source = CountingSelectionSource::new(rows);
 
         let result = read_requested_model_rows(&source, "openai:chat", "gpt-5", false)
             .await
@@ -654,35 +690,21 @@ mod tests {
             result.1.len(),
             super::REQUESTED_MODEL_MAX_COLLECTED_ROWS as usize
         );
-        assert_eq!(
-            source.fast_calls.load(Ordering::SeqCst),
-            (super::REQUESTED_MODEL_MAX_COLLECTED_ROWS / super::REQUESTED_MODEL_CANDIDATE_PAGE_SIZE)
-                as usize
-        );
-        assert_eq!(source.fallback_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(source.pins(), 1);
+        assert_eq!(source.format_reads(), 0);
     }
 
     #[tokio::test]
-    async fn requested_model_rows_page_reads_only_requested_slice() {
+    async fn requested_model_window_reads_only_the_requested_slice() {
         let mut rows = Vec::new();
         for index in 0..10 {
             let mut row = sample_row("gpt-5");
             row.key_id = format!("key-{index}");
             rows.push(row);
         }
-        let source = CountingSelectionSource::new(rows, Vec::new());
 
-        let page = read_requested_model_rows_fast_path_page(
-            &source,
-            "openai:chat",
-            "gpt-5",
-            "gpt-5",
-            4,
-            3,
-            false,
-        )
-        .await
-        .expect("page read should succeed");
+        let page =
+            requested_model_page_from_rows(&rows, "openai:chat", "gpt-5", "gpt-5", 4, 3, false);
 
         assert_eq!(page.scanned_rows, 3);
         assert!(!page.scan_exhausted);
@@ -693,30 +715,17 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["key-4", "key-5", "key-6"]
         );
-        assert_eq!(source.fast_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(source.fallback_calls.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
-    async fn requested_model_rows_page_reports_an_exhausted_scan() {
-        let source = CountingSelectionSource::new(vec![sample_row("gpt-5")], Vec::new());
+    async fn requested_model_window_reports_an_exhausted_scan() {
+        let rows = vec![sample_row("gpt-5")];
 
-        let page = read_requested_model_rows_fast_path_page(
-            &source,
-            "openai:chat",
-            "gpt-5",
-            "gpt-5",
-            0,
-            3,
-            false,
-        )
-        .await
-        .expect("page read should succeed");
+        let page =
+            requested_model_page_from_rows(&rows, "openai:chat", "gpt-5", "gpt-5", 0, 3, false);
 
         assert_eq!(page.scanned_rows, 1);
         assert!(page.scan_exhausted);
         assert_eq!(page.rows.len(), 1);
-        assert_eq!(source.fast_calls.load(Ordering::SeqCst), 1);
-        assert_eq!(source.fallback_calls.load(Ordering::SeqCst), 0);
     }
 }

@@ -145,14 +145,6 @@ impl ProviderTransportSnapshotSource for GatewayDataState {
 
 #[async_trait]
 impl MinimalCandidateSelectionRowSource for GatewayDataState {
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
-        &self,
-        query: &aether_data_contracts::repository::candidate_selection::StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        self.list_minimal_candidate_selection_rows_for_requested_model_page(query)
-            .await
-    }
-
     async fn read_minimal_candidate_selection_rows_for_api_format(
         &self,
         api_format: &str,
@@ -161,11 +153,11 @@ impl MinimalCandidateSelectionRowSource for GatewayDataState {
             .await
     }
 
-    async fn read_minimal_candidate_selection_rows_for_api_format_page(
+    async fn pin_minimal_candidate_selection_rows_for_api_format(
         &self,
-        query: &aether_data_contracts::repository::candidate_selection::StoredApiFormatCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        self.list_minimal_candidate_selection_rows_for_api_format_page(query)
+        api_format: &str,
+    ) -> Result<std::sync::Arc<Vec<StoredMinimalCandidateSelectionRow>>, DataLayerError> {
+        self.pin_minimal_candidate_selection_rows_for_api_format(api_format)
             .await
     }
 
