@@ -1,10 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
-
-function readSource(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), 'utf8')
-}
 
 describe('ProviderFormDialog Responses WebSocket switch', () => {
   it('displays and submits the switch for every provider type', () => {

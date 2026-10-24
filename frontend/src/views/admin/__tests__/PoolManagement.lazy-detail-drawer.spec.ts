@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/views/admin/PoolManagement.vue'),
-  'utf8',
-)
+const source = readSource('src/views/admin/PoolManagement.vue')
 
 describe('PoolManagement provider detail drawer', () => {
   it('keeps the heavy drawer out of the initial route chunk and prefetches it when idle', () => {

@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/views/admin/CacheMonitoring.vue'),
-  'utf8',
-)
+const source = readSource('src/views/admin/CacheMonitoring.vue')
 
 describe('CacheMonitoring analysis loading', () => {
   it('observes the TTL section against the app scroll container', () => {
