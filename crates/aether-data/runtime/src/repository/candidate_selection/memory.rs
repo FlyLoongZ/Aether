@@ -185,10 +185,6 @@ fn stable_pool_key_hash(seed: &str, key_id: &str) -> u64 {
     hash
 }
 
-fn normalize_api_format(value: &str) -> String {
-    aether_ai_formats::normalize_api_format_alias(value)
-}
-
 fn api_format_matches(left: &str, right: &str) -> bool {
     aether_ai_formats::api_format_alias_matches(left, right)
 }

@@ -4,8 +4,9 @@ use aether_scheduler_core::{
     auth_constraints_allow_api_format, collect_global_model_names_for_required_capability,
     enumerate_minimal_candidate_selection_with_model_directives, normalize_api_format,
     resolve_requested_global_model_name_with_reserved_global_model,
-    row_supports_requested_model_with_model_directives, EnumerateMinimalCandidateSelectionInput,
-    SchedulerAuthConstraints, SchedulerMinimalCandidateSelectionCandidate,
+    row_supports_requested_model_with_model_directives_and_request_operation,
+    EnumerateMinimalCandidateSelectionInput, SchedulerAuthConstraints,
+    SchedulerMinimalCandidateSelectionCandidate,
 };
 use async_trait::async_trait;
 use std::collections::BTreeSet;
@@ -138,131 +139,82 @@ pub(crate) async fn read_requested_model_rows(
     api_format: &str,
     requested_model_name: &str,
     enable_model_directives: bool,
+    request_operation: Option<&str>,
 ) -> Result<Option<(String, Vec<StoredMinimalCandidateSelectionRow>)>, DataLayerError> {
-    let fast_rows = read_requested_model_rows_fast_path(
-        state,
-        api_format,
-        requested_model_name,
-        enable_model_directives,
-    )
-    .await?;
-    let mut rows = filter_rows_for_requested_model(
-        fast_rows,
-        requested_model_name,
-        api_format,
-        enable_model_directives,
-    );
-    if rows.is_empty() {
-        let fallback_rows = state
-            .read_minimal_candidate_selection_rows_for_api_format(api_format)
-            .await?;
-        rows = filter_rows_for_requested_model(
-            fallback_rows,
-            requested_model_name,
-            api_format,
-            enable_model_directives,
-        );
-    }
-    if rows.is_empty() {
-        return Ok(None);
-    }
-
+    // Resolve against the complete pinned version before collection: broad
+    // global-model mappings must not fill the budget ahead of a higher-rank
+    // exact match or rows belonging to the reserved global-model namespace.
+    let all_rows = state
+        .pin_minimal_candidate_selection_rows_for_api_format(api_format)
+        .await?;
     let reserved_global_model_name =
-        resolve_reserved_global_model_name(state, &rows, requested_model_name).await?;
+        resolve_reserved_global_model_name(state, &all_rows, requested_model_name).await?;
     let Some(resolved_global_model_name) =
         resolve_requested_global_model_name_with_reserved_global_model(
-            &rows,
+            &all_rows,
             requested_model_name,
             api_format,
             enable_model_directives,
-            None,
+            request_operation,
             reserved_global_model_name.as_deref(),
         )
     else {
         return Ok(None);
     };
 
-    let resolved_rows = rows
-        .into_iter()
+    let mut seen = BTreeSet::new();
+    let rows = all_rows
+        .iter()
         .filter(|row| row.global_model_name == resolved_global_model_name)
-        .collect();
-
-    Ok(Some((resolved_global_model_name, resolved_rows)))
-}
-
-fn filter_rows_for_requested_model(
-    rows: Vec<StoredMinimalCandidateSelectionRow>,
-    requested_model_name: &str,
-    api_format: &str,
-    enable_model_directives: bool,
-) -> Vec<StoredMinimalCandidateSelectionRow> {
-    rows.into_iter()
         .filter(|row| {
-            row_supports_requested_model_with_model_directives(
+            row_supports_requested_model_with_model_directives_and_request_operation(
                 row,
                 requested_model_name,
                 api_format,
                 enable_model_directives,
+                request_operation,
+            )
+        })
+        .take(REQUESTED_MODEL_MAX_COLLECTED_ROWS as usize)
+        .filter(|row| {
+            seen.insert((
+                row.endpoint_id.clone(),
+                row.key_id.clone(),
+                row.model_id.clone(),
+            ))
+        })
+        .cloned()
+        .collect();
+
+    Ok(Some((resolved_global_model_name, rows)))
+}
+
+/// The request-level filter, including the request operation.
+///
+/// A model mapping may be scoped to one operation (`compact` is the live
+/// example). Leaving the operation out of the predicate does not mean "any
+/// operation": `mapping_scope_matches` only accepts an operation-scoped mapping
+/// when the request names a matching operation, so an unscoped call quietly
+/// drops those rows. Every window therefore carries the operation the request
+/// asked for.
+fn filter_rows_for_requested_model_for_operation(
+    rows: Vec<StoredMinimalCandidateSelectionRow>,
+    requested_model_name: &str,
+    api_format: &str,
+    enable_model_directives: bool,
+    request_operation: Option<&str>,
+) -> Vec<StoredMinimalCandidateSelectionRow> {
+    rows.into_iter()
+        .filter(|row| {
+            row_supports_requested_model_with_model_directives_and_request_operation(
+                row,
+                requested_model_name,
+                api_format,
+                enable_model_directives,
+                request_operation,
             )
         })
         .collect()
-}
-
-async fn read_requested_model_rows_fast_path(
-    state: &(impl MinimalCandidateSelectionRowSource + Sync),
-    api_format: &str,
-    requested_model_name: &str,
-    enable_model_directives: bool,
-) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-    let requested_names =
-        requested_model_candidate_names(requested_model_name, enable_model_directives);
-
-    // One version for the whole walk. Every offset below is measured against
-    // these rows, so a concurrent configuration change cannot make one page of
-    // this scan address a set the previous page never saw.
-    let all_rows = state
-        .pin_minimal_candidate_selection_rows_for_api_format(api_format)
-        .await?;
-
-    let mut rows = Vec::new();
-    let mut seen = BTreeSet::new();
-    for requested_name in requested_names {
-        if requested_name.is_empty() {
-            continue;
-        }
-        let mut offset = 0;
-        let mut scanned = 0;
-        while scanned < REQUESTED_MODEL_MAX_COLLECTED_ROWS {
-            let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE
-                .min(REQUESTED_MODEL_MAX_COLLECTED_ROWS - scanned);
-            let page = requested_name_window_from_rows(
-                all_rows.as_slice(),
-                api_format,
-                &requested_name,
-                offset,
-                limit,
-            );
-            if page.is_empty() {
-                break;
-            }
-            let page_len = page.len() as u32;
-            for row in page {
-                if seen.insert((
-                    row.endpoint_id.clone(),
-                    row.key_id.clone(),
-                    row.model_id.clone(),
-                )) {
-                    rows.push(row);
-                }
-            }
-            scanned = scanned.saturating_add(page_len);
-            if page_len < limit {
-                break;
-            }
-            offset = offset.saturating_add(limit);
-        }
-    }
-    Ok(rows)
 }
 
 pub(crate) fn requested_model_candidate_names(
@@ -291,49 +243,58 @@ pub(crate) fn requested_model_candidate_names(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn requested_model_page_from_rows(
     all_rows: &[StoredMinimalCandidateSelectionRow],
+    resolved_global_model_name: &str,
     api_format: &str,
     requested_model_name: &str,
     requested_name: &str,
     offset: u32,
     limit: u32,
     enable_model_directives: bool,
+    request_operation: Option<&str>,
 ) -> RequestedModelCandidateRowsPage {
     let limit = limit.max(1);
-    let window =
-        requested_name_window_from_rows(all_rows, api_format, requested_name, offset, limit);
+    let window = requested_name_window_from_rows(
+        all_rows,
+        resolved_global_model_name,
+        api_format,
+        requested_name,
+        offset,
+        limit,
+        request_operation,
+    );
     finish_requested_model_window(
         window,
         api_format,
         requested_model_name,
         limit,
         enable_model_directives,
+        request_operation,
     )
 }
 
-/// The rows the query shape matches for one alias, inside
-/// `[offset, offset + limit)`.
-///
-/// This is the window an offset is measured against, which is why it is a
-/// separate step from the request-level filter: cutting the window after the
-/// request filter would make offsets address rows the caller never sees, and
-/// cutting it before the alias filter would make them address rows the shape
-/// never returned.
+/// The target global model is resolved from the entire pinned version first;
+/// only its matching rows belong to this window and its collection budget.
+/// Other global models' broad aliases cannot shift these offsets.
 pub(crate) fn requested_name_window_from_rows(
     all_rows: &[StoredMinimalCandidateSelectionRow],
+    resolved_global_model_name: &str,
     api_format: &str,
     requested_name: &str,
     offset: u32,
     limit: u32,
+    request_operation: Option<&str>,
 ) -> Vec<StoredMinimalCandidateSelectionRow> {
     let limit = limit.max(1);
     all_rows
         .iter()
+        .filter(|row| row.global_model_name == resolved_global_model_name)
         .filter(|row| {
-            row_supports_requested_model_with_model_directives(
+            row_supports_requested_model_with_model_directives_and_request_operation(
                 row,
                 requested_name,
                 api_format,
                 false,
+                request_operation,
             )
         })
         .skip(offset as usize)
@@ -348,47 +309,21 @@ fn finish_requested_model_window(
     requested_model_name: &str,
     limit: u32,
     enable_model_directives: bool,
+    request_operation: Option<&str>,
 ) -> RequestedModelCandidateRowsPage {
     let scanned_rows = window.len() as u32;
     let scan_exhausted = scanned_rows < limit;
-    let rows = filter_rows_for_requested_model(
+    let rows = filter_rows_for_requested_model_for_operation(
         window,
         requested_model_name,
         api_format,
         enable_model_directives,
+        request_operation,
     );
     RequestedModelCandidateRowsPage {
         rows,
         scanned_rows,
         scan_exhausted,
-    }
-}
-
-/// One api-format window, cut from a pinned version.
-pub(crate) fn api_format_page_from_rows(
-    all_rows: &[StoredMinimalCandidateSelectionRow],
-    offset: u32,
-    limit: u32,
-) -> RequestedModelCandidateRowsPage {
-    let limit = limit.max(1);
-    let window = all_rows
-        .iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .cloned()
-        .collect::<Vec<_>>();
-    finish_api_format_window(window, limit)
-}
-
-fn finish_api_format_window(
-    window: Vec<StoredMinimalCandidateSelectionRow>,
-    limit: u32,
-) -> RequestedModelCandidateRowsPage {
-    let scanned_rows = window.len() as u32;
-    RequestedModelCandidateRowsPage {
-        rows: window,
-        scanned_rows,
-        scan_exhausted: scanned_rows < limit,
     }
 }
 
@@ -442,6 +377,7 @@ pub(crate) async fn enumerate_minimal_candidate_selection_with_required_capabili
         &normalized_api_format,
         requested_model_name,
         enable_model_directives,
+        request_operation,
     )
     .await?
     else {
@@ -655,7 +591,7 @@ mod tests {
     async fn requested_model_rows_are_filtered_from_one_pinned_version() {
         let source = CountingSelectionSource::new(vec![sample_row("gpt-5")]);
 
-        let result = read_requested_model_rows(&source, "openai:chat", "gpt-5", false)
+        let result = read_requested_model_rows(&source, "openai:chat", "gpt-5", false, None)
             .await
             .expect("read should succeed")
             .expect("rows should resolve");
@@ -681,7 +617,7 @@ mod tests {
         }
         let source = CountingSelectionSource::new(rows);
 
-        let result = read_requested_model_rows(&source, "openai:chat", "gpt-5", false)
+        let result = read_requested_model_rows(&source, "openai:chat", "gpt-5", false, None)
             .await
             .expect("read should succeed")
             .expect("rows should resolve");
@@ -695,6 +631,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn exact_alias_after_the_collection_budget_beats_broad_mappings() {
+        for requested in ["requested-alias", "zzz-target"] {
+            let mut rows = (0..super::REQUESTED_MODEL_MAX_COLLECTED_ROWS)
+                .map(|index| {
+                    let mut row = sample_row("aaa-general");
+                    row.endpoint_id = format!("endpoint-{index}");
+                    row.global_model_mappings = Some(vec![requested.to_string()]);
+                    row
+                })
+                .collect::<Vec<_>>();
+            let mut exact = sample_row("zzz-target");
+            exact.model_provider_model_name = requested.to_string();
+            rows.push(exact);
+            let source = CountingSelectionSource::new(rows);
+
+            let (global, rows) =
+                read_requested_model_rows(&source, "openai:chat", requested, false, None)
+                    .await
+                    .unwrap()
+                    .expect("exact match must remain reachable");
+            assert_eq!(global, "zzz-target");
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].model_provider_model_name, requested);
+            assert_eq!(source.pins(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn operation_scoped_alias_is_used_for_global_resolution_too() {
+        let mut row = sample_row("global-compact");
+        row.model_provider_model_mappings = Some(vec![
+            aether_data_contracts::repository::candidate_selection::StoredProviderModelMapping {
+                name: "compact-alias".to_string(),
+                priority: 0,
+                api_formats: None,
+                endpoint_ids: None,
+                operations: Some(vec!["compact".to_string()]),
+            },
+        ]);
+        let source = CountingSelectionSource::new(vec![row]);
+        let result = read_requested_model_rows(
+            &source,
+            "openai:chat",
+            "compact-alias",
+            false,
+            Some("compact"),
+        )
+        .await
+        .unwrap()
+        .expect("operation must reach the resolver");
+        assert_eq!(result.0, "global-compact");
+        assert_eq!(result.1.len(), 1);
+        assert!(
+            read_requested_model_rows(&source, "openai:chat", "compact-alias", false, None,)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
     async fn requested_model_window_reads_only_the_requested_slice() {
         let mut rows = Vec::new();
         for index in 0..10 {
@@ -703,8 +700,17 @@ mod tests {
             rows.push(row);
         }
 
-        let page =
-            requested_model_page_from_rows(&rows, "openai:chat", "gpt-5", "gpt-5", 4, 3, false);
+        let page = requested_model_page_from_rows(
+            &rows,
+            "gpt-5",
+            "openai:chat",
+            "gpt-5",
+            "gpt-5",
+            4,
+            3,
+            false,
+            None,
+        );
 
         assert_eq!(page.scanned_rows, 3);
         assert!(!page.scan_exhausted);
@@ -717,12 +723,68 @@ mod tests {
         );
     }
 
+    /// A mapping scoped to one request operation is only offered to requests
+    /// that name it. The window has to apply the same predicate the request
+    /// does: an operation-scoped mapping does not mean "any operation".
+    #[tokio::test]
+    async fn a_window_applies_the_request_operation_scope() {
+        let mut row = sample_row("compacted");
+        row.model_provider_model_name = "gpt-5-compact".to_string();
+        row.model_provider_model_mappings = Some(vec![
+            aether_data_contracts::repository::candidate_selection::StoredProviderModelMapping {
+                name: "gpt-5-compact".to_string(),
+                priority: 0,
+                api_formats: None,
+                endpoint_ids: None,
+                operations: Some(vec!["compact".to_string()]),
+            },
+        ]);
+        let rows = vec![row];
+
+        let compact = requested_model_page_from_rows(
+            &rows,
+            "compacted",
+            "openai:chat",
+            "gpt-5-compact",
+            "gpt-5-compact",
+            0,
+            8,
+            false,
+            Some("compact"),
+        );
+        assert_eq!(compact.rows.len(), 1);
+        assert_eq!(compact.scanned_rows, 1);
+
+        let unscoped = requested_model_page_from_rows(
+            &rows,
+            "compacted",
+            "openai:chat",
+            "gpt-5-compact",
+            "gpt-5-compact",
+            0,
+            8,
+            false,
+            None,
+        );
+        assert!(unscoped.rows.is_empty());
+        assert_eq!(unscoped.scanned_rows, 0);
+    }
+
     #[tokio::test]
     async fn requested_model_window_reports_an_exhausted_scan() {
         let rows = vec![sample_row("gpt-5")];
 
-        let page =
-            requested_model_page_from_rows(&rows, "openai:chat", "gpt-5", "gpt-5", 0, 3, false);
+        let page = requested_model_page_from_rows(
+            &rows,
+            "gpt-5",
+            "openai:chat",
+            "gpt-5",
+            "gpt-5",
+            0,
+            3,
+            false,
+            None,
+        );
 
         assert_eq!(page.scanned_rows, 1);
         assert!(page.scan_exhausted);
