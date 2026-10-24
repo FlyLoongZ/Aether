@@ -122,6 +122,7 @@ pub(crate) struct AuthContextInflightGuard<'a> {
     generation: AuthContextCacheGeneration,
 }
 
+#[cfg(test)]
 pub(crate) struct AuthContextOwnedInflightGuard {
     cache: Arc<AuthContextCache>,
     cache_key: Option<String>,
@@ -145,6 +146,7 @@ impl AuthContextInflightGuard<'_> {
     }
 }
 
+#[cfg(test)]
 impl AuthContextOwnedInflightGuard {
     pub(crate) fn generation(&self) -> AuthContextCacheGeneration {
         self.generation.clone()
@@ -164,6 +166,7 @@ impl Drop for AuthContextInflightGuard<'_> {
     }
 }
 
+#[cfg(test)]
 impl Drop for AuthContextOwnedInflightGuard {
     fn drop(&mut self) {
         let Some(cache_key) = self.cache_key.take() else {
@@ -226,6 +229,7 @@ impl AuthContextCache {
         self.entries.remove(&format!("negative:{cache_key}"));
     }
 
+    #[cfg(test)]
     pub(crate) fn get_fresh(
         &self,
         cache_key: &str,
@@ -335,6 +339,7 @@ impl AuthContextCache {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn try_register_owned_leader(
         self: &Arc<Self>,
         cache_key: &str,

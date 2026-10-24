@@ -21,7 +21,7 @@ async fn gateway_exposes_readyz_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -58,7 +58,7 @@ async fn gateway_handles_public_health_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -93,7 +93,7 @@ async fn gateway_handles_public_service_health_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

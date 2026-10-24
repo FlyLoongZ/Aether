@@ -37,8 +37,8 @@ pub(crate) use self::ops::{
     admin_provider_id_for_provider_ops_disconnect, admin_provider_id_for_provider_ops_status,
     admin_provider_id_for_provider_ops_verify, admin_provider_ops_action_route_parts,
     admin_provider_ops_architecture_id_from_path, is_admin_provider_ops_architectures_root,
-    is_admin_provider_ops_batch_balance_root,
 };
+
 pub(crate) use self::strategy::{
     admin_provider_id_for_provider_strategy_billing, admin_provider_id_for_provider_strategy_quota,
     admin_provider_id_for_provider_strategy_stats, is_admin_provider_strategy_strategies_root,

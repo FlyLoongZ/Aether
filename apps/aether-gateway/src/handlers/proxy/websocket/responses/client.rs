@@ -2,7 +2,6 @@
 
 use aether_provider_transport::CodexFingerprintConvergenceContext;
 use axum::extract::ws::{Message as AxumWsMessage, WebSocket};
-use futures_util::SinkExt;
 use serde_json::Value;
 use uuid::Uuid;
 use wreq::ws::message::Message as WreqWsMessage;

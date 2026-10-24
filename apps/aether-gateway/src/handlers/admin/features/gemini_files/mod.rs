@@ -9,7 +9,6 @@ use serde_json::json;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const ADMIN_GEMINI_FILES_DATA_UNAVAILABLE_DETAIL: &str = "Admin Gemini files data unavailable";
-const ADMIN_GEMINI_FILE_UPLOAD_DETAIL: &str = "Admin Gemini file upload requires Rust uploader";
 const ADMIN_GEMINI_FILES_DEFAULT_PAGE: usize = 1;
 const ADMIN_GEMINI_FILES_DEFAULT_PAGE_SIZE: usize = 20;
 const ADMIN_GEMINI_FILES_MAX_PAGE_SIZE: usize = 100;

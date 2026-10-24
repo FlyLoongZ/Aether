@@ -1,8 +1,7 @@
 use super::{
     auth_email_is_verified, auth_password_policy_level, base_url_from_request,
     build_auth_error_response, build_auth_json_response, build_auth_refresh_cookie_clear_header,
-    build_auth_wallet_summary_payload, consume_auth_email_registration_proof,
-    decrypt_catalog_secret_with_fallbacks, encrypt_catalog_secret_with_fallbacks, handle_auth_me,
+    build_auth_wallet_summary_payload, consume_auth_email_registration_proof, handle_auth_me,
     handle_users_me_api_key_install_session_create, query_param_optional_bool, query_param_value,
     resolve_authenticated_local_user, sanitize_public_model_capabilities,
     sanitize_public_model_config_for_user, sanitize_public_tiered_pricing, unix_secs_to_rfc3339,
@@ -13,7 +12,6 @@ use crate::admin_api::build_admin_endpoint_health_status_payload;
 use crate::handlers::internal::build_management_token_payload;
 use crate::handlers::shared::{
     admin_stats_bad_request_response, parse_bounded_u32, round_to, AdminStatsTimeRange,
-    AdminStatsUsageFilter,
 };
 
 const USERS_ME_AVAILABLE_MODELS_FETCH_LIMIT: usize = 1000;
@@ -51,6 +49,5 @@ mod user_me_shared;
 use user_me_shared::*;
 #[path = "user_me_routes.rs"]
 mod user_me_routes;
-use user_me_routes::*;
 
 pub(super) use self::user_me_routes::maybe_build_local_users_me_response;

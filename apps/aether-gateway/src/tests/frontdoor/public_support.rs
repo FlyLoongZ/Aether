@@ -337,7 +337,7 @@ async fn gateway_handles_public_announcements_list_without_proxying_upstream() {
         .expect("announcement should build"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -424,7 +424,7 @@ async fn gateway_handles_public_active_announcements_without_proxying_upstream()
         .expect("announcement should build"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -491,7 +491,7 @@ async fn gateway_handles_public_announcement_detail_without_proxying_upstream() 
         .expect("announcement should build"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -596,7 +596,7 @@ async fn gateway_creates_announcement_locally_with_trusted_admin_principal() {
 
     let announcement_repository = Arc::new(InMemoryAnnouncementReadRepository::seed(vec![]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -687,7 +687,7 @@ async fn gateway_updates_announcement_locally_with_trusted_admin_principal() {
         .expect("announcement should build"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -777,7 +777,7 @@ async fn gateway_deletes_announcement_locally_with_trusted_admin_principal() {
         .expect("announcement should build"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -949,7 +949,7 @@ async fn gateway_handles_public_catalog_site_info_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1035,7 +1035,7 @@ async fn gateway_handles_public_catalog_providers_without_proxying_upstream() {
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1117,7 +1117,7 @@ async fn gateway_handles_public_catalog_models_without_proxying_upstream() {
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1208,7 +1208,7 @@ async fn public_catalog_excludes_unsupported_embedding_provider() {
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1278,7 +1278,7 @@ async fn gateway_handles_public_catalog_search_models_without_proxying_upstream(
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1361,7 +1361,7 @@ async fn gateway_handles_public_catalog_stats_without_proxying_upstream() {
             ),
         ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1450,7 +1450,7 @@ async fn gateway_handles_public_global_models_without_proxying_upstream() {
         gpt_model,
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1604,7 +1604,7 @@ async fn gateway_handles_public_health_api_formats_without_proxying_upstream() {
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1692,7 +1692,7 @@ async fn gateway_handles_public_auth_modules_status_without_proxying_upstream() 
         }),
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1748,7 +1748,7 @@ async fn gateway_handles_public_capabilities_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1817,7 +1817,7 @@ async fn gateway_handles_auth_registration_settings_without_proxying_upstream() 
         ),
     ]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1896,7 +1896,7 @@ async fn gateway_handles_auth_settings_without_proxying_upstream() {
                 json!(true),
             )]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1941,7 +1941,7 @@ async fn gateway_handles_public_user_configurable_capabilities_without_proxying_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1984,7 +1984,7 @@ async fn gateway_handles_public_model_capabilities_without_proxying_upstream() {
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2037,7 +2037,7 @@ async fn gateway_handles_missing_public_model_capabilities_without_proxying_upst
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -2084,7 +2084,7 @@ async fn gateway_handles_public_providers_without_proxying_upstream() {
         vec![],
         vec![],
     ));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2138,7 +2138,7 @@ async fn gateway_handles_public_provider_detail_without_proxying_upstream() {
         vec![],
         vec![],
     ));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2224,7 +2224,7 @@ async fn gateway_handles_public_providers_with_endpoints_without_proxying_upstre
         ],
         vec![],
     ));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2279,7 +2279,7 @@ async fn gateway_handles_test_connection_alias_without_proxying_upstream() {
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -2699,103 +2699,6 @@ async fn gateway_gemini_test_connection_does_not_force_low_max_output_tokens() {
     provider_handle.abort();
 }
 
-async fn assert_public_support_route_returns_local_503(
-    method: reqwest::Method,
-    path: &str,
-    body: Option<serde_json::Value>,
-    expected_detail: &str,
-) {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        "/{*path}",
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("proxied"))
-            }
-        }),
-    );
-
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
-    let gateway = build_router().expect("gateway should build");
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let client = reqwest::Client::new();
-    let url = format!("{gateway_url}{path}");
-    let request = client.request(method, url);
-    let request = if let Some(body) = body {
-        request.json(&body)
-    } else {
-        request
-    };
-    let response = request.send().await.expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["detail"], expected_detail);
-    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
-
-    gateway_handle.abort();
-    upstream_handle.abort();
-}
-
-async fn assert_public_support_route_returns_local_503_with_auth(
-    method: reqwest::Method,
-    path: &str,
-    body: Option<serde_json::Value>,
-    expected_detail: &str,
-) {
-    let now = Utc::now();
-    let user = sample_auth_user(now);
-    let access_token = build_test_auth_token(
-        "access",
-        serde_json::Map::from_iter([
-            ("user_id".to_string(), json!(user.id)),
-            ("role".to_string(), json!(user.role)),
-            (
-                "created_at".to_string(),
-                json!(user.created_at.map(|value| value.to_rfc3339())),
-            ),
-            ("session_id".to_string(), json!("session-maintenance-1")),
-        ]),
-        chrono::Utc::now() + chrono::Duration::hours(1),
-    );
-    let session = sample_auth_session(
-        "user-auth-1",
-        "session-maintenance-1",
-        "device-maintenance-1",
-        "refresh-maintenance-1",
-        now,
-    );
-    let (gateway_url, upstream_hits, gateway_handle, upstream_handle) =
-        start_auth_gateway_with_state(user, sample_auth_wallet("user-auth-1", now), [session])
-            .await;
-
-    let client = reqwest::Client::new();
-    let url = format!("{gateway_url}{path}");
-    let request = client
-        .request(method, url)
-        .header("authorization", format!("Bearer {access_token}"))
-        .header("x-client-device-id", "device-maintenance-1")
-        .header("user-agent", "AetherTest/1.0");
-    let request = if let Some(body) = body {
-        request.json(&body)
-    } else {
-        request
-    };
-    let response = request.send().await.expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["detail"], expected_detail);
-    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
-
-    gateway_handle.abort();
-    upstream_handle.abort();
-}
-
 async fn assert_local_route_not_found_response(response: reqwest::Response) {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
@@ -3098,7 +3001,7 @@ async fn start_auth_gateway_with_state(
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user]));
     let wallet_repository = Arc::new(InMemoryWalletRepository::seed(vec![wallet]));
     let state = AppState::new()
@@ -3142,7 +3045,7 @@ where
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user]));
     let wallet_repository = Arc::new(InMemoryWalletRepository::seed(vec![wallet]));
     let state = AppState::new()
@@ -3189,7 +3092,7 @@ where
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user]));
     let wallet_repository = Arc::new(InMemoryWalletRepository::seed(vec![wallet]));
     let data_state = crate::data::GatewayDataState::with_user_wallet_and_usage_for_tests(
@@ -3231,7 +3134,7 @@ async fn start_auth_gateway_with_preferences_state(
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user]));
     let wallet_repository = Arc::new(InMemoryWalletRepository::seed(vec![wallet]));
     let state = AppState::new()
@@ -3343,7 +3246,7 @@ where
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user]));
     let wallet_repository = Arc::new(InMemoryWalletRepository::seed(vec![wallet]));
     let state = AppState::new()
@@ -6083,7 +5986,7 @@ async fn gateway_handles_users_me_endpoint_status_locally_without_proxying_upstr
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user]));
     let wallet_repository = Arc::new(InMemoryWalletRepository::seed(vec![sample_auth_wallet(
         "user-auth-1",

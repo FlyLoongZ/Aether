@@ -574,7 +574,7 @@ where
         return None;
     }
     if cold_fetch_budget
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
+        .try_update(Ordering::AcqRel, Ordering::Acquire, |remaining| {
             remaining.checked_sub(1)
         })
         .is_err()

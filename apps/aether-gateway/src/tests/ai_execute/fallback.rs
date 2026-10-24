@@ -82,7 +82,7 @@ async fn gateway_locally_denies_openai_chat_after_repeated_execution_runtime_mis
 
     let execution_runtime = Router::new();
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_execution_runtime_override(execution_runtime_url);
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -211,7 +211,7 @@ async fn gateway_locally_denies_openai_chat_when_control_api_is_configured_witho
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -321,7 +321,7 @@ async fn gateway_locally_denies_openai_chat_stream_after_execution_runtime_miss_
 
     let execution_runtime = Router::new();
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_execution_runtime_override(execution_runtime_url);
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -482,7 +482,7 @@ async fn assert_ai_route_locally_denied_after_execution_runtime_miss_with_reques
 
     let execution_runtime = Router::new();
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_execution_runtime_override(execution_runtime_url);
     let (gateway_url, gateway_handle) = start_server(gateway).await;

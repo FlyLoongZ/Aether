@@ -2,11 +2,13 @@ use crate::{AdminWalletPaymentOrderRecord, AdminWalletTransactionRecord, AppStat
 use aether_data::repository::wallet::{
     AdjustWalletBalanceInBatchInput, AdminUserWalletBalanceBatchUserOutcome,
     PrepareAdminUserWalletBalanceBatchInput, PrepareAdminUserWalletBalanceBatchOutcome,
-    StoredAdminUserWalletBalanceBatch,
 };
-use std::collections::BTreeMap;
 
 use super::admin_wallet_build_order_no;
+#[cfg(test)]
+pub(crate) use aether_data::repository::wallet::StoredAdminUserWalletBalanceBatch;
+#[cfg(test)]
+pub(crate) use std::collections::BTreeMap;
 
 impl AppState {
     pub(crate) async fn prepare_admin_user_wallet_balance_batch(

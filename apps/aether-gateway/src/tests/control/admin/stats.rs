@@ -15,7 +15,7 @@ use aether_data::repository::users::{
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 use async_trait::async_trait;
 use axum::body::Body;
-use axum::routing::{any, get};
+use axum::routing::any;
 use axum::{extract::Request, Router};
 use chrono::Utc;
 use http::StatusCode;
@@ -26,8 +26,7 @@ use super::super::{
     AppState,
 };
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
 
@@ -276,7 +275,7 @@ impl AuthApiKeyReadRepository for BulkMissAuthApiKeyRepository {
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_provider_quota_usage_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/providers/quota-usage").await;
 
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
@@ -339,7 +338,7 @@ async fn gateway_handles_admin_stats_provider_quota_usage_locally_with_trusted_a
 #[tokio::test]
 async fn gateway_handles_admin_stats_provider_quota_usage_locally_without_provider_catalog_reader()
 {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/providers/quota-usage").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -364,7 +363,7 @@ async fn gateway_handles_admin_stats_provider_quota_usage_locally_without_provid
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_comparison_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/comparison").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
@@ -433,7 +432,7 @@ async fn gateway_handles_admin_stats_comparison_locally_with_trusted_admin_princ
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_comparison_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/comparison").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -466,7 +465,7 @@ async fn gateway_handles_admin_stats_comparison_locally_without_usage_reader() {
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_cost_forecast_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/cost/forecast").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
@@ -540,7 +539,7 @@ async fn gateway_handles_admin_stats_cost_forecast_locally_with_trusted_admin_pr
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_cost_forecast_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/cost/forecast").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -568,7 +567,7 @@ async fn gateway_handles_admin_stats_cost_forecast_locally_without_usage_reader(
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_error_distribution_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/errors/distribution").await;
 
     let mut rate_limit_a = sample_usage_row(
@@ -669,7 +668,7 @@ async fn gateway_handles_admin_stats_error_distribution_locally_with_trusted_adm
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_error_distribution_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/errors/distribution").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -774,7 +773,7 @@ async fn gateway_defaults_admin_stats_error_distribution_to_bounded_recent_windo
 #[tokio::test]
 async fn gateway_handles_admin_stats_performance_percentiles_locally_with_trusted_admin_principal()
 {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/performance/percentiles").await;
 
     let usage: Vec<_> = (1..=10)
@@ -836,7 +835,7 @@ async fn gateway_handles_admin_stats_performance_percentiles_locally_with_truste
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_performance_percentiles_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/performance/percentiles").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -1076,7 +1075,7 @@ async fn gateway_returns_empty_admin_stats_provider_performance_without_usage_re
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_time_series_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/time-series").await;
 
     let mut first_day = sample_usage_row(
@@ -1227,7 +1226,7 @@ async fn gateway_handles_admin_stats_time_series_hourly_locally_with_model_filte
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_time_series_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/time-series").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -1253,7 +1252,7 @@ async fn gateway_handles_admin_stats_time_series_locally_without_usage_reader() 
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_cost_savings_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/cost/savings").await;
 
     let mut usage_row = sample_usage_row(
@@ -1312,7 +1311,7 @@ async fn gateway_handles_admin_stats_cost_savings_locally_with_trusted_admin_pri
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_cost_savings_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/cost/savings").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -1342,7 +1341,7 @@ async fn gateway_handles_admin_stats_cost_savings_locally_without_usage_reader()
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_models_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/models").await;
 
     let mut openai_row = sample_usage_row(
@@ -1416,7 +1415,7 @@ async fn gateway_handles_admin_stats_leaderboard_models_locally_with_trusted_adm
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_models_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/models").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -1509,7 +1508,7 @@ async fn gateway_defaults_admin_stats_leaderboard_models_to_bounded_recent_windo
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_api_keys_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/api-keys").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
@@ -1587,7 +1586,7 @@ async fn gateway_handles_admin_stats_leaderboard_api_keys_locally_with_trusted_a
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_api_keys_locally_without_auth_snapshot_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/api-keys").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
@@ -1715,7 +1714,7 @@ async fn gateway_treats_admin_stats_leaderboard_api_key_bulk_snapshots_as_author
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_api_keys_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/api-keys").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
@@ -1743,7 +1742,7 @@ async fn gateway_handles_admin_stats_leaderboard_api_keys_locally_without_usage_
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_users_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/users").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
@@ -1814,7 +1813,7 @@ async fn gateway_handles_admin_stats_leaderboard_users_locally_with_trusted_admi
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_users_locally_without_user_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/users").await;
 
     let mut usage_user = sample_usage_row(
@@ -2292,7 +2291,7 @@ async fn gateway_group_usage_intersects_members_and_providers_with_shared_overla
 
 #[tokio::test]
 async fn gateway_handles_admin_stats_leaderboard_users_locally_without_usage_reader() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_stats_upstream("/api/admin/stats/leaderboard/users").await;
 
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));

@@ -673,49 +673,6 @@ impl AppState {
         Ok(restored)
     }
 
-    pub(crate) async fn update_local_auth_user_password_hash(
-        &self,
-        user_id: &str,
-        password_hash: String,
-        updated_at: chrono::DateTime<chrono::Utc>,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
-        #[cfg(test)]
-        if let Some(store) = self.auth_user_store.as_ref() {
-            let existing = {
-                store
-                    .lock()
-                    .expect("auth user store should lock")
-                    .get(user_id)
-                    .cloned()
-            };
-            let existing = match existing {
-                Some(user) => Some(user),
-                None => self
-                    .data
-                    .find_user_auth_by_id(user_id)
-                    .await
-                    .map_err(|err| GatewayError::Internal(err.to_string()))?,
-            };
-            let Some(mut user) = existing else {
-                return Ok(None);
-            };
-            user.password_hash = Some(password_hash);
-            user.security_version = user.security_version.checked_add(1).ok_or_else(|| {
-                GatewayError::Internal("users.security_version overflow".to_string())
-            })?;
-            store
-                .lock()
-                .expect("auth user store should lock")
-                .insert(user.id.clone(), user.clone());
-            return Ok(Some(user));
-        }
-
-        self.data
-            .update_local_auth_user_password_hash(user_id, password_hash, updated_at)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn restore_local_auth_user_password_hash_if_matches(
         &self,
         user_id: &str,
@@ -899,52 +856,6 @@ impl AppState {
                 next_password_hash,
                 changed_at,
             )
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn create_local_auth_user(
-        &self,
-        email: Option<String>,
-        email_verified: bool,
-        username: String,
-        password_hash: String,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
-        #[cfg(test)]
-        if let Some(store) = self.auth_user_store.as_ref() {
-            let now = chrono::Utc::now();
-            let user = aether_data::repository::users::StoredUserAuthRecord::new(
-                uuid::Uuid::new_v4().to_string(),
-                email,
-                email_verified,
-                username,
-                Some(password_hash),
-                "user".to_string(),
-                "local".to_string(),
-                None,
-                None,
-                None,
-                true,
-                false,
-                Some(now),
-                None,
-            )
-            .map_err(|err| GatewayError::Internal(err.to_string()))?
-            .with_policy_modes(
-                "inherit".to_string(),
-                "inherit".to_string(),
-                "inherit".to_string(),
-            )
-            .map_err(|err| GatewayError::Internal(err.to_string()))?;
-            store
-                .lock()
-                .expect("auth user store should lock")
-                .insert(user.id.clone(), user.clone());
-            return Ok(Some(user));
-        }
-
-        self.data
-            .create_local_auth_user(email, email_verified, username, password_hash)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
@@ -1307,34 +1218,6 @@ impl AppState {
             )
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn register_local_auth_user(
-        &self,
-        email: Option<String>,
-        email_verified: bool,
-        username: String,
-        password_hash: String,
-        initial_gift_usd: f64,
-        unlimited: bool,
-    ) -> Result<
-        Option<(
-            aether_data::repository::users::StoredUserAuthRecord,
-            aether_data::repository::wallet::StoredWalletSnapshot,
-        )>,
-        GatewayError,
-    > {
-        Ok(self
-            .register_local_auth_user_with_wallet_outcome(
-                email,
-                email_verified,
-                username,
-                password_hash,
-                initial_gift_usd,
-                unlimited,
-            )
-            .await?
-            .map(|(user, wallet, _created)| (user, wallet)))
     }
 }
 

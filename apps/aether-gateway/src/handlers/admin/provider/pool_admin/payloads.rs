@@ -22,6 +22,7 @@ use aether_data_contracts::repository::provider_catalog::{
 use aether_data_contracts::repository::usage::StoredProviderApiKeyWindowUsageSummary;
 use serde_json::json;
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn admin_pool_string_list(value: Option<&serde_json::Value>) -> Option<Vec<String>> {
@@ -376,6 +377,7 @@ fn admin_pool_build_codex_account_quota_from_snapshot(
     None
 }
 
+#[cfg(test)]
 fn admin_pool_current_unix_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -440,6 +442,7 @@ fn admin_pool_prune_expired_codex_window_usage_at(
     }
 }
 
+#[cfg(test)]
 fn admin_pool_prune_expired_codex_window_usage(status_snapshot: &mut serde_json::Value) {
     admin_pool_prune_expired_codex_window_usage_at(status_snapshot, admin_pool_current_unix_secs());
 }

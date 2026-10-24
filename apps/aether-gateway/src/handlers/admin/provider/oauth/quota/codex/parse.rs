@@ -1,10 +1,6 @@
 use aether_admin::provider::quota as admin_provider_quota_pure;
 use std::collections::BTreeMap;
 
-pub(super) fn normalize_codex_plan_type(value: Option<&str>) -> Option<String> {
-    admin_provider_quota_pure::normalize_codex_plan_type(value)
-}
-
 pub(super) fn build_codex_quota_exhausted_fallback_metadata(
     plan_type: Option<&str>,
     updated_at_unix_secs: u64,

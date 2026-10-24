@@ -1,4 +1,3 @@
-use super::data::GatewayDataState;
 use super::error::GatewayError;
 
 mod admin_types;
@@ -27,8 +26,7 @@ pub(crate) use self::admin_types::{
     AdminPaymentCallbackRecord, AdminSecurityBlacklistEntry, AdminWalletPaymentOrderRecord,
     AdminWalletRefundRecord, AdminWalletTransactionRecord, BillingPlanRecord,
     BillingPlanWriteInput, PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigRecord,
-    PaymentGatewayConfigWriteInput, PaymentGatewaySecretCasUpdate,
-    UserDailyQuotaAvailabilityRecord, UserPlanEntitlementRecord,
+    PaymentGatewaySecretCasUpdate, UserDailyQuotaAvailabilityRecord, UserPlanEntitlementRecord,
 };
 pub use self::app::AppState;
 pub(crate) use self::app::{
@@ -54,5 +52,7 @@ pub(crate) use self::types::{
     LocalProviderDeleteTaskState,
 };
 pub(crate) use self::video::VideoTaskRouteAccess;
+#[cfg(test)]
+pub(crate) use super::data::GatewayDataState;
 use super::provider_transport::provider_transport_snapshot_looks_refreshed;
 pub(crate) use super::provider_transport::ProviderTransportSnapshotCacheKey;

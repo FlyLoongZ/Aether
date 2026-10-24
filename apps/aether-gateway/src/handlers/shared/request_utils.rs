@@ -1,16 +1,15 @@
-use crate::constants::{
-    CONTROL_EXECUTE_FALLBACK_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
+use crate::constants::CONTROL_EXECUTE_FALLBACK_HEADER;
+#[cfg(test)]
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
 use crate::headers::header_value_str;
-use axum::http::{self, HeaderName};
+use axum::http::{self};
 use chrono::{SecondsFormat, Utc};
 use url::form_urlencoded;
 
 use super::OFFICIAL_EXTERNAL_MODEL_PROVIDERS;
 
+#[cfg(test)]
 pub(crate) fn rust_auth_terminates_provider_credentials(
     decision: Option<&GatewayControlDecision>,
 ) -> bool {
@@ -48,40 +47,7 @@ pub(crate) fn mark_external_models_official_providers(
     ))
 }
 
-pub(crate) fn should_strip_forwarded_provider_credential_header(
-    decision: Option<&GatewayControlDecision>,
-    header_name: &HeaderName,
-) -> bool {
-    if !rust_auth_terminates_provider_credentials(decision) {
-        return false;
-    }
-
-    matches!(
-        header_name.as_str(),
-        "authorization" | "x-api-key" | "api-key" | "x-goog-api-key"
-    )
-}
-
-pub(crate) fn should_strip_forwarded_trusted_admin_header(
-    decision: Option<&GatewayControlDecision>,
-    header_name: &HeaderName,
-) -> bool {
-    let Some(decision) = decision else {
-        return false;
-    };
-    if decision.route_class.as_deref() != Some("admin_proxy") {
-        return false;
-    }
-
-    matches!(
-        header_name.as_str(),
-        TRUSTED_ADMIN_USER_ID_HEADER
-            | TRUSTED_ADMIN_USER_ROLE_HEADER
-            | TRUSTED_ADMIN_SESSION_ID_HEADER
-            | TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER
-    )
-}
-
+#[cfg(test)]
 pub(crate) fn sanitize_upstream_path_and_query(
     decision: Option<&GatewayControlDecision>,
     default_path_and_query: &str,
@@ -115,6 +81,7 @@ pub(crate) fn security_log_url_origin(value: &str) -> String {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn strip_query_param(path_and_query: &str, key_to_strip: &str) -> String {
     let Some((path, query)) = path_and_query.split_once('?') else {
         return path_and_query.to_string();

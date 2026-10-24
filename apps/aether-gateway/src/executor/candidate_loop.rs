@@ -20,11 +20,12 @@ use tracing::{debug, warn, Instrument};
 use crate::ai_serving::LocalExecutionAttemptSource;
 use crate::clock::current_unix_ms;
 use crate::control::GatewayControlDecision;
+#[cfg(test)]
+pub(crate) use crate::execution_runtime::mark_stream_candidate_watchdog_terminal_started;
 use crate::execution_runtime::{
     acquire_upstream_execution_gate, build_transport_error_stop_response,
     execute_execution_runtime_stream_with_retry_scope,
-    execute_execution_runtime_sync_with_retry_scope,
-    mark_stream_candidate_watchdog_terminal_started, StreamCandidateWatchdogProgress,
+    execute_execution_runtime_sync_with_retry_scope, StreamCandidateWatchdogProgress,
     UpstreamExecutionGateProvider, UPSTREAM_EXECUTION_GATE_NAME,
 };
 use crate::executor::{
@@ -73,30 +74,6 @@ fn attach_redaction_execution_candidate(response: &mut Response<Body>, candidate
             .extensions_mut()
             .insert(RedactionExecutionCandidateId::new(candidate_id));
     }
-}
-
-pub(crate) async fn execute_sync_plan_and_reports<T>(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-    plan_and_reports: Vec<T>,
-) -> Result<LocalExecutionRequestOutcome, GatewayError>
-where
-    T: AiExecutionAttempt + Send + Sync + 'static,
-{
-    let transfer_tracker = ProviderTransferTracker::for_request(parts);
-    execute_sync_plan_and_reports_with_transfer_tracker(
-        state,
-        parts,
-        trace_id,
-        decision,
-        plan_kind,
-        plan_and_reports,
-        &transfer_tracker,
-    )
-    .await
 }
 
 pub(crate) async fn execute_sync_plan_and_reports_with_transfer_tracker<T>(
@@ -170,6 +147,7 @@ where
     .await
 }
 
+#[cfg(test)]
 pub(crate) async fn execute_sync_attempt_source<T, S>(
     state: &AppState,
     parts: &http::request::Parts,
@@ -471,28 +449,6 @@ where
     }
 }
 
-pub(crate) async fn execute_stream_plan_and_reports<T>(
-    state: &AppState,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-    plan_and_reports: Vec<T>,
-) -> Result<LocalExecutionRequestOutcome, GatewayError>
-where
-    T: AiExecutionAttempt + Send + Sync + 'static,
-{
-    let transfer_tracker = ProviderTransferTracker::default();
-    execute_stream_plan_and_reports_with_transfer_tracker(
-        state,
-        trace_id,
-        decision,
-        plan_kind,
-        plan_and_reports,
-        &transfer_tracker,
-    )
-    .await
-}
-
 pub(crate) async fn execute_stream_plan_and_reports_with_transfer_tracker<T>(
     state: &AppState,
     trace_id: &str,
@@ -559,29 +515,6 @@ where
         }
     }
     .instrument(span)
-    .await
-}
-
-pub(crate) async fn execute_stream_attempt_source<T, S>(
-    state: &AppState,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-    source: S,
-) -> Result<LocalExecutionRequestOutcome, GatewayError>
-where
-    T: AiExecutionAttempt + Send + Sync + 'static,
-    S: LocalExecutionAttemptSource<T>,
-{
-    let transfer_tracker = ProviderTransferTracker::default();
-    execute_stream_attempt_source_with_transfer_tracker(
-        state,
-        trace_id,
-        decision,
-        plan_kind,
-        source,
-        &transfer_tracker,
-    )
     .await
 }
 
@@ -1748,6 +1681,7 @@ async fn mark_unused_local_candidate(
     .await;
 }
 
+#[cfg(test)]
 fn should_skip_unused_persistence(report_context: Option<&serde_json::Value>) -> bool {
     let metadata = local_execution_candidate_metadata_from_report_context(report_context);
     should_skip_unused_persistence_from_metadata(&metadata)
@@ -2157,38 +2091,6 @@ fn hold_response_upstream_execution_permit(
         }
     };
     Response::from_parts(parts, Body::from_stream(stream))
-}
-
-pub(crate) async fn mark_unused_local_candidate_items<T, FPlan, FContext>(
-    state: &AppState,
-    remaining: Vec<T>,
-    plan: FPlan,
-    report_context: FContext,
-) where
-    FPlan: Fn(&T) -> &aether_contracts::ExecutionPlan,
-    FContext: Fn(&T) -> Option<&serde_json::Value>,
-{
-    for item in remaining {
-        let report_context = report_context(&item);
-        if should_skip_unused_persistence(report_context) {
-            continue;
-        }
-        record_local_request_candidate_status(
-            state,
-            plan(&item),
-            report_context,
-            SchedulerRequestCandidateStatusUpdate {
-                status: RequestCandidateStatus::Unused,
-                status_code: None,
-                error_type: None,
-                error_message: None,
-                latency_ms: None,
-                started_at_unix_ms: None,
-                finished_at_unix_ms: None,
-            },
-        )
-        .await;
-    }
 }
 
 #[cfg(test)]

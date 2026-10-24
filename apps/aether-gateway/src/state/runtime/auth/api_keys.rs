@@ -50,6 +50,7 @@ impl AppState {
             .await
     }
 
+    #[cfg(test)]
     pub(crate) async fn read_cached_auth_api_key_snapshot_by_key_hash(
         &self,
         key_hash: &str,
@@ -85,6 +86,7 @@ impl AppState {
         Ok(snapshot)
     }
 
+    #[cfg(test)]
     pub(crate) async fn resolve_auth_api_key_snapshots_by_ids(
         &self,
         api_key_ids: &[String],

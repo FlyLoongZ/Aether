@@ -7,7 +7,9 @@ use crate::control::GatewayControlDecision;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum GatewayFallbackMetricKind {
+    #[cfg_attr(not(test), allow(dead_code))]
     DecisionRemote,
+    #[cfg_attr(not(test), allow(dead_code))]
     PlanFallback,
     ControlExecuteFallback,
     LocalExecutionRuntimeMiss,
@@ -46,14 +48,12 @@ impl GatewayFallbackMetricKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum GatewayFallbackReason {
+    #[cfg_attr(not(test), allow(dead_code))]
     LocalDecisionMiss,
     RemoteDecisionMiss,
     SchedulerDecisionUnsupported,
-    ExecutionRuntimeMiss,
-    ProxyPassthrough,
     LocalExecutionPathRequired,
     ControlExecuteEmergency,
-    ExecutionRuntimeMissing,
 }
 
 impl GatewayFallbackReason {
@@ -62,11 +62,8 @@ impl GatewayFallbackReason {
             Self::LocalDecisionMiss => "local_decision_miss",
             Self::RemoteDecisionMiss => "remote_decision_miss",
             Self::SchedulerDecisionUnsupported => "scheduler_decision_unsupported",
-            Self::ExecutionRuntimeMiss => "execution_runtime_miss",
-            Self::ProxyPassthrough => "proxy_passthrough",
             Self::LocalExecutionPathRequired => "local_execution_path_required",
             Self::ControlExecuteEmergency => "control_execute_emergency",
-            Self::ExecutionRuntimeMissing => "execution_runtime_missing",
         }
     }
 }

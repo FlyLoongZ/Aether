@@ -1,8 +1,7 @@
 use super::{
-    DataLayerError, GatewayDataState, GetPoolMemberScoresByIdsQuery,
-    ListPoolMemberProbeCandidatesQuery, ListPoolMemberScoresQuery, ListRankedPoolMembersQuery,
-    PoolMemberHardState, PoolMemberIdentity, PoolMemberProbeAttempt, PoolMemberProbeResult,
-    PoolMemberScheduleFeedback, PoolScoreScope, StoredPoolMemberScore, UpsertPoolMemberScore,
+    DataLayerError, GatewayDataState, GetPoolMemberScoresByIdsQuery, ListPoolMemberScoresQuery,
+    ListRankedPoolMembersQuery, PoolMemberIdentity, PoolMemberProbeAttempt, PoolMemberProbeResult,
+    PoolMemberScheduleFeedback, StoredPoolMemberScore, UpsertPoolMemberScore,
 };
 use aether_data_contracts::repository::pool_scores::PoolMemberScoreUpsertMode;
 
@@ -13,16 +12,6 @@ impl GatewayDataState {
     ) -> Result<Vec<StoredPoolMemberScore>, DataLayerError> {
         match &self.pool_score_reader {
             Some(repository) => repository.list_ranked_pool_members(query).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn list_pool_member_probe_candidates(
-        &self,
-        query: &ListPoolMemberProbeCandidatesQuery,
-    ) -> Result<Vec<StoredPoolMemberScore>, DataLayerError> {
-        match &self.pool_score_reader {
-            Some(repository) => repository.list_pool_member_probe_candidates(query).await,
             None => Ok(Vec::new()),
         }
     }
@@ -99,23 +88,6 @@ impl GatewayDataState {
             Some(repository) => {
                 repository
                     .record_pool_member_schedule_feedback(feedback)
-                    .await
-            }
-            None => Ok(0),
-        }
-    }
-
-    pub(crate) async fn mark_pool_member_hard_state(
-        &self,
-        identity: &PoolMemberIdentity,
-        scope: Option<&PoolScoreScope>,
-        hard_state: PoolMemberHardState,
-        updated_at: u64,
-    ) -> Result<usize, DataLayerError> {
-        match &self.pool_score_writer {
-            Some(repository) => {
-                repository
-                    .mark_pool_member_hard_state(identity, scope, hard_state, updated_at)
                     .await
             }
             None => Ok(0),

@@ -1,5 +1,8 @@
 use aether_runtime::{MetricKind, MetricSample};
 
+#[cfg(all(feature = "jemalloc", not(target_env = "msvc")))]
+use crate::tokio_metrics::u64_from_usize;
+
 pub(crate) fn gateway_allocator_metric_samples() -> Vec<MetricSample> {
     match allocator_snapshot() {
         Some(snapshot) => snapshot.to_metric_samples(),
@@ -185,10 +188,6 @@ fn ratio_basis_points(numerator: u64, denominator: u64) -> u64 {
         return 0;
     }
     numerator.saturating_mul(10_000) / denominator
-}
-
-fn u64_from_usize(value: usize) -> u64 {
-    u64::try_from(value).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]

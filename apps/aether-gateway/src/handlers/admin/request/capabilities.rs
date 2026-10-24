@@ -1,10 +1,6 @@
 use super::AdminAppState;
 
 impl<'a> AdminAppState<'a> {
-    pub(crate) fn http_client(&self) -> &reqwest::Client {
-        &self.app.client
-    }
-
     pub(crate) fn provider_oauth_token_url(
         &self,
         provider_type: &str,
@@ -12,14 +8,6 @@ impl<'a> AdminAppState<'a> {
     ) -> String {
         self.app
             .provider_oauth_token_url(provider_type, default_url)
-    }
-
-    pub(crate) fn encryption_key(&self) -> Option<&str> {
-        self.app.encryption_key()
-    }
-
-    pub(crate) fn encrypt_catalog_secret_with_fallbacks(&self, secret: &str) -> Option<String> {
-        crate::handlers::admin::shared::encrypt_catalog_secret_with_fallbacks(self.app, secret)
     }
 
     pub(crate) fn encrypt_system_config_secret(&self, key: &str, secret: &str) -> Option<String> {
@@ -94,10 +82,6 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) fn has_gemini_file_mapping_data_writer(&self) -> bool {
         self.app.has_gemini_file_mapping_data_writer()
-    }
-
-    pub(crate) fn has_background_task_data_reader(&self) -> bool {
-        self.app.has_background_task_data_reader()
     }
 
     pub(crate) fn has_background_task_data_writer(&self) -> bool {

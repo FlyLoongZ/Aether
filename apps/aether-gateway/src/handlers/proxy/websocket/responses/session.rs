@@ -9,7 +9,6 @@
 //! connection and account.
 
 use axum::extract::ws::{Message as AxumWsMessage, WebSocket};
-use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -2577,7 +2576,7 @@ mod tests {
     /// 验证 deadline 内收到合法 response.create 时正常返回，Ping 被正确回复 Pong。
     #[tokio::test]
     async fn initial_message_succeeds_within_deadline() {
-        use super::{receive_initial_response_create_with_deadline, InitialMessageError};
+        use super::receive_initial_response_create_with_deadline;
 
         let (mut fake, mut pair) = fake_socket();
 

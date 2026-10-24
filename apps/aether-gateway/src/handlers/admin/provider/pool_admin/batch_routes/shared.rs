@@ -2,17 +2,9 @@ use super::attach_admin_audit_response;
 use crate::LocalProviderDeleteTaskState;
 use aether_admin::provider::pool as admin_provider_pool_pure;
 pub(crate) use aether_admin::provider::pool::{
-    admin_pool_batch_delete_task_parts, AdminPoolBatchActionRequest, AdminPoolBatchImportItem,
-    AdminPoolBatchImportRequest,
-};
-use aether_data_contracts::repository::provider_catalog::{
-    StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
+    admin_pool_batch_delete_task_parts, AdminPoolBatchActionRequest, AdminPoolBatchImportRequest,
 };
 use axum::{body::Body, response::Response};
-
-pub(crate) fn admin_pool_key_proxy_value(proxy_node_id: Option<&str>) -> Option<serde_json::Value> {
-    admin_provider_pool_pure::admin_pool_key_proxy_value(proxy_node_id)
-}
 
 pub(crate) fn build_admin_pool_batch_delete_task_payload(
     task: &LocalProviderDeleteTaskState,
@@ -53,11 +45,4 @@ pub(crate) fn attach_admin_pool_batch_delete_task_terminal_audit(
         ),
         _ => response,
     }
-}
-
-pub(crate) fn admin_pool_resolved_api_formats(
-    endpoints: &[StoredProviderCatalogEndpoint],
-    existing_keys: &[StoredProviderCatalogKey],
-) -> Vec<String> {
-    admin_provider_pool_pure::admin_pool_resolved_api_formats(endpoints, existing_keys)
 }

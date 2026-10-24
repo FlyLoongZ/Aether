@@ -113,16 +113,6 @@ impl<'a> AdminAppState<'a> {
             .await
     }
 
-    pub(crate) async fn read_provider_quota_snapshots(
-        &self,
-        provider_ids: &[String],
-    ) -> Result<
-        Vec<aether_data_contracts::repository::quota::StoredProviderQuotaSnapshot>,
-        GatewayError,
-    > {
-        self.app.read_provider_quota_snapshots(provider_ids).await
-    }
-
     pub(crate) async fn update_provider_catalog_key_health_state(
         &self,
         key_id: &str,
@@ -259,17 +249,6 @@ impl<'a> AdminAppState<'a> {
         Err(GatewayError::Internal(format!(
             "provider key {key_id} adaptive state changed repeatedly while updating"
         )))
-    }
-
-    pub(crate) async fn reset_provider_catalog_key_recovery_state(
-        &self,
-        key_id: &str,
-    ) -> Result<
-        Option<aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey>,
-        GatewayError,
-    > {
-        self.reset_provider_catalog_key_recovery_state_inner(key_id, None)
-            .await
     }
 
     pub(crate) async fn reset_provider_catalog_key_recovery_state_fenced(

@@ -1,7 +1,7 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json,
     run_stream_cli_test, start_server, strip_sse_keepalive_comments, to_bytes, Arc, Body, Bytes,
-    HeaderName, HeaderValue, Infallible, Json, Mutex, Request, Response, Router, StatusCode,
+    HeaderValue, Infallible, Json, Mutex, Request, Response, Router, StatusCode,
     UsageRuntimeConfig, TRACE_ID_HEADER,
 };
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
@@ -61,11 +61,7 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
     }
 
     #[derive(Debug, Clone)]
-    struct SeenReportStreamRequest {
-        trace_id: String,
-        report_kind: String,
-        request_id: String,
-    }
+    struct SeenReportStreamRequest {}
 
     #[derive(Debug, Clone)]
     struct SeenRefreshRequest {
@@ -278,30 +274,10 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
             any(move |request: Request| {
                 let seen_report_inner = Arc::clone(&seen_report_clone);
                 async move {
-                    let (parts, body) = request.into_parts();
-                    let raw_body = to_bytes(body, usize::MAX).await.expect("body should read");
-                    let payload: serde_json::Value =
-                        serde_json::from_slice(&raw_body).expect("report payload should parse");
+                    let (_parts, body) = request.into_parts();
+                    let _ = to_bytes(body, usize::MAX).await.expect("body should read");
                     *seen_report_inner.lock().expect("mutex should lock") =
-                        Some(SeenReportStreamRequest {
-                            trace_id: parts
-                                .headers
-                                .get(TRACE_ID_HEADER)
-                                .and_then(|value| value.to_str().ok())
-                                .unwrap_or_default()
-                                .to_string(),
-                            report_kind: payload
-                                .get("report_kind")
-                                .and_then(|value| value.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            request_id: payload
-                                .get("report_context")
-                                .and_then(|value| value.get("request_id"))
-                                .and_then(|value| value.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                        });
+                        Some(SeenReportStreamRequest {});
                     Json(json!({"ok": true}))
                 }
             }),
@@ -563,7 +539,7 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
     let usage_repository = Arc::new(InMemoryUsageReadRepository::default());
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (refresh_url, refresh_handle) = start_server(refresh).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let oauth_refresh =
@@ -770,7 +746,7 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
     assert_eq!(stored_candidates.len(), 1);
     assert_eq!(stored_candidates[0].status, RequestCandidateStatus::Success);
 
-    let mut stored_usage = None;
+    let mut stored_usage;
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
     loop {
         stored_usage = usage_repository

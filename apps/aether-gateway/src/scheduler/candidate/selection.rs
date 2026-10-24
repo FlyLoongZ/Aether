@@ -5,9 +5,8 @@ use crate::scheduler::config::{SchedulerOrderingConfig, SchedulerSchedulingMode}
 use crate::GatewayError;
 use aether_scheduler_core::ClientSessionAffinity;
 
-use super::affinity::{
-    build_scheduler_affinity_cache_key, has_explicit_session_affinity, remember_scheduler_affinity,
-};
+use super::affinity::{build_scheduler_affinity_cache_key, has_explicit_session_affinity};
+
 use super::enumeration::enumerate_scheduler_candidates;
 use super::ranking::rank_scheduler_candidates;
 use super::resolution::resolve_scheduler_candidate_selectability;
@@ -94,6 +93,7 @@ pub(super) async fn select_minimal_candidate(
     .next())
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn collect_selectable_candidates(
     selection_row_source: &(impl MinimalCandidateSelectionRowSource + Sync),

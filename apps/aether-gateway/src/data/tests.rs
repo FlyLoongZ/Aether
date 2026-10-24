@@ -13,7 +13,7 @@ use aether_data::repository::users::{
     InMemoryUserReadRepository, StoredUserAuthRecord, StoredUserPreferenceRecord,
 };
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
-use aether_data::{DataLayerError, DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
+use aether_data::DatabaseDriver;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };

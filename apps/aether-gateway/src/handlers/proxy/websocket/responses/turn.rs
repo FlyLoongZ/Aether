@@ -8,7 +8,6 @@
 
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use aether_contracts::{
@@ -17,17 +16,11 @@ use aether_contracts::{
 };
 use aether_data_contracts::repository::candidates::RequestCandidateStatus;
 use aether_data_contracts::repository::usage::{
-    UsageBodyCaptureState, PLAN_USAGE_RESERVATION_DEFERRED_METADATA_KEY,
-    WEBSOCKET_MODE_METADATA_KEY, WEBSOCKET_TRANSPORT_METADATA_KEY,
+    PLAN_USAGE_RESERVATION_DEFERRED_METADATA_KEY, WEBSOCKET_MODE_METADATA_KEY,
+    WEBSOCKET_TRANSPORT_METADATA_KEY,
 };
 use aether_scheduler_core::SchedulerRequestCandidateStatusUpdate;
-use aether_usage_runtime::{
-    build_lifecycle_usage_seed, build_stream_terminal_usage_payload_seed,
-    build_terminal_usage_context_seed, stream_report_represents_failure,
-    DEFAULT_USAGE_RESPONSE_BODY_CAPTURE_LIMIT_BYTES,
-};
 use axum::http::StatusCode;
-use base64::Engine as _;
 use serde_json::{json, Map, Value};
 use tracing::warn;
 
@@ -48,15 +41,13 @@ use crate::execution_runtime::attempt_lifecycle::{
     ExecutionAttemptLifecycle,
 };
 use crate::orchestration::{
-    apply_local_stream_failure_effects, apply_local_stream_success_effects,
     release_local_pool_key_lease, release_pool_key_lease_from_report_context,
-    LocalExecutionEffectContext, LocalStreamFailureEffect,
+    LocalExecutionEffectContext,
 };
 use crate::plan_usage_policy::PlanUsagePolicySnapshot;
 use crate::request_candidate_runtime::{
     ensure_execution_request_candidate_slot, record_local_request_candidate_status,
 };
-use crate::usage::{submit_stream_report, GatewayStreamReportRequest};
 use crate::{AppState, GatewayError};
 
 const WEBSOCKET_CONNECTION_TRACE_REPORT_CONTEXT_FIELD: &str = "websocket_connection_trace_id";
@@ -227,6 +218,7 @@ impl ResponsesWebSocketTurnOutcome {
         }
     }
 
+    #[cfg(test)]
     const fn status_code(self) -> u16 {
         match self {
             Self::ProviderTerminal { status_code, .. } | Self::Failure { status_code, .. } => {

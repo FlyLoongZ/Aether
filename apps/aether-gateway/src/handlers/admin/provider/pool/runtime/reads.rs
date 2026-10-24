@@ -383,26 +383,6 @@ async fn read_provider_pool_runtime_state(
     state
 }
 
-pub(crate) async fn read_admin_provider_pool_cooldown_count(
-    runtime: &RuntimeState,
-    provider_id: &str,
-) -> usize {
-    runtime
-        .set_len(&pool_cooldown_index_key(provider_id))
-        .await
-        .unwrap_or(0)
-}
-
-pub(crate) async fn read_admin_provider_pool_cooldown_key_ids(
-    runtime: &RuntimeState,
-    provider_id: &str,
-) -> Vec<String> {
-    runtime
-        .set_members(&pool_cooldown_index_key(provider_id))
-        .await
-        .unwrap_or_default()
-}
-
 pub(crate) async fn read_admin_provider_pool_key_cooldown_reason(
     runtime: &RuntimeState,
     provider_id: &str,

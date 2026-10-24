@@ -13,8 +13,6 @@ pub(crate) const ADMIN_POOL_PROVIDER_CATALOG_READER_UNAVAILABLE_DETAIL: &str =
     "Admin pool overview requires provider catalog reader";
 pub(crate) const ADMIN_POOL_PROVIDER_CATALOG_WRITER_UNAVAILABLE_DETAIL: &str =
     "Admin pool cleanup requires provider catalog writer";
-pub(crate) const ADMIN_POOL_BANNED_KEY_CLEANUP_EMPTY_MESSAGE: &str = "未发现可清理的异常账号";
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AdminPoolKeySortField {
     Default,

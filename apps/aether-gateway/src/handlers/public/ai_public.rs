@@ -90,6 +90,7 @@ impl OpenAiImageOperation {
 
 #[derive(Debug, Default)]
 struct OpenAiImageValidationInput {
+    #[cfg_attr(not(test), allow(dead_code))]
     model: Option<String>,
     prompt: Option<String>,
     image_count: usize,
@@ -2093,7 +2094,6 @@ mod tests {
     use aether_data_contracts::repository::video_tasks::{StoredVideoTask, VideoTaskStatus};
     use axum::body::{to_bytes, Body, Bytes};
     use axum::http::StatusCode;
-    use serde_json::json;
 
     #[tokio::test]
     async fn ai_public_server_errors_do_not_expose_internal_details() {

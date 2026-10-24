@@ -7,9 +7,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use aether_contracts::ExecutionPlan;
-use aether_gateway_frontdoor::{
-    drive_first_request_connection, FirstRequestGate, FirstRequestService,
-};
+use aether_gateway_frontdoor::{drive_first_request_connection, FirstRequestService};
 use aether_runtime::{
     maybe_hold_axum_response_permit, prometheus_response, service_up_sample, AdmissionPermit,
     ConcurrencyError, ConcurrencyGate, ConcurrencySnapshot, MetricKind, MetricLabel, MetricSample,
@@ -523,7 +521,7 @@ fn validate_existing_execution_runtime_socket(metadata: &std::fs::Metadata) -> i
 
 #[cfg(unix)]
 async fn remove_stale_execution_runtime_socket(socket_path: &Path) -> io::Result<()> {
-    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    use std::os::unix::fs::MetadataExt;
     use std::time::Duration;
 
     let metadata = match std::fs::symlink_metadata(socket_path) {
@@ -845,7 +843,7 @@ mod tests {
     use http_body_util::{BodyExt, Full};
     use hyper::body::Incoming as HyperIncoming;
     use hyper::{Request as HyperRequest, Response as HyperResponse};
-    use hyper_util::rt::{TokioExecutor, TokioIo};
+    use hyper_util::rt::TokioIo;
     use std::convert::Infallible;
     use std::fs;
     #[cfg(unix)]

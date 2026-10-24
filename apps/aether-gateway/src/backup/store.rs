@@ -1,5 +1,7 @@
+#[cfg(test)]
 use std::collections::BTreeMap;
 use std::fmt;
+#[cfg(test)]
 use std::sync::Arc;
 
 use bytes::{Bytes, BytesMut};
@@ -8,6 +10,7 @@ use object_store::aws::AmazonS3Builder;
 use object_store::path::Path;
 use object_store::{ClientOptions, ObjectStore, ObjectStoreExt, PutMode, PutOptions};
 use reqwest::header::HeaderValue;
+#[cfg(test)]
 use tokio::sync::RwLock;
 
 use super::config::S3BackupConfig;
@@ -20,6 +23,7 @@ pub(crate) enum BackupObjectCreateResult {
 
 #[async_trait::async_trait]
 pub(crate) trait BackupObjectStore: Send + Sync {
+    #[cfg_attr(not(test), allow(dead_code))]
     async fn put_object(&self, key: &str, bytes: Bytes) -> Result<(), BackupStoreError>;
 
     async fn put_object_if_absent(
@@ -70,11 +74,13 @@ impl fmt::Display for BackupStoreError {
 
 impl std::error::Error for BackupStoreError {}
 
+#[cfg(test)]
 #[derive(Debug, Default, Clone)]
 pub(crate) struct FakeBackupObjectStore {
     objects: Arc<RwLock<BTreeMap<String, Bytes>>>,
 }
 
+#[cfg(test)]
 #[async_trait::async_trait]
 impl BackupObjectStore for FakeBackupObjectStore {
     async fn put_object(&self, key: &str, bytes: Bytes) -> Result<(), BackupStoreError> {
@@ -294,6 +300,7 @@ impl BackupObjectStore for ObjectStoreS3BackupStore {
     }
 }
 
+#[cfg(test)]
 fn directory_list_prefix(prefix: &str) -> String {
     let prefix = prefix.trim_end_matches('/');
     if prefix.is_empty() {

@@ -60,6 +60,7 @@ impl InternalGatewayAuthConfig {
         }
     }
 
+    #[cfg(not(test))]
     fn from_environment() -> Self {
         match std::env::var(INTERNAL_GATEWAY_AUTH_SECRET_ENV) {
             Ok(value) => Self::from_secret_value(Some(value.as_str())),
@@ -100,20 +101,6 @@ impl InternalGatewayAuthConfig {
             InternalGatewayAuthMode::LoopbackTestCompatibility => "test_loopback_compatibility",
         }
     }
-
-    #[cfg(test)]
-    pub(crate) fn disabled_for_tests() -> Self {
-        Self {
-            mode: InternalGatewayAuthMode::Disabled,
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_secret_for_tests(secret: &str) -> Self {
-        let config = Self::from_secret_value(Some(secret));
-        assert_eq!(config.status(), "hmac_authenticated");
-        config
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,7 +112,7 @@ pub(crate) enum InternalGatewayAuthError {
 
 pub(crate) async fn authenticate_internal_gateway_request(
     state: &AppState,
-    remote_addr: &std::net::SocketAddr,
+    _remote_addr: &std::net::SocketAddr,
     method: &http::Method,
     path_and_query: &str,
     headers: &http::HeaderMap,
@@ -139,7 +126,7 @@ pub(crate) async fn authenticate_internal_gateway_request(
         InternalGatewayAuthMode::Hmac { secret } => Arc::clone(secret),
         #[cfg(test)]
         InternalGatewayAuthMode::LoopbackTestCompatibility => {
-            return remote_addr
+            return _remote_addr
                 .ip()
                 .is_loopback()
                 .then_some(())

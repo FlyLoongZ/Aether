@@ -104,10 +104,6 @@ pub(crate) fn header_value_str(headers: &http::HeaderMap, key: &str) -> Option<S
         .map(ToOwned::to_owned)
 }
 
-pub(crate) fn header_value_u64(headers: &http::HeaderMap, key: &str) -> Option<u64> {
-    header_value_str(headers, key).and_then(|value| value.parse::<u64>().ok())
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct RequestOrigin {
     pub(crate) client_ip: Option<String>,
@@ -307,10 +303,6 @@ pub(crate) fn should_skip_request_header(name: &str) -> bool {
     crate::provider_transport::should_skip_request_header(name)
 }
 
-pub(crate) fn should_skip_upstream_passthrough_header(name: &str) -> bool {
-    crate::provider_transport::should_skip_upstream_passthrough_header(name)
-}
-
 pub(crate) fn should_skip_response_header(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     name == "set-cookie"
@@ -494,26 +486,15 @@ impl fmt::Display for RequestBodyNormalizationError {
 
 impl std::error::Error for RequestBodyNormalizationError {}
 
+#[cfg(test)]
 pub(crate) fn normalize_request_body_headers_and_bytes(
     headers: &mut http::HeaderMap,
     body_bytes: Bytes,
 ) -> Result<Bytes, RequestBodyNormalizationError> {
-    normalize_request_body_headers_and_bytes_with_limit(
-        headers,
-        body_bytes,
-        max_request_body_bytes(),
-    )
-}
-
-pub(crate) fn normalize_request_body_headers_and_bytes_with_limit(
-    headers: &mut http::HeaderMap,
-    body_bytes: Bytes,
-    limit_bytes: u64,
-) -> Result<Bytes, RequestBodyNormalizationError> {
     normalize_request_body_headers_and_bytes_with_budget(
         headers,
         body_bytes,
-        limit_bytes,
+        max_request_body_bytes(),
         &mut |_| Ok(()),
     )
 }
@@ -536,15 +517,14 @@ pub(crate) fn normalize_request_body_headers_and_bytes_with_budget(
     Ok(Bytes::from(decoded.into_owned()))
 }
 
-/// Rejects a request whose declared `Content-Length` already exceeds the body
-/// limit, before the body is buffered into memory. Chunked or length-less
-/// requests pass this check and stay bounded by the post-decode guard instead.
+#[cfg(test)]
 pub(crate) fn check_request_content_length(
     headers: &http::HeaderMap,
 ) -> Result<(), RequestBodyNormalizationError> {
     check_request_content_length_with_limit(headers, max_request_body_bytes())
 }
 
+#[cfg(test)]
 pub(crate) fn check_request_content_length_with_limit(
     headers: &http::HeaderMap,
     limit: u64,
@@ -674,27 +654,6 @@ fn declared_request_content_length(
         .map_err(|_| RequestBodyNormalizationError::InvalidBodyFraming)
 }
 
-fn decode_single_request_body(
-    encoding: &str,
-    body_bytes: &[u8],
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    decode_single_request_body_with_limit(encoding, body_bytes, max_request_body_bytes())
-}
-
-fn decode_single_request_body_with_limit(
-    encoding: &str,
-    body_bytes: &[u8],
-    limit: u64,
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    decode_single_request_body_with_budget(
-        encoding,
-        body_bytes,
-        limit,
-        body_bytes.len(),
-        &mut |_| Ok(()),
-    )
-}
-
 fn decode_single_request_body_with_budget(
     encoding: &str,
     body_bytes: &[u8],
@@ -741,39 +700,6 @@ fn decode_single_request_body_with_budget(
     }
 }
 
-fn decode_gzip_body(
-    encoding: &str,
-    body_bytes: &[u8],
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    decode_gzip_body_with_limit(encoding, body_bytes, max_request_body_bytes())
-}
-
-fn decode_gzip_body_with_limit(
-    encoding: &str,
-    body_bytes: &[u8],
-    limit: u64,
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    let mut decoder = GzDecoder::new(body_bytes);
-    read_request_decoder_to_end_with_limit(encoding, &mut decoder, limit)
-}
-
-fn decode_deflate_body(
-    encoding: &str,
-    body_bytes: &[u8],
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    decode_deflate_body_with_limit(encoding, body_bytes, max_request_body_bytes())
-}
-
-fn decode_deflate_body_with_limit(
-    encoding: &str,
-    body_bytes: &[u8],
-    limit: u64,
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    decode_deflate_body_with_budget(encoding, body_bytes, limit, body_bytes.len(), &mut |_| {
-        Ok(())
-    })
-}
-
 fn decode_deflate_body_with_budget(
     encoding: &str,
     body_bytes: &[u8],
@@ -811,42 +737,6 @@ fn decode_deflate_body_with_budget(
         }
         Err(error) => Err(error),
     }
-}
-
-fn decode_zstd_body(
-    encoding: &str,
-    body_bytes: &[u8],
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    decode_zstd_body_with_limit(encoding, body_bytes, max_request_body_bytes())
-}
-
-fn decode_zstd_body_with_limit(
-    encoding: &str,
-    body_bytes: &[u8],
-    limit: u64,
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    let mut decoder = zstd::stream::read::Decoder::new(body_bytes).map_err(|err| {
-        RequestBodyNormalizationError::DecodeFailed {
-            encoding: encoding.to_string(),
-            reason: err.to_string(),
-        }
-    })?;
-    read_request_decoder_to_end_with_limit(encoding, &mut decoder, limit)
-}
-
-fn read_request_decoder_to_end(
-    encoding: &str,
-    decoder: &mut impl Read,
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    read_request_decoder_to_end_with_limit(encoding, decoder, max_request_body_bytes())
-}
-
-fn read_request_decoder_to_end_with_limit(
-    encoding: &str,
-    decoder: &mut impl Read,
-    limit: u64,
-) -> Result<Vec<u8>, RequestBodyNormalizationError> {
-    read_request_decoder_to_end_with_budget(encoding, decoder, limit, 0, &mut |_| Ok(()))
 }
 
 fn read_request_decoder_to_end_with_budget(
@@ -910,18 +800,6 @@ fn read_request_decoder_to_end_with_budget(
         }
         out.extend_from_slice(&scratch[..read]);
     }
-}
-
-pub(crate) fn header_equals(
-    headers: &reqwest::header::HeaderMap,
-    key: &'static str,
-    expected: &str,
-) -> bool {
-    headers
-        .get(key)
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.eq_ignore_ascii_case(expected))
-        .unwrap_or(false)
 }
 
 #[cfg(test)]

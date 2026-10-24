@@ -489,32 +489,6 @@ async fn dashboard_summary_for_unix_range_raw(
     }
 }
 
-async fn dashboard_daily_breakdown_for_unix_range_raw(
-    state: &AppState,
-    created_from_unix_secs: u64,
-    created_until_unix_secs: u64,
-    tz_offset_minutes: i32,
-    user_id: Option<&str>,
-    error_context: &str,
-) -> Result<Vec<StoredUsageDashboardDailyBreakdownRow>, Response<Body>> {
-    match state
-        .list_dashboard_daily_breakdown(&UsageDashboardDailyBreakdownQuery {
-            created_from_unix_secs,
-            created_until_unix_secs,
-            tz_offset_minutes,
-            user_id: user_id.map(ToOwned::to_owned),
-        })
-        .await
-    {
-        Ok(value) => Ok(value),
-        Err(err) => Err(build_auth_error_response(
-            http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("{error_context}: {err:?}"),
-            false,
-        )),
-    }
-}
-
 async fn dashboard_summary_for_range_raw(
     state: &AppState,
     range: DashboardDateRange,
@@ -1374,7 +1348,7 @@ pub(super) async fn handle_dashboard_recent_requests_get(
                 );
             }
         };
-    let mut usernames_by_id: BTreeMap<String, String> = users_by_id
+    let usernames_by_id: BTreeMap<String, String> = users_by_id
         .iter()
         .filter(|(_, user)| !user.username.trim().is_empty())
         .map(|(user_id, user)| (user_id.clone(), user.username.clone()))

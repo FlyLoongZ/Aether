@@ -1,5 +1,4 @@
 use crate::ai_serving::GatewayControlDecision;
-use crate::ai_serving::{build_generated_tool_call_id, canonicalize_tool_arguments};
 use crate::{usage::GatewaySyncReportRequest, GatewayError};
 
 pub(crate) use crate::ai_serving::finalize::common::{
@@ -11,12 +10,11 @@ pub(crate) use crate::ai_serving::finalize::standard::{
     maybe_build_standard_sync_finalize_product_from_normalized_payload,
     StandardSyncFinalizeNormalizedProduct,
 };
+pub(crate) use crate::ai_serving::maybe_build_openai_image_sync_finalize_product;
+#[cfg(test)]
 pub(crate) use crate::ai_serving::{
     aggregate_claude_stream_sync_response, aggregate_gemini_stream_sync_response,
     aggregate_openai_chat_stream_sync_response, aggregate_openai_responses_stream_sync_response,
-    maybe_build_openai_image_sync_finalize_product,
-};
-pub(crate) use crate::ai_serving::{
     convert_claude_chat_response_to_openai_chat, convert_claude_response_to_openai_responses,
     convert_gemini_chat_response_to_openai_chat, convert_gemini_response_to_openai_responses,
 };

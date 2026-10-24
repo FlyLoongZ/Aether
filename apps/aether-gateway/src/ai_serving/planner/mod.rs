@@ -36,16 +36,17 @@ pub(crate) use self::candidate_resolution::{
 };
 pub(crate) use self::common::resolve_upstream_is_stream_for_provider;
 pub(crate) use self::passthrough::{
-    build_local_same_format_stream_attempt_source, build_local_same_format_stream_plan_and_reports,
-    build_local_same_format_sync_attempt_source, build_local_same_format_sync_plan_and_reports,
+    build_local_same_format_stream_attempt_source, build_local_same_format_sync_attempt_source,
     maybe_build_pinned_stream_local_same_format_provider_decision_payload,
 };
+#[cfg(test)]
 pub(crate) use self::plan_builders::{
     build_gemini_stream_plan_from_decision, build_gemini_sync_plan_from_decision,
-    build_openai_responses_stream_plan_from_decision,
     build_openai_responses_sync_plan_from_decision, build_passthrough_sync_plan_from_decision,
-    build_standard_stream_plan_from_decision, build_standard_sync_plan_from_decision,
-    AiStreamAttempt, AiSyncAttempt,
+};
+pub(crate) use self::plan_builders::{
+    build_openai_responses_stream_plan_from_decision, build_standard_stream_plan_from_decision,
+    build_standard_sync_plan_from_decision,
 };
 pub(crate) use self::pool_scores::{
     build_provider_key_pool_score_upsert, provider_key_pool_score_id, provider_key_pool_score_scope,
@@ -53,39 +54,27 @@ pub(crate) use self::pool_scores::{
 pub(crate) use self::redaction::resolve_provider_chat_pii_redaction;
 pub(crate) use self::request_gzip::resolve_transport_request_encoding_policy;
 pub(crate) use self::route::is_matching_stream_request as planner_is_matching_stream_request;
-pub(crate) use self::runtime_miss::{
-    apply_local_runtime_candidate_terminal_reason, record_local_runtime_candidate_skip_reason,
-};
+#[cfg(test)]
+pub(crate) use self::runtime_miss::apply_local_runtime_candidate_terminal_reason;
+pub(crate) use self::runtime_miss::record_local_runtime_candidate_skip_reason;
 pub(crate) use self::specialized::{
     build_local_gemini_files_stream_attempt_source_for_kind,
-    build_local_gemini_files_stream_plan_and_reports_for_kind,
     build_local_gemini_files_sync_attempt_source_for_kind,
-    build_local_gemini_files_sync_plan_and_reports_for_kind,
     build_local_image_stream_attempt_source_for_kind,
-    build_local_image_stream_plan_and_reports_for_kind,
-    build_local_image_sync_attempt_source_for_kind,
-    build_local_image_sync_plan_and_reports_for_kind,
-    build_local_video_sync_attempt_source_for_kind,
-    build_local_video_sync_plan_and_reports_for_kind,
+    build_local_image_sync_attempt_source_for_kind, build_local_video_sync_attempt_source_for_kind,
     set_local_openai_image_execution_exhausted_diagnostic,
 };
 pub(crate) use self::standard::{
     build_local_openai_chat_stream_attempt_source_for_kind,
-    build_local_openai_chat_stream_plan_and_reports_for_kind,
     build_local_openai_chat_sync_attempt_source_for_kind,
-    build_local_openai_chat_sync_plan_and_reports_for_kind,
     build_local_openai_responses_stream_attempt_source_for_kind,
-    build_local_openai_responses_stream_plan_and_reports_for_kind,
     build_local_openai_responses_sync_attempt_source_for_kind,
-    build_local_openai_responses_sync_plan_and_reports_for_kind,
     build_local_stream_attempt_source as build_standard_family_stream_attempt_source,
-    build_local_stream_plan_and_reports as build_standard_family_stream_plan_and_reports,
     build_local_sync_attempt_source as build_standard_family_sync_attempt_source,
-    build_local_sync_plan_and_reports as build_standard_family_sync_plan_and_reports,
     codex_model_capabilities_for_transport, maybe_build_responses_websocket_decision,
     openai_responses_reasoning_replay_policy, set_local_openai_chat_execution_exhausted_diagnostic,
-    validate_final_openai_provider_request, ResponsesWebSocketBodyNormalization,
-    ResponsesWebSocketDecision, ResponsesWebSocketPinnedCandidate,
+    ResponsesWebSocketBodyNormalization, ResponsesWebSocketDecision,
+    ResponsesWebSocketPinnedCandidate,
 };
 pub(crate) use self::state::{
     GatewayAuthApiKeySnapshot, GatewayProviderTransportSnapshot, LocalResolvedOAuthRequestAuth,
@@ -94,15 +83,8 @@ pub(crate) use self::state::{
 pub(crate) use aether_ai_serving::extract_ai_pool_sticky_session_token as extract_pool_sticky_session_token;
 pub(crate) use aether_ai_serving::{
     build_ai_execution_decision_response, AiExecutionDecisionResponseParts,
-    CandidateFailureDiagnostic, CandidateFailureDiagnosticKind,
+    CandidateFailureDiagnostic,
 };
-
-pub(crate) struct ResolvedTunnelSchedulerAffinityContext {
-    pub(crate) requested_model: String,
-    pub(crate) client_session_affinity: Option<aether_scheduler_core::ClientSessionAffinity>,
-    pub(crate) policy_context: Option<crate::scheduler::affinity::SchedulerAffinityPolicyContext>,
-    pub(crate) routing_overlay: Option<aether_routing_core::RankingOverlay>,
-}
 
 pub(crate) async fn maybe_build_sync_decision_payload(
     state: &AppState,

@@ -14,7 +14,6 @@ use axum::body::Bytes;
 use base64::Engine as _;
 use futures_util::stream::{self, BoxStream};
 use futures_util::StreamExt;
-use http::{HeaderMap, HeaderName, HeaderValue};
 use http_body_util::BodyExt;
 use regex::{Captures, Regex};
 use serde_json::{json, Map, Value};
@@ -97,7 +96,6 @@ pub(crate) struct GrokRuntimeStream {
 #[derive(Debug)]
 struct GrokCollected {
     status_code: u16,
-    headers: BTreeMap<String, String>,
     text: String,
     thinking: String,
     images: Vec<String>,
@@ -106,7 +104,6 @@ struct GrokCollected {
 
 #[derive(Debug, Clone)]
 struct GrokImagineImage {
-    image_id: String,
     order: usize,
     url: Option<String>,
     blob_b64: Option<String>,
@@ -118,7 +115,6 @@ impl Default for GrokCollected {
     fn default() -> Self {
         Self {
             status_code: 0,
-            headers: BTreeMap::new(),
             text: String::new(),
             thinking: String::new(),
             images: Vec::new(),
@@ -235,7 +231,6 @@ async fn execute_grok_app_chat(
     let response = send_request(&upstream_plan, request_body).await?;
     let ttfb_ms = started_at.elapsed().as_millis() as u64;
     let status_code = response.status_code();
-    let headers = response.headers();
     let mut upstream_bytes = 0u64;
     let mut raw_body = Vec::new();
     let mut adapter = GrokStreamAdapter::default();
@@ -257,7 +252,6 @@ async fn execute_grok_app_chat(
     if !(200..300).contains(&status_code) {
         return Ok(GrokCollected {
             status_code,
-            headers,
             text: grok_upstream_http_error_message(status_code),
             telemetry: ExecutionTelemetry {
                 ttfb_ms: Some(ttfb_ms),
@@ -270,7 +264,6 @@ async fn execute_grok_app_chat(
 
     Ok(GrokCollected {
         status_code,
-        headers,
         text: adapter.text,
         thinking: adapter.thinking,
         images: adapter.images,
@@ -291,7 +284,6 @@ async fn execute_grok_app_chat_stream(
     let started_at = Instant::now();
     let response = send_request(&upstream_plan, request_body).await?;
     let status_code = response.status_code();
-    let headers = response.headers();
     if !(200..300).contains(&status_code) {
         let mut upstream_bytes = 0u64;
         let mut raw_body = Vec::new();
@@ -309,7 +301,6 @@ async fn execute_grok_app_chat_stream(
         let elapsed_ms = started_at.elapsed().as_millis() as u64;
         let collected = GrokCollected {
             status_code,
-            headers,
             text: grok_upstream_http_error_message(status_code),
             telemetry: ExecutionTelemetry {
                 ttfb_ms: Some(elapsed_ms),
@@ -328,7 +319,6 @@ async fn execute_grok_app_chat_stream(
         frame_stream: grok_success_frame_stream(
             plan.clone(),
             status_code,
-            headers,
             started_at,
             grok_response_body_stream(response),
         ),
@@ -390,7 +380,6 @@ async fn execute_grok_imagine_websocket(
     images.sort_by_key(|image| image.order);
     Ok(GrokCollected {
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
         images: images
             .into_iter()
             .filter_map(|image| {
@@ -648,7 +637,6 @@ fn grok_response_body_stream(response: DirectHttpResponse) -> GrokUpstreamBodySt
 fn grok_success_frame_stream(
     plan: ExecutionPlan,
     status_code: u16,
-    headers: BTreeMap<String, String>,
     started_at: Instant,
     mut body_stream: GrokUpstreamBodyStream,
 ) -> BoxStream<'static, Result<Bytes, IoError>> {
@@ -814,7 +802,6 @@ fn grok_success_frame_stream(
         let elapsed_ms = Some(started_at.elapsed().as_millis() as u64);
         let collected = GrokCollected {
             status_code,
-            headers,
             text: adapter.text,
             thinking: adapter.thinking,
             images: adapter.images,
@@ -2373,7 +2360,6 @@ fn grok_handle_imagine_json_frame(
     match status {
         Some("start_stage") => {
             slots.entry(image_id.clone()).or_insert(GrokImagineImage {
-                image_id,
                 order,
                 url: None,
                 blob_b64: None,
@@ -2383,7 +2369,6 @@ fn grok_handle_imagine_json_frame(
         }
         Some("completed") => {
             let slot = slots.entry(image_id.clone()).or_insert(GrokImagineImage {
-                image_id,
                 order,
                 url: None,
                 blob_b64: None,
@@ -2435,7 +2420,6 @@ fn grok_handle_imagine_image_frame(
     let Some(blob) = blob else {
         let fallback_order = slots.len();
         let slot = slots.entry(image_id.clone()).or_insert(GrokImagineImage {
-            image_id,
             order: fallback_order,
             url: None,
             blob_b64: None,
@@ -2455,7 +2439,6 @@ fn grok_handle_imagine_image_frame(
     }
     let fallback_order = slots.len();
     let slot = slots.entry(image_id.clone()).or_insert(GrokImagineImage {
-        image_id,
         order: fallback_order,
         url: None,
         blob_b64: None,
@@ -4001,7 +3984,6 @@ mod tests {
         let chunks = collect_decoded_data_frames(grok_success_frame_stream(
             plan,
             200,
-            BTreeMap::new(),
             std::time::Instant::now(),
             upstream,
         ))

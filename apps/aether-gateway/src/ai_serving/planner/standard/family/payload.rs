@@ -68,7 +68,7 @@ pub(super) async fn maybe_build_local_standard_decision_payload_for_candidate(
 
     let LocalStandardCandidateAttempt {
         eligible,
-        candidate_index,
+        candidate_index: _,
         candidate_id,
         ..
     } = &attempt;

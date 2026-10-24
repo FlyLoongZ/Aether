@@ -48,10 +48,6 @@ pub(super) struct AdminLdapConfigTestRequest {
     #[serde(default)]
     display_name_attr: Option<String>,
     #[serde(default)]
-    is_enabled: Option<bool>,
-    #[serde(default)]
-    is_exclusive: Option<bool>,
-    #[serde(default)]
     use_starttls: Option<bool>,
     #[serde(default)]
     connect_timeout: Option<i32>,
@@ -62,7 +58,6 @@ pub(super) struct AdminLdapConnectionTestConfig {
     server_url: String,
     bind_dn: String,
     bind_password: String,
-    base_dn: String,
     use_starttls: bool,
     connect_timeout: i32,
 }
@@ -311,7 +306,6 @@ pub(super) async fn build_admin_ldap_test_config(
         server_url,
         bind_dn,
         bind_password: bind_password.expect("bind_password already checked"),
-        base_dn,
         use_starttls,
         connect_timeout,
     }))

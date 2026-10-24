@@ -1,5 +1,8 @@
-use crate::handlers::admin::provider::shared::payloads::{
-    OAUTH_ACCOUNT_BLOCK_PREFIX, OAUTH_EXPIRED_PREFIX, OAUTH_REFRESH_FAILED_PREFIX,
+#[cfg(test)]
+use crate::handlers::admin::provider::shared::payloads::OAUTH_ACCOUNT_BLOCK_PREFIX;
+#[cfg(test)]
+pub(crate) use crate::handlers::admin::provider::shared::payloads::{
+    OAUTH_EXPIRED_PREFIX, OAUTH_REFRESH_FAILED_PREFIX,
 };
 use axum::{
     body::Body,
@@ -9,6 +12,7 @@ use axum::{
 };
 use serde_json::json;
 
+#[cfg(test)]
 fn oauth_invalid_reason_is_account_level_block(reason: Option<&str>) -> bool {
     let Some(reason) = reason.map(str::trim).filter(|value| !value.is_empty()) else {
         return false;
@@ -115,6 +119,7 @@ pub(crate) fn normalize_provider_oauth_refresh_error_message(
         .unwrap_or_else(|| "Token 刷新失败".to_string())
 }
 
+#[cfg(test)]
 pub(crate) fn merge_provider_oauth_refresh_failure_reason(
     current_reason: Option<&str>,
     refresh_reason: &str,

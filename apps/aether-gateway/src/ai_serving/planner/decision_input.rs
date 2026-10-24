@@ -68,14 +68,6 @@ pub(crate) struct LocalRequestedModelDecisionInput {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct LocalAuthenticatedDecisionInput {
-    pub(crate) auth_context: ExecutionRuntimeAuthContext,
-    pub(crate) auth_snapshot: GatewayAuthApiKeySnapshot,
-    pub(crate) required_capabilities: Option<serde_json::Value>,
-    pub(crate) client_session_affinity: Option<ClientSessionAffinity>,
-}
-
-#[derive(Debug, Clone)]
 pub(crate) struct LocalRoutingRequestContext {
     pub(crate) group_id: Option<String>,
     pub(crate) group_version: Option<i64>,
@@ -873,17 +865,6 @@ fn try_attach_static_default_routing_policy_to_input(
     input.routing_policy = Some(policy);
     input.routing_context = None;
     Ok(true)
-}
-
-pub(crate) fn build_local_authenticated_decision_input(
-    resolved_input: ResolvedLocalDecisionAuthInput,
-) -> LocalAuthenticatedDecisionInput {
-    LocalAuthenticatedDecisionInput {
-        auth_context: resolved_input.auth_context,
-        auth_snapshot: resolved_input.auth_snapshot,
-        required_capabilities: resolved_input.required_capabilities,
-        client_session_affinity: None,
-    }
 }
 
 pub(crate) async fn resolve_local_authenticated_decision_input(

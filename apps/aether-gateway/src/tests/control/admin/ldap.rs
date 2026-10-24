@@ -36,7 +36,7 @@ async fn gateway_handles_admin_ldap_config_locally_with_trusted_admin_principal(
         Some(sample_ldap_module_config()),
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -97,7 +97,7 @@ async fn gateway_updates_admin_ldap_config_locally_with_trusted_admin_principal(
         Some(sample_ldap_module_config()),
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -185,7 +185,7 @@ async fn gateway_tests_admin_ldap_connection_locally_with_trusted_admin_principa
 
     let auth_module_repository = Arc::new(InMemoryAuthModuleReadRepository::default());
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

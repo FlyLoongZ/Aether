@@ -517,7 +517,7 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url.clone())
     .with_data_state_for_tests(
@@ -1132,7 +1132,7 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
     ));
 
     let (refresh_url, refresh_handle) = start_server(refresh_server).await;
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let oauth_refresh =
         crate::provider_transport::LocalOAuthRefreshCoordinator::with_adapters_for_tests(vec![

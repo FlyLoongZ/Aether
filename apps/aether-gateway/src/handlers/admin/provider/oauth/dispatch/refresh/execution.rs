@@ -1,5 +1,4 @@
 use super::super::super::errors::normalize_provider_oauth_refresh_error_message;
-use super::super::super::runtime::refresh_provider_oauth_account_state_after_update;
 use super::helpers::{self, RefreshDispatch, RefreshRequestContext, RefreshSuccessContext};
 use super::response;
 use crate::handlers::admin::request::{AdminAppState, AdminLocalOAuthRefreshError};

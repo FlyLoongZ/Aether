@@ -28,7 +28,7 @@ impl UsageCaptureMemoryBudget {
             return true;
         }
         self.retained
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |retained| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |retained| {
                 retained
                     .checked_add(bytes)
                     .filter(|next| *next <= self.limit)

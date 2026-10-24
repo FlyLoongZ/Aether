@@ -1,100 +1,42 @@
 use super::payload::{
     provider_query_extract_api_key_id, provider_query_extract_api_key_ids,
-    provider_query_extract_force_refresh, provider_query_extract_model,
-    provider_query_extract_provider_id, provider_query_extract_request_id,
+    provider_query_extract_force_refresh, provider_query_extract_provider_id,
 };
 use super::response::{
     build_admin_provider_query_bad_request_response, build_admin_provider_query_not_found_response,
-    ADMIN_PROVIDER_QUERY_API_KEY_NOT_FOUND_DETAIL, ADMIN_PROVIDER_QUERY_MODEL_REQUIRED_DETAIL,
-    ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL, ADMIN_PROVIDER_QUERY_NO_LOCAL_MODELS_DETAIL,
+    ADMIN_PROVIDER_QUERY_API_KEY_NOT_FOUND_DETAIL, ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL,
     ADMIN_PROVIDER_QUERY_PROVIDER_ID_REQUIRED_DETAIL,
     ADMIN_PROVIDER_QUERY_PROVIDER_NOT_FOUND_DETAIL,
 };
-use crate::ai_serving::{
-    maybe_build_sync_finalize_outcome, GatewayControlDecision,
-    ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME, GEMINI_CHAT_SYNC_FINALIZE_REPORT_KIND,
-    OPENAI_IMAGE_SYNC_FINALIZE_REPORT_KIND,
-};
-use crate::clock::{current_unix_ms, current_unix_secs};
-use crate::execution_runtime;
+use crate::clock::current_unix_secs;
 use crate::handlers::admin::provider::shared::model_test_capabilities::{
     admin_provider_model_supports_image_generation, admin_provider_model_test_capabilities_payload,
 };
-use crate::handlers::admin::request::{AdminAppState, AdminGatewayProviderTransportSnapshot};
-use crate::handlers::shared::provider_pool::{
-    admin_provider_pool_config_from_config_value, read_admin_provider_pool_runtime_state,
-    AdminProviderPoolConfig, AdminProviderPoolRuntimeState,
-};
-use crate::handlers::shared::{
-    parse_catalog_auth_config_json, provider_key_health_summary,
-    provider_key_status_snapshot_payload,
-};
+use crate::handlers::admin::request::AdminAppState;
 use crate::model_fetch::{safe_model_fetch_error, ModelFetchRuntimeState};
-use crate::provider_key_auth::{
-    provider_key_auth_semantics, provider_key_configured_api_formats,
-    provider_key_inherits_provider_api_formats,
-};
-use crate::provider_transport::antigravity::{
-    build_antigravity_safe_v1internal_request, build_antigravity_static_identity_headers,
-    classify_local_antigravity_request_support, AntigravityEnvelopeRequestType,
-    AntigravityRequestEnvelopeSupport, AntigravityRequestSideSupport,
-    AntigravityRequestSideUnsupportedReason,
-};
-use crate::provider_transport::kiro::{
-    build_kiro_generate_assistant_response_url, build_kiro_provider_headers,
-    build_kiro_provider_request_body, supports_local_kiro_request_transport_with_network,
-    KiroProviderHeadersInput, KIRO_ENVELOPE_NAME,
-};
-use crate::usage::GatewaySyncReportRequest;
 use crate::{AppState, GatewayError};
-use aether_admin::provider::pool as admin_provider_pool_pure;
-use aether_ai_serving::{
-    run_ai_pool_scheduler, AiPoolCandidateFacts, AiPoolCandidateInput, AiPoolCatalogKeyContext,
-    AiPoolRuntimeState, AiPoolSchedulingConfig, AiPoolSchedulingPreset,
-};
-use aether_contracts::{ExecutionPlan, RequestBody};
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
-use aether_data_contracts::repository::global_models::{
-    AdminProviderModelListQuery, StoredAdminProviderModel,
-};
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
 use aether_model_fetch::{
-    aggregate_models_for_cache, fetch_models_from_transports_for_management, json_string_list,
+    aggregate_models_for_cache, fetch_models_from_transports_for_management,
     model_catalog_upstream_metadata, preset_models_for_provider, selected_models_fetch_endpoints,
     upstream_metadata_namespace_updates,
 };
 use axum::{
-    body::{to_bytes, Body},
-    http::{self, HeaderMap, HeaderName, HeaderValue},
+    body::Body,
     response::{IntoResponse, Response},
     Json,
 };
-use base64::Engine as _;
 use serde_json::{json, Map, Value};
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use uuid::Uuid;
+use std::collections::BTreeSet;
 
-pub(crate) const ADMIN_PROVIDER_QUERY_LOCAL_TEST_MODEL_MESSAGE: &str =
-    "Rust local provider-query model test is not configured";
-pub(crate) const ADMIN_PROVIDER_QUERY_LOCAL_TEST_MODEL_FAILOVER_MESSAGE: &str =
-    "Rust local provider-query failover simulation is not configured";
 const ADMIN_PROVIDER_QUERY_NO_ACTIVE_ENDPOINT_DETAIL: &str =
     "No active endpoints found for this provider";
 const ADMIN_PROVIDER_QUERY_NO_MODELS_FROM_ENDPOINT_DETAIL: &str =
     "No models returned from any endpoint";
 const ADMIN_PROVIDER_QUERY_NO_MODELS_FROM_KEY_DETAIL: &str = "No models returned from any key";
-const ADMIN_PROVIDER_QUERY_NO_ACTIVE_TEST_CANDIDATE_DETAIL: &str =
-    "No active endpoint or API key found";
-const ADMIN_PROVIDER_QUERY_INVALID_MAPPED_MODEL_DETAIL: &str =
-    "mapped_model_name is not valid for the selected model and endpoint";
 const ANTIGRAVITY_PROVIDER_CACHE_KEY_PREFIX: &str = "upstream_models_provider:";
-const DEFAULT_PROVIDER_QUERY_TEST_MESSAGE: &str = "Hello! This is a test message.";
-static PROVIDER_QUERY_POOL_LOAD_BALANCE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
 struct ProviderQueryKeyFetchResult {
@@ -377,9 +319,7 @@ mod model_test;
 
 pub(crate) use self::model_test::{
     build_admin_provider_query_test_model_failover_local_response,
-    build_admin_provider_query_test_model_failover_response,
     build_admin_provider_query_test_model_local_response,
-    build_admin_provider_query_test_model_response,
 };
 
 fn provider_query_provider_payload(provider: &StoredProviderCatalogProvider) -> Value {

@@ -66,6 +66,7 @@ pub fn set_gateway_frontdoor_app_port(app_port: u16) {
     let _ = GATEWAY_FRONTDOOR_APP_PORT.set(app_port);
 }
 
+#[cfg(test)]
 pub(crate) fn configured_gateway_frontdoor_base_url() -> String {
     format!(
         "http://127.0.0.1:{}",

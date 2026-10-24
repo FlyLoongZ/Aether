@@ -2,6 +2,7 @@ use crate::ai_serving::planner::common::endpoint_config_forces_body_stream_field
 use crate::ai_serving::planner::plan_builders::{AiStreamAttempt, AiSyncAttempt};
 use crate::ai_serving::planner::spec_metadata::local_openai_responses_spec_metadata;
 use crate::ai_serving::planner::standard::codex::codex_model_capabilities_for_transport;
+#[cfg(test)]
 use crate::ai_serving::planner::standard::normalize::{
     build_local_openai_responses_request_body_with_codex_model_capabilities,
     build_local_openai_responses_request_body_with_codex_model_capabilities_for_websocket_continuation,
@@ -70,40 +71,9 @@ use self::decision::{
     resolve_local_openai_responses_decision_input_with_snapshot,
 };
 use self::plans::{
-    build_local_stream_attempt_source, build_local_stream_plan_and_reports,
-    build_local_sync_attempt_source, build_local_sync_plan_and_reports, resolve_stream_spec,
+    build_local_stream_attempt_source, build_local_sync_attempt_source, resolve_stream_spec,
     resolve_sync_spec,
 };
-
-pub(crate) async fn build_local_openai_responses_sync_plan_and_reports_for_kind(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    body_json: &serde_json::Value,
-    plan_kind: &str,
-) -> Result<Vec<AiSyncAttempt>, GatewayError> {
-    let Some(spec) = resolve_sync_spec(plan_kind) else {
-        return Ok(Vec::new());
-    };
-
-    build_local_sync_plan_and_reports(state, parts, trace_id, decision, body_json, spec).await
-}
-
-pub(crate) async fn build_local_openai_responses_stream_plan_and_reports_for_kind(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    body_json: &serde_json::Value,
-    plan_kind: &str,
-) -> Result<Vec<AiStreamAttempt>, GatewayError> {
-    let Some(spec) = resolve_stream_spec(plan_kind) else {
-        return Ok(Vec::new());
-    };
-
-    build_local_stream_plan_and_reports(state, parts, trace_id, decision, body_json, spec).await
-}
 
 pub(crate) async fn build_local_openai_responses_sync_attempt_source_for_kind<'a>(
     state: &'a AppState,
@@ -237,6 +207,10 @@ pub(crate) struct ResponsesWebSocketDecision {
     /// Effective key auth after applying the endpoint API-format override.
     /// Protocol companions such as Codex Live must not infer this from a URL
     /// or from the presence of one particular generated header.
+    ///
+    /// TODO: wire this into the live planner instead of reading
+    /// `report_context["upstream_credential_mode"]` there.
+    #[allow(dead_code)]
     pub(crate) effective_auth_type: String,
 }
 
@@ -494,6 +468,7 @@ impl ResponsesWebSocketBodyNormalization {
         digest.finalize().into()
     }
 
+    #[cfg(test)]
     /// Applies the same body transformations the planner applied on the turn
     /// that bound this upstream.
     ///

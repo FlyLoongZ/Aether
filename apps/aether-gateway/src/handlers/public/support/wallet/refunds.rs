@@ -69,16 +69,6 @@ fn normalize_wallet_create_refund_request(
     })
 }
 
-fn wallet_default_refund_mode_for_payment_method(payment_method: &str) -> &'static str {
-    if matches!(
-        payment_method,
-        "admin_manual" | "card_recharge" | "card_code" | "gift_code"
-    ) {
-        return "offline_payout";
-    }
-    "original_channel"
-}
-
 fn wallet_build_refund_no(now: chrono::DateTime<chrono::Utc>) -> String {
     format!(
         "rf_{}_{}",

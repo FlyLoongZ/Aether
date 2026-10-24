@@ -279,7 +279,6 @@ pub(in super::super) async fn admin_provider_ops_sub2api_exchange_token(
         .map(str::trim)
         .unwrap_or_default();
 
-    let mut refresh_error = None::<String>;
     let token_data = if !refresh_token.is_empty() {
         match admin_provider_ops_sub2api_token_request(
             state,
@@ -296,7 +295,6 @@ pub(in super::super) async fn admin_provider_ops_sub2api_exchange_token(
                 if email.is_empty() || password.is_empty() {
                     return Err(err);
                 }
-                refresh_error = Some(err);
                 admin_provider_ops_sub2api_token_request(
                     state,
                     base_url,
@@ -319,7 +317,7 @@ pub(in super::super) async fn admin_provider_ops_sub2api_exchange_token(
         )
         .await?
     } else {
-        return Err(refresh_error.unwrap_or_else(|| "请填写账号密码或 Refresh Token".to_string()));
+        return Err("请填写账号密码或 Refresh Token".to_string());
     };
 
     let access_token = token_data

@@ -6,10 +6,7 @@ use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::quota::InMemoryProviderQuotaRepository;
 use aether_data_contracts::repository::candidates::RequestCandidateStatus;
-use aether_data_contracts::repository::global_models::{
-    GlobalModelReadRepository, StoredAdminGlobalModel, StoredAdminProviderModel,
-    StoredProviderActiveGlobalModel, StoredProviderModelStats, StoredPublicGlobalModel,
-};
+use aether_data_contracts::repository::global_models::GlobalModelReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogReadRepository, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
     StoredProviderCatalogProvider,
@@ -27,9 +24,6 @@ use super::super::{
     sample_provider_quota, sample_public_global_model_with_mappings, sample_request_candidate,
     start_server, AppState,
 };
-use crate::admin_api::{
-    maybe_build_local_admin_providers_response, AdminAppState, AdminRequestContext,
-};
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
     GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
@@ -37,6 +31,8 @@ use crate::constants::{
 };
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
+use crate::handlers::admin::provider::crud::routes::maybe_build_local_admin_providers_response;
+use crate::handlers::admin::{AdminAppState, AdminRequestContext};
 
 const ADMIN_PROVIDERS_DATA_UNAVAILABLE_DETAIL: &str = "Admin provider catalog data unavailable";
 
@@ -491,7 +487,7 @@ async fn gateway_handles_admin_providers_locally_with_trusted_admin_principal() 
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -552,7 +548,7 @@ async fn gateway_handles_admin_providers_locally_with_local_503_when_catalog_rea
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -663,7 +659,7 @@ async fn gateway_handles_admin_provider_summary_locally_with_trusted_admin_princ
         sample_provider_quota("provider-openai"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -769,7 +765,7 @@ async fn gateway_handles_admin_providers_summary_list_locally_with_bearer_admin_
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(GatewayDataState::with_provider_catalog_reader_for_tests(
@@ -838,7 +834,7 @@ async fn gateway_handles_admin_provider_summary_locally_with_bearer_admin_sessio
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(GatewayDataState::with_provider_catalog_reader_for_tests(
@@ -888,7 +884,7 @@ async fn gateway_handles_admin_providers_summary_list_locally_with_local_503_whe
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new().expect("gateway should build");
     let access_token = issue_test_admin_access_token(&state, "device-admin-providers-503").await;
     let gateway = build_router_with_state(state);
@@ -976,7 +972,7 @@ async fn gateway_handles_admin_providers_summary_list_locally_with_trusted_admin
         sample_provider_quota("provider-anthropic"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1038,7 +1034,7 @@ async fn gateway_returns_service_unavailable_for_admin_providers_summary_without
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1085,7 +1081,7 @@ async fn gateway_returns_service_unavailable_for_admin_provider_create_without_p
         Vec::new(),
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1171,7 +1167,7 @@ async fn gateway_updates_admin_provider_locally_with_trusted_admin_principal() {
         Vec::new(),
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1411,7 +1407,7 @@ async fn gateway_creates_admin_provider_locally_with_trusted_admin_principal() {
         Vec::new(),
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1967,7 +1963,7 @@ async fn gateway_handles_admin_provider_health_monitor_locally_with_trusted_admi
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2072,7 +2068,7 @@ async fn gateway_handles_admin_provider_mapping_preview_locally_with_trusted_adm
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2184,7 +2180,7 @@ async fn gateway_submits_admin_provider_delete_task_locally_with_trusted_admin_p
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2324,7 +2320,7 @@ fn provider_delete_task_reservation_reuses_active_provider_task() {
 
 #[tokio::test]
 async fn local_admin_provider_delete_task_status_attaches_audit_only_for_terminal_states() {
-    let mut completed_state = AppState::new().expect("gateway should build");
+    let completed_state = AppState::new().expect("gateway should build");
     completed_state.put_provider_delete_task(crate::LocalProviderDeleteTaskState {
         task_id: "task-completed".to_string(),
         provider_id: "provider-openai".to_string(),
@@ -2359,7 +2355,7 @@ async fn local_admin_provider_delete_task_status_attaches_audit_only_for_termina
     assert_eq!(completed_audit.target_type, "provider_delete_task");
     assert_eq!(completed_audit.target_id, "provider-openai:task-completed");
 
-    let mut running_state = AppState::new().expect("gateway should build");
+    let running_state = AppState::new().expect("gateway should build");
     running_state.put_provider_delete_task(crate::LocalProviderDeleteTaskState {
         task_id: "task-running".to_string(),
         provider_id: "provider-openai".to_string(),
@@ -2431,7 +2427,7 @@ async fn gateway_handles_admin_provider_pool_status_locally_with_trusted_admin_p
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2507,7 +2503,7 @@ async fn gateway_clears_admin_provider_pool_cooldown_locally_with_trusted_admin_
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2564,7 +2560,7 @@ async fn gateway_resets_admin_provider_pool_cost_locally_with_trusted_admin_prin
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

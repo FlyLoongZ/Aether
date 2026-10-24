@@ -10,11 +10,12 @@ use crate::control::GatewayPublicRequestContext;
 use crate::middleware::{sanitize_access_log_path, should_downgrade_access_log, RequestLogEmitted};
 use crate::AppState;
 use aether_runtime::{maybe_hold_axum_response_permit, AdmissionPermit};
-use axum::body::{Body, Bytes};
+use axum::body::Body;
 use axum::http::{self, header::HeaderName, header::HeaderValue, Response};
 use std::time::Instant;
 use tracing::{info, trace, warn};
 
+#[cfg(test)]
 pub(super) fn request_wants_stream(
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
@@ -46,7 +47,7 @@ pub(super) fn request_wants_stream(
 }
 
 pub(super) fn finalize_gateway_response(
-    state: &AppState,
+    _statee: &AppState,
     mut response: Response<Body>,
     trace_id: &str,
     remote_addr: &std::net::SocketAddr,

@@ -14,6 +14,7 @@ fn normalize_ldap_identity_email(value: &str) -> Option<String> {
 /// can never delete a pre-existing wallet.
 pub(crate) struct LdapAuthProvisioningResult {
     pub(crate) user: aether_data::repository::users::StoredUserAuthRecord,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) owned_wallet_id: Option<String>,
 }
 
@@ -373,14 +374,6 @@ impl AppState {
             self.invalidate_auth_context_cache();
         }
         Ok(restored)
-    }
-
-    pub(crate) async fn rollback_provisional_auth_user(
-        &self,
-        user_id: &str,
-    ) -> Result<(), GatewayError> {
-        self.rollback_provisional_auth_user_with_wallet(user_id, None)
-            .await
     }
 
     pub(crate) async fn rollback_provisional_auth_user_with_wallet(

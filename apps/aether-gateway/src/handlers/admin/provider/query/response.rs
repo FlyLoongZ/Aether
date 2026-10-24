@@ -15,9 +15,6 @@ pub(crate) const ADMIN_PROVIDER_QUERY_PROVIDER_NOT_FOUND_DETAIL: &str = "Provide
 pub(crate) const ADMIN_PROVIDER_QUERY_API_KEY_NOT_FOUND_DETAIL: &str = "API Key not found";
 pub(crate) const ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL: &str =
     "No active API Key found for this provider";
-pub(crate) const ADMIN_PROVIDER_QUERY_NO_LOCAL_MODELS_DETAIL: &str =
-    "No models available from local provider catalog";
-
 pub(crate) fn build_admin_provider_query_bad_request_response(
     detail: &'static str,
 ) -> Response<Body> {

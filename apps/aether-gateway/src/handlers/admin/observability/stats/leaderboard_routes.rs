@@ -16,7 +16,7 @@ use aether_admin::observability::stats::{
 };
 use aether_data_contracts::repository::usage::{UsageLeaderboardGroupBy, UsageLeaderboardQuery};
 use axum::{body::Body, http, response::Response};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 pub(super) async fn maybe_build_local_admin_stats_leaderboard_response(
     state: &AdminAppState<'_>,

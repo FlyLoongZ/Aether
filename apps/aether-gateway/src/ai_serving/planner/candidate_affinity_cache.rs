@@ -48,6 +48,7 @@ pub(crate) fn read_cached_scheduler_affinity_target(
         .read_scheduler_affinity_target(&cache_key, SCHEDULER_AFFINITY_TTL)
 }
 
+#[cfg(test)]
 pub(crate) fn remember_scheduler_affinity_for_candidate(
     state: PlannerAppState<'_>,
     auth_snapshot: Option<&GatewayAuthApiKeySnapshot>,
@@ -70,6 +71,7 @@ pub(crate) fn remember_scheduler_affinity_for_candidate(
     );
 }
 
+#[cfg(test)]
 pub(crate) fn remember_scheduler_affinity_for_candidate_at_epoch(
     state: PlannerAppState<'_>,
     auth_snapshot: Option<&GatewayAuthApiKeySnapshot>,

@@ -252,6 +252,7 @@ pub(crate) enum LocalExecutionEffect<'a> {
     HealthSuccess(LocalHealthSuccessEffect),
     AdaptiveSuccess(LocalAdaptiveSuccessEffect),
     OauthInvalidation(LocalOAuthInvalidationEffect<'a>),
+    #[cfg_attr(not(test), allow(dead_code))]
     OauthSuccess(LocalOAuthSuccessEffect<'a>),
     PoolSuccessSync {
         payload: &'a GatewaySyncReportRequest,

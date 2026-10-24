@@ -701,6 +701,7 @@ fn permission_key(scope: &str, access: &str) -> &'static str {
     }
 }
 
+#[cfg(test)]
 fn is_known_management_token_permission_scope(scope: &str) -> bool {
     PERMISSION_GROUPS.iter().any(|group| group.scope == scope)
 }

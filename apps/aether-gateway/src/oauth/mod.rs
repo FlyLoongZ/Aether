@@ -15,7 +15,9 @@ pub(crate) use provider_repo::ProviderOAuthRepository;
 pub(crate) use proxy::{
     resolve_identity_oauth_network_context, resolve_provider_oauth_operation_proxy_snapshot,
 };
+#[cfg(test)]
+pub(crate) use state_store::identity_oauth_state_storage_key;
 pub(crate) use state_store::{
-    consume_identity_oauth_state, identity_oauth_state_storage_key, load_identity_oauth_state,
-    save_identity_oauth_state, IdentityOAuthStateMode, StoredIdentityOAuthState,
+    consume_identity_oauth_state, load_identity_oauth_state, save_identity_oauth_state,
+    IdentityOAuthStateMode, StoredIdentityOAuthState,
 };

@@ -1,7 +1,6 @@
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
-use chrono::{DateTime, Utc};
 use hmac::Mac;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use super::{
@@ -45,24 +44,6 @@ pub(super) fn sample_currently_usable_auth_snapshot(
         Some(serde_json::json!(["gpt-5"])),
     )
     .expect("auth snapshot should build")
-}
-
-pub(super) fn sample_expired_auth_snapshot(
-    api_key_id: &str,
-    user_id: &str,
-) -> StoredAuthApiKeySnapshot {
-    let mut snapshot = sample_currently_usable_auth_snapshot(api_key_id, user_id);
-    snapshot.api_key_expires_at_unix_secs = Some(1);
-    snapshot
-}
-
-pub(super) fn sample_locked_auth_snapshot(
-    api_key_id: &str,
-    user_id: &str,
-) -> StoredAuthApiKeySnapshot {
-    let mut snapshot = sample_currently_usable_auth_snapshot(api_key_id, user_id);
-    snapshot.api_key_is_locked = true;
-    snapshot
 }
 
 pub(super) fn hash_api_key(value: &str) -> String {

@@ -7,9 +7,6 @@ pub(super) const ADMIN_PROVIDER_OPS_CONNECT_RUST_ONLY_MESSAGE: &str =
     "Provider 连接仅支持 Rust execution runtime";
 pub(super) const ADMIN_PROVIDER_OPS_ACTION_RUST_ONLY_MESSAGE: &str =
     "Provider 操作仅支持 Rust execution runtime";
-pub(super) const ADMIN_PROVIDER_OPS_VERIFY_RUST_ONLY_MESSAGE: &str =
-    "认证验证仅支持 Rust execution runtime";
-
 #[derive(Clone, Deserialize)]
 pub(super) struct AdminProviderOpsSaveConfigRequest {
     #[serde(default = "default_admin_provider_ops_architecture_id")]

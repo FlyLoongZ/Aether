@@ -17,8 +17,7 @@ use super::super::super::{
     AppState,
 };
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
 
@@ -80,7 +79,7 @@ async fn gateway_handles_admin_global_models_locally_with_trusted_admin_principa
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -134,7 +133,7 @@ async fn gateway_handles_admin_global_models_locally_with_local_503_when_reader_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new().expect("gateway should build");
     let access_token = issue_test_admin_access_token(&state, "device-admin-models-503").await;
     let gateway = build_router_with_state(state);
@@ -199,7 +198,7 @@ async fn gateway_handles_admin_global_models_locally_with_bearer_admin_session()
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -248,7 +247,7 @@ async fn gateway_returns_service_unavailable_for_admin_global_models_without_glo
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -322,7 +321,7 @@ async fn gateway_handles_admin_global_model_detail_locally_with_trusted_admin_pr
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -404,7 +403,7 @@ async fn gateway_handles_admin_model_catalog_locally_with_trusted_admin_principa
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -509,7 +508,7 @@ async fn admin_global_models_include_embedding_capability() {
             .with_admin_provider_models(vec![provider_model]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -587,7 +586,7 @@ async fn gateway_returns_service_unavailable_for_admin_model_catalog_without_req
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -633,7 +632,7 @@ async fn gateway_returns_service_unavailable_for_admin_global_model_create_witho
         InMemoryGlobalModelReadRepository::seed(Vec::new()).with_admin_global_models(Vec::new()),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -684,7 +683,7 @@ async fn gateway_handles_admin_model_catalog_locally_with_local_503_when_readers
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -841,7 +840,7 @@ async fn gateway_handles_admin_global_model_routing_locally_with_trusted_admin_p
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1012,7 +1011,7 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
             ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1086,7 +1085,7 @@ async fn gateway_creates_admin_global_model_locally_with_trusted_admin_principal
 
     let global_model_repository = Arc::new(InMemoryGlobalModelReadRepository::seed(Vec::new()));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1171,7 +1170,7 @@ async fn gateway_updates_and_deletes_admin_global_model_locally_with_trusted_adm
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1263,7 +1262,7 @@ async fn gateway_batch_deletes_admin_global_models_locally_with_trusted_admin_pr
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1333,7 +1332,7 @@ async fn gateway_deletes_admin_global_model_with_bound_provider_models_locally()
             )]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1405,7 +1404,7 @@ async fn gateway_assigns_admin_global_model_to_providers_locally_with_trusted_ad
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1491,7 +1490,7 @@ async fn gateway_handles_admin_global_model_providers_locally_with_trusted_admin
             )]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

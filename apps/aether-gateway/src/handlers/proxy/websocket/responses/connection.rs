@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use axum::extract::ws::{Message as AxumWsMessage, WebSocket};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use serde_json::Value;
 use wreq::ws::message::Message as WreqWsMessage;
 
@@ -14,8 +14,8 @@ use super::continuation::{
 };
 use super::frame::{encode_opaque_websocket_event, ParsedResponsesWebSocketFrame};
 use super::lifecycle::{
-    await_pending_adapter_observation, finalize_active_turn, queue_turn_finalization,
-    settle_turn_finalization, spawn_bounded_adapter_observation, PreviousAttemptSettled,
+    await_pending_adapter_observation, finalize_active_turn, settle_turn_finalization,
+    spawn_bounded_adapter_observation, PreviousAttemptSettled,
 };
 use super::plan_admission::terminate_responses_websocket_for_plan_permit_loss;
 use super::quota::{
@@ -27,9 +27,7 @@ use super::relay_policy::{
 };
 use super::settlement::settle_signal_for_client_delivery_failure;
 use super::state::BoundResponsesConnection;
-use super::turn::{
-    ResponsesProviderAttempt, ResponsesWebSocketTurnObservation, ResponsesWebSocketTurnOutcome,
-};
+use super::turn::{ResponsesWebSocketTurnObservation, ResponsesWebSocketTurnOutcome};
 use super::turn_state::LogicalTurn;
 use super::upstream::{close_bound_upstream, receive_optional_upstream};
 use crate::handlers::proxy::websocket::ingress::WebSocketRequestContext;

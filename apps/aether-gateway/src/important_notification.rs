@@ -3,7 +3,7 @@ use crate::bark_push::{read_bark_push_config, send_bark_push, BarkPushConfig};
 use crate::email_delivery::{
     read_smtp_delivery_config, send_smtp_email, ComposedEmail, SmtpDeliveryConfig,
 };
-use crate::handlers::shared::{system_config_bool, system_config_string};
+use crate::handlers::shared::system_config_bool;
 use crate::server_chan_push::{
     read_server_chan_push_config, send_server_chan_push, ServerChanPushConfig,
 };
@@ -33,7 +33,6 @@ const MAX_NOTIFICATION_RECIPIENT_VALUE_BYTES: usize = 64 * 1024;
 const MAX_NOTIFICATION_RECIPIENT_PARTS_PER_VALUE: usize = 256;
 const MAX_NOTIFICATION_ITEMS: usize = 128;
 const MAX_NOTIFICATION_ITEM_KEY_BYTES: usize = 128;
-const MAX_NOTIFICATION_ITEM_NAME_BYTES: usize = 512;
 const MAX_NOTIFICATION_TEMPLATE_BYTES: usize = 256 * 1024;
 
 #[derive(Debug, Clone)]
@@ -65,12 +64,12 @@ struct ImportantNotificationConfig {
 #[derive(Debug, Clone)]
 struct ImportantNotificationItemConfig {
     key: String,
-    name: String,
     enabled: bool,
     channel: Option<ImportantNotificationChannelFilter>,
     title_template: Option<String>,
     markdown_template: Option<String>,
     text_template: Option<String>,
+    #[cfg_attr(not(test), allow(dead_code))]
     user_email_enabled: bool,
 }
 
@@ -144,18 +143,6 @@ pub(crate) async fn important_notification_dispatch_ready_for_item(
     ))
 }
 
-pub(crate) async fn send_important_notification(
-    state: &AppState,
-    notification: ImportantNotification,
-) -> Result<ImportantNotificationDeliveryReport, GatewayError> {
-    send_important_notification_with_filter(
-        state,
-        notification,
-        ImportantNotificationChannelFilter::All,
-    )
-    .await
-}
-
 pub(crate) async fn send_important_notification_for_item(
     state: &AppState,
     item_key: &str,
@@ -164,57 +151,6 @@ pub(crate) async fn send_important_notification_for_item(
 ) -> Result<ImportantNotificationDeliveryReport, GatewayError> {
     dispatch_important_notification(state, Some(item_key), notification, variables, None, false)
         .await
-}
-
-pub(crate) async fn send_important_notification_with_filter(
-    state: &AppState,
-    notification: ImportantNotification,
-    channel_filter: ImportantNotificationChannelFilter,
-) -> Result<ImportantNotificationDeliveryReport, GatewayError> {
-    dispatch_important_notification(state, None, notification, &[], Some(channel_filter), false)
-        .await
-}
-
-pub(crate) async fn send_user_important_notification_email(
-    state: &AppState,
-    item_key: &str,
-    user_email: &str,
-    notification: ImportantNotification,
-    variables: &[(&str, String)],
-) -> Result<ImportantNotificationDeliveryReport, GatewayError> {
-    let config = read_important_notification_config(state).await?;
-    if !config.module_enabled {
-        return Ok(single_report("module", false, "通知服务未启用"));
-    }
-    let Some(item) = find_notification_item(&config, item_key) else {
-        return Ok(single_report("item", false, "通知项未定义"));
-    };
-    if !item.enabled {
-        return Ok(single_report("item", false, "通知项未启用"));
-    }
-    if !item.user_email_enabled {
-        return Ok(single_report("user_email", false, "通知项未启用用户邮件"));
-    }
-    let notification = apply_notification_item_template(Some(item), notification, variables);
-    let smtp_config = match read_smtp_delivery_config(state).await? {
-        Some(config) => config,
-        None => return Ok(single_report("user_email", false, "SMTP 配置不完整")),
-    };
-    let user_email = user_email.trim();
-    if user_email.is_empty() {
-        return Ok(single_report("user_email", false, "用户邮箱为空"));
-    }
-    match send_single_email_notification(smtp_config, user_email, &notification).await {
-        Ok(()) => Ok(single_report("user_email", true, "用户邮件通知已发送")),
-        Err(err) => {
-            warn!(error = %crate::error::redact_error_debug(&err), user_email = %user_email, "failed to send user notification email");
-            Ok(single_report(
-                "user_email",
-                false,
-                format!("用户邮件通知发送失败: {err:?}"),
-            ))
-        }
-    }
 }
 
 async fn important_notification_has_configured_channel(
@@ -455,16 +391,8 @@ fn parse_notification_item(value: &Value) -> Option<ImportantNotificationItemCon
     if key.is_empty() || key.len() > MAX_NOTIFICATION_ITEM_KEY_BYTES {
         return None;
     }
-    let name = item
-        .get("name")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .filter(|value| value.len() <= MAX_NOTIFICATION_ITEM_NAME_BYTES)
-        .unwrap_or(key);
     Some(ImportantNotificationItemConfig {
         key: key.to_string(),
-        name: name.to_string(),
         enabled: item.get("enabled").and_then(Value::as_bool).unwrap_or(true),
         channel: item
             .get("channel")
@@ -484,7 +412,6 @@ fn default_notification_items() -> Vec<ImportantNotificationItemConfig> {
     vec![
         ImportantNotificationItemConfig {
             key: PROVIDER_QUOTA_ALERT_ITEM_KEY.to_string(),
-            name: "号池额度不足".to_string(),
             enabled: true,
             channel: None,
             title_template: None,
@@ -494,7 +421,6 @@ fn default_notification_items() -> Vec<ImportantNotificationItemConfig> {
         },
         ImportantNotificationItemConfig {
             key: "provider_pool_abnormal".to_string(),
-            name: "号池异常".to_string(),
             enabled: true,
             channel: None,
             title_template: Some("号池异常：{provider_name}".to_string()),
@@ -506,7 +432,6 @@ fn default_notification_items() -> Vec<ImportantNotificationItemConfig> {
         },
         ImportantNotificationItemConfig {
             key: "user_balance_low".to_string(),
-            name: "用户余额不足".to_string(),
             enabled: true,
             channel: Some(ImportantNotificationChannelFilter::Email),
             title_template: Some("余额不足提醒".to_string()),

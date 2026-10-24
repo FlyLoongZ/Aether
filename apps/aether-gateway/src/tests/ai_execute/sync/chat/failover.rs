@@ -330,7 +330,7 @@ async fn gateway_skips_unsupported_local_openai_chat_sync_candidate_before_tryin
         vec![unsupported_key, supported_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -622,7 +622,7 @@ async fn gateway_surfaces_local_execution_runtime_miss_reason_when_all_openai_ch
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url)
@@ -1079,7 +1079,7 @@ async fn gateway_retries_next_local_openai_chat_sync_candidate_after_auth_failur
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())

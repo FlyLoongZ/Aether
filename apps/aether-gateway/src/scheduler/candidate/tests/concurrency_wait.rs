@@ -5,8 +5,7 @@ use std::time::Duration;
 
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateRowsQuery,
-    StoredRequestedModelCandidateRowsQuery,
+    StoredMinimalCandidateSelectionRow, StoredRequestedModelCandidateRowsQuery,
 };
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
@@ -121,22 +120,6 @@ fn limited_auth() -> GatewayAuthApiKeySnapshot {
 
 #[async_trait]
 impl MinimalCandidateSelectionRowSource for CountingState {
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_global_model(
-        &self,
-        _api_format: &str,
-        _global_model_name: &str,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        panic!("requested-model selection should use its paged query")
-    }
-
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model(
-        &self,
-        _api_format: &str,
-        _requested_model_name: &str,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        panic!("requested-model selection should use its paged query")
-    }
-
     async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
         &self,
         query: &StoredRequestedModelCandidateRowsQuery,
@@ -171,13 +154,6 @@ impl MinimalCandidateSelectionRowSource for CountingState {
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
         self.format_reads.fetch_add(1, Ordering::SeqCst);
         Ok(self.rows.lock().unwrap().clone())
-    }
-
-    async fn read_pool_key_candidate_rows_for_group(
-        &self,
-        _query: &StoredPoolKeyCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        panic!("the test has no provider pool")
     }
 }
 
@@ -264,30 +240,6 @@ impl SchedulerRuntimeState for CountingState {
         _ttl: Duration,
     ) -> Option<SchedulerAffinityTarget> {
         None
-    }
-
-    fn scheduler_affinity_epoch(&self) -> u64 {
-        0
-    }
-
-    fn remember_scheduler_affinity_target(
-        &self,
-        _cache_key: &str,
-        _target: SchedulerAffinityTarget,
-        _ttl: Duration,
-        _max_entries: usize,
-    ) {
-    }
-
-    fn remember_scheduler_affinity_target_for_epoch(
-        &self,
-        _cache_key: &str,
-        _target: SchedulerAffinityTarget,
-        _ttl: Duration,
-        _max_entries: usize,
-        _expected_epoch: Option<u64>,
-    ) -> bool {
-        true
     }
 }
 

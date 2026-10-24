@@ -15,61 +15,41 @@ mod normalize;
 mod openai;
 
 pub(crate) use self::codex::{
-    apply_codex_openai_responses_special_body_edits, apply_codex_openai_special_headers,
-    codex_model_capabilities_for_transport,
+    apply_codex_openai_special_headers, codex_model_capabilities_for_transport,
 };
 pub(crate) use self::deepseek::{
     apply_deepseek_tool_call_thinking_compat, is_deepseek_provider,
     openai_responses_reasoning_replay_policy,
 };
-pub(crate) use self::family::{
-    build_local_stream_attempt_source, build_local_stream_plan_and_reports,
-    build_local_sync_attempt_source, build_local_sync_plan_and_reports,
-};
+pub(crate) use self::family::{build_local_stream_attempt_source, build_local_sync_attempt_source};
+
 pub(crate) use self::normalize::{
     build_cross_format_openai_chat_request_body, build_cross_format_openai_chat_upstream_url,
-    build_cross_format_openai_responses_request_body,
     build_cross_format_openai_responses_request_body_with_codex_model_capabilities,
     build_cross_format_openai_responses_upstream_url, build_local_openai_chat_request_body,
-    build_local_openai_chat_upstream_url, build_local_openai_responses_request_body,
+    build_local_openai_chat_upstream_url,
     build_local_openai_responses_request_body_with_codex_model_capabilities,
     build_local_openai_responses_request_body_with_codex_model_capabilities_for_websocket_continuation,
-    build_local_openai_responses_upstream_url, validate_final_openai_provider_request,
+    build_local_openai_responses_upstream_url,
 };
 pub(crate) use self::openai::{
     build_local_openai_chat_stream_attempt_source_for_kind,
-    build_local_openai_chat_stream_plan_and_reports_for_kind,
     build_local_openai_chat_sync_attempt_source_for_kind,
-    build_local_openai_chat_sync_plan_and_reports_for_kind,
     build_local_openai_responses_stream_attempt_source_for_kind,
-    build_local_openai_responses_stream_plan_and_reports_for_kind,
     build_local_openai_responses_sync_attempt_source_for_kind,
-    build_local_openai_responses_sync_plan_and_reports_for_kind, copy_request_number_field,
-    copy_request_number_field_as, map_openai_reasoning_effort_to_claude_output,
-    map_openai_reasoning_effort_to_gemini_budget, maybe_build_responses_websocket_decision,
-    maybe_build_stream_local_decision_payload,
+    maybe_build_responses_websocket_decision, maybe_build_stream_local_decision_payload,
     maybe_build_stream_local_openai_responses_decision_payload,
     maybe_build_sync_local_decision_payload,
-    maybe_build_sync_local_openai_embedding_decision_payload,
-    maybe_build_sync_local_openai_responses_decision_payload, parse_openai_stop_sequences,
-    resolve_openai_chat_max_tokens, set_local_openai_chat_execution_exhausted_diagnostic,
-    value_as_u64, ResponsesWebSocketBodyNormalization, ResponsesWebSocketDecision,
-    ResponsesWebSocketPinnedCandidate,
+    maybe_build_sync_local_openai_responses_decision_payload,
+    set_local_openai_chat_execution_exhausted_diagnostic, ResponsesWebSocketBodyNormalization,
+    ResponsesWebSocketDecision, ResponsesWebSocketPinnedCandidate,
 };
-pub(crate) use crate::ai_serving::normalize_standard_request_to_openai_chat_request;
-pub(crate) use crate::ai_serving::{
-    build_core_error_body_for_client_format, request_conversion_kind,
-    request_conversion_transport_supported, sync_chat_response_conversion_kind,
-    sync_cli_response_conversion_kind, RequestConversionKind, SyncChatResponseConversionKind,
-    SyncCliResponseConversionKind,
+
+#[cfg(test)]
+pub(crate) use self::normalize::{
+    build_cross_format_openai_responses_request_body, build_local_openai_responses_request_body,
 };
-pub(crate) use crate::ai_serving::{
-    build_standard_request_body, build_standard_request_body_with_model_directives,
-    build_standard_request_body_with_model_directives_and_request_headers_and_reasoning_replay_policy,
-    convert_openai_chat_request_to_claude_request, convert_openai_chat_request_to_gemini_request,
-    convert_openai_chat_request_to_openai_responses_request, extract_openai_text_content,
-    normalize_openai_responses_request_to_openai_chat_request, parse_openai_tool_result_content,
-};
+pub(crate) use crate::ai_serving::build_standard_request_body_with_model_directives_and_request_headers_and_reasoning_replay_policy;
 pub(crate) use aether_ai_serving::{
     openai_provider_request_contract_failure_extra_data, request_body_build_failure_extra_data,
     request_conversion_failure_extra_data, same_format_provider_request_body_failure_extra_data,
@@ -146,6 +126,9 @@ pub(crate) async fn maybe_build_stream_local_standard_decision_payload(
     )
     .await
 }
+
+#[cfg(test)]
+pub(crate) use crate::ai_serving::build_standard_request_body;
 
 #[cfg(test)]
 mod tests {

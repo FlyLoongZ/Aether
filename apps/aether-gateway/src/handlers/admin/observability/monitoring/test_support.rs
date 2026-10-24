@@ -125,17 +125,6 @@ pub(super) fn sample_provider() -> StoredProviderCatalogProvider {
     .expect("provider should build")
 }
 
-pub(super) fn sample_inactive_provider() -> StoredProviderCatalogProvider {
-    StoredProviderCatalogProvider::new(
-        "provider-2".to_string(),
-        "Anthropic".to_string(),
-        Some("https://anthropic.com".to_string()),
-        "custom".to_string(),
-    )
-    .expect("provider should build")
-    .with_transport_fields(false, false, false, None, None, None, None, None, None)
-}
-
 pub(super) fn sample_endpoint() -> StoredProviderCatalogEndpoint {
     StoredProviderCatalogEndpoint::new(
         "endpoint-1".to_string(),

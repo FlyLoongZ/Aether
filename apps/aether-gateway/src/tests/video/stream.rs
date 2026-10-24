@@ -210,7 +210,7 @@ async fn gateway_executes_openai_video_content_from_reconstructed_data_task_with
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
 
     let repository = Arc::new(InMemoryVideoTaskRepository::default());

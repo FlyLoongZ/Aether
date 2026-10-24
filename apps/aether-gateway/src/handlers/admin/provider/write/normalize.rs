@@ -225,6 +225,7 @@ pub(crate) fn set_responses_websocket_enabled(
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn remove_responses_websocket_enabled(
     config: &mut serde_json::Map<String, serde_json::Value>,
 ) {

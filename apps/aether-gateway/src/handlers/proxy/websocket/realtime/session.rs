@@ -15,8 +15,7 @@ use crate::handlers::proxy::websocket::ingress::{
 };
 use crate::handlers::proxy::websocket::responses::ResponsesWebSocketTurnAdmission;
 use crate::handlers::proxy::websocket::session::{
-    CLOSE_INTERNAL_ERROR, CLOSE_POLICY_VIOLATION, CLOSE_TRY_AGAIN,
-    REALTIME_WEBSOCKET_SESSION_LIMITS, WEBSOCKET_LOG_TRANSPORT,
+    CLOSE_TRY_AGAIN, REALTIME_WEBSOCKET_SESSION_LIMITS, WEBSOCKET_LOG_TRANSPORT,
 };
 use crate::handlers::proxy::websocket::transport::{
     client_message_to_upstream, close_client_socket, close_upstream_socket,

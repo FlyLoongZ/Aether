@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use aether_data::repository::users::InMemoryUserReadRepository;
+use aether_data::repository::wallet::InMemoryWalletRepository;
 use aether_data::repository::wallet::StoredWalletSnapshot;
-use aether_data::repository::wallet::{InMemoryWalletRepository, WalletWriteRepository};
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};
@@ -11,8 +11,7 @@ use serde_json::json;
 
 use super::super::{build_router_with_state, start_server, AppState};
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 
 fn admin_request(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -122,7 +121,7 @@ fn sample_payment_callback(
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_list_orders_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders").await;
 
     let gateway = build_router_with_state(
@@ -179,7 +178,7 @@ async fn gateway_handles_admin_payments_list_orders_locally_with_trusted_admin_p
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_get_order_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders/order-1").await;
 
     let gateway = build_router_with_state(
@@ -218,7 +217,7 @@ async fn gateway_handles_admin_payments_get_order_locally_with_trusted_admin_pri
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_expire_order_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders/order-1/expire").await;
 
     let gateway = build_router_with_state(
@@ -260,7 +259,7 @@ async fn gateway_handles_admin_payments_expire_order_locally_with_trusted_admin_
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_credit_order_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders/order-1/credit").await;
 
     let gateway = build_router_with_state(
@@ -321,7 +320,7 @@ async fn gateway_handles_admin_payments_credit_order_locally_with_trusted_admin_
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_fail_order_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders/order-1/fail").await;
 
     let gateway = build_router_with_state(
@@ -362,7 +361,7 @@ async fn gateway_handles_admin_payments_fail_order_locally_with_trusted_admin_pr
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_callbacks_locally_with_trusted_admin_principal() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/callbacks").await;
 
     let gateway = build_router_with_state(
@@ -477,7 +476,7 @@ async fn gateway_handles_admin_payments_trailing_slash_routes_locally_with_trust
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -585,7 +584,7 @@ async fn gateway_handles_admin_payments_trailing_slash_routes_locally_with_trust
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_list_orders_locally_without_payment_backend() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders").await;
 
     let mut state = AppState::new().expect("gateway should build");
@@ -614,7 +613,7 @@ async fn gateway_handles_admin_payments_list_orders_locally_without_payment_back
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_get_order_locally_without_payment_backend() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders/order-missing").await;
 
     let mut state = AppState::new().expect("gateway should build");
@@ -640,7 +639,7 @@ async fn gateway_handles_admin_payments_get_order_locally_without_payment_backen
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_expire_order_with_backend_unavailable_detail() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/orders/order-missing/expire").await;
 
     let mut state = AppState::new().expect("gateway should build");
@@ -667,7 +666,7 @@ async fn gateway_handles_admin_payments_expire_order_with_backend_unavailable_de
 
 #[tokio::test]
 async fn gateway_handles_admin_payments_callbacks_locally_without_payment_backend() {
-    let (upstream_url, upstream_hits, upstream_handle) =
+    let (_upstream_url, upstream_hits, upstream_handle) =
         start_payments_upstream("/api/admin/payments/callbacks").await;
 
     let mut state = AppState::new().expect("gateway should build");
@@ -707,7 +706,7 @@ async fn gateway_rejects_admin_payments_empty_order_identifier_locally_with_trus
         }
     }));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

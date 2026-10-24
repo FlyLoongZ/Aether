@@ -1,6 +1,8 @@
+#[cfg(test)]
+use super::normalize_auth_login_identifier;
 use super::{
     decrypt_or_migrate_ldap_bind_password, ldap_config_is_enabled, module_available_from_env,
-    normalize_auth_login_identifier, system_config_bool, AppState, GatewayError,
+    system_config_bool, AppState, GatewayError,
 };
 
 #[derive(Clone)]

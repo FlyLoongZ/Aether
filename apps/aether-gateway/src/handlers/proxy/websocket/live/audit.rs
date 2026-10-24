@@ -1122,7 +1122,7 @@ mod tests {
             guard.fail(http::StatusCode::BAD_REQUEST, "explicit_failure");
         }
 
-        let (cancelled, explicit) = tokio::time::timeout(Duration::from_secs(5), async {
+        let (cancelled, _explicit) = tokio::time::timeout(Duration::from_secs(5), async {
             loop {
                 let cancelled = usage_repository
                     .find_by_request_id("live-call-create-cancelled")

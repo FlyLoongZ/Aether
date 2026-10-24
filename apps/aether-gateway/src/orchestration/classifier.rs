@@ -82,7 +82,6 @@ pub(crate) const fn classify_local_transport_error(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FailureRetryAction {
     Stop,
-    SameCredential,
     NextCandidate,
     NextCredential,
     NextEndpoint,
@@ -98,10 +97,12 @@ pub(crate) enum FailureScope {
 }
 
 impl FailureScope {
+    #[cfg(test)]
     pub(crate) const fn affects_credential(self) -> bool {
         matches!(self, Self::Credential | Self::CredentialModel)
     }
 
+    #[cfg(test)]
     pub(crate) const fn allows_key_wide_effects(self) -> bool {
         matches!(self, Self::None | Self::Credential)
     }
@@ -111,8 +112,6 @@ impl FailureScope {
 pub(crate) enum FailureTokenAction {
     None,
     ForceRefresh,
-    #[allow(dead_code)]
-    Quarantine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

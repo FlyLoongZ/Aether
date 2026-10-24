@@ -177,12 +177,6 @@ pub(crate) async fn list_admin_cleanup_run_records(
     Ok(parse_cleanup_run_records(value))
 }
 
-pub(crate) async fn start_admin_request_body_cleanup_task(
-    app: AppState,
-) -> Result<AdminCleanupRunRecord, GatewayError> {
-    start_admin_system_purge_task(app, AdminCleanupTaskKind::RequestBodies).await
-}
-
 pub(crate) async fn start_admin_system_purge_task(
     app: AppState,
     kind: AdminCleanupTaskKind,

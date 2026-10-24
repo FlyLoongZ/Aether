@@ -2,7 +2,7 @@ use crate::handlers::admin::model::ADMIN_EXTERNAL_MODELS_PROXY_NODE_CONFIG_KEY;
 use crate::handlers::admin::request::AdminAppState;
 use crate::handlers::shared::{
     bark_device_key_binding, encrypt_bark_device_key, encrypt_smtp_password, smtp_password_binding,
-    system_config_bool, system_config_string, unix_secs_to_rfc3339,
+    system_config_bool, system_config_string,
 };
 use crate::GatewayError;
 use aether_admin::system::{

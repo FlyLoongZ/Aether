@@ -410,7 +410,7 @@ pub(crate) async fn record_admin_provider_pool_success(
     }
 
     if let Some(ttfb_ms) = ttfb_ms
-        .filter(|value| should_record_latency(pool_config))
+        .filter(|_valuee| should_record_latency(pool_config))
         .filter(|_| pool_config.latency_window_seconds > 0)
     {
         let latency_key = pool_latency_key(provider_id, key_id);

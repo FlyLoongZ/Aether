@@ -87,15 +87,7 @@ struct UsersMePatchApiKeyRequest {
 #[serde(untagged)]
 enum UsersMeApiKeyProviderValue {
     ProviderId(String),
-    ProviderConfig {
-        provider_id: String,
-        #[serde(default)]
-        priority: Option<i32>,
-        #[serde(default)]
-        weight: Option<f64>,
-        #[serde(default)]
-        enabled: Option<bool>,
-    },
+    ProviderConfig { provider_id: String },
 }
 
 #[derive(Debug, Deserialize)]

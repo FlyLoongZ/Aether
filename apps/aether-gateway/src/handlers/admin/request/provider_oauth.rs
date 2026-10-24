@@ -3,8 +3,6 @@ pub(crate) type AdminGatewayProviderTransportSnapshot =
 pub(crate) type AdminLocalOAuthRefreshError = crate::provider_transport::LocalOAuthRefreshError;
 pub(crate) type AdminKiroRequestAuth = crate::provider_transport::kiro::KiroRequestAuth;
 pub(crate) type AdminKiroAuthConfig = crate::provider_transport::kiro::KiroAuthConfig;
-pub(crate) type AdminKiroOAuthRefreshAdapter =
-    crate::provider_transport::kiro::KiroOAuthRefreshAdapter;
 pub(crate) type AdminProviderOAuthTemplate =
     crate::provider_transport::provider_types::ProviderOAuthTemplate;
 

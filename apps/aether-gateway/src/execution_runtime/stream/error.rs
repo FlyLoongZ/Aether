@@ -4,7 +4,7 @@ use aether_contracts::{StreamFrame, StreamFramePayload};
 use axum::http::StatusCode;
 use base64::Engine as _;
 use futures_util::StreamExt;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 use tokio_util::codec::{FramedRead, LinesCodec};
 use tracing::warn;
 

@@ -31,7 +31,7 @@ async fn gateway_rejects_spoofed_admin_principal_headers_without_gateway_marker_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -79,7 +79,7 @@ async fn gateway_handles_models_support_routes_locally_with_public_support_contr
         sample_currently_usable_auth_snapshot("key-models-1", "user-models-1"),
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

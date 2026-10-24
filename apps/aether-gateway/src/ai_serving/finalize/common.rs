@@ -9,10 +9,8 @@ pub(crate) use crate::ai_serving::api::{
     provider_private_response_allows_sync_finalize as local_finalize_allows_envelope,
 };
 use crate::ai_serving::{
-    build_generated_tool_call_id,
     build_local_success_background_report as build_local_success_background_report_impl,
     build_local_success_conversion_background_report as build_local_success_conversion_background_report_impl,
-    canonicalize_tool_arguments,
     prepare_local_success_response_parts as prepare_local_success_response_parts_impl,
     GatewayControlDecision, LocalSyncReportParts,
 };

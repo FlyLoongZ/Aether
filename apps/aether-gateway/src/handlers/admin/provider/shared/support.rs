@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(crate) const ADMIN_PROVIDER_MAPPING_PREVIEW_MAX_KEYS: usize = 200;
 pub(crate) const ADMIN_PROVIDER_MAPPING_PREVIEW_MAX_MODELS: usize = 500;
 pub(crate) const ADMIN_PROVIDER_MAPPING_PREVIEW_FETCH_LIMIT: usize = 10_000;
-pub(crate) const ADMIN_PROVIDER_POOL_SCAN_BATCH: u64 = 200;
 pub(crate) const ADMIN_PROVIDER_POOL_QUOTA_PROBE_ACTIVE_SET_PREFIX: &str =
     "ap:quota_probe:active_members";
 pub(crate) const ADMIN_PROVIDER_OAUTH_DATA_UNAVAILABLE_DETAIL: &str =
@@ -74,7 +73,9 @@ pub(crate) struct AdminProviderPoolConfig {
     pub(crate) rate_limit_cooldown_seconds: u64,
     pub(crate) overload_cooldown_seconds: u64,
     pub(crate) probing_enabled: bool,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) probing_target_percent: Option<f64>,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) probing_target_count: Option<u64>,
     pub(crate) probe_concurrency: u64,
     pub(crate) account_self_check_enabled: bool,

@@ -1,12 +1,10 @@
 use super::super::duplicates::{
-    acquire_codex_oauth_account_locks, find_duplicate_provider_oauth_key,
-    release_codex_oauth_account_locks,
+    acquire_codex_oauth_account_locks, release_codex_oauth_account_locks,
 };
 use super::super::errors::build_internal_control_error_response;
 use super::super::provisioning::{
-    build_provider_oauth_auth_config_from_token_payload, create_provider_oauth_catalog_key,
-    provider_oauth_active_api_formats, provider_oauth_key_proxy_value,
-    update_existing_provider_oauth_catalog_key,
+    build_provider_oauth_auth_config_from_token_payload, provider_oauth_active_api_formats,
+    provider_oauth_key_proxy_value,
 };
 use super::super::runtime::{
     resolve_provider_oauth_runtime_endpoints,
@@ -14,8 +12,8 @@ use super::super::runtime::{
 };
 use super::super::state::{
     admin_provider_oauth_template, build_admin_provider_oauth_backend_unavailable_response,
-    enrich_admin_provider_oauth_auth_config, exchange_admin_provider_oauth_refresh_token,
-    is_fixed_provider_type_for_provider_oauth, json_u64_value,
+    enrich_admin_provider_oauth_auth_config, is_fixed_provider_type_for_provider_oauth,
+    json_u64_value,
 };
 use super::helpers::admin_provider_oauth_key_name_from_auth_config;
 use super::token_import::{

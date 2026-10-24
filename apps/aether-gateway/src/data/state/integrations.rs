@@ -17,8 +17,9 @@ use aether_data_contracts::repository::settlement::{
     UsageSettlementInput,
 };
 use aether_data_contracts::repository::usage::{
-    ProxyNodeCounterDelta, StoredRequestUsageAudit, UpsertUsageRecord, UsageWriteRepository,
+    ProxyNodeCounterDelta, StoredRequestUsageAudit, UpsertUsageRecord,
 };
+
 use aether_data_contracts::repository::video_tasks::{StoredVideoTask, VideoTaskLookupKey};
 use aether_runtime_state::RuntimeQueueStore;
 use aether_usage_runtime::{
@@ -144,27 +145,6 @@ impl ProviderTransportSnapshotSource for GatewayDataState {
 
 #[async_trait]
 impl MinimalCandidateSelectionRowSource for GatewayDataState {
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_global_model(
-        &self,
-        api_format: &str,
-        global_model_name: &str,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        self.list_minimal_candidate_selection_rows(api_format, global_model_name)
-            .await
-    }
-
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model(
-        &self,
-        api_format: &str,
-        requested_model_name: &str,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        self.list_minimal_candidate_selection_rows_for_requested_model(
-            api_format,
-            requested_model_name,
-        )
-        .await
-    }
-
     async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
         &self,
         query: &aether_data_contracts::repository::candidate_selection::StoredRequestedModelCandidateRowsQuery,
@@ -187,13 +167,6 @@ impl MinimalCandidateSelectionRowSource for GatewayDataState {
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
         self.list_minimal_candidate_selection_rows_for_api_format_page(query)
             .await
-    }
-
-    async fn read_pool_key_candidate_rows_for_group(
-        &self,
-        query: &aether_data_contracts::repository::candidate_selection::StoredPoolKeyCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        self.list_pool_key_candidate_rows_for_group(query).await
     }
 
     async fn read_reserved_global_model_name(

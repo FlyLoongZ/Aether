@@ -1,10 +1,13 @@
+#[cfg(test)]
+use crate::ai_serving::api::{
+    supports_stream_execution_decision_kind as supports_stream_execution_decision_kind_impl,
+    supports_sync_execution_decision_kind as supports_sync_execution_decision_kind_impl,
+};
 use crate::ai_serving::GatewayControlDecision;
 use crate::ai_serving::{
     is_matching_stream_http_request as is_matching_stream_http_request_impl,
     resolve_execution_runtime_stream_plan_kind_with_client_surface as resolve_execution_runtime_stream_plan_kind_impl,
     resolve_execution_runtime_sync_plan_kind_with_client_surface as resolve_execution_runtime_sync_plan_kind_impl,
-    supports_stream_execution_decision_kind as supports_stream_execution_decision_kind_impl,
-    supports_sync_execution_decision_kind as supports_sync_execution_decision_kind_impl,
 };
 
 pub(crate) fn resolve_execution_runtime_stream_plan_kind(
@@ -50,10 +53,12 @@ pub(crate) fn is_matching_stream_request(
     is_matching_stream_http_request_impl(plan_kind, parts, body_json, body_base64)
 }
 
+#[cfg(test)]
 pub(crate) fn supports_sync_execution_decision_kind(plan_kind: &str) -> bool {
     supports_sync_execution_decision_kind_impl(plan_kind)
 }
 
+#[cfg(test)]
 pub(crate) fn supports_stream_execution_decision_kind(plan_kind: &str) -> bool {
     supports_stream_execution_decision_kind_impl(plan_kind)
 }

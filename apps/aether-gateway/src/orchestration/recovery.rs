@@ -89,9 +89,7 @@ pub(crate) fn apply_provider_failure_disposition(
     let disposition =
         classify_failure_disposition(provider_api_format, analysis.classification, status_code);
     let decision = match disposition.retry_action {
-        FailureRetryAction::Stop | FailureRetryAction::SameCredential => {
-            LocalFailoverDecision::StopLocalFailover
-        }
+        FailureRetryAction::Stop => LocalFailoverDecision::StopLocalFailover,
         FailureRetryAction::NextCandidate
         | FailureRetryAction::NextCredential
         | FailureRetryAction::NextEndpoint => LocalFailoverDecision::RetryNextCandidate,
@@ -103,6 +101,7 @@ pub(crate) fn apply_provider_failure_disposition(
     }
 }
 
+#[cfg(test)]
 pub(crate) fn recover_local_failover_decision(
     policy: &LocalFailoverPolicy,
     input: LocalFailoverInput<'_>,

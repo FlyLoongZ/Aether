@@ -12,8 +12,7 @@ use serde_json::json;
 
 use super::super::{build_router_with_state, sample_key, sample_provider, start_server, AppState};
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
 
@@ -47,7 +46,7 @@ async fn assert_adaptive_route_returns_local_503(
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -104,7 +103,7 @@ async fn gateway_handles_admin_adaptive_keys_locally_with_trusted_admin_principa
 
     let repository = adaptive_repository_with_keys(vec![adaptive_key, fixed_key]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -171,7 +170,7 @@ async fn gateway_handles_admin_adaptive_summary_locally_with_trusted_admin_princ
 
     let repository = adaptive_repository_with_keys(vec![first_key, second_key]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -266,7 +265,7 @@ async fn gateway_handles_admin_adaptive_stats_locally_with_trusted_admin_princip
     }));
     let repository = adaptive_repository_with_keys(vec![key]);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

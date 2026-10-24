@@ -9,49 +9,9 @@ use serde_json::json;
 
 use super::super::{build_router_with_state, start_server, AppState};
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
-
-async fn assert_admin_billing_get_returns_local(
-    path: &str,
-) -> (serde_json::Value, Arc<Mutex<usize>>) {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        path,
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("unexpected upstream hit"))
-            }
-        }),
-    );
-
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
-    let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .get(format!("{gateway_url}{path}"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .send()
-        .await
-        .expect("request should succeed");
-
-    let status = response.status();
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    gateway_handle.abort();
-    upstream_handle.abort();
-    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
-    assert_eq!(status, StatusCode::OK);
-    (payload, upstream_hits)
-}
 
 async fn send_admin_billing_request(
     gateway_url: &str,
@@ -219,7 +179,7 @@ async fn gateway_handles_admin_billing_presets_locally_with_trusted_admin_princi
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -259,7 +219,7 @@ async fn gateway_handles_admin_billing_apply_preset_locally_with_trusted_admin_p
             }
         }),
     );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -344,7 +304,7 @@ async fn gateway_returns_conflict_for_admin_billing_apply_preset_when_backend_un
             }
         }),
     );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let mut state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(crate::data::GatewayDataState::with_user_reader_for_tests(
@@ -397,7 +357,7 @@ async fn gateway_handles_admin_billing_rule_routes_locally_with_trusted_admin_pr
                 }
             }),
         );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -490,7 +450,7 @@ async fn gateway_handles_admin_billing_rule_routes_locally_with_trusted_admin_pr
                 (StatusCode::OK, Body::from("unexpected upstream hit"))
             }),
         );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -570,7 +530,7 @@ async fn gateway_returns_conflict_for_admin_billing_rule_create_when_backend_una
             }
         }),
     );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let mut state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(crate::data::GatewayDataState::with_user_reader_for_tests(
@@ -631,7 +591,7 @@ async fn gateway_handles_admin_billing_collector_routes_locally_with_trusted_adm
                 }
             }),
         );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -721,7 +681,7 @@ async fn gateway_handles_admin_billing_collector_routes_locally_with_trusted_adm
                 (StatusCode::OK, Body::from("unexpected upstream hit"))
             }),
         );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

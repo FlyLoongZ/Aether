@@ -20,6 +20,7 @@ pub(super) struct ParsedResponsesWebSocketFrame<'a> {
     raw_text: &'a str,
     event: Value,
     event_type: Option<String>,
+    #[cfg_attr(not(test), allow(dead_code))]
     status: Option<u16>,
     started: bool,
     terminal: Option<ResponsesWebSocketFrameTerminal>,
@@ -112,6 +113,7 @@ impl<'a> ParsedResponsesWebSocketFrame<'a> {
         self.event_type.as_deref()
     }
 
+    #[cfg(test)]
     pub(super) fn status(&self) -> Option<u16> {
         self.status
     }
@@ -120,6 +122,7 @@ impl<'a> ParsedResponsesWebSocketFrame<'a> {
         self.started
     }
 
+    #[cfg(test)]
     pub(super) fn is_terminal(&self) -> bool {
         self.terminal.is_some()
     }

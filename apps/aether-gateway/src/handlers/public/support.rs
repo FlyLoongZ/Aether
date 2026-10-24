@@ -95,12 +95,12 @@ use self::support_oauth::maybe_build_local_oauth_response;
 use self::support_payment::maybe_build_local_payment_callback_response;
 use self::support_test_connection::maybe_build_local_test_connection_response;
 use self::support_user_me::maybe_build_local_users_me_response;
+#[cfg(test)]
+pub(crate) use self::support_wallet::prepare_wallet_gateway_response_for_storage;
 use self::support_wallet::{
-    build_wallet_balance_payload_for_auth_scope, build_wallet_balance_payload_for_user,
-    build_wallet_live_today_usage_payload_for_api_key,
-    build_wallet_live_today_usage_payload_for_user, direct_gateway_channels,
-    maybe_build_local_wallet_response, prepare_billing_gateway_response_for_storage,
-    prepare_wallet_gateway_response_for_storage, resolve_direct_gateway_channel,
+    build_wallet_balance_payload_for_auth_scope, build_wallet_live_today_usage_payload_for_api_key,
+    build_wallet_live_today_usage_payload_for_user, maybe_build_local_wallet_response,
+    prepare_billing_gateway_response_for_storage, resolve_direct_gateway_channel,
     sanitize_wallet_gateway_response, wallet_normalize_optional_string_field,
     wallet_payment_instructions_from_checkout, wallet_payment_instructions_from_stored,
 };

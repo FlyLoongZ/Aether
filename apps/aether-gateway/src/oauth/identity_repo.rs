@@ -14,7 +14,7 @@ use aether_data::repository::users::{
 use aether_oauth::identity::{IdentityClaims, IdentityOAuthProviderConfig};
 use chrono::Utc;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use uuid::Uuid;
 
 const LINUXDO_AUTHORIZE_URL: &str = "https://connect.linux.do/oauth2/authorize";

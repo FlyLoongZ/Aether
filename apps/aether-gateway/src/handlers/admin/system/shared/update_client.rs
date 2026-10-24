@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 
+#[cfg(not(test))]
 const EXPLICIT_UPDATE_PROXY_ENV_KEYS: &[&str] = &["AETHER_UPDATE_PROXY_URL", "UPDATE_PROXY_URL"];
 
 const UPDATE_PROXY_ENV_KEYS: &[&str] = &[
@@ -17,6 +18,7 @@ const UPDATE_PROXY_ENV_KEYS: &[&str] = &[
     "http_proxy",
 ];
 
+#[cfg(not(test))]
 const UPDATE_GITHUB_TOKEN_ENV_KEYS: &[&str] =
     &["AETHER_UPDATE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"];
 
@@ -43,6 +45,7 @@ pub(crate) fn build_update_http_client(
         .map_err(|err| format!("创建{label}客户端失败: {err}"))
 }
 
+#[cfg(not(test))]
 pub(crate) fn build_direct_update_http_client(
     timeout: Duration,
     label: &str,
@@ -54,6 +57,7 @@ pub(crate) fn build_direct_update_http_client(
         .map_err(|err| format!("创建{label}客户端失败: {err}"))
 }
 
+#[cfg(not(test))]
 pub(crate) fn has_explicit_update_proxy_env() -> bool {
     read_nonempty_env_value(EXPLICIT_UPDATE_PROXY_ENV_KEYS).is_some()
 }
@@ -165,6 +169,7 @@ fn update_proxy_host(proxy_url: &str) -> Option<String> {
     parsed.host_str().map(ToOwned::to_owned)
 }
 
+#[cfg(not(test))]
 pub(crate) fn update_github_token_from_env() -> Option<String> {
     read_nonempty_env_value(UPDATE_GITHUB_TOKEN_ENV_KEYS)
 }

@@ -268,6 +268,7 @@ fn build_admin_system_data_import_part_body(
         .map_err(|err| invalid_request(format!("{field_name} 序列化失败: {err}")))
 }
 
+#[cfg(test)]
 fn build_aggregate_rollback_body(
     checkpoint: &Value,
     is_config: bool,
@@ -280,6 +281,7 @@ fn build_aggregate_rollback_body(
 /// feeding the checkpoint wallet fields back through the regular importer
 /// would otherwise perform an unconditional overwrite and could erase a
 /// concurrent recharge or adjustment.
+#[cfg(test)]
 fn build_aggregate_users_rollback_body(checkpoint: &Value) -> Result<Bytes, GatewayError> {
     let mut object = checkpoint.as_object().cloned().ok_or_else(|| {
         GatewayError::Internal("aggregate rollback checkpoint must be a JSON object".to_string())
@@ -4926,7 +4928,7 @@ impl<'a> AdminAppState<'a> {
         if journal.existing_users.contains_key(&user.id) {
             return Ok(());
         }
-        let mut before_export = self.find_export_user_by_id(&user.id).await?;
+        let before_export = self.find_export_user_by_id(&user.id).await?;
         let before_model_capability_settings = self
             .app()
             .read_user_model_capability_settings(&user.id)
@@ -4936,13 +4938,15 @@ impl<'a> AdminAppState<'a> {
             .and_then(|record| record.feature_settings.clone())
             .or(self.app().read_user_feature_settings(&user.id).await?);
         #[cfg(test)]
-        if before_export.is_none() {
-            before_export = Some(synthetic_rollback_export_row(
+        let before_export = if before_export.is_none() {
+            Some(synthetic_rollback_export_row(
                 user,
                 before_model_capability_settings.clone(),
                 before_feature_settings.clone(),
-            )?);
-        }
+            )?)
+        } else {
+            before_export
+        };
         let mut before_group_ids = self
             .list_user_groups_for_user(&user.id)
             .await?
@@ -5011,19 +5015,21 @@ impl<'a> AdminAppState<'a> {
             .app()
             .read_user_model_capability_settings(user_id)
             .await?;
-        let mut export = self.find_export_user_by_id(user_id).await?;
+        let export = self.find_export_user_by_id(user_id).await?;
         let feature_settings = export
             .as_ref()
             .and_then(|record| record.feature_settings.clone())
             .or(self.app().read_user_feature_settings(user_id).await?);
         #[cfg(test)]
-        if export.is_none() {
-            export = Some(synthetic_rollback_export_row(
+        let export = if export.is_none() {
+            Some(synthetic_rollback_export_row(
                 &auth,
                 model_capability_settings.clone(),
                 feature_settings.clone(),
-            )?);
-        }
+            )?)
+        } else {
+            export
+        };
         let mut group_ids = self
             .list_user_groups_for_user(user_id)
             .await?

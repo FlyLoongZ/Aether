@@ -53,7 +53,7 @@ pub(in super::super) async fn build_admin_monitoring_cache_users_delete_response
         clear_admin_monitoring_scheduler_affinity_entries(state, &target_affinities);
 
         let user = admin_monitoring_find_user_summary_by_id(state, &api_key.user_id).await?;
-        let api_key_name = api_key
+        let _api_key_namee = api_key
             .name
             .clone()
             .unwrap_or_else(|| user_identifier.clone());

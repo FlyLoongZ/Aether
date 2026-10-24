@@ -1,9 +1,7 @@
 use super::{
-    any, build_router_with_execution_runtime_override, build_router_with_state,
-    build_state_with_execution_runtime_override, json, run_finalize_local_cli_test, start_server,
-    to_bytes, Arc, Body, Bytes, HeaderName, HeaderValue, Json, Mutex, Request, Response, Router,
-    StatusCode, CONTROL_EXECUTED_HEADER, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
-    EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
+    any, build_router_with_state, build_state_with_execution_runtime_override, json,
+    run_finalize_local_cli_test, start_server, to_bytes, Arc, Body, Json, Mutex, Request, Router,
+    StatusCode, TRACE_ID_HEADER,
 };
 use crate::data::GatewayDataState;
 use aether_ai_formats::openai_responses_message_item_id;
@@ -361,7 +359,7 @@ async fn gateway_executes_openai_responses_cross_format_upstream_stream_via_loca
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -832,7 +830,7 @@ async fn gateway_executes_openai_responses_cross_format_function_call_upstream_s
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -1405,7 +1403,7 @@ async fn gateway_executes_openai_responses_antigravity_cross_format_upstream_str
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (refresh_url, refresh_handle) = start_server(refresh).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let oauth_refresh =

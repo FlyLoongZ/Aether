@@ -14,7 +14,7 @@ use aether_data::repository::wallet::InMemoryWalletRepository;
 use aether_data::repository::wallet::StoredWalletSnapshot;
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 use axum::body::Body;
-use axum::routing::{any, delete, get, patch, post, put};
+use axum::routing::any;
 use axum::{extract::Request, Router};
 use chrono::{TimeZone, Utc};
 use http::StatusCode;
@@ -414,7 +414,7 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -640,7 +640,7 @@ async fn gateway_allows_default_user_group_access_policy_updates() {
         .expect("user group should exist");
     let group_id = group.id.clone();
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -772,7 +772,7 @@ async fn gateway_allows_removing_default_group_members_when_other_group_remains(
         .await
         .expect("team membership should create");
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -855,7 +855,7 @@ async fn gateway_resolves_admin_user_batch_selection_locally() {
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -939,7 +939,7 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
         }
     }));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1214,7 +1214,7 @@ async fn gateway_handles_admin_users_root_locally_with_bearer_admin_session() {
         "unlimited",
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(GatewayDataState::with_user_and_wallet_for_tests(
@@ -1540,7 +1540,7 @@ async fn gateway_handles_admin_user_detail_routes_locally_with_trusted_admin_pri
         }
     }));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_auth_users_for_tests([
@@ -1695,7 +1695,7 @@ async fn gateway_handles_admin_user_detail_locally_with_trusted_admin_principal(
         "unlimited",
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1766,7 +1766,7 @@ async fn gateway_handles_admin_user_session_routes_locally_with_trusted_admin_pr
     let mut expired = sample_admin_session("user-1", "session-4");
     expired.expires_at = Some(chrono::Utc::now() - chrono::Duration::minutes(1));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1857,7 +1857,7 @@ async fn gateway_handles_admin_user_api_key_routes_locally_with_trusted_admin_pr
         sample_admin_user("user-1"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2249,7 +2249,7 @@ async fn gateway_returns_conflict_for_admin_create_user_api_key_when_writer_unav
         sample_admin_user("user-1"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2296,7 +2296,7 @@ async fn gateway_returns_conflict_for_admin_create_user_when_writer_unavailable(
         }
     }));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let mut state = AppState::new().expect("gateway should build");
     state =
         state.with_data_state_for_tests(crate::data::GatewayDataState::with_user_reader_for_tests(
@@ -2375,7 +2375,7 @@ async fn gateway_returns_conflict_for_admin_lock_user_api_key_when_writer_unavai
         .expect("export record should build")]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2449,7 +2449,7 @@ async fn gateway_allows_admin_update_user_to_clear_explicit_groups() {
         .await
         .expect("default membership should create");
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2504,7 +2504,7 @@ async fn gateway_returns_conflict_for_admin_update_user_when_writer_unavailable(
         InMemoryUserReadRepository::seed_auth_users(vec![sample_admin_user("user-1")]).read_only(),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let mut state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(crate::data::GatewayDataState::with_user_reader_for_tests(
@@ -2578,7 +2578,7 @@ async fn gateway_returns_conflict_for_admin_update_user_api_key_when_writer_unav
         .expect("export record should build")]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2653,7 +2653,7 @@ async fn gateway_returns_conflict_for_admin_delete_user_api_key_when_writer_unav
         .expect("export record should build")]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2740,7 +2740,7 @@ async fn gateway_lists_admin_user_api_keys_locally_with_trusted_admin_principal(
         sample_admin_user("user-1"),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2810,7 +2810,7 @@ async fn gateway_revokes_admin_user_session_locally_with_trusted_admin_principal
     let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![
         sample_admin_user("user-1"),
     ]));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2864,7 +2864,7 @@ async fn gateway_revokes_all_admin_user_sessions_locally_with_trusted_admin_prin
         sample_admin_session("user-1", "session-1"),
         sample_admin_session("user-1", "session-2"),
     ];
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2939,7 +2939,7 @@ async fn gateway_reveals_admin_user_full_key_locally_with_trusted_admin_principa
         .expect("export record should build")]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

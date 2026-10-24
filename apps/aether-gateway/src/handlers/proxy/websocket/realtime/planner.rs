@@ -11,7 +11,8 @@ use crate::ai_serving::{
     build_standard_stream_plan_from_decision, maybe_build_stream_decision_payload,
     AiExecutionDecision,
 };
-use crate::control::GatewayControlDecision;
+#[cfg(test)]
+pub(crate) use crate::control::GatewayControlDecision;
 use crate::headers::request_origin_from_headers_and_remote_addr;
 use crate::privacy::RedactionSessionSlot;
 use crate::{AppState, GatewayError};

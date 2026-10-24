@@ -1,6 +1,4 @@
-use aether_dispatch_core::{
-    DispatchCandidateRef, DispatchRankFacts, KeyRef, PoolRef, ProviderEndpointRef,
-};
+use aether_dispatch_core::{DispatchCandidateRef, DispatchRankFacts, KeyRef, PoolRef};
 
 use crate::ai_serving::{EligibleLocalExecutionCandidate, LocalExecutionCandidateKind};
 
@@ -53,18 +51,6 @@ pub(crate) fn pool_ref_for_candidate(eligible: &EligibleLocalExecutionCandidate)
             .candidate_group_id
             .clone()
             .unwrap_or_else(|| pool_group_id_for_provider_endpoint(eligible)),
-    }
-}
-
-pub(crate) fn provider_endpoint_ref_for_candidate(
-    eligible: &EligibleLocalExecutionCandidate,
-) -> ProviderEndpointRef {
-    ProviderEndpointRef {
-        provider_id: eligible.candidate.provider_id.clone(),
-        endpoint_id: eligible.candidate.endpoint_id.clone(),
-        model_id: eligible.candidate.model_id.clone(),
-        selected_provider_model_name: eligible.candidate.selected_provider_model_name.clone(),
-        api_format: eligible.candidate.endpoint_api_format.clone(),
     }
 }
 

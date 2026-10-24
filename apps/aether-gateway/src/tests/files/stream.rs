@@ -1,5 +1,4 @@
 use aether_contracts::{StreamFrame, StreamFramePayload, StreamFrameType};
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 
 use super::{
     any, build_router, build_router_with_state, build_state_with_execution_runtime_override,
@@ -215,7 +214,7 @@ async fn gateway_executes_gemini_files_download_via_local_decision_gate_with_loc
         vec![key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -341,7 +340,7 @@ async fn gateway_locally_denies_gemini_files_upload_control_sync_with_opt_in_hea
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -414,7 +413,7 @@ async fn gateway_locally_denies_gemini_files_upload_control_sync_without_opt_in_
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

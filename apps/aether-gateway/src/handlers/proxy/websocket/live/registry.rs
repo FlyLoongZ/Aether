@@ -570,6 +570,7 @@ impl LiveCallRegistry {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(super) async fn lookup(
         &self,
         user_id: &str,

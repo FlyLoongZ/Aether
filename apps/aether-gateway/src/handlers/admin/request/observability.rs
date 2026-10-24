@@ -103,14 +103,6 @@ impl<'a> AdminAppState<'a> {
         self.app.summarize_usage_cache_hit_summary(query).await
     }
 
-    pub(crate) async fn summarize_usage_settled_cost(
-        &self,
-        query: &aether_data_contracts::repository::usage::UsageSettledCostSummaryQuery,
-    ) -> Result<aether_data_contracts::repository::usage::StoredUsageSettledCostSummary, GatewayError>
-    {
-        self.app.summarize_usage_settled_cost(query).await
-    }
-
     pub(crate) async fn summarize_usage_cache_affinity_hit_summary(
         &self,
         query: &aether_data_contracts::repository::usage::UsageCacheAffinityHitSummaryQuery,

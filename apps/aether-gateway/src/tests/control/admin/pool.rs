@@ -10,7 +10,7 @@ use aether_data_contracts::repository::pool_scores::{
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 use axum::body::{to_bytes, Body, Bytes};
-use axum::routing::{any, get, post};
+use axum::routing::any;
 use axum::{extract::Request, Router};
 use http::{HeaderMap, HeaderValue, StatusCode};
 use serde_json::json;
@@ -19,7 +19,6 @@ use super::super::{
     build_router_with_state, sample_bound_auth_config, sample_bound_key as sample_key,
     sample_endpoint, sample_provider, start_server, AppState,
 };
-use crate::admin_api::{maybe_build_local_admin_pool_response, AdminAppState, AdminRequestContext};
 use crate::ai_serving::{provider_key_pool_score_id, provider_key_pool_score_scope};
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
@@ -28,6 +27,8 @@ use crate::constants::{
 };
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
+use crate::handlers::admin::provider::pool_admin::maybe_build_local_admin_pool_response;
+use crate::handlers::admin::{AdminAppState, AdminRequestContext};
 
 fn trusted_admin_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
@@ -204,7 +205,7 @@ async fn gateway_handles_admin_pool_overview_locally_with_trusted_admin_principa
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -263,7 +264,7 @@ async fn gateway_handles_admin_pool_scheduling_presets_locally_with_trusted_admi
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -330,7 +331,7 @@ async fn gateway_handles_admin_pool_batch_import_locally_with_trusted_admin_prin
         vec![],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -548,7 +549,7 @@ async fn gateway_handles_admin_pool_trailing_slash_routes_locally_with_trusted_a
         vec![first_key, second_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -821,7 +822,7 @@ async fn gateway_handles_admin_pool_list_keys_locally_with_trusted_admin_princip
         },
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -3559,7 +3560,7 @@ async fn gateway_handles_admin_pool_resolve_selection_locally_with_trusted_admin
         vec![proxy_key, plain_key, disabled_proxy_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -3817,7 +3818,7 @@ async fn gateway_handles_admin_pool_batch_action_locally_with_trusted_admin_prin
         vec![first_key, second_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -4147,7 +4148,7 @@ async fn gateway_handles_admin_pool_batch_delete_locally_with_trusted_admin_prin
         vec![first_key, second_key],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -4206,8 +4207,8 @@ async fn gateway_handles_admin_pool_batch_delete_task_status_locally_with_truste
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
-    let mut state = AppState::new().expect("gateway should build");
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
+    let state = AppState::new().expect("gateway should build");
     state.put_provider_delete_task(crate::LocalProviderDeleteTaskState {
         task_id: "task-123".to_string(),
         provider_id: "provider-openai".to_string(),
@@ -4253,7 +4254,7 @@ async fn gateway_handles_admin_pool_batch_delete_task_status_locally_with_truste
 
 #[tokio::test]
 async fn local_admin_pool_batch_delete_task_status_attaches_audit_only_for_terminal_states() {
-    let mut completed_state = AppState::new().expect("gateway should build");
+    let completed_state = AppState::new().expect("gateway should build");
     completed_state.put_provider_delete_task(crate::LocalProviderDeleteTaskState {
         task_id: "task-completed".to_string(),
         provider_id: "provider-openai".to_string(),
@@ -4291,7 +4292,7 @@ async fn local_admin_pool_batch_delete_task_status_attaches_audit_only_for_termi
     );
     assert_eq!(completed_audit.target_id, "provider-openai:task-completed");
 
-    let mut running_state = AppState::new().expect("gateway should build");
+    let running_state = AppState::new().expect("gateway should build");
     running_state.put_provider_delete_task(crate::LocalProviderDeleteTaskState {
         task_id: "task-running".to_string(),
         provider_id: "provider-openai".to_string(),
@@ -4394,7 +4395,7 @@ async fn gateway_cleans_up_admin_pool_banned_keys_locally_with_trusted_admin_pri
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -4464,7 +4465,7 @@ async fn gateway_rejects_admin_pool_list_keys_with_empty_provider_id() {
         Vec::new(),
         Vec::new(),
     ));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -4513,7 +4514,7 @@ async fn gateway_rejects_admin_pool_batch_import_with_empty_provider_id() {
         Vec::new(),
         Vec::new(),
     ));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -4566,7 +4567,7 @@ async fn gateway_rejects_admin_pool_cleanup_banned_with_empty_provider_id() {
         Vec::new(),
         Vec::new(),
     ));
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")

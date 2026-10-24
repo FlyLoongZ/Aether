@@ -77,10 +77,6 @@ pub(super) fn admin_pool_matches_catalog_search(
         || admin_pool_normalize_text(&key.id).contains(&search)
 }
 
-pub(super) fn admin_pool_key_is_known_banned(key: &StoredProviderCatalogKey) -> bool {
-    admin_provider_pool_pure::admin_pool_key_is_known_banned(key)
-}
-
 pub(super) fn admin_pool_sort_keys(keys: &mut [StoredProviderCatalogKey]) {
     admin_provider_pool_pure::admin_pool_sort_keys(keys);
 }

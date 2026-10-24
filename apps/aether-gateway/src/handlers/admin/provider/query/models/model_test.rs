@@ -1,23 +1,21 @@
 use super::super::payload::{
-    provider_query_extract_api_key_ids, provider_query_extract_force_refresh,
-    provider_query_extract_model, provider_query_extract_provider_id,
-    provider_query_extract_request_id,
+    provider_query_extract_api_key_ids, provider_query_extract_model,
+    provider_query_extract_provider_id, provider_query_extract_request_id,
 };
 use super::super::response::{
     build_admin_provider_query_bad_request_response, build_admin_provider_query_not_found_response,
     ADMIN_PROVIDER_QUERY_API_KEY_NOT_FOUND_DETAIL, ADMIN_PROVIDER_QUERY_MODEL_REQUIRED_DETAIL,
-    ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL, ADMIN_PROVIDER_QUERY_NO_LOCAL_MODELS_DETAIL,
+    ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL,
     ADMIN_PROVIDER_QUERY_PROVIDER_ID_REQUIRED_DETAIL,
     ADMIN_PROVIDER_QUERY_PROVIDER_NOT_FOUND_DETAIL,
 };
-use super::{provider_query_key_display_name, provider_query_provider_payload};
+use super::provider_query_provider_payload;
 use crate::ai_serving::{
     maybe_build_sync_finalize_outcome, GatewayControlDecision,
     ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME, GEMINI_CHAT_SYNC_FINALIZE_REPORT_KIND,
     OPENAI_CHAT_SYNC_FINALIZE_REPORT_KIND, OPENAI_IMAGE_SYNC_FINALIZE_REPORT_KIND,
 };
 use crate::clock::current_unix_ms;
-use crate::execution_runtime;
 use crate::handlers::admin::provider::write::provider::reconcile_admin_fixed_provider_template_endpoints;
 use crate::handlers::admin::request::{AdminAppState, AdminGatewayProviderTransportSnapshot};
 use crate::handlers::shared::provider_pool::{
@@ -28,7 +26,6 @@ use crate::handlers::shared::{
     parse_catalog_auth_config_json, provider_key_health_summary,
     provider_key_status_snapshot_payload,
 };
-use crate::model_fetch::ModelFetchRuntimeState;
 use crate::provider_key_auth::provider_key_auth_semantics;
 use crate::provider_transport::antigravity::{
     build_antigravity_safe_v1internal_request, build_antigravity_static_identity_headers,
@@ -49,22 +46,13 @@ use aether_ai_serving::{
     AiPoolRuntimeState, AiPoolSchedulingConfig, AiPoolSchedulingPreset,
 };
 use aether_contracts::{ExecutionPlan, RequestBody};
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, UpsertRequestCandidateRecord,
-};
-use aether_data_contracts::repository::global_models::{
-    AdminProviderModelListQuery, StoredAdminProviderModel,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use aether_model_fetch::{
-    aggregate_models_for_cache, fetch_models_from_transports, json_string_list,
-    preset_models_for_provider, selected_models_fetch_endpoints,
-};
+use aether_model_fetch::json_string_list;
 use aether_pool_core::PoolSchedulingPreset;
 use aether_provider_pool::ProviderPoolService;
 use aether_scheduler_core::provider_key_circuit_payload_is_active_open_at;
@@ -86,11 +74,9 @@ mod model_mapping;
 mod summary;
 
 use self::adapter::{
-    provider_query_antigravity_test_unsupported_reason,
-    provider_query_antigravity_unsupported_reason,
-    provider_query_default_antigravity_endpoint_test_body,
-    provider_query_grok_test_unsupported_reason, provider_query_model_test_endpoint_priority,
-    provider_query_normalize_api_format_alias, provider_query_standard_test_client_api_format,
+    provider_query_antigravity_unsupported_reason, provider_query_grok_test_unsupported_reason,
+    provider_query_model_test_endpoint_priority, provider_query_normalize_api_format_alias,
+    provider_query_standard_test_client_api_format,
     provider_query_standard_test_unsupported_reason,
     provider_query_test_adapter_for_provider_api_format,
     provider_query_transport_supports_model_test_execution,
@@ -113,17 +99,11 @@ pub(crate) const ADMIN_PROVIDER_QUERY_LOCAL_TEST_MODEL_MESSAGE: &str =
     "Rust local provider-query model test is not configured";
 pub(crate) const ADMIN_PROVIDER_QUERY_LOCAL_TEST_MODEL_FAILOVER_MESSAGE: &str =
     "Rust local provider-query failover simulation is not configured";
-const ADMIN_PROVIDER_QUERY_NO_ACTIVE_ENDPOINT_DETAIL: &str =
-    "No active endpoints found for this provider";
-const ADMIN_PROVIDER_QUERY_NO_MODELS_FROM_ENDPOINT_DETAIL: &str =
-    "No models returned from any endpoint";
-const ADMIN_PROVIDER_QUERY_NO_MODELS_FROM_KEY_DETAIL: &str = "No models returned from any key";
 const ADMIN_PROVIDER_QUERY_NO_ACTIVE_TEST_CANDIDATE_DETAIL: &str =
     "No active endpoint or API key found";
 const ADMIN_PROVIDER_QUERY_INVALID_MAPPED_MODEL_DETAIL: &str =
     "mapped_model_name is not valid for the selected model and endpoint";
 const PROVIDER_QUERY_KEY_MODEL_NOT_ALLOWED_SKIP_REASON: &str = "key_model_not_allowed";
-const ANTIGRAVITY_PROVIDER_CACHE_KEY_PREFIX: &str = "upstream_models_provider:";
 const DEFAULT_PROVIDER_QUERY_TEST_MESSAGE: &str = "Hello! This is a test message.";
 static PROVIDER_QUERY_POOL_LOAD_BALANCE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 struct ProviderQueryTestCandidate {
@@ -131,27 +111,6 @@ struct ProviderQueryTestCandidate {
     key: StoredProviderCatalogKey,
     effective_model: String,
     scheduler_skip_reason: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct ProviderQueryTestAttempt {
-    candidate_index: usize,
-    endpoint_api_format: String,
-    endpoint_base_url: String,
-    key_name: String,
-    key_id: String,
-    auth_type: String,
-    effective_model: String,
-    status: &'static str,
-    skip_reason: Option<String>,
-    error_message: Option<String>,
-    status_code: Option<u16>,
-    latency_ms: Option<u64>,
-    request_url: Option<String>,
-    request_headers: Option<BTreeMap<String, String>>,
-    request_body: Option<Value>,
-    response_headers: Option<BTreeMap<String, String>>,
-    response_body: Option<Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -526,6 +485,7 @@ fn provider_query_extract_request_headers(payload: &Value) -> HeaderMap {
     headers
 }
 
+#[cfg(test)]
 fn provider_query_build_test_request_body(payload: &Value, model: &str) -> Value {
     provider_query_build_test_request_body_with_model_policy(payload, model, false)
 }
@@ -2217,14 +2177,9 @@ async fn provider_query_execute_openai_image_test_candidate(
     trace_id: &str,
     requested_model: &str,
 ) -> Result<ProviderQueryExecutionOutcome, GatewayError> {
-    let Some(mut transport) = provider_query_read_test_transport(
-        state,
-        &provider.id,
-        &candidate.endpoint.id,
-        &candidate.key.id,
-        provider_query_extract_api_key_ids(payload).as_ref(),
-    )
-    .await?
+    let Some(transport) = state
+        .read_provider_transport_snapshot(&provider.id, &candidate.endpoint.id, &candidate.key.id)
+        .await?
     else {
         return Ok(provider_query_skipped_execution_outcome(
             Value::Null,
@@ -4148,26 +4103,6 @@ pub(crate) async fn build_admin_provider_query_test_model_failover_local_respons
         "/api/admin/provider-query/test-model-failover",
     )
     .await
-}
-
-pub(crate) fn build_admin_provider_query_test_model_response(
-    provider_id: String,
-    model: String,
-) -> Response<Body> {
-    Json(json!({
-        "success": false,
-        "tested": false,
-        "provider_id": provider_id,
-        "model": model,
-        "attempts": [],
-        "total_candidates": 0,
-        "total_attempts": 0,
-        "candidate_summary": provider_query_candidate_summary_payload(0, 0, &[]),
-        "error": ADMIN_PROVIDER_QUERY_LOCAL_TEST_MODEL_MESSAGE,
-        "source": "local",
-        "message": ADMIN_PROVIDER_QUERY_LOCAL_TEST_MODEL_MESSAGE,
-    }))
-    .into_response()
 }
 
 pub(crate) fn build_admin_provider_query_test_model_failover_response(

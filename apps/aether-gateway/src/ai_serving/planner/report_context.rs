@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+#[cfg(test)]
+use aether_ai_serving::provider_stream_event_api_format_for_provider_type as ai_provider_stream_event_api_format_for_provider_type;
 use aether_ai_serving::{
     build_ai_execution_report_context,
     insert_provider_stream_event_api_format as insert_ai_provider_stream_event_api_format,
-    provider_stream_event_api_format_for_provider_type as ai_provider_stream_event_api_format_for_provider_type,
     AiExecutionReportContextParts, AiRequestOrigin, STICKY_KEY_ATTEMPTS_REPORT_FIELD,
 };
 use aether_data_contracts::repository::usage::{
@@ -298,6 +299,7 @@ fn insert_request_path_fields(
         .or_insert_with(|| Value::String(path_and_query));
 }
 
+#[cfg(test)]
 pub(crate) fn provider_stream_event_api_format_for_provider_type(
     provider_type: &str,
 ) -> Option<&'static str> {

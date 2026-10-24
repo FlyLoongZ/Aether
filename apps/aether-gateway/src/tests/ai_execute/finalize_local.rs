@@ -1,6 +1,6 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json, start_server,
-    to_bytes, Arc, Body, Bytes, HeaderName, HeaderValue, Json, Mutex, Request, Response, Router,
+    to_bytes, Arc, Body, HeaderName, HeaderValue, Json, Mutex, Request, Response, Router,
     StatusCode, CONTROL_EXECUTED_HEADER, EXECUTION_PATH_HEADER,
     LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER, TRACE_ID_HEADER,
 };
@@ -69,9 +69,7 @@ async fn gateway_executes_openai_chat_sync_upstream_stream_via_local_finalize_re
     }
 
     #[derive(Debug, Clone)]
-    struct SeenReportSyncRequest {
-        report_kind: String,
-    }
+    struct SeenReportSyncRequest {}
 
     fn hash_api_key(value: &str) -> String {
         let mut hasher = Sha256::new();
@@ -285,18 +283,10 @@ async fn gateway_executes_openai_chat_sync_upstream_stream_via_local_finalize_re
                 let seen_report_inner = Arc::clone(&seen_report_clone);
                 async move {
                     let (_parts, body) = request.into_parts();
-                    let raw_body = to_bytes(body, usize::MAX).await.expect("body should read");
-                    let payload: serde_json::Value =
-                        serde_json::from_slice(&raw_body).expect("report payload should parse");
+                    let _ = to_bytes(body, usize::MAX).await.expect("body should read");
                     *report_hits_inner.lock().expect("mutex should lock") += 1;
                     *seen_report_inner.lock().expect("mutex should lock") =
-                        Some(SeenReportSyncRequest {
-                            report_kind: payload
-                                .get("report_kind")
-                                .and_then(|value| value.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                        });
+                        Some(SeenReportSyncRequest {});
                     Json(json!({"ok": true}))
                 }
             }),
@@ -402,7 +392,7 @@ async fn gateway_executes_openai_chat_sync_upstream_stream_via_local_finalize_re
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -873,7 +863,7 @@ async fn gateway_executes_openai_chat_cross_format_upstream_stream_via_local_fin
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -1336,7 +1326,7 @@ async fn gateway_executes_openai_chat_cross_format_tool_use_upstream_stream_via_
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -1865,7 +1855,7 @@ async fn gateway_executes_openai_chat_antigravity_cross_format_sync_via_local_fi
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -2274,7 +2264,7 @@ async fn gateway_executes_openai_chat_cross_format_claude_upstream_sync_via_loca
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -2639,7 +2629,7 @@ async fn gateway_executes_openai_chat_cross_format_gemini_upstream_sync_via_loca
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())

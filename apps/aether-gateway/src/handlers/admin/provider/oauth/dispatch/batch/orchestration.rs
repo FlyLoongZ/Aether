@@ -5,7 +5,7 @@ use super::execution::{
 use super::parse::{
     admin_provider_oauth_batch_contains_agent_identity,
     build_admin_provider_oauth_batch_import_response,
-    parse_admin_provider_oauth_batch_import_request, AdminProviderOAuthBatchImportRequest,
+    parse_admin_provider_oauth_batch_import_request,
 };
 use crate::handlers::admin::provider::oauth::errors::build_internal_control_error_response;
 use crate::handlers::admin::provider::oauth::state::{
@@ -19,7 +19,6 @@ use axum::{
     body::Bytes,
     http,
     response::{IntoResponse, Response},
-    Json,
 };
 
 pub(in super::super) async fn handle_admin_provider_oauth_batch_import(

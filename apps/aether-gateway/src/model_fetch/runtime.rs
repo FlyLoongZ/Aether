@@ -11,7 +11,7 @@ use aether_model_fetch::{
     model_catalog_upstream_metadata, model_fetch_interval_minutes,
     model_fetch_startup_delay_seconds, model_fetch_startup_enabled, preset_models_for_provider,
     selected_models_fetch_endpoints, sync_provider_model_whitelist_associations,
-    upstream_metadata_namespace_updates, ModelFetchAssociationStore, ModelFetchRunSummary,
+    upstream_metadata_namespace_updates, ModelFetchRunSummary,
 };
 use serde_json::{json, Value};
 use tracing::{debug, info, warn};
@@ -71,6 +71,7 @@ pub(crate) fn spawn_model_fetch_worker(state: AppState) -> Option<tokio::task::J
     ))
 }
 
+#[cfg(test)]
 pub(crate) async fn perform_model_fetch_once(
     state: &AppState,
 ) -> Result<ModelFetchRunSummary, GatewayError> {
@@ -917,15 +918,6 @@ mod tests {
                     key_id.to_string(),
                 ))
                 .cloned())
-        }
-
-        async fn execute_execution_runtime_sync_plan(
-            &self,
-            _plan: &ExecutionPlan,
-        ) -> Result<ExecutionResult, GatewayError> {
-            Err(GatewayError::Internal(
-                "execute_execution_runtime_sync_plan should not be called".to_string(),
-            ))
         }
 
         async fn update_provider_catalog_key_model_fetch_state(

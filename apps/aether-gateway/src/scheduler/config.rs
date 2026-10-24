@@ -74,23 +74,6 @@ impl SchedulerOrderingConfig {
         }
     }
 
-    pub(crate) fn to_routing_default_policy(self) -> RoutingDefaultPolicy {
-        RoutingDefaultPolicy {
-            priority_mode: match self.priority_mode {
-                SchedulerPriorityMode::Provider => RoutingSetPriorityMode::Provider,
-                SchedulerPriorityMode::GlobalKey => RoutingSetPriorityMode::GlobalKey,
-            },
-            scheduling_mode: match self.scheduling_mode {
-                SchedulerSchedulingMode::FixedOrder => RoutingSchedulingMode::FixedOrder,
-                SchedulerSchedulingMode::CacheAffinity => RoutingSchedulingMode::CacheAffinity,
-                SchedulerSchedulingMode::LoadBalance => RoutingSchedulingMode::LoadBalance,
-            },
-            keep_priority_on_conversion: self.keep_priority_on_conversion,
-            sticky_key_attempts: self.sticky_key_attempts,
-            execution_policy: aether_routing_core::RoutingExecutionPolicy::default(),
-        }
-    }
-
     pub(crate) fn priority_mode_str(self) -> &'static str {
         scheduler_priority_mode_as_str(self.priority_mode)
     }

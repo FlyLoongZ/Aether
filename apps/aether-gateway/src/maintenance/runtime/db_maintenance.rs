@@ -1,4 +1,5 @@
 use aether_data_contracts::DataLayerError;
+#[cfg(test)]
 use tracing::warn;
 
 use crate::data::GatewayDataState;
@@ -35,6 +36,7 @@ pub(super) async fn perform_db_maintenance_once(
     })
 }
 
+#[cfg(test)]
 pub(super) async fn run_db_maintenance_with<F, Fut>(
     data: &GatewayDataState,
     mut vacuum_table: F,

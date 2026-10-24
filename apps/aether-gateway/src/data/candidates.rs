@@ -2,9 +2,9 @@ use aether_data_contracts::DataLayerError;
 
 use super::state::GatewayDataState;
 
-pub(crate) use aether_data_contracts::repository::candidates::{
-    RequestCandidateFinalStatus, RequestCandidateTrace,
-};
+#[cfg(test)]
+pub(crate) use aether_data_contracts::repository::candidates::RequestCandidateFinalStatus;
+pub(crate) use aether_data_contracts::repository::candidates::RequestCandidateTrace;
 
 pub(crate) async fn read_request_candidate_trace(
     state: &GatewayDataState,

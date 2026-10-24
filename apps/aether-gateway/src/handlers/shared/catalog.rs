@@ -14,10 +14,8 @@ use aether_admin::provider::redaction::{
 use aether_admin::provider::status as admin_provider_status_pure;
 #[cfg(test)]
 use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-use aether_crypto::{
-    decrypt_python_fernet_ciphertext, encrypt_python_fernet_plaintext,
-    looks_like_python_fernet_ciphertext,
-};
+use aether_crypto::{decrypt_python_fernet_ciphertext, encrypt_python_fernet_plaintext};
+
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
 use aether_provider_pool::{
     grok_pool_tier_from_quota_bucket, grok_supported_quota_windows_for_tier,
@@ -32,12 +30,6 @@ const OAUTH_ACCOUNT_BLOCK_PREFIX: &str = "[ACCOUNT_BLOCK] ";
 const OAUTH_EXPIRED_PREFIX: &str = "[OAUTH_EXPIRED] ";
 const OAUTH_REFRESH_FAILED_PREFIX: &str = "[REFRESH_FAILED] ";
 const OAUTH_REQUEST_FAILED_PREFIX: &str = "[REQUEST_FAILED] ";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum StoredCatalogSecret {
-    Encrypted(String),
-    LegacyPlaintext(String),
-}
 
 pub(crate) fn provider_catalog_key_supports_format(
     key: &StoredProviderCatalogKey,
@@ -88,25 +80,6 @@ pub(crate) fn decrypt_catalog_secret_with_fallbacks(
     None
 }
 
-pub(crate) fn decrypt_catalog_secret_or_legacy_plaintext(
-    encryption_key: Option<&str>,
-    stored_value: &str,
-) -> Result<StoredCatalogSecret, ()> {
-    if let Some(plaintext) = decrypt_catalog_secret_with_fallbacks(encryption_key, stored_value) {
-        return Ok(StoredCatalogSecret::Encrypted(plaintext));
-    }
-    if looks_like_python_fernet_ciphertext(stored_value) {
-        return Err(());
-    }
-    Ok(StoredCatalogSecret::LegacyPlaintext(
-        stored_value.to_string(),
-    ))
-}
-
-pub(crate) fn effective_catalog_encryption_key(state: &AppState) -> Option<Cow<'_, str>> {
-    effective_catalog_encryption_key_from_config(state.encryption_key())
-}
-
 pub(crate) fn effective_catalog_encryption_key_from_config(
     encryption_key: Option<&str>,
 ) -> Option<Cow<'_, str>> {
@@ -150,29 +123,6 @@ pub(crate) fn encrypt_catalog_secret_with_configured_key_fallbacks(
     encrypt_python_fernet_plaintext(encryption_key.as_ref(), plaintext).ok()
 }
 
-pub(crate) fn take_secret_prefix(value: &str, prefix_chars: usize) -> &str {
-    let end = value
-        .char_indices()
-        .nth(prefix_chars)
-        .map(|(index, _)| index)
-        .unwrap_or(value.len());
-    &value[..end]
-}
-
-pub(crate) fn take_secret_suffix(value: &str, suffix_chars: usize) -> &str {
-    if suffix_chars == 0 {
-        return &value[value.len()..];
-    }
-
-    let start = value
-        .char_indices()
-        .rev()
-        .nth(suffix_chars - 1)
-        .map(|(index, _)| index)
-        .unwrap_or(0);
-    &value[start..]
-}
-
 pub(crate) fn masked_catalog_api_key(state: &AppState, key: &StoredProviderCatalogKey) -> String {
     match key.auth_type.trim() {
         "service_account" | "vertex_ai" => "[Service Account]".to_string(),
@@ -186,7 +136,7 @@ pub(crate) fn masked_catalog_api_key(state: &AppState, key: &StoredProviderCatal
             }
         }
         _ => {
-            let Some(ciphertext) = key
+            let Some(_ciphertextt) = key
                 .encrypted_api_key
                 .as_deref()
                 .map(str::trim)

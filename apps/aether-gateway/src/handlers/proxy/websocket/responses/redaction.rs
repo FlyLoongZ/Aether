@@ -90,6 +90,7 @@ pub(super) struct ResponsesWebSocketTurnRedaction {
 ///
 /// 出错必须让这一轮失败：脱敏已启用却读不到配置或加密密钥时，把原文发上游就是
 /// 静默旁路，正是本次要修的问题。
+#[cfg(test)]
 pub(super) async fn redact_responses_websocket_client_event(
     state: &AppState,
     parts: &http::request::Parts,

@@ -1,8 +1,8 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json, start_server,
-    strip_sse_keepalive_comments, to_bytes, wait_until, AppState, Arc, Body, Bytes, HeaderName,
-    HeaderValue, Json, Mutex, Request, Response, Router, StatusCode,
-    EXECUTION_PATH_EXECUTION_RUNTIME_STREAM, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
+    strip_sse_keepalive_comments, to_bytes, wait_until, AppState, Arc, Body, Bytes, HeaderValue,
+    Json, Mutex, Request, Response, Router, StatusCode, EXECUTION_PATH_EXECUTION_RUNTIME_STREAM,
+    EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{
@@ -355,7 +355,7 @@ async fn gateway_executes_openai_chat_stream_via_local_decision_gate_without_exe
             sample_candidate_row(),
         ]));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (provider_url, provider_handle) = start_server(provider).await;
     let mut primary_endpoint = sample_provider_catalog_endpoint();
     primary_endpoint.base_url = format!("{provider_url}/v1");
@@ -852,7 +852,7 @@ async fn gateway_executes_openai_chat_stream_via_local_openai_responses_cross_fo
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -1297,7 +1297,7 @@ async fn gateway_executes_openai_chat_stream_via_local_cross_format_gemini_candi
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -1786,7 +1786,7 @@ async fn gateway_executes_openai_chat_stream_with_custom_path_via_local_decision
         vec![sample_provider_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())
@@ -2315,7 +2315,7 @@ async fn gateway_retries_next_local_openai_chat_stream_candidate_after_retryable
         ],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway_state =
         build_state_with_execution_runtime_override(execution_runtime_url.clone())

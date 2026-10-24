@@ -210,26 +210,6 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    pub(crate) async fn activate_management_token_if_matches(
-        &self,
-        mutation: &aether_data::repository::management_tokens::ActivateManagementTokenIfMatches,
-    ) -> Result<bool, GatewayError> {
-        self.data
-            .activate_management_token_if_matches(mutation)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn delete_inactive_management_token_if_matches(
-        &self,
-        mutation: &aether_data::repository::management_tokens::ActivateManagementTokenIfMatches,
-    ) -> Result<bool, GatewayError> {
-        self.data
-            .delete_inactive_management_token_if_matches(mutation)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn regenerate_management_token_secret(
         &self,
         mutation: &aether_data::repository::management_tokens::RegenerateManagementTokenSecret,
@@ -1296,39 +1276,6 @@ impl AppState {
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))?;
         self.open_provider_catalog_keys(keys).await
-    }
-
-    pub(crate) async fn update_provider_catalog_key_format_health(
-        &self,
-        key_id: &str,
-        api_format: &str,
-        health_by_format: &serde_json::Value,
-    ) -> Result<bool, GatewayError> {
-        let api_format = api_format.trim();
-        if api_format.is_empty() {
-            return Ok(false);
-        }
-
-        let Some(current_key) = self
-            .read_provider_catalog_keys_by_ids(&[key_id.to_string()])
-            .await?
-            .into_iter()
-            .next()
-        else {
-            return Ok(false);
-        };
-
-        if current_key.health_by_format.as_ref() == Some(health_by_format) {
-            return Ok(false);
-        }
-
-        self.update_provider_catalog_key_health_state(
-            key_id,
-            current_key.is_active,
-            Some(health_by_format),
-            current_key.circuit_breaker_by_format.as_ref(),
-        )
-        .await
     }
 
     pub(crate) async fn update_provider_catalog_key_health_state(

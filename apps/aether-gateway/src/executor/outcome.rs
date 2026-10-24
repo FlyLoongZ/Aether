@@ -6,9 +6,7 @@ use aether_data_contracts::repository::candidates::{
     sanitize_request_candidate_error_type, sanitize_request_candidate_skip_reason,
     RequestCandidateStatus, StoredRequestCandidate,
 };
-use aether_data_contracts::repository::provider_catalog::{
-    StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
-};
+use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
 use aether_data_contracts::repository::usage::ROUTING_CANDIDATE_SKIP_REASON_METADATA_KEY;
 use aether_usage_runtime::{
     build_usage_event_data_seed, UsageEvent, UsageEventData, UsageEventType,
@@ -21,9 +19,7 @@ use serde_json::{json, Map, Value};
 use tracing::warn;
 
 use crate::ai_serving::{build_core_error_body_for_client_format, LocalCoreSyncErrorKind};
-use crate::constants::{
-    EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
-};
+use crate::constants::LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER;
 use crate::control::GatewayControlDecision;
 use crate::state::LocalExecutionRuntimeMissDiagnostic;
 use crate::AppState;
@@ -313,20 +309,6 @@ pub(crate) async fn build_local_execution_runtime_miss_context(
             state, request_id, decision,
         )
         .await,
-    }
-}
-
-pub(crate) fn build_fast_local_execution_runtime_miss_context(
-    decision: Option<&GatewayControlDecision>,
-) -> LocalExecutionRuntimeMissContext {
-    let auth_context = decision.and_then(|value| value.auth_context.as_ref());
-
-    LocalExecutionRuntimeMissContext {
-        auth_user_id: auth_context.map(|value| value.user_id.clone()),
-        auth_api_key_id: auth_context.map(|value| value.api_key_id.clone()),
-        auth_username: auth_context.and_then(|value| value.username.clone()),
-        auth_api_key_name: auth_context.and_then(|value| value.api_key_name.clone()),
-        candidate_contexts: Vec::new(),
     }
 }
 

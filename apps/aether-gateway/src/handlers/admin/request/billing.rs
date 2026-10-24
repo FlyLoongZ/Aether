@@ -119,6 +119,15 @@ impl<'a> AdminAppState<'a> {
         self.app.find_wallet(lookup).await
     }
 
+    pub(crate) async fn find_wallet_refund(
+        &self,
+        wallet_id: &str,
+        refund_id: &str,
+    ) -> Result<Option<aether_data::repository::wallet::StoredAdminWalletRefund>, GatewayError>
+    {
+        self.app.find_wallet_refund(wallet_id, refund_id).await
+    }
+
     pub(crate) async fn list_admin_wallets(
         &self,
         user_id: Option<&str>,
@@ -276,15 +285,6 @@ impl<'a> AdminAppState<'a> {
     ) -> Result<crate::AdminWalletMutationOutcome<crate::AdminWalletPaymentOrderRecord>, GatewayError>
     {
         self.app.admin_fail_payment_order(order_id).await
-    }
-
-    pub(crate) async fn find_wallet_refund(
-        &self,
-        wallet_id: &str,
-        refund_id: &str,
-    ) -> Result<Option<aether_data::repository::wallet::StoredAdminWalletRefund>, GatewayError>
-    {
-        self.app.find_wallet_refund(wallet_id, refund_id).await
     }
 
     pub(crate) async fn list_admin_redeem_code_batches(

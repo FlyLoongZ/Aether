@@ -11,7 +11,6 @@ use aether_admin::system::{
     parse_admin_email_template_preview_payload, parse_admin_email_template_update,
 };
 use axum::{body::Bytes, http};
-use serde_json::json;
 use std::collections::BTreeMap;
 
 impl<'a> AdminAppState<'a> {

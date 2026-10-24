@@ -254,6 +254,7 @@ impl AppState {
         });
     }
 
+    #[cfg(any(test, feature = "testkit"))]
     pub(crate) fn replace_data_state(&mut self, data: Arc<GatewayDataState>) {
         self.background_data = Arc::new(
             (*data)
@@ -319,7 +320,7 @@ impl AppState {
         self
     }
 
-    fn build(execution_runtime_override_base_url: Option<String>) -> Result<Self, reqwest::Error> {
+    fn build(_execution_runtime_override_base_url: Option<String>) -> Result<Self, reqwest::Error> {
         let runtime_state = Arc::new(RuntimeState::memory(MemoryRuntimeStateConfig::default()));
         let data = Arc::new(
             GatewayDataState::disabled()
@@ -337,17 +338,6 @@ impl AppState {
             },
         )
         .build()?;
-        let owner_forward_client = apply_http_client_config(
-            reqwest::Client::builder()
-                .no_proxy()
-                .redirect(reqwest::redirect::Policy::none()),
-            &HttpClientConfig {
-                connect_timeout_ms: Some(10_000),
-                http2_adaptive_window: true,
-                ..HttpClientConfig::default()
-            },
-        )
-        .build()?;
         let frontdoor_runtime_guards = Arc::new(FrontdoorRuntimeGuardConfig::from_env());
         let internal_gateway_auth =
             Arc::new(crate::internal_gateway_auth::InternalGatewayAuthConfig::for_process());
@@ -359,7 +349,7 @@ impl AppState {
         }
         Ok(Self {
             #[cfg(test)]
-            execution_runtime_override_base_url: execution_runtime_override_base_url
+            execution_runtime_override_base_url: _execution_runtime_override_base_url
                 .map(|value| value.trim_end_matches('/').to_string())
                 .filter(|value| !value.is_empty()),
             #[cfg(test)]
@@ -402,7 +392,6 @@ impl AppState {
             distributed_request_gate: None,
             distributed_websocket_connection_gate: None,
             client,
-            owner_forward_client,
             auth_context_cache: Arc::new(AuthContextCache::default()),
             auth_snapshot_cache: Arc::new(AuthSnapshotCache::default()),
             admin_security_blacklist_cache: Arc::new(ValueCache::default()),
@@ -1994,6 +1983,7 @@ impl AppState {
         )
     }
 
+    #[cfg(test)]
     pub(crate) fn remember_scheduler_affinity_target(
         &self,
         cache_key: &str,

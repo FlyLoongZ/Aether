@@ -1,7 +1,8 @@
 use self::selection::{
-    collect_selectable_candidates, collect_selectable_candidates_with_skip_reasons_and_ordering,
+    collect_selectable_candidates_with_skip_reasons_and_ordering,
     collect_selectable_enumerated_candidates_with_skip_reasons,
 };
+
 use super::config::SchedulerOrderingConfig;
 use super::state::SchedulerRuntimeState;
 
@@ -15,30 +16,17 @@ mod selection;
 #[cfg(test)]
 mod tests;
 
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
-use aether_data_contracts::repository::provider_catalog::{
-    StoredProviderCatalogKey, StoredProviderCatalogProvider,
-};
-use aether_data_contracts::repository::quota::StoredProviderQuotaSnapshot;
 use aether_scheduler_core::{
-    candidate_model_names, candidate_supports_required_capability, matches_model_mapping,
-    normalize_api_format, resolve_provider_model_name, select_provider_model_name,
-    ClientSessionAffinity, SchedulerMinimalCandidateSelectionCandidate,
+    candidate_supports_required_capability, normalize_api_format, ClientSessionAffinity,
+    SchedulerMinimalCandidateSelectionCandidate,
 };
-use aether_wallet::{ProviderBillingType, ProviderQuotaSnapshot};
-use regex::Regex;
-use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 
 pub(crate) use self::runtime::{
     select_with_auth_concurrency_wait, wait_for_auth_api_key_concurrency_retry,
 };
 pub(crate) use self::selection::{
     is_auth_api_key_concurrency_limit_skip_reason, SchedulerSkippedCandidate,
-    API_KEY_CONCURRENCY_LIMIT_SKIP_REASON, AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON,
-    LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON,
+    AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON, LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON,
 };
 
 use crate::data::auth::GatewayAuthApiKeySnapshot;
@@ -47,46 +35,16 @@ use crate::data::candidate_selection::{
     MinimalCandidateSelectionRowSource,
 };
 use crate::GatewayError;
-
-#[cfg_attr(not(test), allow(dead_code))]
-const SCHEDULER_AFFINITY_MAX_ENTRIES: usize = 10_000;
+#[cfg(test)]
+pub(crate) use aether_scheduler_core::{
+    candidate_model_names, matches_model_mapping, resolve_provider_model_name,
+    select_provider_model_name,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RequiredCapabilityMatchMode {
     Compatible,
     Exclusive,
-}
-
-/// `ordering_config` carries the request's routing-policy derived scheduler
-/// config. Every production scheduling pass must provide this snapshot.
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn list_selectable_candidates(
-    selection_row_source: &(impl MinimalCandidateSelectionRowSource + Sync),
-    runtime_state: &impl SchedulerRuntimeState,
-    api_format: &str,
-    global_model_name: &str,
-    require_streaming: bool,
-    required_capabilities: Option<&serde_json::Value>,
-    auth_snapshot: Option<&GatewayAuthApiKeySnapshot>,
-    client_session_affinity: Option<&ClientSessionAffinity>,
-    now_unix_secs: u64,
-    enable_model_directives: bool,
-    ordering_config: SchedulerOrderingConfig,
-) -> Result<Vec<SchedulerMinimalCandidateSelectionCandidate>, GatewayError> {
-    collect_selectable_candidates(
-        selection_row_source,
-        runtime_state,
-        api_format,
-        global_model_name,
-        require_streaming,
-        required_capabilities,
-        auth_snapshot,
-        client_session_affinity,
-        now_unix_secs,
-        enable_model_directives,
-        ordering_config,
-    )
-    .await
 }
 
 pub(crate) fn is_exact_all_skipped_by_auth_limit(
@@ -96,6 +54,7 @@ pub(crate) fn is_exact_all_skipped_by_auth_limit(
     selection::is_exact_all_skipped_by_auth_limit(selected, skipped)
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn list_selectable_candidates_with_skip_reasons(
     selection_row_source: &(impl MinimalCandidateSelectionRowSource + Sync),
@@ -209,6 +168,7 @@ pub(crate) async fn list_selectable_enumerated_candidates_with_skip_reasons(
     .await
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn list_selectable_candidates_for_required_capability_without_requested_model(
     selection_row_source: &(impl MinimalCandidateSelectionRowSource + Sync),

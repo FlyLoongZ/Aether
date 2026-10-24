@@ -75,6 +75,7 @@ pub(crate) fn project_local_success_health(
     Some(Value::Object(health_by_format))
 }
 
+#[cfg(test)]
 pub(crate) fn project_local_key_circuit_open(
     current_circuit_by_format: Option<&Value>,
     api_format: &str,

@@ -2,68 +2,30 @@ pub(crate) use crate::handlers::admin::{
     admin_provider_ops_local_action_response, admin_provider_pool_config,
     build_internal_control_error_response, create_provider_oauth_catalog_key,
     execute_admin_system_import_exclusively, find_duplicate_provider_oauth_key,
-    maybe_build_local_admin_pool_response, maybe_build_local_admin_response,
-    persist_provider_quota_refresh_state, provider_oauth_maintenance_endpoint_for_provider,
-    provider_oauth_runtime_endpoint_for_provider, provider_quota_refresh_endpoint_for_provider,
-    provider_type_supports_quota_refresh, reconcile_admin_fixed_provider_template_endpoints,
+    maybe_build_local_admin_response, provider_oauth_maintenance_endpoint_for_provider,
+    provider_quota_refresh_endpoint_for_provider, provider_type_supports_quota_refresh,
+    reconcile_admin_fixed_provider_template_endpoints,
     refresh_provider_oauth_account_state_after_update, refresh_provider_pool_quota_locally,
-    release_admin_system_import_lease, store_admin_provider_ops_balance_cache,
-    try_acquire_admin_system_import_lease, update_existing_provider_oauth_catalog_key,
+    store_admin_provider_ops_balance_cache, update_existing_provider_oauth_catalog_key,
     AdminAppState, AdminGatewayProviderTransportSnapshot, AdminLocalOAuthRefreshError,
-    AdminRequestContext, AdminRouteRequest, AdminRouteResponse, AdminRouteResult,
-    AdminStatsTimeRange, AdminStatsUsageFilter, AdminSystemImportLockError, SystemExportMode,
-    OAUTH_ACCOUNT_BLOCK_PREFIX, OAUTH_REQUEST_FAILED_PREFIX,
+    AdminRouteRequest, AdminStatsTimeRange, AdminSystemImportLockError, SystemExportMode,
 };
 
+#[cfg(test)]
+pub(crate) use crate::handlers::admin::system::{
+    release_admin_system_import_lease, try_acquire_admin_system_import_lease,
+};
 use crate::handlers::admin::{
     admin_stats_bad_request_response as admin_stats_bad_request_response_impl,
     parse_bounded_u32 as parse_bounded_u32_impl, round_to as round_to_impl,
 };
-use crate::GatewayError;
-use axum::{
-    body::{Body, Bytes},
-    response::Response,
-};
-
-pub(crate) async fn maybe_build_local_admin_security_response(
-    state: &AdminAppState<'_>,
-    request_context: &AdminRequestContext<'_>,
-    request_body: Option<&Bytes>,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    crate::handlers::admin::maybe_build_local_admin_security_response(
-        state,
-        request_context,
-        request_body,
-    )
-    .await
-}
+use axum::{body::Body, response::Response};
 
 pub(crate) async fn build_admin_endpoint_health_status_payload(
     state: &AdminAppState<'_>,
     lookback_hours: u64,
 ) -> Option<serde_json::Value> {
     crate::handlers::admin::build_admin_endpoint_health_status_payload(state, lookback_hours).await
-}
-
-pub(crate) async fn maybe_build_local_admin_video_tasks_response(
-    state: &AdminAppState<'_>,
-    request_context: &AdminRequestContext<'_>,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    crate::handlers::admin::maybe_build_local_admin_video_tasks_response(state, request_context)
-        .await
-}
-
-pub(crate) async fn maybe_build_local_admin_usage_response(
-    state: &AdminAppState<'_>,
-    request_context: &AdminRequestContext<'_>,
-    request_body: Option<&Bytes>,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    crate::handlers::admin::maybe_build_local_admin_usage_response(
-        state,
-        request_context,
-        request_body,
-    )
-    .await
 }
 
 pub(crate) fn admin_stats_bad_request_response(detail: String) -> Response<Body> {
@@ -81,30 +43,4 @@ pub(crate) fn parse_bounded_u32(
 
 pub(crate) fn round_to(value: f64, decimals: u32) -> f64 {
     round_to_impl(value, decimals)
-}
-
-pub(crate) async fn maybe_build_local_admin_provider_oauth_response(
-    state: &AdminAppState<'_>,
-    request_context: &AdminRequestContext<'_>,
-    request_body: Option<&Bytes>,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    crate::handlers::admin::maybe_build_local_admin_provider_oauth_response(
-        state,
-        request_context,
-        request_body,
-    )
-    .await
-}
-
-pub(crate) async fn maybe_build_local_admin_providers_response(
-    state: &AdminAppState<'_>,
-    request_context: &AdminRequestContext<'_>,
-    request_body: Option<&Bytes>,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    crate::handlers::admin::maybe_build_local_admin_providers_response(
-        state,
-        request_context,
-        request_body,
-    )
-    .await
 }

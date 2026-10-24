@@ -18,56 +18,15 @@ use aether_data_contracts::repository::provider_catalog::{
 };
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 use axum::body::Body;
-use axum::routing::{any, delete, get};
+use axum::routing::any;
 use axum::{extract::Request, Router};
 use http::StatusCode;
 use serde_json::json;
 
 use super::super::{build_router_with_state, start_server, AppState};
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
-use crate::data::GatewayDataState;
-
-const ADMIN_MONITORING_DATA_UNAVAILABLE_DETAIL: &str = "Admin monitoring data unavailable";
-
-async fn assert_admin_monitoring_route_returns_local_503(method: http::Method, path: &str) {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        path,
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("unexpected upstream hit"))
-            }
-        }),
-    );
-
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
-    let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .request(method, format!("{gateway_url}{path}"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["detail"], ADMIN_MONITORING_DATA_UNAVAILABLE_DETAIL);
-    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
-
-    gateway_handle.abort();
-    upstream_handle.abort();
-}
 
 #[tokio::test]
 async fn gateway_handles_admin_monitoring_audit_logs_locally_with_trusted_admin_principal() {
@@ -84,7 +43,7 @@ async fn gateway_handles_admin_monitoring_audit_logs_locally_with_trusted_admin_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -235,7 +194,7 @@ async fn gateway_handles_admin_monitoring_system_status_locally_with_trusted_adm
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -505,7 +464,7 @@ async fn gateway_handles_admin_monitoring_trace_request_locally_with_trusted_adm
         vec![sample_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -645,7 +604,7 @@ async fn gateway_handles_admin_monitoring_trace_provider_stats_locally_with_trus
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -722,7 +681,7 @@ async fn gateway_handles_admin_monitoring_cache_stats_locally_with_trusted_admin
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -793,7 +752,7 @@ async fn gateway_handles_admin_monitoring_cache_affinities_locally_with_trusted_
         vec![sample_monitoring_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -881,7 +840,7 @@ async fn gateway_handles_admin_monitoring_cache_affinity_locally_with_trusted_ad
         vec![sample_monitoring_catalog_key()],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -945,7 +904,7 @@ async fn gateway_handles_admin_monitoring_cache_affinities_locally_without_redis
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -999,7 +958,7 @@ async fn gateway_handles_admin_monitoring_cache_affinity_locally_without_redis_o
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1063,7 +1022,7 @@ async fn gateway_handles_admin_monitoring_cache_users_delete_locally_with_truste
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1138,7 +1097,7 @@ async fn gateway_handles_admin_monitoring_cache_affinity_delete_locally_with_tru
         ]),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1200,7 +1159,7 @@ async fn gateway_handles_admin_monitoring_cache_flush_locally_with_trusted_admin
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("state should build")
         .with_admin_monitoring_cache_affinity_entry_for_tests(
@@ -1264,7 +1223,7 @@ async fn gateway_handles_admin_monitoring_cache_provider_delete_locally_with_tru
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("state should build")
         .with_admin_monitoring_cache_affinity_entry_for_tests(
@@ -1331,7 +1290,7 @@ async fn gateway_handles_admin_monitoring_cache_redis_keys_delete_locally_with_t
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1398,7 +1357,7 @@ async fn gateway_handles_admin_monitoring_cache_metrics_locally_with_trusted_adm
         ),
     ]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1455,7 +1414,7 @@ async fn gateway_handles_admin_monitoring_cache_config_locally_with_trusted_admi
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1508,7 +1467,7 @@ async fn gateway_handles_admin_monitoring_model_mapping_stats_locally_with_trust
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1552,7 +1511,7 @@ async fn gateway_handles_admin_monitoring_model_mapping_delete_locally_with_trus
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("state should build")
         .with_admin_monitoring_redis_key_for_tests("model:id:model-1", json!({"id": "model-1"}))
@@ -1608,7 +1567,7 @@ async fn gateway_handles_admin_monitoring_model_mapping_delete_model_locally_wit
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("state should build")
         .with_admin_monitoring_redis_key_for_tests(
@@ -1668,7 +1627,7 @@ async fn gateway_handles_admin_monitoring_model_mapping_delete_provider_locally_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("state should build")
         .with_admin_monitoring_redis_key_for_tests(
@@ -1728,7 +1687,7 @@ async fn gateway_handles_admin_monitoring_redis_keys_locally_with_trusted_admin_
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1771,7 +1730,7 @@ async fn gateway_handles_admin_monitoring_redis_keys_delete_locally_with_trusted
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("state should build")
         .with_admin_monitoring_redis_key_for_tests("dashboard:summary:user-1", json!({"ok": true}))
@@ -1823,7 +1782,7 @@ async fn gateway_handles_admin_monitoring_suspicious_activities_locally_with_tru
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -1895,7 +1854,7 @@ async fn gateway_handles_admin_monitoring_resilience_status_locally_with_trusted
         now - 120,
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -1988,7 +1947,7 @@ async fn gateway_resets_admin_monitoring_error_stats_locally_with_trusted_admin_
         now - 120,
     )]));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2086,7 +2045,7 @@ async fn gateway_handles_admin_monitoring_resilience_circuit_history_locally_wit
         )],
     ));
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -2144,7 +2103,7 @@ async fn gateway_handles_admin_monitoring_user_behavior_locally_with_trusted_adm
         }),
     );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

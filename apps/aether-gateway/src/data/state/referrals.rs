@@ -4,10 +4,10 @@ use aether_data::DataLayerError;
 use super::GatewayDataState;
 
 pub(crate) use aether_data::backend::{
-    ReferralAdminOverviewStats, ReferralAdminStats, ReferralMutationStatus,
-    ReferralReconciliationSummary, ReferralRefundPreview, ReferralRelationshipListQuery,
-    ReferralRelationshipRecord, ReferralRewardConfig, ReferralRewardDetail,
-    ReferralRewardListQuery, ReferralRewardRecord, ReferralUserDashboard,
+    ReferralAdminOverviewStats, ReferralAdminStats, ReferralReconciliationSummary,
+    ReferralRefundPreview, ReferralRelationshipListQuery, ReferralRelationshipRecord,
+    ReferralRewardConfig, ReferralRewardDetail, ReferralRewardListQuery, ReferralRewardRecord,
+    ReferralUserDashboard,
 };
 
 impl GatewayDataState {

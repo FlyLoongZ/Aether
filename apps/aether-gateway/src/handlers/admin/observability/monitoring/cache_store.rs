@@ -73,10 +73,6 @@ fn admin_monitoring_test_key_matches_pattern(key: &str, pattern: &str) -> bool {
     }
 }
 
-pub(super) fn admin_monitoring_has_test_redis_keys(state: &AdminAppState<'_>) -> bool {
-    !load_admin_monitoring_redis_keys_for_tests(state).is_empty()
-}
-
 pub(super) async fn list_admin_monitoring_namespaced_keys(
     state: &AdminAppState<'_>,
     pattern: &str,
@@ -134,15 +130,6 @@ pub(super) async fn list_admin_monitoring_cache_affinity_records_by_affinity_key
         return Ok(Vec::new());
     }
     list_admin_monitoring_cache_affinity_records_matching(state, Some(affinity_keys)).await
-}
-
-pub(super) fn admin_monitoring_has_runtime_scheduler_affinity_entries(
-    state: &AdminAppState<'_>,
-) -> bool {
-    !state
-        .as_ref()
-        .list_scheduler_affinity_entries(SCHEDULER_AFFINITY_TTL)
-        .is_empty()
 }
 
 async fn list_admin_monitoring_cache_affinity_records_matching(

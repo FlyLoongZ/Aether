@@ -2,7 +2,8 @@ use super::{
     AdminWalletMutationOutcome, AdminWalletRefundRecord, AdminWalletTransactionRecord, AppState,
     GatewayError,
 };
-use aether_data::repository::wallet::{
+#[cfg(test)]
+pub(crate) use aether_data::repository::wallet::{
     payment_order_refund_amounts_are_consistent, wallet_refund_proof_is_success,
 };
 

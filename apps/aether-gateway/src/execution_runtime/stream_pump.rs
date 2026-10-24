@@ -48,8 +48,6 @@ pub(crate) fn build_direct_execution_frame_stream(
 ) -> impl Stream<Item = Result<Bytes, IoError>> + Send + 'static {
     stream! {
         let DirectUpstreamStreamExecution {
-            request_id: _,
-            candidate_id: _,
             status_code,
             headers,
             upstream_content_length,
@@ -863,22 +861,20 @@ fn observe_normalized_bytes(
 mod tests {
     use std::collections::BTreeMap;
     use std::convert::Infallible;
-    use std::sync::Arc;
+
     use std::time::Duration;
 
     use aether_contracts::{ExecutionPlan, ExecutionTimeouts, RequestBody};
-    use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-    use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
+
     use async_stream::stream;
     use axum::body::{Body, Bytes};
-    use axum::extract::ws::Message;
+
     use axum::routing::post;
     use axum::{http::header, http::HeaderValue, Router};
     use base64::Engine as _;
     use futures_util::StreamExt;
     use serde_json::Value;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::sync::watch;
 
     use super::{
         build_direct_execution_frame_stream, encode_error_frame, observe_normalized_bytes,
@@ -886,8 +882,7 @@ mod tests {
         STREAM_USAGE_OBSERVER_MAX_LINE_BYTES, UPSTREAM_STREAM_READ_ERROR_MESSAGE,
     };
     use crate::ai_serving::api::StreamingStandardTerminalObserver;
-    use crate::execution_runtime::transport::{DirectSyncExecutionRuntime, DirectUpstreamResponse};
-    use crate::AppState;
+    use crate::execution_runtime::transport::DirectSyncExecutionRuntime;
 
     #[test]
     fn treats_kiro_eventstream_envelope_as_stream_even_when_content_type_is_json() {

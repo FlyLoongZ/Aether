@@ -3,8 +3,7 @@ use aether_ai_serving::{
     apply_ai_runtime_candidate_evaluation_progress_preserving_candidate_signal,
     apply_ai_runtime_candidate_evaluation_progress_to_diagnostic,
     apply_ai_runtime_candidate_terminal_plan_reason_to_diagnostic,
-    apply_ai_runtime_candidate_terminal_reason, build_ai_runtime_candidate_evaluation_diagnostic,
-    build_ai_runtime_execution_exhausted_diagnostic, record_ai_runtime_candidate_skip_reason,
+    apply_ai_runtime_candidate_terminal_reason, record_ai_runtime_candidate_skip_reason,
     record_ai_runtime_candidate_skip_reason_on_diagnostic,
     set_ai_runtime_candidate_evaluation_diagnostic, set_ai_runtime_execution_exhausted_diagnostic,
     set_ai_runtime_miss_diagnostic_reason, AiRuntimeMissDiagnosticFields,
@@ -145,22 +144,6 @@ pub(crate) fn set_local_runtime_miss_diagnostic_reason(
     );
 }
 
-pub(crate) fn build_local_runtime_execution_exhausted_diagnostic(
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-    requested_model: Option<&str>,
-    candidate_count: usize,
-) -> LocalExecutionRuntimeMissDiagnostic {
-    let port = GatewayRuntimeMissDiagnosticPort { state: None };
-    build_ai_runtime_execution_exhausted_diagnostic(
-        &port,
-        decision,
-        plan_kind,
-        requested_model,
-        candidate_count,
-    )
-}
-
 pub(crate) fn set_local_runtime_execution_exhausted_diagnostic(
     state: &AppState,
     trace_id: &str,
@@ -178,22 +161,6 @@ pub(crate) fn set_local_runtime_execution_exhausted_diagnostic(
         requested_model,
         candidate_count,
     );
-}
-
-pub(crate) fn build_local_runtime_candidate_evaluation_diagnostic(
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-    requested_model: Option<&str>,
-    candidate_count: usize,
-) -> LocalExecutionRuntimeMissDiagnostic {
-    let port = GatewayRuntimeMissDiagnosticPort { state: None };
-    build_ai_runtime_candidate_evaluation_diagnostic(
-        &port,
-        decision,
-        plan_kind,
-        requested_model,
-        candidate_count,
-    )
 }
 
 pub(crate) fn set_local_runtime_candidate_evaluation_diagnostic(

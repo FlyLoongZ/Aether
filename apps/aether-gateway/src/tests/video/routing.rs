@@ -54,7 +54,7 @@ async fn gateway_hides_video_task_from_unauthenticated_caller_with_opt_in_header
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -125,7 +125,7 @@ async fn gateway_hides_video_task_without_calling_public_or_control_upstream() {
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -191,7 +191,7 @@ async fn gateway_hides_video_task_from_unauthenticated_caller_without_opt_in_hea
             }),
         );
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router().expect("gateway should build");
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

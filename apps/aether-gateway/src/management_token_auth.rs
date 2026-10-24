@@ -16,7 +16,6 @@ pub(crate) struct AuthenticatedManagementToken {
     pub(crate) token: StoredManagementToken,
     pub(crate) user: StoredUserAuthRecord,
     pub(crate) permissions: Vec<String>,
-    pub(crate) verified_token_hash: VerifiedManagementTokenHash,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -161,7 +160,6 @@ where
         token: token_with_user.token,
         user,
         permissions,
-        verified_token_hash: token_hash.clone(),
     })
 }
 

@@ -23,9 +23,7 @@ mod rules;
 mod wallets;
 
 pub(in crate::handlers::admin) use self::payments::admin_payment_gateway_response_projection;
-pub(super) use self::payments::maybe_build_local_admin_payments_response;
 pub(super) use self::routes::maybe_build_local_admin_billing_routes_response;
-pub(super) use self::wallets::maybe_build_local_admin_wallets_response;
 
 fn default_admin_billing_true() -> bool {
     true

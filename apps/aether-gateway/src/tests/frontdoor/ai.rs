@@ -40,7 +40,6 @@ use axum::http::{HeaderMap, Uri};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use base64::Engine as _;
-use futures_util::SinkExt;
 use std::collections::HashMap;
 use std::future::pending;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -4223,7 +4222,7 @@ async fn gateway_cancels_gemini_operation_without_hitting_fallback_probe() {
         .await
         .expect("upsert should succeed");
 
-    let (fallback_probe_url, fallback_probe_handle) = start_server(fallback_probe).await;
+    let (_fallback_probe_url, fallback_probe_handle) = start_server(fallback_probe).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let provider_catalog_repository = gemini_video_catalog_repository();
     let gateway = build_router_with_state(

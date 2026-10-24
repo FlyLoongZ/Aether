@@ -1,15 +1,9 @@
 use std::time::Duration;
 
 use aether_routing_core::{ResolvedRoutingPolicy, RoutingSchedulingMode};
-use aether_scheduler_core::{
-    build_scheduler_affinity_cache_key_for_api_key_id_with_client_session,
-    build_scheduler_affinity_cache_key_for_api_key_id_with_client_session_and_scope,
-    ClientSessionAffinity, SchedulerAffinityScope, SchedulerAffinityTarget,
-};
+use aether_scheduler_core::SchedulerAffinityScope;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
-use super::state::SchedulerRuntimeState;
 
 pub(crate) const SCHEDULER_AFFINITY_TTL: Duration = Duration::from_secs(300);
 pub(crate) const SCHEDULER_AFFINITY_POLICY_REPORT_FIELD: &str = "scheduler_affinity_policy";
@@ -59,42 +53,4 @@ pub(crate) fn insert_scheduler_affinity_policy_report_context_field(
     if let Ok(value) = serde_json::to_value(context) {
         extra_fields.insert(SCHEDULER_AFFINITY_POLICY_REPORT_FIELD.to_string(), value);
     }
-}
-
-pub(crate) fn read_cached_scheduler_affinity_target(
-    state: &(impl SchedulerRuntimeState + ?Sized),
-    api_key_id: &str,
-    client_session_affinity: Option<&ClientSessionAffinity>,
-    api_format: &str,
-    global_model_name: &str,
-) -> Option<SchedulerAffinityTarget> {
-    let cache_key = build_scheduler_affinity_cache_key_for_api_key_id_with_client_session(
-        api_key_id,
-        api_format,
-        global_model_name,
-        client_session_affinity,
-    )?;
-    state.read_cached_scheduler_affinity_target(&cache_key, SCHEDULER_AFFINITY_TTL)
-}
-
-pub(crate) fn read_cached_scheduler_affinity_target_with_policy_context(
-    state: &(impl SchedulerRuntimeState + ?Sized),
-    api_key_id: &str,
-    client_session_affinity: Option<&ClientSessionAffinity>,
-    api_format: &str,
-    global_model_name: &str,
-    policy_context: &SchedulerAffinityPolicyContext,
-) -> Option<SchedulerAffinityTarget> {
-    if !policy_context.cache_affinity_enabled() {
-        return None;
-    }
-    let cache_key =
-        build_scheduler_affinity_cache_key_for_api_key_id_with_client_session_and_scope(
-            api_key_id,
-            api_format,
-            global_model_name,
-            client_session_affinity,
-            policy_context.scope.as_ref(),
-        )?;
-    state.read_cached_scheduler_affinity_target(&cache_key, SCHEDULER_AFFINITY_TTL)
 }

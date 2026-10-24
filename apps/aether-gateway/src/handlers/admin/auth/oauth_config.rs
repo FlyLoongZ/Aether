@@ -3,7 +3,6 @@ use aether_data::repository::oauth_providers::{
     validate_oauth_frontend_callback_url, validate_oauth_provider_endpoint_config,
     validate_oauth_redirect_uri, EncryptedSecretUpdate, UpsertOAuthProviderConfigRecord,
 };
-use axum::http;
 use serde::Deserialize;
 use serde_json::json;
 use url::{Host, Url};

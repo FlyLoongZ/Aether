@@ -32,14 +32,6 @@ pub(super) async fn find_admin_export_user(
     state.find_export_user_by_id(user_id).await
 }
 
-pub(super) fn build_admin_user_payload(
-    user: &aether_data::repository::users::StoredUserAuthRecord,
-    rate_limit: Option<i32>,
-    unlimited: bool,
-) -> serde_json::Value {
-    build_admin_user_payload_with_groups(user, rate_limit, None, unlimited, &[])
-}
-
 pub(super) fn build_admin_user_payload_with_groups(
     user: &aether_data::repository::users::StoredUserAuthRecord,
     rate_limit: Option<i32>,

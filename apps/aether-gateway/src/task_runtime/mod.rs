@@ -605,17 +605,6 @@ pub(crate) async fn set_cancel_signal(app: &AppState, run_id: &str) -> Result<()
         .await
 }
 
-pub(crate) async fn is_cancel_requested(app: &AppState, run_id: &str) -> bool {
-    if let Ok(Some(run)) = app.find_background_task_run(run_id).await {
-        if run.cancel_requested {
-            return true;
-        }
-    }
-    app.runtime_kv_exists(&task_cancel_kv_key(run_id))
-        .await
-        .unwrap_or(false)
-}
-
 pub(crate) async fn submit_provider_delete_task(
     state: &crate::admin_api::AdminAppState<'_>,
     provider_id: &str,

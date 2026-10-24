@@ -17,7 +17,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::clock::current_unix_secs;

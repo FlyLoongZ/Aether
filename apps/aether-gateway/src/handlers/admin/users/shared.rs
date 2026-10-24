@@ -395,22 +395,6 @@ pub(crate) fn normalize_admin_rate_limit_policy_mode(value: &str) -> Result<Stri
     }
 }
 
-pub(super) fn legacy_admin_list_policy_mode(values: &Option<Vec<String>>) -> String {
-    if values.as_ref().is_some_and(|items| !items.is_empty()) {
-        "specific".to_string()
-    } else {
-        "unrestricted".to_string()
-    }
-}
-
-pub(super) fn legacy_admin_rate_limit_policy_mode(value: Option<i32>) -> String {
-    if value.is_some() {
-        "custom".to_string()
-    } else {
-        "system".to_string()
-    }
-}
-
 pub(super) fn normalize_admin_user_group_ids(values: Vec<String>) -> Vec<String> {
     values
         .into_iter()

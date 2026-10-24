@@ -8,8 +8,8 @@ use aether_data_contracts::repository::candidates::StoredRequestCandidate;
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
 use aether_scheduler_core::{
     auth_api_key_concurrency_limit_reached, build_provider_concurrent_limit_map,
-    candidate_is_selectable_with_runtime_state, candidate_runtime_skip_reason_with_state,
-    effective_provider_key_rpm_limit, CandidateRuntimeSelectabilityInput,
+    candidate_runtime_skip_reason_with_state, effective_provider_key_rpm_limit,
+    CandidateRuntimeSelectabilityInput,
 };
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::Instant;
@@ -193,50 +193,6 @@ where
         }
         attempt_now_unix_secs = crate::clock::current_unix_secs();
     }
-}
-
-pub(super) fn is_candidate_selectable(
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
-    snapshot: &CandidateRuntimeSelectionSnapshot,
-    now_unix_secs: u64,
-) -> bool {
-    let pool_group = snapshot
-        .pool_provider_ids
-        .contains(candidate.provider_id.as_str());
-    candidate_is_selectable_with_runtime_state(CandidateRuntimeSelectabilityInput {
-        candidate,
-        recent_candidates: &snapshot.recent_candidates,
-        provider_concurrent_limits: &snapshot.provider_concurrent_limits,
-        provider_key_rpm_states: &snapshot.provider_key_rpm_states,
-        now_unix_secs,
-        provider_quota_blocks_requests: snapshot
-            .provider_quota_blocks_requests
-            .get(candidate.provider_id.as_str())
-            .copied()
-            .unwrap_or(false),
-        account_quota_exhausted: !pool_group
-            && snapshot
-                .key_account_quota_exhausted
-                .get(candidate.key_id.as_str())
-                .copied()
-                .unwrap_or(false),
-        oauth_invalid: !pool_group
-            && snapshot
-                .key_oauth_invalid
-                .get(candidate.key_id.as_str())
-                .copied()
-                .unwrap_or(false),
-        enforce_key_circuit_breaker: !pool_group,
-        rpm_reset_at: (!pool_group)
-            .then(|| {
-                snapshot
-                    .provider_key_rpm_reset_ats
-                    .get(candidate.key_id.as_str())
-                    .copied()
-                    .flatten()
-            })
-            .flatten(),
-    })
 }
 
 pub(super) fn current_candidate_runtime_skip_reason(

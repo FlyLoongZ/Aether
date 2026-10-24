@@ -3,9 +3,6 @@ use super::super::support_payment::payment_epay::{
     build_epay_checkout_url, configured_epay_channels, epay_callback_base_url, load_epay_config,
     resolve_epay_channel, EpayCheckoutInput,
 };
-use super::super::support_payment::payment_gateway::{
-    CreateCheckoutSessionInput, PaymentGatewayRegistry,
-};
 use super::{
     build_auth_error_response, build_auth_json_response, build_wallet_payload,
     build_wallet_recharge_storage_unavailable_response, http, parse_wallet_limit,
@@ -86,9 +83,12 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+#[cfg(test)]
+pub(crate) use super::super::support_payment::payment_gateway::{
+    CreateCheckoutSessionInput, PaymentGatewayRegistry,
+};
 use aether_data::repository::wallet::{
     wallet_recharge_checkout_claim_response, wallet_recharge_order_created_at_unix_secs,
-    wallet_recharge_order_is_checkout_placeholder,
     wallet_recharge_order_is_reclaimable_placeholder, FailWalletRechargeCheckoutInput,
     ReclaimWalletRechargeCheckoutInput,
 };
@@ -402,6 +402,7 @@ pub(crate) fn prepare_billing_gateway_response_for_storage(
     )
 }
 
+#[cfg(test)]
 fn prepare_wallet_gateway_response_for_storage_with_encrypt(
     payment_provider: &str,
     checkout: &Value,
@@ -897,6 +898,7 @@ fn wallet_recharge_order_matches_effective_request(
     )
 }
 
+#[cfg(test)]
 fn wallet_test_recharge_payload_matches_request(
     order: &Value,
     payload: &NormalizedWalletCreateRechargeRequest,
@@ -973,6 +975,7 @@ fn wallet_test_recharge_payload_matches_request(
         && exchange_rate_matches
 }
 
+#[cfg(test)]
 fn wallet_test_recharge_replay_payment_instructions(order: &Value) -> Value {
     let is_pending_and_live = order
         .get("status")
@@ -3334,7 +3337,7 @@ mod tests {
 
     #[test]
     fn effective_matcher_still_runs_when_existing_order_has_checkout_evidence() {
-        let mut order = StoredAdminPaymentOrder {
+        let order = StoredAdminPaymentOrder {
             id: "checkout-order".to_string(),
             order_no: "po_idem_checkout".to_string(),
             wallet_id: "wallet-1".to_string(),

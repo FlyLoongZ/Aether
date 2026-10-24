@@ -32,28 +32,28 @@ pub(crate) mod selection;
 mod support;
 
 pub(crate) use self::batch_shared::{
-    admin_pool_batch_delete_task_parts, admin_pool_key_proxy_value,
-    admin_pool_resolved_api_formats, attach_admin_pool_batch_delete_task_terminal_audit,
+    admin_pool_batch_delete_task_parts, attach_admin_pool_batch_delete_task_terminal_audit,
     build_admin_pool_batch_delete_task_payload, AdminPoolBatchActionRequest,
     AdminPoolBatchImportRequest,
 };
+
 pub(crate) use self::support::{
     admin_pool_provider_id_from_path, admin_pool_provider_id_from_scores_path,
     parse_admin_pool_key_sort, parse_admin_pool_page, parse_admin_pool_page_size,
     parse_admin_pool_quick_selectors, parse_admin_pool_search, parse_admin_pool_status_filter,
     parse_admin_pool_status_value, AdminPoolKeySort, AdminPoolKeySortDirection,
     AdminPoolKeySortField, AdminPoolResolveSelectionRequest,
-    ADMIN_POOL_BANNED_KEY_CLEANUP_EMPTY_MESSAGE,
     ADMIN_POOL_PROVIDER_CATALOG_READER_UNAVAILABLE_DETAIL,
     ADMIN_POOL_PROVIDER_CATALOG_WRITER_UNAVAILABLE_DETAIL,
 };
+
 use self::support::{build_admin_pool_error_response, is_admin_pool_route};
 pub(crate) use self::{payloads as pool_payloads, selection as pool_selection};
 pub(crate) use crate::handlers::admin::provider::pool::config::admin_provider_pool_config;
 pub(crate) use crate::handlers::admin::provider::pool::runtime::{
-    read_admin_provider_pool_cooldown_counts, read_admin_provider_pool_cooldown_key_ids,
-    read_admin_provider_pool_runtime_state,
+    read_admin_provider_pool_cooldown_counts, read_admin_provider_pool_runtime_state,
 };
+
 pub(crate) use crate::handlers::admin::provider::shared::support::AdminProviderPoolRuntimeState;
 pub(crate) use crate::handlers::admin::shared::attach_admin_audit_response;
 pub(crate) use aether_data_contracts::repository::provider_catalog::{

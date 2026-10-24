@@ -8,7 +8,8 @@ use axum::body::{Body, Bytes};
 use axum::http::{self, Response};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Semaphore;
+#[cfg(test)]
+pub(crate) use tokio::sync::Semaphore;
 use tracing::{info, warn};
 
 const REQUEST_BODY_READ_TIMEOUT_DETAIL: &str =
@@ -162,9 +163,7 @@ impl RequestBodyBufferPolicy {
 
 #[derive(Debug)]
 pub(super) enum RequestBodyBufferError {
-    InvalidHeaders {
-        message: String,
-    },
+    InvalidHeaders,
     Normalization(RequestBodyNormalizationError),
     TooLarge {
         limit_bytes: u64,
@@ -172,9 +171,11 @@ pub(super) enum RequestBodyBufferError {
     Overloaded {
         requested_bytes: usize,
         budget_bytes: usize,
+        #[cfg_attr(not(test), allow(dead_code))]
         timeout_ms: u64,
     },
     Timeout {
+        #[cfg_attr(not(test), allow(dead_code))]
         timeout_ms: u64,
     },
     ReadFailed {
@@ -185,7 +186,7 @@ pub(super) enum RequestBodyBufferError {
 impl RequestBodyBufferError {
     pub(super) fn http_status(&self) -> http::StatusCode {
         match self {
-            Self::InvalidHeaders { .. } => http::StatusCode::BAD_REQUEST,
+            Self::InvalidHeaders => http::StatusCode::BAD_REQUEST,
             Self::Normalization(error) => error.http_status(),
             Self::TooLarge { .. } => http::StatusCode::PAYLOAD_TOO_LARGE,
             Self::Overloaded { .. } => http::StatusCode::SERVICE_UNAVAILABLE,
@@ -196,7 +197,7 @@ impl RequestBodyBufferError {
 
     pub(super) fn client_message(&self) -> String {
         match self {
-            Self::InvalidHeaders { .. } => "Invalid request body headers".to_string(),
+            Self::InvalidHeaders => "Invalid request body headers".to_string(),
             Self::Normalization(error) => error.client_message(),
             Self::TooLarge { limit_bytes } => format!("Request body exceeds {limit_bytes} bytes"),
             Self::Overloaded { .. } => {
@@ -209,7 +210,7 @@ impl RequestBodyBufferError {
 
     fn reason(&self) -> &'static str {
         match self {
-            Self::InvalidHeaders { .. } => "invalid_request_body_headers",
+            Self::InvalidHeaders => "invalid_request_body_headers",
             Self::Normalization(error) => match error {
                 RequestBodyNormalizationError::InvalidBodyFraming
                 | RequestBodyNormalizationError::AmbiguousBodyFraming => {
@@ -240,7 +241,7 @@ impl RequestBodyBufferError {
 impl From<BodyBufferError> for RequestBodyBufferError {
     fn from(error: BodyBufferError) -> Self {
         match error {
-            BodyBufferError::InvalidHeaders { message } => Self::InvalidHeaders { message },
+            BodyBufferError::InvalidHeaders { .. } => Self::InvalidHeaders,
             BodyBufferError::TooLarge { limit_bytes } => Self::TooLarge { limit_bytes },
             BodyBufferError::Overloaded {
                 requested_bytes,

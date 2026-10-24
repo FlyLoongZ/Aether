@@ -67,16 +67,6 @@ impl<'a> AdminAppState<'a> {
         self.app.has_oauth_links_for_provider(provider_type).await
     }
 
-    pub(crate) async fn count_locked_users_if_oauth_provider_disabled(
-        &self,
-        provider_type: &str,
-        ldap_exclusive: bool,
-    ) -> Result<usize, GatewayError> {
-        self.app
-            .count_locked_users_if_oauth_provider_disabled(provider_type, ldap_exclusive)
-            .await
-    }
-
     pub(crate) async fn get_management_token_with_user(
         &self,
         token_id: &str,

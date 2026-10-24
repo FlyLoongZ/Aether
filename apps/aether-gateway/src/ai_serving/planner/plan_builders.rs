@@ -10,7 +10,7 @@ use crate::ai_serving::augment_sync_report_context as augment_sync_report_contex
 pub(crate) use crate::ai_serving::{
     generic_decision_missing_exact_provider_request, AiStreamAttempt, AiSyncAttempt,
 };
-use crate::{AiExecutionDecision, GatewayError};
+use crate::GatewayError;
 
 #[path = "standard/gemini/plan_builders.rs"]
 mod gemini_builders;

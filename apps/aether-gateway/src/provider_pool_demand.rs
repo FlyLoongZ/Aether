@@ -328,6 +328,7 @@ fn spawn_in_flight_renewal(
     })
 }
 
+#[cfg(test)]
 pub(crate) async fn acquire_provider_pool_in_flight_guard(
     runtime: Arc<RuntimeState>,
     provider_id: &str,

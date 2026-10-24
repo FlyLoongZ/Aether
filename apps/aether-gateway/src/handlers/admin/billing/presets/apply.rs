@@ -17,7 +17,7 @@ use serde_json::json;
 
 pub(super) async fn build_admin_apply_billing_preset_response(
     state: &AdminAppState<'_>,
-    request_context: &AdminRequestContext<'_>,
+    _request_contextt: &AdminRequestContext<'_>,
     request_body: Option<&Bytes>,
 ) -> Result<Response<Body>, GatewayError> {
     let (preset, mode) = match parse_admin_billing_preset_apply_request(request_body) {

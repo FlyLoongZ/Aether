@@ -20,7 +20,7 @@ use super::super::{
     start_server,
 };
 use crate::constants::{
-    GATEWAY_HEADER, TRACE_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
+    TRACE_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
     TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
@@ -233,7 +233,7 @@ async fn gateway_uploads_admin_gemini_file_locally_with_trusted_admin_principal(
         .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository))
         .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
 
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
+    let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
     let gateway = build_router_with_state(
         build_state_with_execution_runtime_override(execution_runtime_url)

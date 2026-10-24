@@ -8,7 +8,6 @@ fn normalize_reveal_auth_type(value: &str) -> &str {
 }
 
 use crate::handlers::admin::request::AdminAppState;
-use crate::handlers::admin::shared::parse_catalog_auth_config_json;
 use crate::provider_key_auth::provider_key_auth_semantics;
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
 use chrono::{SecondsFormat, Utc};

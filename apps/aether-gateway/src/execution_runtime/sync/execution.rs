@@ -36,7 +36,7 @@ use crate::ai_serving::api::{
 };
 use crate::ai_serving::record_local_runtime_candidate_skip_reason;
 use crate::api::response::{
-    attach_control_metadata_headers, build_client_response, build_client_response_from_parts,
+    attach_control_metadata_headers, build_client_response_from_parts,
     build_client_response_from_parts_with_mutator,
 };
 use crate::clock::current_unix_ms as current_request_candidate_unix_ms;
@@ -57,11 +57,11 @@ use crate::execution_runtime::submission::{
 };
 use crate::execution_runtime::transport::{
     append_upstream_response_body_chunk_with_limit, build_execution_response_body,
-    build_request_body, collect_response_headers, decode_response_body_bytes_with_limit,
+    build_request_body, decode_response_body_bytes_with_limit,
     execution_plan_response_body_limit_bytes, execution_response_body_mode,
     format_hyper_error_chain, format_upstream_request_error, format_wreq_upstream_request_error,
-    response_body_is_json, safe_transport_error_message, send_request, DirectHttpResponse,
-    DirectSyncExecutionRuntime, ExecutionRuntimeTransportError,
+    safe_transport_error_message, send_request, DirectHttpResponse, DirectSyncExecutionRuntime,
+    ExecutionRuntimeTransportError,
 };
 use crate::execution_runtime::windsurf::maybe_execute_windsurf_sync;
 use crate::execution_runtime::{
@@ -101,6 +101,8 @@ mod policy;
 #[path = "execution/response.rs"]
 mod response;
 
+#[cfg(test)]
+pub(crate) use crate::api::response::build_client_response;
 use policy::{decode_execution_result_body, decode_execution_result_body_with_limit};
 pub(crate) use response::{
     maybe_build_local_sync_finalize_response, maybe_build_local_video_error_response,
@@ -1982,12 +1984,12 @@ enum RemoteSyncFallbackOutcome {
 pub(crate) async fn execute_execution_runtime_sync(
     state: &AppState,
     request_path: &str,
-    mut plan: ExecutionPlan,
+    plan: ExecutionPlan,
     trace_id: &str,
     decision: &GatewayControlDecision,
     plan_kind: &str,
     report_kind: Option<String>,
-    mut report_context: Option<serde_json::Value>,
+    report_context: Option<serde_json::Value>,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     execute_execution_runtime_sync_impl(
         state,
@@ -3136,7 +3138,7 @@ async fn execute_execution_runtime_sync_impl(
     };
 
     if let Some(finalize_report_kind) = finalize_report_kind {
-        let mut payload = build_sync_report_payload(
+        let payload = build_sync_report_payload(
             trace_id,
             finalize_report_kind,
             report_context,
@@ -3566,7 +3568,7 @@ mod tests {
     use aether_data_contracts::repository::candidates::RequestCandidateReadRepository;
     use aether_data_contracts::repository::usage::UsageReadRepository;
     use aether_usage_runtime::UsageRuntimeConfig;
-    use futures_util::{pin_mut, StreamExt as _};
+    use futures_util::pin_mut;
     use serde_json::json;
     use std::collections::BTreeMap;
     use std::sync::Arc;

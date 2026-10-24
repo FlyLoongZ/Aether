@@ -46,61 +46,6 @@ use crate::ai_serving::planner::standard::{
     openai_responses_reasoning_replay_policy, same_format_provider_request_body_failure_extra_data,
 };
 
-pub(crate) fn resolve_same_format_provider_transport_unsupported_reason_for_trace(
-    transport: &GatewayProviderTransportSnapshot,
-    provider_api_format: &str,
-) -> Option<&'static str> {
-    let provider_api_format =
-        match crate::ai_serving::normalize_api_format_alias(provider_api_format).as_str() {
-            "openai:chat" => "openai:chat",
-            "openai:responses" => "openai:responses",
-            "openai:responses:compact" => "openai:responses:compact",
-            "openai:search" => "openai:search",
-            "openai:embedding" => "openai:embedding",
-            "openai:rerank" => "openai:rerank",
-            "claude:messages" => "claude:messages",
-            "gemini:generate_content" => "gemini:generate_content",
-            "gemini:embedding" => "gemini:embedding",
-            "jina:embedding" => "jina:embedding",
-            "jina:rerank" => "jina:rerank",
-            "doubao:embedding" => "doubao:embedding",
-            "aliyun:multimodal_embedding" => "aliyun:multimodal_embedding",
-            _ => return Some("transport_api_format_unsupported"),
-        };
-    let behavior = policy::classify_same_format_provider_request_behavior(
-        transport,
-        provider_api_format,
-        crate::ai_serving::planner::spec_metadata::LocalExecutionSurfaceSpecMetadata {
-            api_format: provider_api_format,
-            require_streaming: false,
-            requested_model_family: None,
-            decision_kind: "trace_candidate_metadata",
-            report_kind: Some("trace_candidate_metadata"),
-        },
-        None,
-    );
-    if !behavior.is_antigravity
-        && !behavior.is_claude_code_transport
-        && !behavior.is_gemini_cli
-        && !behavior.is_vertex
-        && !behavior.is_kiro
-    {
-        return None;
-    }
-
-    let family = if provider_api_format.starts_with("gemini:") {
-        crate::ai_serving::LocalSameFormatProviderFamily::Gemini
-    } else {
-        crate::ai_serving::LocalSameFormatProviderFamily::Standard
-    };
-    policy::same_format_provider_transport_unsupported_reason(
-        &behavior,
-        transport,
-        family,
-        provider_api_format,
-    )
-}
-
 pub(crate) struct LocalSameFormatProviderCandidatePayloadParts {
     pub(super) transport: Arc<GatewayProviderTransportSnapshot>,
     pub(super) is_antigravity: bool,
@@ -211,7 +156,7 @@ pub(crate) async fn resolve_local_same_format_provider_candidate_payload_parts(
             prepared.force_body_stream_field,
             prepared.kiro_auth.as_ref(),
             prepared.is_claude_code,
-            prepared.is_vertex,
+            prepared.behavior.is_vertex,
             false,
             reasoning_replay_policy,
         )
@@ -657,11 +602,11 @@ fn same_format_provider_operation_skip_reason(
 #[cfg(test)]
 mod tests {
     use super::same_format_provider_operation_skip_reason;
-    use crate::ai_serving::transport::snapshot::{
+    use crate::ai_serving::{ApiOperation, GatewayProviderTransportSnapshot};
+    use crate::provider_transport::snapshot::{
         GatewayProviderTransportEndpoint, GatewayProviderTransportKey,
         GatewayProviderTransportProvider,
     };
-    use crate::ai_serving::{ApiOperation, GatewayProviderTransportSnapshot};
 
     fn private_adapter_transport(provider_type: &str) -> GatewayProviderTransportSnapshot {
         GatewayProviderTransportSnapshot {

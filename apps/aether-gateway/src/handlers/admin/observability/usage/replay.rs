@@ -265,7 +265,7 @@ pub(super) async fn build_admin_usage_replay_response(
             {
                 endpoint
             } else {
-                let mut endpoints = state
+                let endpoints = state
                     .list_provider_catalog_endpoints_by_provider_ids(std::slice::from_ref(
                         &target_provider.id,
                     ))
@@ -293,7 +293,7 @@ pub(super) async fn build_admin_usage_replay_response(
                     })?
             }
         } else {
-            let mut endpoints = state
+            let endpoints = state
                 .list_provider_catalog_endpoints_by_provider_ids(std::slice::from_ref(
                     &target_provider.id,
                 ))
@@ -389,14 +389,6 @@ pub(super) fn admin_usage_curl_url(
         }
         _ => endpoint.base_url.clone(),
     }
-}
-
-pub(super) fn admin_usage_build_curl_command(
-    url: Option<&str>,
-    headers: &BTreeMap<String, String>,
-    body: Option<&serde_json::Value>,
-) -> String {
-    aether_admin::observability::usage::admin_usage_build_curl_command(url, headers, body)
 }
 
 #[cfg(test)]

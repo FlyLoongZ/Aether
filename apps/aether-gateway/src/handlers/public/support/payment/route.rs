@@ -1,5 +1,7 @@
 use axum::{body::Body, http, response::Response};
 
+#[cfg(not(test))]
+use super::build_payment_callback_storage_unavailable_response;
 use super::payment_gateway::{PaymentGatewayRegistry, VerifyCallbackInput};
 use super::payment_shared::{
     generic_payment_callback_method_allowed, payment_callback_payment_method_from_path,
@@ -7,9 +9,8 @@ use super::payment_shared::{
     PAYMENT_CALLBACK_SIGNATURE_HEADER, PAYMENT_CALLBACK_TOKEN_HEADER,
 };
 use super::{
-    build_auth_error_response, build_payment_callback_storage_unavailable_response,
-    handle_payment_callback_with_wallet_repository, payment_alipay, payment_epay, payment_stripe,
-    payment_wxpay, AppState, GatewayPublicRequestContext,
+    build_auth_error_response, handle_payment_callback_with_wallet_repository, payment_alipay,
+    payment_epay, payment_stripe, payment_wxpay, AppState, GatewayPublicRequestContext,
 };
 
 pub(super) async fn maybe_build_local_payment_callback_route_response(

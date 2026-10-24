@@ -267,17 +267,17 @@ async fn read_auth_turnstile_config(
     })
 }
 
-fn turnstile_siteverify_url(state: &AppState) -> &str {
+fn turnstile_siteverify_url(_state: &AppState) -> &str {
     #[cfg(test)]
-    if let Some(url) = state.turnstile_siteverify_url_override.as_deref() {
+    if let Some(url) = _state.turnstile_siteverify_url_override.as_deref() {
         return url;
     }
     TURNSTILE_SITEVERIFY_URL
 }
 
-fn turnstile_siteverify_timeout(state: &AppState) -> Duration {
+fn turnstile_siteverify_timeout(_state: &AppState) -> Duration {
     #[cfg(test)]
-    if let Some(timeout) = state.turnstile_siteverify_timeout_override {
+    if let Some(timeout) = _state.turnstile_siteverify_timeout_override {
         return timeout;
     }
     TURNSTILE_SITEVERIFY_TIMEOUT

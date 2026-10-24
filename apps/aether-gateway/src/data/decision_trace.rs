@@ -5,9 +5,9 @@ use aether_data_contracts::DataLayerError;
 
 use super::state::GatewayDataState;
 
-pub(crate) use aether_data_contracts::repository::candidates::{
-    DecisionTrace, DecisionTraceCandidate,
-};
+pub(crate) use aether_data_contracts::repository::candidates::DecisionTrace;
+#[cfg(test)]
+pub(crate) use aether_data_contracts::repository::candidates::DecisionTraceCandidate;
 
 pub(crate) async fn read_decision_trace(
     state: &GatewayDataState,
