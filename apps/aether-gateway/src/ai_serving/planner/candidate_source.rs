@@ -25,7 +25,7 @@ use crate::cache::{
 use crate::clock::request_distribution_seed;
 use crate::data::candidate_selection::{
     read_api_format_rows_fallback_page, read_requested_model_rows_fast_path_page,
-    requested_model_candidate_names, RequestedModelCandidateRowsPage,
+    requested_model_candidate_names, CandidateScanBudget, RequestedModelCandidateRowsPage,
     REQUESTED_MODEL_CANDIDATE_PAGE_SIZE, REQUESTED_MODEL_MAX_SCANNED_ROWS,
 };
 use crate::scheduler::candidate::SchedulerSkippedCandidate;
@@ -370,7 +370,7 @@ pub(crate) struct LocalCandidatePreselectionPageCursor<'a> {
     format_index: usize,
     requested_name_indexes: BTreeMap<String, usize>,
     requested_name_offsets: BTreeMap<String, u32>,
-    scanned_rows_by_format: BTreeMap<String, u32>,
+    scan_budget_by_format: BTreeMap<String, CandidateScanBudget>,
     resolved_global_model_names: BTreeMap<String, String>,
     reserved_global_model_names: BTreeMap<String, Option<String>>,
     fallback_offsets: BTreeMap<String, u32>,
@@ -450,7 +450,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
             format_index: 0,
             requested_name_indexes: BTreeMap::new(),
             requested_name_offsets: BTreeMap::new(),
-            scanned_rows_by_format: BTreeMap::new(),
+            scan_budget_by_format: BTreeMap::new(),
             resolved_global_model_names: BTreeMap::new(),
             reserved_global_model_names: BTreeMap::new(),
             fallback_offsets: BTreeMap::new(),
@@ -549,7 +549,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         self.format_index = 0;
         self.requested_name_indexes.clear();
         self.requested_name_offsets.clear();
-        self.scanned_rows_by_format.clear();
+        self.scan_budget_by_format.clear();
         self.resolved_global_model_names.clear();
         self.reserved_global_model_names.clear();
         self.fallback_offsets.clear();
@@ -558,6 +558,21 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         self.seen_candidate_keys.clear();
         self.priority_page_emitted = false;
         self.deferred_pages_by_format.clear();
+    }
+
+    /// The scan budget for one API format, created on first use.
+    fn scan_budget(&self, normalized_api_format: &str) -> CandidateScanBudget {
+        self.scan_budget_by_format
+            .get(normalized_api_format)
+            .copied()
+            .unwrap_or_else(|| CandidateScanBudget::new(REQUESTED_MODEL_MAX_SCANNED_ROWS))
+    }
+
+    fn charge_scan_budget(&mut self, normalized_api_format: &str, rows: u32) {
+        let mut budget = self.scan_budget(normalized_api_format);
+        budget.consume(rows);
+        self.scan_budget_by_format
+            .insert(normalized_api_format.to_string(), budget);
     }
 
     pub(crate) fn resolved_page_cache_preselection_mode(&self) -> &'static str {
@@ -887,11 +902,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         }
         let routing_model = self.routing_model(candidate_api_format).to_string();
         let requested_names = requested_model_candidate_names(&routing_model, false);
-        let scanned = *self
-            .scanned_rows_by_format
-            .get(&normalized_api_format)
-            .unwrap_or(&0);
-        if scanned >= REQUESTED_MODEL_MAX_SCANNED_ROWS {
+        if self.scan_budget(&normalized_api_format).is_exhausted() {
             self.exhausted_api_formats
                 .insert(normalized_api_format.clone());
             return Ok(None);
@@ -918,17 +929,13 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
                 .requested_name_offsets
                 .entry(offset_key.clone())
                 .or_insert(0);
-            let scanned = *self
-                .scanned_rows_by_format
-                .get(&normalized_api_format)
-                .unwrap_or(&0);
-            let remaining = REQUESTED_MODEL_MAX_SCANNED_ROWS.saturating_sub(scanned);
-            if remaining == 0 {
+            let budget = self.scan_budget(&normalized_api_format);
+            if budget.is_exhausted() {
                 self.exhausted_api_formats
                     .insert(normalized_api_format.clone());
                 return Ok(None);
             }
-            let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE.min(remaining);
+            let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE.min(budget.remaining());
             let page = self
                 .read_requested_model_rows_fast_path_page_cached(
                     &normalized_api_format,
@@ -938,13 +945,13 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
                     limit,
                 )
                 .await?;
-            self.scanned_rows_by_format.insert(
-                normalized_api_format.clone(),
-                scanned.saturating_add(page.scanned_rows),
-            );
+            self.charge_scan_budget(&normalized_api_format, page.scanned_rows);
             self.requested_name_offsets
                 .insert(offset_key, offset.saturating_add(limit));
-            if page.end_of_requested_name {
+            // The name is done when the query shape had nothing after this
+            // window. Budget exhaustion is a different outcome: it ends the
+            // whole format, not this one name.
+            if page.scan_exhausted {
                 self.requested_name_indexes
                     .insert(normalized_api_format.clone(), requested_name_index + 1);
             }
@@ -1032,17 +1039,13 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
     > {
         let routing_model = self.routing_model(candidate_api_format).to_string();
         loop {
-            let scanned = *self
-                .scanned_rows_by_format
-                .get(normalized_api_format)
-                .unwrap_or(&0);
-            let remaining = REQUESTED_MODEL_MAX_SCANNED_ROWS.saturating_sub(scanned);
-            if remaining == 0 {
+            let budget = self.scan_budget(normalized_api_format);
+            if budget.is_exhausted() {
                 self.exhausted_api_formats
                     .insert(normalized_api_format.to_string());
                 return Ok(None);
             }
-            let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE.min(remaining);
+            let limit = REQUESTED_MODEL_CANDIDATE_PAGE_SIZE.min(budget.remaining());
             let offset = *self
                 .fallback_offsets
                 .get(normalized_api_format)
@@ -1051,15 +1054,15 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
                 .read_api_format_rows_fallback_page_cached(normalized_api_format, offset, limit)
                 .await?;
             let page_scanned = page.scanned_rows.min(limit);
-            let end_of_format = page.end_of_requested_name || page_scanned < limit;
+            // Two independent stop conditions: the shape has nothing left, or
+            // this request has walked as far as its budget allows.
+            let scan_ended = page.scan_exhausted || page_scanned < limit;
             self.fallback_offsets.insert(
                 normalized_api_format.to_string(),
                 offset.saturating_add(page_scanned),
             );
-            let total_scanned = scanned.saturating_add(page_scanned);
-            self.scanned_rows_by_format
-                .insert(normalized_api_format.to_string(), total_scanned);
-            if end_of_format || total_scanned >= REQUESTED_MODEL_MAX_SCANNED_ROWS {
+            self.charge_scan_budget(normalized_api_format, page_scanned);
+            if scan_ended || self.scan_budget(normalized_api_format).is_exhausted() {
                 self.exhausted_api_formats
                     .insert(normalized_api_format.to_string());
             }
