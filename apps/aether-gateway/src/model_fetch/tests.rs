@@ -1,8 +1,9 @@
+use crate::tests::DEV_FERNET_KEY;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aether_contracts::ExecutionPlan;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::global_models::{
@@ -94,7 +95,7 @@ fn sample_key(provider_id: &str, key_id: &str) -> StoredProviderCatalogKey {
     .expect("key should build")
     .with_transport_fields(
         Some(json!(["openai:chat"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "live-secret-api-key")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "live-secret-api-key")
             .expect("api key should encrypt"),
         None,
         None,
@@ -248,7 +249,7 @@ async fn gateway_model_fetch_updates_key_and_syncs_provider_model_whitelist_asso
     let data_state = crate::data::GatewayDataState::disabled()
         .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository))
         .with_global_model_repository_for_tests(Arc::clone(&global_model_repository))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
     let state = build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state);
 
@@ -341,7 +342,7 @@ async fn codex_preset_model_fetch_associates_the_api_supported_review_model() {
     let data_state = crate::data::GatewayDataState::disabled()
         .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository))
         .with_global_model_repository_for_tests(Arc::clone(&global_model_repository))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(data_state);
@@ -459,7 +460,7 @@ async fn gateway_model_fetch_updates_key_and_syncs_provider_model_whitelist_asso
     let data_state = crate::data::GatewayDataState::disabled()
         .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository))
         .with_global_model_repository_for_tests(Arc::clone(&global_model_repository))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state);
@@ -566,7 +567,7 @@ async fn gateway_background_model_fetch_updates_key_and_syncs_provider_model_whi
     let data_state = crate::data::GatewayDataState::disabled()
         .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository))
         .with_global_model_repository_for_tests(Arc::clone(&global_model_repository))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state);
 

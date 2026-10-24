@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use aether_contracts::ExecutionPlan;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;

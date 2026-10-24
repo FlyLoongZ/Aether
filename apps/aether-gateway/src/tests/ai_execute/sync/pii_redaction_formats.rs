@@ -4,7 +4,8 @@ use super::{
     EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 use crate::data::GatewayDataState;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
 };
@@ -401,7 +402,7 @@ async fn run_redaction_format_case(
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .with_system_config_values_for_tests(redaction_config()),
         );
@@ -655,11 +656,8 @@ fn key(case: &RedactionFormatCase) -> StoredProviderCatalogKey {
     .expect("key should build")
     .with_transport_fields(
         Some(json!([case.provider_format.api_format()])),
-        encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            &format!("sk-upstream-{}", case.test_id),
-        )
-        .expect("api key should encrypt"),
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &format!("sk-upstream-{}", case.test_id))
+            .expect("api key should encrypt"),
         None,
         None,
         Some(json!({case.provider_format.api_format(): 1})),

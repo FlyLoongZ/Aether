@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::routing_profiles::{
     CreateRoutingGroupRecord, RoutingGroupWriteRepository, UpdateRoutingGroupRecord,
@@ -51,7 +52,7 @@ async fn users_me_api_key_routing_selection_round_trips_and_cannot_bypass_visibi
         let data = GatewayDataState::with_auth_api_key_repository_for_tests(keys)
             .with_user_reader(users)
             .with_routing_group_repository_for_tests(groups.clone())
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+            .with_encryption_key_for_tests(DEV_FERNET_KEY);
         AppState::new()
             .unwrap()
             .with_data_state_for_tests(data)

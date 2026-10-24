@@ -6,7 +6,8 @@ use super::{
 };
 use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -126,7 +127,7 @@ async fn gateway_executes_openai_chat_stream_via_local_decision_gate_without_exe
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -293,7 +294,7 @@ async fn gateway_executes_openai_chat_stream_via_local_decision_gate_without_exe
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state)
@@ -685,7 +686,7 @@ async fn gateway_executes_openai_chat_stream_via_local_openai_responses_cross_fo
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests(vec![
             ("scheduling_mode".to_string(), json!("fixed_order")),
@@ -1042,7 +1043,7 @@ async fn gateway_executes_openai_chat_stream_via_local_cross_format_gemini_candi
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests(vec![(
             "provider_priority_mode".to_string(),
@@ -1242,7 +1243,7 @@ async fn gateway_executes_openai_chat_stream_with_custom_path_via_local_decision
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -1439,7 +1440,7 @@ async fn gateway_executes_openai_chat_stream_with_custom_path_via_local_decision
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests(vec![(
             "provider_priority_mode".to_string(),
@@ -1688,7 +1689,7 @@ async fn gateway_retries_next_local_openai_chat_stream_candidate_after_retryable
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, secret)
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, secret)
                 .expect("api key should encrypt"),
             None,
             None,
@@ -1916,7 +1917,7 @@ async fn gateway_retries_next_local_openai_chat_stream_candidate_after_retryable
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests(vec![(
             "provider_priority_mode".to_string(),

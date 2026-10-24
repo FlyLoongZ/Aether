@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_query_test_model_locally_with_trusted_admin_principal() {
@@ -83,7 +84,7 @@ async fn gateway_handles_admin_provider_query_test_model_locally_with_trusted_ad
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -258,7 +259,7 @@ async fn gateway_handles_openai_responses_test_model_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

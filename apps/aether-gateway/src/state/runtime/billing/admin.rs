@@ -682,10 +682,11 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::DEV_FERNET_KEY;
     use std::sync::Arc;
     use std::time::Duration;
 
-    use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+    use aether_crypto::encrypt_python_fernet_plaintext;
     use aether_data::repository::billing::InMemoryBillingReadRepository;
     use aether_data_contracts::repository::billing::{
         BillingReadRepository, PaymentGatewayConfigWriteInput,
@@ -821,11 +822,9 @@ mod tests {
     #[tokio::test]
     async fn gateway_lookup_lazily_migrates_legacy_secret_without_touching_other_fields() {
         let repository = Arc::new(InMemoryBillingReadRepository::default());
-        let legacy = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            r#"{"secret_key":"legacy-value"}"#,
-        )
-        .expect("legacy secret should encrypt");
+        let legacy =
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, r#"{"secret_key":"legacy-value"}"#)
+                .expect("legacy secret should encrypt");
         repository
             .upsert_payment_gateway_config(&PaymentGatewayConfigWriteInput {
                 provider: "stripe".to_string(),
@@ -848,7 +847,7 @@ mod tests {
             .expect("gateway lookup should succeed")
             .expect("gateway should exist");
         let data = GatewayDataState::with_billing_reader_for_tests(repository.clone())
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+            .with_encryption_key_for_tests(DEV_FERNET_KEY);
         let state = AppState::new()
             .expect("app state should build")
             .with_data_state_for_tests(data);

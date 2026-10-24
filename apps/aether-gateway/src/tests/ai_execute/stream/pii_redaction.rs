@@ -1,5 +1,5 @@
 use super::*;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -25,6 +25,7 @@ struct SeenProviderStreamRequest {
 }
 
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 
 fn auth_snapshot() -> StoredAuthApiKeySnapshot {
     StoredAuthApiKeySnapshot::new(
@@ -200,7 +201,7 @@ fn key() -> StoredProviderCatalogKey {
     .expect("key should build")
     .with_transport_fields(
         Some(serde_json::json!(["openai:chat"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-stream-pii")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-stream-pii")
             .expect("api key should encrypt"),
         None,
         None,
@@ -309,7 +310,7 @@ async fn ai_execute_stream_pii_redaction_round_trip_impl() {
         candidate_selection_repository,
         provider_catalog_repository,
         Arc::clone(&request_candidate_repository),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     )
     .with_system_config_values_for_tests(vec![
         ("module.chat_pii_redaction.enabled".to_string(), json!(true)),

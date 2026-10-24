@@ -7,6 +7,7 @@ use super::{
 };
 use crate::data::GatewayDataState;
 use crate::image_capabilities::openai_image_gateway_max_generation_count;
+use crate::tests::DEV_FERNET_KEY;
 use crate::tests::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json, start_server,
     to_bytes, wait_until, AppState, Arc, Body, Json, Mutex, Request, Router, StatusCode,
@@ -14,7 +15,7 @@ use crate::tests::{
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS,
 };
 use aether_contracts::{ExecutionResult, ExecutionTelemetry, ResponseBody};
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
@@ -998,7 +999,7 @@ async fn run_versioned_codex_model_cards_frontdoor_scenario() {
                 auth_repository,
             )
             .attach_provider_catalog_repository_for_tests(provider_catalog_repository.clone())
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let configured_rows = state
@@ -1477,7 +1478,7 @@ async fn run_openai_realtime_websocket_frontdoor_scenario() {
                 provider_catalog_repository,
                 request_candidate_repository,
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(crate::usage::UsageRuntimeConfig {
@@ -1826,7 +1827,7 @@ async fn run_codex_live_oauth_frontdoor_scenario(dialect: CodexLiveWebRtcTestDia
     upstream_key.auth_type = "oauth".to_string();
     upstream_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"account_id":"account-live-1","is_fedramp":true}"#,
         )
         .expect("Codex Live auth config should encrypt"),
@@ -1893,7 +1894,7 @@ async fn run_codex_live_oauth_frontdoor_scenario(dialect: CodexLiveWebRtcTestDia
                 provider_catalog_repository,
                 request_candidate_repository,
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(crate::usage::UsageRuntimeConfig {
@@ -2190,7 +2191,7 @@ async fn run_codex_live_api_key_websocket_frontdoor_scenario(dialect: CodexLiveD
                 auth_repository,
             )
             .attach_provider_catalog_repository_for_tests(provider_catalog_repository)
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
     let gateway = build_router_with_state(state);
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2489,7 +2490,7 @@ async fn run_codex_live_api_key_sideband_frontdoor_scenario(dialect: CodexLiveWe
                 auth_repository,
             )
             .attach_provider_catalog_repository_for_tests(provider_catalog_repository)
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
     let gateway = build_router_with_state(state);
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -4205,7 +4206,7 @@ async fn gateway_cancels_gemini_operation_without_hitting_fallback_probe() {
                 crate::data::GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
                     Arc::clone(&repository),
                     provider_catalog_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 )
                 .with_auth_api_key_reader(auth_repository),
             ),

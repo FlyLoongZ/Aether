@@ -1,6 +1,7 @@
+use crate::tests::DEV_FERNET_KEY;
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::candidates::{
@@ -153,7 +154,7 @@ async fn gateway_provider_checkin_runs_local_query_balance_for_configured_provid
                         },
                         "credentials": {
                             "api_key": encrypt_python_fernet_plaintext(
-                                DEVELOPMENT_ENCRYPTION_KEY,
+                                DEV_FERNET_KEY,
                                 "live-secret-api-key",
                             ).expect("api key should encrypt"),
                         }
@@ -230,7 +231,7 @@ async fn gateway_provider_checkin_runs_local_query_balance_for_configured_provid
                     ("enable_provider_checkin".to_string(), json!(true)),
                     ("provider_checkin_time".to_string(), json!("01:05")),
                 ])
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let summary = crate::maintenance::perform_provider_checkin_once(&gateway_state)
@@ -281,7 +282,7 @@ async fn gateway_provider_checkin_counts_anyrouter_auto_signin_as_success() {
                         "config": {},
                         "credentials": {
                             "session_cookie": encrypt_python_fernet_plaintext(
-                                DEVELOPMENT_ENCRYPTION_KEY,
+                                DEV_FERNET_KEY,
                                 "session=MTIzfGVIaDRlQUpwWkFOcGJuU3F1d0RfVkhsNWVYa0lkWE5sY201aGJXVUdjM1J5YVc1bkRCQUFCV0ZzYVdObHxzaWc",
                             ).expect("session cookie should encrypt"),
                         }
@@ -382,7 +383,7 @@ async fn gateway_provider_checkin_counts_anyrouter_auto_signin_as_success() {
                     ("enable_provider_checkin".to_string(), json!(true)),
                     ("provider_checkin_time".to_string(), json!("01:05")),
                 ])
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let summary = crate::maintenance::perform_provider_checkin_once(&gateway_state)

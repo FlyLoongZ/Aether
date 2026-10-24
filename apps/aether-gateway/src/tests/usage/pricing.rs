@@ -8,8 +8,9 @@ use super::{
     RequestCandidateStatus, Response, Router, StatusCode, StoredAuthApiKeySnapshot,
     StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
     StoredProviderCatalogProvider, StoredProviderModelMapping, UsageReadRepository,
-    UsageRuntimeConfig, DEVELOPMENT_ENCRYPTION_KEY, TRACE_ID_HEADER,
+    UsageRuntimeConfig, TRACE_ID_HEADER,
 };
+use crate::tests::DEV_FERNET_KEY;
 use aether_data::repository::billing::InMemoryBillingReadRepository;
 use aether_data::repository::wallet::{InMemoryWalletRepository, StoredWalletSnapshot};
 use aether_data_contracts::repository::billing::StoredBillingModelContext;
@@ -333,7 +334,7 @@ fn sample_provider_catalog_key(spec: ProviderSpec) -> StoredProviderCatalogKey {
     .expect("key should build")
     .with_transport_fields(
         Some(json!([spec.api_format])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, spec.upstream_secret)
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, spec.upstream_secret)
             .expect("api key should encrypt"),
         None,
         None,
@@ -438,7 +439,7 @@ async fn start_local_billing_gateway(
         Arc::clone(&usage_repository),
         billing_repository,
         wallet_repository,
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state)

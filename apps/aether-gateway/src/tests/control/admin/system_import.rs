@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aether_contracts::ExecutionPlan;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
 };
@@ -54,6 +54,7 @@ use crate::handlers::shared::{
     open_provider_catalog_credential, ProviderCatalogCredentialField,
 };
 use crate::restore_backup_json;
+use crate::tests::DEV_FERNET_KEY;
 
 fn decrypt_test_provider_catalog_credential(
     key: &aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey,
@@ -87,7 +88,7 @@ fn build_admin_system_data_state_with_repositories(
         .attach_auth_module_repository_for_tests(auth_module_repository)
         .attach_oauth_provider_repository_for_tests(oauth_provider_repository)
         .with_system_config_values_for_tests(Vec::<(String, Value)>::new())
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+        .with_encryption_key_for_tests(DEV_FERNET_KEY)
 }
 
 fn build_empty_admin_system_data_state() -> GatewayDataState {
@@ -517,7 +518,7 @@ async fn gateway_imports_admin_system_config_locally_and_persists_data_impl() {
     .attach_auth_module_repository_for_tests(Arc::clone(&auth_module_repository))
     .attach_oauth_provider_repository_for_tests(Arc::clone(&oauth_provider_repository))
     .with_system_config_values_for_tests(Vec::<(String, Value)>::new())
-    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+    .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     let (upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
@@ -1199,7 +1200,7 @@ async fn gateway_prevalidates_aggregate_user_data_before_config_mutation_impl() 
             .attach_provider_catalog_repository_for_tests(provider_catalog_repository)
             .with_global_model_repository_for_tests(global_model_repository)
             .with_system_config_values_for_tests(Vec::<(String, Value)>::new())
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+            .with_encryption_key_for_tests(DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(data)
@@ -1356,7 +1357,7 @@ async fn gateway_prevalidates_nested_user_key_before_user_mutation_impl() {
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123")])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -1415,7 +1416,7 @@ async fn gateway_rejects_credentials_in_v16_user_import_before_mutation_impl() {
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123")])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -1514,7 +1515,7 @@ async fn gateway_prevalidates_usage_integer_storage_before_user_mutation_impl() 
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123")])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -1589,7 +1590,7 @@ async fn gateway_prevalidates_duplicate_usage_dimensions_before_user_mutation_im
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123")])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -1699,7 +1700,7 @@ async fn gateway_user_import_allows_chained_username_release_impl() {
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123"), first, second])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -1793,7 +1794,7 @@ async fn gateway_user_import_preserves_omitted_email_in_simulated_state_impl() {
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123"), existing])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -1894,12 +1895,12 @@ async fn authenticated_recovery_restores_password_and_api_key_login_material_imp
         0,
     )
     .expect("payload should compress");
-    let (envelope, _) = encrypt_backup_bytes(DEVELOPMENT_ENCRYPTION_KEY, object_key, &compressed)
+    let (envelope, _) = encrypt_backup_bytes(DEV_FERNET_KEY, object_key, &compressed)
         .expect("backup should encrypt");
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEV_FERNET_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");
@@ -1911,7 +1912,7 @@ async fn authenticated_recovery_restores_password_and_api_key_login_material_imp
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(&auth_repository))
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123")])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -2056,7 +2057,7 @@ async fn authenticated_recovery_reencrypts_existing_api_key_impl() {
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(&auth_repository))
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([
             sample_import_admin_user("admin-user-123"),
@@ -2095,12 +2096,12 @@ async fn authenticated_recovery_reencrypts_existing_api_key_impl() {
         0,
     )
     .expect("payload should compress");
-    let (envelope, _) = encrypt_backup_bytes(DEVELOPMENT_ENCRYPTION_KEY, object_key, &compressed)
+    let (envelope, _) = encrypt_backup_bytes(DEV_FERNET_KEY, object_key, &compressed)
         .expect("backup should encrypt");
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEV_FERNET_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");
@@ -2172,12 +2173,12 @@ async fn authenticated_recovery_rejects_proxy_nodes_before_config_mutation_impl(
         0,
     )
     .expect("payload should compress");
-    let (envelope, _) = encrypt_backup_bytes(DEVELOPMENT_ENCRYPTION_KEY, object_key, &compressed)
+    let (envelope, _) = encrypt_backup_bytes(DEV_FERNET_KEY, object_key, &compressed)
         .expect("backup should encrypt");
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEV_FERNET_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");
@@ -2243,12 +2244,12 @@ async fn authenticated_recovery_rejects_ldap_filter_injection_before_config_muta
         0,
     )
     .expect("payload should compress");
-    let (envelope, _) = encrypt_backup_bytes(DEVELOPMENT_ENCRYPTION_KEY, object_key, &compressed)
+    let (envelope, _) = encrypt_backup_bytes(DEV_FERNET_KEY, object_key, &compressed)
         .expect("backup should encrypt");
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEV_FERNET_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");
@@ -2298,7 +2299,7 @@ async fn gateway_user_import_password_hash_overwrite_revokes_existing_sessions_i
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123"), existing_user])
         .with_auth_session_for_tests(old_session)
@@ -2386,7 +2387,7 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(&auth_repository))
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123")])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -2768,7 +2769,7 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(&auth_repository))
                 .with_user_reader(user_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123"), existing_user])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -3155,7 +3156,7 @@ async fn gateway_rejects_legacy_user_import_string_bool_field_impl() {
         .expect("gateway should build")
         .with_data_state_for_tests(
             GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(&auth_repository))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_auth_users_for_tests([sample_import_admin_user("admin-user-123")])
         .with_auth_wallets_for_tests(Vec::<StoredWalletSnapshot>::new());
@@ -3485,7 +3486,7 @@ async fn gateway_imports_oauth_provider_key_credentials_from_admin_system_config
     .attach_auth_module_repository_for_tests(Arc::clone(&auth_module_repository))
     .attach_oauth_provider_repository_for_tests(Arc::clone(&oauth_provider_repository))
     .with_system_config_values_for_tests(Vec::<(String, Value)>::new())
-    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+    .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     let gateway = build_router_with_state(
         AppState::new()
@@ -3571,7 +3572,7 @@ async fn gateway_overwrites_oauth_provider_key_credentials_from_admin_system_imp
     .attach_auth_module_repository_for_tests(Arc::clone(&auth_module_repository))
     .attach_oauth_provider_repository_for_tests(Arc::clone(&oauth_provider_repository))
     .with_system_config_values_for_tests(Vec::<(String, Value)>::new())
-    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+    .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     let state = AppState::new()
         .expect("gateway should build")
@@ -3749,7 +3750,7 @@ async fn gateway_overwrites_oauth_provider_key_credentials_from_admin_system_imp
     }));
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"oauth-refresh-token-old","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config should encrypt"),
@@ -3817,7 +3818,7 @@ async fn gateway_overwrites_oauth_provider_key_credentials_from_admin_system_imp
     .attach_oauth_provider_repository_for_tests(Arc::clone(&oauth_provider_repository))
     .with_pool_score_repository_for_tests(Arc::clone(&pool_score_repository))
     .with_system_config_values_for_tests(Vec::<(String, Value)>::new())
-    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+    .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     let gateway = build_router_with_state(
         AppState::new()
@@ -4034,7 +4035,7 @@ async fn gateway_preserves_manual_proxy_configs_while_skipping_proxy_nodes_durin
     .attach_auth_module_repository_for_tests(Arc::clone(&auth_module_repository))
     .attach_oauth_provider_repository_for_tests(Arc::clone(&oauth_provider_repository))
     .with_system_config_values_for_tests(Vec::<(String, Value)>::new())
-    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+    .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     let gateway = build_router_with_state(
         AppState::new()

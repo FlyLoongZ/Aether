@@ -3,7 +3,8 @@ use super::{
     to_bytes, Arc, Body, Json, Mutex, Request, Router, StatusCode, TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -128,7 +129,7 @@ async fn gateway_executes_codex_image_stream_via_local_decision_gate_after_oauth
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"rt-codex-image-stream-local-123"}"#,
         )
         .expect("auth config should encrypt");
@@ -143,7 +144,7 @@ async fn gateway_executes_codex_image_stream_via_local_decision_gate_after_oauth
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:image"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -265,7 +266,7 @@ async fn gateway_executes_codex_image_stream_via_local_decision_gate_after_oauth
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::new(InMemoryRequestCandidateRepository::default()),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
@@ -453,7 +454,7 @@ async fn gateway_bridges_codex_image_sync_json_to_streaming_image_sse_impl() {
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"rt-codex-image-stream-local-123"}"#,
         )
         .expect("auth config should encrypt");
@@ -468,7 +469,7 @@ async fn gateway_bridges_codex_image_sync_json_to_streaming_image_sse_impl() {
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:image"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -572,7 +573,7 @@ async fn gateway_bridges_codex_image_sync_json_to_streaming_image_sse_impl() {
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::new(InMemoryRequestCandidateRepository::default()),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
@@ -798,7 +799,7 @@ fn image_bridge_provider_catalog_key(
     .expect("key should build")
     .with_transport_fields(
         Some(serde_json::json!(["openai:image"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-image-bridge")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-image-bridge")
             .expect("api key should encrypt"),
         None,
         None,
@@ -850,7 +851,7 @@ async fn start_image_bridge_gateway(
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);

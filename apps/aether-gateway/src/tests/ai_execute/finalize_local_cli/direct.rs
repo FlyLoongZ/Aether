@@ -6,8 +6,9 @@ use crate::data::GatewayDataState;
 use crate::tests::hash_api_key;
 use crate::tests::support::encode_event_frame;
 use crate::tests::support::sample_auth_snapshot_kiro as sample_auth_snapshot;
+use crate::tests::DEV_FERNET_KEY;
 use aether_ai_formats::openai_responses_message_item_id;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -289,7 +290,7 @@ async fn gateway_executes_openai_responses_sync_upstream_stream_via_local_finali
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -528,11 +529,11 @@ async fn gateway_executes_kiro_claude_cli_sync_upstream_stream_via_local_finaliz
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("api key should encrypt"),
             Some(
                 encrypt_python_fernet_plaintext(
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                     auth_config.to_string().as_str(),
                 )
                 .expect("auth config should encrypt"),
@@ -739,7 +740,7 @@ async fn gateway_executes_kiro_claude_cli_sync_upstream_stream_via_local_finaliz
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 )
                 .attach_proxy_node_repository_for_tests(
                     crate::tests::ai_execute::ai_execute_proxy_node_repository([

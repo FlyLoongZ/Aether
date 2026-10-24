@@ -3,8 +3,9 @@ use super::super::test_support::{
 };
 use super::local_monitoring_response;
 use crate::data::GatewayDataState;
+use crate::tests::DEV_FERNET_KEY;
 use crate::AppState;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data_contracts::repository::{
     candidates::RequestCandidateStatus, usage::UsageBodyCaptureState,
 };
@@ -344,10 +345,10 @@ async fn admin_monitoring_trace_request_returns_oauth_account_label_from_auth_co
     let oauth_key = sample_key()
         .with_transport_fields(
             None,
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder should encrypt"),
             Some(
-                encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, &auth_config)
+                encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &auth_config)
                     .expect("auth config should encrypt"),
             ),
             None,
@@ -365,7 +366,7 @@ async fn admin_monitoring_trace_request_returns_oauth_account_label_from_auth_co
     ));
     let data_state = GatewayDataState::with_request_candidate_reader_for_tests(request_candidates)
         .attach_provider_catalog_repository_for_tests(provider_catalog)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state);

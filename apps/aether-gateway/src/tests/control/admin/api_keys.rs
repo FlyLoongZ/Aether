@@ -12,7 +12,7 @@ use serde_json::json;
 
 use super::super::{build_router_with_state, start_server, AppState};
 use crate::data::GatewayDataState;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+use crate::tests::DEV_FERNET_KEY;
 
 use super::super::helpers::admin_request;
 
@@ -196,7 +196,7 @@ async fn gateway_handles_admin_api_keys_list_locally_with_trusted_admin_principa
                     ])),
                     usage_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -270,7 +270,7 @@ async fn gateway_handles_admin_api_keys_detail_locally_with_trusted_admin_princi
                     wallet_repository,
                     usage_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -331,7 +331,7 @@ async fn gateway_includes_usage_summary_when_admin_api_keys_list_requests_it() {
                     )),
                     usage_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -378,7 +378,7 @@ async fn gateway_handles_admin_api_keys_full_key_locally_with_trusted_admin_prin
                     auth_repository,
                     wallet_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -422,7 +422,7 @@ async fn gateway_handles_admin_api_key_install_session_locally_with_trusted_admi
                 GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(
                     &auth_repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -551,7 +551,7 @@ async fn gateway_handles_admin_api_keys_create_locally_with_trusted_admin_princi
                 crate::data::GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(
                     &repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -637,7 +637,7 @@ async fn gateway_handles_admin_api_keys_update_locally_with_trusted_admin_princi
                 crate::data::GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(
                     &repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -709,7 +709,7 @@ async fn gateway_handles_admin_api_keys_toggle_locally_with_trusted_admin_princi
                 crate::data::GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(
                     &repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -755,7 +755,7 @@ async fn gateway_handles_admin_api_keys_delete_locally_with_trusted_admin_princi
                 crate::data::GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(
                     &repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

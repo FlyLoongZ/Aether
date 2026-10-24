@@ -5,13 +5,13 @@ use super::{
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
     Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
     StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
-    StoredProviderCatalogProvider, DEVELOPMENT_ENCRYPTION_KEY,
-    EXECUTION_PATH_EXECUTION_RUNTIME_SYNC, EXECUTION_PATH_HEADER,
+    StoredProviderCatalogProvider, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC, EXECUTION_PATH_HEADER,
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
     TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot_claude as sample_auth_snapshot;
+use crate::tests::DEV_FERNET_KEY;
 
 fn run_claude_chat_sync_test<F, Fut>(test_name: &'static str, make_future: F)
 where
@@ -126,7 +126,7 @@ async fn gateway_executes_claude_chat_sync_via_local_decision_gate_with_local_sy
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-claude-chat")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-claude-chat")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -326,7 +326,7 @@ async fn gateway_executes_claude_chat_sync_via_local_decision_gate_with_local_sy
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -591,7 +591,7 @@ async fn gateway_surfaces_candidate_list_empty_reason_for_claude_chat_runtime_mi
                     candidate_selection_repository,
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -728,7 +728,7 @@ async fn gateway_returns_claude_chat_error_for_local_sync_failure_impl() {
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-claude-chat")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-claude-chat")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -844,7 +844,7 @@ async fn gateway_returns_claude_chat_error_for_local_sync_failure_impl() {
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([

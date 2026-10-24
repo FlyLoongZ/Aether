@@ -5,13 +5,14 @@ use super::{
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
     Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
     StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
-    StoredProviderCatalogProvider, StoredProviderModelMapping, DEVELOPMENT_ENCRYPTION_KEY,
+    StoredProviderCatalogProvider, StoredProviderModelMapping,
     EXECUTION_PATH_EXECUTION_RUNTIME_SYNC, EXECUTION_PATH_HEADER,
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
     TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot;
+use crate::tests::DEV_FERNET_KEY;
 
 large_stack_async_test!(
     gateway_skips_unsupported_local_openai_chat_sync_candidate_before_trying_next_one,
@@ -98,7 +99,7 @@ async fn gateway_skips_unsupported_local_openai_chat_sync_candidate_before_tryin
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -253,7 +254,7 @@ async fn gateway_skips_unsupported_local_openai_chat_sync_candidate_before_tryin
     supported_key.provider_id = "provider-openai-skip-local-2".to_string();
     supported_key.name = "backup".to_string();
     supported_key.encrypted_api_key = Some(
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai-backup")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai-backup")
             .expect("api key should encrypt"),
     );
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
@@ -272,7 +273,7 @@ async fn gateway_skips_unsupported_local_openai_chat_sync_candidate_before_tryin
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests(vec![(
             "provider_priority_mode".to_string(),
@@ -437,7 +438,7 @@ async fn gateway_surfaces_local_execution_runtime_miss_reason_when_all_openai_ch
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -506,7 +507,7 @@ async fn gateway_surfaces_local_execution_runtime_miss_reason_when_all_openai_ch
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);
@@ -695,7 +696,7 @@ async fn gateway_retries_next_local_openai_chat_sync_candidate_after_auth_failur
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, secret)
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, secret)
                 .expect("api key should encrypt"),
             None,
             None,
@@ -922,7 +923,7 @@ async fn gateway_retries_next_local_openai_chat_sync_candidate_after_auth_failur
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests(vec![(
             "provider_priority_mode".to_string(),

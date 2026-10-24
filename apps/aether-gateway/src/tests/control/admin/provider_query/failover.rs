@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_query_test_model_failover_locally_with_trusted_admin_principal() {
@@ -116,7 +117,7 @@ async fn gateway_handles_admin_provider_query_test_model_failover_locally_with_t
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -291,7 +292,7 @@ async fn gateway_handles_admin_provider_query_test_model_failover_for_kiro_local
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -451,7 +452,7 @@ async fn gateway_retries_kiro_failover_after_http_error_without_message_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -577,7 +578,7 @@ async fn gateway_handles_non_kiro_multi_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -682,7 +683,7 @@ async fn gateway_handles_openai_responses_test_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -782,7 +783,7 @@ async fn gateway_handles_claude_cli_test_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -882,7 +883,7 @@ async fn gateway_handles_gemini_cli_test_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1013,7 +1014,7 @@ async fn gateway_unwraps_gemini_cli_v1internal_response_for_failover_model_test_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1111,7 +1112,7 @@ async fn gateway_handles_admin_provider_query_test_model_failover_with_single_mo
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1239,7 +1240,7 @@ async fn gateway_retries_non_kiro_failover_after_http_error_without_message_impl
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1274,6 +1275,69 @@ async fn gateway_retries_non_kiro_failover_after_http_error_without_message_impl
 
     gateway_handle.abort();
     execution_runtime_handle.abort();
+}
+
+#[test]
+fn gateway_rejects_admin_provider_query_test_model_without_provider_id() {
+    run_provider_query_test(
+        "gateway_rejects_admin_provider_query_test_model_without_provider_id",
+        gateway_rejects_admin_provider_query_test_model_without_provider_id_impl,
+    );
+}
+
+async fn gateway_rejects_admin_provider_query_test_model_without_provider_id_impl() {
+    assert_admin_provider_query_route(
+        "/api/admin/provider-query/test-model",
+        json!({ "model": "gpt-4.1" }),
+        StatusCode::BAD_REQUEST,
+        |payload| {
+            assert_eq!(payload["detail"], json!("provider_id is required"));
+        },
+    )
+    .await;
+}
+
+#[test]
+fn gateway_rejects_admin_provider_query_test_model_failover_without_provider_id() {
+    run_provider_query_test(
+        "gateway_rejects_admin_provider_query_test_model_failover_without_provider_id",
+        gateway_rejects_admin_provider_query_test_model_failover_without_provider_id_impl,
+    );
+}
+
+async fn gateway_rejects_admin_provider_query_test_model_failover_without_provider_id_impl() {
+    assert_admin_provider_query_route(
+        "/api/admin/provider-query/test-model-failover",
+        json!({ "failover_models": ["gpt-4.1"] }),
+        StatusCode::BAD_REQUEST,
+        |payload| {
+            assert_eq!(payload["detail"], json!("provider_id is required"));
+        },
+    )
+    .await;
+}
+
+#[test]
+fn gateway_rejects_admin_provider_query_test_model_failover_without_models() {
+    run_provider_query_test(
+        "gateway_rejects_admin_provider_query_test_model_failover_without_models",
+        gateway_rejects_admin_provider_query_test_model_failover_without_models_impl,
+    );
+}
+
+async fn gateway_rejects_admin_provider_query_test_model_failover_without_models_impl() {
+    assert_admin_provider_query_route(
+        "/api/admin/provider-query/test-model-failover",
+        json!({ "provider_id": "provider-openai", "failover_models": [] }),
+        StatusCode::BAD_REQUEST,
+        |payload| {
+            assert_eq!(
+                payload["detail"],
+                json!("failover_models should not be empty")
+            );
+        },
+    )
+    .await;
 }
 
 #[test]
@@ -1366,7 +1430,7 @@ async fn gateway_retries_non_kiro_failover_after_success_status_without_body_imp
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1411,67 +1475,4 @@ async fn gateway_retries_non_kiro_failover_after_success_status_without_body_imp
 
     gateway_handle.abort();
     execution_runtime_handle.abort();
-}
-
-#[test]
-fn gateway_rejects_admin_provider_query_test_model_without_provider_id() {
-    run_provider_query_test(
-        "gateway_rejects_admin_provider_query_test_model_without_provider_id",
-        gateway_rejects_admin_provider_query_test_model_without_provider_id_impl,
-    );
-}
-
-async fn gateway_rejects_admin_provider_query_test_model_without_provider_id_impl() {
-    assert_admin_provider_query_route(
-        "/api/admin/provider-query/test-model",
-        json!({ "model": "gpt-4.1" }),
-        StatusCode::BAD_REQUEST,
-        |payload| {
-            assert_eq!(payload["detail"], json!("provider_id is required"));
-        },
-    )
-    .await;
-}
-
-#[test]
-fn gateway_rejects_admin_provider_query_test_model_failover_without_provider_id() {
-    run_provider_query_test(
-        "gateway_rejects_admin_provider_query_test_model_failover_without_provider_id",
-        gateway_rejects_admin_provider_query_test_model_failover_without_provider_id_impl,
-    );
-}
-
-async fn gateway_rejects_admin_provider_query_test_model_failover_without_provider_id_impl() {
-    assert_admin_provider_query_route(
-        "/api/admin/provider-query/test-model-failover",
-        json!({ "failover_models": ["gpt-4.1"] }),
-        StatusCode::BAD_REQUEST,
-        |payload| {
-            assert_eq!(payload["detail"], json!("provider_id is required"));
-        },
-    )
-    .await;
-}
-
-#[test]
-fn gateway_rejects_admin_provider_query_test_model_failover_without_models() {
-    run_provider_query_test(
-        "gateway_rejects_admin_provider_query_test_model_failover_without_models",
-        gateway_rejects_admin_provider_query_test_model_failover_without_models_impl,
-    );
-}
-
-async fn gateway_rejects_admin_provider_query_test_model_failover_without_models_impl() {
-    assert_admin_provider_query_route(
-        "/api/admin/provider-query/test-model-failover",
-        json!({ "provider_id": "provider-openai", "failover_models": [] }),
-        StatusCode::BAD_REQUEST,
-        |payload| {
-            assert_eq!(
-                payload["detail"],
-                json!("failover_models should not be empty")
-            );
-        },
-    )
-    .await;
 }

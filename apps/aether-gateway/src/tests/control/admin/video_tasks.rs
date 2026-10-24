@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
@@ -26,6 +25,7 @@ use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::handlers::admin::features::video_tasks::maybe_build_local_admin_video_tasks_response;
 use crate::handlers::admin::{AdminAppState, AdminRequestContext};
+use crate::tests::DEV_FERNET_KEY;
 
 use super::super::helpers::trusted_admin_headers;
 
@@ -168,7 +168,7 @@ async fn gateway_handles_admin_video_tasks_list_locally_with_trusted_admin_princ
     let data_state = GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
         Arc::clone(&repository),
         provider_catalog_repository,
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
 
     let (_upstream_url, upstream_handle) = start_server(upstream).await;
@@ -351,7 +351,7 @@ async fn gateway_handles_admin_video_task_detail_locally_with_trusted_admin_prin
     let data_state = GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
         Arc::clone(&repository),
         provider_catalog_repository,
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
 
     let (_upstream_url, upstream_handle) = start_server(upstream).await;
@@ -419,7 +419,7 @@ async fn local_admin_video_task_detail_attaches_explicit_audit() {
     let data_state = GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
         Arc::clone(&repository),
         provider_catalog_repository,
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let state = AppState::new()
         .expect("gateway state should build")
@@ -605,7 +605,7 @@ async fn gateway_cancels_admin_video_task_locally_with_trusted_admin_principal()
             .with_video_task_repository_and_provider_transport_for_tests(
                 Arc::clone(&repository),
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -911,7 +911,7 @@ async fn gateway_rejects_cross_origin_admin_gemini_video_without_sending_provide
     let data_state = GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
         Arc::clone(&repository),
         provider_catalog_repository,
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
 
     let gateway = build_router_with_state(

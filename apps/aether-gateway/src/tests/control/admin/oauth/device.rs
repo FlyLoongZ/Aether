@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_oauth_device_authorize_for_windsurf_browser() {
@@ -246,7 +247,7 @@ async fn gateway_handles_admin_provider_oauth_device_poll_for_xai_impl() {
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_provider_oauth_device_session_entry_for_tests(
             "session-xai",
@@ -401,7 +402,7 @@ async fn gateway_handles_admin_provider_oauth_device_poll_for_windsurf_one_time_
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+            .with_encryption_key_for_tests(DEV_FERNET_KEY)
             .attach_proxy_node_repository_for_tests(proxy_node_repository),
         )
         .with_provider_oauth_device_session_entry_for_tests(
@@ -905,7 +906,7 @@ async fn gateway_handles_admin_provider_oauth_device_poll_locally_with_trusted_a
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_provider_oauth_device_session_entry_for_tests(
             "session-123",
@@ -1066,7 +1067,7 @@ async fn gateway_handles_admin_provider_oauth_device_poll_for_kiro_social_callba
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_provider_oauth_device_session_entry_for_tests(
             "session-social",
@@ -1312,7 +1313,7 @@ async fn local_admin_provider_oauth_device_poll_attaches_audit_only_when_transit
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_provider_oauth_device_session_entry_for_tests(
             "session-terminal",

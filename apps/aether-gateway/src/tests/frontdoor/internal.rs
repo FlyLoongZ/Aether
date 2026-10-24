@@ -4,9 +4,9 @@ use super::{
     InMemoryAuthApiKeySnapshotRepository, InMemoryMinimalCandidateSelectionReadRepository,
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository,
     InMemoryVideoTaskRepository, UpsertVideoTask, VideoTaskStatus, VideoTaskWriteRepository,
-    DEVELOPMENT_ENCRYPTION_KEY,
 };
 use crate::data::GatewayDataState;
+use crate::tests::DEV_FERNET_KEY;
 use crate::tests::{
     any, build_router, build_router_with_state, build_state_with_execution_runtime_override, json,
     start_server, AppState, Arc, Body, HeaderValue, Json, Mutex, Request, Response, Router,
@@ -62,7 +62,7 @@ fn internal_report_planner_state() -> AppState {
                 candidate_repository,
                 provider_catalog_repository,
                 request_candidate_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
 }
@@ -116,7 +116,7 @@ fn internal_video_create_planner_state(api_format: &str, model: &str) -> AppStat
                 candidate_repository,
                 provider_catalog_repository,
                 request_candidate_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
 }
@@ -208,7 +208,7 @@ async fn internal_video_followup_planner_state(
         repository,
         provider_catalog_repository,
         request_candidate_repository,
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     )
     .with_auth_api_key_reader(auth_repository);
 
@@ -576,7 +576,7 @@ async fn gateway_handles_internal_gateway_execute_sync_locally_impl() {
                     candidate_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );
@@ -744,7 +744,7 @@ async fn gateway_handles_internal_gateway_execute_stream_locally() {
                     candidate_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );
@@ -1686,7 +1686,7 @@ async fn gateway_handles_internal_gateway_decision_sync_locally_with_supplied_au
                     candidate_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );
@@ -1795,7 +1795,7 @@ async fn gateway_internal_decision_sync_revalidates_supplied_auth_context_wallet
                     usage_repository,
                     billing_repository,
                     wallet_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );
@@ -1943,7 +1943,7 @@ async fn gateway_handles_internal_gateway_decision_stream_locally_with_supplied_
                     candidate_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );
@@ -2038,7 +2038,7 @@ async fn gateway_handles_internal_gateway_plan_sync_locally_with_supplied_auth_c
                     candidate_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );
@@ -2130,7 +2130,7 @@ async fn gateway_handles_internal_gateway_plan_stream_locally_with_supplied_auth
                     candidate_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );

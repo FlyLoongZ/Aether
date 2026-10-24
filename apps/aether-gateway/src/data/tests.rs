@@ -1,7 +1,8 @@
+use crate::tests::DEV_FERNET_KEY;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -717,11 +718,10 @@ async fn data_state_reads_request_audit_bundle_from_multiple_readers() {
 
 #[tokio::test]
 async fn data_state_reads_decrypted_provider_transport_snapshot() {
-    let encrypted_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-live-openai")
-            .expect("api key ciphertext should build");
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-live-openai")
+        .expect("api key ciphertext should build");
     let encrypted_auth_config = encrypt_python_fernet_plaintext(
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
         "{\"refresh_token\":\"rt-1\",\"project\":\"demo\"}",
     )
     .expect("auth config ciphertext should build");
@@ -768,7 +768,7 @@ async fn data_state_reads_decrypted_provider_transport_snapshot() {
     ));
     let state = GatewayDataState::with_provider_transport_reader_for_tests(
         repository,
-        DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+        DEV_FERNET_KEY.to_string(),
     );
 
     let snapshot = state

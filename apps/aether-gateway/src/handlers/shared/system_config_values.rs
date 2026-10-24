@@ -713,11 +713,9 @@ mod tests {
         SMTP_PASSWORD_V3_PREFIX, SYSTEM_CONFIG_SECRET_V2_PREFIX,
     };
     use crate::data::GatewayDataState;
+    use crate::tests::DEV_FERNET_KEY;
     use crate::AppState;
-    use aether_crypto::{
-        encrypt_python_fernet_plaintext, looks_like_python_fernet_ciphertext,
-        DEVELOPMENT_ENCRYPTION_KEY,
-    };
+    use aether_crypto::{encrypt_python_fernet_plaintext, looks_like_python_fernet_ciphertext};
     use aether_data::repository::auth_modules::{
         AuthModuleReadRepository, InMemoryAuthModuleReadRepository, StoredLdapModuleConfig,
     };
@@ -739,7 +737,7 @@ mod tests {
 
     fn state_with_named_stored_secret(key: &str, value: &str) -> AppState {
         let data = GatewayDataState::disabled()
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+            .with_encryption_key_for_tests(DEV_FERNET_KEY)
             .with_system_config_values_for_tests([(key.to_string(), json!(value))]);
         let mut state = AppState::new().expect("gateway state should build");
         state.replace_data_state(Arc::new(data));
@@ -759,7 +757,7 @@ mod tests {
         let fixture_state = state_with_stored_secret(TEST_SECRET);
         let legacy_values = [
             TEST_SECRET.to_string(),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, TEST_SECRET)
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, TEST_SECRET)
                 .expect("legacy SMTP password should encrypt"),
             encrypt_system_config_secret(&fixture_state, TEST_KEY, TEST_SECRET)
                 .expect("v2 SMTP password should encrypt"),
@@ -806,7 +804,7 @@ mod tests {
         )
         .expect("SMTP binding should build");
         let fixture_state = state_with_stored_secret(TEST_SECRET);
-        let mut tampered = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, TEST_SECRET)
+        let mut tampered = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, TEST_SECRET)
             .expect("legacy SMTP password should encrypt");
         tampered.replace_range(tampered.len() - 2.., "AA");
         let invalid_values = [
@@ -983,7 +981,7 @@ mod tests {
             Some(ldap_config(value)),
         ));
         let data = GatewayDataState::with_auth_module_repository_for_tests(repository.clone())
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+            .with_encryption_key_for_tests(DEV_FERNET_KEY);
         let mut state = AppState::new().expect("gateway state should build");
         state.replace_data_state(Arc::new(data));
         (state, repository)
@@ -1019,7 +1017,7 @@ mod tests {
 
     #[tokio::test]
     async fn tampered_ldap_bind_password_ciphertext_fails_closed() {
-        let mut tampered = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, TEST_SECRET)
+        let mut tampered = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, TEST_SECRET)
             .expect("LDAP password should encrypt");
         tampered.replace_range(tampered.len() - 2.., "AA");
         assert!(looks_like_python_fernet_ciphertext(&tampered));
@@ -1181,16 +1179,10 @@ mod tests {
 
     #[tokio::test]
     async fn stale_cached_ciphertext_does_not_bypass_strong_read() {
-        let stale = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            "credential-before-rotation",
-        )
-        .expect("stale fixture should encrypt");
-        let current = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            "credential-after-rotation",
-        )
-        .expect("current fixture should encrypt");
+        let stale = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "credential-before-rotation")
+            .expect("stale fixture should encrypt");
+        let current = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "credential-after-rotation")
+            .expect("current fixture should encrypt");
         let state = state_with_stored_secret(&current);
 
         let plaintext = decrypt_or_migrate_system_config_secret(&state, TEST_KEY, stale)
@@ -1215,9 +1207,8 @@ mod tests {
     async fn administrator_rotation_wins_race_with_plaintext_migration() {
         let state = state_with_stored_secret(TEST_SECRET);
         let rotated_plaintext = "credential-after-administrator-rotation";
-        let rotated_ciphertext =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, rotated_plaintext)
-                .expect("rotated fixture should encrypt");
+        let rotated_ciphertext = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, rotated_plaintext)
+            .expect("rotated fixture should encrypt");
         let reached_compare = Arc::new(Barrier::new(2));
         let resume_compare = Arc::new(Barrier::new(2));
         let first_compare = Arc::new(AtomicBool::new(true));
@@ -1272,7 +1263,7 @@ mod tests {
     async fn failed_compare_and_set_invalidates_cached_system_config_value() {
         let data = Arc::new(
             GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                .with_encryption_key_for_tests(DEV_FERNET_KEY)
                 .with_system_config_values_for_tests([(
                     TEST_KEY.to_string(),
                     json!("value-cached-on-this-node"),

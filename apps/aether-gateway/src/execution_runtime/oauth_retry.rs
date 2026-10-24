@@ -254,12 +254,13 @@ mod tests {
         refresh_oauth_plan_auth_for_retry, status_may_be_oauth_invalid,
         status_proves_access_token_invalid,
     };
+    use crate::tests::DEV_FERNET_KEY;
     use std::collections::BTreeMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
     use aether_contracts::{ExecutionPlan, RequestBody};
-    use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+    use aether_crypto::encrypt_python_fernet_plaintext;
     use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogKeyAdminCasUpdate, ProviderCatalogKeyOAuthCredentialFence,
@@ -442,7 +443,7 @@ mod tests {
         .expect("endpoint transport should build");
 
         let encrypted_api_key =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "stale-codex-token")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "stale-codex-token")
                 .expect("api key ciphertext should build");
         let mut key = StoredProviderCatalogKey::new(
             "key-codex-oauth-retry".to_string(),
@@ -468,7 +469,7 @@ mod tests {
         key.expires_at_unix_secs = Some(4_102_444_800);
         key.encrypted_auth_config = Some(
             encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
                 r#"{"provider_type":"codex","refresh_token":"used-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":4102444800}"#,
             )
             .expect("auth config ciphertext should build"),
@@ -494,7 +495,7 @@ mod tests {
                 crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
 
@@ -608,13 +609,11 @@ mod tests {
             None,
         )
         .expect("endpoint transport should build");
-        let encrypted_api_key = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            "stale-claude-access-token",
-        )
-        .expect("api key ciphertext should build");
+        let encrypted_api_key =
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "stale-claude-access-token")
+                .expect("api key ciphertext should build");
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"claude_code","access_token":"stale-claude-access-token","refresh_token":"stale-claude-refresh-token","expires_at":4102444800}"#,
         )
         .expect("auth config ciphertext should build");
@@ -663,7 +662,7 @@ mod tests {
                 crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
         let stale_transport = state
@@ -762,11 +761,8 @@ mod tests {
             .expect("Claude key should exist");
         let expected_admin_replacement = admin_replacement.clone();
         admin_replacement.encrypted_api_key = Some(
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "admin-claude-access-token",
-            )
-            .expect("admin access token should encrypt"),
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "admin-claude-access-token")
+                .expect("admin access token should encrypt"),
         );
         admin_replacement.expires_at_unix_secs = Some(4_102_444_800);
         assert!(provider_catalog_repository

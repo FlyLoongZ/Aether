@@ -1,9 +1,9 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 fn sample_catalog_key() -> StoredProviderCatalogKey {
-    let encrypted_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-test-123")
-            .expect("api key ciphertext should build");
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-test-123")
+        .expect("api key ciphertext should build");
     StoredProviderCatalogKey::new(
         "key-test".to_string(),
         "provider-test".to_string(),
@@ -88,9 +88,8 @@ fn responses_key_scope_covers_search_in_one_direction() {
 #[test]
 fn masked_catalog_api_key_handles_unicode_plaintext_without_panicking() {
     let state = AppState::new().expect("gateway should build");
-    let encrypted_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "测试-密钥-1234567890")
-            .expect("api key ciphertext should build");
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "测试-密钥-1234567890")
+        .expect("api key ciphertext should build");
     let key = StoredProviderCatalogKey::new(
         "key-unicode".to_string(),
         "provider-test".to_string(),
@@ -122,7 +121,7 @@ fn masked_catalog_api_key_handles_unicode_plaintext_without_panicking() {
 fn masked_catalog_api_key_never_returns_a_complete_short_secret() {
     let state = AppState::new().expect("gateway should build");
     let plaintext = "sk-test-a";
-    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, plaintext)
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, plaintext)
         .expect("api key ciphertext should build");
     let key = StoredProviderCatalogKey::new(
         "key-short".to_string(),
@@ -154,11 +153,10 @@ fn masked_catalog_api_key_never_returns_a_complete_short_secret() {
 #[test]
 fn provider_aware_mask_labels_agent_identity_without_exposing_placeholder() {
     let state = AppState::new().expect("gateway should build");
-    let encrypted_placeholder =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
-            .expect("placeholder ciphertext should build");
+    let encrypted_placeholder = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
+        .expect("placeholder ciphertext should build");
     let encrypted_auth_config = encrypt_python_fernet_plaintext(
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
         r#"{"provider_type":"codex","auth_mode":"agentIdentity","agent_runtime_id":"runtime-1","agent_private_key":"base64-private-key","task_id":"task-1"}"#,
     )
     .expect("auth config ciphertext should build");

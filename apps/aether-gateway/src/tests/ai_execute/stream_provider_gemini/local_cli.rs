@@ -7,9 +7,10 @@ use super::{
     Request, RequestCandidateReadRepository, RequestCandidateStatus, Response, Router, StatusCode,
     StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
     StoredProviderCatalogKey, StoredProviderCatalogProvider, StoredProviderModelMapping,
-    DEVELOPMENT_ENCRYPTION_KEY, TRACE_ID_HEADER,
+    TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_executes_gemini_cli_stream_via_local_decision_gate_with_local_stream_decision() {
@@ -126,7 +127,7 @@ async fn gateway_executes_gemini_cli_stream_via_local_decision_gate_with_local_s
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-gemini-cli")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-gemini-cli")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -293,7 +294,7 @@ async fn gateway_executes_gemini_cli_stream_via_local_decision_gate_with_local_s
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -499,7 +500,7 @@ async fn gateway_executes_gemini_cli_stream_via_local_decision_gate_after_oauth_
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"gemini_cli","refresh_token":"rt-gemini-cli-stream-local-123","project_id":"gemini-cli-project-1"}"#,
         )
         .expect("auth config should encrypt");
@@ -514,7 +515,7 @@ async fn gateway_executes_gemini_cli_stream_via_local_decision_gate_after_oauth_
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -753,7 +754,7 @@ async fn gateway_executes_gemini_cli_stream_via_local_decision_gate_after_oauth_
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -998,7 +999,7 @@ async fn gateway_executes_vertex_ai_gemini_cli_stream_via_local_decision_gate_wi
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "vertex-upstream-secret")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "vertex-upstream-secret")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -1167,7 +1168,7 @@ async fn gateway_executes_vertex_ai_gemini_cli_stream_via_local_decision_gate_wi
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let gateway = build_router_with_state(gateway_state);
@@ -1393,7 +1394,7 @@ async fn gateway_executes_antigravity_gemini_cli_stream_via_local_decision_gate_
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"antigravity","project_id":"project-antigravity-stream-local-1","client_version":"1.2.3","session_id":"sess-antigravity-stream-local-123","refresh_token":"rt-antigravity-cli-stream-local-123"}"#,
         )
         .expect("auth config should encrypt");
@@ -1408,7 +1409,7 @@ async fn gateway_executes_antigravity_gemini_cli_stream_via_local_decision_gate_
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -1640,7 +1641,7 @@ async fn gateway_executes_antigravity_gemini_cli_stream_via_local_decision_gate_
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_default_routing_group_for_tests()
         .with_system_config_values_for_tests([(

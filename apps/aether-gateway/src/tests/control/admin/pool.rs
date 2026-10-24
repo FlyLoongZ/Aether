@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::pool_scores::InMemoryPoolMemberScoreRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
@@ -28,6 +27,7 @@ use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::handlers::admin::provider::pool_admin::maybe_build_local_admin_pool_response;
 use crate::handlers::admin::{AdminAppState, AdminRequestContext};
+use crate::tests::DEV_FERNET_KEY;
 
 use super::super::helpers::trusted_admin_headers;
 
@@ -318,7 +318,7 @@ async fn gateway_handles_admin_pool_batch_import_locally_with_trusted_admin_prin
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1846,7 +1846,7 @@ async fn gateway_includes_pool_quota_and_compat_fields_in_list_keys_response() {
         .expect("gateway should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_reader_for_tests(provider_catalog_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let response = local_admin_pool_response(
@@ -3233,7 +3233,7 @@ async fn gateway_pool_prefers_upstream_plan_type_over_auth_config() {
         .expect("gateway should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_reader_for_tests(provider_catalog_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let response = local_admin_pool_response(
@@ -3306,7 +3306,7 @@ async fn gateway_pool_plan_free_selector_prefers_upstream_plan_type() {
         .expect("gateway should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_reader_for_tests(provider_catalog_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let response = local_admin_pool_response(
@@ -3388,7 +3388,7 @@ async fn gateway_pool_keys_classify_oauth_credentials() {
         .expect("gateway should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_reader_for_tests(provider_catalog_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let response = local_admin_pool_response(
@@ -3464,7 +3464,7 @@ async fn gateway_pool_resolve_selection_marks_oauth_header_auth() {
         .expect("gateway should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_reader_for_tests(provider_catalog_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let response = local_admin_pool_response(
@@ -3726,7 +3726,7 @@ async fn gateway_resolve_selection_marks_legacy_kiro_bearer_keys_as_oauth_manage
         .expect("gateway should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_reader_for_tests(provider_catalog_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let response = local_admin_pool_response(
@@ -4501,7 +4501,7 @@ async fn gateway_rejects_admin_pool_batch_import_with_empty_provider_id() {
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

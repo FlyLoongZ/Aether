@@ -5,8 +5,8 @@ use super::{
 };
 use crate::data::GatewayDataState;
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 use aether_ai_formats::openai_responses_message_item_id;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -282,7 +282,7 @@ async fn gateway_executes_openai_responses_compact_openai_family_upstream_stream
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);

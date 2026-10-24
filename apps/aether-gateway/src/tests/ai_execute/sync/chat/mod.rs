@@ -15,7 +15,7 @@ use crate::constants::{
 use super::{
     build_router_with_state, build_state_with_execution_runtime_override, start_server, AppState,
 };
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };

@@ -5,7 +5,8 @@ use super::{
     EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -147,14 +148,11 @@ async fn gateway_executes_openai_responses_compact_as_unary_request_impl() {
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:responses:compact"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-compact",
-            )
-            .expect("api key should encrypt"),
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai-compact")
+                .expect("api key should encrypt"),
             Some(
                 encrypt_python_fernet_plaintext(
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                     r#"{"account_id":"acc-compact-local-123","is_fedramp":true}"#,
                 )
                 .expect("auth config should encrypt"),
@@ -411,7 +409,7 @@ async fn gateway_executes_openai_responses_compact_as_unary_request_impl() {
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([

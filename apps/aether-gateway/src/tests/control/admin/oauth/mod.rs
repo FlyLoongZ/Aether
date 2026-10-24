@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use aether_contracts::{ExecutionPlan, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER};
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::background_tasks::InMemoryBackgroundTaskRepository;
 use aether_data::repository::management_tokens::{
     InMemoryManagementTokenRepository, ManagementTokenReadRepository,
@@ -45,6 +45,7 @@ use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::handlers::admin::provider::oauth::dispatch::maybe_build_local_admin_provider_oauth_response;
 use crate::handlers::admin::{AdminAppState, AdminRequestContext};
+use crate::tests::DEV_FERNET_KEY;
 
 mod device;
 mod import;
@@ -341,7 +342,7 @@ async fn assert_antigravity_oauth_account_uses_google_userinfo_email(
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_state_entry_for_tests(
                 "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -517,7 +518,7 @@ async fn run_gateway_manual_kiro_oauth_refresh_maintenance_endpoint_test(
     key.auth_type = "oauth".to_string();
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             &json!({
                 "provider_type": "kiro",
                 "auth_method": "social",
@@ -553,7 +554,7 @@ async fn run_gateway_manual_kiro_oauth_refresh_maintenance_endpoint_test(
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );

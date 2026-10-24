@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_oauth_batch_import_task_status_locally_with_trusted_admin_principal(
@@ -175,7 +176,7 @@ async fn gateway_batch_imports_admin_provider_oauth_locally_with_trusted_admin_p
     existing_key.is_active = false;
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","email":"batch-alice@example.com","account_id":"acct-batch-123","account_user_id":"acct-user-batch-123","plan_type":"plus","refresh_token":"old-refresh-token"}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -196,7 +197,7 @@ async fn gateway_batch_imports_admin_provider_oauth_locally_with_trusted_admin_p
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", format!("{token_url}/oauth/token")),
     );
@@ -309,7 +310,7 @@ async fn gateway_batch_imports_chatgpt_web_access_tokens_with_pool_hints_impl() 
                     provider_catalog_repository.clone(),
                 )
                 .with_pool_score_repository_for_tests(Arc::clone(&pool_score_repository))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests(
                 "chatgpt_web",
@@ -460,7 +461,7 @@ async fn gateway_starts_admin_provider_oauth_batch_import_task_locally_with_trus
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", format!("{token_url}/oauth/token")),
     );
@@ -606,7 +607,7 @@ async fn gateway_updates_admin_provider_oauth_batch_import_task_progress_impl() 
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", format!("{token_url}/oauth/token")),
     );
@@ -868,7 +869,7 @@ async fn gateway_completes_admin_provider_oauth_key_locally_with_trusted_admin_p
                     provider_catalog_repository.clone(),
                 )
                 .with_pool_score_repository_for_tests(Arc::clone(&pool_score_repository))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_state_entry_for_tests(
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1098,7 +1099,7 @@ async fn gateway_completes_admin_provider_oauth_provider_locally_with_trusted_ad
     existing_key.is_active = false;
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","refresh_token":"old-refresh-token"}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1119,7 +1120,7 @@ async fn gateway_completes_admin_provider_oauth_provider_locally_with_trusted_ad
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_state_entry_for_tests(
                 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -1279,7 +1280,7 @@ async fn gateway_imports_codex_header_authorization_without_overwriting_payload_
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1366,7 +1367,7 @@ async fn gateway_imports_codex_access_token_with_payload_expires_at_when_token_h
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1472,7 +1473,7 @@ async fn gateway_import_invalidate_cached_oauth_entry_before_followup_resolution
     existing_key.oauth_invalid_reason = Some("[OAUTH_EXPIRED] token invalidated".to_string());
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","refresh_token":"old-refresh-token","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1498,7 +1499,7 @@ async fn gateway_import_invalidate_cached_oauth_entry_before_followup_resolution
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_provider_oauth_token_url_for_tests("codex", format!("{token_url}/oauth/token"))
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
@@ -1639,7 +1640,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_locally_with_trusted_ad
     existing_key.is_active = false;
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"kiro","auth_method":"social","email":"kiro-batch@example.com","refresh_token":"kiro-batch-refresh-old"}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1660,7 +1661,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_locally_with_trusted_ad
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests(
                 "kiro_social_refresh",
@@ -1783,7 +1784,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_over_active_expired_dup
     existing_key.oauth_invalid_reason = Some("Kiro Token 无效或已过期".to_string());
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"kiro","auth_method":"social","email":"kiro-batch@example.com","refresh_token":"kiro-batch-refresh-old"}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1804,7 +1805,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_over_active_expired_dup
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests(
                 "kiro_social_refresh",
@@ -1971,7 +1972,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_via_execution_runtime_p
     existing_key.is_active = false;
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"kiro","auth_method":"social","email":"kiro-runtime@example.com","refresh_token":"kiro-runtime-refresh-token-old"}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1995,7 +1996,7 @@ async fn gateway_batch_imports_admin_provider_oauth_kiro_via_execution_runtime_p
                     provider_catalog_repository.clone(),
                 )
                 .attach_proxy_node_repository_for_tests(proxy_node_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests(
                 "kiro_social_refresh",
@@ -2127,7 +2128,7 @@ async fn gateway_starts_admin_provider_oauth_kiro_batch_import_task_locally_with
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests(
                 "kiro_social_refresh",
@@ -2265,7 +2266,7 @@ async fn gateway_prevents_pool_write_token_from_importing_agent_identity_via_bat
     let data_state =
         GatewayDataState::with_management_token_repository_for_tests(management_token_repository)
             .attach_provider_catalog_repository_for_tests(provider_catalog_repository.clone())
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+            .with_encryption_key_for_tests(DEV_FERNET_KEY);
     let gateway = build_router_with_state(state.with_data_state_for_tests(data_state));
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 

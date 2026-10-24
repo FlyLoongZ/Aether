@@ -1,4 +1,4 @@
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::provider_catalog::{
@@ -14,6 +14,7 @@ use super::{
     start_authenticated_operational_server, start_server, to_bytes, AppState, Arc, Body,
     HeaderValue, Json, Mutex, Request, Response, Router, StatusCode,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 fn sample_video_task(
     id: &str,
@@ -83,7 +84,7 @@ fn bound_provider_api_key(provider_id: &str, key_id: &str, plaintext: &str) -> S
         key_id.len(),
     );
     let protected = format!("{purpose}\0{plaintext}");
-    let ciphertext = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, &protected)
+    let ciphertext = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &protected)
         .expect("bound provider api key should encrypt");
     format!("aether-provider-catalog-credential-v2:aether-runtime-secret-v1:{ciphertext}")
 }
@@ -497,7 +498,7 @@ async fn gateway_rejects_private_gemini_video_target_without_sending_provider_ke
         crate::data::GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
             repository,
             provider_catalog_repository,
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let (gateway_url, gateway_handle, access_token) =
@@ -654,7 +655,7 @@ async fn gateway_cancels_openai_video_task_via_internal_async_task_endpoint() {
         crate::data::GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
             Arc::clone(&repository),
             provider_catalog_repository,
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let (gateway_url, gateway_handle, access_token) =
@@ -832,7 +833,7 @@ async fn gateway_cancels_openai_video_task_via_internal_async_task_endpoint_with
         crate::data::GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
             Arc::clone(&repository),
             provider_catalog_repository,
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let (gateway_url, gateway_handle, access_token) =

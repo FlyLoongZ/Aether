@@ -7,7 +7,8 @@ use super::{
 use crate::data::GatewayDataState;
 use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -129,7 +130,7 @@ async fn gateway_executes_openai_chat_sync_upstream_stream_via_local_finalize_re
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -313,7 +314,7 @@ async fn gateway_executes_openai_chat_sync_upstream_stream_via_local_finalize_re
                     candidate_selection_repository,
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -702,7 +703,7 @@ async fn gateway_executes_openai_chat_cross_format_upstream_stream_via_local_fin
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -1078,7 +1079,7 @@ async fn gateway_executes_openai_chat_cross_format_tool_use_upstream_stream_via_
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -1306,7 +1307,7 @@ async fn gateway_executes_openai_chat_antigravity_cross_format_sync_via_local_fi
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"antigravity","project_id":"project-antigravity-chat-local-1","client_version":"1.2.3","session_id":"sess-antigravity-chat-local-123","access_token_import_temporary":true,"headers":{"Authorization":"Bearer imported-antigravity-chat-token"}}"#,
         )
         .expect("auth config should encrypt");
@@ -1321,7 +1322,7 @@ async fn gateway_executes_openai_chat_antigravity_cross_format_sync_via_local_fi
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -1522,7 +1523,7 @@ async fn gateway_executes_openai_chat_antigravity_cross_format_sync_via_local_fi
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 )
                 .with_system_default_routing_group_for_tests(),
             );
@@ -1867,7 +1868,7 @@ async fn gateway_executes_openai_chat_cross_format_claude_upstream_sync_via_loca
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -2168,7 +2169,7 @@ async fn gateway_executes_openai_chat_cross_format_gemini_upstream_sync_via_loca
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);

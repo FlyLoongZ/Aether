@@ -5,8 +5,9 @@ use super::{
 };
 use crate::data::GatewayDataState;
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 use aether_ai_formats::openai_responses_message_item_id;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -281,7 +282,7 @@ async fn gateway_executes_openai_responses_cross_format_upstream_stream_via_loca
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -665,7 +666,7 @@ async fn gateway_executes_openai_responses_cross_format_function_call_upstream_s
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -904,7 +905,7 @@ async fn gateway_executes_openai_responses_antigravity_cross_format_upstream_str
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"antigravity","project_id":"project-antigravity-local-1","client_version":"1.2.3","session_id":"sess-antigravity-local-123","refresh_token":"rt-antigravity-cli-local-123"}"#,
         )
         .expect("auth config should encrypt");
@@ -919,7 +920,7 @@ async fn gateway_executes_openai_responses_antigravity_cross_format_upstream_str
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -1164,7 +1165,7 @@ async fn gateway_executes_openai_responses_antigravity_cross_format_upstream_str
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 )
                 .with_system_default_routing_group_for_tests(),
             )

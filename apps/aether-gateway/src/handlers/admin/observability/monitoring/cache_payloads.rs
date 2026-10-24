@@ -71,8 +71,9 @@ mod tests {
         admin_monitoring_masked_provider_key_prefix, admin_monitoring_masked_user_api_key_prefix,
     };
     use crate::handlers::admin::request::AdminAppState;
+    use crate::tests::DEV_FERNET_KEY;
     use crate::AppState;
-    use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+    use aether_crypto::encrypt_python_fernet_plaintext;
     use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
     use sha2::{Digest, Sha256};
 
@@ -81,10 +82,10 @@ mod tests {
         let app = AppState::new().expect("gateway should build");
         let state = AdminAppState::new(&app);
         let encrypted_placeholder =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder should encrypt");
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"auth_mode":"agentIdentity","agent_runtime_id":"runtime-1","agent_private_key":"base64-private-key","task_id":"task-1"}"#,
         )
         .expect("auth config should encrypt");
@@ -121,7 +122,7 @@ mod tests {
         let app = AppState::new().expect("gateway should build");
         let state = AdminAppState::new(&app);
         let plaintext = "short-key";
-        let ciphertext = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, plaintext)
+        let ciphertext = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, plaintext)
             .expect("secret should encrypt");
         let mut hasher = Sha256::new();
         hasher.update(plaintext.as_bytes());

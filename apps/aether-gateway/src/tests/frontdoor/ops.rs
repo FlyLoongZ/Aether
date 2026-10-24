@@ -2,12 +2,12 @@ use super::super::usage::{
     hash_api_key, sample_local_openai_auth_snapshot, sample_local_openai_candidate_row,
     sample_local_openai_endpoint, sample_local_openai_key, sample_local_openai_provider,
 };
+use crate::tests::DEV_FERNET_KEY;
 use crate::tests::{
     any, build_router_with_execution_runtime_override, build_router_with_state,
     build_state_with_execution_runtime_override, json, start_server, AppState, Arc, Body,
     FrontdoorCorsConfig, Mutex, Request, Router, StatusCode, FRONTDOOR_MANIFEST_PATH, READYZ_PATH,
 };
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
@@ -410,7 +410,7 @@ async fn gateway_adds_cors_headers_to_proxied_responses_inner() {
                 provider_catalog_repository,
                 request_candidate_repository,
                 usage_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(state);

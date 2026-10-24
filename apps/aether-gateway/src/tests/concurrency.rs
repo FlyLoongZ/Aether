@@ -12,7 +12,6 @@ use super::{
     EXECUTION_PATH_DISTRIBUTED_OVERLOADED, EXECUTION_PATH_HEADER,
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, EXECUTION_PATH_LOCAL_OVERLOADED,
 };
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
@@ -23,6 +22,7 @@ use aether_runtime_state::{
 };
 
 use crate::data::GatewayDataState;
+use crate::tests::DEV_FERNET_KEY;
 
 fn run_concurrency_test<F, Fut>(test_name: &'static str, make_future: F)
 where
@@ -169,7 +169,7 @@ fn build_local_openai_gateway_state(
                 provider_catalog_repository,
                 request_candidate_repository,
                 usage_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
 }

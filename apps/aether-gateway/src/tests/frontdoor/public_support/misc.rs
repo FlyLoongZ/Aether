@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[tokio::test]
 async fn gateway_handles_test_connection_alias_without_proxying_upstream() {
@@ -119,7 +120,7 @@ async fn gateway_gemini_test_connection_does_not_force_low_max_output_tokens() {
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                .with_encryption_key_for_tests(DEV_FERNET_KEY)
                 .with_user_reader(user_repository),
             )
             .with_auth_session_for_tests(sample_auth_session(
@@ -1346,7 +1347,7 @@ async fn gateway_handles_users_me_api_keys_locally_without_proxying_upstream() {
         ]),
         now + chrono::Duration::hours(1),
     );
-    let encrypted = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-live-1")
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-live-1")
         .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -1411,7 +1412,7 @@ async fn gateway_handles_users_me_api_keys_locally_without_proxying_upstream() {
             let data_state =
                 crate::data::GatewayDataState::with_user_reader_for_tests(user_repository)
                     .attach_auth_api_key_repository_for_tests(auth_repository)
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY);
             AppState::new()
                 .expect("gateway should build")
                 .with_data_state_for_tests(data_state)
@@ -1736,9 +1737,8 @@ async fn gateway_handles_users_me_api_key_writes_locally_without_proxying_upstre
         ]),
         now + chrono::Duration::hours(1),
     );
-    let encrypted =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-existing-1")
-            .expect("ciphertext should build");
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-existing-1")
+        .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
             Some("hash-user-existing-1".to_string()),
@@ -1808,7 +1808,7 @@ async fn gateway_handles_users_me_api_key_writes_locally_without_proxying_upstre
             )
             .with_user_reader(user_repository)
             .with_provider_catalog_reader(provider_catalog_repository)
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+            .with_encryption_key_for_tests(DEV_FERNET_KEY);
             AppState::new()
                 .expect("gateway should build")
                 .with_data_state_for_tests(data_state)
@@ -2042,9 +2042,8 @@ async fn gateway_returns_service_unavailable_for_users_me_api_key_writes_without
         ]),
         now + chrono::Duration::hours(1),
     );
-    let encrypted =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-existing-1")
-            .expect("ciphertext should build");
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-existing-1")
+        .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
             Some("hash-user-existing-1".to_string()),

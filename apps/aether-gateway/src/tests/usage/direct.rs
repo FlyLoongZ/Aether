@@ -5,9 +5,9 @@ use super::{
     start_server, Arc, Body, GatewayDataState, HeaderValue, InMemoryAuthApiKeySnapshotRepository,
     InMemoryMinimalCandidateSelectionReadRepository, InMemoryProviderCatalogReadRepository,
     InMemoryRequestCandidateRepository, InMemoryUsageReadRepository, Json, Request, Response,
-    Router, StatusCode, UsageReadRepository, UsageRuntimeConfig, DEVELOPMENT_ENCRYPTION_KEY,
-    TRACE_ID_HEADER,
+    Router, StatusCode, UsageReadRepository, UsageRuntimeConfig, TRACE_ID_HEADER,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 fn large_request_body(stream: bool) -> String {
     let large_message = "x".repeat(128 * 1024);
@@ -96,7 +96,7 @@ async fn gateway_records_usage_for_execution_runtime_sync_when_runtime_enabled_i
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             )
             .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -230,7 +230,7 @@ async fn gateway_records_active_usage_before_execution_runtime_sync_result_arriv
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             )
             .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -391,7 +391,7 @@ async fn gateway_keeps_active_sync_usage_lightweight_for_large_request_body_impl
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -534,7 +534,7 @@ async fn gateway_records_pending_usage_before_execution_runtime_stream_headers_a
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 usage_repository.clone(),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -690,7 +690,7 @@ async fn gateway_keeps_pending_stream_usage_lightweight_for_large_request_body_i
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 usage_repository.clone(),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {

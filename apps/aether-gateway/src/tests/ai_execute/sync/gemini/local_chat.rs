@@ -5,10 +5,11 @@ use super::{
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
     Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
     StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
-    StoredProviderCatalogKey, StoredProviderCatalogProvider, DEVELOPMENT_ENCRYPTION_KEY,
-    EXECUTION_PATH_EXECUTION_RUNTIME_SYNC, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
+    StoredProviderCatalogKey, StoredProviderCatalogProvider, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
+    EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 
 fn run_gemini_chat_sync_test<F, Fut>(test_name: &'static str, make_future: F)
 where
@@ -135,7 +136,7 @@ async fn gateway_executes_gemini_chat_sync_via_local_decision_gate_with_local_sy
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-gemini-chat")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-gemini-chat")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -322,7 +323,7 @@ async fn gateway_executes_gemini_chat_sync_via_local_decision_gate_with_local_sy
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -506,7 +507,7 @@ async fn gateway_returns_gemini_chat_error_for_local_sync_failure_impl() {
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-gemini-chat")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-gemini-chat")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -626,7 +627,7 @@ async fn gateway_returns_gemini_chat_error_for_local_sync_failure_impl() {
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([

@@ -5,7 +5,8 @@ use super::{
 };
 use crate::constants::LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER;
 use crate::tests::hash_api_key;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -155,7 +156,7 @@ async fn gateway_executes_openai_responses_sync_via_local_decision_gate_with_loc
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:responses"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai-cli")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai-cli")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -373,7 +374,7 @@ async fn gateway_executes_openai_responses_sync_via_local_decision_gate_with_loc
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -732,7 +733,7 @@ async fn gateway_waits_for_api_key_concurrency_slot_then_executes_openai_respons
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);
@@ -1033,7 +1034,7 @@ async fn gateway_executes_openai_responses_sync_after_api_key_concurrency_wait_b
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);
@@ -1238,7 +1239,7 @@ async fn gateway_returns_openai_responses_error_for_local_sync_failure_impl() {
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:responses"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai-cli")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai-cli")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -1344,7 +1345,7 @@ async fn gateway_returns_openai_responses_error_for_local_sync_failure_impl() {
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -1651,7 +1652,7 @@ async fn gateway_returns_openai_responses_error_for_local_cross_format_gemini_cl
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -1977,7 +1978,7 @@ async fn gateway_returns_openai_responses_error_for_local_cross_format_claude_sy
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -2287,7 +2288,7 @@ async fn gateway_returns_openai_responses_to_claude_code_applies_body_mimicry_im
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -2628,7 +2629,7 @@ async fn gateway_returns_openai_responses_error_for_local_cross_format_claude_ch
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -2948,7 +2949,7 @@ async fn gateway_returns_openai_responses_error_for_local_cross_format_gemini_ch
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([
@@ -3141,7 +3142,7 @@ async fn gateway_executes_codex_cli_sync_via_local_decision_gate_after_oauth_ref
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"rt-codex-local-123"}"#,
         )
         .expect("auth config should encrypt");
@@ -3156,7 +3157,7 @@ async fn gateway_executes_codex_cli_sync_via_local_decision_gate_after_oauth_ref
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:responses"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -3356,7 +3357,7 @@ async fn gateway_executes_codex_cli_sync_via_local_decision_gate_after_oauth_ref
             candidate_selection_repository.clone(),
             provider_catalog_repository.clone(),
             Arc::new(InMemoryRequestCandidateRepository::default()),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     )
     .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
@@ -3451,7 +3452,7 @@ async fn gateway_executes_codex_cli_sync_via_local_decision_gate_after_oauth_ref
     let persisted_transport_state =
         crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
             provider_catalog_repository.clone(),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         );
     let persisted_transport = persisted_transport_state
         .read_provider_transport_snapshot(
@@ -3503,7 +3504,7 @@ async fn gateway_executes_codex_cli_sync_via_local_decision_gate_after_oauth_ref
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::new(InMemoryRequestCandidateRepository::default()),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     )
     .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
