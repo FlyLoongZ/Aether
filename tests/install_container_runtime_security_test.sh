@@ -5,10 +5,7 @@ REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=../install.sh
 source "${REPO_ROOT}/install.sh"
 
-fail_test() {
-    echo "FAIL: $*" >&2
-    exit 1
-}
+source "$(dirname "${BASH_SOURCE[0]}")/test_helpers.sh"
 
 assert_generated_key_output() {
     local label="$1"
@@ -27,13 +24,6 @@ assert_generated_key_output() {
     done
     [[ "$(printf '%s\n' "${values[@]}" | sort -u | wc -l | tr -d '[:space:]')" == "4" ]] \
         || fail_test "${label} reused a generated secret"
-}
-
-assert_line() {
-    local file="$1"
-    local expected="$2"
-    grep -Fqx -- "${expected}" "${file}" \
-        || fail_test "missing expected line in ${file}: ${expected}"
 }
 
 APP_DOCKERFILE="${REPO_ROOT}/Dockerfile.app"
