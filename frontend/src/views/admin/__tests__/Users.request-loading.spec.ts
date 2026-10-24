@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/views/admin/Users.vue'),
-  'utf8',
-)
+const source = readSource('src/views/admin/Users.vue')
 
 describe('Users request loading', () => {
   it('debounces search without delaying discrete filters', () => {

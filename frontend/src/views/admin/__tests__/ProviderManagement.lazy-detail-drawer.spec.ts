@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/views/admin/ProviderManagement.vue'),
-  'utf8',
-)
+const source = readSource('src/views/admin/ProviderManagement.vue')
 
 describe('ProviderManagement detail drawer loading', () => {
   it('keeps the heavy detail drawer out of the initial route chunk', () => {

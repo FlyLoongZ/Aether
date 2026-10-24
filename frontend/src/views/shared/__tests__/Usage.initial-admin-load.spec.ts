@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/views/shared/Usage.vue'),
-  'utf8',
-)
+const source = readSource('src/views/shared/Usage.vue')
 
 describe('admin usage initial loading', () => {
   it('starts the user filter request before analytics completes', () => {

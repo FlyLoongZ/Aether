@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/features/providers/components/ProviderDetailDrawer.vue'),
-  'utf8',
-)
+const source = readSource('src/features/providers/components/ProviderDetailDrawer.vue')
 
 describe('ProviderDetailDrawer loading priorities', () => {
   it('plays the drawer transition when the lazily mounted component first appears', () => {

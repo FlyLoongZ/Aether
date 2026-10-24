@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/views/shared/Usage.vue'),
-  'utf8',
-)
+const source = readSource('src/views/shared/Usage.vue')
 
 function functionBlock(name: string, nextName: string): string {
   return source.split(`async function ${name}`)[1]?.split(`async function ${nextName}`)[0] ?? ''

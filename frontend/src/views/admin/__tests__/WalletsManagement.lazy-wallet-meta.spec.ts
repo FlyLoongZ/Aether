@@ -1,11 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readSource } from '@/tests/readSource'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/views/admin/WalletsManagement.vue'),
-  'utf8',
-)
+const source = readSource('src/views/admin/WalletsManagement.vue')
 
 describe('WalletsManagement wallet metadata loading', () => {
   it('only loads the full wallet metadata map for the orders tab', () => {
