@@ -26,7 +26,7 @@ use crate::clock::request_distribution_seed;
 use crate::data::candidate_selection::{
     read_api_format_rows_fallback_page, read_requested_model_rows_fast_path_page,
     requested_model_candidate_names, CandidateScanBudget, RequestedModelCandidateRowsPage,
-    REQUESTED_MODEL_CANDIDATE_PAGE_SIZE, REQUESTED_MODEL_MAX_SCANNED_ROWS,
+    REQUESTED_MODEL_CANDIDATE_PAGE_SIZE, REQUESTED_MODEL_MAX_COLLECTED_ROWS,
 };
 use crate::scheduler::candidate::SchedulerSkippedCandidate;
 use crate::scheduler::config::{SchedulerOrderingConfig, SchedulerSchedulingMode};
@@ -565,7 +565,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         self.scan_budget_by_format
             .get(normalized_api_format)
             .copied()
-            .unwrap_or_else(|| CandidateScanBudget::new(REQUESTED_MODEL_MAX_SCANNED_ROWS))
+            .unwrap_or_else(|| CandidateScanBudget::new(REQUESTED_MODEL_MAX_COLLECTED_ROWS))
     }
 
     fn charge_scan_budget(&mut self, normalized_api_format: &str, rows: u32) {
