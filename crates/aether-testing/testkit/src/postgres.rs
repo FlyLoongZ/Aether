@@ -149,6 +149,8 @@ impl ManagedPostgresServer {
             .arg("synchronous_commit=off")
             .arg("-c")
             .arg("full_page_writes=off")
+            .arg("-c")
+            .arg("lc_messages=C")
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr))
             .spawn()?;
