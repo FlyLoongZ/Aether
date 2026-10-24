@@ -81,6 +81,7 @@ pub struct SameFormatProviderRequestBodyInput<'a> {
     pub force_body_stream_field: bool,
     pub kiro_auth_config: Option<&'a KiroAuthConfig>,
     pub is_claude_code: bool,
+    pub is_vertex: bool,
     pub enable_model_directives: bool,
 }
 
@@ -110,6 +111,7 @@ impl fmt::Debug for SameFormatProviderRequestBodyInput<'_> {
             .field("force_body_stream_field", &self.force_body_stream_field)
             .field("has_kiro_auth_config", &self.kiro_auth_config.is_some())
             .field("is_claude_code", &self.is_claude_code)
+            .field("is_vertex", &self.is_vertex)
             .field("enable_model_directives", &self.enable_model_directives)
             .finish()
     }
@@ -580,7 +582,8 @@ fn build_same_format_provider_request_body_inner(
             );
         }
     }
-    if matches!(input.family, SameFormatProviderFamily::Gemini)
+    if input.is_vertex
+        && matches!(input.family, SameFormatProviderFamily::Gemini)
         && aether_ai_formats::api_format_alias_matches(
             input.provider_api_format,
             "gemini:generate_content",

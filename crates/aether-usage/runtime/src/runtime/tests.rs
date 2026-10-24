@@ -6124,6 +6124,7 @@ fn oversized_full_terminal_event(max_bytes: usize) -> (serde_json::Value, UsageE
     apply_usage_body_capture_policy_to_event(
         UsageBodyCapturePolicy {
             record_level: UsageRequestRecordLevel::Full,
+            ..UsageBodyCapturePolicy::default()
         },
         &mut event,
     );
@@ -7789,6 +7790,7 @@ fn event_capture_budget_full_policy_preserves_facts_before_zero_budget_and_datab
     apply_usage_body_capture_policy_to_event(
         UsageBodyCapturePolicy {
             record_level: UsageRequestRecordLevel::Full,
+            ..UsageBodyCapturePolicy::default()
         },
         &mut event,
     );
@@ -7867,6 +7869,7 @@ fn basic_request_record_level_strips_body_capture_but_preserves_derived_fields()
     apply_usage_body_capture_policy_to_event(
         UsageBodyCapturePolicy {
             record_level: UsageRequestRecordLevel::Basic,
+            ..UsageBodyCapturePolicy::default()
         },
         &mut event,
     );

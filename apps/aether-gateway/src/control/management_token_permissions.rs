@@ -490,6 +490,7 @@ fn access_for_route(method: &http::Method, decision: &GatewayControlDecision) ->
                     | "purge_stats"
                     | "settings_set"
                     | "config_set"
+                    | "referral_settings_set"
                     | "config_delete"
             )
         ) | (

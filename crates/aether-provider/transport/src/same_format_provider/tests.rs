@@ -24,6 +24,7 @@ fn memories_preserves_native_traces_and_does_not_apply_responses_stream_policy()
         force_body_stream_field: true,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     };
     let result = build_same_format_provider_request_body_for_operation(
@@ -206,6 +207,7 @@ fn anthropic_compatibility_profile_controls_legacy_claude_code_edits() {
             force_body_stream_field: false,
             kiro_auth_config: None,
             is_claude_code: behavior.is_claude_code,
+            is_vertex: behavior.is_vertex,
             enable_model_directives: false,
         })
         .expect("body should build")
@@ -535,6 +537,7 @@ fn same_format_policy_resolution_drives_standard_body_stream_field() {
             force_body_stream_field: behavior.force_body_stream_field,
             kiro_auth_config: None,
             is_claude_code: false,
+            is_vertex: false,
             enable_model_directives: false,
         })
         .expect("body should build");
@@ -709,6 +712,7 @@ fn builds_same_format_standard_body_with_mapped_model_and_stream_flag() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -738,6 +742,7 @@ fn same_format_standard_body_preserves_fields_that_cross_format_would_block() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("same-format body should bypass canonical conversion");
@@ -825,6 +830,7 @@ fn same_format_responses_body_preserves_gpt_5_6_protocol_contract_verbatim() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("valid GPT-5.6 Responses request should use raw same-format transport");
@@ -855,6 +861,7 @@ fn same_format_prompt_cache_capability_uses_mapped_provider_model() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("final GPT-5.6 provider model should accept prompt_cache_options");
@@ -878,6 +885,7 @@ fn same_format_prompt_cache_capability_uses_mapped_provider_model() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     });
     assert!(rejected.is_none());
@@ -904,6 +912,7 @@ fn same_format_reasoning_capability_uses_mapped_provider_model() {
             force_body_stream_field: false,
             kiro_auth_config: None,
             is_claude_code: false,
+            is_vertex: false,
             enable_model_directives: false,
         })
     };
@@ -932,6 +941,7 @@ fn same_format_gpt_5_6_requires_prompt_cache_options() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     });
 
@@ -959,6 +969,7 @@ fn same_format_responses_body_preserves_opaque_extension_fields() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     });
 
@@ -986,6 +997,7 @@ fn cross_format_standard_body_fails_closed_for_lossy_chat_fields() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     });
 
@@ -1013,6 +1025,7 @@ fn same_format_embedding_body_rejects_multimodal_for_openai_like_provider() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     });
 
@@ -1038,6 +1051,7 @@ fn same_format_standard_body_overrides_client_stream_for_non_stream_upstream() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1064,6 +1078,7 @@ fn same_format_standard_body_does_not_add_stream_false_for_plain_sync_body() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1090,6 +1105,7 @@ fn same_format_standard_body_forced_policy_adds_stream_false() {
         force_body_stream_field: true,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1116,6 +1132,7 @@ fn same_format_gemini_body_removes_leaked_client_stream_field() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1142,6 +1159,7 @@ fn same_format_gemini_interactions_body_keeps_body_routing_target() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1168,6 +1186,7 @@ fn same_format_gemini_interactions_body_rewrites_agent_target() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1180,7 +1199,7 @@ fn same_format_gemini_interactions_body_rewrites_agent_target() {
 }
 
 #[test]
-fn same_format_gemini_body_strips_function_response_id_for_upstream() {
+fn same_format_vertex_body_strips_function_response_id_for_upstream() {
     let body = build_same_format_provider_request_body(SameFormatProviderRequestBodyInput {
         body_json: &json!({
             "contents": [
@@ -1222,6 +1241,7 @@ fn same_format_gemini_body_strips_function_response_id_for_upstream() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: true,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1236,6 +1256,67 @@ fn same_format_gemini_body_strips_function_response_id_for_upstream() {
 
     let function_response = &body["contents"][0]["parts"][1]["function_response"];
     assert!(function_response.get("id").is_none());
+    assert_eq!(function_response["name"], "lookup_snake");
+}
+
+#[test]
+fn same_format_gemini_body_preserves_function_response_id_for_native_upstream() {
+    let body = build_same_format_provider_request_body(SameFormatProviderRequestBodyInput {
+        body_json: &json!({
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {
+                            "functionResponse": {
+                                "id": "call_123",
+                                "name": "lookup",
+                                "response": {
+                                    "result": {
+                                        "id": "keep_result_id",
+                                        "ok": true
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "function_response": {
+                                "id": "call_456",
+                                "name": "lookup_snake",
+                                "response": {"ok": true}
+                            }
+                        }
+                    ]
+                }
+            ],
+            "stream": true
+        }),
+        mapped_model: "gemini-upstream",
+        client_api_format: "gemini:generate_content",
+        provider_api_format: "gemini:generate_content",
+        source_model: None,
+        family: SameFormatProviderFamily::Gemini,
+        body_rules: None,
+        request_headers: None,
+        upstream_is_stream: true,
+        force_body_stream_field: false,
+        kiro_auth_config: None,
+        is_claude_code: false,
+        is_vertex: false,
+        enable_model_directives: false,
+    })
+    .expect("body should build");
+
+    let function_response = &body["contents"][0]["parts"][0]["functionResponse"];
+    assert_eq!(function_response["id"], "call_123");
+    assert_eq!(function_response["name"], "lookup");
+    assert_eq!(
+        function_response["response"]["result"]["id"],
+        "keep_result_id"
+    );
+
+    let function_response = &body["contents"][0]["parts"][1]["function_response"];
+    assert_eq!(function_response["id"], "call_456");
     assert_eq!(function_response["name"], "lookup_snake");
 }
 
@@ -1272,6 +1353,7 @@ fn same_format_gemini_body_enables_mixed_tool_invocations() {
             force_body_stream_field: false,
             kiro_auth_config: None,
             is_claude_code: false,
+            is_vertex: false,
             enable_model_directives: false,
         },
     )
@@ -1333,6 +1415,7 @@ fn same_format_body_report_records_provider_compatibility_edits() {
             force_body_stream_field: false,
             kiro_auth_config: None,
             is_claude_code: false,
+            is_vertex: true,
             enable_model_directives: false,
         },
     )
@@ -1392,6 +1475,7 @@ fn same_format_responses_body_strips_foreign_reasoning_ids_and_reports_the_edit(
             force_body_stream_field: false,
             kiro_auth_config: None,
             is_claude_code: false,
+            is_vertex: false,
             enable_model_directives: false,
         },
     )
@@ -1444,6 +1528,7 @@ fn same_format_responses_body_preserves_deepseek_opaque_reasoning_replay() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     };
 
@@ -1500,6 +1585,7 @@ fn same_format_compact_keeps_strict_reasoning_replay_under_deepseek_policy() {
             force_body_stream_field: false,
             kiro_auth_config: None,
             is_claude_code: false,
+            is_vertex: false,
             enable_model_directives: false,
         },
         aether_ai_formats::OpenAiResponsesReasoningReplayPolicy::DeepSeekOpaque,
@@ -1537,6 +1623,7 @@ fn same_format_stream_policy_wins_after_body_rules() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1567,6 +1654,7 @@ fn same_format_compact_stream_policy_wins_after_body_rules() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: false,
     })
     .expect("body should build");
@@ -1595,6 +1683,7 @@ fn same_format_body_applies_model_directive_before_body_rules() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: true,
     })
     .expect("body should build");
@@ -1627,6 +1716,7 @@ fn search_body_projects_the_protocol_contract_and_keeps_fast_routing_only() {
         force_body_stream_field: false,
         kiro_auth_config: None,
         is_claude_code: false,
+        is_vertex: false,
         enable_model_directives: true,
     })
     .expect("search body should build");

@@ -18,6 +18,7 @@ pub(crate) fn build_same_format_provider_request_body_with_compatibility_report(
     force_body_stream_field: bool,
     kiro_auth: Option<&crate::ai_serving::transport::kiro::KiroRequestAuth>,
     is_claude_code: bool,
+    is_vertex: bool,
     enable_model_directives: bool,
     reasoning_replay_policy: crate::ai_serving::OpenAiResponsesReasoningReplayPolicy,
 ) -> Option<SameFormatProviderRequestBodyOutput> {
@@ -35,6 +36,7 @@ pub(crate) fn build_same_format_provider_request_body_with_compatibility_report(
             force_body_stream_field,
             kiro_auth_config: kiro_auth.map(|auth| &auth.auth_config),
             is_claude_code,
+            is_vertex,
             enable_model_directives,
         },
         reasoning_replay_policy,

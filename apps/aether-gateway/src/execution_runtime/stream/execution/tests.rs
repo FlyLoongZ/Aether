@@ -3185,6 +3185,7 @@ fn stream_capture_policy_hard_caps_full_and_basic_analysis_buffers() {
     apply_usage_body_capture_policy_to_event(
         UsageBodyCapturePolicy {
             record_level: UsageRequestRecordLevel::Basic,
+            ..UsageBodyCapturePolicy::default()
         },
         &mut event,
     );

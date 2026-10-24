@@ -1188,3 +1188,60 @@ fn extract_admin_route_scopes(source: &'static str) -> BTreeSet<&'static str> {
 
     scopes
 }
+
+#[test]
+fn admin_referral_queries_and_wallet_links_require_only_read_permissions() {
+    let permissions = read_only_management_token_permissions();
+    for (path, family, kind, signature) in [
+        (
+            "/api/admin/referrals/overview",
+            "referrals_manage",
+            "referrals_overview",
+            "admin:billing",
+        ),
+        (
+            "/api/admin/referral-rewards/reward-1",
+            "referrals_manage",
+            "referral_reward_detail",
+            "admin:billing",
+        ),
+        (
+            "/api/admin/wallets/wallet-1/refunds/refund-1",
+            "wallets_manage",
+            "wallet_refund_detail",
+            "admin:wallets",
+        ),
+        (
+            "/api/admin/wallets/wallet-1/transactions/tx-1",
+            "wallets_manage",
+            "wallet_transaction_detail",
+            "admin:wallets",
+        ),
+    ] {
+        let decision = GatewayControlDecision::synthetic(
+            path,
+            Some("admin_proxy".into()),
+            Some(family.into()),
+            Some(kind.into()),
+            Some(signature.into()),
+        );
+        assert!(
+            validate_management_token_admin_route_permission(
+                &http::Method::GET,
+                &decision,
+                Some(&permissions)
+            )
+            .is_ok(),
+            "{path}"
+        );
+        assert!(
+            validate_management_token_admin_route_permission(
+                &http::Method::GET,
+                &decision,
+                Some(&[])
+            )
+            .is_err(),
+            "{path}"
+        );
+    }
+}
