@@ -318,64 +318,20 @@ fn mapping_scope_matches(
     })
 }
 
+/// Which credential channel may serve this format, asked of the one shared
+/// table (`aether_ai_formats::auth_channel`) that the SQL gate also applies.
+///
+/// The in-memory backend does not model credentials, so it reports the key as
+/// configured for channels that require configuration. Every other channel is
+/// decided exactly as the SQL decides it, which is the point: a fixture that
+/// routes here must route identically against Postgres.
 fn key_auth_channel_matches(row: &StoredMinimalCandidateSelectionRow, api_format: &str) -> bool {
-    let provider_type = row.provider_type.trim().to_ascii_lowercase();
-    let auth_type = row.key_auth_type.trim().to_ascii_lowercase();
-    let api_format = normalize_api_format(api_format);
-    match provider_type.as_str() {
-        "codex" => {
-            auth_type == "oauth"
-                && matches!(
-                    api_format.as_str(),
-                    "openai:responses"
-                        | "openai:responses:compact"
-                        | "openai:search"
-                        | "openai:image"
-                        | "codex:live"
-                )
-        }
-        "chatgpt_web" => {
-            matches!(auth_type.as_str(), "oauth" | "bearer") && api_format == "openai:image"
-        }
-        "claude_code" => auth_type == "oauth" && api_format == "claude:messages",
-        "kiro" => {
-            matches!(auth_type.as_str(), "oauth" | "bearer") && api_format == "claude:messages"
-        }
-        "gemini_cli" | "antigravity" => {
-            auth_type == "oauth" && api_format == "gemini:generate_content"
-        }
-        "grok" => {
-            auth_type == "oauth"
-                && matches!(
-                    api_format.as_str(),
-                    "openai:chat" | "openai:responses" | "claude:messages" | "openai:image"
-                )
-        }
-        "xai" => {
-            matches!(auth_type.as_str(), "oauth" | "bearer" | "api_key")
-                && matches!(
-                    api_format.as_str(),
-                    "openai:responses"
-                        | "openai:responses:compact"
-                        | "openai:image"
-                        | "openai:video"
-                )
-        }
-        "windsurf" => {
-            matches!(auth_type.as_str(), "oauth" | "api_key" | "bearer")
-                && api_format == "openai:chat"
-        }
-        "vertex_ai" => {
-            matches!(
-                auth_type.as_str(),
-                "api_key" | "service_account" | "vertex_ai"
-            ) && matches!(
-                api_format.as_str(),
-                "gemini:generate_content" | "gemini:embedding"
-            )
-        }
-        _ => auth_type != "oauth",
-    }
+    aether_ai_formats::auth_channel::provider_auth_channel_allows(
+        &row.provider_type,
+        &row.key_auth_type,
+        true,
+        api_format,
+    )
 }
 
 #[cfg(test)]
@@ -763,6 +719,25 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["provider-2", "provider-3"]
         );
+    }
+
+    #[tokio::test]
+    async fn auth_channel_gate_preserves_case_and_explicit_format_capabilities() {
+        for (provider, auth, format, expected) in [
+            (" Codex ", " OAUTH ", "openai:responses", true),
+            ("custom", "OAuth", "openai:chat", false),
+            ("Grok", "oauth", "openai:responses:compact", false),
+            ("grok", "oauth", "openai:search", false),
+            ("xai", "oauth", "openai:search", false),
+            ("xai", "API_KEY", "openai:responses:compact", true),
+        ] {
+            let mut row = sample_row("provider-1", format, "model-1", 10);
+            row.provider_type = provider.to_string();
+            row.key_auth_type = auth.to_string();
+            let repository = InMemoryMinimalCandidateSelectionReadRepository::seed([row]);
+            let rows = repository.list_for_exact_api_format(format).await.unwrap();
+            assert_eq!(!rows.is_empty(), expected, "{provider}/{auth}/{format}");
+        }
     }
 
     #[tokio::test]

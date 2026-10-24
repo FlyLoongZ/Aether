@@ -7,13 +7,10 @@ mod refresh;
 mod request;
 mod url;
 
-use crate::provider_types::{
-    ProviderApiFormatInheritance, ProviderLocalEmbeddingSupport, ProviderRuntimePolicy,
-};
+use crate::provider_types::{ProviderLocalEmbeddingSupport, ProviderRuntimePolicy};
 
 pub const RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
-    api_format_inheritance: ProviderApiFormatInheritance::OAuthOrConfiguredBearer,
     enable_format_conversion_by_default: true,
     allow_auth_channel_mismatch_by_default: true,
     oauth_is_bearer_like: true,

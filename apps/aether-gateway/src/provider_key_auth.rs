@@ -342,6 +342,56 @@ mod tests {
         endpoint
     }
 
+    /// A key whose credential kind the transport accepts must also inherit the
+    /// provider's formats, or the catalog shows it as unscoped while routing
+    /// keeps using it — and the key write handlers reconcile explicit
+    /// `api_formats` against this answer, which could empty a working key.
+    #[test]
+    fn api_key_channels_inherit_the_provider_formats() {
+        let endpoints = vec![
+            sample_endpoint("gemini:generate_content", true),
+            sample_endpoint("gemini:embedding", true),
+        ];
+        let key = sample_key("api_key");
+
+        assert!(provider_key_inherits_provider_api_formats(
+            &key,
+            "vertex_ai"
+        ));
+        assert_eq!(
+            provider_key_effective_api_formats(&key, "vertex_ai", &endpoints),
+            vec![
+                "gemini:generate_content".to_string(),
+                "gemini:embedding".to_string()
+            ]
+        );
+
+        let openai_chat = vec![sample_endpoint("openai:chat", true)];
+        assert_eq!(
+            provider_key_effective_api_formats(&key, "windsurf", &openai_chat),
+            vec!["openai:chat".to_string()]
+        );
+
+        let xai_responses = vec![sample_endpoint("openai:responses", true)];
+        assert_eq!(
+            provider_key_effective_api_formats(&key, "xai", &xai_responses),
+            vec!["openai:responses".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_channel_the_table_does_not_list_still_does_not_inherit() {
+        // chatgpt_web accepts oauth and bearer, not api_key.
+        let key = sample_key("api_key");
+        let endpoints = vec![sample_endpoint("openai:image", true)];
+
+        assert!(!provider_key_inherits_provider_api_formats(
+            &key,
+            "chatgpt_web"
+        ));
+        assert!(provider_key_effective_api_formats(&key, "chatgpt_web", &endpoints).is_empty());
+    }
+
     #[test]
     fn recognizes_oauth_managed_key() {
         let semantics = provider_key_auth_semantics(&sample_key("oauth"), "codex");
