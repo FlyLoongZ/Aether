@@ -22,9 +22,5 @@ libc.workspace = true
 tokio.workspace = true
 
 [[bin]]
-name = "http_load_probe"
-path = "src/bin/http_load_probe.rs"
-
-[[bin]]
 name = "gateway_pressure_probe"
 path = "src/bin/gateway_pressure_probe.rs"

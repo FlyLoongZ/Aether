@@ -388,20 +388,16 @@ dependencies = [
 name = "aether-integration-tests"
 version = "0.1.0"
 dependencies = [
- "aether-contracts",
  "aether-crypto",
  "aether-data",
  "aether-data-contracts",
  "aether-gateway",
- "aether-runtime",
- "aether-runtime-state",
  "aether-testkit",
  "async-stream",
  "axum",
  "futures-util",
  "http",
  "reqwest",
- "serde",
  "serde_json",
  "sha2",
  "sqlx",

@@ -8,22 +8,20 @@ description = "Gateway-backed integration scenarios and benchmark binaries"
 
 [dependencies]
 async-stream.workspace = true
-aether-contracts.workspace = true
 aether-crypto.workspace = true
 aether-data.workspace = true
 aether-data-contracts.workspace = true
-aether-gateway = { workspace = true, features = ["testkit"] }
-aether-runtime.workspace = true
-aether-runtime-state.workspace = true
-aether-testkit = { workspace = true, features = ["gateway", "postgres"] }
 axum.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+aether-gateway = { workspace = true, features = ["testkit"] }
+aether-testkit = { workspace = true, features = ["gateway", "postgres"] }
 futures-util.workspace = true
 http.workspace = true
 reqwest.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-sha2.workspace = true
 sqlx = { workspace = true, features = ["postgres"] }
-tokio.workspace = true
 tokio-tungstenite.workspace = true
-uuid.workspace = true
