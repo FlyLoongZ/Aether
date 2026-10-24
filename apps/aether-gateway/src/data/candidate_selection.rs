@@ -82,16 +82,6 @@ pub(crate) struct RequestedModelCandidateRowsPage {
     pub(crate) end_of_requested_name: bool,
 }
 
-impl aether_cache::CacheWeight for RequestedModelCandidateRowsPage {
-    fn cache_weight(&self) -> usize {
-        // Rows are shared contract records with a shallow shape.
-        aether_cache::value_weight::<Self>(
-            self.rows.capacity()
-                * std::mem::size_of::<aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow>(),
-        )
-    }
-}
-
 pub(crate) async fn read_requested_model_rows(
     state: &(impl MinimalCandidateSelectionRowSource + Sync),
     api_format: &str,

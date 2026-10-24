@@ -284,7 +284,6 @@ impl AppState {
         self.clear_provider_transport_snapshot_cache();
         self.invalidate_scheduler_affinity_cache();
         self.invalidate_auth_context_cache();
-        self.candidate_row_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
         self.system_config_cache.invalidate_all();
         self.frontdoor_user_rpm.clear_system_default_cache();
@@ -293,7 +292,6 @@ impl AppState {
                 .clone()
                 .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
         );
-        self.candidate_row_page_cache.clear();
         self.candidate_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
         self.data = data;
@@ -415,13 +413,6 @@ impl AppState {
             overview_total_cache: Arc::new(OverviewTotalCache::default()),
             system_config_cache: Arc::new(SystemConfigCache::default()),
             endpoint_response_header_rules_cache: Arc::new(JsonValueCache::default()),
-            candidate_row_page_cache: Arc::new(crate::cache::ValueCache::with_observer(
-                aether_cache::CacheObserver::new()
-                    .on_hit(crate::cache::record_candidate_row_page_cache_hit)
-                    .on_miss(crate::cache::record_candidate_row_page_cache_miss)
-                    .on_load(crate::cache::record_candidate_row_page_cache_load)
-                    .on_follower_wait(crate::cache::record_candidate_row_page_cache_follower_wait),
-            )),
             candidate_page_cache: Arc::new(crate::cache::ValueCache::with_observer(
                 aether_cache::CacheObserver::new()
                     .on_hit(crate::cache::record_candidate_page_cache_hit)
@@ -961,7 +952,6 @@ impl AppState {
         self.endpoint_response_header_rules_cache.clear();
         self.auth_request_cost_upper_bound_cache.clear();
         self.routing_group_selection_cache.clear();
-        self.candidate_row_page_cache.clear();
         self.candidate_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
         self.clear_provider_transport_snapshot_cache();
@@ -971,7 +961,6 @@ impl AppState {
     pub(crate) fn invalidate_provider_health_routing_caches(&self) {
         self.data.clear_minimal_candidate_selection_cache();
         self.data.clear_provider_catalog_cache();
-        self.candidate_row_page_cache.clear();
         self.candidate_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
         // Transport snapshots contain static provider/endpoint/key configuration,
@@ -1009,7 +998,6 @@ impl AppState {
         self.provider_quota_snapshot_cache.clear();
         self.user_groups_for_user_cache.clear();
         self.routing_group_selection_cache.clear();
-        self.candidate_row_page_cache.clear();
         self.candidate_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
     }
@@ -1937,7 +1925,6 @@ impl AppState {
             .fetch_add(1, Ordering::AcqRel)
             .saturating_add(1);
         self.scheduler_affinity_cache.clear();
-        self.candidate_row_page_cache.clear();
         self.candidate_page_cache.clear();
         self.candidate_resolved_page_cache.clear();
         next_epoch
