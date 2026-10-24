@@ -117,6 +117,7 @@ impl ManagedPostgresServer {
                 .args(["-c", "max_connections=8"])
                 .args(["-c", "dynamic_shared_memory_type=mmap"])
                 .args(["-c", "autovacuum=off"])
+                .args(["-c", "lc_messages=C"])
                 .stdout(Stdio::from(stdout))
                 .stderr(Stdio::from(stderr))
                 .spawn()?,
