@@ -5,10 +5,7 @@ REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "${TEST_ROOT}"' EXIT
 
-fail_test() {
-    echo "FAIL: $*" >&2
-    exit 1
-}
+source "$(dirname "${BASH_SOURCE[0]}")/test_helpers.sh"
 
 make_fixture() {
     local fixture="$1"

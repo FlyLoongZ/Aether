@@ -7,17 +7,7 @@ RELEASE_WORKFLOW="${REPO_ROOT}/.github/workflows/release.yml"
 NIGHTLY_WORKFLOW="${REPO_ROOT}/.github/workflows/nightly.yml"
 APP_DOCKERFILE="${REPO_ROOT}/Dockerfile.app"
 
-fail_test() {
-    echo "FAIL: $*" >&2
-    exit 1
-}
-
-assert_line() {
-    local file="$1"
-    local expected="$2"
-    grep -Fqx -- "${expected}" "${file}" \
-        || fail_test "missing expected line in ${file}: ${expected}"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/test_helpers.sh"
 
 assert_line "${COMPOSE_FILE}" \
     "    image: postgres:15.19@sha256:5f72c7b5bd616308ccfd2e74d6be16fb06364e5eecbb815fe9dc6ab9761d2111"

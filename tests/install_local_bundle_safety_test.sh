@@ -8,10 +8,7 @@ source "${REPO_ROOT}/install.sh"
 TEST_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "${TEST_ROOT}"' EXIT
 
-fail_test() {
-    echo "FAIL: $*" >&2
-    exit 1
-}
+source "$(dirname "${BASH_SOURCE[0]}")/test_helpers.sh"
 
 make_bundle() {
     local bundle="$1"

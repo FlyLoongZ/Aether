@@ -13,10 +13,7 @@ cleanup_test_root() {
 }
 trap cleanup_test_root EXIT
 
-fail_test() {
-    echo "FAIL: $*" >&2
-    exit 1
-}
+source "$(dirname "${BASH_SOURCE[0]}")/test_helpers.sh"
 
 assert_link_target() {
     local link="$1"
