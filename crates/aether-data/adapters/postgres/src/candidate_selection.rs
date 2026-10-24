@@ -69,75 +69,7 @@ INNER JOIN LATERAL (
         WHERE LOWER(BTRIM(fmt.value)) = ANY($2::text[])
       )
     )
-    AND (
-      (
-        LOWER(BTRIM(p.provider_type)) = 'codex'
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($3) IN ('openai:responses', 'openai:responses:compact', 'openai:search', 'openai:image', 'codex:live')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'chatgpt_web'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer')
-        AND LOWER($3) = 'openai:image'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'claude_code'
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($3) = 'claude:messages'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'kiro'
-        AND LOWER($3) = 'claude:messages'
-        AND (
-          LOWER(BTRIM(pak.auth_type)) = 'oauth'
-          OR (
-            LOWER(BTRIM(pak.auth_type)) = 'bearer'
-            AND pak.auth_config IS NOT NULL
-            AND BTRIM(pak.auth_config) <> ''
-          )
-        )
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'grok'
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($3) IN ('openai:chat', 'openai:responses', 'claude:messages', 'openai:image')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'xai'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer', 'api_key')
-        AND LOWER($3) IN ('openai:responses', 'openai:responses:compact', 'openai:image', 'openai:video')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) IN ('gemini_cli', 'antigravity')
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($3) = 'gemini:generate_content'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'windsurf'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'api_key', 'bearer')
-        AND LOWER($3) = 'openai:chat'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'vertex_ai'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('api_key', 'service_account', 'vertex_ai')
-        AND LOWER($3) IN ('gemini:generate_content', 'gemini:embedding')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) NOT IN (
-          'chatgpt_web',
-          'claude_code',
-          'codex',
-          'gemini_cli',
-          'grok',
-          'vertex_ai',
-          'antigravity',
-          'kiro',
-          'windsurf',
-          'xai'
-        )
-        AND LOWER(BTRIM(pak.auth_type)) <> 'oauth'
-      )
-    )
+    AND /*auth_channel_gate:$3*/
   ORDER BY pak.internal_priority ASC, pak.id ASC
   LIMIT CASE WHEN (p.config -> 'pool_advanced') IS NOT NULL THEN 1 ELSE 2147483647 END
 ) pak ON TRUE
@@ -160,75 +92,7 @@ WHERE p.is_active = TRUE
       WHERE LOWER(BTRIM(fmt.value)) = ANY($2::text[])
     )
   )
-  AND (
-    (
-      LOWER(BTRIM(p.provider_type)) = 'codex'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($3) IN ('openai:responses', 'openai:responses:compact', 'openai:search', 'openai:image', 'codex:live')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'chatgpt_web'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer')
-      AND LOWER($3) = 'openai:image'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'claude_code'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($3) = 'claude:messages'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'kiro'
-      AND LOWER($3) = 'claude:messages'
-      AND (
-        LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        OR (
-          LOWER(BTRIM(pak.auth_type)) = 'bearer'
-          AND pak.auth_config IS NOT NULL
-          AND BTRIM(pak.auth_config) <> ''
-        )
-      )
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'grok'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($3) IN ('openai:chat', 'openai:responses', 'claude:messages', 'openai:image')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'xai'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer', 'api_key')
-      AND LOWER($3) IN ('openai:responses', 'openai:responses:compact', 'openai:image', 'openai:video')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) IN ('gemini_cli', 'antigravity')
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($3) = 'gemini:generate_content'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'windsurf'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'api_key', 'bearer')
-      AND LOWER($3) = 'openai:chat'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'vertex_ai'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('api_key', 'service_account', 'vertex_ai')
-      AND LOWER($3) IN ('gemini:generate_content', 'gemini:embedding')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) NOT IN (
-        'chatgpt_web',
-        'claude_code',
-        'codex',
-        'gemini_cli',
-        'grok',
-        'vertex_ai',
-        'antigravity',
-        'kiro',
-        'windsurf',
-        'xai'
-      )
-      AND LOWER(BTRIM(pak.auth_type)) <> 'oauth'
-    )
-  )
+  AND /*auth_channel_gate:$3*/
 ),
 pool_rows AS (
   SELECT DISTINCT ON (provider_id, endpoint_id, model_id)
@@ -344,75 +208,7 @@ INNER JOIN LATERAL (
         WHERE LOWER(BTRIM(fmt.value)) = ANY($3::text[])
       )
     )
-    AND (
-      (
-        LOWER(BTRIM(p.provider_type)) = 'codex'
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($4) IN ('openai:responses', 'openai:responses:compact', 'openai:search', 'openai:image', 'codex:live')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'chatgpt_web'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer')
-        AND LOWER($4) = 'openai:image'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'claude_code'
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($4) = 'claude:messages'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'kiro'
-        AND LOWER($4) = 'claude:messages'
-        AND (
-          LOWER(BTRIM(pak.auth_type)) = 'oauth'
-          OR (
-            LOWER(BTRIM(pak.auth_type)) = 'bearer'
-            AND pak.auth_config IS NOT NULL
-            AND BTRIM(pak.auth_config) <> ''
-          )
-        )
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'grok'
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($4) IN ('openai:chat', 'openai:responses', 'claude:messages', 'openai:image')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'xai'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer', 'api_key')
-        AND LOWER($4) IN ('openai:responses', 'openai:responses:compact', 'openai:image', 'openai:video')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) IN ('gemini_cli', 'antigravity')
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($4) = 'gemini:generate_content'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'windsurf'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'api_key', 'bearer')
-        AND LOWER($4) = 'openai:chat'
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'vertex_ai'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('api_key', 'service_account', 'vertex_ai')
-        AND LOWER($4) IN ('gemini:generate_content', 'gemini:embedding')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) NOT IN (
-          'chatgpt_web',
-          'claude_code',
-          'codex',
-          'gemini_cli',
-          'grok',
-          'vertex_ai',
-          'antigravity',
-          'kiro',
-          'windsurf',
-          'xai'
-        )
-        AND LOWER(BTRIM(pak.auth_type)) <> 'oauth'
-      )
-    )
+    AND /*auth_channel_gate:$4*/
   ORDER BY pak.internal_priority ASC, pak.id ASC
   LIMIT CASE WHEN (p.config -> 'pool_advanced') IS NOT NULL THEN 1 ELSE 2147483647 END
 ) pak ON TRUE
@@ -436,75 +232,7 @@ WHERE p.is_active = TRUE
       WHERE LOWER(BTRIM(fmt.value)) = ANY($3::text[])
     )
   )
-  AND (
-    (
-      LOWER(BTRIM(p.provider_type)) = 'codex'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($4) IN ('openai:responses', 'openai:responses:compact', 'openai:search', 'openai:image', 'codex:live')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'chatgpt_web'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer')
-      AND LOWER($4) = 'openai:image'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'claude_code'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($4) = 'claude:messages'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'kiro'
-      AND LOWER($4) = 'claude:messages'
-      AND (
-        LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        OR (
-          LOWER(BTRIM(pak.auth_type)) = 'bearer'
-          AND pak.auth_config IS NOT NULL
-          AND BTRIM(pak.auth_config) <> ''
-        )
-      )
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'grok'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($4) IN ('openai:chat', 'openai:responses', 'claude:messages', 'openai:image')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'xai'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer', 'api_key')
-      AND LOWER($4) IN ('openai:responses', 'openai:responses:compact', 'openai:image', 'openai:video')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) IN ('gemini_cli', 'antigravity')
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($4) = 'gemini:generate_content'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'windsurf'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'api_key', 'bearer')
-      AND LOWER($4) = 'openai:chat'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'vertex_ai'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('api_key', 'service_account', 'vertex_ai')
-      AND LOWER($4) IN ('gemini:generate_content', 'gemini:embedding')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) NOT IN (
-        'chatgpt_web',
-        'claude_code',
-        'codex',
-        'gemini_cli',
-        'grok',
-        'vertex_ai',
-        'antigravity',
-        'kiro',
-        'windsurf',
-        'xai'
-      )
-      AND LOWER(BTRIM(pak.auth_type)) <> 'oauth'
-    )
-  )
+  AND /*auth_channel_gate:$4*/
 ),
 pool_rows AS (
   SELECT DISTINCT ON (provider_id, endpoint_id, model_id)
@@ -628,75 +356,7 @@ WHERE p.is_active = TRUE
       WHERE LOWER(BTRIM(fmt.value)) = ANY($5::text[])
     )
   )
-  AND (
-    (
-      LOWER(BTRIM(p.provider_type)) = 'codex'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($6) IN ('openai:responses', 'openai:responses:compact', 'openai:search', 'openai:image', 'codex:live')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'chatgpt_web'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer')
-      AND LOWER($6) = 'openai:image'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'claude_code'
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($6) = 'claude:messages'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'kiro'
-      AND LOWER($6) = 'claude:messages'
-      AND (
-        LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        OR (
-          LOWER(BTRIM(pak.auth_type)) = 'bearer'
-          AND pak.auth_config IS NOT NULL
-          AND BTRIM(pak.auth_config) <> ''
-        )
-      )
-    )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'grok'
-        AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-        AND LOWER($6) IN ('openai:chat', 'openai:responses', 'claude:messages', 'openai:image')
-      )
-      OR (
-        LOWER(BTRIM(p.provider_type)) = 'xai'
-        AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer', 'api_key')
-        AND LOWER($6) IN ('openai:responses', 'openai:responses:compact', 'openai:image', 'openai:video')
-      )
-    OR (
-      LOWER(BTRIM(p.provider_type)) IN ('gemini_cli', 'antigravity')
-      AND LOWER(BTRIM(pak.auth_type)) = 'oauth'
-      AND LOWER($6) = 'gemini:generate_content'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'windsurf'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'api_key', 'bearer')
-      AND LOWER($6) = 'openai:chat'
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) = 'vertex_ai'
-      AND LOWER(BTRIM(pak.auth_type)) IN ('api_key', 'service_account', 'vertex_ai')
-      AND LOWER($6) IN ('gemini:generate_content', 'gemini:embedding')
-    )
-    OR (
-      LOWER(BTRIM(p.provider_type)) NOT IN (
-        'chatgpt_web',
-        'claude_code',
-        'codex',
-        'gemini_cli',
-        'grok',
-        'vertex_ai',
-        'antigravity',
-        'kiro',
-        'windsurf',
-        'xai'
-      )
-      AND LOWER(BTRIM(pak.auth_type)) <> 'oauth'
-    )
-  )
+  AND /*auth_channel_gate:$6*/
 ORDER BY
   pak.internal_priority ASC,
   pak.id ASC
@@ -731,14 +391,14 @@ fn pool_key_candidate_selection_sql(order: &StoredPoolKeyCandidateOrder) -> Stri
         "{}\nLIMIT $7\nOFFSET $8\n",
         pool_key_candidate_order_by_sql(order)
     );
-    LIST_POOL_KEYS_FOR_GROUP_SQL.replace(default_order, &replacement)
+    list_pool_keys_for_group_sql().replace(default_order, &replacement)
 }
 
 fn pool_key_candidate_selection_by_key_ids_sql() -> String {
     let default_order =
         "ORDER BY\n  pak.internal_priority ASC,\n  pak.id ASC\nLIMIT $7\nOFFSET $8\n";
     let replacement = "AND pak.id = ANY($7::text[])\nORDER BY\n  array_position($7::text[], pak.id) ASC,\n  pak.id ASC\n";
-    LIST_POOL_KEYS_FOR_GROUP_SQL.replace(default_order, replacement)
+    list_pool_keys_for_group_sql().replace(default_order, replacement)
 }
 
 #[derive(Debug, Clone)]
@@ -781,7 +441,7 @@ impl SqlxMinimalCandidateSelectionReadRepository {
         for api_format in storage_aliases {
             rows.extend(
                 Self::collect_query_rows(
-                    sqlx::query(LIST_FOR_EXACT_API_FORMAT_SQL)
+                    sqlx::query(list_for_exact_api_format_sql())
                         .bind(api_format)
                         .bind(sql_match_aliases.clone())
                         .bind(canonical_api_format.clone())
@@ -806,7 +466,7 @@ impl SqlxMinimalCandidateSelectionReadRepository {
         let sql_match_aliases =
             sql_match_aliases(&api_format_permission_aliases(&canonical_api_format));
         let fetch_limit = i64::from(query.offset.saturating_add(query.limit));
-        let sql = format!("{LIST_FOR_EXACT_API_FORMAT_SQL}\nLIMIT $4\nOFFSET $5");
+        let sql = format!("{}\nLIMIT $4\nOFFSET $5", list_for_exact_api_format_sql());
         let mut rows = Vec::new();
         for api_format in storage_aliases {
             rows.extend(
@@ -845,7 +505,7 @@ impl SqlxMinimalCandidateSelectionReadRepository {
         for api_format in storage_aliases {
             rows.extend(
                 Self::collect_query_rows(
-                    sqlx::query(LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL)
+                    sqlx::query(list_for_exact_api_format_and_global_model_sql())
                         .bind(api_format)
                         .bind(global_model_name)
                         .bind(sql_match_aliases.clone())
@@ -1001,6 +661,81 @@ impl SqlxMinimalCandidateSelectionReadRepository {
     }
 }
 
+/// The auth-channel gate, generated from the one shared table in
+/// `aether_ai_formats::auth_channel`.
+///
+/// This used to be five hand-written `OR` chains inside the statements below,
+/// one per statement section, plus a `match` in the in-memory repository and a
+/// per-provider enum in the transport crate. They drifted (see the module
+/// documentation in `aether_ai_formats::auth_channel`), so the table is written
+/// down once and the SQL is generated from it. The rows are static data, so
+/// baking them into the statement text keeps the prepared statement stable.
+fn provider_auth_channel_values_sql() -> String {
+    let mut values = String::new();
+    for channel in aether_ai_formats::auth_channel::PROVIDER_AUTH_CHANNELS {
+        for api_format in channel.api_formats {
+            values.push_str(&format!(
+                "\n      ('{}', '{}', {}, '{}'),",
+                channel.provider_type, channel.auth_type, channel.requires_auth_config, api_format
+            ));
+        }
+    }
+    // The last row keeps its comma; Postgres does not accept a trailing one, so
+    // drop it.
+    values.pop();
+    values
+}
+
+fn provider_auth_channel_known_providers_sql() -> String {
+    let mut providers = Vec::new();
+    for channel in aether_ai_formats::auth_channel::PROVIDER_AUTH_CHANNELS {
+        if !providers.contains(&channel.provider_type) {
+            providers.push(channel.provider_type);
+        }
+    }
+    providers
+        .iter()
+        .map(|provider| format!("'{provider}'"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Replaces every `/*auth_channel_gate:$N*/` marker in `sql` with the gate,
+/// where `$N` is the statement's requested-api-format parameter.
+fn expand_auth_channel_gates(sql: &str) -> String {
+    let mut sql = sql.to_string();
+    for param in 1..=9u32 {
+        let marker = format!("/*auth_channel_gate:${param}*/");
+        if !sql.contains(&marker) {
+            continue;
+        }
+        let gate = format!(
+            r#"(
+    EXISTS (
+      SELECT 1
+      FROM (VALUES{values}
+      ) AS channel(provider_type, auth_type, requires_auth_config, api_format)
+      WHERE channel.provider_type = LOWER(BTRIM(p.provider_type))
+        AND channel.auth_type = LOWER(BTRIM(pak.auth_type))
+        AND channel.api_format = LOWER(BTRIM(${param}::text))
+        AND (
+          NOT channel.requires_auth_config
+          OR (pak.auth_config IS NOT NULL AND BTRIM(pak.auth_config) <> '')
+        )
+    )
+    OR (
+      LOWER(BTRIM(pak.auth_type)) <> 'oauth'
+      AND LOWER(BTRIM(p.provider_type)) <> ALL (ARRAY[{known}]::text[])
+    )
+  )"#,
+            values = provider_auth_channel_values_sql(),
+            known = provider_auth_channel_known_providers_sql(),
+        );
+        sql = sql.replace(&marker, &gate);
+    }
+    sql
+}
+
 const PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_MARKER: &str =
     "__AETHER_PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH__";
 const PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_SQL: &str = r#"(
@@ -1012,8 +747,31 @@ const PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_SQL: &str = r#"(
   )
 )"#;
 
+fn list_for_exact_api_format_sql() -> &'static str {
+    static SQL: std::sync::LazyLock<String> =
+        std::sync::LazyLock::new(|| expand_auth_channel_gates(LIST_FOR_EXACT_API_FORMAT_SQL));
+    &SQL
+}
+
+fn list_for_exact_api_format_and_global_model_sql() -> &'static str {
+    static SQL: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+        expand_auth_channel_gates(LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL)
+    });
+    &SQL
+}
+
+fn list_pool_keys_for_group_sql() -> &'static str {
+    static SQL: std::sync::LazyLock<String> =
+        std::sync::LazyLock::new(|| expand_auth_channel_gates(LIST_POOL_KEYS_FOR_GROUP_SQL));
+    &SQL
+}
+
 fn requested_model_selection_sql() -> String {
-    LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL
+    expand_auth_channel_gates(&base_requested_model_selection_sql())
+}
+
+fn base_requested_model_selection_sql() -> String {
+    list_for_exact_api_format_and_global_model_sql()
         .replace(
             "AND gm.name = $2",
             r#"AND (
@@ -1627,11 +1385,11 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        parse_key_policy_string_list, parse_provider_model_mappings, parse_string_list,
+        list_for_exact_api_format_and_global_model_sql, list_for_exact_api_format_sql,
+        list_pool_keys_for_group_sql, parse_key_policy_string_list, parse_provider_model_mappings,
+        parse_string_list, pool_key_candidate_selection_by_key_ids_sql,
         pool_key_candidate_selection_sql, requested_model_selection_page_sql,
-        requested_model_selection_sql, LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-        LIST_FOR_EXACT_API_FORMAT_SQL, LIST_POOL_KEYS_FOR_GROUP_SQL,
-        PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_MARKER,
+        requested_model_selection_sql, PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_MARKER,
         PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_SQL,
     };
     use aether_data_contracts::repository::candidate_selection::{
@@ -1654,8 +1412,9 @@ mod tests {
     #[test]
     fn exact_candidate_selection_sql_limits_pool_key_expansion() {
         for sql in [
-            LIST_FOR_EXACT_API_FORMAT_SQL,
-            LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
+            list_for_exact_api_format_sql(),
+            list_for_exact_api_format_and_global_model_sql(),
+            requested_model_selection_sql().as_str(),
         ] {
             assert!(sql.contains("INNER JOIN LATERAL"));
             assert!(sql.contains("FROM provider_api_keys pak"));
@@ -1665,38 +1424,152 @@ mod tests {
                 "LIMIT CASE WHEN (p.config -> 'pool_advanced') IS NOT NULL THEN 1 ELSE 2147483647 END"
             ));
         }
-        assert!(!LIST_POOL_KEYS_FOR_GROUP_SQL.contains("INNER JOIN LATERAL"));
-        assert!(LIST_POOL_KEYS_FOR_GROUP_SQL.contains("AND pak.is_active IS TRUE"));
-        assert!(!LIST_POOL_KEYS_FOR_GROUP_SQL.contains("AND pak.is_active = TRUE"));
+        assert!(!list_pool_keys_for_group_sql().contains("INNER JOIN LATERAL"));
+        assert!(list_pool_keys_for_group_sql().contains("AND pak.is_active IS TRUE"));
+        assert!(!list_pool_keys_for_group_sql().contains("AND pak.is_active = TRUE"));
+    }
+
+    /// Every statement that carries the auth-channel gate, expanded.
+    fn expanded_candidate_statements() -> Vec<(&'static str, String)> {
+        vec![
+            ("exact", list_for_exact_api_format_sql().to_string()),
+            (
+                "global_model",
+                list_for_exact_api_format_and_global_model_sql().to_string(),
+            ),
+            ("pool_keys", list_pool_keys_for_group_sql().to_string()),
+            ("requested_model", requested_model_selection_sql()),
+        ]
+    }
+
+    #[test]
+    fn every_statement_expands_the_auth_channel_gate() {
+        for (name, sql) in expanded_candidate_statements() {
+            assert!(
+                !sql.contains("/*auth_channel_gate:"),
+                "{name} still carries an unexpanded gate marker"
+            );
+            assert!(
+                sql.contains(
+                    "AS channel(provider_type, auth_type, requires_auth_config, api_format)"
+                ),
+                "{name} must take both channel answers from the shared table"
+            );
+            // The hand-written per-provider chains this replaced are gone: no
+            // statement may list a credential kind next to a provider type.
+            assert!(
+                !sql.contains("LOWER(BTRIM(pak.auth_type)) IN ("),
+                "{name} still carries a hand-written credential-kind list"
+            );
+            // The generated fragment has to be balanced SQL on its own; a
+            // missing paren here would only surface against a live server.
+            let depth = sql.chars().fold(0i32, |depth, ch| match ch {
+                '(' => depth + 1,
+                ')' => depth - 1,
+                _ => depth,
+            });
+            assert_eq!(depth, 0, "{name} has unbalanced parentheses");
+        }
+    }
+
+    /// Statements bind positionally, so the parameters a statement references
+    /// must be exactly `$1..=$n` with no holes: a hand-edited or generated
+    /// fragment that skipped an index would bind the wrong value.
+    #[test]
+    fn every_statement_references_a_contiguous_parameter_range() {
+        let load_balance_sql =
+            pool_key_candidate_selection_sql(&StoredPoolKeyCandidateOrder::LoadBalance {
+                seed: "seed".to_string(),
+            });
+        let statements: Vec<(&str, String, u32)> = vec![
+            ("exact", list_for_exact_api_format_sql().to_string(), 3),
+            (
+                "exact_page",
+                format!("{}\nLIMIT $4\nOFFSET $5", list_for_exact_api_format_sql()),
+                5,
+            ),
+            (
+                "global_model",
+                list_for_exact_api_format_and_global_model_sql().to_string(),
+                4,
+            ),
+            ("requested_model", requested_model_selection_sql(), 4),
+            (
+                "requested_model_page",
+                requested_model_selection_page_sql(),
+                6,
+            ),
+            (
+                "pool_keys",
+                pool_key_candidate_selection_sql(&StoredPoolKeyCandidateOrder::Lru),
+                8,
+            ),
+            ("pool_keys_load_balance", load_balance_sql, 9),
+            (
+                "pool_keys_by_key_ids",
+                pool_key_candidate_selection_by_key_ids_sql(),
+                7,
+            ),
+        ];
+        for (name, sql, expected_max) in statements {
+            let mut indices = std::collections::BTreeSet::new();
+            let mut rest = sql.as_str();
+            while let Some(start) = rest.find('$') {
+                let digits = rest[start + 1..]
+                    .chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect::<String>();
+                if let Ok(index) = digits.parse::<u32>() {
+                    indices.insert(index);
+                }
+                rest = &rest[start + 1 + digits.len()..];
+            }
+            let expected: std::collections::BTreeSet<u32> = (1..=expected_max).collect();
+            assert_eq!(indices, expected, "{name} parameter range");
+        }
+    }
+
+    fn assert_channel(
+        name: &str,
+        sql: &str,
+        provider_type: &str,
+        auth_type: &str,
+        requires_auth_config: bool,
+        api_format: &str,
+    ) {
+        let row =
+            format!("('{provider_type}', '{auth_type}', {requires_auth_config}, '{api_format}')");
+        assert!(
+            sql.contains(&row),
+            "{name} is missing the channel row {row}"
+        );
     }
 
     #[test]
     fn candidate_selection_sql_allows_chatgpt_web_image_auth() {
-        let requested_model_sql = requested_model_selection_sql();
-        for sql in [
-            LIST_FOR_EXACT_API_FORMAT_SQL,
-            LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-            LIST_POOL_KEYS_FOR_GROUP_SQL,
-            requested_model_sql.as_str(),
-        ] {
-            assert!(sql.contains("LOWER(BTRIM(p.provider_type)) = 'chatgpt_web'"));
-            assert!(sql.contains("LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer')"));
-            assert!(sql.contains("'chatgpt_web',"));
+        for (name, sql) in expanded_candidate_statements() {
+            for auth_type in ["oauth", "bearer"] {
+                assert_channel(name, &sql, "chatgpt_web", auth_type, false, "openai:image");
+            }
+            assert!(!sql.contains("('chatgpt_web', 'api_key'"));
+            assert!(sql.contains("'chatgpt_web'"));
         }
     }
 
     #[test]
     fn candidate_selection_sql_allows_codex_live_oauth_auth() {
-        let requested_model_sql = requested_model_selection_sql();
-        for sql in [
-            LIST_FOR_EXACT_API_FORMAT_SQL,
-            LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-            LIST_POOL_KEYS_FOR_GROUP_SQL,
-            requested_model_sql.as_str(),
-        ] {
-            assert!(sql.contains("LOWER(BTRIM(p.provider_type)) = 'codex'"));
-            assert!(sql.contains("LOWER(BTRIM(pak.auth_type)) = 'oauth'"));
-            assert!(sql.contains("'codex:live'"));
+        for (name, sql) in expanded_candidate_statements() {
+            for api_format in [
+                "openai:responses",
+                "openai:responses:compact",
+                "openai:search",
+                "openai:image",
+                "codex:live",
+            ] {
+                assert_channel(name, &sql, "codex", "oauth", false, api_format);
+            }
+            assert!(!sql.contains("('codex', 'bearer'"));
+            assert!(sql.contains("'codex'"));
         }
     }
 
@@ -1717,15 +1590,12 @@ mod tests {
             ));
             assert!(compatibility.contains(&format!("'{legacy_responses_alias}'")));
         }
-        assert!(!LIST_FOR_EXACT_API_FORMAT_SQL.contains(compatibility));
-        assert!(!LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL.contains(compatibility));
-        assert!(!LIST_POOL_KEYS_FOR_GROUP_SQL.contains(compatibility));
-        for permission_sql in [
-            LIST_FOR_EXACT_API_FORMAT_SQL,
-            LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-            LIST_POOL_KEYS_FOR_GROUP_SQL,
-        ] {
-            assert!(!permission_sql.contains("'/v1/responses'"));
+        for (name, other_sql) in expanded_candidate_statements() {
+            if name == "requested_model" {
+                continue;
+            }
+            assert!(!other_sql.contains(compatibility));
+            assert!(!other_sql.contains("'/v1/responses'"));
         }
     }
 
@@ -1746,93 +1616,58 @@ mod tests {
 
     #[test]
     fn candidate_selection_sql_allows_grok_oauth_chat_auth() {
-        let requested_model_sql = requested_model_selection_sql();
-        for sql in [
-            LIST_FOR_EXACT_API_FORMAT_SQL,
-            LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-            LIST_POOL_KEYS_FOR_GROUP_SQL,
-            requested_model_sql.as_str(),
-        ] {
-            assert!(sql.contains("LOWER(BTRIM(p.provider_type)) = 'grok'"));
-            assert!(sql.contains("LOWER(BTRIM(pak.auth_type)) = 'oauth'"));
-            assert!(sql
-                .contains("'openai:chat', 'openai:responses', 'claude:messages', 'openai:image'"));
-            assert!(sql.contains("'grok',"));
+        for (name, sql) in expanded_candidate_statements() {
+            for api_format in [
+                "openai:chat",
+                "openai:responses",
+                "claude:messages",
+                "openai:image",
+            ] {
+                assert_channel(name, &sql, "grok", "oauth", false, api_format);
+            }
+            assert!(!sql.contains("('grok', 'api_key'"));
+            assert!(sql.contains("'grok'"));
         }
     }
 
     #[test]
     fn candidate_selection_sql_allows_xai_oauth_responses_auth() {
-        let requested_model_sql = requested_model_selection_sql();
-        for sql in [
-            LIST_FOR_EXACT_API_FORMAT_SQL,
-            LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-            LIST_POOL_KEYS_FOR_GROUP_SQL,
-            requested_model_sql.as_str(),
-        ] {
-            assert!(sql.contains("LOWER(BTRIM(p.provider_type)) = 'xai'"));
-            assert!(sql.contains("LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'bearer', 'api_key')"));
-            assert!(sql.contains(
-                "'openai:responses', 'openai:responses:compact', 'openai:image', 'openai:video'"
-            ));
+        for (name, sql) in expanded_candidate_statements() {
+            for auth_type in ["oauth", "bearer", "api_key"] {
+                for api_format in [
+                    "openai:responses",
+                    "openai:responses:compact",
+                    "openai:image",
+                    "openai:video",
+                ] {
+                    assert_channel(name, &sql, "xai", auth_type, false, api_format);
+                }
+            }
             assert!(sql.contains("'xai'"));
         }
     }
 
     #[test]
     fn candidate_selection_sql_allows_windsurf_openai_chat_managed_keys() {
-        let requested_model_sql = requested_model_selection_sql();
-        for sql in [
-            LIST_FOR_EXACT_API_FORMAT_SQL,
-            LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-            LIST_POOL_KEYS_FOR_GROUP_SQL,
-            requested_model_sql.as_str(),
-        ] {
-            assert!(sql.contains("LOWER(BTRIM(p.provider_type)) = 'windsurf'"));
-            assert!(
-                sql.contains("LOWER($3) = 'openai:chat'")
-                    || sql.contains("LOWER($4) = 'openai:chat'")
-                    || sql.contains("LOWER($6) = 'openai:chat'")
-            );
-            assert!(sql.contains("LOWER(BTRIM(pak.auth_type)) IN ('oauth', 'api_key', 'bearer')"));
+        for (name, sql) in expanded_candidate_statements() {
+            for auth_type in ["oauth", "api_key", "bearer"] {
+                assert_channel(name, &sql, "windsurf", auth_type, false, "openai:chat");
+            }
             assert!(sql.contains("'windsurf'"));
         }
     }
 
     #[test]
     fn candidate_selection_sql_rejects_retired_vertex_claude_auth() {
-        let requested_model_sql = requested_model_selection_sql();
-        for (name, sql, expected_occurrences) in [
-            ("exact", LIST_FOR_EXACT_API_FORMAT_SQL, 2),
-            (
-                "global_model",
-                LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
-                2,
-            ),
-            ("pool_keys", LIST_POOL_KEYS_FOR_GROUP_SQL, 1),
-            ("requested_model", requested_model_sql.as_str(), 2),
-        ] {
-            let mut remaining = sql;
-            let mut occurrences = 0;
-            while let Some((_, suffix)) =
-                remaining.split_once("LOWER(BTRIM(p.provider_type)) = 'vertex_ai'")
-            {
-                let (vertex_clause, rest) = suffix
-                    .split_once("LOWER(BTRIM(p.provider_type)) NOT IN")
-                    .expect("each Vertex auth clause should have a following fallback clause");
-                assert!(vertex_clause.contains(
-                    "LOWER(BTRIM(pak.auth_type)) IN ('api_key', 'service_account', 'vertex_ai')"
-                ));
-                assert!(vertex_clause.contains("gemini:embedding"));
-                assert!(vertex_clause.contains("gemini:generate_content"));
-                assert!(!vertex_clause.contains("claude:messages"));
-                occurrences += 1;
-                remaining = rest;
+        for (name, sql) in expanded_candidate_statements() {
+            for auth_type in ["api_key", "service_account", "vertex_ai"] {
+                for api_format in ["gemini:generate_content", "gemini:embedding"] {
+                    assert_channel(name, &sql, "vertex_ai", auth_type, false, api_format);
+                }
             }
-            assert_eq!(
-                occurrences, expected_occurrences,
-                "unexpected Vertex auth clause count in {name} SQL"
-            );
+            assert!(!sql.contains("('vertex_ai', 'oauth'"));
+            assert!(!sql.contains("('vertex_ai', 'api_key', false, 'claude:messages')"));
+            assert!(sql.contains("'vertex_ai'"));
         }
     }
 
