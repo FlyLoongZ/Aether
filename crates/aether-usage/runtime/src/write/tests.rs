@@ -12,6 +12,34 @@ use super::{
     UsageBodyStatesSeed, UsageRoutingSeed, UsageTerminalState, MAX_USAGE_CAPTURE_BYTES,
     MAX_USAGE_CAPTURE_DEPTH,
 };
+
+fn default_test_plan() -> ExecutionPlan {
+    ExecutionPlan {
+        request_id: "req-pending-usage-1".to_string(),
+        candidate_id: None,
+        provider_name: Some("OpenAI".to_string()),
+        provider_id: "provider-1".to_string(),
+        endpoint_id: "endpoint-1".to_string(),
+        key_id: "key-1".to_string(),
+        method: "POST".to_string(),
+        url: "https://example.com/v1/responses".to_string(),
+        headers: BTreeMap::new(),
+        content_type: Some("application/json".to_string()),
+        content_encoding: None,
+        body: RequestBody {
+            json_body: None,
+            body_bytes_b64: None,
+            body_ref: None,
+        },
+        stream: false,
+        client_api_format: "openai:responses".to_string(),
+        provider_api_format: "openai:responses".to_string(),
+        model_name: Some("gpt-5.4".to_string()),
+        proxy: None,
+        transport_profile: None,
+        timeouts: None,
+    }
+}
 use crate::{
     build_upsert_usage_record_from_event, GatewayStreamReportRequest, GatewaySyncReportRequest,
     UsageEventType,
@@ -140,32 +168,18 @@ fn extracts_usage_tokens_from_last_matching_chunk() {
 #[test]
 fn pending_usage_records_stay_lightweight() {
     let plan = ExecutionPlan {
-        request_id: "req-pending-usage-1".to_string(),
         candidate_id: Some("cand-pending-usage-1".to_string()),
         provider_name: Some("Codex Proxy".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/messages".to_string(),
         headers: BTreeMap::from([(
             "authorization".to_string(),
             "Bearer pending-secret".to_string(),
         )]),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-5.4",
-            "messages": [{"role": "user", "content": "hello"}],
-            "reasoning": {"effort": "max"}
-        })),
-        stream: false,
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-5.4", "messages": [{"role": "user", "content": "hello"}], "reasoning": {"effort": "max"} }),
+        ),
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     let record = build_pending_usage_record(
@@ -241,22 +255,10 @@ fn pending_usage_event_round_trips_to_lightweight_upsert_record() {
         request_id: "req-pending-event-1".to_string(),
         candidate_id: Some("cand-pending-event-1".to_string()),
         provider_name: Some("Codex Proxy".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/messages".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5.4"})),
-        stream: false,
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     let event = build_pending_usage_event_from_owned_seed(
@@ -332,22 +334,11 @@ fn streaming_usage_event_round_trips_to_lightweight_upsert_record() {
         request_id: "req-streaming-event-1".to_string(),
         candidate_id: Some("cand-streaming-event-1".to_string()),
         provider_name: Some("Codex Proxy".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/messages".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5.4"})),
         stream: true,
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     let event = build_streaming_usage_event_from_owned_seed(
@@ -407,24 +398,9 @@ fn lifecycle_routing_snapshot_preserves_legacy_factors_and_invalid_markers() {
 
     let plan = ExecutionPlan {
         request_id: "req-lifecycle-snapshot".to_string(),
-        candidate_id: None,
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5.4"})),
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     for (snapshot, expected_multiplier) in [
@@ -502,24 +478,8 @@ fn lifecycle_routing_snapshot_preserves_legacy_factors_and_invalid_markers() {
 fn pending_usage_record_preserves_standalone_key_metadata() {
     let plan = ExecutionPlan {
         request_id: "req-pending-standalone-1".to_string(),
-        candidate_id: None,
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5.4"})),
-        stream: false,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     let record = build_pending_usage_record(
@@ -563,22 +523,11 @@ fn streaming_usage_records_stay_lightweight_by_default() {
         request_id: "req-streaming-usage-1".to_string(),
         candidate_id: Some("cand-streaming-usage-1".to_string()),
         provider_name: Some("Codex Proxy".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/messages".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5.4"})),
         stream: true,
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     let record = build_streaming_usage_record(
@@ -620,22 +569,10 @@ fn sync_terminal_usage_preserves_overdeep_request_payloads_for_repo_body_storage
         request_id: "req-sync-usage-deep-1".to_string(),
         candidate_id: Some("cand-sync-usage-deep-1".to_string()),
         provider_name: Some("Codex Proxy".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/messages".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5.4"})),
-        stream: false,
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-usage-deep-1".to_string(),
@@ -779,20 +716,13 @@ fn sync_terminal_usage_redacts_provider_request_body_secrets_from_context() {
         provider_id: "provider-windsurf".to_string(),
         endpoint_id: "endpoint-windsurf".to_string(),
         key_id: "key-windsurf".to_string(),
-        method: "POST".to_string(),
         url: "https://server.codeium.com/exa.api_server_pb.ApiServerService/GetChatMessage"
             .to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "windsurf-model"})),
-        stream: false,
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "openai:chat".to_string(),
         model_name: Some("windsurf-model".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-redact-provider-request-1".to_string(),
@@ -847,27 +777,10 @@ fn builds_stream_terminal_usage_from_provider_body_and_preserves_client_body() {
     let plan = ExecutionPlan {
         request_id: "req-stream-usage-1".to_string(),
         candidate_id: Some("cand-stream-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
         client_api_format: "openai:chat".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewayStreamReportRequest {
         trace_id: "trace-stream-usage-1".to_string(),
@@ -941,27 +854,11 @@ fn cancelled_stream_usage_does_not_estimate_tokens_from_request_or_partial_respo
     let plan = ExecutionPlan {
         request_id: "req-stream-cancelled-estimated-usage-1".to_string(),
         candidate_id: Some("cand-stream-cancelled-estimated-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-5.4",
-            "input": "Write a short greeting for a usage test",
-            "stream": true
-        })),
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-5.4", "input": "Write a short greeting for a usage test", "stream": true }),
+        ),
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let sse_body = concat!(
         "event: response.created\n",
@@ -1012,23 +909,9 @@ fn cancelled_stream_usage_does_not_infer_cache_or_token_estimates_from_prompt_ca
     let plan = ExecutionPlan {
         request_id: "req-stream-cancelled-cache-estimated-usage-1".to_string(),
         candidate_id: Some("cand-stream-cancelled-cache-estimated-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(request_body.clone()),
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewayStreamReportRequest {
         trace_id: "trace-stream-cancelled-cache-estimated-usage-1".to_string(),
@@ -1065,27 +948,11 @@ fn cancelled_stream_usage_preserves_terminal_summary_usage() {
     let plan = ExecutionPlan {
         request_id: "req-stream-cancelled-summary-usage-1".to_string(),
         candidate_id: Some("cand-stream-cancelled-summary-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-5.4",
-            "input": "This cancelled request has terminal upstream usage",
-            "stream": true
-        })),
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-5.4", "input": "This cancelled request has terminal upstream usage", "stream": true }),
+        ),
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let mut standardized_usage = StandardizedUsage::new();
     standardized_usage.input_tokens = 13;
@@ -1134,27 +1001,11 @@ fn failed_stream_usage_does_not_estimate_partial_response_tokens() {
     let plan = ExecutionPlan {
         request_id: "req-stream-failed-estimated-usage-1".to_string(),
         candidate_id: Some("cand-stream-failed-estimated-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-5.4",
-            "input": "This failed request should not be billed",
-            "stream": true
-        })),
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-5.4", "input": "This failed request should not be billed", "stream": true }),
+        ),
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewayStreamReportRequest {
         trace_id: "trace-stream-failed-estimated-usage-1".to_string(),
@@ -1198,23 +1049,13 @@ fn stream_terminal_usage_marks_redirect_status_as_failed() {
         provider_id: "provider-redirect".to_string(),
         endpoint_id: "endpoint-redirect".to_string(),
         key_id: "key-redirect".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1beta/models/gemini:streamGenerateContent".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
         client_api_format: "gemini:generate_content".to_string(),
         provider_api_format: "gemini:generate_content".to_string(),
         model_name: Some("gemini".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let client_body = json!({
         "error": {
@@ -1268,27 +1109,10 @@ fn builds_stream_terminal_usage_from_terminal_summary_usage_without_decoding_bod
     let plan = ExecutionPlan {
         request_id: "req-stream-summary-usage-1".to_string(),
         candidate_id: Some("cand-stream-summary-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
         client_api_format: "openai:chat".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let mut standardized_usage = StandardizedUsage::new();
     standardized_usage.input_tokens = 13;
@@ -1348,27 +1172,10 @@ fn stream_terminal_usage_marks_missing_observed_finish_as_failed() {
     let plan = ExecutionPlan {
         request_id: "req-stream-missing-finish-1".to_string(),
         candidate_id: Some("cand-stream-missing-finish-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
         model_name: Some("gpt-5.5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewayStreamReportRequest {
         trace_id: "trace-stream-missing-finish-1".to_string(),
@@ -1414,27 +1221,10 @@ fn stream_terminal_usage_marks_empty_openai_responses_capture_as_missing_termina
     let plan = ExecutionPlan {
         request_id: "req-stream-empty-capture-1".to_string(),
         candidate_id: Some("cand-stream-empty-capture-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
         model_name: Some("gpt-5.5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewayStreamReportRequest {
         trace_id: "trace-stream-empty-capture-1".to_string(),
@@ -1487,27 +1277,10 @@ fn stream_terminal_usage_marks_missing_captured_openai_responses_terminal_as_fai
     let plan = ExecutionPlan {
         request_id: "req-stream-missing-captured-finish-1".to_string(),
         candidate_id: Some("cand-stream-missing-captured-finish-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
         model_name: Some("gpt-5.5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let provider_sse = concat!(
         "event: response.created\n",
@@ -1554,27 +1327,10 @@ fn stream_terminal_usage_ignores_missing_terminal_from_truncated_capture() {
     let plan = ExecutionPlan {
         request_id: "req-stream-truncated-captured-finish-1".to_string(),
         candidate_id: Some("cand-stream-truncated-captured-finish-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
         model_name: Some("gpt-5.5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let provider_sse = concat!(
         "event: response.created\n",
@@ -1615,27 +1371,10 @@ fn stream_terminal_usage_marks_http_200_response_failed_as_stream_terminal_error
     let plan = ExecutionPlan {
         request_id: "req-stream-response-failed-1".to_string(),
         candidate_id: Some("cand-stream-response-failed-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
         model_name: Some("gpt-5.5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let message = "This content was flagged for possible cybersecurity risk";
     let provider_sse = format!(
@@ -1705,28 +1444,15 @@ fn completed_image_usage_estimates_request_tokens_when_provider_usage_is_missing
     let plan = ExecutionPlan {
         request_id: "req-image-completed-estimate-1".to_string(),
         candidate_id: Some("cand-image-completed-estimate-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/images/generations".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-image-2",
-            "prompt": "draw a small red cube on a clean desk",
-            "size": "1024x1024",
-            "quality": "medium"
-        })),
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-image-2", "prompt": "draw a small red cube on a clean desk", "size": "1024x1024", "quality": "medium" }),
+        ),
         stream: true,
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "openai:image".to_string(),
         model_name: Some("gpt-image-2".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let mut standardized_usage = StandardizedUsage::new();
     standardized_usage.request_count = 1;
@@ -1804,23 +1530,12 @@ fn sync_completed_openai_image_usage_infers_image_dimensions_from_response() {
     let plan = ExecutionPlan {
         request_id: "req-image-sync-completed-dimensions-1".to_string(),
         candidate_id: Some("cand-image-sync-completed-dimensions-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/images/generations".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(request_body.clone()),
-        stream: false,
         client_api_format: "openai:image".to_string(),
         provider_api_format: "openai:image".to_string(),
         model_name: Some("gpt-image-2".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-image-sync-completed-dimensions-1".to_string(),
@@ -1869,23 +1584,12 @@ fn sync_completed_openai_image_usage_preserves_native_usage_with_image_count() {
     let plan = ExecutionPlan {
         request_id: "req-image-sync-native-usage-1".to_string(),
         candidate_id: Some("cand-image-sync-native-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/images/generations".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(request_body.clone()),
-        stream: false,
         client_api_format: "openai:image".to_string(),
         provider_api_format: "openai:image".to_string(),
         model_name: Some("gpt-image-2".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-image-sync-native-usage-1".to_string(),
@@ -1933,27 +1637,10 @@ fn stream_terminal_usage_prefers_more_complete_provider_chunks_usage() {
     let plan = ExecutionPlan {
         request_id: "req-stream-provider-chunks-usage-1".to_string(),
         candidate_id: Some("cand-stream-provider-chunks-usage-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
         model_name: Some("gpt-5.5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let mut partial_summary_usage = StandardizedUsage::new();
     partial_summary_usage.output_tokens = 148;
@@ -2039,27 +1726,9 @@ fn builds_stream_terminal_usage_from_sse_chunks_and_extracts_usage() {
     let plan = ExecutionPlan {
         request_id: "req-stream-usage-2".to_string(),
         candidate_id: Some("cand-stream-usage-2".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let sse_body = concat!(
         "event: response.created\n",
@@ -2166,23 +1835,12 @@ fn builds_sync_terminal_usage_from_provider_body_and_preserves_client_body() {
         provider_id: "provider-2".to_string(),
         endpoint_id: "endpoint-2".to_string(),
         key_id: "key-2".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1beta/models/gemini:generateContent".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
-        stream: false,
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "gemini:generate_content".to_string(),
         model_name: Some("gpt-5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-usage-1".to_string(),
@@ -2306,27 +1964,8 @@ fn sync_terminal_usage_prefers_upstream_stream_body_over_aggregated_sync_body() 
     let plan = ExecutionPlan {
         request_id: "req-sync-upstream-stream-1".to_string(),
         candidate_id: Some("cand-sync-upstream-stream-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
-        stream: false,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-upstream-stream-1".to_string(),
@@ -2418,27 +2057,10 @@ fn sync_terminal_usage_prefers_error_body_over_partial_upstream_stream_body() {
     let plan = ExecutionPlan {
         request_id: "req-sync-upstream-stream-error-1".to_string(),
         candidate_id: Some("cand-sync-upstream-stream-error-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
-        stream: false,
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
         model_name: Some("gpt-5.5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-upstream-stream-error-1".to_string(),
@@ -2491,23 +2113,12 @@ fn sync_terminal_seed_path_matches_legacy_wrapper_event() {
         provider_id: "provider-2".to_string(),
         endpoint_id: "endpoint-2".to_string(),
         key_id: "key-2".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1beta/models/gemini:generateContent".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
-        stream: false,
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "gemini:generate_content".to_string(),
         model_name: Some("gpt-5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-seed-match-1".to_string(),
@@ -2555,30 +2166,14 @@ fn sync_terminal_usage_exposes_provider_request_body_ref_as_typed_field() {
     let plan = ExecutionPlan {
         request_id: "req-sync-body-ref-1".to_string(),
         candidate_id: Some("cand-sync-body-ref-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody {
-            json_body: Some(json!({
-                "model": "gpt-5.4",
-                "input": "this should stay out of usage storage"
-            })),
+            json_body: Some(
+                json!({ "model": "gpt-5.4", "input": "this should stay out of usage storage" }),
+            ),
             body_bytes_b64: None,
             body_ref: Some("blob://provider-request-1".to_string()),
         },
-        stream: false,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-body-ref-1".to_string(),
@@ -2622,27 +2217,13 @@ fn sync_terminal_usage_records_human_readable_request_body_sizes_in_metadata() {
     let plan = ExecutionPlan {
         request_id: "req-sync-body-size-1".to_string(),
         candidate_id: Some("cand-sync-body-size-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody {
             json_body: None,
             body_bytes_b64: Some(provider_body_base64),
             body_ref: None,
         },
-        stream: false,
         client_api_format: "openai:chat".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-body-size-1".to_string(),
@@ -2706,27 +2287,10 @@ fn stream_terminal_usage_records_base64_response_sizes_in_metadata() {
     let plan = ExecutionPlan {
         request_id: "req-stream-bytes-1".to_string(),
         candidate_id: Some("cand-stream-bytes-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
         client_api_format: "openai:chat".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewayStreamReportRequest {
         trace_id: "trace-stream-bytes-1".to_string(),
@@ -2789,27 +2353,9 @@ fn stream_terminal_usage_preserves_large_sse_response_for_repo_body_storage() {
     let plan = ExecutionPlan {
         request_id: "req-stream-usage-large-1".to_string(),
         candidate_id: Some("cand-stream-usage-large-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
         content_type: None,
-        content_encoding: None,
-        body: RequestBody {
-            json_body: None,
-            body_bytes_b64: None,
-            body_ref: None,
-        },
         stream: true,
-        client_api_format: "openai:responses".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewayStreamReportRequest {
         trace_id: "trace-stream-usage-large-1".to_string(),
@@ -2855,26 +2401,11 @@ fn sync_terminal_usage_does_not_fallback_request_body_to_plan_when_client_echo_i
     let plan = ExecutionPlan {
         request_id: "req-sync-no-client-echo-1".to_string(),
         candidate_id: Some("cand-sync-no-client-echo-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
-        url: "https://example.com/v1/responses".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-5.4",
-            "input": [{"role": "user", "content": "provider-side compiled body"}],
-        })),
-        stream: false,
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-5.4", "input": [{"role": "user", "content": "provider-side compiled body"}], }),
+        ),
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-no-client-echo-1".to_string(),
@@ -2925,25 +2456,15 @@ fn openai_image_sync_terminal_usage_captures_request_and_response_bodies() {
         provider_id: "provider-aether-1".to_string(),
         endpoint_id: "endpoint-aether-1".to_string(),
         key_id: "key-aether-1".to_string(),
-        method: "POST".to_string(),
         url: "https://upstream-aether.example/v1/images/generations".to_string(),
         headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-image-2-upstream",
-            "prompt": "Draw a red kite",
-            "size": "1024x1024",
-            "n": 1,
-            "response_format": "b64_json"
-        })),
-        stream: false,
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-image-2-upstream", "prompt": "Draw a red kite", "size": "1024x1024", "n": 1, "response_format": "b64_json" }),
+        ),
         client_api_format: "openai:image".to_string(),
         provider_api_format: "openai:image".to_string(),
         model_name: Some("gpt-image-2".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-openai-image-sync-body-1".to_string(),
@@ -3029,22 +2550,14 @@ fn sync_terminal_usage_applies_kiro_simulated_cache_context() {
         provider_id: "provider-kiro-1".to_string(),
         endpoint_id: "endpoint-kiro-1".to_string(),
         key_id: "key-kiro-1".to_string(),
-        method: "POST".to_string(),
         url: "https://kiro.example/generateAssistantResponse".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "claude-sonnet-4",
-            "messages": [{"role": "user", "content": "hello kiro"}],
-        })),
-        stream: false,
+        body: RequestBody::from_json(
+            json!({ "model": "claude-sonnet-4", "messages": [{"role": "user", "content": "hello kiro"}], }),
+        ),
         client_api_format: "claude:messages".to_string(),
         provider_api_format: "claude:messages".to_string(),
         model_name: Some("claude-sonnet-4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-kiro-cache-context-1".to_string(),
@@ -3106,23 +2619,10 @@ fn sync_terminal_usage_treats_null_error_field_as_success() {
     let plan = ExecutionPlan {
         request_id: "req-sync-null-error-1".to_string(),
         candidate_id: Some("cand-sync-null-error-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/messages".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5.4"})),
-        stream: false,
         client_api_format: "claude:messages".to_string(),
-        provider_api_format: "openai:responses".to_string(),
-        model_name: Some("gpt-5.4".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-sync-null-error-1".to_string(),
@@ -3337,23 +2837,12 @@ fn usage_event_data_seed_preserves_headers_before_outcome_paths_use_it() {
     let plan = ExecutionPlan {
         request_id: "req-seed-sanitize-1".to_string(),
         candidate_id: Some("cand-seed-sanitize-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/chat/completions".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5"})),
-        stream: false,
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "openai:chat".to_string(),
         model_name: Some("gpt-5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     let data = build_usage_event_data_seed(
@@ -3389,23 +2878,12 @@ fn usage_event_data_seed_preserves_timing_and_runtime_body_metadata() {
     let plan = ExecutionPlan {
         request_id: "req-seed-metadata-1".to_string(),
         candidate_id: Some("cand-seed-metadata-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/chat/completions".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5"})),
-        stream: false,
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "openai:chat".to_string(),
         model_name: Some("gpt-5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
 
     let data = build_usage_event_data_seed(
@@ -3447,27 +2925,14 @@ fn describing_request_bodies_matches_the_capturing_seed_apart_from_the_bodies() 
     let plan = ExecutionPlan {
         request_id: "req-seed-describe-1".to_string(),
         candidate_id: Some("cand-seed-describe-1".to_string()),
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/chat/completions".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
-        body: RequestBody::from_json(json!({
-            "model": "gpt-5",
-            "service_tier": "priority",
-            "reasoning": {"effort": "high"}
-        })),
-        stream: false,
+        body: RequestBody::from_json(
+            json!({ "model": "gpt-5", "service_tier": "priority", "reasoning": {"effort": "high"} }),
+        ),
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "openai:chat".to_string(),
         model_name: Some("gpt-5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     let report_context = json!({
         "client_api_format": "openai:chat",
@@ -3520,24 +2985,12 @@ fn describing_request_bodies_matches_the_capturing_seed_apart_from_the_bodies() 
 fn describing_request_bodies_keeps_the_unavailable_marker_for_raw_bodies() {
     let mut plan = ExecutionPlan {
         request_id: "req-seed-describe-2".to_string(),
-        candidate_id: None,
-        provider_name: Some("OpenAI".to_string()),
-        provider_id: "provider-1".to_string(),
-        endpoint_id: "endpoint-1".to_string(),
-        key_id: "key-1".to_string(),
-        method: "POST".to_string(),
         url: "https://example.com/v1/chat/completions".to_string(),
-        headers: BTreeMap::new(),
-        content_type: Some("application/json".to_string()),
-        content_encoding: None,
         body: RequestBody::from_json(json!({"model": "gpt-5"})),
-        stream: false,
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "openai:chat".to_string(),
         model_name: Some("gpt-5".to_string()),
-        proxy: None,
-        transport_profile: None,
-        timeouts: None,
+        ..default_test_plan()
     };
     plan.body.json_body = None;
     plan.body.body_bytes_b64 = Some("eyJtb2RlbCI6ICJncHQtNSJ9".to_string());
