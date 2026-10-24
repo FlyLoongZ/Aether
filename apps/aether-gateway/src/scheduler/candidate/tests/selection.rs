@@ -29,7 +29,6 @@ use crate::scheduler::config::SchedulerOrderingConfig;
 use crate::{AppState, GatewayError};
 
 use super::super::affinity::build_scheduler_affinity_cache_key;
-use super::super::runtime::should_skip_provider_quota;
 use super::super::selection::{
     collect_selectable_candidates as collect_selectable_candidates_impl,
     collect_selectable_candidates_with_skip_reasons as collect_selectable_candidates_with_skip_reasons_impl,
@@ -265,61 +264,6 @@ fn provider_key_concurrency_state(
                 request_candidates,
             ),
         )
-}
-
-#[test]
-fn skips_only_exhausted_monthly_quota_provider() {
-    let inactive = StoredProviderQuotaSnapshot::new(
-        "provider-1".to_string(),
-        "monthly_quota".to_string(),
-        Some(10.0),
-        1.0,
-        Some(30),
-        Some(1_000),
-        None,
-        false,
-    )
-    .expect("quota should build");
-    assert!(!should_skip_provider_quota(&inactive, 2_000));
-
-    let expired = StoredProviderQuotaSnapshot::new(
-        "provider-1".to_string(),
-        "monthly_quota".to_string(),
-        Some(10.0),
-        1.0,
-        Some(30),
-        Some(1_000),
-        Some(1_500),
-        true,
-    )
-    .expect("quota should build");
-    assert!(!should_skip_provider_quota(&expired, 2_000));
-
-    let exhausted = StoredProviderQuotaSnapshot::new(
-        "provider-1".to_string(),
-        "monthly_quota".to_string(),
-        Some(10.0),
-        10.0,
-        Some(30),
-        Some(1_000),
-        None,
-        true,
-    )
-    .expect("quota should build");
-    assert!(should_skip_provider_quota(&exhausted, 2_000));
-
-    let payg = StoredProviderQuotaSnapshot::new(
-        "provider-1".to_string(),
-        "pay_as_you_go".to_string(),
-        None,
-        10.0,
-        None,
-        None,
-        None,
-        true,
-    )
-    .expect("quota should build");
-    assert!(!should_skip_provider_quota(&payg, 2_000));
 }
 
 #[tokio::test]

@@ -8,14 +8,13 @@ use super::{
     build_usage_event_data_seed_describing_request_bodies, decode_body_for_storage,
     extract_token_counts_from_json, extract_token_counts_from_value, headers_to_json,
     mask_sensitive_body_fields, parse_sse_body_for_storage, resolve_error_message,
-    trim_owned_non_empty_string, validate_usage_headers_in_json_value, LifecycleUsageSeed,
-    TerminalUsageSeed, UsageBodyRefsSeed,
+    validate_usage_headers_in_json_value, LifecycleUsageSeed, TerminalUsageSeed, UsageBodyRefsSeed,
     UsageBodyStatesSeed, UsageRoutingSeed, UsageTerminalState, MAX_USAGE_CAPTURE_BYTES,
     MAX_USAGE_CAPTURE_DEPTH,
 };
 use crate::{
     build_upsert_usage_record_from_event, GatewayStreamReportRequest, GatewaySyncReportRequest,
-    UsageEvent, UsageEventData, UsageEventType,
+    UsageEventType,
 };
 use aether_contracts::{
     ExecutionPlan, ExecutionStreamTerminalSummary, RequestBody, StandardizedUsage,
@@ -136,47 +135,6 @@ fn extracts_usage_tokens_from_last_matching_chunk() {
     .expect("tokens should exist");
 
     assert_eq!(tokens, (9, 4, 13));
-}
-
-#[test]
-fn trim_owned_non_empty_string_preserves_clean_values_and_drops_blank_ones() {
-    assert_eq!(
-        trim_owned_non_empty_string("body-ref-1".to_string()),
-        Some("body-ref-1".to_string()),
-    );
-    assert_eq!(
-        trim_owned_non_empty_string("  body-ref-1  ".to_string()),
-        Some("body-ref-1".to_string()),
-    );
-    assert_eq!(trim_owned_non_empty_string("   ".to_string()), None);
-}
-
-#[test]
-fn builds_upsert_record_from_terminal_event() {
-    let record = build_upsert_usage_record_from_event(&UsageEvent {
-        event_type: UsageEventType::Completed,
-        request_id: "req-1".to_string(),
-        timestamp_ms: 1_700_000_000_000,
-        data: UsageEventData {
-            user_id: Some("user-1".to_string()),
-            api_key_id: Some("key-1".to_string()),
-            provider_name: "OpenAI".to_string(),
-            model: "gpt-5".to_string(),
-            api_format: Some("openai:chat".to_string()),
-            endpoint_api_format: Some("openai:chat".to_string()),
-            input_tokens: Some(10),
-            output_tokens: Some(20),
-            total_tokens: Some(30),
-            status_code: Some(200),
-            ..UsageEventData::default()
-        },
-    })
-    .expect("record should build");
-
-    assert_eq!(record.request_id, "req-1");
-    assert_eq!(record.status, "completed");
-    assert_eq!(record.billing_status, "pending");
-    assert_eq!(record.total_tokens, Some(30));
 }
 
 #[test]

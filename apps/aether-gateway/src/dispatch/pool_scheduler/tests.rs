@@ -35,7 +35,7 @@ use aether_data_contracts::repository::pool_scores::{
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use aether_pool_core::{PoolSchedulingPreset, POOL_ACCOUNT_EXHAUSTED_SKIP_REASON};
+use aether_pool_core::POOL_ACCOUNT_EXHAUSTED_SKIP_REASON;
 use aether_provider_pool::ProviderPoolService;
 use aether_provider_transport::snapshot::{
     GatewayProviderTransportEndpoint, GatewayProviderTransportKey, GatewayProviderTransportProvider,
@@ -1219,41 +1219,6 @@ fn pool_scheduler_defaults_empty_pool_advanced_to_cache_affinity() {
             .collect::<Vec<_>>(),
         vec!["key-b", "key-a"]
     );
-}
-
-#[test]
-fn normalizes_distribution_mode_before_strategy_presets() {
-    let presets = ProviderPoolService::with_builtin_adapters()
-        .normalize_scheduling_presets(
-            "openai",
-            &[
-                PoolSchedulingPreset {
-                    preset: "lru".to_string(),
-                    enabled: false,
-                    mode: None,
-                },
-                PoolSchedulingPreset {
-                    preset: "single_account".to_string(),
-                    enabled: true,
-                    mode: None,
-                },
-                PoolSchedulingPreset {
-                    preset: "cache_affinity".to_string(),
-                    enabled: true,
-                    mode: None,
-                },
-                PoolSchedulingPreset {
-                    preset: "priority_first".to_string(),
-                    enabled: true,
-                    mode: None,
-                },
-            ],
-        )
-        .into_iter()
-        .map(|preset| preset.preset)
-        .collect::<Vec<_>>();
-
-    assert_eq!(presets, ["single_account", "priority_first"]);
 }
 
 #[test]

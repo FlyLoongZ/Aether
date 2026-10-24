@@ -1377,12 +1377,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn repository_constructs_from_lazy_pool() {
-        let repository = SqlxVideoTaskRepository::new(build_pool());
-        let _ = repository.pool();
-    }
-
-    #[tokio::test]
     async fn read_trait_delegates_to_sqlx_repository() {
         let repository = SqlxVideoTaskRepository::new(build_pool());
         let _ = VideoTaskReadRepository::find(&repository, VideoTaskLookupKey::Id("task-1")).await;

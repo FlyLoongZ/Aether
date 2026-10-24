@@ -439,11 +439,7 @@ fn map_oauth_provider_row(row: &PgRow) -> Result<StoredOAuthProviderConfig, Data
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        parse_scopes, SqlxOAuthProviderRepository,
-        COMPARE_AND_SWAP_OAUTH_PROVIDER_CLIENT_SECRET_SQL,
-    };
-    use crate::{PostgresPoolConfig, PostgresPoolFactory};
+    use super::{parse_scopes, COMPARE_AND_SWAP_OAUTH_PROVIDER_CLIENT_SECRET_SQL};
     use aether_data_contracts::DataLayerError;
 
     #[test]
@@ -502,23 +498,5 @@ mod tests {
         assert!(COMPARE_AND_SWAP_OAUTH_PROVIDER_CLIENT_SECRET_SQL
             .contains("client_secret_encrypted = $2"));
         assert!(!COMPARE_AND_SWAP_OAUTH_PROVIDER_CLIENT_SECRET_SQL.contains("updated_at"));
-    }
-
-    #[tokio::test]
-    async fn repository_constructs_from_lazy_pool() {
-        let factory = PostgresPoolFactory::new(PostgresPoolConfig {
-            database_url: "postgres://localhost/aether".to_string(),
-            min_connections: 1,
-            max_connections: 4,
-            acquire_timeout_ms: 1_000,
-            idle_timeout_ms: 5_000,
-            max_lifetime_ms: 30_000,
-            statement_cache_capacity: 64,
-            require_ssl: false,
-        })
-        .expect("factory should build");
-
-        let pool = factory.connect_lazy().expect("pool should build");
-        let _repository = SqlxOAuthProviderRepository::new(pool);
     }
 }

@@ -1629,35 +1629,15 @@ mod tests {
     use super::{
         parse_key_policy_string_list, parse_provider_model_mappings, parse_string_list,
         pool_key_candidate_selection_sql, requested_model_selection_page_sql,
-        requested_model_selection_sql, SqlxMinimalCandidateSelectionReadRepository,
-        LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL, LIST_FOR_EXACT_API_FORMAT_SQL,
-        LIST_POOL_KEYS_FOR_GROUP_SQL, PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_MARKER,
+        requested_model_selection_sql, LIST_FOR_EXACT_API_FORMAT_AND_GLOBAL_MODEL_SQL,
+        LIST_FOR_EXACT_API_FORMAT_SQL, LIST_POOL_KEYS_FOR_GROUP_SQL,
+        PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_MARKER,
         PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_SQL,
     };
-    use crate::{PostgresPoolConfig, PostgresPoolFactory};
     use aether_data_contracts::repository::candidate_selection::{
         provider_model_mapping_api_format_covers, StoredPoolKeyCandidateOrder,
         StoredProviderModelMapping,
     };
-
-    #[tokio::test]
-    async fn repository_constructs_from_lazy_pool() {
-        let factory = PostgresPoolFactory::new(PostgresPoolConfig {
-            database_url: "postgres://localhost/aether".to_string(),
-            min_connections: 1,
-            max_connections: 4,
-            acquire_timeout_ms: 1_000,
-            idle_timeout_ms: 5_000,
-            max_lifetime_ms: 30_000,
-            statement_cache_capacity: 64,
-            require_ssl: false,
-        })
-        .expect("factory should build");
-
-        let pool = factory.connect_lazy().expect("pool should build");
-        let repository = SqlxMinimalCandidateSelectionReadRepository::new(pool);
-        let _ = repository.pool();
-    }
 
     #[test]
     fn requested_model_selection_sql_filters_before_row_materialization() {

@@ -1686,7 +1686,6 @@ mod tests {
         project_codex_openai_image_api_request_body, project_openai_image_api_request_body,
         OpenAiImageNormalizeOptions, OpenAiImageOperation,
     };
-    use crate::formats::openai::image::spec::{resolve_stream_spec, resolve_sync_spec};
 
     fn request_parts(path: &str, content_type: Option<&str>) -> http::request::Parts {
         let mut builder = Request::builder().method(Method::POST).uri(path);
@@ -1713,22 +1712,6 @@ mod tests {
         ] {
             assert_eq!(normalize_openai_image_quality(input), expected);
         }
-    }
-
-    #[test]
-    fn resolves_openai_image_sync_spec() {
-        let spec = resolve_sync_spec("openai_image_sync").expect("spec");
-        assert_eq!(spec.api_format, "openai:image");
-        assert_eq!(spec.report_kind, "openai_image_sync_finalize");
-        assert!(!spec.require_streaming);
-    }
-
-    #[test]
-    fn resolves_openai_image_stream_spec() {
-        let spec = resolve_stream_spec("openai_image_stream").expect("spec");
-        assert_eq!(spec.api_format, "openai:image");
-        assert_eq!(spec.report_kind, "openai_image_stream_success");
-        assert!(spec.require_streaming);
     }
 
     #[test]

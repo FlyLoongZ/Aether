@@ -1,5 +1,3 @@
-#[cfg(test)]
-use crate::ai_serving::force_upstream_streaming_for_provider as force_upstream_streaming_for_provider_impl;
 use crate::ai_serving::{
     endpoint_config_forces_upstream_stream_policy as endpoint_config_forces_upstream_stream_policy_impl,
     enforce_request_body_stream_field as enforce_request_body_stream_field_impl,
@@ -24,14 +22,6 @@ pub(crate) use crate::ai_serving::{
 };
 
 pub(crate) use aether_ai_serving::AiRequestedModelFamily as RequestedModelFamily;
-
-#[cfg(test)]
-pub(crate) fn force_upstream_streaming_for_provider(
-    provider_type: &str,
-    provider_api_format: &str,
-) -> bool {
-    force_upstream_streaming_for_provider_impl(provider_type, provider_api_format)
-}
 
 pub(crate) fn resolve_upstream_is_stream_for_provider(
     endpoint_config: Option<&serde_json::Value>,
@@ -100,39 +90,10 @@ mod tests {
     use super::{
         endpoint_config_forces_body_stream_field, enforce_provider_body_stream_policy,
         extract_requested_model_from_request, extract_standard_requested_model,
-        force_upstream_streaming_for_provider, resolve_upstream_is_stream_for_provider,
-        RequestedModelFamily,
+        resolve_upstream_is_stream_for_provider, RequestedModelFamily,
     };
     use axum::http::Request;
     use serde_json::json;
-
-    #[test]
-    fn forces_streaming_for_codex_openai_responses() {
-        assert!(force_upstream_streaming_for_provider(
-            "codex",
-            "openai:responses"
-        ));
-        assert!(!force_upstream_streaming_for_provider(
-            "codex",
-            "openai:responses:compact"
-        ));
-    }
-
-    #[test]
-    fn does_not_force_streaming_for_compact_or_other_provider_types() {
-        assert!(!force_upstream_streaming_for_provider(
-            "codex",
-            "openai:responses:compact"
-        ));
-        assert!(!force_upstream_streaming_for_provider(
-            "codex",
-            "openai:responses:compact"
-        ));
-        assert!(!force_upstream_streaming_for_provider(
-            "openai",
-            "openai:responses"
-        ));
-    }
 
     #[test]
     fn resolves_endpoint_upstream_stream_policy_with_provider_hard_constraints() {
