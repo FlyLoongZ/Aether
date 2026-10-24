@@ -132,7 +132,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-    use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
     use aether_runtime_state::{MemoryRuntimeStateConfig, RuntimeState};
     use serde_json::json;
     use sha2::{Digest, Sha256};
@@ -140,18 +139,12 @@ mod tests {
     use super::{
         hydrate_openai_response_history, persist_response_history_record, ResponseHistoryRecord,
     };
-    use crate::{ai_serving::response_history_storage_key, data::GatewayDataState, AppState};
+    use crate::{ai_serving::response_history_storage_key, AppState};
 
     fn response_history_test_state() -> AppState {
-        AppState::new()
-            .expect("test state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            )
-            .with_runtime_state(Arc::new(RuntimeState::memory(
-                MemoryRuntimeStateConfig::default(),
-            )))
+        crate::tests::support::credential_fixture_state().with_runtime_state(Arc::new(
+            RuntimeState::memory(MemoryRuntimeStateConfig::default()),
+        ))
     }
 
     fn response_history_payload(response_id: &str, scope: &str, marker: &str) -> String {

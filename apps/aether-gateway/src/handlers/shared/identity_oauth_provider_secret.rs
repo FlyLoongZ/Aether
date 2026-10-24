@@ -399,12 +399,7 @@ mod tests {
     use crate::{data::GatewayDataState, AppState};
 
     fn state_with_encryption_key() -> AppState {
-        AppState::new()
-            .expect("test state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            )
+        crate::tests::support::credential_fixture_state()
     }
 
     fn sample_provider(provider_type: &str, encrypted: &str) -> StoredOAuthProviderConfig {

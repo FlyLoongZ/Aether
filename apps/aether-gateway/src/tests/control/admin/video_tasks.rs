@@ -11,7 +11,7 @@ use axum::body::{to_bytes, Body};
 use axum::response::Response;
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};
-use http::{HeaderMap, HeaderValue, StatusCode};
+use http::{HeaderValue, StatusCode};
 use serde_json::json;
 
 use super::super::{
@@ -20,35 +20,14 @@ use super::super::{
 };
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
-    TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
+    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::handlers::admin::features::video_tasks::maybe_build_local_admin_video_tasks_response;
 use crate::handlers::admin::{AdminAppState, AdminRequestContext};
 
-fn trusted_admin_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert(GATEWAY_HEADER, HeaderValue::from_static("rust-phase3b"));
-    headers.insert(
-        TRUSTED_ADMIN_USER_ID_HEADER,
-        HeaderValue::from_static("admin-user-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_USER_ROLE_HEADER,
-        HeaderValue::from_static("admin"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_SESSION_ID_HEADER,
-        HeaderValue::from_static("session-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-        HeaderValue::from_static("management-token-123"),
-    );
-    headers
-}
+use super::super::helpers::trusted_admin_headers;
 
 async fn local_admin_video_tasks_response(
     state: &AppState,

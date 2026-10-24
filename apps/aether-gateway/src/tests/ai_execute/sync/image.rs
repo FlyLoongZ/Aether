@@ -2,6 +2,7 @@ use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json, start_server,
     to_bytes, Arc, Json, Mutex, Request, Router, StatusCode, TRACE_ID_HEADER,
 };
+use crate::tests::hash_api_key;
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
@@ -9,37 +10,22 @@ use aether_data::repository::auth::{
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
 use base64::Engine as _;
-use sha2::{Digest, Sha256};
-
-const IMAGE_SYNC_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 fn run_image_sync_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(IMAGE_SYNC_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("image sync test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 #[test]
@@ -62,79 +48,31 @@ async fn gateway_converts_openai_image_sync_to_gemini_image_provider_impl() {
         image_size: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "google"])),
-            Some(serde_json::json!(["openai:image"])),
-            Some(serde_json::json!(["gpt-image-2"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["openai", "google"])),
-            Some(serde_json::json!(["openai:image"])),
-            Some(serde_json::json!(["gpt-image-2"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai", "google"]),
+            serde_json::json!(["openai:image"]),
+            serde_json::json!(["gpt-image-2"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-gemini-image-bridge-1".to_string(),
-            provider_name: "google".to_string(),
-            provider_type: "google".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-gemini-image-bridge-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-gemini-image-bridge-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({
-                "gemini:generate_content": 1
-            })),
-            model_id: "model-gemini-image-bridge-1".to_string(),
-            global_model_id: "global-model-gemini-image-bridge-1".to_string(),
-            global_model_name: "gpt-image-2".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-2.5-flash-image-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-2.5-flash-image-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "gemini-image-bridge-1",
+            provider_name: "google",
+            provider_type: "google",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gpt-image-2",
+            upstream_model: "gemini-2.5-flash-image-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -227,23 +165,9 @@ async fn gateway_converts_openai_image_sync_to_gemini_image_provider_impl() {
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    auth_header_value: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-goog-api-key"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
+                    auth_header_value: crate::tests::support::payload_string(&payload, &["headers", "x-goog-api-key"]),
                     has_model_field: body_json.get("model").is_some(),
                     prompt: body_json
                         .get("contents")
@@ -418,77 +342,31 @@ async fn gateway_converts_gemini_image_sync_to_openai_image_provider_impl() {
         body_stream: Option<bool>,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["gemini", "openai"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-image"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["gemini", "openai"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-image"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["gemini", "openai"]),
+            serde_json::json!(["gemini:generate_content"]),
+            serde_json::json!(["gemini-image"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-image-bridge-1".to_string(),
-            provider_name: "openai".to_string(),
-            provider_type: "openai".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-image-bridge-1".to_string(),
-            endpoint_api_format: "openai:image".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("image".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-image-bridge-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:image".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:image": 1})),
-            model_id: "model-openai-image-bridge-1".to_string(),
-            global_model_id: "global-model-openai-image-bridge-1".to_string(),
-            global_model_name: "gemini-image".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gpt-image-2-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gpt-image-2-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:image".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-image-bridge-1",
+            provider_name: "openai",
+            provider_type: "openai",
+            api_format: "openai:image",
+            api_family: "openai",
+            endpoint_kind: Some("image"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gemini-image",
+            upstream_model: "gpt-image-2-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -579,23 +457,12 @@ async fn gateway_converts_gemini_image_sync_to_openai_image_provider_impl() {
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
+                    authorization: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
                     model: body_json
                         .get("model")
                         .and_then(|value| value.as_str())
@@ -768,77 +635,31 @@ async fn gateway_executes_codex_image_sync_via_local_decision_gate_after_oauth_r
         body: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "codex"])),
-            Some(serde_json::json!(["openai:image"])),
-            Some(serde_json::json!(["gpt-image-2"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["openai", "codex"])),
-            Some(serde_json::json!(["openai:image"])),
-            Some(serde_json::json!(["gpt-image-2"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai", "codex"]),
+            serde_json::json!(["openai:image"]),
+            serde_json::json!(["gpt-image-2"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-codex-image-local-1".to_string(),
-            provider_name: "codex".to_string(),
-            provider_type: "codex".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-codex-image-local-1".to_string(),
-            endpoint_api_format: "openai:image".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("image".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-codex-image-local-1".to_string(),
-            key_name: "oauth".to_string(),
-            key_auth_type: "oauth".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:image".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:image": 1})),
-            model_id: "model-codex-image-local-1".to_string(),
-            global_model_id: "global-model-codex-image-local-1".to_string(),
-            global_model_name: "gpt-image-2".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gpt-image-2".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gpt-image-2".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:image".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "codex-image-local-1",
+            provider_name: "codex",
+            provider_type: "codex",
+            api_format: "openai:image",
+            api_family: "openai",
+            endpoint_kind: Some("image"),
+            key_name: "oauth",
+            key_auth_type: "oauth",
+            global_model_name: "gpt-image-2",
+            upstream_model: "gpt-image-2",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -932,12 +753,10 @@ async fn gateway_executes_codex_image_sync_via_local_decision_gate_after_oauth_r
                 let (parts, body) = request.into_parts();
                 let raw_body = to_bytes(body, usize::MAX).await.expect("body should read");
                 *seen_refresh_inner.lock().expect("mutex should lock") = Some(SeenRefreshRequest {
-                    content_type: parts
-                        .headers
-                        .get(http::header::CONTENT_TYPE)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
+                    content_type: crate::tests::support::header_string(
+                        &parts.headers,
+                        http::header::CONTENT_TYPE,
+                    ),
                     body: String::from_utf8(raw_body.to_vec())
                         .expect("refresh body should be utf8"),
                 });
@@ -963,23 +782,9 @@ async fn gateway_executes_codex_image_sync_via_local_decision_gate_after_oauth_r
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
+                    authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
                     headers: payload.get("headers").cloned().unwrap_or_default(),
                     body: payload
                         .get("body")
@@ -1178,77 +983,31 @@ async fn gateway_plans_chatgpt_web_image_sync_with_internal_web_executor_url_imp
         ratio: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "chatgpt_web"])),
-            Some(serde_json::json!(["openai:image"])),
-            Some(serde_json::json!(["gpt-image-2"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["openai", "chatgpt_web"])),
-            Some(serde_json::json!(["openai:image"])),
-            Some(serde_json::json!(["gpt-image-2"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai", "chatgpt_web"]),
+            serde_json::json!(["openai:image"]),
+            serde_json::json!(["gpt-image-2"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-chatgpt-web-image-plan-1".to_string(),
-            provider_name: "ChatGPT Web".to_string(),
-            provider_type: "chatgpt_web".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-chatgpt-web-image-plan-1".to_string(),
-            endpoint_api_format: "openai:image".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("image".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-chatgpt-web-image-plan-1".to_string(),
-            key_name: "manual bearer".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:image".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:image": 1})),
-            model_id: "model-chatgpt-web-image-plan-1".to_string(),
-            global_model_id: "global-model-chatgpt-web-image-plan-1".to_string(),
-            global_model_name: "gpt-image-2".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gpt-image-2".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gpt-image-2".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:image".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "chatgpt-web-image-plan-1",
+            provider_name: "ChatGPT Web",
+            provider_type: "chatgpt_web",
+            api_format: "openai:image",
+            api_family: "openai",
+            endpoint_kind: Some("image"),
+            key_name: "manual bearer",
+            key_auth_type: "bearer",
+            global_model_name: "gpt-image-2",
+            upstream_model: "gpt-image-2",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -1339,29 +1098,10 @@ async fn gateway_plans_chatgpt_web_image_sync_with_internal_web_executor_url_imp
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    marker: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-aether-chatgpt-web-image"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
+                    marker: crate::tests::support::payload_string(&payload, &["headers", "x-aether-chatgpt-web-image"]),
+                    authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
                     operation: body
                         .get("operation")
                         .and_then(|value| value.as_str())

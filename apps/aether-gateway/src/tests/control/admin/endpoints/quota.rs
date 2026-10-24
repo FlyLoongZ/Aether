@@ -20,7 +20,7 @@ use serde_json::json;
 use super::super::super::{
     build_router_with_state, build_state_with_execution_runtime_override,
     sample_admin_global_model, sample_bound_auth_config, sample_bound_key, sample_endpoint,
-    sample_key, sample_proxy_node, start_server, AppState,
+    sample_key, sample_proxy_node, start_server,
 };
 use crate::constants::{
     GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
@@ -28,17 +28,11 @@ use crate::constants::{
 };
 use crate::data::GatewayDataState;
 
-const PROVIDER_QUOTA_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
-
 fn open_provider_catalog_credential_for_test(
     key: &StoredProviderCatalogKey,
     field: &str,
 ) -> String {
-    let state = AppState::new()
-        .expect("gateway state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let state = crate::tests::support::credential_fixture_state();
     match field {
         "api_key" => state
             .decrypt_provider_catalog_key_api_key(key)
@@ -59,7 +53,7 @@ where
 {
     crate::tests::run_async_test_on_large_stack(
         test_name,
-        PROVIDER_QUOTA_TEST_STACK_BYTES,
+        crate::tests::LARGE_TEST_STACK_BYTES,
         make_future,
     );
 }
@@ -1609,9 +1603,8 @@ async fn gateway_auto_removes_kiro_quota_refresh_after_terminal_oauth_refresh_fa
         .to_string(),
     )
     .expect("auth config ciphertext should build");
-    let encrypted_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
-            .expect("api key ciphertext should build");
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+        .expect("api key ciphertext should build");
     let mut key = StoredProviderCatalogKey::new(
         "key-kiro-expired-refresh-failed".to_string(),
         "provider-kiro-auto-remove".to_string(),

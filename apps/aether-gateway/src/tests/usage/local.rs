@@ -29,21 +29,9 @@ fn run_async_test_on_large_stack<F>(name: &'static str, future: F)
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(name.to_string())
-        .stack_size(16 * 1024 * 1024)
-        .spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("tokio runtime should build")
-                .block_on(future);
-        })
-        .expect("large-stack test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(name, crate::tests::LARGE_TEST_STACK_BYTES, || {
+        future
+    });
 }
 
 async fn wait_for_usage_status<T>(
@@ -1835,30 +1823,15 @@ fn gateway_records_failed_usage_when_all_local_claude_cli_candidates_are_skipped
 
 async fn gateway_records_failed_usage_when_all_local_claude_cli_candidates_are_skipped_impl() {
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            None,
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["gpt-5.4"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            None,
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["gpt-5.4"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["claude", "RightCode"]),
+            serde_json::json!(["claude:messages"]),
+            serde_json::json!(["gpt-5.4"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
@@ -2141,30 +2114,15 @@ async fn gateway_records_failed_usage_when_all_local_claude_cli_candidates_are_s
 fn gateway_keeps_failed_usage_request_capture_lightweight_for_large_local_claude_cli_runtime_miss()
 {
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            None,
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["gpt-5.4"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            None,
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["gpt-5.4"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["claude", "RightCode"]),
+            serde_json::json!(["claude:messages"]),
+            serde_json::json!(["gpt-5.4"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {

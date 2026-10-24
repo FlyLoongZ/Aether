@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use axum::body::{Body, Bytes};
 use axum::routing::any;
 use axum::{extract::Request, Router};
-use http::{HeaderMap, HeaderValue, StatusCode};
+use http::StatusCode;
 use http_body_util::BodyExt;
 use serde_json::json;
 
@@ -14,8 +14,8 @@ use super::super::super::send_request;
 use super::super::{build_router_with_state, start_server, AppState};
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
-    TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
+    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
+    TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::control::resolve_public_request_context;
 use crate::handlers::admin::auth::security::maybe_build_local_admin_security_response;
@@ -242,7 +242,7 @@ async fn send_admin_security_request(
     let path = path.to_string();
     crate::tests::run_async_test_on_large_stack_with_result(
         "admin-security-router-request",
-        16 * 1024 * 1024,
+        crate::tests::LARGE_TEST_STACK_BYTES,
         move || send_admin_security_request_on_large_stack(gateway, method, path, body),
     )
 }
@@ -317,27 +317,7 @@ async fn send_admin_security_request_on_large_stack(
     (status, payload, upstream_count)
 }
 
-fn trusted_admin_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert(GATEWAY_HEADER, HeaderValue::from_static("rust-phase3b"));
-    headers.insert(
-        TRUSTED_ADMIN_USER_ID_HEADER,
-        HeaderValue::from_static("admin-user-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_USER_ROLE_HEADER,
-        HeaderValue::from_static("admin"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_SESSION_ID_HEADER,
-        HeaderValue::from_static("session-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-        HeaderValue::from_static("management-token-123"),
-    );
-    headers
-}
+use super::super::helpers::trusted_admin_headers;
 
 async fn local_admin_security_response(
     state: &AppState,

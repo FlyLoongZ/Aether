@@ -1149,12 +1149,7 @@ mod tests {
     }
 
     fn encryption_state() -> AppState {
-        AppState::new()
-            .expect("test state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            )
+        crate::tests::support::credential_fixture_state()
     }
 
     #[tokio::test]

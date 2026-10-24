@@ -1,3 +1,4 @@
+use crate::tests::hash_api_key;
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
@@ -19,7 +20,7 @@ use axum::routing::any;
 use axum::{extract::Request, Json, Router};
 use http::StatusCode;
 use serde_json::json;
-use sha2::{Digest, Sha256};
+
 use std::sync::{Arc, Mutex};
 
 use crate::constants::TRACE_ID_HEADER;
@@ -48,37 +49,16 @@ async fn gateway_executes_gemini_video_create_via_local_decision_gate_with_local
         transport_profile_id: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "video-user".to_string(),
-            Some("video@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(json!(["gemini"])),
-            Some(json!(["gemini:video"])),
-            Some(json!(["veo-3"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(json!(["gemini"])),
-            Some(json!(["gemini:video"])),
-            Some(json!(["veo-3"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "video-user",
+            "video@example.com",
+            serde_json::json!(["gemini"]),
+            serde_json::json!(["gemini:video"]),
+            serde_json::json!(["veo-3"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {

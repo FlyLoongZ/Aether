@@ -1,39 +1,30 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override,
-    encrypt_python_fernet_plaintext, json, start_server, to_bytes, Arc, Body, Digest,
+    encrypt_python_fernet_plaintext, json, start_server, to_bytes, Arc, Body,
     InMemoryAuthApiKeySnapshotRepository, InMemoryMinimalCandidateSelectionReadRepository,
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
-    Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, Sha256, StatusCode,
-    StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
-    StoredProviderCatalogKey, StoredProviderCatalogProvider, StoredProviderModelMapping,
-    DEVELOPMENT_ENCRYPTION_KEY, TRACE_ID_HEADER,
+    Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
+    StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
+    StoredProviderCatalogProvider, TRACE_ID_HEADER,
 };
+use crate::tests::hash_api_key;
+use crate::tests::support::encode_event_frame;
+use crate::tests::support::sample_auth_snapshot_kiro as sample_auth_snapshot;
+use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
 use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UsageReadRepository};
 use aether_usage_runtime::UsageRuntimeConfig;
-
-const KIRO_CLAUDE_CLI_SYNC_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 fn run_kiro_claude_cli_sync_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(KIRO_CLAUDE_CLI_SYNC_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("kiro claude cli sync test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 async fn wait_for_completed_usage<T>(repository: &T, request_id: &str) -> StoredRequestUsageAudit
@@ -87,122 +78,19 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
         transport_profile_id: String,
     }
 
-    fn crc32(data: &[u8]) -> u32 {
-        let mut crc = 0xffff_ffffu32;
-        for &byte in data {
-            crc ^= byte as u32;
-            for _ in 0..8 {
-                let mask = if crc & 1 == 1 { 0xedb8_8320 } else { 0 };
-                crc = (crc >> 1) ^ mask;
-            }
-        }
-        !crc
-    }
-
-    fn encode_string_header(name: &str, value: &str) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.push(name.len() as u8);
-        out.extend_from_slice(name.as_bytes());
-        out.push(7);
-        out.extend_from_slice(&(value.len() as u16).to_be_bytes());
-        out.extend_from_slice(value.as_bytes());
-        out
-    }
-
-    fn encode_event_frame(
-        message_type: &str,
-        event_type: Option<&str>,
-        payload: serde_json::Value,
-    ) -> Vec<u8> {
-        let mut headers = encode_string_header(":message-type", message_type);
-        if let Some(event_type) = event_type {
-            headers.extend_from_slice(&encode_string_header(":event-type", event_type));
-        }
-        let payload = serde_json::to_vec(&payload).expect("payload should encode");
-        let total_len = 12 + headers.len() + payload.len() + 4;
-        let mut out = Vec::with_capacity(total_len);
-        out.extend_from_slice(&(total_len as u32).to_be_bytes());
-        out.extend_from_slice(&(headers.len() as u32).to_be_bytes());
-        let prelude_crc = crc32(&out[..8]);
-        out.extend_from_slice(&prelude_crc.to_be_bytes());
-        out.extend_from_slice(&headers);
-        out.extend_from_slice(&payload);
-        let message_crc = crc32(&out);
-        out.extend_from_slice(&message_crc.to_be_bytes());
-        out
-    }
-
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
-    fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["claude", "kiro"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["claude", "kiro"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-        )
-        .expect("auth snapshot should build")
-    }
-
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-kiro-cli-local-sync-1".to_string(),
-            provider_name: "kiro".to_string(),
-            provider_type: "kiro".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-kiro-cli-local-sync-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-kiro-cli-local-sync-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-kiro-cli-local-sync-1".to_string(),
-            global_model_id: "global-model-kiro-cli-local-sync-1".to_string(),
-            global_model_name: "claude-sonnet-4".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-sonnet-4-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-sonnet-4-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "kiro-cli-local-sync-1",
+            provider_name: "kiro",
+            provider_type: "kiro",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "bearer",
+            global_model_name: "claude-sonnet-4",
+            upstream_model: "claude-sonnet-4-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -282,11 +170,8 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
             encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
                 .expect("api key should encrypt"),
             Some(
-                encrypt_python_fernet_plaintext(
-                    DEVELOPMENT_ENCRYPTION_KEY,
-                    auth_config.to_string().as_str(),
-                )
-                .expect("auth config should encrypt"),
+                encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, auth_config.to_string().as_str())
+                    .expect("auth config should encrypt"),
             ),
             None,
             Some(serde_json::json!({"claude:messages": 1})),
@@ -382,44 +267,15 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
                 let raw_body = to_bytes(body, usize::MAX).await.expect("body should read");
                 let payload: serde_json::Value =
                     serde_json::from_slice(&raw_body).expect("execution runtime payload should parse");
-                let trace_id = parts
-                    .headers
-                    .get(TRACE_ID_HEADER)
-                    .and_then(|value| value.to_str().ok())
-                    .unwrap_or_default()
-                    .to_string();
+                let trace_id = crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER);
                 *seen_execution_runtime_inner.lock().expect("mutex should lock") =
                     Some(SeenExecutionRuntimeSyncRequest {
                         trace_id: trace_id.clone(),
-                        url: payload
-                            .get("url")
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        authorization: payload
-                            .get("headers")
-                            .and_then(|value| value.get("authorization"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        accept: payload
-                            .get("headers")
-                            .and_then(|value| value.get("accept"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        host: payload
-                            .get("headers")
-                            .and_then(|value| value.get("host"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        endpoint_tag: payload
-                            .get("headers")
-                            .and_then(|value| value.get("x-endpoint-tag"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
+                        url: crate::tests::support::payload_string(&payload, &["url"]),
+                        authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
+                        accept: crate::tests::support::payload_string(&payload, &["headers", "accept"]),
+                        host: crate::tests::support::payload_string(&payload, &["headers", "host"]),
+                        endpoint_tag: crate::tests::support::payload_string(&payload, &["headers", "x-endpoint-tag"]),
                         mapped_model: payload
                             .get("body")
                             .and_then(|value| value.get("json_body"))
@@ -454,12 +310,7 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
                             .and_then(|value| value.as_str())
                             .unwrap_or_default()
                             .to_string(),
-                        proxy_node_id: payload
-                            .get("proxy")
-                            .and_then(|value| value.get("node_id"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
+                        proxy_node_id: crate::tests::support::payload_string(&payload, &["proxy", "node_id"]),
                         transport_profile_id: payload
                             .get("transport_profile").and_then(|value| value.get("profile_id"))
                             .and_then(|value| value.as_str())
@@ -732,122 +583,19 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
         current_content: String,
     }
 
-    fn crc32(data: &[u8]) -> u32 {
-        let mut crc = 0xffff_ffffu32;
-        for &byte in data {
-            crc ^= byte as u32;
-            for _ in 0..8 {
-                let mask = if crc & 1 == 1 { 0xedb8_8320 } else { 0 };
-                crc = (crc >> 1) ^ mask;
-            }
-        }
-        !crc
-    }
-
-    fn encode_string_header(name: &str, value: &str) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.push(name.len() as u8);
-        out.extend_from_slice(name.as_bytes());
-        out.push(7);
-        out.extend_from_slice(&(value.len() as u16).to_be_bytes());
-        out.extend_from_slice(value.as_bytes());
-        out
-    }
-
-    fn encode_event_frame(
-        message_type: &str,
-        event_type: Option<&str>,
-        payload: serde_json::Value,
-    ) -> Vec<u8> {
-        let mut headers = encode_string_header(":message-type", message_type);
-        if let Some(event_type) = event_type {
-            headers.extend_from_slice(&encode_string_header(":event-type", event_type));
-        }
-        let payload = serde_json::to_vec(&payload).expect("payload should encode");
-        let total_len = 12 + headers.len() + payload.len() + 4;
-        let mut out = Vec::with_capacity(total_len);
-        out.extend_from_slice(&(total_len as u32).to_be_bytes());
-        out.extend_from_slice(&(headers.len() as u32).to_be_bytes());
-        let prelude_crc = crc32(&out[..8]);
-        out.extend_from_slice(&prelude_crc.to_be_bytes());
-        out.extend_from_slice(&headers);
-        out.extend_from_slice(&payload);
-        let message_crc = crc32(&out);
-        out.extend_from_slice(&message_crc.to_be_bytes());
-        out
-    }
-
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
-    fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["claude", "kiro"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["claude", "kiro"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-        )
-        .expect("auth snapshot should build")
-    }
-
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-kiro-cli-local-refresh-1".to_string(),
-            provider_name: "kiro".to_string(),
-            provider_type: "kiro".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-kiro-cli-local-refresh-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-kiro-cli-local-refresh-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-kiro-cli-local-refresh-1".to_string(),
-            global_model_id: "global-model-kiro-cli-local-refresh-1".to_string(),
-            global_model_name: "claude-sonnet-4".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-sonnet-4-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-sonnet-4-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "kiro-cli-local-refresh-1",
+            provider_name: "kiro",
+            provider_type: "kiro",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "bearer",
+            global_model_name: "claude-sonnet-4",
+            upstream_model: "claude-sonnet-4-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -926,11 +674,8 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
             encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
                 .expect("api key should encrypt"),
             Some(
-                encrypt_python_fernet_plaintext(
-                    DEVELOPMENT_ENCRYPTION_KEY,
-                    auth_config.to_string().as_str(),
-                )
-                .expect("auth config should encrypt"),
+                encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, auth_config.to_string().as_str())
+                    .expect("auth config should encrypt"),
             ),
             None,
             Some(serde_json::json!({"claude:messages": 1})),
@@ -1027,20 +772,10 @@ async fn gateway_executes_kiro_claude_cli_sync_via_local_provider_catalog_candid
                 let payload: serde_json::Value =
                     serde_json::from_slice(&raw_body).expect("execution runtime payload should parse");
                 *execution_hits_inner.lock().expect("mutex should lock") += 1;
-                let authorization = payload
-                    .get("headers")
-                    .and_then(|value| value.get("authorization"))
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string();
+                let authorization = crate::tests::support::payload_string(&payload, &["headers", "authorization"]);
                 *seen_execution_runtime_inner.lock().expect("mutex should lock") =
                     Some(SeenExecutionRuntimeSyncRequest {
-                        trace_id: parts
-                            .headers
-                            .get(TRACE_ID_HEADER)
-                            .and_then(|value| value.to_str().ok())
-                            .unwrap_or_default()
-                            .to_string(),
+                        trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
                         authorization: authorization.clone(),
                         mapped_model: payload
                             .get("body")

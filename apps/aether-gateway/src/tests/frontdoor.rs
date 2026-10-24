@@ -1,5 +1,5 @@
 use super::json;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::announcements::{
     InMemoryAnnouncementReadRepository, StoredAnnouncement,
 };
@@ -14,33 +14,30 @@ use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
-use aether_data_contracts::repository::candidates::{
-    RequestCandidateStatus, StoredRequestCandidate,
-};
+use aether_data_contracts::repository::candidates::RequestCandidateStatus;
 use aether_data_contracts::repository::global_models::{
     StoredPublicCatalogModel, StoredPublicGlobalModel,
 };
-use aether_data_contracts::repository::provider_catalog::{
-    StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
-};
+
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskLookupKey, VideoTaskReadRepository, VideoTaskStatus,
     VideoTaskWriteRepository,
 };
-use sha2::{Digest, Sha256};
 
 fn run_frontdoor_async_test<F>(name: &'static str, future: F)
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
-    crate::tests::run_async_test_on_large_stack(name, 16 * 1024 * 1024, || future);
+    crate::tests::run_async_test_on_large_stack(name, crate::tests::LARGE_TEST_STACK_BYTES, || {
+        future
+    });
 }
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+pub(super) use crate::tests::hash_api_key;
+
+pub(super) use super::support::{
+    sample_endpoint, sample_key, sample_provider, sample_request_candidate,
+};
 
 fn unrestricted_models_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
     StoredAuthApiKeySnapshot::new(
@@ -67,115 +64,6 @@ fn unrestricted_models_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthAp
         None,
     )
     .expect("snapshot should build")
-}
-
-fn sample_provider(id: &str, name: &str, priority: i32) -> StoredProviderCatalogProvider {
-    StoredProviderCatalogProvider::new(
-        id.to_string(),
-        name.to_string(),
-        Some("https://example.com".to_string()),
-        "custom".to_string(),
-    )
-    .expect("provider should build")
-    .with_routing_fields(priority)
-}
-
-fn sample_endpoint(
-    id: &str,
-    provider_id: &str,
-    api_format: &str,
-    base_url: &str,
-) -> StoredProviderCatalogEndpoint {
-    StoredProviderCatalogEndpoint::new(
-        id.to_string(),
-        provider_id.to_string(),
-        api_format.to_string(),
-        None,
-        None,
-        true,
-    )
-    .expect("endpoint should build")
-    .with_transport_fields(
-        base_url.to_string(),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("endpoint transport should build")
-}
-
-fn sample_key(
-    id: &str,
-    provider_id: &str,
-    api_format: &str,
-    secret: &str,
-) -> StoredProviderCatalogKey {
-    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, secret)
-        .expect("api key ciphertext should build");
-    StoredProviderCatalogKey::new(
-        id.to_string(),
-        provider_id.to_string(),
-        "default".to_string(),
-        "api_key".to_string(),
-        None,
-        true,
-    )
-    .expect("key should build")
-    .with_transport_fields(
-        Some(json!([api_format])),
-        encrypted_api_key,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("key transport should build")
-}
-
-fn sample_request_candidate(
-    id: &str,
-    request_id: &str,
-    endpoint_id: &str,
-    status: RequestCandidateStatus,
-    created_at_unix_secs: i64,
-    finished_at_unix_secs: Option<i64>,
-) -> StoredRequestCandidate {
-    let created_at_unix_ms = created_at_unix_secs * 1_000;
-    let finished_at_unix_ms = finished_at_unix_secs.map(|v| v * 1_000);
-    StoredRequestCandidate::new(
-        id.to_string(),
-        request_id.to_string(),
-        Some("user-1".to_string()),
-        Some("api-key-1".to_string()),
-        Some("alice".to_string()),
-        Some("default".to_string()),
-        0,
-        0,
-        Some("provider-1".to_string()),
-        Some(endpoint_id.to_string()),
-        Some("key-1".to_string()),
-        status,
-        None,
-        false,
-        Some(200),
-        matches!(status, RequestCandidateStatus::Failed).then_some("rate_limit".to_string()),
-        None,
-        Some(120),
-        Some(1),
-        None,
-        None,
-        created_at_unix_ms,
-        Some(created_at_unix_ms),
-        finished_at_unix_ms,
-    )
-    .expect("request candidate should build")
 }
 
 fn sample_models_candidate_row(

@@ -4,8 +4,9 @@ use super::{
     StatusCode, TRACE_ID_HEADER,
 };
 use crate::data::GatewayDataState;
+use crate::tests::hash_api_key;
 use aether_ai_formats::openai_responses_message_item_id;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -13,16 +14,13 @@ use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelect
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
 
 #[test]
 fn gateway_executes_openai_responses_compact_openai_family_upstream_stream_via_local_finalize_response(
@@ -47,77 +45,31 @@ async fn gateway_executes_openai_responses_compact_openai_family_upstream_stream
         endpoint_tag: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai"])),
-            Some(serde_json::json!(["openai:responses:compact"])),
-            Some(serde_json::json!(["gpt-5"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["openai"])),
-            Some(serde_json::json!(["openai:responses:compact"])),
-            Some(serde_json::json!(["gpt-5"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai"]),
+            serde_json::json!(["openai:responses:compact"]),
+            serde_json::json!(["gpt-5"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-compact-finalize-local-1".to_string(),
-            provider_name: "openai".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-compact-finalize-local-1".to_string(),
-            endpoint_api_format: "openai:responses:compact".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("compact".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-compact-finalize-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:responses:compact".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:responses:compact": 1})),
-            model_id: "model-openai-compact-finalize-local-1".to_string(),
-            global_model_id: "global-model-openai-compact-finalize-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gpt-5-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gpt-5-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:responses:compact".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-compact-finalize-local-1",
+            provider_name: "openai",
+            provider_type: "custom",
+            api_format: "openai:responses:compact",
+            api_family: "openai",
+            endpoint_kind: Some("compact"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gpt-5",
+            upstream_model: "gpt-5-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -167,31 +119,13 @@ async fn gateway_executes_openai_responses_compact_openai_family_upstream_stream
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-openai-compact-finalize-local-1".to_string(),
-            "provider-openai-compact-finalize-local-1".to_string(),
-            "prod".to_string(),
-            "api_key".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["openai:responses:compact"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-compact-finalize",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"openai:responses:compact": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "openai-compact-finalize-local-1",
+            key_name: "prod",
+            auth_type: "api_key",
+            api_format: "openai:responses:compact",
+            secret: "sk-upstream-openai-compact-finalize",
+        })
     }
 
     let seen_remote_execution_runtime =
@@ -280,22 +214,9 @@ async fn gateway_executes_openai_responses_compact_openai_family_upstream_stream
                 *seen_remote_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenRemoteExecutionRuntimeRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    request_id: payload
-                        .get("request_id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    request_id: crate::tests::support::payload_string(&payload, &["request_id"]),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -303,18 +224,8 @@ async fn gateway_executes_openai_responses_compact_openai_family_upstream_stream
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
+                    endpoint_tag: crate::tests::support::payload_string(&payload, &["headers", "x-endpoint-tag"]),
                 });
                 Json(json!({
                     "request_id": "trace-openai-compact-openai-family-stream-123",

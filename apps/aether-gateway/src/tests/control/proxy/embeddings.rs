@@ -21,28 +21,16 @@ use crate::constants::{
 };
 use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 
-const EMBEDDING_PROXY_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
-
 fn run_embedding_proxy_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(EMBEDDING_PROXY_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("embedding proxy test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 fn embedding_success_state(execution_runtime_url: String) -> AppState {

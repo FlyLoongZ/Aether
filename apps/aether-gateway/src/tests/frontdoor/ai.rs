@@ -3,7 +3,7 @@ use super::{
     unrestricted_models_snapshot, InMemoryAuthApiKeySnapshotRepository,
     InMemoryMinimalCandidateSelectionReadRepository, InMemoryRequestCandidateRepository,
     InMemoryVideoTaskRepository, StoredAuthApiKeySnapshot, UpsertVideoTask, VideoTaskLookupKey,
-    VideoTaskReadRepository, VideoTaskStatus, VideoTaskWriteRepository, DEVELOPMENT_ENCRYPTION_KEY,
+    VideoTaskReadRepository, VideoTaskStatus, VideoTaskWriteRepository,
 };
 use crate::data::GatewayDataState;
 use crate::image_capabilities::openai_image_gateway_max_generation_count;
@@ -14,7 +14,7 @@ use crate::tests::{
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS,
 };
 use aether_contracts::{ExecutionResult, ExecutionTelemetry, ResponseBody};
-use aether_crypto::encrypt_python_fernet_plaintext;
+use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
@@ -234,12 +234,7 @@ fn codex_catalog_key(
     key_id: &str,
     allowed_models: &[&str],
 ) -> StoredProviderCatalogKey {
-    let bootstrap = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            crate::data::GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let mut key = StoredProviderCatalogKey::new(
         key_id.to_string(),
         provider_id.to_string(),
@@ -422,12 +417,7 @@ fn gemini_video_catalog_repository() -> Arc<InMemoryProviderCatalogReadRepositor
     const PROVIDER_ID: &str = "provider-gemini-video-local-1";
     const ENDPOINT_ID: &str = "endpoint-gemini-video-local-1";
     const KEY_ID: &str = "key-gemini-video-local-1";
-    let bootstrap = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            crate::data::GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let provider = StoredProviderCatalogProvider::new(
         PROVIDER_ID.to_string(),
         "gemini-video".to_string(),
@@ -726,19 +716,11 @@ async fn gateway_handles_public_openai_models_without_hitting_fallback_probe() {
 
 #[test]
 fn gateway_versioned_models_fail_closed_when_cached_auth_becomes_unusable_or_missing() {
-    std::thread::Builder::new()
-        .name("codex-model-catalog-auth-race".to_string())
-        .stack_size(16 * 1024 * 1024)
-        .spawn(|| {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("Codex auth race test runtime should build")
-                .block_on(run_versioned_models_auth_race_scenario());
-        })
-        .expect("Codex auth race test thread should spawn")
-        .join()
-        .expect("Codex auth race test thread should finish");
+    crate::tests::run_async_test_on_large_stack(
+        "codex-model-catalog-auth-race",
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        run_versioned_models_auth_race_scenario,
+    );
 }
 
 async fn run_versioned_models_auth_race_scenario() {
@@ -814,19 +796,11 @@ async fn run_versioned_models_auth_race_scenario() {
 
 #[test]
 fn gateway_serves_codex_model_cards_for_versioned_models_requests() {
-    std::thread::Builder::new()
-        .name("codex-model-catalog-frontdoor".to_string())
-        .stack_size(16 * 1024 * 1024)
-        .spawn(|| {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("Codex frontdoor test runtime should build")
-                .block_on(run_versioned_codex_model_cards_frontdoor_scenario());
-        })
-        .expect("Codex frontdoor test thread should spawn")
-        .join()
-        .expect("Codex frontdoor test thread should finish");
+    crate::tests::run_async_test_on_large_stack(
+        "codex-model-catalog-frontdoor",
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        run_versioned_codex_model_cards_frontdoor_scenario,
+    );
 }
 
 async fn run_versioned_codex_model_cards_frontdoor_scenario() {

@@ -33,8 +33,6 @@ use crate::handlers::shared::{
     open_provider_ops_credential, provider_ops_credential_binding_from_config,
 };
 
-const PROVIDER_OPS_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
-
 fn open_stored_provider_ops_credential(
     provider: &aether_data_contracts::repository::provider_catalog::StoredProviderCatalogProvider,
     field: &str,
@@ -53,11 +51,7 @@ fn open_stored_provider_ops_credential(
         .expect("provider ops base_url should be present");
     let binding = provider_ops_credential_binding_from_config(&provider.id, provider_ops, base_url)
         .expect("provider ops credential binding should be valid");
-    let state = AppState::new()
-        .expect("gateway state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let state = crate::tests::support::credential_fixture_state();
     open_provider_ops_credential(&state, &binding, field, stored)
         .expect("provider ops credential should decrypt")
         .plaintext
@@ -70,7 +64,7 @@ where
 {
     crate::tests::run_async_test_on_large_stack(
         test_name,
-        PROVIDER_OPS_TEST_STACK_BYTES,
+        crate::tests::LARGE_TEST_STACK_BYTES,
         make_future,
     );
 }

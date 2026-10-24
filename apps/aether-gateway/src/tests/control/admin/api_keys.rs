@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::{
     AuthApiKeyWriteRepository, InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
     StoredAuthApiKeySnapshot,
@@ -8,52 +7,18 @@ use aether_data::repository::auth::{
 use aether_data::repository::usage::InMemoryUsageReadRepository;
 use aether_data::repository::wallet::{InMemoryWalletRepository, StoredWalletSnapshot};
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
-use axum::body::Body;
-use axum::routing::any;
-use axum::{extract::Request, Router};
 use http::StatusCode;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 
 use super::super::{build_router_with_state, start_server, AppState};
-use crate::constants::{
-    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
+use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 
-fn admin_request(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    builder
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-}
+use super::super::helpers::admin_request;
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+use crate::tests::hash_api_key;
 
-async fn start_api_keys_upstream(
-    path: &'static str,
-) -> (String, Arc<Mutex<usize>>, tokio::task::JoinHandle<()>) {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        path,
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("unexpected upstream hit"))
-            }
-        }),
-    );
-
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
-    (upstream_url, upstream_hits, upstream_handle)
-}
+use super::super::helpers::start_unreachable_upstream;
 
 fn sample_standalone_api_key_snapshot(
     api_key_id: &str,
@@ -93,11 +58,7 @@ fn sample_standalone_export_record(
     is_active: bool,
 ) -> StoredAuthApiKeyExportRecord {
     let key_hash = hash_api_key(plaintext_key);
-    let bootstrap = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let key_encrypted = crate::handlers::shared::seal_auth_api_key_secret(
         &bootstrap,
         user_id,
@@ -203,7 +164,7 @@ fn sample_usage_row(
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_list_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys").await;
+        start_unreachable_upstream("/api/admin/api-keys").await;
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![
             (
@@ -284,7 +245,7 @@ async fn gateway_handles_admin_api_keys_list_locally_with_trusted_admin_principa
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_detail_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys/key-1").await;
+        start_unreachable_upstream("/api/admin/api-keys/key-1").await;
     let mut export = sample_standalone_export_record("key-1", "user-1", "sk-key-1-plaintext", true);
     export.total_tokens = 77;
     let auth_repository = Arc::new(
@@ -346,7 +307,7 @@ async fn gateway_handles_admin_api_keys_detail_locally_with_trusted_admin_princi
 #[tokio::test]
 async fn gateway_includes_usage_summary_when_admin_api_keys_list_requests_it() {
     let (_upstream_url, _upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys").await;
+        start_unreachable_upstream("/api/admin/api-keys").await;
     let mut export = sample_standalone_export_record("key-1", "user-1", "sk-key-1-plaintext", true);
     export.total_tokens = 42;
     let auth_repository = Arc::new(
@@ -393,7 +354,7 @@ async fn gateway_includes_usage_summary_when_admin_api_keys_list_requests_it() {
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_full_key_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys/key-1").await;
+        start_unreachable_upstream("/api/admin/api-keys/key-1").await;
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
             None,
@@ -441,7 +402,7 @@ async fn gateway_handles_admin_api_keys_full_key_locally_with_trusted_admin_prin
 #[tokio::test]
 async fn gateway_handles_admin_api_key_install_session_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys/key-1/install-sessions").await;
+        start_unreachable_upstream("/api/admin/api-keys/key-1/install-sessions").await;
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
             None,
@@ -578,7 +539,7 @@ async fn gateway_handles_admin_api_key_install_session_locally_with_trusted_admi
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_create_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys").await;
+        start_unreachable_upstream("/api/admin/api-keys").await;
     let repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::seed(Vec::<(
         Option<String>,
         StoredAuthApiKeySnapshot,
@@ -655,7 +616,7 @@ async fn gateway_handles_admin_api_keys_create_locally_with_trusted_admin_princi
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_update_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys/key-123").await;
+        start_unreachable_upstream("/api/admin/api-keys/key-123").await;
     let repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
             Some("hash-key-123".to_string()),
@@ -728,7 +689,7 @@ async fn gateway_handles_admin_api_keys_update_locally_with_trusted_admin_princi
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_toggle_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys/key-123").await;
+        start_unreachable_upstream("/api/admin/api-keys/key-123").await;
     let repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
             Some("hash-key-123".to_string()),
@@ -774,7 +735,7 @@ async fn gateway_handles_admin_api_keys_toggle_locally_with_trusted_admin_princi
 #[tokio::test]
 async fn gateway_handles_admin_api_keys_delete_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_api_keys_upstream("/api/admin/api-keys/key-123").await;
+        start_unreachable_upstream("/api/admin/api-keys/key-123").await;
     let repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
             Some("hash-key-123".to_string()),

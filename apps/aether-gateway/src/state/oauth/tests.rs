@@ -136,24 +136,14 @@ fn sample_key_for_provider(provider_id: &str) -> StoredProviderCatalogKey {
         static ENCRYPTED_API_KEY: OnceLock<String> = OnceLock::new();
         ENCRYPTED_API_KEY
             .get_or_init(|| {
-                let credential_state = AppState::new()
-                    .expect("credential state should build")
-                    .with_data_state_for_tests(
-                        GatewayDataState::disabled()
-                            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-                    );
+                let credential_state = crate::tests::support::credential_fixture_state();
                 credential_state
                     .seal_provider_catalog_key_api_key("provider-1", "key-1", "plain-upstream-key")
                     .expect("api key should encrypt")
             })
             .clone()
     } else {
-        let credential_state = AppState::new()
-            .expect("credential state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            );
+        let credential_state = crate::tests::support::credential_fixture_state();
         credential_state
             .seal_provider_catalog_key_api_key(provider_id, "key-1", "plain-upstream-key")
             .expect("api key should encrypt")
@@ -253,11 +243,7 @@ fn vertex_service_account_state() -> (AppState, Arc<InMemoryProviderCatalogReadR
         "private_key": "TEST-PRIVATE-KEY",
         "project_id": "demo-project"
     });
-    let credential_state = AppState::new()
-        .expect("credential state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let credential_state = crate::tests::support::credential_fixture_state();
     let encrypted_auth_config = credential_state
         .seal_provider_catalog_key_auth_config("provider-1", "key-1", &auth_config.to_string())
         .expect("Vertex auth config should encrypt");

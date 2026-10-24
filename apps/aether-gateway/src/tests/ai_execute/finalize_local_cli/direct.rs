@@ -3,6 +3,9 @@ use super::{
     to_bytes, Arc, Body, Json, Mutex, Request, Router, StatusCode, TRACE_ID_HEADER,
 };
 use crate::data::GatewayDataState;
+use crate::tests::hash_api_key;
+use crate::tests::support::encode_event_frame;
+use crate::tests::support::sample_auth_snapshot_kiro as sample_auth_snapshot;
 use aether_ai_formats::openai_responses_message_item_id;
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{
@@ -12,39 +15,24 @@ use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelect
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
-
-const KIRO_CLAUDE_CLI_FINALIZE_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 fn run_kiro_claude_cli_finalize_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(KIRO_CLAUDE_CLI_FINALIZE_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("kiro claude cli finalize test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 #[test]
@@ -68,77 +56,31 @@ async fn gateway_executes_openai_responses_sync_upstream_stream_via_local_finali
         endpoint_tag: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai"])),
-            Some(serde_json::json!(["openai:responses"])),
-            Some(serde_json::json!(["gpt-5"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["openai"])),
-            Some(serde_json::json!(["openai:responses"])),
-            Some(serde_json::json!(["gpt-5"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai"]),
+            serde_json::json!(["openai:responses"]),
+            serde_json::json!(["gpt-5"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-cli-finalize-local-1".to_string(),
-            provider_name: "openai".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-cli-finalize-local-1".to_string(),
-            endpoint_api_format: "openai:responses".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-cli-finalize-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:responses".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:responses": 1})),
-            model_id: "model-openai-cli-finalize-local-1".to_string(),
-            global_model_id: "global-model-openai-cli-finalize-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gpt-5-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gpt-5-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:responses".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-cli-finalize-local-1",
+            provider_name: "openai",
+            provider_type: "custom",
+            api_format: "openai:responses",
+            api_family: "openai",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "bearer",
+            global_model_name: "gpt-5",
+            upstream_model: "gpt-5-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -188,31 +130,13 @@ async fn gateway_executes_openai_responses_sync_upstream_stream_via_local_finali
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-openai-cli-finalize-local-1".to_string(),
-            "provider-openai-cli-finalize-local-1".to_string(),
-            "prod".to_string(),
-            "bearer".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["openai:responses"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-cli-finalize",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"openai:responses": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "openai-cli-finalize-local-1",
+            key_name: "prod",
+            auth_type: "bearer",
+            api_format: "openai:responses",
+            secret: "sk-upstream-openai-cli-finalize",
+        })
     }
 
     let seen_remote_execution_runtime =
@@ -298,22 +222,9 @@ async fn gateway_executes_openai_responses_sync_upstream_stream_via_local_finali
                 *seen_remote_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenRemoteExecutionRuntimeRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    request_id: payload
-                        .get("request_id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    request_id: crate::tests::support::payload_string(&payload, &["request_id"]),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -321,18 +232,8 @@ async fn gateway_executes_openai_responses_sync_upstream_stream_via_local_finali
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
+                    endpoint_tag: crate::tests::support::payload_string(&payload, &["headers", "x-endpoint-tag"]),
                 });
                 Json(json!({
                     "request_id": "trace-openai-cli-stream-sync-direct-123",
@@ -522,51 +423,6 @@ fn gateway_executes_kiro_claude_cli_sync_upstream_stream_via_local_finalize_resp
 async fn gateway_executes_kiro_claude_cli_sync_upstream_stream_via_local_finalize_response_impl() {
     use base64::Engine as _;
 
-    fn crc32(data: &[u8]) -> u32 {
-        let mut crc = 0xffff_ffffu32;
-        for &byte in data {
-            crc ^= byte as u32;
-            for _ in 0..8 {
-                let mask = if crc & 1 == 1 { 0xedb8_8320 } else { 0 };
-                crc = (crc >> 1) ^ mask;
-            }
-        }
-        !crc
-    }
-
-    fn encode_string_header(name: &str, value: &str) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.push(name.len() as u8);
-        out.extend_from_slice(name.as_bytes());
-        out.push(7);
-        out.extend_from_slice(&(value.len() as u16).to_be_bytes());
-        out.extend_from_slice(value.as_bytes());
-        out
-    }
-
-    fn encode_event_frame(
-        message_type: &str,
-        event_type: Option<&str>,
-        payload: serde_json::Value,
-    ) -> Vec<u8> {
-        let mut headers = encode_string_header(":message-type", message_type);
-        if let Some(event_type) = event_type {
-            headers.extend_from_slice(&encode_string_header(":event-type", event_type));
-        }
-        let payload = serde_json::to_vec(&payload).expect("payload should encode");
-        let total_len = 12 + headers.len() + payload.len() + 4;
-        let mut out = Vec::with_capacity(total_len);
-        out.extend_from_slice(&(total_len as u32).to_be_bytes());
-        out.extend_from_slice(&(headers.len() as u32).to_be_bytes());
-        let prelude_crc = crc32(&out[..8]);
-        out.extend_from_slice(&prelude_crc.to_be_bytes());
-        out.extend_from_slice(&headers);
-        out.extend_from_slice(&payload);
-        let message_crc = crc32(&out);
-        out.extend_from_slice(&message_crc.to_be_bytes());
-        out
-    }
-
     #[derive(Debug, Clone)]
     struct SeenRemoteExecutionRuntimeRequest {
         trace_id: String,
@@ -583,78 +439,19 @@ async fn gateway_executes_kiro_claude_cli_sync_upstream_stream_via_local_finaliz
         proxy_node_id: String,
         transport_profile_id: String,
     }
-
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
-    fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["claude", "kiro"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["claude", "kiro"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-        )
-        .expect("auth snapshot should build")
-    }
-
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-kiro-cli-finalize-local-1".to_string(),
-            provider_name: "kiro".to_string(),
-            provider_type: "kiro".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-kiro-cli-finalize-local-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-kiro-cli-finalize-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-kiro-cli-finalize-local-1".to_string(),
-            global_model_id: "global-model-kiro-cli-finalize-local-1".to_string(),
-            global_model_name: "claude-sonnet-4".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-sonnet-4-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-sonnet-4-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "kiro-cli-finalize-local-1",
+            provider_name: "kiro",
+            provider_type: "kiro",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "bearer",
+            global_model_name: "claude-sonnet-4",
+            upstream_model: "claude-sonnet-4-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -835,46 +632,13 @@ async fn gateway_executes_kiro_claude_cli_sync_upstream_stream_via_local_finaliz
                 *seen_remote_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenRemoteExecutionRuntimeRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    request_id: payload
-                        .get("request_id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    accept: payload
-                        .get("headers")
-                        .and_then(|value| value.get("accept"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    host: payload
-                        .get("headers")
-                        .and_then(|value| value.get("host"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    request_id: crate::tests::support::payload_string(&payload, &["request_id"]),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
+                    authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
+                    accept: crate::tests::support::payload_string(&payload, &["headers", "accept"]),
+                    host: crate::tests::support::payload_string(&payload, &["headers", "host"]),
+                    endpoint_tag: crate::tests::support::payload_string(&payload, &["headers", "x-endpoint-tag"]),
                     mapped_model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -909,12 +673,7 @@ async fn gateway_executes_kiro_claude_cli_sync_upstream_stream_via_local_finaliz
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    proxy_node_id: payload
-                        .get("proxy")
-                        .and_then(|value| value.get("node_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    proxy_node_id: crate::tests::support::payload_string(&payload, &["proxy", "node_id"]),
                     transport_profile_id: payload
                         .get("transport_profile").and_then(|value| value.get("profile_id"))
                         .and_then(|value| value.as_str())

@@ -25,43 +25,18 @@ async fn gateway_executes_openai_chat_sync_via_local_decision_gate_without_execu
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-local-1".to_string(),
-            provider_name: "openai".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-local-1".to_string(),
-            endpoint_api_format: "openai:chat".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:chat".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:chat": 1})),
-            model_id: "model-openai-local-1".to_string(),
-            global_model_id: "global-model-openai-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gpt-5-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gpt-5-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:chat".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-local-1",
+            provider_name: "openai",
+            provider_type: "custom",
+            api_format: "openai:chat",
+            api_family: "openai",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gpt-5",
+            upstream_model: "gpt-5-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -199,23 +174,15 @@ async fn gateway_executes_openai_chat_sync_via_local_decision_gate_without_execu
                     serde_json::from_slice(&raw_body).expect("upstream payload should parse");
                 *seen_upstream_inner.lock().expect("mutex should lock") =
                     Some(SeenUpstreamSyncRequest {
-                        model: payload
-                            .get("model")
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        authorization: parts
-                            .headers
-                            .get(http::header::AUTHORIZATION)
-                            .and_then(|value| value.to_str().ok())
-                            .unwrap_or_default()
-                            .to_string(),
-                        content_type: parts
-                            .headers
-                            .get(http::header::CONTENT_TYPE)
-                            .and_then(|value| value.to_str().ok())
-                            .unwrap_or_default()
-                            .to_string(),
+                        model: crate::tests::support::payload_string(&payload, &["model"]),
+                        authorization: crate::tests::support::header_string(
+                            &parts.headers,
+                            http::header::AUTHORIZATION,
+                        ),
+                        content_type: crate::tests::support::header_string(
+                            &parts.headers,
+                            http::header::CONTENT_TYPE,
+                        ),
                     });
                 Json(json!({
                     "id": "chatcmpl-local-123",
@@ -631,43 +598,18 @@ async fn gateway_executes_openai_chat_sync_with_custom_path_via_local_decision_g
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-custom-path-1".to_string(),
-            provider_name: "openai".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-custom-path-1".to_string(),
-            endpoint_api_format: "openai:chat".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-custom-path-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:chat".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:chat": 1})),
-            model_id: "model-openai-custom-path-1".to_string(),
-            global_model_id: "global-model-openai-custom-path-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gpt-5-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gpt-5-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:chat".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-custom-path-1",
+            provider_name: "openai",
+            provider_type: "custom",
+            api_format: "openai:chat",
+            api_family: "openai",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gpt-5",
+            upstream_model: "gpt-5-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -814,17 +756,8 @@ async fn gateway_executes_openai_chat_sync_with_custom_path_via_local_decision_g
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -832,24 +765,18 @@ async fn gateway_executes_openai_chat_sync_with_custom_path_via_local_decision_g
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    renamed_header: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-upstream-rename"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
+                    renamed_header: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-upstream-rename"],
+                    ),
                     dropped_header_present: payload
                         .get("headers")
                         .and_then(|value| value.get("x-drop-me"))
@@ -875,18 +802,14 @@ async fn gateway_executes_openai_chat_sync_with_custom_path_via_local_decision_g
                         .and_then(|value| value.get("json_body"))
                         .and_then(|value| value.get("temperature"))
                         .is_some(),
-                    proxy_node_id: payload
-                        .get("proxy")
-                        .and_then(|value| value.get("node_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    transport_profile_id: payload
-                        .get("transport_profile")
-                        .and_then(|value| value.get("profile_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    proxy_node_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["proxy", "node_id"],
+                    ),
+                    transport_profile_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["transport_profile", "profile_id"],
+                    ),
                 });
                 Json(json!({
                     "request_id": "trace-openai-chat-custom-path-123",

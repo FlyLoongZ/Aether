@@ -198,11 +198,7 @@ fn sample_provider_catalog_provider(
 }
 
 fn sample_provider_catalog_key(key_id: &str, provider_id: &str) -> StoredProviderCatalogKey {
-    let credential_state = AppState::new()
-        .expect("credential state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let credential_state = crate::tests::support::credential_fixture_state();
     let encrypted_api_key = credential_state
         .seal_provider_catalog_key_api_key(provider_id, key_id, "sk-codex-test")
         .expect("api key should encrypt");

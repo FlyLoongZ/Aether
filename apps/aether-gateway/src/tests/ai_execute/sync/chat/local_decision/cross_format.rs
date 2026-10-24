@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::support::sample_auth_snapshot_openai_gemini as sample_auth_snapshot;
 
 large_stack_async_test!(
     gateway_returns_openai_chat_error_for_local_cross_format_gemini_sync_failure,
@@ -39,72 +40,19 @@ async fn gateway_executes_openai_chat_sync_via_local_cross_format_gemini_candida
         max_output_tokens: u64,
         temperature: f64,
     }
-
-    fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "gemini"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["openai", "gemini"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
-        )
-        .expect("auth snapshot should build")
-    }
-
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-chat-gemini-local-1".to_string(),
-            provider_name: "gemini".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-chat-gemini-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-chat-gemini-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-openai-chat-gemini-local-1".to_string(),
-            global_model_id: "global-model-openai-chat-gemini-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-2.5-pro-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-2.5-pro-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-chat-gemini-local-1",
+            provider_name: "gemini",
+            provider_type: "custom",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gpt-5",
+            upstream_model: "gemini-2.5-pro-upstream",
+        })
     }
 
     fn sample_disabled_conversion_candidate_row() -> StoredMinimalCandidateSelectionRow {
@@ -217,31 +165,13 @@ async fn gateway_executes_openai_chat_sync_via_local_cross_format_gemini_candida
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-openai-chat-gemini-local-1".to_string(),
-            "provider-openai-chat-gemini-local-1".to_string(),
-            "prod".to_string(),
-            "api_key".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-chat-gemini",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"gemini:generate_content": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "openai-chat-gemini-local-1",
+            key_name: "prod",
+            auth_type: "api_key",
+            api_format: "gemini:generate_content",
+            secret: "sk-upstream-openai-chat-gemini",
+        })
     }
 
     fn sample_disabled_conversion_provider_catalog_key() -> StoredProviderCatalogKey {
@@ -340,17 +270,8 @@ async fn gateway_executes_openai_chat_sync_via_local_cross_format_gemini_candida
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     provider_model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -358,18 +279,14 @@ async fn gateway_executes_openai_chat_sync_via_local_cross_format_gemini_candida
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    auth_header_value: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-goog-api-key"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    auth_header_value: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-goog-api-key"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     system_text: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -602,70 +519,30 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_cli_syn
     }
 
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "claude", "claude_code"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["openai", "claude", "claude_code"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai", "claude", "claude_code"]),
+            serde_json::json!(["openai:chat"]),
+            serde_json::json!(["gpt-5"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-chat-claude-cli-local-1".to_string(),
-            provider_name: "claude_code".to_string(),
-            provider_type: "claude_code".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-chat-claude-cli-local-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-chat-claude-cli-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "oauth".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-openai-chat-claude-cli-local-1".to_string(),
-            global_model_id: "global-model-openai-chat-claude-cli-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-code-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-code-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-chat-claude-cli-local-1",
+            provider_name: "claude_code",
+            provider_type: "claude_code",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "oauth",
+            global_model_name: "gpt-5",
+            upstream_model: "claude-code-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -722,31 +599,13 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_cli_syn
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-openai-chat-claude-cli-local-1".to_string(),
-            "provider-openai-chat-claude-cli-local-1".to_string(),
-            "prod".to_string(),
-            "oauth".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-chat-claude-cli",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"claude:messages": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "openai-chat-claude-cli-local-1",
+            key_name: "prod",
+            auth_type: "oauth",
+            api_format: "claude:messages",
+            secret: "sk-upstream-openai-chat-claude-cli",
+        })
     }
 
     let seen_execution_runtime = Arc::new(Mutex::new(None::<SeenExecutionRuntimeSyncRequest>));
@@ -817,50 +676,33 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_cli_syn
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     body: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
                         .cloned()
                         .unwrap_or(serde_json::Value::Null),
-                    client_api_format: payload
-                        .get("client_api_format")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    provider_api_format: payload
-                        .get("provider_api_format")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    auth_header_value: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    anthropic_version: payload
-                        .get("headers")
-                        .and_then(|value| value.get("anthropic-version"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    client_api_format: crate::tests::support::payload_string(
+                        &payload,
+                        &["client_api_format"],
+                    ),
+                    provider_api_format: crate::tests::support::payload_string(
+                        &payload,
+                        &["provider_api_format"],
+                    ),
+                    auth_header_value: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
+                    anthropic_version: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "anthropic-version"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                 });
                 Json(json!({
                     "request_id": "trace-openai-chat-claude-cli-local-error-123",
@@ -1069,70 +911,30 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_cli_syn
     }
 
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "gemini", "gemini_cli"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["openai", "gemini", "gemini_cli"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai", "gemini", "gemini_cli"]),
+            serde_json::json!(["openai:chat"]),
+            serde_json::json!(["gpt-5"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-chat-gemini-cli-local-1".to_string(),
-            provider_name: "gemini_cli".to_string(),
-            provider_type: "gemini_cli".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-chat-gemini-cli-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-chat-gemini-cli-local-1".to_string(),
-            key_name: "oauth".to_string(),
-            key_auth_type: "oauth".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-openai-chat-gemini-cli-local-1".to_string(),
-            global_model_id: "global-model-openai-chat-gemini-cli-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-cli-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-cli-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-chat-gemini-cli-local-1",
+            provider_name: "gemini_cli",
+            provider_type: "gemini_cli",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("cli"),
+            key_name: "oauth",
+            key_auth_type: "oauth",
+            global_model_name: "gpt-5",
+            upstream_model: "gemini-cli-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -1186,31 +988,13 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_cli_syn
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-openai-chat-gemini-cli-local-1".to_string(),
-            "provider-openai-chat-gemini-cli-local-1".to_string(),
-            "oauth".to_string(),
-            "oauth".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-chat-gemini-cli",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"gemini:generate_content": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "openai-chat-gemini-cli-local-1",
+            key_name: "oauth",
+            auth_type: "oauth",
+            api_format: "gemini:generate_content",
+            secret: "sk-upstream-openai-chat-gemini-cli",
+        })
     }
 
     let seen_execution_runtime = Arc::new(Mutex::new(None::<SeenExecutionRuntimeSyncRequest>));
@@ -1281,17 +1065,8 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_cli_syn
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     outer_model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1312,18 +1087,14 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_cli_syn
                         .and_then(|value| value.get("request"))
                         .and_then(|value| value.get("model"))
                         .is_some(),
-                    auth_header_value: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    auth_header_value: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     has_contents: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1497,70 +1268,30 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_sync_fa
     }
 
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "claude"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["openai", "claude"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai", "claude"]),
+            serde_json::json!(["openai:chat"]),
+            serde_json::json!(["gpt-5"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-chat-claude-local-1".to_string(),
-            provider_name: "claude".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-chat-claude-local-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-chat-claude-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-openai-chat-claude-local-1".to_string(),
-            global_model_id: "global-model-openai-chat-claude-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-sonnet-4-5-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-sonnet-4-5-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-chat-claude-local-1",
+            provider_name: "claude",
+            provider_type: "custom",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gpt-5",
+            upstream_model: "claude-sonnet-4-5-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -1614,31 +1345,13 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_sync_fa
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-openai-chat-claude-local-1".to_string(),
-            "provider-openai-chat-claude-local-1".to_string(),
-            "prod".to_string(),
-            "api_key".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-chat-claude",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"claude:messages": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "openai-chat-claude-local-1",
+            key_name: "prod",
+            auth_type: "api_key",
+            api_format: "claude:messages",
+            secret: "sk-upstream-openai-chat-claude",
+        })
     }
 
     let seen_execution_runtime = Arc::new(Mutex::new(None::<SeenExecutionRuntimeSyncRequest>));
@@ -1709,17 +1422,8 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_sync_fa
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1727,18 +1431,14 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_sync_fa
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    auth_header_value: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-api-key"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    auth_header_value: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-api-key"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     has_messages: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1902,72 +1602,19 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_sync_fa
         max_output_tokens: u64,
         temperature: f64,
     }
-
-    fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai", "gemini"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["openai", "gemini"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-5"])),
-        )
-        .expect("auth snapshot should build")
-    }
-
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-chat-gemini-local-1".to_string(),
-            provider_name: "gemini".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-chat-gemini-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-chat-gemini-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-openai-chat-gemini-local-1".to_string(),
-            global_model_id: "global-model-openai-chat-gemini-local-1".to_string(),
-            global_model_name: "gpt-5".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-2.5-pro-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-2.5-pro-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-chat-gemini-local-1",
+            provider_name: "gemini",
+            provider_type: "custom",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gpt-5",
+            upstream_model: "gemini-2.5-pro-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -2021,31 +1668,13 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_sync_fa
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-openai-chat-gemini-local-1".to_string(),
-            "provider-openai-chat-gemini-local-1".to_string(),
-            "prod".to_string(),
-            "api_key".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-openai-chat-gemini",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"gemini:generate_content": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "openai-chat-gemini-local-1",
+            key_name: "prod",
+            auth_type: "api_key",
+            api_format: "gemini:generate_content",
+            secret: "sk-upstream-openai-chat-gemini",
+        })
     }
 
     let seen_execution_runtime = Arc::new(Mutex::new(None::<SeenExecutionRuntimeSyncRequest>));
@@ -2116,17 +1745,8 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_sync_fa
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     provider_model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -2134,18 +1754,14 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_sync_fa
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    auth_header_value: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-goog-api-key"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    auth_header_value: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-goog-api-key"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     system_text: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))

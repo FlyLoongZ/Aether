@@ -1,36 +1,25 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override,
-    encrypt_python_fernet_plaintext, json, start_server, to_bytes, Arc, Body, Digest,
+    encrypt_python_fernet_plaintext, json, start_server, to_bytes, Arc, Body,
     InMemoryAuthApiKeySnapshotRepository, InMemoryMinimalCandidateSelectionReadRepository,
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
-    Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, Sha256, StatusCode,
+    Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
     StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
-    StoredProviderCatalogKey, StoredProviderCatalogProvider, StoredProviderModelMapping,
-    DEVELOPMENT_ENCRYPTION_KEY, TRACE_ID_HEADER,
+    StoredProviderCatalogKey, StoredProviderCatalogProvider, DEVELOPMENT_ENCRYPTION_KEY,
+    TRACE_ID_HEADER,
 };
-
-const CLAUDE_CODE_CLI_SYNC_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
+use crate::tests::hash_api_key;
 
 fn run_claude_code_cli_sync_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(CLAUDE_CODE_CLI_SYNC_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("claude code cli sync test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 #[test]
@@ -66,77 +55,31 @@ async fn gateway_executes_claude_code_cli_sync_via_local_decision_gate_with_loca
         transport_profile_id: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["claude", "claude_code"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-code"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["claude", "claude_code"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-code"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["claude", "claude_code"]),
+            serde_json::json!(["claude:messages"]),
+            serde_json::json!(["claude-code"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-claude-code-cli-local-1".to_string(),
-            provider_name: "claude_code".to_string(),
-            provider_type: "claude_code".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-claude-code-cli-local-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-claude-code-cli-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "oauth".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-claude-code-cli-local-1".to_string(),
-            global_model_id: "global-model-claude-code-cli-local-1".to_string(),
-            global_model_name: "claude-code".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-code-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-code-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "claude-code-cli-local-1",
+            provider_name: "claude_code",
+            provider_type: "claude_code",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "oauth",
+            global_model_name: "claude-code",
+            upstream_model: "claude-code-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -299,17 +242,8 @@ async fn gateway_executes_claude_code_cli_sync_via_local_decision_gate_with_loca
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -317,70 +251,44 @@ async fn gateway_executes_claude_code_cli_sync_via_local_decision_gate_with_loca
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    client_api_format: payload
-                        .get("client_api_format")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    provider_api_format: payload
-                        .get("provider_api_format")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    accept: payload
-                        .get("headers")
-                        .and_then(|value| value.get("accept"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    anthropic_version: payload
-                        .get("headers")
-                        .and_then(|value| value.get("anthropic-version"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    anthropic_beta: payload
-                        .get("headers")
-                        .and_then(|value| value.get("anthropic-beta"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    x_app: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-app"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    x_stainless_helper_method: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-stainless-helper-method"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    x_stainless_package_version: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-stainless-package-version"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    user_agent: payload
-                        .get("headers")
-                        .and_then(|value| value.get("user-agent"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    client_api_format: crate::tests::support::payload_string(
+                        &payload,
+                        &["client_api_format"],
+                    ),
+                    provider_api_format: crate::tests::support::payload_string(
+                        &payload,
+                        &["provider_api_format"],
+                    ),
+                    authorization: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
+                    accept: crate::tests::support::payload_string(&payload, &["headers", "accept"]),
+                    anthropic_version: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "anthropic-version"],
+                    ),
+                    anthropic_beta: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "anthropic-beta"],
+                    ),
+                    x_app: crate::tests::support::payload_string(&payload, &["headers", "x-app"]),
+                    x_stainless_helper_method: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-stainless-helper-method"],
+                    ),
+                    x_stainless_package_version: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-stainless-package-version"],
+                    ),
+                    user_agent: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "user-agent"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     metadata_mode: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -405,18 +313,14 @@ async fn gateway_executes_claude_code_cli_sync_via_local_decision_gate_with_loca
                         .and_then(|value| value.get("content"))
                         .cloned()
                         .unwrap_or(serde_json::Value::Null),
-                    proxy_node_id: payload
-                        .get("proxy")
-                        .and_then(|value| value.get("node_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    transport_profile_id: payload
-                        .get("transport_profile")
-                        .and_then(|value| value.get("profile_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    proxy_node_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["proxy", "node_id"],
+                    ),
+                    transport_profile_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["transport_profile", "profile_id"],
+                    ),
                 });
                 Json(json!({
                     "request_id": "trace-claude-code-cli-local-sync-123",

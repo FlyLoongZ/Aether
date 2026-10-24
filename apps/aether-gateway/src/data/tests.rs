@@ -392,30 +392,15 @@ async fn data_state_finds_active_provider_name_through_catalog_reader() {
 }
 
 fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-    StoredAuthApiKeySnapshot::new(
-        user_id.to_string(),
-        "alice".to_string(),
-        Some("alice@example.com".to_string()),
-        "user".to_string(),
-        "local".to_string(),
-        true,
-        false,
-        Some(serde_json::json!(["openai"])),
-        Some(serde_json::json!(["openai:chat"])),
-        Some(serde_json::json!(["gpt-4.1"])),
-        api_key_id.to_string(),
-        Some("default".to_string()),
-        true,
-        false,
-        false,
-        Some(60),
-        Some(5),
-        Some(200),
-        Some(serde_json::json!(["openai"])),
-        Some(serde_json::json!(["openai:chat"])),
-        Some(serde_json::json!(["gpt-4.1"])),
+    crate::tests::support::sample_auth_snapshot_with(
+        api_key_id,
+        user_id,
+        "alice",
+        "alice@example.com",
+        serde_json::json!(["openai"]),
+        serde_json::json!(["openai:chat"]),
+        serde_json::json!(["gpt-4.1"]),
     )
-    .expect("auth snapshot should build")
 }
 
 #[tokio::test]

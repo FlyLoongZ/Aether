@@ -20,28 +20,16 @@ use crate::constants::{
     EXECUTION_PATH_LOCAL_AUTH_DENIED,
 };
 
-const RERANK_PROXY_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
-
 fn run_rerank_proxy_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(RERANK_PROXY_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("rerank proxy test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 fn rerank_success_state(execution_runtime_url: String) -> AppState {

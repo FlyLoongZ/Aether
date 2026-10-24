@@ -852,8 +852,7 @@ mod response_decode_tests {
         decode_admin_provider_oauth_device_session, decode_admin_provider_oauth_state,
         project_kiro_device_oidc_response, read_admin_provider_oauth_decoder_with_limit,
     };
-    use crate::{data::GatewayDataState, AppState};
-    use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+
     use aether_data::repository::provider_oauth::{
         provider_oauth_batch_task_secret_purpose, provider_oauth_device_session_secret_purpose,
         StoredAdminProviderOAuthDeviceSession, StoredAdminProviderOAuthState,
@@ -875,12 +874,7 @@ mod response_decode_tests {
 
     #[test]
     fn admin_provider_oauth_state_ciphertext_is_bound_to_its_nonce() {
-        let app = AppState::new()
-            .expect("test state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            );
+        let app = crate::tests::support::credential_fixture_state();
         let admin = super::AdminAppState::new(&app);
         let record = StoredAdminProviderOAuthState {
             nonce: "a".repeat(64),
@@ -925,12 +919,7 @@ mod response_decode_tests {
 
     #[test]
     fn admin_provider_oauth_device_session_ciphertext_is_bound_to_session_and_principal() {
-        let app = AppState::new()
-            .expect("test state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            );
+        let app = crate::tests::support::credential_fixture_state();
         let admin = super::AdminAppState::new(&app);
         let now = aether_admin::provider::state::current_unix_secs();
         let record = StoredAdminProviderOAuthDeviceSession {
@@ -1015,12 +1004,7 @@ mod response_decode_tests {
 
     #[test]
     fn admin_provider_oauth_batch_task_ciphertext_is_bound_to_task_id() {
-        let app = AppState::new()
-            .expect("test state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            );
+        let app = crate::tests::support::credential_fixture_state();
         let admin = super::AdminAppState::new(&app);
         let task = json!({
             "task_id": "task-123",
