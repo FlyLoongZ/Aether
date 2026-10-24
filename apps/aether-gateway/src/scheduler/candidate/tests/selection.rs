@@ -186,11 +186,7 @@ fn provider_key_with_concurrent_limit(
 }
 
 fn sealed_kiro_auth_config() -> String {
-    let credential_state = AppState::new()
-        .expect("credential state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let credential_state = crate::tests::support::credential_fixture_state();
     credential_state
         .seal_provider_catalog_key_auth_config(
             "provider-kiro",

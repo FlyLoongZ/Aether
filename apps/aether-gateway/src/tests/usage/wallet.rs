@@ -15,21 +15,7 @@ fn run_async_test_on_large_stack<F>(name: &'static str, future: F)
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(name.to_string())
-        .stack_size(8 * 1024 * 1024)
-        .spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("tokio runtime should build")
-                .block_on(future);
-        })
-        .expect("large-stack test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(name, 8 * 1024 * 1024, || future);
 }
 
 #[test]

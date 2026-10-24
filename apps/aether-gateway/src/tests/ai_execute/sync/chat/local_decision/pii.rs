@@ -235,18 +235,14 @@ async fn proxy_pii_redaction_local_openai_chat_runtime_masks_headers_and_restore
                     .lock()
                     .expect("mutex should lock") = Some(SeenProviderRequest {
                     body: payload,
-                    authorization: parts
-                        .headers
-                        .get(http::header::AUTHORIZATION)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    accept_encoding: parts
-                        .headers
-                        .get(http::header::ACCEPT_ENCODING)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::header_string(
+                        &parts.headers,
+                        http::header::AUTHORIZATION,
+                    ),
+                    accept_encoding: crate::tests::support::header_string(
+                        &parts.headers,
+                        http::header::ACCEPT_ENCODING,
+                    ),
                 });
                 Json(json!({
                     "id": "chatcmpl-redaction-1",

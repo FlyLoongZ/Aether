@@ -20,7 +20,6 @@ use aether_data_contracts::repository::candidates::{
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
 
 const ORIGINAL_EMAIL: &str = "alice@example.com";
 
@@ -28,21 +27,9 @@ fn run_async_test_on_large_stack<F>(name: &'static str, future: F)
 where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(name.to_string())
-        .stack_size(16 * 1024 * 1024)
-        .spawn(move || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("tokio runtime should build")
-                .block_on(future);
-        })
-        .expect("large-stack pii redaction format test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(name, crate::tests::LARGE_TEST_STACK_BYTES, || {
+        future
+    });
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -368,11 +355,7 @@ async fn run_redaction_format_case(
                     .next()
                     .expect("email sentinel should exist in provider body");
                 let headers = payload.get("headers").cloned().unwrap_or_else(|| json!({}));
-                let url = payload
-                    .get("url")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string();
+                let url = crate::tests::support::payload_string(&payload, &["url"]);
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
@@ -781,11 +764,7 @@ fn collect_sentinels(text: &str, kind: &str) -> Vec<String> {
     sentinels
 }
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+use crate::tests::hash_api_key;
 
 fn client_api_key(case: &RedactionFormatCase) -> String {
     format!("sk-client-{}", case.test_id)

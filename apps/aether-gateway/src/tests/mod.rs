@@ -8,6 +8,27 @@ pub(super) use axum::{extract::Request, Json, Router};
 pub(super) use http::header::{HeaderName, HeaderValue};
 pub(super) use http::StatusCode;
 pub(super) use serde_json::json;
+use sha2::{Digest, Sha256};
+
+/// Stack size for tests that build the full gateway/router tree on the stack.
+///
+/// These tests still need a deep stack; the constant only removes the 30+
+/// per-module copies that had to be kept in sync by hand.
+pub(crate) const LARGE_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
+
+/// Wrap an async impl future in a deep-stack thread and a plain #[test].
+macro_rules! large_stack_async_test {
+    ($test_name:ident, $impl_name:ident) => {
+        #[test]
+        fn $test_name() {
+            crate::tests::run_async_test_on_large_stack(
+                stringify!($test_name),
+                crate::tests::LARGE_TEST_STACK_BYTES,
+                || $impl_name(),
+            );
+        }
+    };
+}
 
 mod ai_execute;
 mod async_task;
@@ -17,6 +38,7 @@ mod control;
 mod files;
 mod frontdoor;
 mod operational_auth;
+pub(crate) mod support;
 mod usage;
 mod video;
 
@@ -26,6 +48,12 @@ pub(super) use super::fallback_metrics::{GatewayFallbackMetricKind, GatewayFallb
 pub(super) use super::router::{attach_static_frontend, build_router, build_router_with_state};
 pub(super) use super::state::{AppState, FrontdoorCorsConfig};
 pub(super) use super::usage::UsageRuntimeConfig;
+
+pub(crate) fn hash_api_key(value: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(value.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
 
 pub(super) async fn start_server(app: Router) -> (String, tokio::task::JoinHandle<()>) {
     let listener = crate::test_support::bind_loopback_listener()

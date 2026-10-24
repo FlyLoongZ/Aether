@@ -10,6 +10,7 @@ use super::{
     StoredPublicGlobalModel,
 };
 use crate::data::GatewayDataState;
+use crate::tests::support::build_test_auth_token;
 use crate::tests::{
     any, build_router, build_router_with_state, json, start_server, to_bytes, AppState, Arc, Body,
     Json, Mutex, Request, Router, StatusCode, CONTROL_ROUTE_FAMILY_HEADER,
@@ -68,51 +69,6 @@ async fn assert_local_route_not_found_response(response: reqwest::Response) {
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(payload["error"]["type"], "http_error");
     assert_eq!(payload["error"]["message"], "Route not found");
-}
-
-fn test_auth_secret() -> String {
-    std::env::var("JWT_SECRET_KEY")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "aether-rust-test-jwt-secret-32-bytes-minimum".to_string())
-}
-
-fn test_base64url_encode(bytes: &[u8]) -> String {
-    use base64::Engine as _;
-
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
-}
-
-fn build_test_auth_token(
-    token_type: &str,
-    mut payload: serde_json::Map<String, serde_json::Value>,
-    expires_at: chrono::DateTime<chrono::Utc>,
-) -> String {
-    use hmac::Mac;
-
-    let header = json!({ "alg": "HS256", "typ": "JWT" });
-    payload.insert("exp".to_string(), json!(expires_at.timestamp()));
-    payload.insert("type".to_string(), json!(token_type));
-    let header_segment = test_base64url_encode(
-        serde_json::to_vec(&header)
-            .expect("jwt header should serialize")
-            .as_slice(),
-    );
-    let payload_segment = test_base64url_encode(
-        serde_json::to_vec(&payload)
-            .expect("jwt payload should serialize")
-            .as_slice(),
-    );
-    let signing_input = format!("{header_segment}.{payload_segment}");
-    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(test_auth_secret().as_bytes())
-        .expect("jwt secret should build");
-    mac.update(signing_input.as_bytes());
-    let signature = mac.finalize().into_bytes();
-    format!(
-        "{header_segment}.{payload_segment}.{}",
-        test_base64url_encode(signature.as_slice())
-    )
 }
 
 struct TestEnvVarGuard {

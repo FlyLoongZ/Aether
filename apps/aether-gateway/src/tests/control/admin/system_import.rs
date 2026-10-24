@@ -59,11 +59,7 @@ fn decrypt_test_provider_catalog_credential(
     key: &aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey,
     field: ProviderCatalogCredentialField,
 ) -> String {
-    let state = AppState::new()
-        .expect("gateway should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let state = crate::tests::support::credential_fixture_state();
     let ciphertext = match field {
         ProviderCatalogCredentialField::ApiKey => key.encrypted_api_key.as_deref(),
         ProviderCatalogCredentialField::AuthConfig => key.encrypted_auth_config.as_deref(),
@@ -335,8 +331,6 @@ fn sample_import_user_session(
     .expect("session should build")
 }
 
-const ADMIN_SYSTEM_IMPORT_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
-
 fn run_admin_system_import_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
@@ -344,7 +338,7 @@ where
 {
     crate::tests::run_async_test_on_large_stack(
         test_name,
-        ADMIN_SYSTEM_IMPORT_TEST_STACK_BYTES,
+        crate::tests::LARGE_TEST_STACK_BYTES,
         make_future,
     );
 }
@@ -1829,8 +1823,7 @@ async fn authenticated_recovery_restores_password_and_api_key_login_material_imp
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY)
-            .expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");
@@ -2031,8 +2024,7 @@ async fn authenticated_recovery_reencrypts_existing_api_key_impl() {
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY)
-            .expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");
@@ -2109,8 +2101,7 @@ async fn authenticated_recovery_rejects_proxy_nodes_before_config_mutation_impl(
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY)
-            .expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");
@@ -2181,8 +2172,7 @@ async fn authenticated_recovery_rejects_ldap_filter_injection_before_config_muta
     let restored = restore_backup_json(
         object_key,
         &envelope,
-        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY)
-            .expect("restore key should build")],
+        &[BackupDecryptionKey::current(DEVELOPMENT_ENCRYPTION_KEY).expect("restore key should build")],
         BackupRestoreLimits::default(),
     )
     .expect("backup should authenticate");

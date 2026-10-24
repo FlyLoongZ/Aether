@@ -984,12 +984,7 @@ fn provider_catalog_for_standard_row(
         None,
     )
     .expect("endpoint transport should build");
-    let credential_state = AppState::new()
-        .expect("credential state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let credential_state = crate::tests::support::credential_fixture_state();
     let encrypted_api_key = credential_state
         .seal_provider_catalog_key_api_key(
             row.provider_id.as_str(),

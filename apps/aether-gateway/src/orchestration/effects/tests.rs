@@ -299,11 +299,7 @@ fn sample_codex_endpoint() -> StoredProviderCatalogEndpoint {
 fn sample_codex_key() -> StoredProviderCatalogKey {
     let provider_id = "provider-codex-cli-local-1";
     let key_id = "key-codex-cli-local-1";
-    let credential_state = AppState::new()
-        .expect("credential state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let credential_state = crate::tests::support::credential_fixture_state();
     let encrypted_api_key = credential_state
         .seal_provider_catalog_key_api_key(provider_id, key_id, "codex-access-token")
         .expect("access token should encrypt");

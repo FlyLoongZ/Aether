@@ -1,7 +1,7 @@
+use crate::tests::hash_api_key;
+use crate::tests::support::sample_auth_snapshot_video as sample_auth_snapshot;
 use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
+use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::candidates::{
@@ -17,7 +17,7 @@ use axum::{extract::Request, Json, Router};
 use http::header::{HeaderName, HeaderValue};
 use http::StatusCode;
 use serde_json::json;
-use sha2::{Digest, Sha256};
+
 use std::sync::{Arc, Mutex};
 
 use crate::constants::{CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER};
@@ -36,40 +36,6 @@ async fn gateway_executes_openai_video_delete_via_reconstructed_data_backed_loca
         url: String,
         authorization: String,
     }
-
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
-    fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "video-user".to_string(),
-            Some("video@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(json!(["openai"])),
-            Some(json!(["openai:video"])),
-            Some(json!(["sora-2"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(json!(["openai"])),
-            Some(json!(["openai:video"])),
-            Some(json!(["sora-2"])),
-        )
-        .expect("auth snapshot should build")
-    }
-
     let decision_hits = Arc::new(Mutex::new(0usize));
     let decision_hits_clone = Arc::clone(&decision_hits);
     let execute_hits = Arc::new(Mutex::new(0usize));

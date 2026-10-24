@@ -12,15 +12,10 @@ use axum::routing::any;
 use axum::{extract::Request, Json, Router};
 use http::StatusCode;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 
 use super::{build_router_with_state, build_state_with_execution_runtime_override, start_server};
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+use crate::tests::hash_api_key;
 
 fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
     StoredAuthApiKeySnapshot::new(

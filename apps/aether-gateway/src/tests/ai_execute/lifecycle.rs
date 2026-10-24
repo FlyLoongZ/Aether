@@ -4,56 +4,37 @@ use super::{
     LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER, TRACE_ID_HEADER,
 };
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
 
 use crate::data::GatewayDataState;
 use crate::tests::next_non_keepalive_chunk;
-
-const LIFECYCLE_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
+use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 
 fn run_lifecycle_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(LIFECYCLE_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("lifecycle test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+use crate::tests::hash_api_key;
 
 async fn build_cancelling_gateway(state: crate::AppState) -> Router {
     state
@@ -73,142 +54,36 @@ async fn build_cancelling_gateway(state: crate::AppState) -> Router {
     build_router_with_state(state)
 }
 
+const LOCAL_OPENAI_SPEC: crate::tests::support::LocalOpenAiSpec<'_> =
+    crate::tests::support::LocalOpenAiSpec {
+        id_suffix: "openai-lifecycle-local-1",
+        provider_name: "openai",
+        provider_priority: 2,
+        secret: "sk-upstream-openai",
+    };
+
 fn sample_local_openai_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-    StoredAuthApiKeySnapshot::new(
-        user_id.to_string(),
-        "alice".to_string(),
-        Some("alice@example.com".to_string()),
-        "user".to_string(),
-        "local".to_string(),
-        true,
-        false,
-        Some(serde_json::json!(["openai"])),
-        Some(serde_json::json!(["openai:chat"])),
-        Some(serde_json::json!(["gpt-5"])),
-        api_key_id.to_string(),
-        Some("default".to_string()),
-        true,
-        false,
-        false,
-        Some(60),
-        Some(5),
-        Some(4_102_444_800),
-        Some(serde_json::json!(["openai"])),
-        Some(serde_json::json!(["openai:chat"])),
-        Some(serde_json::json!(["gpt-5"])),
-    )
-    .expect("auth snapshot should build")
+    crate::tests::support::local_openai_auth_snapshot(api_key_id, user_id)
 }
 
 fn sample_local_openai_candidate_row() -> StoredMinimalCandidateSelectionRow {
-    StoredMinimalCandidateSelectionRow {
-        provider_id: "provider-openai-lifecycle-local-1".to_string(),
-        provider_name: "openai".to_string(),
-        provider_type: "custom".to_string(),
-        provider_priority: 10,
-        provider_is_active: true,
-        endpoint_id: "endpoint-openai-lifecycle-local-1".to_string(),
-        endpoint_api_format: "openai:chat".to_string(),
-        endpoint_api_family: Some("openai".to_string()),
-        endpoint_kind: Some("chat".to_string()),
-        endpoint_is_active: true,
-        key_id: "key-openai-lifecycle-local-1".to_string(),
-        key_name: "prod".to_string(),
-        key_auth_type: "api_key".to_string(),
-        key_is_active: true,
-        key_api_formats: Some(vec!["openai:chat".to_string()]),
-        key_allowed_models: None,
-        key_capabilities: None,
-        key_internal_priority: 5,
-        key_global_priority_by_format: Some(serde_json::json!({"openai:chat": 1})),
-        model_id: "model-openai-lifecycle-local-1".to_string(),
-        global_model_id: "global-model-openai-lifecycle-local-1".to_string(),
-        global_model_name: "gpt-5".to_string(),
-        global_model_mappings: None,
-        global_model_supports_streaming: Some(true),
-        model_provider_model_name: "gpt-5-upstream".to_string(),
-        model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-            name: "gpt-5-upstream".to_string(),
-            priority: 1,
-            api_formats: Some(vec!["openai:chat".to_string()]),
-            endpoint_ids: None,
-            operations: None,
-        }]),
-        model_supports_streaming: Some(true),
-        model_is_active: true,
-        model_is_available: true,
-    }
+    crate::tests::support::local_openai_candidate_row(&LOCAL_OPENAI_SPEC)
 }
 
 fn sample_local_openai_provider() -> StoredProviderCatalogProvider {
-    StoredProviderCatalogProvider::new(
-        "provider-openai-lifecycle-local-1".to_string(),
-        "openai".to_string(),
-        Some("https://example.com".to_string()),
-        "custom".to_string(),
-    )
-    .expect("provider should build")
-    .with_transport_fields(
-        true,
-        false,
-        false,
-        None,
-        Some(2),
-        None,
-        Some(20.0),
-        None,
-        None,
-    )
-}
-
-fn sample_local_openai_endpoint() -> StoredProviderCatalogEndpoint {
-    StoredProviderCatalogEndpoint::new(
-        "endpoint-openai-lifecycle-local-1".to_string(),
-        "provider-openai-lifecycle-local-1".to_string(),
-        "openai:chat".to_string(),
-        Some("openai".to_string()),
-        Some("chat".to_string()),
-        true,
-    )
-    .expect("endpoint should build")
-    .with_transport_fields(
-        "https://api.openai.example/v1".to_string(),
-        None,
-        None,
-        Some(2),
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("endpoint transport should build")
+    crate::tests::support::local_openai_provider(&LOCAL_OPENAI_SPEC)
 }
 
 fn sample_local_openai_key() -> StoredProviderCatalogKey {
-    StoredProviderCatalogKey::new(
-        "key-openai-lifecycle-local-1".to_string(),
-        "provider-openai-lifecycle-local-1".to_string(),
-        "prod".to_string(),
-        "api_key".to_string(),
-        None,
-        true,
-    )
-    .expect("key should build")
-    .with_transport_fields(
-        Some(serde_json::json!(["openai:chat"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai")
-            .expect("api key should encrypt"),
-        None,
-        None,
-        Some(serde_json::json!({"openai:chat": 1})),
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("key transport should build")
+    crate::tests::support::local_openai_key(&LOCAL_OPENAI_SPEC)
 }
 
+fn sample_local_openai_endpoint() -> StoredProviderCatalogEndpoint {
+    crate::tests::support::local_openai_endpoint(
+        &LOCAL_OPENAI_SPEC,
+        "https://api.openai.example/v1",
+    )
+}
 #[test]
 fn gateway_completes_sync_response_on_local_execution_runtime_path() {
     run_lifecycle_test(

@@ -288,7 +288,7 @@ async fn execute_grok_quota_plan(
     execute_provider_quota_plan(state, transport, plan, "grok").await
 }
 
-fn grok_quota_error_detail(result: &ExecutionResult) -> Option<String> {
+pub(super) fn grok_quota_error_detail(result: &ExecutionResult) -> Option<String> {
     extract_execution_error_message_ref(result)
         .map(bound_quota_error_detail)
         .or_else(|| {
@@ -314,7 +314,10 @@ fn grok_is_cloudflare_challenge(message: &str) -> bool {
         || lowered.contains("cf-ray")
 }
 
-fn grok_quota_invalid_reason(status_code: u16, upstream_message: Option<&str>) -> String {
+pub(super) fn grok_quota_invalid_reason(
+    status_code: u16,
+    upstream_message: Option<&str>,
+) -> String {
     let message = upstream_message.unwrap_or_default().trim();
     if status_code == 403 && grok_is_cloudflare_challenge(message) {
         return format!(
@@ -819,52 +822,6 @@ mod tests {
     }
 
     #[test]
-    fn quota_error_detail_is_bounded_before_copying_json_message() {
-        let message = format!("{}界", "x".repeat(crate::MAX_ERROR_BODY_BYTES));
-        let result = ExecutionResult {
-            request_id: "grok-quota:oversized-json".to_string(),
-            candidate_id: None,
-            status_code: 500,
-            headers: BTreeMap::new(),
-            response_observation: None,
-            body: Some(ResponseBody {
-                json_body: Some(json!({"error": {"message": message}})),
-                body_bytes_b64: None,
-            }),
-            telemetry: None,
-            error: None,
-        };
-
-        let detail = grok_quota_error_detail(&result).expect("JSON error detail");
-
-        assert_eq!(detail.len(), crate::MAX_ERROR_BODY_BYTES);
-        assert!(detail.bytes().all(|byte| byte == b'x'));
-    }
-
-    #[test]
-    fn quota_error_detail_rejects_oversized_base64_before_decode() {
-        let encoded_limit =
-            crate::execution_runtime::transport::maximum_base64_len_for_decoded_limit(
-                crate::MAX_ERROR_BODY_BYTES,
-            );
-        let result = ExecutionResult {
-            request_id: "grok-quota:oversized-base64".to_string(),
-            candidate_id: None,
-            status_code: 500,
-            headers: BTreeMap::new(),
-            response_observation: None,
-            body: Some(ResponseBody {
-                json_body: None,
-                body_bytes_b64: Some("A".repeat(encoded_limit + 1)),
-            }),
-            telemetry: None,
-            error: None,
-        };
-
-        assert_eq!(grok_quota_error_detail(&result), None);
-    }
-
-    #[test]
     fn quota_result_message_removes_status_prefix() {
         let reason = format!("{OAUTH_REFRESH_FAILED_PREFIX}Grok Cloudflare 验证失败");
 
@@ -872,17 +829,5 @@ mod tests {
             grok_quota_result_message(&reason),
             "Grok Cloudflare 验证失败"
         );
-    }
-
-    #[test]
-    fn quota_invalid_reason_does_not_persist_upstream_credentials() {
-        let reason = grok_quota_invalid_reason(
-            401,
-            Some("authorization=Bearer upstream-secret https://user:pass@example.test?q=secret"),
-        );
-
-        assert_eq!(reason, "[OAUTH_EXPIRED] Grok Token 无效或已过期");
-        assert!(!reason.contains("upstream-secret"));
-        assert!(!reason.contains("user:pass"));
     }
 }

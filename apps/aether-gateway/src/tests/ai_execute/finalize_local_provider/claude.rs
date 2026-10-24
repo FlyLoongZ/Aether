@@ -3,7 +3,8 @@ use super::{
     to_bytes, Arc, Body, Json, Mutex, Request, Router, StatusCode, TRACE_ID_HEADER,
 };
 use crate::data::GatewayDataState;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::hash_api_key;
+use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -11,39 +12,24 @@ use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelect
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
-
-const CLAUDE_PROVIDER_FINALIZE_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 fn run_claude_provider_finalize_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(CLAUDE_PROVIDER_FINALIZE_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("claude provider finalize test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 #[test]
@@ -65,77 +51,31 @@ async fn gateway_executes_claude_chat_sync_same_format_via_local_finalize_respon
         endpoint_tag: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["claude"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["claude"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["claude"]),
+            serde_json::json!(["claude:messages"]),
+            serde_json::json!(["claude-sonnet-4"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-claude-chat-finalize-local-1".to_string(),
-            provider_name: "claude".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-claude-chat-finalize-local-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-claude-chat-finalize-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-claude-chat-finalize-local-1".to_string(),
-            global_model_id: "global-model-claude-chat-finalize-local-1".to_string(),
-            global_model_name: "claude-sonnet-4".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-sonnet-4-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-sonnet-4-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "claude-chat-finalize-local-1",
+            provider_name: "claude",
+            provider_type: "custom",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "claude-sonnet-4",
+            upstream_model: "claude-sonnet-4-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -185,31 +125,13 @@ async fn gateway_executes_claude_chat_sync_same_format_via_local_finalize_respon
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-claude-chat-finalize-local-1".to_string(),
-            "provider-claude-chat-finalize-local-1".to_string(),
-            "prod".to_string(),
-            "api_key".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-claude-chat-finalize",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"claude:messages": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "claude-chat-finalize-local-1",
+            key_name: "prod",
+            auth_type: "api_key",
+            api_format: "claude:messages",
+            secret: "sk-upstream-claude-chat-finalize",
+        })
     }
 
     let seen_remote_execution_runtime =
@@ -296,22 +218,9 @@ async fn gateway_executes_claude_chat_sync_same_format_via_local_finalize_respon
                 *seen_remote_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenRemoteExecutionRuntimeRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    request_id: payload
-                        .get("request_id")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    request_id: crate::tests::support::payload_string(&payload, &["request_id"]),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -319,18 +228,14 @@ async fn gateway_executes_claude_chat_sync_same_format_via_local_finalize_respon
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    auth_header_value: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-api-key"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    auth_header_value: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-api-key"],
+                    ),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                 });
                 Json(json!({
                     "request_id": "trace-claude-chat-sync-local-123",
@@ -522,77 +427,31 @@ async fn gateway_executes_claude_chat_sync_upstream_stream_via_local_finalize_re
         accept: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["claude"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["claude"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-sonnet-4"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["claude"]),
+            serde_json::json!(["claude:messages"]),
+            serde_json::json!(["claude-sonnet-4"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-claude-chat-stream-finalize-local-1".to_string(),
-            provider_name: "claude".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-claude-chat-stream-finalize-local-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-claude-chat-stream-finalize-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-claude-chat-stream-finalize-local-1".to_string(),
-            global_model_id: "global-model-claude-chat-stream-finalize-local-1".to_string(),
-            global_model_name: "claude-sonnet-4".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-sonnet-4-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-sonnet-4-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "claude-chat-stream-finalize-local-1",
+            provider_name: "claude",
+            provider_type: "custom",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("chat"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "claude-sonnet-4",
+            upstream_model: "claude-sonnet-4-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -642,31 +501,13 @@ async fn gateway_executes_claude_chat_sync_upstream_stream_via_local_finalize_re
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-claude-chat-stream-finalize-local-1".to_string(),
-            "provider-claude-chat-stream-finalize-local-1".to_string(),
-            "prod".to_string(),
-            "api_key".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-claude-chat-stream-finalize",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"claude:messages": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "claude-chat-stream-finalize-local-1",
+            key_name: "prod",
+            auth_type: "api_key",
+            api_format: "claude:messages",
+            secret: "sk-upstream-claude-chat-stream-finalize",
+        })
     }
 
     let seen_remote_execution_runtime =
@@ -750,22 +591,9 @@ async fn gateway_executes_claude_chat_sync_upstream_stream_via_local_finalize_re
             *seen_remote_execution_runtime_clone
                 .lock()
                 .expect("mutex should lock") = Some(SeenRemoteExecutionRuntimeRequest {
-                trace_id: parts
-                    .headers
-                    .get(TRACE_ID_HEADER)
-                    .and_then(|value| value.to_str().ok())
-                    .unwrap_or_default()
-                    .to_string(),
-                request_id: payload
-                    .get("request_id")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                url: payload
-                    .get("url")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
+                trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                request_id: crate::tests::support::payload_string(&payload, &["request_id"]),
+                url: crate::tests::support::payload_string(&payload, &["url"]),
                 model: payload
                     .get("body")
                     .and_then(|value| value.get("json_body"))
@@ -773,24 +601,9 @@ async fn gateway_executes_claude_chat_sync_upstream_stream_via_local_finalize_re
                     .and_then(|value| value.as_str())
                     .unwrap_or_default()
                     .to_string(),
-                auth_header_value: payload
-                    .get("headers")
-                    .and_then(|value| value.get("x-api-key"))
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                endpoint_tag: payload
-                    .get("headers")
-                    .and_then(|value| value.get("x-endpoint-tag"))
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                accept: payload
-                    .get("headers")
-                    .and_then(|value| value.get("accept"))
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
+                auth_header_value: crate::tests::support::payload_string(&payload, &["headers", "x-api-key"]),
+                endpoint_tag: crate::tests::support::payload_string(&payload, &["headers", "x-endpoint-tag"]),
+                accept: crate::tests::support::payload_string(&payload, &["headers", "accept"]),
             });
             Json(json!({
                 "request_id": "trace-claude-chat-stream-sync-direct-123",
@@ -984,77 +797,31 @@ async fn gateway_executes_claude_cli_sync_upstream_stream_via_local_finalize_res
         accept: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["claude"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-code"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["claude"])),
-            Some(serde_json::json!(["claude:messages"])),
-            Some(serde_json::json!(["claude-code"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["claude"]),
+            serde_json::json!(["claude:messages"]),
+            serde_json::json!(["claude-code"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-claude-cli-finalize-local-1".to_string(),
-            provider_name: "claude".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-claude-cli-finalize-local-1".to_string(),
-            endpoint_api_format: "claude:messages".to_string(),
-            endpoint_api_family: Some("claude".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-claude-cli-finalize-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["claude:messages".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"claude:messages": 1})),
-            model_id: "model-claude-cli-finalize-local-1".to_string(),
-            global_model_id: "global-model-claude-cli-finalize-local-1".to_string(),
-            global_model_name: "claude-code".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-code-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-code-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["claude:messages".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "claude-cli-finalize-local-1",
+            provider_name: "claude",
+            provider_type: "custom",
+            api_format: "claude:messages",
+            api_family: "claude",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "bearer",
+            global_model_name: "claude-code",
+            upstream_model: "claude-code-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -1104,31 +871,13 @@ async fn gateway_executes_claude_cli_sync_upstream_stream_via_local_finalize_res
     }
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
-        StoredProviderCatalogKey::new(
-            "key-claude-cli-finalize-local-1".to_string(),
-            "provider-claude-cli-finalize-local-1".to_string(),
-            "prod".to_string(),
-            "bearer".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build")
-        .with_transport_fields(
-            Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-claude-cli-finalize",
-            )
-            .expect("api key should encrypt"),
-            None,
-            None,
-            Some(serde_json::json!({"claude:messages": 1})),
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("key transport should build")
+        crate::tests::support::provider_catalog_key(&crate::tests::support::CatalogKeySpec {
+            id_suffix: "claude-cli-finalize-local-1",
+            key_name: "prod",
+            auth_type: "bearer",
+            api_format: "claude:messages",
+            secret: "sk-upstream-claude-cli-finalize",
+        })
     }
 
     let seen_remote_execution_runtime =
@@ -1212,22 +961,9 @@ async fn gateway_executes_claude_cli_sync_upstream_stream_via_local_finalize_res
             *seen_remote_execution_runtime_clone
                 .lock()
                 .expect("mutex should lock") = Some(SeenRemoteExecutionRuntimeRequest {
-                trace_id: parts
-                    .headers
-                    .get(TRACE_ID_HEADER)
-                    .and_then(|value| value.to_str().ok())
-                    .unwrap_or_default()
-                    .to_string(),
-                request_id: payload
-                    .get("request_id")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                url: payload
-                    .get("url")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
+                trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                request_id: crate::tests::support::payload_string(&payload, &["request_id"]),
+                url: crate::tests::support::payload_string(&payload, &["url"]),
                 model: payload
                     .get("body")
                     .and_then(|value| value.get("json_body"))
@@ -1235,24 +971,9 @@ async fn gateway_executes_claude_cli_sync_upstream_stream_via_local_finalize_res
                     .and_then(|value| value.as_str())
                     .unwrap_or_default()
                     .to_string(),
-                authorization: payload
-                    .get("headers")
-                    .and_then(|value| value.get("authorization"))
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                endpoint_tag: payload
-                    .get("headers")
-                    .and_then(|value| value.get("x-endpoint-tag"))
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                accept: payload
-                    .get("headers")
-                    .and_then(|value| value.get("accept"))
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
+                authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
+                endpoint_tag: crate::tests::support::payload_string(&payload, &["headers", "x-endpoint-tag"]),
+                accept: crate::tests::support::payload_string(&payload, &["headers", "accept"]),
             });
             Json(json!({
                 "request_id": "trace-claude-cli-stream-sync-direct-123",

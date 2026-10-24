@@ -11,30 +11,15 @@ use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-    StoredAuthApiKeySnapshot::new(
-        user_id.to_string(),
-        "video-user".to_string(),
-        Some("video@example.com".to_string()),
-        "user".to_string(),
-        "local".to_string(),
-        true,
-        false,
-        Some(json!(["openai"])),
-        Some(json!(["openai:video"])),
-        Some(json!(["video-model"])),
-        api_key_id.to_string(),
-        Some("default".to_string()),
-        true,
-        false,
-        false,
-        Some(60),
-        Some(5),
-        Some(4_102_444_800),
-        Some(json!(["openai"])),
-        Some(json!(["openai:video"])),
-        Some(json!(["video-model"])),
+    crate::tests::support::sample_auth_snapshot_with(
+        api_key_id,
+        user_id,
+        "video-user",
+        "video@example.com",
+        serde_json::json!(["openai"]),
+        serde_json::json!(["openai:video"]),
+        serde_json::json!(["video-model"]),
     )
-    .expect("auth snapshot should build")
 }
 
 fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {

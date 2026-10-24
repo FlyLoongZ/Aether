@@ -207,19 +207,12 @@ fn api_key_secret_error(message: &str) -> GatewayError {
 
 #[cfg(test)]
 mod tests {
-    use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-
     use super::{open_auth_api_key_secret, seal_auth_api_key_secret, sha256_hex};
     use crate::handlers::shared::encrypt_catalog_secret_with_fallbacks;
-    use crate::{data::GatewayDataState, AppState};
+    use crate::AppState;
 
     fn state_with_encryption_key() -> AppState {
-        AppState::new()
-            .expect("test state should build")
-            .with_data_state_for_tests(
-                GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-            )
+        crate::tests::support::credential_fixture_state()
     }
 
     fn record(

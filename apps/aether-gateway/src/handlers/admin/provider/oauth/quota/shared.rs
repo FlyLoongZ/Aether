@@ -1726,3 +1726,108 @@ fn kiro_quota_host_is_allowed(host: &str) -> bool {
 #[cfg(test)]
 #[path = "shared_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod quota_cross_provider_tests {
+    use super::super::{chatgpt_web, grok};
+    use crate::handlers::admin::provider::shared::payloads::OAUTH_EXPIRED_PREFIX;
+    use aether_contracts::{ExecutionResult, ResponseBody};
+    use serde_json::json;
+    use std::collections::BTreeMap;
+
+    #[derive(Clone, Copy)]
+    struct QuotaCase {
+        name: &'static str,
+        error_detail: fn(&ExecutionResult) -> Option<String>,
+        invalid_reason: fn(u16, Option<&str>) -> String,
+        expired_suffix: &'static str,
+    }
+
+    fn cases() -> [QuotaCase; 2] {
+        [
+            QuotaCase {
+                name: "chatgpt-web",
+                error_detail: chatgpt_web::chatgpt_web_quota_error_detail,
+                invalid_reason: chatgpt_web::chatgpt_web_quota_invalid_reason,
+                expired_suffix: "ChatGPT Web Token 无效或已过期",
+            },
+            QuotaCase {
+                name: "grok",
+                error_detail: grok::grok_quota_error_detail,
+                invalid_reason: grok::grok_quota_invalid_reason,
+                expired_suffix: "Grok Token 无效或已过期",
+            },
+        ]
+    }
+
+    #[test]
+    fn quota_error_detail_is_bounded_before_copying_json_message() {
+        for case in cases() {
+            let message = format!("{}界", "x".repeat(crate::MAX_ERROR_BODY_BYTES));
+            let result = ExecutionResult {
+                request_id: format!("{}-quota:oversized-json", case.name),
+                candidate_id: None,
+                status_code: 500,
+                headers: BTreeMap::new(),
+                response_observation: None,
+                body: Some(ResponseBody {
+                    json_body: Some(json!({"error": {"message": message}})),
+                    body_bytes_b64: None,
+                }),
+                telemetry: None,
+                error: None,
+            };
+
+            let detail = (case.error_detail)(&result).expect("JSON error detail");
+
+            assert_eq!(detail.len(), crate::MAX_ERROR_BODY_BYTES, "{}", case.name);
+            assert!(detail.bytes().all(|byte| byte == b'x'), "{}", case.name);
+        }
+    }
+
+    #[test]
+    fn quota_error_detail_rejects_oversized_base64_before_decode() {
+        for case in cases() {
+            let encoded_limit =
+                crate::execution_runtime::transport::maximum_base64_len_for_decoded_limit(
+                    crate::MAX_ERROR_BODY_BYTES,
+                );
+            let result = ExecutionResult {
+                request_id: format!("{}-quota:oversized-base64", case.name),
+                candidate_id: None,
+                status_code: 500,
+                headers: BTreeMap::new(),
+                response_observation: None,
+                body: Some(ResponseBody {
+                    json_body: None,
+                    body_bytes_b64: Some("A".repeat(encoded_limit + 1)),
+                }),
+                telemetry: None,
+                error: None,
+            };
+
+            assert_eq!((case.error_detail)(&result), None, "{}", case.name);
+        }
+    }
+
+    #[test]
+    fn quota_invalid_reason_does_not_persist_upstream_credentials() {
+        for case in cases() {
+            let reason = (case.invalid_reason)(
+                401,
+                Some(
+                    "authorization=Bearer upstream-secret https://user:pass@example.test?q=secret",
+                ),
+            );
+
+            assert_eq!(
+                reason,
+                format!("{OAUTH_EXPIRED_PREFIX}{}", case.expired_suffix),
+                "{}",
+                case.name
+            );
+            assert!(!reason.contains("upstream-secret"), "{}", case.name);
+            assert!(!reason.contains("user:pass"), "{}", case.name);
+        }
+    }
+}

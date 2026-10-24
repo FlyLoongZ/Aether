@@ -14,7 +14,7 @@ use aether_data_contracts::repository::provider_catalog::{
 use axum::body::{Body, Bytes};
 use axum::routing::any;
 use axum::{extract::Request, Router};
-use http::{HeaderMap, HeaderValue, StatusCode};
+use http::StatusCode;
 use serde_json::json;
 
 use super::super::{
@@ -26,8 +26,8 @@ use super::super::{
 };
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
-    TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
+    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
+    TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
@@ -402,27 +402,7 @@ async fn admin_provider_summary_health_excludes_disabled_endpoints_and_defaults_
     assert_eq!(payload["unhealthy_endpoints"], 0);
 }
 
-fn trusted_admin_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert(GATEWAY_HEADER, HeaderValue::from_static("rust-phase3b"));
-    headers.insert(
-        TRUSTED_ADMIN_USER_ID_HEADER,
-        HeaderValue::from_static("admin-user-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_USER_ROLE_HEADER,
-        HeaderValue::from_static("admin"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_SESSION_ID_HEADER,
-        HeaderValue::from_static("session-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-        HeaderValue::from_static("management-token-123"),
-    );
-    headers
-}
+use super::super::helpers::trusted_admin_headers;
 
 async fn local_admin_providers_response(
     state: &AppState,

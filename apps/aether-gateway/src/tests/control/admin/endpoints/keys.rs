@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use aether_contracts::ExecutionPlan;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogKeyListQuery, ProviderCatalogReadRepository, StoredProviderCatalogEndpoint,
@@ -24,15 +23,10 @@ use crate::constants::{
     TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
-
-const PROVIDER_KEYS_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
+use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 
 fn open_provider_catalog_api_key_for_test(key: &StoredProviderCatalogKey) -> String {
-    let state = AppState::new()
-        .expect("gateway state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let state = crate::tests::support::credential_fixture_state();
     state
         .decrypt_provider_catalog_key_api_key(key)
         .expect("provider catalog API key should decrypt")
@@ -46,7 +40,7 @@ where
 {
     crate::tests::run_async_test_on_large_stack(
         test_name,
-        PROVIDER_KEYS_TEST_STACK_BYTES,
+        crate::tests::LARGE_TEST_STACK_BYTES,
         make_future,
     );
 }

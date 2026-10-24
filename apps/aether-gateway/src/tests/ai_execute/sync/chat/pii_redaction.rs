@@ -8,11 +8,7 @@ struct SeenProviderRequest {
     accept_encoding: String,
 }
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+use crate::tests::hash_api_key;
 
 fn auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
     StoredAuthApiKeySnapshot::new(
@@ -318,18 +314,14 @@ async fn run_sync_redaction_case_with_system_config(
                     .lock()
                     .expect("mutex should lock") = Some(SeenProviderRequest {
                     body: payload,
-                    authorization: parts
-                        .headers
-                        .get(http::header::AUTHORIZATION)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    accept_encoding: parts
-                        .headers
-                        .get(http::header::ACCEPT_ENCODING)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::header_string(
+                        &parts.headers,
+                        http::header::AUTHORIZATION,
+                    ),
+                    accept_encoding: crate::tests::support::header_string(
+                        &parts.headers,
+                        http::header::ACCEPT_ENCODING,
+                    ),
                 });
 
                 let content = match provider_response {
@@ -658,18 +650,8 @@ async fn ai_execute_pii_redaction_restores_executed_candidate_session_after_late
                 *seen_provider_request_inner.lock().expect("mutex should lock") = Some(
                     SeenProviderRequest {
                         body: payload,
-                        authorization: parts
-                            .headers
-                            .get(http::header::AUTHORIZATION)
-                            .and_then(|value| value.to_str().ok())
-                            .unwrap_or_default()
-                            .to_string(),
-                        accept_encoding: parts
-                            .headers
-                            .get(http::header::ACCEPT_ENCODING)
-                            .and_then(|value| value.to_str().ok())
-                            .unwrap_or_default()
-                            .to_string(),
+                        authorization: crate::tests::support::header_string(&parts.headers, http::header::AUTHORIZATION),
+                        accept_encoding: crate::tests::support::header_string(&parts.headers, http::header::ACCEPT_ENCODING),
                     },
                 );
 

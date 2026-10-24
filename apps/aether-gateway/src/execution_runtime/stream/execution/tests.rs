@@ -96,12 +96,7 @@ fn provider_catalog_for_plan(
     plan: &ExecutionPlan,
     provider_config: Option<Value>,
 ) -> InMemoryProviderCatalogReadRepository {
-    let credential_state = AppState::new()
-        .expect("credential state should build")
-        .with_data_state_for_tests(
-            crate::data::GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let credential_state = crate::tests::support::credential_fixture_state();
     let encrypted_api_key = credential_state
         .seal_provider_catalog_key_api_key(&plan.provider_id, &plan.key_id, "plain-upstream-key")
         .expect("api key should encrypt");

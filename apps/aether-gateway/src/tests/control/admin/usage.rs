@@ -16,7 +16,7 @@ use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UsageBod
 use axum::body::{to_bytes, Body, Bytes};
 use axum::routing::any;
 use axum::{extract::Request, Router};
-use http::{HeaderMap, HeaderValue, StatusCode};
+use http::StatusCode;
 use serde_json::json;
 
 use super::super::{
@@ -24,10 +24,6 @@ use super::super::{
     sample_key, sample_provider, start_server, AppState,
 };
 use crate::audit::AdminAuditEvent;
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
-    TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::handlers::admin::observability::usage::maybe_build_local_admin_usage_response;
@@ -37,35 +33,9 @@ const ADMIN_USAGE_DATA_UNAVAILABLE_DETAIL: &str = "Admin usage data unavailable"
 const DAY_1_UNIX_SECS: i64 = 1_711_000_000;
 const DAY_2_UNIX_SECS: i64 = 1_711_086_400;
 
-fn admin_request(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    builder
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-}
+use super::super::helpers::admin_request;
 
-fn trusted_admin_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert(GATEWAY_HEADER, HeaderValue::from_static("rust-phase3b"));
-    headers.insert(
-        TRUSTED_ADMIN_USER_ID_HEADER,
-        HeaderValue::from_static("admin-user-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_USER_ROLE_HEADER,
-        HeaderValue::from_static("admin"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_SESSION_ID_HEADER,
-        HeaderValue::from_static("session-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-        HeaderValue::from_static("management-token-123"),
-    );
-    headers
-}
+use super::super::helpers::trusted_admin_headers;
 
 async fn local_admin_usage_response(
     state: &AppState,
@@ -94,24 +64,7 @@ async fn local_admin_usage_response(
     .expect("usage route should resolve locally")
 }
 
-async fn start_usage_upstream(
-    path: &'static str,
-) -> (String, Arc<Mutex<usize>>, tokio::task::JoinHandle<()>) {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        path,
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("unexpected upstream hit"))
-            }
-        }),
-    );
-    let (upstream_url, upstream_handle) = start_server(upstream).await;
-    (upstream_url, upstream_hits, upstream_handle)
-}
+use super::super::helpers::start_unreachable_upstream;
 
 async fn assert_admin_usage_route_returns_local_503(
     data_state: GatewayDataState,
@@ -120,7 +73,7 @@ async fn assert_admin_usage_route_returns_local_503(
     body: Option<serde_json::Value>,
     expected_detail: &str,
 ) {
-    let (_upstream_url, upstream_hits, upstream_handle) = start_usage_upstream(path).await;
+    let (_upstream_url, upstream_hits, upstream_handle) = start_unreachable_upstream(path).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
@@ -312,7 +265,7 @@ fn recent_unix_secs(minutes_ago: u64) -> i64 {
 #[tokio::test]
 async fn gateway_handles_admin_usage_stats_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/stats").await;
+        start_unreachable_upstream("/api/admin/usage/stats").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
@@ -389,7 +342,7 @@ async fn gateway_handles_admin_usage_stats_locally_with_trusted_admin_principal(
 #[tokio::test]
 async fn gateway_filters_admin_usage_stats_by_query_fields_locally() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/stats").await;
+        start_unreachable_upstream("/api/admin/usage/stats").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
@@ -454,7 +407,7 @@ async fn gateway_filters_admin_usage_stats_by_query_fields_locally() {
 #[tokio::test]
 async fn gateway_defaults_admin_usage_stats_to_bounded_recent_window_when_query_missing() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/stats").await;
+        start_unreachable_upstream("/api/admin/usage/stats").await;
 
     let recent_created_at = recent_unix_secs(5);
     let stale_created_at = recent_unix_secs(60 * 48);
@@ -532,7 +485,7 @@ async fn gateway_returns_service_unavailable_for_admin_usage_stats_without_usage
 #[tokio::test]
 async fn gateway_handles_admin_usage_aggregation_stats_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/aggregation/stats").await;
+        start_unreachable_upstream("/api/admin/usage/aggregation/stats").await;
 
     let mut usage_1 = sample_usage_row(
         "usage-1",
@@ -768,7 +721,7 @@ async fn gateway_returns_service_unavailable_for_admin_usage_replay_without_prov
 #[tokio::test]
 async fn gateway_handles_admin_usage_aggregation_stats_locally_with_bearer_admin_session() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/aggregation/stats").await;
+        start_unreachable_upstream("/api/admin/usage/aggregation/stats").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
@@ -854,7 +807,7 @@ async fn gateway_handles_admin_usage_aggregation_stats_locally_with_bearer_admin
 #[tokio::test]
 async fn gateway_handles_admin_usage_heatmap_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/heatmap").await;
+        start_unreachable_upstream("/api/admin/usage/heatmap").await;
     let now_unix_secs = chrono::Utc::now().timestamp();
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
@@ -927,7 +880,7 @@ async fn gateway_handles_admin_usage_heatmap_locally_with_trusted_admin_principa
 #[tokio::test]
 async fn gateway_handles_admin_usage_active_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/active").await;
+        start_unreachable_upstream("/api/admin/usage/active").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         {
@@ -1043,7 +996,7 @@ async fn gateway_handles_admin_usage_active_locally_with_trusted_admin_principal
 #[tokio::test]
 async fn gateway_defaults_admin_usage_active_to_recent_window_when_query_missing() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/active").await;
+        start_unreachable_upstream("/api/admin/usage/active").await;
 
     let recent_created_at = recent_unix_secs(3);
     let stale_created_at = recent_unix_secs(60 * 48);
@@ -1124,7 +1077,7 @@ async fn gateway_defaults_admin_usage_active_to_recent_window_when_query_missing
 #[tokio::test]
 async fn gateway_handles_admin_usage_active_ids_for_terminal_updates() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/active").await;
+        start_unreachable_upstream("/api/admin/usage/active").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![sample_usage_row(
         "usage-completed",
@@ -1173,7 +1126,7 @@ async fn gateway_handles_admin_usage_active_ids_for_terminal_updates() {
 #[tokio::test]
 async fn gateway_derives_admin_usage_records_and_detail_status_from_terminal_candidate() {
     let (_records_upstream_url, records_upstream_hits, records_upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![sample_usage_row(
         "usage-stale-stream",
@@ -1249,7 +1202,7 @@ async fn gateway_derives_admin_usage_records_and_detail_status_from_terminal_can
 #[tokio::test]
 async fn gateway_handles_admin_usage_records_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
@@ -1338,7 +1291,7 @@ async fn gateway_handles_admin_usage_records_locally_with_trusted_admin_principa
 #[tokio::test]
 async fn gateway_filters_admin_usage_records_with_unknown_model_or_provider() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
@@ -1416,7 +1369,7 @@ async fn gateway_filters_admin_usage_records_with_unknown_model_or_provider() {
 #[tokio::test]
 async fn gateway_supports_fast_admin_usage_record_totals() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
@@ -1511,7 +1464,7 @@ async fn gateway_supports_fast_admin_usage_record_totals() {
 async fn gateway_handles_admin_usage_records_with_provider_key_name_fallback_from_request_metadata()
 {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let mut usage_row = sample_usage_row(
         "usage-fallback",
@@ -1570,7 +1523,7 @@ async fn gateway_handles_admin_usage_records_with_provider_key_name_fallback_fro
 #[tokio::test]
 async fn gateway_filters_admin_usage_records_by_has_fallback_status() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let mut fallback_usage = sample_usage_row(
         "usage-has-fallback",
@@ -1641,7 +1594,7 @@ async fn gateway_filters_admin_usage_records_by_has_fallback_status() {
 #[tokio::test]
 async fn gateway_usage_record_attempt_flags_follow_request_candidate_timeline() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let mut non_fallback_usage = sample_usage_row(
         "usage-non-fallback-secondary",
@@ -1825,7 +1778,7 @@ async fn gateway_usage_record_attempt_flags_follow_request_candidate_timeline() 
 #[tokio::test]
 async fn gateway_handles_admin_usage_records_with_snapshot_first_user_and_api_key_names() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![sample_usage_row(
         "usage-snapshot",
@@ -1885,7 +1838,7 @@ async fn gateway_handles_admin_usage_records_with_snapshot_first_user_and_api_ke
 async fn gateway_handles_admin_usage_records_without_legacy_username_fallback_when_user_reader_exists(
 ) {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/records").await;
+        start_unreachable_upstream("/api/admin/usage/records").await;
 
     let mut usage = sample_usage_row(
         "usage-no-legacy-username",
@@ -1939,7 +1892,7 @@ async fn gateway_handles_admin_usage_records_without_legacy_username_fallback_wh
 #[tokio::test]
 async fn gateway_handles_admin_usage_detail_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/usage-1").await;
+        start_unreachable_upstream("/api/admin/usage/usage-1").await;
 
     let mut usage = sample_usage_row(
         "usage-1",
@@ -2253,7 +2206,7 @@ async fn gateway_admin_usage_detail_preserves_live_websocket_session_metadata() 
 #[tokio::test]
 async fn gateway_handles_admin_usage_detail_with_ref_backed_bodies() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/usage-ref-detail").await;
+        start_unreachable_upstream("/api/admin/usage/usage-ref-detail").await;
 
     let mut usage = sample_usage_row(
         "usage-ref-detail",
@@ -2627,7 +2580,7 @@ async fn gateway_admin_usage_detail_isolates_missing_body_errors() {
 #[tokio::test]
 async fn gateway_resolves_admin_usage_detail_when_inline_state_has_body_ref() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/usage-inline-state-ref-detail").await;
+        start_unreachable_upstream("/api/admin/usage/usage-inline-state-ref-detail").await;
 
     let mut usage = sample_usage_row(
         "usage-inline-state-ref-detail",
@@ -2752,7 +2705,7 @@ async fn local_admin_usage_detail_attaches_explicit_audit() {
 #[tokio::test]
 async fn gateway_returns_bad_request_for_admin_usage_detail_with_empty_usage_id() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/").await;
+        start_unreachable_upstream("/api/admin/usage/").await;
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![]));
     let gateway = build_router_with_state(
         AppState::new()
@@ -3028,7 +2981,7 @@ async fn local_admin_usage_replay_attaches_explicit_audit() {
 #[tokio::test]
 async fn gateway_handles_admin_usage_curl_locally_with_trusted_admin_principal() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/usage-1/curl").await;
+        start_unreachable_upstream("/api/admin/usage/usage-1/curl").await;
 
     let mut usage = sample_usage_row(
         "usage-1",
@@ -3135,7 +3088,7 @@ async fn gateway_handles_admin_usage_curl_locally_with_trusted_admin_principal()
 #[tokio::test]
 async fn gateway_handles_admin_usage_curl_with_ref_backed_provider_request_body() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/usage-ref-curl/curl").await;
+        start_unreachable_upstream("/api/admin/usage/usage-ref-curl/curl").await;
 
     let mut usage = sample_usage_row(
         "usage-ref-curl",
@@ -3302,7 +3255,7 @@ async fn local_admin_usage_curl_attaches_explicit_audit() {
 #[tokio::test]
 async fn gateway_returns_bad_request_for_admin_usage_curl_with_empty_usage_id() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage//curl").await;
+        start_unreachable_upstream("/api/admin/usage//curl").await;
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![]));
     let gateway = build_router_with_state(
         AppState::new()
@@ -3332,7 +3285,7 @@ async fn gateway_returns_bad_request_for_admin_usage_curl_with_empty_usage_id() 
 async fn gateway_handles_admin_usage_cache_affinity_hit_analysis_locally_with_trusted_admin_principal(
 ) {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/cache-affinity/hit-analysis").await;
+        start_unreachable_upstream("/api/admin/usage/cache-affinity/hit-analysis").await;
     let mut cache_hit = sample_usage_row(
         "usage-cache-hit",
         "req-cache-hit",
@@ -3412,7 +3365,7 @@ async fn gateway_handles_admin_usage_cache_affinity_hit_analysis_locally_with_tr
 async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_locally_with_trusted_admin_principal(
 ) {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
+        start_unreachable_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
             "usage-1",
@@ -3519,7 +3472,7 @@ async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_locally_wi
 #[tokio::test]
 async fn gateway_samples_admin_usage_cache_affinity_interval_timeline_across_full_window() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
+        start_unreachable_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
     let now = chrono::Utc::now().timestamp();
     let first_request_at = now - 4 * 3600;
     let latest_request_at = now - 60;
@@ -3628,7 +3581,7 @@ async fn gateway_samples_admin_usage_cache_affinity_interval_timeline_across_ful
 #[tokio::test]
 async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_with_auth_user_fallback() {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
+        start_unreachable_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
     let mut usage_one = sample_usage_row(
         "usage-auth-fallback-1",
         "req-auth-fallback-1",
@@ -3697,7 +3650,7 @@ async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_with_auth_
 async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_without_legacy_username_fallback_when_user_reader_exists(
 ) {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
+        start_unreachable_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
     let mut usage_one = sample_usage_row(
         "usage-auth-reader-miss-1",
         "req-auth-reader-miss-1",
@@ -3770,7 +3723,7 @@ async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_without_le
 async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_with_legacy_username_fallback_when_auth_user_lookup_fails(
 ) {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
+        start_unreachable_upstream("/api/admin/usage/cache-affinity/interval-timeline").await;
     let mut usage_one = sample_usage_row(
         "usage-auth-lookup-fail-1",
         "req-auth-lookup-fail-1",
@@ -3858,7 +3811,7 @@ async fn gateway_handles_admin_usage_cache_affinity_interval_timeline_with_legac
 async fn gateway_handles_admin_usage_cache_affinity_ttl_analysis_locally_with_trusted_admin_principal(
 ) {
     let (_upstream_url, upstream_hits, upstream_handle) =
-        start_usage_upstream("/api/admin/usage/cache-affinity/ttl-analysis").await;
+        start_unreachable_upstream("/api/admin/usage/cache-affinity/ttl-analysis").await;
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![
         sample_usage_row(
             "usage-1",

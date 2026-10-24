@@ -1,6 +1,4 @@
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
+use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::auth_modules::{
     StoredLdapModuleConfig, StoredOAuthProviderModuleConfig,
 };
@@ -16,9 +14,7 @@ use aether_data_contracts::repository::{
         StoredAdminGlobalModel, StoredAdminProviderModel, StoredProviderActiveGlobalModel,
         StoredProviderModelStats, StoredPublicGlobalModel,
     },
-    provider_catalog::{
-        StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
-    },
+    provider_catalog::{StoredProviderCatalogEndpoint, StoredProviderCatalogKey},
     quota::StoredProviderQuotaSnapshot,
 };
 use axum::routing::any;

@@ -227,11 +227,7 @@ fn sample_bound_admin_api_key_secret(
     plaintext: &str,
 ) -> (String, String) {
     let key_hash = hash_api_key(plaintext);
-    let state = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let state = crate::tests::support::credential_fixture_state();
     let encrypted = crate::handlers::shared::seal_auth_api_key_secret(
         &state, user_id, api_key_id, &key_hash, false, plaintext,
     )

@@ -1,37 +1,25 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override,
-    encrypt_python_fernet_plaintext, json, start_server, to_bytes, Arc, Body, Digest,
+    encrypt_python_fernet_plaintext, json, start_server, to_bytes, Arc, Body,
     InMemoryAuthApiKeySnapshotRepository, InMemoryMinimalCandidateSelectionReadRepository,
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
-    Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, Sha256, StatusCode,
+    Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
     StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
-    StoredProviderCatalogKey, StoredProviderCatalogProvider, StoredProviderModelMapping,
-    DEVELOPMENT_ENCRYPTION_KEY, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC, EXECUTION_PATH_HEADER,
-    TRACE_ID_HEADER,
+    StoredProviderCatalogKey, StoredProviderCatalogProvider, DEVELOPMENT_ENCRYPTION_KEY,
+    EXECUTION_PATH_EXECUTION_RUNTIME_SYNC, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
-
-const GEMINI_CLI_SYNC_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
+use crate::tests::hash_api_key;
 
 fn run_gemini_cli_sync_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(GEMINI_CLI_SYNC_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("gemini cli sync test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 #[test]
@@ -58,77 +46,31 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_with_local_syn
         transport_profile_id: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["gemini"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["gemini"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["gemini"]),
+            serde_json::json!(["gemini:generate_content"]),
+            serde_json::json!(["gemini-cli"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-gemini-cli-local-1".to_string(),
-            provider_name: "gemini".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-gemini-cli-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-gemini-cli-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-gemini-cli-local-1".to_string(),
-            global_model_id: "global-model-gemini-cli-local-1".to_string(),
-            global_model_name: "gemini-cli".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-cli-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-cli-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "gemini-cli-local-1",
+            provider_name: "gemini",
+            provider_type: "custom",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "bearer",
+            global_model_name: "gemini-cli",
+            upstream_model: "gemini-cli-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -273,28 +215,17 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_with_local_syn
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     has_model_field: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
                         .and_then(|value| value.get("model"))
                         .is_some(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
                     exact_temperature: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -302,12 +233,10 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_with_local_syn
                         .and_then(|value| value.get("temperature"))
                         .and_then(|value| value.as_f64())
                         .unwrap_or_default(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     metadata_mode: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -329,18 +258,14 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_with_local_syn
                         .and_then(|value| value.get("json_body"))
                         .and_then(|value| value.get("toolConfig"))
                         .is_some(),
-                    proxy_node_id: payload
-                        .get("proxy")
-                        .and_then(|value| value.get("node_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    transport_profile_id: payload
-                        .get("transport_profile")
-                        .and_then(|value| value.get("profile_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    proxy_node_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["proxy", "node_id"],
+                    ),
+                    transport_profile_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["transport_profile", "profile_id"],
+                    ),
                 });
                 Json(json!({
                     "request_id": "trace-gemini-cli-local-sync-123",
@@ -502,77 +427,31 @@ fn gateway_returns_gemini_cli_error_for_local_sync_failure() {
 }
 
 async fn gateway_returns_gemini_cli_error_for_local_sync_failure_impl() {
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["gemini"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["gemini"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["gemini"]),
+            serde_json::json!(["gemini:generate_content"]),
+            serde_json::json!(["gemini-cli"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-gemini-cli-local-1".to_string(),
-            provider_name: "gemini".to_string(),
-            provider_type: "custom".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-gemini-cli-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-gemini-cli-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "bearer".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-gemini-cli-local-1".to_string(),
-            global_model_id: "global-model-gemini-cli-local-1".to_string(),
-            global_model_name: "gemini-cli".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-cli-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-cli-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "gemini-cli-local-1",
+            provider_name: "gemini",
+            provider_type: "custom",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "bearer",
+            global_model_name: "gemini-cli",
+            upstream_model: "gemini-cli-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -816,77 +695,31 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_after_oauth_re
         body: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["gemini", "gemini_cli"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["gemini", "gemini_cli"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["gemini", "gemini_cli"]),
+            serde_json::json!(["gemini:generate_content"]),
+            serde_json::json!(["gemini-cli"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-gemini-cli-oauth-local-1".to_string(),
-            provider_name: "gemini_cli".to_string(),
-            provider_type: "gemini_cli".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-gemini-cli-oauth-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-gemini-cli-oauth-local-1".to_string(),
-            key_name: "oauth".to_string(),
-            key_auth_type: "oauth".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-gemini-cli-oauth-local-1".to_string(),
-            global_model_id: "global-model-gemini-cli-oauth-local-1".to_string(),
-            global_model_name: "gemini-cli".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-cli-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-cli-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "gemini-cli-oauth-local-1",
+            provider_name: "gemini_cli",
+            provider_type: "gemini_cli",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("cli"),
+            key_name: "oauth",
+            key_auth_type: "oauth",
+            global_model_name: "gemini-cli",
+            upstream_model: "gemini-cli-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -1036,12 +869,10 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_after_oauth_re
                 let (parts, body) = request.into_parts();
                 let raw_body = to_bytes(body, usize::MAX).await.expect("body should read");
                 *seen_refresh_inner.lock().expect("mutex should lock") = Some(SeenRefreshRequest {
-                    content_type: parts
-                        .headers
-                        .get(http::header::CONTENT_TYPE)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
+                    content_type: crate::tests::support::header_string(
+                        &parts.headers,
+                        http::header::CONTENT_TYPE,
+                    ),
                     body: String::from_utf8(raw_body.to_vec())
                         .expect("refresh body should be utf8"),
                 });
@@ -1067,17 +898,8 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_after_oauth_re
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     outer_model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1105,12 +927,10 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_after_oauth_re
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
                     exact_temperature: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1119,12 +939,10 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_after_oauth_re
                         .and_then(|value| value.get("temperature"))
                         .and_then(|value| value.as_f64())
                         .unwrap_or_default(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     metadata_mode: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1149,18 +967,14 @@ async fn gateway_executes_gemini_cli_sync_via_local_decision_gate_after_oauth_re
                         .and_then(|value| value.get("request"))
                         .and_then(|value| value.get("toolConfig"))
                         .is_some(),
-                    proxy_node_id: payload
-                        .get("proxy")
-                        .and_then(|value| value.get("node_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    transport_profile_id: payload
-                        .get("transport_profile")
-                        .and_then(|value| value.get("profile_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    proxy_node_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["proxy", "node_id"],
+                    ),
+                    transport_profile_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["transport_profile", "profile_id"],
+                    ),
                 });
                 Json(json!({
                     "request_id": "trace-gemini-cli-oauth-local-sync-123",
@@ -1389,77 +1203,31 @@ async fn gateway_executes_vertex_ai_gemini_cli_sync_via_local_decision_gate_with
         tool_config_present: bool,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["gemini", "vertex"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["gemini", "vertex"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["gemini", "vertex"]),
+            serde_json::json!(["gemini:generate_content"]),
+            serde_json::json!(["gemini-cli"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-vertex-cli-local-1".to_string(),
-            provider_name: "vertex".to_string(),
-            provider_type: "vertex_ai".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-vertex-cli-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-vertex-cli-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "api_key".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-vertex-cli-local-1".to_string(),
-            global_model_id: "global-model-vertex-cli-local-1".to_string(),
-            global_model_name: "gemini-cli".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "gemini-cli-upstream".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "gemini-cli-upstream".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "vertex-cli-local-1",
+            provider_name: "vertex",
+            provider_type: "vertex_ai",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("cli"),
+            key_name: "prod",
+            key_auth_type: "api_key",
+            global_model_name: "gemini-cli",
+            upstream_model: "gemini-cli-upstream",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -1607,35 +1375,20 @@ async fn gateway_executes_vertex_ai_gemini_cli_sync_via_local_decision_gate_with
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeSyncRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    x_goog_api_key: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-goog-api-key"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    user_agent: payload
-                        .get("headers")
-                        .and_then(|value| value.get("user-agent"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
+                    authorization: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
+                    x_goog_api_key: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-goog-api-key"],
+                    ),
+                    user_agent: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "user-agent"],
+                    ),
                     has_model_field: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1648,12 +1401,10 @@ async fn gateway_executes_vertex_ai_gemini_cli_sync_via_local_decision_gate_with
                         .and_then(|value| value.get("temperature"))
                         .and_then(|value| value.as_f64())
                         .unwrap_or_default(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
                     metadata_mode: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -1842,77 +1593,31 @@ async fn gateway_executes_antigravity_gemini_cli_sync_via_local_decision_gate_af
         body: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["gemini", "antigravity"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800),
-            Some(serde_json::json!(["gemini", "antigravity"])),
-            Some(serde_json::json!(["gemini:generate_content"])),
-            Some(serde_json::json!(["gemini-cli"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["gemini", "antigravity"]),
+            serde_json::json!(["gemini:generate_content"]),
+            serde_json::json!(["gemini-cli"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-antigravity-cli-oauth-local-1".to_string(),
-            provider_name: "antigravity".to_string(),
-            provider_type: "antigravity".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-antigravity-cli-oauth-local-1".to_string(),
-            endpoint_api_format: "gemini:generate_content".to_string(),
-            endpoint_api_family: Some("gemini".to_string()),
-            endpoint_kind: Some("cli".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-antigravity-cli-oauth-local-1".to_string(),
-            key_name: "oauth".to_string(),
-            key_auth_type: "oauth".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["gemini:generate_content".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"gemini:generate_content": 1})),
-            model_id: "model-antigravity-cli-oauth-local-1".to_string(),
-            global_model_id: "global-model-antigravity-cli-oauth-local-1".to_string(),
-            global_model_name: "gemini-cli".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "claude-sonnet-4-5".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "claude-sonnet-4-5".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["gemini:generate_content".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "antigravity-cli-oauth-local-1",
+            provider_name: "antigravity",
+            provider_type: "antigravity",
+            api_format: "gemini:generate_content",
+            api_family: "gemini",
+            endpoint_kind: Some("cli"),
+            key_name: "oauth",
+            key_auth_type: "oauth",
+            global_model_name: "gemini-cli",
+            upstream_model: "claude-sonnet-4-5",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -2066,12 +1771,10 @@ async fn gateway_executes_antigravity_gemini_cli_sync_via_local_decision_gate_af
                 let (parts, body) = request.into_parts();
                 let raw_body = to_bytes(body, usize::MAX).await.expect("body should read");
                 *seen_refresh_inner.lock().expect("mutex should lock") = Some(SeenRefreshRequest {
-                    content_type: parts
-                        .headers
-                        .get(http::header::CONTENT_TYPE)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
+                    content_type: crate::tests::support::header_string(
+                        &parts.headers,
+                        http::header::CONTENT_TYPE,
+                    ),
                     body: String::from_utf8(raw_body.to_vec())
                         .expect("refresh body should be utf8"),
                 });
@@ -2096,53 +1799,14 @@ async fn gateway_executes_antigravity_gemini_cli_sync_via_local_decision_gate_af
                     serde_json::from_slice(&raw_body).expect("execution runtime payload should parse");
                 *seen_execution_runtime_inner.lock().expect("mutex should lock") =
                     Some(SeenExecutionRuntimeSyncRequest {
-                        trace_id: parts
-                            .headers
-                            .get(TRACE_ID_HEADER)
-                            .and_then(|value| value.to_str().ok())
-                            .unwrap_or_default()
-                            .to_string(),
-                        url: payload
-                            .get("url")
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        accept: payload
-                            .get("headers")
-                            .and_then(|value| value.get("accept"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        authorization: payload
-                            .get("headers")
-                            .and_then(|value| value.get("authorization"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        x_client_name: payload
-                            .get("headers")
-                            .and_then(|value| value.get("x-client-name"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        x_client_version: payload
-                            .get("headers")
-                            .and_then(|value| value.get("x-client-version"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        x_vscode_sessionid: payload
-                            .get("headers")
-                            .and_then(|value| value.get("x-vscode-sessionid"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
-                        x_goog_api_client: payload
-                            .get("headers")
-                            .and_then(|value| value.get("x-goog-api-client"))
-                            .and_then(|value| value.as_str())
-                            .unwrap_or_default()
-                            .to_string(),
+                        trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                        url: crate::tests::support::payload_string(&payload, &["url"]),
+                        accept: crate::tests::support::payload_string(&payload, &["headers", "accept"]),
+                        authorization: crate::tests::support::payload_string(&payload, &["headers", "authorization"]),
+                        x_client_name: crate::tests::support::payload_string(&payload, &["headers", "x-client-name"]),
+                        x_client_version: crate::tests::support::payload_string(&payload, &["headers", "x-client-version"]),
+                        x_vscode_sessionid: crate::tests::support::payload_string(&payload, &["headers", "x-vscode-sessionid"]),
+                        x_goog_api_client: crate::tests::support::payload_string(&payload, &["headers", "x-goog-api-client"]),
                         project: payload
                             .get("body")
                             .and_then(|value| value.get("json_body"))

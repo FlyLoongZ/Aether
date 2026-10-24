@@ -38,15 +38,13 @@ use crate::ai_serving::{
 };
 use crate::audit::AdminAuditEvent;
 use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
+    TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
     TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::handlers::admin::provider::oauth::dispatch::maybe_build_local_admin_provider_oauth_response;
 use crate::handlers::admin::{AdminAppState, AdminRequestContext};
-
-const ADMIN_OAUTH_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 mod device;
 mod import;
@@ -62,54 +60,26 @@ where
 {
     crate::tests::run_async_test_on_large_stack(
         test_name,
-        ADMIN_OAUTH_TEST_STACK_BYTES,
+        crate::tests::LARGE_TEST_STACK_BYTES,
         make_future,
     );
 }
 
 fn decrypt_persisted_provider_api_key(key: &StoredProviderCatalogKey) -> String {
-    AppState::new()
-        .expect("credential test state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        )
+    crate::tests::support::credential_fixture_state()
         .decrypt_provider_catalog_key_api_key(key)
         .expect("persisted api key should decrypt")
         .expect("persisted api key should exist")
 }
 
 fn decrypt_persisted_provider_auth_config(key: &StoredProviderCatalogKey) -> String {
-    AppState::new()
-        .expect("credential test state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        )
+    crate::tests::support::credential_fixture_state()
         .decrypt_provider_catalog_key_auth_config(key)
         .expect("persisted auth config should decrypt")
         .expect("persisted auth config should exist")
 }
 
-fn trusted_admin_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert(GATEWAY_HEADER, HeaderValue::from_static("rust-phase3b"));
-    headers.insert(
-        TRUSTED_ADMIN_USER_ID_HEADER,
-        HeaderValue::from_static("admin-user-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_USER_ROLE_HEADER,
-        HeaderValue::from_static("admin"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_SESSION_ID_HEADER,
-        HeaderValue::from_static("session-123"),
-    );
-    headers.insert(
-        TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-        HeaderValue::from_static("management-token-123"),
-    );
-    headers
-}
+use super::super::helpers::trusted_admin_headers;
 
 async fn local_admin_provider_oauth_response(
     state: &AppState,

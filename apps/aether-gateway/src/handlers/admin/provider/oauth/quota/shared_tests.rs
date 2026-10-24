@@ -189,12 +189,7 @@ fn codex_refresh_test_state(
         "codex".to_string(),
     )
     .expect("provider should build");
-    let bootstrap = AppState::new()
-        .expect("bootstrap app should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let encrypted_auth_config = auth_config
         .map(|plaintext| {
             bootstrap.seal_provider_catalog_key_auth_config(&provider.id, key_id, plaintext)
@@ -259,12 +254,7 @@ fn codex_reset_state_machine_test_state(
         "codex".to_string(),
     )
     .expect("provider should build");
-    let bootstrap = AppState::new()
-        .expect("bootstrap app should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let encrypted_auth_config = bootstrap
         .seal_provider_catalog_key_auth_config(&provider.id, key_id, "auth-v1")
         .expect("auth config should seal");
@@ -1374,12 +1364,7 @@ async fn fenced_same_millisecond_older_success_cannot_clear_newer_invalid_state(
 async fn metadata_cas_conflict_does_not_persist_stale_oauth_runtime_state() {
     let provider_id = "provider-codex-cas";
     let key_id = "key-codex-cas";
-    let bootstrap = AppState::new()
-        .expect("bootstrap app should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let old_auth_config = bootstrap
         .seal_provider_catalog_key_auth_config(provider_id, key_id, "old-auth-config")
         .expect("old auth config should seal");

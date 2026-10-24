@@ -15,7 +15,6 @@ use aether_data_contracts::repository::candidates::{
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone)]
 struct SeenProviderStreamRequest {
@@ -25,11 +24,7 @@ struct SeenProviderStreamRequest {
     accept: String,
 }
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+use crate::tests::hash_api_key;
 
 fn auth_snapshot() -> StoredAuthApiKeySnapshot {
     StoredAuthApiKeySnapshot::new(
@@ -229,28 +224,16 @@ fn collect_email_sentinel(text: &str) -> String {
     text[start..end].to_string()
 }
 
-const STREAM_PII_REDACTION_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
-
 fn run_stream_pii_redaction_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    let handle = std::thread::Builder::new()
-        .name(test_name.to_string())
-        .stack_size(STREAM_PII_REDACTION_TEST_STACK_BYTES)
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("test runtime should build");
-            runtime.block_on(make_future());
-        })
-        .expect("stream pii redaction test thread should spawn");
-
-    if let Err(payload) = handle.join() {
-        std::panic::resume_unwind(payload);
-    }
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
 #[test]
@@ -279,24 +262,9 @@ async fn ai_execute_stream_pii_redaction_round_trip_impl() {
                     .lock()
                     .expect("mutex should lock") = Some(SeenProviderStreamRequest {
                     body: payload,
-                    authorization: parts
-                        .headers
-                        .get(http::header::AUTHORIZATION)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    accept_encoding: parts
-                        .headers
-                        .get(http::header::ACCEPT_ENCODING)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    accept: parts
-                        .headers
-                        .get(http::header::ACCEPT)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
+                    authorization: crate::tests::support::header_string(&parts.headers, http::header::AUTHORIZATION),
+                    accept_encoding: crate::tests::support::header_string(&parts.headers, http::header::ACCEPT_ENCODING),
+                    accept: crate::tests::support::header_string(&parts.headers, http::header::ACCEPT),
                 });
 
                 let split_at = sentinel.len() / 2;

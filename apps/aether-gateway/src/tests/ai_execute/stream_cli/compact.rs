@@ -4,6 +4,7 @@ use super::{
     Mutex, Request, Response, Router, StatusCode, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
     EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
+use crate::tests::hash_api_key;
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
@@ -11,16 +12,13 @@ use aether_data::repository::auth::{
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
 
 #[test]
 fn gateway_executes_openai_responses_compact_as_unary_request() {
@@ -58,77 +56,31 @@ async fn gateway_executes_openai_responses_compact_as_unary_request_impl() {
         transport_profile_id: String,
     }
 
-    fn hash_api_key(value: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(value.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-
     fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-        StoredAuthApiKeySnapshot::new(
-            user_id.to_string(),
-            "alice".to_string(),
-            Some("alice@example.com".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            true,
-            false,
-            Some(serde_json::json!(["openai"])),
-            Some(serde_json::json!(["openai:responses:compact"])),
-            Some(serde_json::json!(["gpt-5.6-sol"])),
-            api_key_id.to_string(),
-            Some("default".to_string()),
-            true,
-            false,
-            false,
-            Some(60),
-            Some(5),
-            Some(4_102_444_800_i64),
-            Some(serde_json::json!(["openai"])),
-            Some(serde_json::json!(["openai:responses:compact"])),
-            Some(serde_json::json!(["gpt-5.6-sol"])),
+        crate::tests::support::sample_auth_snapshot_with(
+            api_key_id,
+            user_id,
+            "alice",
+            "alice@example.com",
+            serde_json::json!(["openai"]),
+            serde_json::json!(["openai:responses:compact"]),
+            serde_json::json!(["gpt-5.6-sol"]),
         )
-        .expect("auth snapshot should build")
     }
 
     fn sample_candidate_row() -> StoredMinimalCandidateSelectionRow {
-        StoredMinimalCandidateSelectionRow {
-            provider_id: "provider-openai-compact-local-1".to_string(),
-            provider_name: "openai".to_string(),
-            provider_type: "codex".to_string(),
-            provider_priority: 10,
-            provider_is_active: true,
-            endpoint_id: "endpoint-openai-compact-local-1".to_string(),
-            endpoint_api_format: "openai:responses:compact".to_string(),
-            endpoint_api_family: Some("openai".to_string()),
-            endpoint_kind: Some("compact".to_string()),
-            endpoint_is_active: true,
-            key_id: "key-openai-compact-local-1".to_string(),
-            key_name: "prod".to_string(),
-            key_auth_type: "oauth".to_string(),
-            key_is_active: true,
-            key_api_formats: Some(vec!["openai:responses:compact".to_string()]),
-            key_allowed_models: None,
-            key_capabilities: None,
-            key_internal_priority: 5,
-            key_global_priority_by_format: Some(serde_json::json!({"openai:responses:compact": 1})),
-            model_id: "model-openai-compact-local-1".to_string(),
-            global_model_id: "global-model-openai-compact-local-1".to_string(),
-            global_model_name: "gpt-5.6-sol".to_string(),
-            global_model_mappings: None,
-            global_model_supports_streaming: Some(true),
-            model_provider_model_name: "deployment-production".to_string(),
-            model_provider_model_mappings: Some(vec![StoredProviderModelMapping {
-                name: "deployment-production".to_string(),
-                priority: 1,
-                api_formats: Some(vec!["openai:responses:compact".to_string()]),
-                endpoint_ids: None,
-                operations: None,
-            }]),
-            model_supports_streaming: Some(true),
-            model_is_active: true,
-            model_is_available: true,
-        }
+        crate::tests::support::minimal_candidate_row(&crate::tests::support::CandidateRowSpec {
+            id_suffix: "openai-compact-local-1",
+            provider_name: "openai",
+            provider_type: "codex",
+            api_format: "openai:responses:compact",
+            api_family: "openai",
+            endpoint_kind: Some("compact"),
+            key_name: "prod",
+            key_auth_type: "oauth",
+            global_model_name: "gpt-5.6-sol",
+            upstream_model: "deployment-production",
+        })
     }
 
     fn sample_provider_catalog_provider() -> StoredProviderCatalogProvider {
@@ -318,17 +270,8 @@ async fn gateway_executes_openai_responses_compact_as_unary_request_impl() {
                 *seen_execution_runtime_inner
                     .lock()
                     .expect("mutex should lock") = Some(SeenExecutionRuntimeStreamRequest {
-                    trace_id: parts
-                        .headers
-                        .get(TRACE_ID_HEADER)
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_string(),
-                    url: payload
-                        .get("url")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    trace_id: crate::tests::support::header_string(&parts.headers, TRACE_ID_HEADER),
+                    url: crate::tests::support::payload_string(&payload, &["url"]),
                     model: payload
                         .get("body")
                         .and_then(|value| value.get("json_body"))
@@ -336,85 +279,59 @@ async fn gateway_executes_openai_responses_compact_as_unary_request_impl() {
                         .and_then(|value| value.as_str())
                         .unwrap_or_default()
                         .to_string(),
-                    content_encoding: payload
-                        .get("content_encoding")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    content_encoding: crate::tests::support::payload_string(
+                        &payload,
+                        &["content_encoding"],
+                    ),
                     stream: payload
                         .get("stream")
                         .and_then(|value| value.as_bool())
                         .unwrap_or(false),
-                    accept: payload
-                        .get("headers")
-                        .and_then(|value| value.get("accept"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    turn_state: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-codex-turn-state"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    authorization: payload
-                        .get("headers")
-                        .and_then(|value| value.get("authorization"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    chatgpt_account_id: payload
-                        .get("headers")
-                        .and_then(|value| value.get("chatgpt-account-id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    fedramp: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-openai-fedramp"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    responses_lite: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-openai-internal-codex-responses-lite"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    session_id: payload
-                        .get("headers")
-                        .and_then(|value| value.get("session-id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    thread_id: payload
-                        .get("headers")
-                        .and_then(|value| value.get("thread-id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    accept: crate::tests::support::payload_string(&payload, &["headers", "accept"]),
+                    turn_state: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-codex-turn-state"],
+                    ),
+                    authorization: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "authorization"],
+                    ),
+                    chatgpt_account_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "chatgpt-account-id"],
+                    ),
+                    fedramp: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-openai-fedramp"],
+                    ),
+                    responses_lite: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-openai-internal-codex-responses-lite"],
+                    ),
+                    session_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "session-id"],
+                    ),
+                    thread_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "thread-id"],
+                    ),
                     x_client_request_id_present: payload
                         .get("headers")
                         .and_then(|value| value.get("x-client-request-id"))
                         .is_some(),
-                    endpoint_tag: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-endpoint-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    conditional_header: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-conditional-tag"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    renamed_header: payload
-                        .get("headers")
-                        .and_then(|value| value.get("x-upstream-rename"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    endpoint_tag: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-endpoint-tag"],
+                    ),
+                    conditional_header: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-conditional-tag"],
+                    ),
+                    renamed_header: crate::tests::support::payload_string(
+                        &payload,
+                        &["headers", "x-upstream-rename"],
+                    ),
                     dropped_header_present: payload
                         .get("headers")
                         .and_then(|value| value.get("x-drop-me"))
@@ -436,18 +353,14 @@ async fn gateway_executes_openai_responses_compact_as_unary_request_impl() {
                         .and_then(|value| value.get("json_body"))
                         .cloned()
                         .unwrap_or(serde_json::Value::Null),
-                    proxy_node_id: payload
-                        .get("proxy")
-                        .and_then(|value| value.get("node_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    transport_profile_id: payload
-                        .get("transport_profile")
-                        .and_then(|value| value.get("profile_id"))
-                        .and_then(|value| value.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    proxy_node_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["proxy", "node_id"],
+                    ),
+                    transport_profile_id: crate::tests::support::payload_string(
+                        &payload,
+                        &["transport_profile", "profile_id"],
+                    ),
                 });
                 Json(json!({
                     "request_id": "trace-openai-compact-local-123",

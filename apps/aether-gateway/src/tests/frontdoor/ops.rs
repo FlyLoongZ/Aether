@@ -345,7 +345,7 @@ async fn gateway_handles_cors_preflight_without_proxying_upstream() {
 fn gateway_adds_cors_headers_to_proxied_responses() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
-        .thread_stack_size(16 * 1024 * 1024)
+        .thread_stack_size(crate::tests::LARGE_TEST_STACK_BYTES)
         .enable_all()
         .build()
         .expect("runtime should build");

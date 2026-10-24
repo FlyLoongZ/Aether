@@ -1,98 +1,28 @@
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
-use hmac::Mac;
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 use super::{
     RequestCandidateStatus, StoredAdminGlobalModel, StoredAdminProviderModel,
-    StoredAuthApiKeySnapshot, StoredLdapModuleConfig, StoredManagementToken,
-    StoredManagementTokenUserSummary, StoredManagementTokenWithUser, StoredOAuthProviderConfig,
-    StoredOAuthProviderModuleConfig, StoredProviderActiveGlobalModel,
-    StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
+    StoredLdapModuleConfig, StoredManagementToken, StoredManagementTokenUserSummary,
+    StoredManagementTokenWithUser, StoredOAuthProviderConfig, StoredOAuthProviderModuleConfig,
+    StoredProviderActiveGlobalModel, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
     StoredProviderModelStats, StoredProviderQuotaSnapshot, StoredProxyNode,
     StoredPublicGlobalModel, StoredRequestCandidate,
 };
-use crate::{data::GatewayDataState, AppState};
+use crate::AppState;
+use std::sync::{Arc, Mutex};
 
 pub(super) const PROXY_NODE_TEST_GENERATION: &str = "test-generation-1";
 
-pub(super) fn sample_currently_usable_auth_snapshot(
-    api_key_id: &str,
-    user_id: &str,
-) -> StoredAuthApiKeySnapshot {
-    StoredAuthApiKeySnapshot::new(
-        user_id.to_string(),
-        "alice".to_string(),
-        Some("alice@example.com".to_string()),
-        "user".to_string(),
-        "local".to_string(),
-        true,
-        false,
-        Some(serde_json::json!(["openai"])),
-        Some(serde_json::json!(["openai:chat"])),
-        Some(serde_json::json!(["gpt-5"])),
-        api_key_id.to_string(),
-        Some("default".to_string()),
-        true,
-        false,
-        false,
-        Some(60),
-        Some(5),
-        Some(4_102_444_800),
-        Some(serde_json::json!(["openai"])),
-        Some(serde_json::json!(["openai:chat"])),
-        Some(serde_json::json!(["gpt-5"])),
-    )
-    .expect("auth snapshot should build")
-}
+pub(super) use crate::tests::support::{
+    build_test_auth_token, sample_key, sample_provider, sample_request_candidate,
+};
 
-pub(super) fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+pub(super) use crate::tests::hash_api_key;
+pub(super) use crate::tests::support::sample_currently_usable_auth_snapshot;
 
 pub(super) fn hash_management_token(value: &str) -> String {
     hash_api_key(value)
-}
-
-pub(super) fn test_auth_secret() -> String {
-    std::env::var("JWT_SECRET_KEY")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "aether-rust-test-jwt-secret-32-bytes-minimum".to_string())
-}
-
-pub(super) fn build_test_auth_token(
-    token_type: &str,
-    mut payload: serde_json::Map<String, serde_json::Value>,
-    expires_at: chrono::DateTime<chrono::Utc>,
-) -> String {
-    use base64::Engine as _;
-
-    let header = json!({ "alg": "HS256", "typ": "JWT" });
-    payload.insert("exp".to_string(), json!(expires_at.timestamp()));
-    payload.insert("type".to_string(), json!(token_type));
-    let header_segment = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-        serde_json::to_vec(&header)
-            .expect("jwt header should serialize")
-            .as_slice(),
-    );
-    let payload_segment = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
-        serde_json::to_vec(&payload)
-            .expect("jwt payload should serialize")
-            .as_slice(),
-    );
-    let signing_input = format!("{header_segment}.{payload_segment}");
-    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(test_auth_secret().as_bytes())
-        .expect("jwt secret should build");
-    mac.update(signing_input.as_bytes());
-    let signature = mac.finalize().into_bytes();
-    format!(
-        "{header_segment}.{payload_segment}.{}",
-        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(signature.as_slice())
-    )
 }
 
 pub(in crate::tests) async fn issue_test_admin_access_token(
@@ -153,21 +83,6 @@ pub(in crate::tests) async fn issue_test_admin_access_token(
         ]),
         now + chrono::Duration::hours(12),
     )
-}
-
-pub(super) fn sample_provider(
-    id: &str,
-    name: &str,
-    priority: i32,
-) -> StoredProviderCatalogProvider {
-    StoredProviderCatalogProvider::new(
-        id.to_string(),
-        name.to_string(),
-        Some("https://example.com".to_string()),
-        "custom".to_string(),
-    )
-    .expect("provider should build")
-    .with_routing_fields(priority)
 }
 
 pub(super) fn sample_proxy_node(node_id: &str) -> StoredProxyNode {
@@ -414,58 +329,13 @@ pub(super) fn sample_endpoint(
     api_format: &str,
     base_url: &str,
 ) -> StoredProviderCatalogEndpoint {
-    StoredProviderCatalogEndpoint::new(
-        id.to_string(),
-        provider_id.to_string(),
-        api_format.to_string(),
-        None,
-        None,
-        true,
+    crate::tests::support::sample_endpoint_with_health_score(
+        id,
+        provider_id,
+        api_format,
+        base_url,
+        Some(0.9),
     )
-    .expect("endpoint should build")
-    .with_health_score(0.9)
-    .with_transport_fields(
-        base_url.to_string(),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("endpoint transport should build")
-}
-
-pub(super) fn sample_key(
-    id: &str,
-    provider_id: &str,
-    api_format: &str,
-    secret: &str,
-) -> StoredProviderCatalogKey {
-    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, secret)
-        .expect("api key ciphertext should build");
-    StoredProviderCatalogKey::new(
-        id.to_string(),
-        provider_id.to_string(),
-        "default".to_string(),
-        "api_key".to_string(),
-        None,
-        true,
-    )
-    .expect("key should build")
-    .with_transport_fields(
-        Some(json!([api_format])),
-        encrypted_api_key,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("key transport should build")
 }
 
 /// Build a provider catalog key using the same provider/key-bound v2 envelope
@@ -480,11 +350,7 @@ pub(super) fn sample_bound_key(
     api_format: &str,
     secret: &str,
 ) -> StoredProviderCatalogKey {
-    let bootstrap = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let mut key = sample_key(id, provider_id, api_format, secret);
     key.encrypted_api_key = Some(
         bootstrap
@@ -498,11 +364,7 @@ pub(super) fn sample_bound_key(
 /// Stored proxy credentials are record-bound before they are accepted by
 /// read-only repositories, so fixtures must use the same envelope.
 pub(super) fn sample_bound_provider_proxy(provider_id: &str, host: &str, password: &str) -> Value {
-    let bootstrap = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     let purpose = format!(
         "provider-catalog-proxy-credential-v2\0scope=provider\0field=password\0record-id-bytes={}\0{provider_id}",
         provider_id.len(),
@@ -519,53 +381,10 @@ pub(super) fn sample_bound_provider_proxy(provider_id: &str, host: &str, passwor
 /// Seal an auth-config fixture with the provider/key-bound v2 envelope.
 /// Ordinary read-only catalog tests must not rely on the migration writer.
 pub(super) fn sample_bound_auth_config(provider_id: &str, key_id: &str, plaintext: &str) -> String {
-    let bootstrap = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            GatewayDataState::disabled().with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     bootstrap
         .seal_provider_catalog_key_auth_config(provider_id, key_id, plaintext)
         .expect("bound provider auth config ciphertext should build")
-}
-
-pub(super) fn sample_request_candidate(
-    id: &str,
-    request_id: &str,
-    endpoint_id: &str,
-    status: RequestCandidateStatus,
-    created_at_unix_secs: i64,
-    finished_at_unix_secs: Option<i64>,
-) -> StoredRequestCandidate {
-    let created_at_unix_ms = created_at_unix_secs * 1_000;
-    let finished_at_unix_ms = finished_at_unix_secs.map(|v| v * 1_000);
-    StoredRequestCandidate::new(
-        id.to_string(),
-        request_id.to_string(),
-        Some("user-1".to_string()),
-        Some("api-key-1".to_string()),
-        Some("alice".to_string()),
-        Some("default".to_string()),
-        0,
-        0,
-        Some("provider-1".to_string()),
-        Some(endpoint_id.to_string()),
-        Some("key-1".to_string()),
-        status,
-        None,
-        false,
-        Some(200),
-        matches!(status, RequestCandidateStatus::Failed).then_some("rate_limit".to_string()),
-        None,
-        Some(120),
-        Some(1),
-        None,
-        None,
-        created_at_unix_ms,
-        Some(created_at_unix_ms),
-        finished_at_unix_ms,
-    )
-    .expect("request candidate should build")
 }
 
 pub(super) fn sample_recent_key_rpm_candidate(
@@ -603,4 +422,66 @@ pub(super) fn sample_recent_key_rpm_candidate(
         Some((now_unix_secs - 8) * 1_000),
     )
     .expect("request candidate should build")
+}
+
+/// Trusted-admin request headers shared by every local admin-route test.
+pub(super) fn trusted_admin_headers() -> http::HeaderMap {
+    let mut headers = http::HeaderMap::new();
+    for (name, value) in [
+        (crate::constants::GATEWAY_HEADER, "rust-phase3b"),
+        (
+            crate::constants::TRUSTED_ADMIN_USER_ID_HEADER,
+            "admin-user-123",
+        ),
+        (crate::constants::TRUSTED_ADMIN_USER_ROLE_HEADER, "admin"),
+        (
+            crate::constants::TRUSTED_ADMIN_SESSION_ID_HEADER,
+            "session-123",
+        ),
+        (
+            crate::constants::TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
+            "management-token-123",
+        ),
+    ] {
+        headers.insert(name, http::HeaderValue::from_static(value));
+    }
+    headers
+}
+
+/// Attach the same trusted-admin headers to an outgoing reqwest request.
+pub(super) fn admin_request(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    builder
+        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
+        .header(
+            crate::constants::TRUSTED_ADMIN_USER_ID_HEADER,
+            "admin-user-123",
+        )
+        .header(crate::constants::TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
+        .header(
+            crate::constants::TRUSTED_ADMIN_SESSION_ID_HEADER,
+            "session-123",
+        )
+}
+
+/// Spin up an upstream that must never be reached; the counter proves it.
+pub(super) async fn start_unreachable_upstream(
+    path: &'static str,
+) -> (String, Arc<Mutex<usize>>, tokio::task::JoinHandle<()>) {
+    let upstream_hits = Arc::new(Mutex::new(0usize));
+    let upstream_hits_clone = Arc::clone(&upstream_hits);
+    let upstream = axum::Router::new().route(
+        path,
+        axum::routing::any(move |_request: axum::extract::Request| {
+            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
+            async move {
+                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
+                (
+                    http::StatusCode::OK,
+                    axum::body::Body::from("unexpected upstream hit"),
+                )
+            }
+        }),
+    );
+    let (upstream_url, upstream_handle) = super::start_server(upstream).await;
+    (upstream_url, upstream_hits, upstream_handle)
 }

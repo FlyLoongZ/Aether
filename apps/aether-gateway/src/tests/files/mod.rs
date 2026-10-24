@@ -24,53 +24,35 @@ use aether_data_contracts::repository::candidates::{
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use sha2::{Digest, Sha256};
 
 mod registry_cleanup;
 mod stream;
 mod sync;
-
-const FILES_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
 fn run_files_test<F, Fut>(test_name: &'static str, make_future: F)
 where
     F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = ()> + 'static,
 {
-    crate::tests::run_async_test_on_large_stack(test_name, FILES_TEST_STACK_BYTES, make_future);
+    crate::tests::run_async_test_on_large_stack(
+        test_name,
+        crate::tests::LARGE_TEST_STACK_BYTES,
+        make_future,
+    );
 }
 
-fn hash_api_key(value: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
+pub(super) use crate::tests::hash_api_key;
 
 fn sample_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
-    StoredAuthApiKeySnapshot::new(
-        user_id.to_string(),
-        "alice".to_string(),
-        Some("alice@example.com".to_string()),
-        "user".to_string(),
-        "local".to_string(),
-        true,
-        false,
-        Some(serde_json::json!(["gemini"])),
-        Some(serde_json::json!(["gemini:files"])),
-        Some(serde_json::json!(["gemini-2.5-pro"])),
-        api_key_id.to_string(),
-        Some("default".to_string()),
-        true,
-        false,
-        false,
-        Some(60),
-        Some(5),
-        Some(4_102_444_800_i64),
-        Some(serde_json::json!(["gemini"])),
-        Some(serde_json::json!(["gemini:files"])),
-        Some(serde_json::json!(["gemini-2.5-pro"])),
+    crate::tests::support::sample_auth_snapshot_with(
+        api_key_id,
+        user_id,
+        "alice",
+        "alice@example.com",
+        serde_json::json!(["gemini"]),
+        serde_json::json!(["gemini:files"]),
+        serde_json::json!(["gemini-2.5-pro"]),
     )
-    .expect("auth snapshot should build")
 }
 
 fn sample_files_candidate_row() -> StoredMinimalCandidateSelectionRow {
@@ -158,12 +140,7 @@ fn sample_files_provider_catalog_endpoint() -> StoredProviderCatalogEndpoint {
 }
 
 fn sample_files_provider_catalog_key() -> StoredProviderCatalogKey {
-    let bootstrap = AppState::new()
-        .expect("bootstrap state should build")
-        .with_data_state_for_tests(
-            crate::data::GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
-        );
+    let bootstrap = crate::tests::support::credential_fixture_state();
     StoredProviderCatalogKey::new(
         "key-gemini-files-local-1".to_string(),
         "provider-gemini-files-local-1".to_string(),
