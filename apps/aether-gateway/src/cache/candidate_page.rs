@@ -255,19 +255,37 @@ fn resolve_candidate_page_cache_ttl() -> Duration {
     Duration::from_millis(ttl_ms)
 }
 
-pub(crate) fn candidate_page_cache_stale_ttl(ttl: Duration) -> Duration {
+/// The oldest a candidate page may ever be served, whatever its entry says.
+///
+/// Two different mechanisms end up here, and they are not the same thing:
+///
+/// - a **resync**: the entry is still fresh enough to answer with, and one
+///   task re-derives it in the background (`get_or_load_revalidating`); the
+///   page a request sees is at most one refresh cadence old;
+/// - a **relist-on-miss**: nobody re-derives anything, the entry is simply kept
+///   until this age because every node that could have invalidated it might
+///   have missed the signal. Serving it is cheaper than a relist and strictly
+///   more expensive than a resync — it is the case where the answer is wrong
+///   for up to this long.
+///
+/// The name is deliberate: this bounds staleness, it does not promise
+/// freshness. A plain `get_or_load` that is handed this value is choosing the
+/// second mechanism.
+///
+/// The environment knob keeps its historical `..._STALE_TTL_MS` name.
+pub(crate) fn candidate_page_cache_max_stale_age(ttl: Duration) -> Duration {
     #[cfg(test)]
     {
-        resolve_candidate_page_cache_stale_ttl().max(ttl)
+        resolve_candidate_page_cache_max_stale_age().max(ttl)
     }
     #[cfg(not(test))]
     {
-        (*CANDIDATE_PAGE_CACHE_STALE_TTL.get_or_init(resolve_candidate_page_cache_stale_ttl))
+        (*CANDIDATE_PAGE_CACHE_STALE_TTL.get_or_init(resolve_candidate_page_cache_max_stale_age))
             .max(ttl)
     }
 }
 
-fn resolve_candidate_page_cache_stale_ttl() -> Duration {
+fn resolve_candidate_page_cache_max_stale_age() -> Duration {
     let stale_ttl_ms = std::env::var(CANDIDATE_PAGE_CACHE_STALE_TTL_ENV)
         .ok()
         .and_then(|value| value.trim().parse::<u64>().ok())
@@ -504,28 +522,28 @@ mod tests {
     }
 
     #[test]
-    fn candidate_page_cache_stale_ttl_defaults_longer_than_burst_gap() {
+    fn candidate_page_cache_max_stale_age_defaults_longer_than_burst_gap() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         std::env::remove_var(CANDIDATE_PAGE_CACHE_STALE_TTL_ENV);
 
         assert_eq!(
-            candidate_page_cache_stale_ttl(Duration::from_millis(250)),
+            candidate_page_cache_max_stale_age(Duration::from_millis(250)),
             Duration::from_millis(DEFAULT_CANDIDATE_PAGE_CACHE_STALE_TTL_MS)
         );
     }
 
     #[test]
-    fn candidate_page_cache_stale_ttl_respects_env_and_never_under_fresh_ttl() {
+    fn candidate_page_cache_max_stale_age_respects_env_and_never_under_fresh_ttl() {
         let _guard = ENV_LOCK.lock().expect("env lock poisoned");
         std::env::set_var(CANDIDATE_PAGE_CACHE_STALE_TTL_ENV, "100");
         assert_eq!(
-            candidate_page_cache_stale_ttl(Duration::from_millis(2_500)),
+            candidate_page_cache_max_stale_age(Duration::from_millis(2_500)),
             Duration::from_millis(2_500)
         );
 
         std::env::set_var(CANDIDATE_PAGE_CACHE_STALE_TTL_ENV, "60000");
         assert_eq!(
-            candidate_page_cache_stale_ttl(Duration::from_millis(250)),
+            candidate_page_cache_max_stale_age(Duration::from_millis(250)),
             Duration::from_secs(60)
         );
         std::env::remove_var(CANDIDATE_PAGE_CACHE_STALE_TTL_ENV);
