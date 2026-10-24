@@ -4,7 +4,7 @@ use super::{
 };
 use crate::data::GatewayDataState;
 use crate::tests::hash_api_key;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+use crate::tests::DEV_FERNET_KEY;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -297,7 +297,7 @@ async fn gateway_executes_claude_chat_sync_same_format_via_local_finalize_respon
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -666,7 +666,7 @@ async fn gateway_executes_claude_chat_sync_upstream_stream_via_local_finalize_re
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);
@@ -1036,7 +1036,7 @@ async fn gateway_executes_claude_cli_sync_upstream_stream_via_local_finalize_res
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
     let gateway = build_router_with_state(gateway_state);

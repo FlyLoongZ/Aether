@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[tokio::test]
 async fn gateway_redeems_wallet_code_locally() {
@@ -305,7 +306,7 @@ async fn gateway_reuses_pending_billing_plan_checkout_order_without_proxying_ups
         now + chrono::Duration::hours(1),
     );
     let billing_repository = Arc::new(InMemoryBillingReadRepository::seed(Vec::new()));
-    let encrypted_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "epay-secret")
+    let encrypted_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "epay-secret")
         .expect("merchant key should encrypt");
     let AdminBillingMutationOutcome::Applied(_) = billing_repository
         .upsert_payment_gateway_config(&PaymentGatewayConfigWriteInput {

@@ -1,8 +1,9 @@
+use crate::tests::DEV_FERNET_KEY;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aether_contracts::{ExecutionPlan, RequestBody};
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::candidates::{
@@ -337,12 +338,12 @@ fn sample_codex_agent_identity_key() -> StoredProviderCatalogKey {
     let mut key = sample_codex_key();
     key.name = "Agent Identity".to_string();
     key.encrypted_api_key = Some(
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
             .expect("placeholder api key should encrypt"),
     );
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","auth_mode":"agentIdentity","agent_runtime_id":"runtime-current","agent_private_key":"MC4CAQAwBQYDK2VwBCIEIAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcH","task_id":"task-current"}"#,
         )
         .expect("Agent Identity auth config should encrypt"),
@@ -375,7 +376,7 @@ fn codex_state_with_provider_and_key(
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -391,7 +392,7 @@ fn claude_code_oauth_state() -> AppState {
     key.api_formats = Some(json!(["claude:messages"]));
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"claude_code","refresh_token":"rt-claude-local-123"}"#,
         )
         .expect("Claude Code auth config should encrypt"),
@@ -405,7 +406,7 @@ fn claude_code_oauth_state() -> AppState {
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -418,7 +419,7 @@ fn codex_state_with_redis(redis_url: &str, redis_key_prefix: &str) -> AppState {
     let data_state = GatewayDataState::from_config(
         GatewayDataConfig::disabled()
             .with_redis_url(redis_url, Some(redis_key_prefix))
-            .with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key(DEV_FERNET_KEY),
     )
     .expect("data state should build")
     .attach_provider_catalog_repository_for_tests(repository);
@@ -486,8 +487,7 @@ fn sample_health_key() -> StoredProviderCatalogKey {
     .expect("key should build")
     .with_transport_fields(
         Some(serde_json::json!(["openai:chat"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-test")
-            .expect("api key should encrypt"),
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-test").expect("api key should encrypt"),
         None,
         None,
         Some(serde_json::json!({"openai:chat": 1})),
@@ -509,7 +509,7 @@ fn health_state() -> AppState {
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -523,7 +523,7 @@ fn pool_health_state() -> AppState {
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -547,7 +547,7 @@ async fn pool_feedback_uses_routing_profile_scheduling_override() {
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
     let plan = sample_plan();
     let report_context = json!({
@@ -592,7 +592,7 @@ fn health_state_with_key(key: StoredProviderCatalogKey) -> AppState {
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -615,7 +615,7 @@ fn adaptive_state() -> AppState {
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -634,7 +634,7 @@ fn adaptive_state_with_request_candidates(
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(provider_catalog)
                 .with_request_candidate_reader(request_candidates)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -651,7 +651,7 @@ fn fixed_limit_state() -> AppState {
         .expect("gateway state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
 }
 
@@ -1434,7 +1434,7 @@ async fn anthropic_non_credential_failures_preserve_key_wide_state() {
             .expect("gateway state should build")
             .with_data_state_for_tests(
                 GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY),
             );
         let plan = sample_claude_plan();
         let report_context = json!({
@@ -2508,12 +2508,12 @@ async fn health_failure_updates_codex_key_for_current_bearer_request() {
 async fn health_failure_does_not_mutate_codex_bearer_replacement() {
     let mut replacement = sample_codex_key();
     replacement.encrypted_api_key = Some(
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "replacement-token")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "replacement-token")
             .expect("replacement token should encrypt"),
     );
     replacement.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"replacement-refresh-token"}"#,
         )
         .expect("replacement auth config should encrypt"),
@@ -2551,12 +2551,12 @@ async fn health_failure_does_not_mutate_codex_bearer_replacement() {
 async fn adaptive_rate_limit_does_not_mutate_codex_bearer_replacement() {
     let mut replacement = sample_codex_key();
     replacement.encrypted_api_key = Some(
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "replacement-token")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "replacement-token")
             .expect("replacement token should encrypt"),
     );
     replacement.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"replacement-refresh-token"}"#,
         )
         .expect("replacement auth config should encrypt"),
@@ -2607,12 +2607,12 @@ async fn pool_error_does_not_clear_codex_bearer_replacement_circuit() {
     });
     let mut replacement = sample_codex_key();
     replacement.encrypted_api_key = Some(
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "replacement-token")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "replacement-token")
             .expect("replacement token should encrypt"),
     );
     replacement.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"replacement-refresh-token"}"#,
         )
         .expect("replacement auth config should encrypt"),

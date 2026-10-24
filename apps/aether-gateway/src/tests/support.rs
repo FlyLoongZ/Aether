@@ -1,4 +1,14 @@
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::{derive_python_fernet_key, encrypt_python_fernet_plaintext};
+
+/// Precomputed derive_python_fernet_key() of DEVELOPMENT_ENCRYPTION_KEY.
+///
+/// aether-crypto treats a secret that already decodes to 32 bytes as a direct
+/// key and skips PBKDF2. nextest runs every test in its own process, so a
+/// credential fixture used to pay 100k PBKDF2 iterations on each side
+/// (encrypt + decrypt). The derived key material is byte-identical, so
+/// ciphertext still round-trips with the gateway configured for the
+/// passphrase; only the encoding of the same key changes.
+pub(crate) const DEV_FERNET_KEY: &str = "qGVbbzTSey8Hi1DRtS6wkb2jL33pRBHXTQW-GO6qne0=";
 
 /// Credential-only gateway state for fixtures that just seal or open a
 /// provider secret. Avoids repeating the five-line AppState::new() chain in
@@ -7,9 +17,28 @@ pub(crate) fn credential_fixture_state() -> crate::AppState {
     crate::AppState::new()
         .expect("credential fixture state should build")
         .with_data_state_for_tests(
-            crate::data::GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            crate::data::GatewayDataState::disabled().with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
+}
+
+#[test]
+fn dev_fernet_key_is_the_derived_development_key() {
+    assert_eq!(
+        derive_python_fernet_key(aether_crypto::DEVELOPMENT_ENCRYPTION_KEY),
+        DEV_FERNET_KEY,
+        "the fixture constant must stay in sync with the production derivation"
+    );
+
+    let ciphertext =
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "fixture-round-trip").expect("encrypt");
+    assert_eq!(
+        aether_crypto::decrypt_python_fernet_ciphertext(
+            aether_crypto::DEVELOPMENT_ENCRYPTION_KEY,
+            &ciphertext,
+        )
+        .expect("passphrase decrypt"),
+        "fixture-round-trip"
+    );
 }
 use aether_data::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
@@ -244,7 +273,7 @@ pub(crate) fn sample_key(
     api_format: &str,
     secret: &str,
 ) -> StoredProviderCatalogKey {
-    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, secret)
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, secret)
         .expect("api key ciphertext should build");
     StoredProviderCatalogKey::new(
         id.to_string(),
@@ -413,7 +442,7 @@ pub(crate) struct CatalogKeySpec<'a> {
 pub(crate) fn provider_catalog_key(spec: &CatalogKeySpec<'_>) -> StoredProviderCatalogKey {
     let mut priority = serde_json::Map::new();
     priority.insert(spec.api_format.to_string(), serde_json::json!(1));
-    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, spec.secret)
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, spec.secret)
         .expect("api key should encrypt");
 
     StoredProviderCatalogKey::new(
@@ -641,7 +670,7 @@ pub(crate) fn local_openai_endpoint(
 }
 
 pub(crate) fn local_openai_key(spec: &LocalOpenAiSpec<'_>) -> StoredProviderCatalogKey {
-    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, spec.secret)
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, spec.secret)
         .expect("api key should encrypt");
     StoredProviderCatalogKey::new(
         format!("key-{}", spec.id_suffix),

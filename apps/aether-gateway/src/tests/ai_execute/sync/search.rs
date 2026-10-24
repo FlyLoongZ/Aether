@@ -3,7 +3,7 @@ use super::{
     to_bytes, Arc, Json, Mutex, Request, Router, StatusCode, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
     EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -33,6 +33,7 @@ where
 }
 
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 
 fn auth_snapshot() -> StoredAuthApiKeySnapshot {
     StoredAuthApiKeySnapshot::new(
@@ -147,7 +148,7 @@ fn endpoint(api_format: &str) -> StoredProviderCatalogEndpoint {
 
 fn key() -> StoredProviderCatalogKey {
     let auth_config = encrypt_python_fernet_plaintext(
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
         r#"{"provider_type":"codex","account_id":"account-search-1","is_fedramp":true}"#,
     )
     .expect("auth config should encrypt");
@@ -162,7 +163,7 @@ fn key() -> StoredProviderCatalogKey {
     .expect("key should build")
     .with_transport_fields(
         Some(json!(["openai:responses"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "codex-search-access-token")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "codex-search-access-token")
             .expect("access token should encrypt"),
         Some(auth_config),
         None,
@@ -342,7 +343,7 @@ async fn gateway_executes_codex_search_with_responses_permission_and_search_cont
             candidate_repository,
             catalog_repository,
             Arc::clone(&request_candidates),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests([(
             crate::system_features::ENABLE_MODEL_DIRECTIVES_CONFIG_KEY.to_string(),
@@ -620,7 +621,7 @@ fn gateway_executes_codex_memories_with_responses_permission_and_native_json() {
                 vec![key()],
             ));
             let request_candidates = Arc::new(InMemoryRequestCandidateRepository::default());
-            let data = crate::data::GatewayDataState::with_auth_candidate_selection_provider_catalog_and_request_candidate_repository_for_tests(auth,candidates,catalog,Arc::clone(&request_candidates),DEVELOPMENT_ENCRYPTION_KEY)
+            let data = crate::data::GatewayDataState::with_auth_candidate_selection_provider_catalog_and_request_candidate_repository_for_tests(auth,candidates,catalog,Arc::clone(&request_candidates),DEV_FERNET_KEY)
             .with_system_config_values_for_tests([(crate::system_features::ENABLE_MODEL_DIRECTIVES_CONFIG_KEY.to_string(),json!(true))]);
             let (runtime_url, runtime_handle) = start_server(runtime).await;
             let state = build_state_with_execution_runtime_override(runtime_url)

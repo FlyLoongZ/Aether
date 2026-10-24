@@ -790,11 +790,12 @@ fn backup_run_result_json(result: &BackupRunResult) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::DEV_FERNET_KEY;
     use std::convert::Infallible;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
-    use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+    use aether_crypto::encrypt_python_fernet_plaintext;
     use aether_data::repository::background_tasks::InMemoryBackgroundTaskRepository;
     use aether_data_contracts::repository::background_tasks::{
         BackgroundTaskKind, BackgroundTaskStatus, StoredBackgroundTaskRun,
@@ -890,11 +891,8 @@ mod tests {
             ),
             (
                 "backup_s3_secret_access_key".to_string(),
-                serde_json::json!(encrypt_python_fernet_plaintext(
-                    DEVELOPMENT_ENCRYPTION_KEY,
-                    "secret"
-                )
-                .expect("test secret should encrypt")),
+                serde_json::json!(encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "secret")
+                    .expect("test secret should encrypt")),
             ),
         ]
     }
@@ -912,7 +910,7 @@ mod tests {
             .expect("app state should build")
             .with_data_state_for_tests(
                 GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY)
                     .with_system_config_values_for_tests(entries),
             );
 
@@ -953,7 +951,7 @@ mod tests {
             .expect("app state should build")
             .with_data_state_for_tests(
                 GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY)
                     .with_system_config_values_for_tests(entries),
             );
 
@@ -1035,7 +1033,7 @@ mod tests {
             .expect("app state should build")
             .with_data_state_for_tests(
                 GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY)
                     .with_system_config_values_for_tests(valid_s3_backup_config_values()),
             );
 
@@ -1056,7 +1054,7 @@ mod tests {
             .expect("app state should build")
             .with_data_state_for_tests(
                 GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY)
                     .with_system_config_values_for_tests(valid_s3_backup_config_values())
                     .with_background_task_repository_for_tests(repository),
             );
@@ -1116,7 +1114,7 @@ mod tests {
             .expect("app state should build")
             .with_data_state_for_tests(
                 GatewayDataState::disabled()
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY)
                     .with_system_config_values_for_tests(valid_s3_backup_config_values()),
             );
         let values = super::load_s3_backup_config_values(&app)

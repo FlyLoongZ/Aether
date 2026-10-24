@@ -1,7 +1,7 @@
 use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot_video as sample_auth_snapshot;
+use crate::tests::DEV_FERNET_KEY;
 use aether_contracts::{StreamFrame, StreamFramePayload, StreamFrameType};
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::video_tasks::{
@@ -261,7 +261,7 @@ async fn gateway_executes_openai_video_content_from_reconstructed_data_task_with
                 crate::data::GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
                     repository,
                     provider_catalog_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 )
                 .with_auth_api_key_reader(auth_repository),
             )

@@ -24,7 +24,7 @@ use super::{
 };
 
 use crate::tests::hash_api_key;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+use crate::tests::DEV_FERNET_KEY;
 
 fn run_async_test_on_large_stack<F>(name: &'static str, future: F)
 where
@@ -114,7 +114,7 @@ async fn gateway_exposes_request_id_header_for_local_execution_response_impl() {
                 provider_catalog,
                 Arc::clone(&request_candidates),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {

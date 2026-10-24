@@ -9,9 +9,9 @@ use super::{
     InMemoryMinimalCandidateSelectionReadRepository, InMemoryProviderCatalogReadRepository,
     InMemoryRequestCandidateRepository, Infallible, Json, Mutex, Request,
     RequestCandidateReadRepository, RequestCandidateStatus, Response, Router, StatusCode,
-    CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, DEVELOPMENT_ENCRYPTION_KEY,
-    TRACE_ID_HEADER,
+    CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_executes_gemini_files_download_via_local_decision_gate_with_local_planning_only() {
@@ -225,7 +225,7 @@ async fn gateway_executes_gemini_files_download_via_local_decision_gate_with_loc
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 gemini_file_mapping_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .attach_proxy_node_repository_for_tests(sample_files_proxy_node_repository([
                 "proxy-node-gemini-files-download-local",

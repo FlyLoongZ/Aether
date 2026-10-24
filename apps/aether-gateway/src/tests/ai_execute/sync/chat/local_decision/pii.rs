@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 large_stack_async_test!(
     proxy_pii_redaction_local_openai_chat_runtime_masks_headers_and_restores_sync_response,
@@ -189,7 +190,7 @@ async fn proxy_pii_redaction_local_openai_chat_runtime_masks_headers_and_restore
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:chat"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-redaction")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-redaction")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -275,7 +276,7 @@ async fn proxy_pii_redaction_local_openai_chat_runtime_masks_headers_and_restore
         candidate_selection_repository,
         provider_catalog_repository,
         Arc::clone(&request_candidate_repository),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     )
     .with_system_config_values_for_tests(vec![
         ("module.chat_pii_redaction.enabled".to_string(), json!(true)),

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
 };
@@ -38,6 +38,7 @@ use crate::constants::{
 use crate::data::GatewayDataState;
 use crate::handlers::admin::AdminAppState;
 use crate::handlers::admin::SystemExportMode;
+use crate::tests::DEV_FERNET_KEY;
 
 static SYSTEM_UPDATE_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -702,7 +703,7 @@ async fn gateway_handles_admin_system_config_export_locally_with_trusted_admin_p
                         "connector": {
                             "credentials": {
                                 "refresh_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "provider-refresh-token",
                                 )
                                 .expect("provider credential should encrypt")
@@ -732,7 +733,7 @@ async fn gateway_handles_admin_system_config_export_locally_with_trusted_admin_p
             key.allowed_models = Some(json!(["gpt-5"]));
             key.encrypted_auth_config = Some(
                 encrypt_python_fernet_plaintext(
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                     r#"{"refresh_token":"oauth-refresh"}"#,
                 )
                 .expect("auth config should encrypt"),
@@ -756,7 +757,7 @@ async fn gateway_handles_admin_system_config_export_locally_with_trusted_admin_p
     );
     let mut ldap_config = sample_ldap_module_config();
     ldap_config.bind_password_encrypted = Some(
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "ldap-bind-secret")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "ldap-bind-secret")
             .expect("LDAP password should encrypt"),
     );
     let auth_module_repository = Arc::new(InMemoryAuthModuleReadRepository::seed(
@@ -782,7 +783,7 @@ async fn gateway_handles_admin_system_config_export_locally_with_trusted_admin_p
         .attach_auth_module_repository_for_tests(auth_module_repository)
         .attach_oauth_provider_repository_for_tests(oauth_provider_repository)
         .attach_proxy_node_repository_for_tests(proxy_node_repository)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+        .with_encryption_key_for_tests(DEV_FERNET_KEY)
         .with_system_config_values_for_tests(vec![
             ("smtp_password".to_string(), json!("smtp-secret")),
             ("smtp_host".to_string(), json!("smtp.example.test")),
@@ -1071,7 +1072,7 @@ async fn gateway_handles_admin_system_users_export_locally_with_trusted_admin_pr
                 "key-user-1".to_string(),
                 sha256_hex("ak-user-live-1"),
                 Some(
-                    encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "ak-user-live-1")
+                    encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "ak-user-live-1")
                         .expect("user api key should encrypt"),
                 ),
                 Some("User Key".to_string()),
@@ -1095,11 +1096,8 @@ async fn gateway_handles_admin_system_users_export_locally_with_trusted_admin_pr
                 "key-standalone-1".to_string(),
                 sha256_hex("ak-standalone-live-1"),
                 Some(
-                    encrypt_python_fernet_plaintext(
-                        DEVELOPMENT_ENCRYPTION_KEY,
-                        "ak-standalone-live-1",
-                    )
-                    .expect("standalone api key should encrypt"),
+                    encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "ak-standalone-live-1")
+                        .expect("standalone api key should encrypt"),
                 ),
                 Some("Standalone Key".to_string()),
                 Some(json!(["openai"])),
@@ -1159,7 +1157,7 @@ async fn gateway_handles_admin_system_users_export_locally_with_trusted_admin_pr
     )
     .attach_auth_api_key_repository_for_tests(auth_repository)
     .with_user_reader(user_repository)
-    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+    .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     let state = AppState::new()
         .expect("gateway should build")
@@ -2274,7 +2272,7 @@ async fn gateway_sets_admin_system_config_locally_with_trusted_admin_principal()
     );
 
     let data_state = GatewayDataState::disabled()
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+        .with_encryption_key_for_tests(DEV_FERNET_KEY)
         .with_system_config_values_for_tests(vec![
             ("smtp_host".to_string(), json!("smtp.example.com")),
             ("smtp_user".to_string(), json!("smtp-user")),

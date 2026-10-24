@@ -6,10 +6,10 @@ use super::{
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
     Request, RequestCandidateReadRepository, RequestCandidateStatus, Response, Router, StatusCode,
     StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
-    StoredProviderCatalogKey, StoredProviderCatalogProvider, DEVELOPMENT_ENCRYPTION_KEY,
-    TRACE_ID_HEADER,
+    StoredProviderCatalogKey, StoredProviderCatalogProvider, TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_executes_gemini_chat_stream_via_local_decision_gate_with_local_stream_decision() {
@@ -126,11 +126,8 @@ async fn gateway_executes_gemini_chat_stream_via_local_decision_gate_with_local_
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-gemini-chat-stream",
-            )
-            .expect("api key should encrypt"),
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-gemini-chat-stream")
+                .expect("api key should encrypt"),
             None,
             None,
             Some(serde_json::json!({"gemini:generate_content": 1})),
@@ -318,7 +315,7 @@ async fn gateway_executes_gemini_chat_stream_via_local_decision_gate_with_local_
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([

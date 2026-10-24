@@ -9,9 +9,10 @@ use super::{
     RequestCandidateReadRepository, RequestCandidateStatus, Response, Router, StatusCode,
     StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
     StoredProviderCatalogKey, StoredProviderCatalogProvider, StoredProviderModelMapping,
-    UsageReadRepository, UsageRuntimeConfig, DEVELOPMENT_ENCRYPTION_KEY, TRACE_ID_HEADER,
+    UsageReadRepository, UsageRuntimeConfig, TRACE_ID_HEADER,
 };
 use crate::constants::LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER;
+use crate::tests::DEV_FERNET_KEY;
 use aether_data_contracts::repository::usage::UsageBodyCaptureState;
 
 fn deep_nested_metadata(levels: usize) -> serde_json::Value {
@@ -246,7 +247,7 @@ async fn gateway_handles_local_openai_chat_sync_report_with_local_reporting_when
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
             Arc::clone(&usage_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     )
     .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -388,7 +389,7 @@ async fn gateway_truncates_deep_request_echo_for_local_openai_chat_sync_usage_im
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     Arc::clone(&usage_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ).with_system_config_values_for_tests([("request_record_level".to_string(), json!("full"))]),
             )
             .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -546,7 +547,7 @@ async fn gateway_ignores_legacy_max_request_body_size_for_local_openai_chat_sync
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .with_system_config_values_for_tests([
                 ("max_request_body_size".to_string(), json!(128)),
@@ -711,7 +712,7 @@ async fn gateway_honors_request_record_level_impl(record_level: &str) {
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .with_system_config_values_for_tests([(
                 "request_record_level".to_string(),
@@ -875,7 +876,7 @@ async fn gateway_records_failed_usage_when_all_local_openai_chat_candidates_exha
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -1007,7 +1008,7 @@ async fn gateway_records_failed_usage_when_sync_runtime_transport_is_unavailable
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -1153,7 +1154,7 @@ async fn sync_transport_error_policy_stops_or_retries_candidates_end_to_end_impl
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
                     usage_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             );
         let gateway = build_router_with_state(gateway_state);
@@ -1317,7 +1318,7 @@ async fn gateway_records_failed_usage_for_claude_runtime_miss_without_execution_
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
             Arc::clone(&usage_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     )
     .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -1536,7 +1537,7 @@ async fn gateway_handles_local_openai_chat_stream_report_with_local_reporting_wh
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
             Arc::clone(&usage_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ).with_system_config_values_for_tests([("request_record_level".to_string(), json!(record_level))]),
     )
     .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -1738,7 +1739,7 @@ async fn gateway_ignores_legacy_max_response_body_size_for_stream_usage_impl() {
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 Arc::clone(&usage_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .with_system_config_values_for_tests([
                 ("max_response_body_size".to_string(), json!(128)),
@@ -1931,7 +1932,7 @@ async fn gateway_records_failed_usage_when_all_local_claude_cli_candidates_are_s
         .with_transport_fields(
             Some(serde_json::json!(["openai:responses"])),
             encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
                 "sk-upstream-openai-cli-usage-local-miss",
             )
             .expect("api key should encrypt"),
@@ -1991,7 +1992,7 @@ async fn gateway_records_failed_usage_when_all_local_claude_cli_candidates_are_s
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
             Arc::clone(&usage_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     )
     .with_usage_runtime_for_tests(UsageRuntimeConfig {
@@ -2222,7 +2223,7 @@ fn gateway_keeps_failed_usage_request_capture_lightweight_for_large_local_claude
         .with_transport_fields(
             Some(serde_json::json!(["openai:responses"])),
             encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
                 "sk-upstream-openai-cli-usage-local-miss-large",
             )
             .expect("api key should encrypt"),
@@ -2269,7 +2270,7 @@ fn gateway_keeps_failed_usage_request_capture_lightweight_for_large_local_claude
                         provider_catalog_repository,
                         Arc::clone(&request_candidate_repository),
                         Arc::clone(&usage_repository),
-                        DEVELOPMENT_ENCRYPTION_KEY,
+                        DEV_FERNET_KEY,
                     ),
                 )
                 .with_usage_runtime_for_tests(UsageRuntimeConfig {

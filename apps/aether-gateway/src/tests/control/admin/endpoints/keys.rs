@@ -23,7 +23,7 @@ use crate::constants::{
     TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+use crate::tests::DEV_FERNET_KEY;
 
 fn open_provider_catalog_api_key_for_test(key: &StoredProviderCatalogKey) -> String {
     let state = crate::tests::support::credential_fixture_state();
@@ -487,7 +487,7 @@ async fn gateway_admin_provider_keys_prefers_upstream_plan_type_over_auth_config
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -559,7 +559,7 @@ async fn gateway_admin_provider_keys_marks_oauth_header_auth() {
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -617,7 +617,7 @@ async fn gateway_creates_admin_provider_key_locally_with_trusted_admin_principal
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -687,7 +687,7 @@ async fn generic_key_routes_reject_agent_identity_credential_writes() {
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -804,7 +804,7 @@ async fn generic_codex_key_credential_switch_rotates_generation_and_clears_quota
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -877,7 +877,7 @@ async fn provider_key_concurrent_limit_create_and_list_responses() {
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1149,7 +1149,7 @@ async fn gateway_fetches_allowed_models_immediately_when_creating_key_with_auto_
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1237,7 +1237,7 @@ async fn gateway_reveals_admin_provider_key_locally_with_trusted_admin_principal
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1307,7 +1307,7 @@ async fn gateway_exports_admin_provider_key_locally_with_trusted_admin_principal
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1380,7 +1380,7 @@ async fn gateway_exports_admin_provider_key_access_token_when_refresh_token_is_m
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1452,7 +1452,7 @@ async fn gateway_export_does_not_emit_access_token_from_imported_authorization_h
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1526,7 +1526,7 @@ async fn gateway_export_preserves_distinct_imported_access_token_with_authorizat
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1593,7 +1593,7 @@ async fn gateway_generic_export_rejects_agent_identity_without_exposing_private_
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1740,7 +1740,7 @@ async fn gateway_clears_admin_provider_key_oauth_invalid_locally_with_trusted_ad
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1824,7 +1824,7 @@ async fn gateway_noops_admin_provider_key_oauth_invalid_clear_when_marker_absent
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1889,7 +1889,7 @@ async fn gateway_updates_admin_provider_key_locally_with_trusted_admin_principal
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1970,7 +1970,7 @@ async fn provider_key_concurrent_limit_update_presence_semantics() {
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2118,7 +2118,7 @@ async fn gateway_clears_allowed_models_when_disabling_auto_fetch_on_provider_key
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2227,7 +2227,7 @@ async fn gateway_overwrites_allowed_models_immediately_when_enabling_auto_fetch_
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2343,7 +2343,7 @@ async fn gateway_fetches_allowed_models_immediately_when_enabling_auto_fetch_fro
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2459,7 +2459,7 @@ async fn gateway_refreshes_allowed_models_when_updating_include_patterns_with_au
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2571,7 +2571,7 @@ async fn gateway_refreshes_allowed_models_when_updating_exclude_patterns_with_au
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2662,7 +2662,7 @@ async fn gateway_rejects_admin_provider_key_update_when_api_key_duplicates_exist
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2728,7 +2728,7 @@ async fn gateway_deletes_admin_provider_key_locally_with_trusted_admin_principal
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2802,7 +2802,7 @@ async fn gateway_batch_deletes_admin_provider_keys_locally_with_trusted_admin_pr
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2937,7 +2937,7 @@ async fn gateway_handles_admin_keys_grouped_by_format_locally_with_trusted_admin
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

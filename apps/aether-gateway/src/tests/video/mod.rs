@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
@@ -19,6 +19,7 @@ use super::{
     build_router, build_router_with_state, build_state_with_execution_runtime_override,
     start_server, AppState, VideoTaskTruthSourceMode,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 mod data_read;
 mod gemini_sync_create;
@@ -115,7 +116,7 @@ pub(super) fn video_provider_catalog_repository_with_proxy(
             key_id.len(),
         );
         let protected = format!("{purpose}\0{plaintext}");
-        let ciphertext = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, &protected)
+        let ciphertext = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &protected)
             .expect("provider test credential should encrypt");
         format!("aether-provider-catalog-credential-v2:aether-runtime-secret-v1:{ciphertext}")
     }

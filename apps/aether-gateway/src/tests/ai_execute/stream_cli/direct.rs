@@ -5,7 +5,8 @@ use super::{
     UsageRuntimeConfig, TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -140,7 +141,7 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
 
     fn sample_provider_catalog_key() -> StoredProviderCatalogKey {
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"rt-codex-stream-local-123","account_id":"acc-codex-stream-local-123","is_fedramp":true}"#,
         )
         .expect("auth config should encrypt");
@@ -155,7 +156,7 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["openai:responses"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder api key should encrypt"),
             Some(encrypted_auth_config),
             None,
@@ -459,7 +460,7 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
             Arc::clone(&usage_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .with_system_config_values_for_tests([(
             "request_record_level".to_string(),

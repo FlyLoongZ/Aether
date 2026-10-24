@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use aether_contracts::{
     ExecutionPlan, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER, EXECUTION_REQUEST_HTTP1_ONLY_HEADER,
 };
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::proxy_nodes::InMemoryProxyNodeRepository;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
@@ -32,6 +32,7 @@ use crate::data::{GatewayDataConfig, GatewayDataState};
 use crate::handlers::shared::{
     open_provider_ops_credential, provider_ops_credential_binding_from_config,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 fn open_stored_provider_ops_credential(
     provider: &aether_data_contracts::repository::provider_catalog::StoredProviderCatalogProvider,
@@ -411,11 +412,11 @@ async fn gateway_handles_admin_provider_ops_config_locally_with_trusted_admin_pr
                             "config": {"username": "alice"},
                             "credentials": {
                                 "refresh_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "refresh-secret-1234",
                                 ).expect("refresh token should encrypt"),
                                 "password": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "top-secret-password",
                                 ).expect("password should encrypt"),
                             }
@@ -518,7 +519,7 @@ async fn gateway_saves_admin_provider_ops_config_locally_with_trusted_admin_prin
                             "config": {"username": "alice"},
                             "credentials": {
                                 "refresh_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "refresh-secret-1234",
                                 ).expect("refresh token should encrypt"),
                                 "_cached_access_token": "cached-token",
@@ -690,7 +691,7 @@ async fn gateway_deletes_admin_provider_ops_config_locally_with_trusted_admin_pr
                             "auth_type": "api_key",
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -2325,11 +2326,11 @@ async fn gateway_verifies_admin_provider_ops_sub2api_with_cached_access_token_wi
                             "config": {},
                             "credentials": {
                                 "refresh_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "refresh-token-old",
                                 ).expect("refresh token should encrypt"),
                                 "_cached_access_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "cached-access-token",
                                 ).expect("cached access token should encrypt"),
                                 "_cached_token_expires_at": 4102444800.0,
@@ -2349,7 +2350,7 @@ async fn gateway_verifies_admin_provider_ops_sub2api_with_cached_access_token_wi
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2465,7 +2466,7 @@ async fn gateway_verifies_admin_provider_ops_sub2api_persists_rotated_runtime_cr
                             "config": {},
                             "credentials": {
                                 "refresh_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "refresh-token-old",
                                 ).expect("refresh token should encrypt"),
                             }
@@ -2484,7 +2485,7 @@ async fn gateway_verifies_admin_provider_ops_sub2api_persists_rotated_runtime_cr
                 GatewayDataState::with_provider_catalog_repository_for_tests(Arc::clone(
                     &provider_catalog_repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2618,7 +2619,7 @@ async fn gateway_rejects_admin_provider_ops_connect_locally_with_trusted_admin_p
                             "auth_type": "api_key",
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -2754,7 +2755,7 @@ async fn gateway_handles_admin_provider_ops_balance_locally_with_trusted_admin_p
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -2893,7 +2894,7 @@ async fn gateway_handles_admin_provider_ops_balance_locally_for_generic_api_prox
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -3046,7 +3047,7 @@ async fn gateway_handles_admin_provider_ops_balance_locally_without_proxy_via_ex
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -3172,7 +3173,7 @@ async fn gateway_handles_admin_provider_ops_checkin_locally_with_trusted_admin_p
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -3295,7 +3296,7 @@ async fn gateway_handles_admin_provider_ops_checkin_locally_for_generic_api_prox
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -3503,7 +3504,7 @@ async fn gateway_handles_admin_provider_ops_batch_balance_locally_with_trusted_a
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -3529,7 +3530,7 @@ async fn gateway_handles_admin_provider_ops_batch_balance_locally_with_trusted_a
                             "config": {},
                             "credentials": {
                                 "session_cookie": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "session=MTIzfGVIaDRlQUpwWkFOcGJuU3F1d0RfVkhsNWVYa0lkWE5sY201aGJXVUdjM1J5YVc1bkRCQUFCV0ZzYVdObHxzaWc",
                                 ).expect("session cookie should encrypt"),
                             }
@@ -3686,7 +3687,7 @@ async fn gateway_handles_admin_provider_ops_anyrouter_balance_with_auth_expired_
                             "config": {},
                             "credentials": {
                                 "session_cookie": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "session=MTIzfGVIaDRlQUpwWkFOcGJuU3F1d0RfVkhsNWVYa0lkWE5sY201aGJXVUdjM1J5YVc1bkRCQUFCV0ZzYVdObHxzaWc",
                                 ).expect("session cookie should encrypt"),
                             }
@@ -3799,7 +3800,7 @@ async fn gateway_handles_admin_provider_ops_balance_cache_refresh_modes_with_red
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -3812,7 +3813,7 @@ async fn gateway_handles_admin_provider_ops_balance_cache_refresh_modes_with_red
         vec![],
     ));
     let data_state = GatewayDataState::from_config(
-        GatewayDataConfig::disabled().with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY),
+        GatewayDataConfig::disabled().with_encryption_key(DEV_FERNET_KEY),
     )
     .expect("data state should build")
     .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository));
@@ -3961,7 +3962,7 @@ async fn gateway_handles_admin_provider_ops_balance_cache_miss_without_refresh_r
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -3974,7 +3975,7 @@ async fn gateway_handles_admin_provider_ops_balance_cache_miss_without_refresh_r
         vec![],
     ));
     let data_state = GatewayDataState::from_config(
-        GatewayDataConfig::disabled().with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY),
+        GatewayDataConfig::disabled().with_encryption_key(DEV_FERNET_KEY),
     )
     .expect("data state should build")
     .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository));
@@ -4124,7 +4125,7 @@ async fn gateway_clears_admin_provider_ops_balance_cache_after_config_save_with_
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -4137,7 +4138,7 @@ async fn gateway_clears_admin_provider_ops_balance_cache_after_config_save_with_
         vec![],
     ));
     let data_state = GatewayDataState::from_config(
-        GatewayDataConfig::disabled().with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY),
+        GatewayDataConfig::disabled().with_encryption_key(DEV_FERNET_KEY),
     )
     .expect("data state should build")
     .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository));
@@ -4336,7 +4337,7 @@ async fn gateway_verify_does_not_pollute_balance_cache_and_balance_uses_saved_ac
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -4359,7 +4360,7 @@ async fn gateway_verify_does_not_pollute_balance_cache_and_balance_uses_saved_ac
         vec![],
     ));
     let data_state = GatewayDataState::from_config(
-        GatewayDataConfig::disabled().with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY),
+        GatewayDataConfig::disabled().with_encryption_key(DEV_FERNET_KEY),
     )
     .expect("data state should build")
     .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository));
@@ -4525,7 +4526,7 @@ async fn gateway_handles_admin_provider_ops_batch_balance_with_pending_cache_hit
                             },
                             "credentials": {
                                 "api_key": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "live-secret-api-key",
                                 ).expect("api key should encrypt"),
                             }
@@ -4538,7 +4539,7 @@ async fn gateway_handles_admin_provider_ops_batch_balance_with_pending_cache_hit
         vec![],
     ));
     let data_state = GatewayDataState::from_config(
-        GatewayDataConfig::disabled().with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY),
+        GatewayDataConfig::disabled().with_encryption_key(DEV_FERNET_KEY),
     )
     .expect("data state should build")
     .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository));
@@ -4712,11 +4713,11 @@ async fn gateway_handles_admin_provider_ops_sub2api_balance_with_refresh_token_r
                             "config": {},
                             "credentials": {
                                 "refresh_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "refresh-token-old",
                                 ).expect("refresh token should encrypt"),
                                 "_cached_access_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "stale-access-token",
                                 ).expect("cached access token should encrypt"),
                                 "_cached_token_expires_at": 0.0,
@@ -4736,7 +4737,7 @@ async fn gateway_handles_admin_provider_ops_sub2api_balance_with_refresh_token_r
                 GatewayDataState::with_provider_catalog_repository_for_tests(Arc::clone(
                     &provider_catalog_repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -4987,7 +4988,7 @@ async fn gateway_handles_admin_provider_ops_sub2api_balance_against_site_root_wh
                             "config": {},
                             "credentials": {
                                 "refresh_token": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "refresh-token-old",
                                 ).expect("refresh token should encrypt"),
                             }
@@ -5006,7 +5007,7 @@ async fn gateway_handles_admin_provider_ops_sub2api_balance_against_site_root_wh
                 GatewayDataState::with_provider_catalog_repository_for_tests(Arc::clone(
                     &provider_catalog_repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -5132,7 +5133,7 @@ async fn gateway_handles_admin_provider_ops_sub2api_balance_with_session_login_i
                             "credentials": {
                                 "email": "sub2api@example.com",
                                 "password": encrypt_python_fernet_plaintext(
-                                    DEVELOPMENT_ENCRYPTION_KEY,
+                                    DEV_FERNET_KEY,
                                     "top-secret-password",
                                 ).expect("password should encrypt"),
                             }
@@ -5151,7 +5152,7 @@ async fn gateway_handles_admin_provider_ops_sub2api_balance_with_session_login_i
                 GatewayDataState::with_provider_catalog_repository_for_tests(Arc::clone(
                     &provider_catalog_repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

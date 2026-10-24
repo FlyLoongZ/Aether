@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::proxy_nodes::InMemoryProxyNodeRepository;
@@ -27,6 +27,7 @@ use crate::constants::{
     TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
+use crate::tests::DEV_FERNET_KEY;
 
 fn open_provider_catalog_credential_for_test(
     key: &StoredProviderCatalogKey,
@@ -192,7 +193,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_codex_with_trusted_a
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -404,7 +405,7 @@ async fn gateway_codex_quota_refresh_persists_after_automatic_oauth_token_refres
     key.expires_at_unix_secs = Some(1);
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             &json!({
                 "provider_type": "codex",
                 "refresh_token": "expired-codex-refresh-token",
@@ -452,7 +453,7 @@ async fn gateway_codex_quota_refresh_persists_after_automatic_oauth_token_refres
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -645,7 +646,7 @@ async fn gateway_codex_reset_credit_retries_until_same_window_usage_drop_is_auth
     key.expires_at_unix_secs = Some(4_102_444_800);
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             &json!({
                 "provider_type": "codex",
                 "refresh_token": "codex-reset-refresh-token",
@@ -694,7 +695,7 @@ async fn gateway_codex_reset_credit_retries_until_same_window_usage_drop_is_auth
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -823,7 +824,7 @@ async fn gateway_marks_codex_quota_exhausted_when_wham_usage_returns_payment_req
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -943,7 +944,7 @@ async fn gateway_auto_removes_codex_key_when_quota_proves_oauth_invalid() {
     );
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"invalid-refresh-token","expires_at":4102444800}"#,
         )
         .expect("auth config should encrypt"),
@@ -968,7 +969,7 @@ async fn gateway_auto_removes_codex_key_when_quota_proves_oauth_invalid() {
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1114,7 +1115,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_requested_codex_keys
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1265,7 +1266,7 @@ async fn gateway_refreshes_admin_provider_quota_for_codex_proxy_with_extended_ti
                     provider_catalog_repository,
                 )
                 .attach_proxy_node_repository_for_tests(proxy_node_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1425,7 +1426,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_kiro_with_trusted_ad
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1591,7 +1592,7 @@ async fn gateway_auto_removes_kiro_quota_refresh_after_terminal_oauth_refresh_fa
     );
 
     let encrypted_auth_config = encrypt_python_fernet_plaintext(
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
         &json!({
             "provider_type": "kiro",
             "auth_method": "social",
@@ -1603,7 +1604,7 @@ async fn gateway_auto_removes_kiro_quota_refresh_after_terminal_oauth_refresh_fa
         .to_string(),
     )
     .expect("auth config ciphertext should build");
-    let encrypted_api_key = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
         .expect("api key ciphertext should build");
     let mut key = StoredProviderCatalogKey::new(
         "key-kiro-expired-refresh-failed".to_string(),
@@ -1667,7 +1668,7 @@ async fn gateway_auto_removes_kiro_quota_refresh_after_terminal_oauth_refresh_fa
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -1783,7 +1784,7 @@ async fn gateway_refresh_kiro_quota_reconciles_missing_fixed_endpoint_before_ref
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1919,7 +1920,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_gemini_cli_with_trus
     key.auth_type = "oauth".to_string();
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"gemini_cli","project_id":"gemini-cli-project-1"}"#,
         )
         .expect("auth config should encrypt"),
@@ -1950,7 +1951,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_gemini_cli_with_trus
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2064,7 +2065,7 @@ async fn gateway_refresh_quota_reconciles_unsupported_fixed_provider_endpoints_b
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2162,7 +2163,7 @@ async fn gateway_reports_codex_quota_runtime_failures_locally_without_falling_ba
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2345,7 +2346,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_antigravity_with_tru
     );
 
     let encrypted_auth_config = encrypt_python_fernet_plaintext(
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
         r#"{
             "project_id":"project-ant-123",
             "client_version":"1.18.4",
@@ -2364,7 +2365,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_antigravity_with_tru
     .expect("key should build")
     .with_transport_fields(
         Some(json!(["gemini:generate_content"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "ya29.ant-token")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "ya29.ant-token")
             .expect("api key ciphertext should build"),
         Some(encrypted_auth_config),
         None,
@@ -2411,7 +2412,7 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_antigravity_with_tru
                     provider_catalog_repository.clone(),
                 )
                 .with_global_model_repository_for_tests(global_model_repository.clone())
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

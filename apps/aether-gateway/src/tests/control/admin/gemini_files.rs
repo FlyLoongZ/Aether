@@ -1,4 +1,4 @@
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::gemini_file_mappings::{
     GeminiFileMappingReadRepository, InMemoryGeminiFileMappingRepository,
@@ -24,6 +24,7 @@ use crate::constants::{
     TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
+use crate::tests::DEV_FERNET_KEY;
 
 #[derive(Debug, Clone)]
 struct SeenAdminGeminiUploadExecution {
@@ -84,8 +85,7 @@ fn sample_admin_gemini_key(id: &str, name: &str, secret: &str) -> StoredProvider
     .expect("key should build")
     .with_transport_fields(
         Some(json!(["gemini:generate_content"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, secret)
-            .expect("api key should encrypt"),
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, secret).expect("api key should encrypt"),
         None,
         None,
         Some(json!({"gemini:generate_content": 1})),
@@ -231,7 +231,7 @@ async fn gateway_uploads_admin_gemini_file_locally_with_trusted_admin_principal(
             Arc::clone(&gemini_file_mapping_repository),
         )
         .attach_provider_catalog_repository_for_tests(Arc::clone(&provider_catalog_repository))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;

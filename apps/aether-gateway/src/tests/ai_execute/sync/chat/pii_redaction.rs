@@ -9,6 +9,7 @@ struct SeenProviderRequest {
 }
 
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 
 fn auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
     StoredAuthApiKeySnapshot::new(
@@ -164,7 +165,7 @@ fn key(test_id: &str) -> StoredProviderCatalogKey {
     .expect("key should build")
     .with_transport_fields(
         Some(serde_json::json!(["openai:chat"])),
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-pii-redaction")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-pii-redaction")
             .expect("api key should encrypt"),
         None,
         None,
@@ -373,7 +374,7 @@ async fn run_sync_redaction_case_with_system_config(
         candidate_selection_repository,
         provider_catalog_repository,
         Arc::clone(&request_candidate_repository),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     )
     .with_system_config_values_for_tests(system_config);
     let gateway_state = AppState::new()
@@ -713,7 +714,7 @@ async fn ai_execute_pii_redaction_restores_executed_candidate_session_after_late
         candidate_selection_repository,
         provider_catalog_repository,
         Arc::clone(&request_candidate_repository),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     )
     .with_system_config_values_for_tests(redaction_config(true));
     let gateway_state = AppState::new()

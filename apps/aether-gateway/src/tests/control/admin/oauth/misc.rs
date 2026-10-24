@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_authorizes_claude_cookie_without_persisting_cookie() {
@@ -97,7 +98,7 @@ async fn gateway_authorizes_claude_cookie_without_persisting_cookie_impl() {
                 provider_catalog_repository.clone(),
             )
             .attach_proxy_node_repository_for_tests(proxy_node_repository)
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_provider_oauth_token_url_for_tests(
             "claude_code_cookie_base_url",
@@ -293,7 +294,7 @@ async fn gateway_batch_authorizes_claude_cookies_as_redacted_task_impl() {
                 provider_catalog_repository.clone(),
             )
             .attach_proxy_node_repository_for_tests(proxy_node_repository)
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+            .with_encryption_key_for_tests(DEV_FERNET_KEY)
             .with_background_task_repository_for_tests(background_task_repository.clone()),
         )
         .with_provider_oauth_token_url_for_tests(

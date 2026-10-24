@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
 };
@@ -29,6 +29,7 @@ use crate::constants::{
     TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 use crate::data::GatewayDataState;
+use crate::tests::DEV_FERNET_KEY;
 
 fn sample_admin_user(user_id: &str) -> StoredUserAuthRecord {
     sample_admin_user_with_role(user_id, "user", "alice@example.com", "alice")
@@ -1814,7 +1815,7 @@ async fn gateway_handles_admin_user_api_key_routes_locally_with_trusted_admin_pr
         }
     }));
 
-    let encrypted = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-1")
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-1")
         .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -2212,7 +2213,7 @@ async fn gateway_returns_conflict_for_admin_create_user_api_key_when_writer_unav
         }
     }));
 
-    let encrypted = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-1")
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-1")
         .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -2341,7 +2342,7 @@ async fn gateway_returns_conflict_for_admin_lock_user_api_key_when_writer_unavai
         }
     }));
 
-    let encrypted = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-1")
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-1")
         .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -2544,7 +2545,7 @@ async fn gateway_returns_conflict_for_admin_update_user_api_key_when_writer_unav
         }
     }));
 
-    let encrypted = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-1")
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-1")
         .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(
@@ -2619,7 +2620,7 @@ async fn gateway_returns_conflict_for_admin_delete_user_api_key_when_writer_unav
         }
     }));
 
-    let encrypted = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-1")
+    let encrypted = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-1")
         .expect("ciphertext should build");
     let auth_repository = Arc::new(
         InMemoryAuthApiKeySnapshotRepository::seed(vec![(

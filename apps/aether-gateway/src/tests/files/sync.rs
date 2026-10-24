@@ -8,8 +8,9 @@ use super::{
     InMemoryAuthApiKeySnapshotRepository, InMemoryMinimalCandidateSelectionReadRepository,
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
     Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
-    DEVELOPMENT_ENCRYPTION_KEY, TRACE_ID_HEADER,
+    TRACE_ID_HEADER,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_executes_gemini_files_upload_via_local_decision_gate_with_local_planning_only() {
@@ -228,7 +229,7 @@ async fn gateway_executes_gemini_files_upload_via_local_decision_gate_with_local
                 candidate_selection_repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .attach_proxy_node_repository_for_tests(sample_files_proxy_node_repository([
                 "proxy-node-gemini-files-upload-local",
@@ -438,7 +439,7 @@ async fn gateway_executes_gemini_files_list_via_local_decision_gate_with_local_p
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 gemini_file_mapping_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);
@@ -644,7 +645,7 @@ async fn gateway_executes_gemini_files_delete_via_local_decision_gate_with_local
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 gemini_file_mapping_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);

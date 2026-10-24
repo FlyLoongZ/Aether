@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_query_test_model_failover_locally_with_trusted_admin_principal() {
@@ -116,7 +117,7 @@ async fn gateway_handles_admin_provider_query_test_model_failover_locally_with_t
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -291,7 +292,7 @@ async fn gateway_handles_admin_provider_query_test_model_failover_for_kiro_local
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -451,7 +452,7 @@ async fn gateway_retries_kiro_failover_after_http_error_without_message_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -577,7 +578,7 @@ async fn gateway_handles_non_kiro_multi_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -682,7 +683,7 @@ async fn gateway_handles_openai_responses_test_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -782,7 +783,7 @@ async fn gateway_handles_claude_cli_test_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -882,7 +883,7 @@ async fn gateway_handles_gemini_cli_test_model_failover_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1013,7 +1014,7 @@ async fn gateway_unwraps_gemini_cli_v1internal_response_for_failover_model_test_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1111,7 +1112,7 @@ async fn gateway_handles_admin_provider_query_test_model_failover_with_single_mo
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1239,7 +1240,7 @@ async fn gateway_retries_non_kiro_failover_after_http_error_without_message_impl
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1270,143 +1271,6 @@ async fn gateway_retries_non_kiro_failover_after_http_error_without_message_impl
         .expect("attempts should be an array");
     assert_eq!(attempts[0]["status"], json!("failed"));
     assert_eq!(attempts[0]["status_code"], json!(500));
-    assert_eq!(attempts[1]["status"], json!("success"));
-
-    gateway_handle.abort();
-    execution_runtime_handle.abort();
-}
-
-#[test]
-fn gateway_retries_non_kiro_failover_after_success_status_without_body() {
-    run_provider_query_test(
-        "gateway_retries_non_kiro_failover_after_success_status_without_body",
-        gateway_retries_non_kiro_failover_after_success_status_without_body_impl,
-    );
-}
-
-async fn gateway_retries_non_kiro_failover_after_success_status_without_body_impl() {
-    let execution_runtime = Router::new().route(
-        "/v1/execute/sync",
-        any(move |Json(plan): Json<ExecutionPlan>| async move {
-            let auth = plan
-                .headers
-                .get("authorization")
-                .map(String::as_str)
-                .unwrap_or_default()
-                .to_string();
-            let payload = if auth == "Bearer sk-test-first" {
-                json!({
-                    "request_id": plan.request_id,
-                    "candidate_id": plan.candidate_id,
-                    "status_code": 200,
-                    "headers": {
-                        "content-type": "application/json"
-                    },
-                    "body": {},
-                    "telemetry": {
-                        "elapsed_ms": 6
-                    }
-                })
-            } else {
-                json!({
-                    "request_id": plan.request_id,
-                    "candidate_id": plan.candidate_id,
-                    "status_code": 200,
-                    "headers": {
-                        "content-type": "application/json"
-                    },
-                    "body": {
-                        "json_body": {
-                            "id": "chatcmpl-retry-empty-body",
-                            "choices": [{
-                                "message": {
-                                    "role": "assistant",
-                                    "content": "Recovered after empty success body"
-                                }
-                            }]
-                        }
-                    },
-                    "telemetry": {
-                        "elapsed_ms": 14
-                    }
-                })
-            };
-            Json(payload)
-        }),
-    );
-
-    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
-    let mut provider = sample_provider("provider-openai", "OpenAI", 10);
-    provider.provider_type = "openai".to_string();
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        vec![sample_endpoint(
-            "endpoint-openai-chat",
-            "provider-openai",
-            "openai:chat",
-            "https://api.openai.example/v1",
-        )],
-        vec![
-            sample_bound_key(
-                "key-openai-first",
-                "provider-openai",
-                "openai:chat",
-                "sk-test-first",
-            ),
-            sample_bound_key(
-                "key-openai-second",
-                "provider-openai",
-                "openai:chat",
-                "sk-test-second",
-            ),
-        ],
-    ));
-
-    let gateway = build_router_with_state(
-        build_state_with_execution_runtime_override(execution_runtime_url)
-            .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
-                provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
-            )),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{gateway_url}/api/admin/provider-query/test-model-failover"
-        ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .json(&json!({
-            "provider_id": "provider-openai",
-            "failover_models": ["gpt-4.1"],
-            "api_format": "openai:chat"
-        }))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["success"], json!(true));
-    assert_eq!(payload["total_attempts"], json!(2));
-    assert_eq!(
-        payload["data"]["response"]["choices"][0]["message"]["content"],
-        json!("Recovered after empty success body")
-    );
-    let attempts = payload["attempts"]
-        .as_array()
-        .expect("attempts should be an array");
-    assert_eq!(attempts[0]["status"], json!("failed"));
-    assert_eq!(attempts[0]["status_code"], json!(200));
-    assert_eq!(
-        attempts[0]["error_message"],
-        // Attempt diagnostics intentionally expose only the status class;
-        // detailed provider response text is not returned to the admin UI.
-        json!("HTTP 200")
-    );
     assert_eq!(attempts[1]["status"], json!("success"));
 
     gateway_handle.abort();

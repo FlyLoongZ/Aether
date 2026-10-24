@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_query_models_fetches_upstream_for_selected_key() {
@@ -82,7 +83,7 @@ async fn gateway_handles_admin_provider_query_models_fetches_upstream_for_select
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -230,7 +231,7 @@ async fn gateway_handles_admin_provider_query_models_respecting_key_api_formats_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -373,7 +374,7 @@ async fn gateway_handles_admin_provider_query_models_aggregating_active_keys_imp
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -461,7 +462,7 @@ async fn gateway_handles_admin_provider_query_models_for_fixed_provider_without_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -619,7 +620,7 @@ async fn gateway_maps_admin_provider_model_before_model_list_test_request_impl()
             .with_data_state_for_tests(
                 GatewayDataState::with_provider_transport_reader_for_tests(
                     provider_catalog_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                    DEV_FERNET_KEY.to_string(),
                 )
                 .with_global_model_repository_for_tests(global_model_repository),
             ),

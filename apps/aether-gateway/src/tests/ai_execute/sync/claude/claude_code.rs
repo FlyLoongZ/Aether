@@ -5,10 +5,10 @@ use super::{
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository, Json, Mutex,
     Request, RequestCandidateReadRepository, RequestCandidateStatus, Router, StatusCode,
     StoredAuthApiKeySnapshot, StoredMinimalCandidateSelectionRow, StoredProviderCatalogEndpoint,
-    StoredProviderCatalogKey, StoredProviderCatalogProvider, DEVELOPMENT_ENCRYPTION_KEY,
-    TRACE_ID_HEADER,
+    StoredProviderCatalogKey, StoredProviderCatalogProvider, TRACE_ID_HEADER,
 };
 use crate::tests::hash_api_key;
+use crate::tests::DEV_FERNET_KEY;
 
 fn run_claude_code_cli_sync_test<F, Fut>(test_name: &'static str, make_future: F)
 where
@@ -147,11 +147,8 @@ async fn gateway_executes_claude_code_cli_sync_via_local_decision_gate_with_loca
         .expect("key should build")
         .with_transport_fields(
             Some(serde_json::json!(["claude:messages"])),
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-claude-code-oauth",
-            )
-            .expect("api key should encrypt"),
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-claude-code-oauth")
+                .expect("api key should encrypt"),
             None,
             None,
             Some(serde_json::json!({"claude:messages": 1})),
@@ -376,7 +373,7 @@ async fn gateway_executes_claude_code_cli_sync_via_local_decision_gate_with_loca
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(
             crate::tests::ai_execute::ai_execute_proxy_node_repository([

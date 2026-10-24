@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[tokio::test]
 async fn gateway_handles_public_auth_modules_status_without_proxying_upstream() {
@@ -329,7 +330,7 @@ async fn gateway_handles_authenticated_test_connection_without_hitting_fallback_
                 crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                .with_encryption_key_for_tests(DEV_FERNET_KEY)
                 .with_user_reader(user_repository),
             )
             .with_auth_session_for_tests(sample_auth_session(
@@ -1274,9 +1275,8 @@ async fn gateway_rejects_unsupported_auth_login_type_locally_without_proxying_up
 
 #[tokio::test]
 async fn gateway_handles_auth_ldap_login_locally_without_proxying_upstream() {
-    let encrypted_bind_password =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "bind-secret")
-            .expect("bind password should encrypt");
+    let encrypted_bind_password = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "bind-secret")
+        .expect("bind password should encrypt");
     let (gateway_url, upstream_hits, gateway_handle, upstream_handle) =
         start_auth_gateway_with_builder(|| {
             let auth_module_repository = Arc::new(InMemoryAuthModuleReadRepository::seed(
@@ -1297,7 +1297,7 @@ async fn gateway_handles_auth_ldap_login_locally_without_proxying_upstream() {
                 }),
             ));
             let data_state = crate::data::GatewayDataState::disabled()
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                .with_encryption_key_for_tests(DEV_FERNET_KEY)
                 .attach_auth_module_repository_for_tests(auth_module_repository)
                 .with_system_config_values_for_tests(vec![
                     ("module.ldap.enabled".to_string(), json!(true)),

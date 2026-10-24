@@ -1,3 +1,4 @@
+use crate::tests::DEV_FERNET_KEY;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::sync::{
@@ -77,7 +78,7 @@ use super::{
 use crate::control::GatewayControlDecision;
 use crate::stage_metrics::RequestStageTrace;
 use crate::AppState;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 
 fn provider_catalog_stop_429_for_plan(
     plan: &ExecutionPlan,
@@ -214,7 +215,7 @@ fn provider_catalog_for_stream_auth_plan(
     )
     .expect("endpoint transport should build");
     let encrypted_auth_config = auth_config.map(|config| {
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, &config.to_string())
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &config.to_string())
             .expect("auth config should encrypt")
     });
     let key = StoredProviderCatalogKey::new(
@@ -350,7 +351,7 @@ async fn execute_prefetched_codex_cyber_policy_failure(
     let provider_catalog = provider_catalog_for_plan(&plan, None);
     let data_state = crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
         Arc::new(provider_catalog),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let state = AppState::new()
         .expect("app state should build")
@@ -435,7 +436,7 @@ async fn execute_prefetched_transport_failure(
     let provider_catalog = provider_catalog_for_plan(&plan, provider_config);
     let data_state = crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
         Arc::new(provider_catalog),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let state = AppState::new()
         .expect("app state should build")
@@ -528,7 +529,7 @@ async fn execute_prefetched_http_status_failure(
     );
     let data_state = crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
         Arc::new(provider_catalog),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let state = AppState::new()
         .expect("app state should build")
@@ -652,7 +653,7 @@ async fn execute_stream_precommit_for_format(
     let provider_catalog = provider_catalog_for_plan(&plan, provider_config);
     let data_state = crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
         Arc::new(provider_catalog),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let state = AppState::new()
         .unwrap()
@@ -794,7 +795,7 @@ async fn prefetch_handoff_keeps_audit_usage_and_private_conversion() {
                     &repository,
                 ))
                 .with_provider_catalog_reader(Arc::new(catalog))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+                .with_encryption_key_for_tests(DEV_FERNET_KEY)
                 .with_system_config_values_for_tests([(
                     "request_record_level".into(),
                     json!("full"),
@@ -1647,7 +1648,7 @@ async fn execute_native_anthropic_prefetch_stream_with_terminal_error(
     let provider_catalog = provider_catalog_for_plan(&plan, None);
     let data_state = crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
         Arc::new(provider_catalog),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let state = AppState::new()
         .expect("app state should build")
@@ -1810,7 +1811,7 @@ async fn non_agent_stream_401_is_not_prefetched_and_body_passes_through() {
         .with_data_state_for_tests(
             crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
                 Arc::new(repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
 
@@ -1881,7 +1882,7 @@ async fn agent_identity_stream_non_task_401_replays_original_body_without_refres
         .expect("state should build")
         .with_data_state_for_tests(
             crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
 
@@ -1983,7 +1984,7 @@ async fn agent_identity_stream_invalid_task_refreshes_and_retries_once() {
         .expect("state should build")
         .with_data_state_for_tests(
             crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
     let transport = state
@@ -2143,7 +2144,7 @@ async fn native_anthropic_embedded_auth_error_refreshes_oauth_and_retries_once()
         .expect("state should build")
         .with_data_state_for_tests(
             crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
 
@@ -2250,7 +2251,7 @@ async fn native_anthropic_http_permission_error_does_not_refresh_oauth() {
         .expect("state should build")
         .with_data_state_for_tests(
             crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
 
@@ -2314,7 +2315,7 @@ async fn native_anthropic_oauth_pending_events_do_not_start_a_second_precommit_w
     let provider_catalog = provider_catalog_for_plan(&plan, None);
     let data_state = crate::data::GatewayDataState::with_provider_transport_reader_for_tests(
         Arc::new(provider_catalog),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     );
     let state = AppState::new()
         .expect("app state should build")
@@ -2435,7 +2436,7 @@ async fn native_anthropic_embedded_auth_error_does_not_refresh_api_key() {
         .expect("state should build")
         .with_data_state_for_tests(
             crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
 
     let execution = execute_in_process_stream_with_oauth_retry(
@@ -4727,7 +4728,7 @@ async fn native_anthropic_hanging_tail_does_not_delay_body_eof_and_is_bounded() 
                 &usage_repository,
             ))
             .with_provider_catalog_reader(Arc::new(provider_catalog))
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {
             enabled: true,
@@ -4852,7 +4853,7 @@ async fn native_anthropic_unterminated_oversized_tail_respects_read_budget() {
                 &usage_repository,
             ))
             .with_provider_catalog_reader(Arc::new(provider_catalog))
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_usage_runtime_for_tests(UsageRuntimeConfig {
             enabled: true,
@@ -5932,7 +5933,7 @@ async fn execute_stream_from_frame_stream_treats_windsurf_connect_trailer_error_
             Arc::clone(&usage_repository),
         )
         .with_provider_catalog_reader(Arc::new(provider_catalog_stop_429_for_plan(&plan)))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+        .with_encryption_key_for_tests(DEV_FERNET_KEY),
     );
     let trailer_error = connect_json_frame(
         2,
@@ -6073,7 +6074,7 @@ async fn execute_stream_from_frame_stream_decodes_non_success_windsurf_connect_e
             Arc::clone(&usage_repository),
         )
         .with_provider_catalog_reader(Arc::new(provider_catalog_stop_429_for_plan(&plan)))
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+        .with_encryption_key_for_tests(DEV_FERNET_KEY),
     );
     let connect_error = connect_json_frame(
         2,

@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aether_contracts::{ExecutionPlan, ExecutionResult, ResponseBody};
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use base64::Engine as _;
 use http::StatusCode;
@@ -19,6 +18,7 @@ use crate::constants::{
     CONTROL_ROUTE_FAMILY_HEADER, CONTROL_ROUTE_KIND_HEADER, EXECUTION_PATH_HEADER,
     EXECUTION_PATH_LOCAL_AUTH_DENIED,
 };
+use crate::tests::DEV_FERNET_KEY;
 use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 
 fn run_embedding_proxy_test<F, Fut>(test_name: &'static str, make_future: F)
@@ -75,7 +75,7 @@ fn embedding_success_state(execution_runtime_url: String) -> AppState {
             candidate_repository,
         )
         .with_auth_api_key_reader(auth_repository)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state)
@@ -136,7 +136,7 @@ fn gemini_embedding_success_state(
             candidate_repository,
         )
         .with_auth_api_key_reader(auth_repository)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state)
@@ -186,7 +186,7 @@ fn vertex_gemini_embedding_success_state(execution_runtime_url: String) -> AppSt
             candidate_repository,
         )
         .with_auth_api_key_reader(auth_repository)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state)
@@ -234,7 +234,7 @@ fn aliyun_embedding_success_state(execution_runtime_url: String) -> AppState {
             candidate_repository,
         )
         .with_auth_api_key_reader(auth_repository)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state)
@@ -309,7 +309,7 @@ fn mixed_embedding_success_state(execution_runtime_url: String) -> AppState {
             candidate_repository,
         )
         .with_auth_api_key_reader(auth_repository)
-        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY);
+        .with_encryption_key_for_tests(DEV_FERNET_KEY);
 
     build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(data_state)

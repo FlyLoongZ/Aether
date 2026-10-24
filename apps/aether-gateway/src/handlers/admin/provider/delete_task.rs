@@ -368,8 +368,9 @@ pub(crate) async fn build_admin_provider_mapping_preview_payload(
 mod tests {
     use super::mapping_preview_masked_catalog_api_key;
     use crate::handlers::admin::request::AdminAppState;
+    use crate::tests::DEV_FERNET_KEY;
     use crate::AppState;
-    use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+    use aether_crypto::encrypt_python_fernet_plaintext;
     use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
 
     #[test]
@@ -377,10 +378,10 @@ mod tests {
         let app = AppState::new().expect("gateway should build");
         let state = AdminAppState::new(&app);
         let encrypted_placeholder =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
                 .expect("placeholder should encrypt");
         let encrypted_auth_config = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"auth_mode":"agentIdentity","agent_runtime_id":"runtime-1","agent_private_key":"base64-private-key","task_id":"task-1"}"#,
         )
         .expect("auth config should encrypt");

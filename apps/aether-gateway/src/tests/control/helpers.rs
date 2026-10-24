@@ -1,4 +1,4 @@
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use serde_json::{json, Value};
 
 use super::{
@@ -9,6 +9,7 @@ use super::{
     StoredProviderModelStats, StoredProviderQuotaSnapshot, StoredProxyNode,
     StoredPublicGlobalModel, StoredRequestCandidate,
 };
+use crate::tests::DEV_FERNET_KEY;
 use crate::AppState;
 use std::sync::{Arc, Mutex};
 
@@ -309,7 +310,7 @@ pub(super) fn sample_oauth_provider_config(provider_type: &str) -> StoredOAuthPr
     .expect("oauth provider config should build")
     .with_config_fields(
         Some(
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "secret-value")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "secret-value")
                 .expect("secret should encrypt"),
         ),
         Some("https://connect.linux.do/oauth2/authorize".to_string()),

@@ -4,7 +4,7 @@ use super::{
     Mutex, Request, Response, Router, StatusCode, CONTROL_EXECUTED_HEADER,
     CONTROL_EXECUTE_FALLBACK_HEADER, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+use crate::tests::DEV_FERNET_KEY;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -609,7 +609,7 @@ async fn gateway_rejects_gemini_files_get_key_mismatch_without_fallback_and_allo
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
                 gemini_file_mapping_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         );
     let gateway = build_router_with_state(gateway_state);

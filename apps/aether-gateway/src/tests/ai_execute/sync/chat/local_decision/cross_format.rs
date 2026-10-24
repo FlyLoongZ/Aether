@@ -1,5 +1,6 @@
 use super::*;
 use crate::tests::support::sample_auth_snapshot_openai_gemini as sample_auth_snapshot;
+use crate::tests::DEV_FERNET_KEY;
 
 large_stack_async_test!(
     gateway_returns_openai_chat_error_for_local_cross_format_gemini_sync_failure,
@@ -187,7 +188,7 @@ async fn gateway_executes_openai_chat_sync_via_local_cross_format_gemini_candida
         .with_transport_fields(
             Some(serde_json::json!(["gemini:generate_content"])),
             encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
                 "sk-upstream-openai-chat-gemini-disabled",
             )
             .expect("api key should encrypt"),
@@ -396,7 +397,7 @@ async fn gateway_executes_openai_chat_sync_via_local_cross_format_gemini_candida
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let gateway = build_router_with_state(gateway_state);
@@ -759,7 +760,7 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_cli_syn
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let gateway = build_router_with_state(gateway_state);
@@ -1156,7 +1157,7 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_cli_syn
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let gateway = build_router_with_state(gateway_state);
@@ -1500,7 +1501,7 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_claude_sync_fa
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let gateway = build_router_with_state(gateway_state);
@@ -1855,7 +1856,7 @@ async fn gateway_returns_openai_chat_error_for_local_cross_format_gemini_sync_fa
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         ),
     );
     let gateway = build_router_with_state(gateway_state);

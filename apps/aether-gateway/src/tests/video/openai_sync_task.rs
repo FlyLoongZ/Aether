@@ -1,6 +1,6 @@
 use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot_video as sample_auth_snapshot;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+use crate::tests::DEV_FERNET_KEY;
 use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
@@ -238,7 +238,7 @@ async fn gateway_executes_openai_video_delete_via_reconstructed_data_backed_loca
                     repository,
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 )
                 .with_auth_api_key_reader(auth_repository),
             ),

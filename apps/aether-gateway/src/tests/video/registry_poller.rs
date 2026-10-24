@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskLookupKey, VideoTaskReadRepository, VideoTaskStatus,
@@ -16,6 +15,7 @@ use super::{
     video_provider_catalog_repository_with_proxy, video_proxy_node_repository_at_url, AppState,
     VideoTaskTruthSourceMode,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 fn sample_due_openai_task(upstream_base_url: &str) -> UpsertVideoTask {
     UpsertVideoTask {
@@ -186,7 +186,7 @@ async fn gateway_background_video_task_poller_refreshes_due_openai_task_from_rep
             crate::data::GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
                 Arc::clone(&repository),
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ),
         )
         .with_video_task_truth_source_mode(VideoTaskTruthSourceMode::RustAuthoritative)
@@ -303,7 +303,7 @@ async fn gateway_background_video_task_poller_refreshes_due_openai_task_from_rep
             crate::data::GatewayDataState::with_video_task_repository_and_provider_transport_for_tests(
                 Arc::clone(&repository),
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             ).attach_proxy_node_repository_for_tests(video_proxy_node_repository_at_url(["poller-video-proxy"], &upstream_url)),
         )
         .with_video_task_truth_source_mode(VideoTaskTruthSourceMode::RustAuthoritative)

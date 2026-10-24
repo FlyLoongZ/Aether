@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
 };
@@ -27,6 +27,7 @@ use super::super::{build_router_with_state, start_server, AppState};
 use crate::constants::{
     TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
+use crate::tests::DEV_FERNET_KEY;
 
 #[tokio::test]
 async fn gateway_handles_admin_monitoring_audit_logs_locally_with_trusted_admin_principal() {
@@ -358,7 +359,7 @@ fn sample_monitoring_export_api_key(
         api_key_id.to_string(),
         format!("hash-{api_key_id}"),
         Some(
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-user-monitoring-1234")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-user-monitoring-1234")
                 .expect("user key should encrypt"),
         ),
         Some("Alice Key".to_string()),
@@ -398,11 +399,8 @@ fn sample_monitoring_catalog_key() -> StoredProviderCatalogKey {
     sample_key()
         .with_transport_fields(
             None,
-            encrypt_python_fernet_plaintext(
-                DEVELOPMENT_ENCRYPTION_KEY,
-                "sk-upstream-monitoring-5678",
-            )
-            .expect("provider key should encrypt"),
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-monitoring-5678")
+                .expect("provider key should encrypt"),
             None,
             Some(json!({"cache": 1.0})),
             None,
@@ -762,7 +760,7 @@ async fn gateway_handles_admin_monitoring_cache_affinities_locally_with_trusted_
                 )
                 .with_user_reader(user_repository)
                 .with_auth_api_key_reader(auth_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_admin_monitoring_cache_affinity_entry_for_tests(
                 "cache_affinity:user-key-1:openai:model-alpha",

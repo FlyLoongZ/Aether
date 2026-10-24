@@ -1,8 +1,9 @@
+use crate::tests::DEV_FERNET_KEY;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogKeyAdminCasUpdate, ProviderCatalogKeyListQuery,
@@ -190,11 +191,10 @@ fn provider_oauth_state(
     let mut provider = sample_provider();
     provider.provider_type = provider_type.to_string();
     let encrypted_auth_config =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, &auth_config.to_string())
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &auth_config.to_string())
             .expect("auth config should encrypt");
-    let encrypted_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, access_token)
-            .expect("api key should encrypt");
+    let encrypted_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, access_token)
+        .expect("api key should encrypt");
     let key = StoredProviderCatalogKey::new(
         "key-1".to_string(),
         "provider-1".to_string(),
@@ -225,7 +225,7 @@ fn provider_oauth_state(
         .expect("state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository.clone())
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
     (state, repository, encrypted_auth_config)
 }
@@ -280,7 +280,7 @@ fn vertex_service_account_state() -> (AppState, Arc<InMemoryProviderCatalogReadR
         .expect("state should build")
         .with_data_state_for_tests(
             GatewayDataState::with_provider_catalog_repository_for_tests(repository.clone())
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
         );
     (state, repository, encrypted_auth_config)
 }
@@ -325,14 +325,12 @@ fn state_with_global_format_conversion(enabled: bool) -> AppState {
         vec![sample_endpoint()],
         vec![sample_key()],
     ));
-    let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
-        repository,
-        DEVELOPMENT_ENCRYPTION_KEY,
-    )
-    .with_system_config_values_for_tests(vec![(
-        "enable_format_conversion".to_string(),
-        json!(enabled),
-    )]);
+    let data_state =
+        GatewayDataState::with_provider_transport_reader_for_tests(repository, DEV_FERNET_KEY)
+            .with_system_config_values_for_tests(vec![(
+                "enable_format_conversion".to_string(),
+                json!(enabled),
+            )]);
     AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state)
@@ -536,10 +534,8 @@ async fn transport_cache_clear_retries_inflight_load_before_publishing_snapshot(
     let reader = Arc::new(BlockingProviderCatalogReadRepository::new(Arc::clone(
         &inner,
     )));
-    let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
-        reader.clone(),
-        DEVELOPMENT_ENCRYPTION_KEY,
-    );
+    let data_state =
+        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state);
@@ -600,10 +596,8 @@ fn blocking_transport_state(
         Arc::clone(&inner),
         block_on_key_read,
     ));
-    let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
-        reader.clone(),
-        DEVELOPMENT_ENCRYPTION_KEY,
-    );
+    let data_state =
+        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state);
@@ -805,10 +799,8 @@ async fn missing_transport_snapshot_result_is_broadcast_to_all_followers() {
     let reader = Arc::new(BlockingProviderCatalogReadRepository::new(Arc::clone(
         &inner,
     )));
-    let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
-        reader.clone(),
-        DEVELOPMENT_ENCRYPTION_KEY,
-    );
+    let data_state =
+        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state);
@@ -854,10 +846,8 @@ async fn transport_snapshot_error_is_broadcast_to_all_followers() {
     let reader = Arc::new(BlockingProviderCatalogReadRepository::new(Arc::clone(
         &inner,
     )));
-    let data_state = GatewayDataState::with_provider_transport_reader_for_tests(
-        reader.clone(),
-        DEVELOPMENT_ENCRYPTION_KEY,
-    );
+    let data_state =
+        GatewayDataState::with_provider_transport_reader_for_tests(reader.clone(), DEV_FERNET_KEY);
     let state = AppState::new()
         .expect("state should build")
         .with_data_state_for_tests(data_state);
@@ -1229,7 +1219,7 @@ async fn memory_only_vertex_refresh_rejects_replaced_credential_generation() {
 
     let mut replacement = unchanged;
     replacement.encrypted_api_key = Some(
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "admin-replacement")
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "admin-replacement")
             .expect("replacement credential should encrypt"),
     );
     replace_key_credential_for_test(repository.as_ref(), replacement, "vertex_ai").await;
@@ -1368,11 +1358,8 @@ async fn agent_auth_config_fence_rejects_metadata_only_rewrite() {
     let mut replacement_config = initial_config;
     replacement_config["email"] = json!("after@example.com");
     replaced.encrypted_auth_config = Some(
-        encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            &replacement_config.to_string(),
-        )
-        .expect("replacement config should encrypt"),
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &replacement_config.to_string())
+            .expect("replacement config should encrypt"),
     );
     replace_key_credential_for_test(repository.as_ref(), replaced, "codex").await;
 
@@ -1413,14 +1400,11 @@ async fn stale_bearer_refresh_cannot_overwrite_agent_replacement() {
         "agent_private_key": "MC4CAQAwBQYDK2VwBCIEIAcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcH",
         "task_id": "task-new"
     });
-    let replacement_auth_config = encrypt_python_fernet_plaintext(
-        DEVELOPMENT_ENCRYPTION_KEY,
-        &replacement_config.to_string(),
-    )
-    .expect("replacement config should encrypt");
-    let replacement_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "__placeholder__")
-            .expect("replacement api key should encrypt");
+    let replacement_auth_config =
+        encrypt_python_fernet_plaintext(DEV_FERNET_KEY, &replacement_config.to_string())
+            .expect("replacement config should encrypt");
+    let replacement_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "__placeholder__")
+        .expect("replacement api key should encrypt");
     let mut replaced = repository
         .list_keys_by_ids(&["key-1".to_string()])
         .await
@@ -1485,9 +1469,8 @@ async fn stale_refresh_failure_does_not_mark_access_token_only_replacement() {
         .expect("transport should load")
         .expect("transport should exist");
 
-    let replacement_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "access-admin")
-            .expect("replacement api key should encrypt");
+    let replacement_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "access-admin")
+        .expect("replacement api key should encrypt");
     let mut replaced = repository
         .list_keys_by_ids(&["key-1".to_string()])
         .await
@@ -1535,9 +1518,8 @@ async fn stale_request_invalidation_does_not_mark_access_token_only_replacement(
         .expect("transport should load")
         .expect("transport should exist");
 
-    let replacement_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "access-admin")
-            .expect("replacement api key should encrypt");
+    let replacement_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "access-admin")
+        .expect("replacement api key should encrypt");
     let mut replaced = repository
         .list_keys_by_ids(&["key-1".to_string()])
         .await
@@ -1926,9 +1908,8 @@ async fn runtime_oauth_success_rejects_replaced_transport_credential() {
         .expect("transport should load")
         .expect("transport should exist");
 
-    let replacement_api_key =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "access-admin")
-            .expect("replacement api key should encrypt");
+    let replacement_api_key = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "access-admin")
+        .expect("replacement api key should encrypt");
     let mut replaced = repository
         .list_keys_by_ids(&["key-1".to_string()])
         .await

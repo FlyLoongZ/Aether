@@ -1,4 +1,3 @@
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -21,6 +20,7 @@ use serde_json::json;
 use std::sync::{Arc, Mutex};
 
 use crate::constants::{CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER};
+use crate::tests::DEV_FERNET_KEY;
 
 use super::{
     build_router_with_state, build_state_with_execution_runtime_override, start_server,
@@ -280,7 +280,7 @@ async fn gateway_executes_gemini_video_cancel_via_data_backed_local_follow_up_wi
                 repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .with_auth_api_key_reader(auth_repository),
         );
@@ -546,7 +546,7 @@ async fn gateway_executes_gemini_video_cancel_via_reconstructed_data_backed_loca
                 repository.clone(),
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .with_auth_api_key_reader(auth_repository),
         );

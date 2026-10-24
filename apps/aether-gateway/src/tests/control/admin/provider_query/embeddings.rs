@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_query_embedding_model_test() {
@@ -79,7 +80,7 @@ async fn gateway_handles_admin_provider_query_embedding_model_test_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -200,7 +201,7 @@ async fn gateway_handles_admin_provider_query_doubao_text_embedding_model_test_i
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -322,7 +323,7 @@ async fn gateway_handles_admin_provider_query_gemini_embedding_model_test_impl()
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -450,7 +451,7 @@ async fn gateway_handles_admin_provider_query_vertex_gemini_embedding_model_test
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -587,7 +588,7 @@ async fn gateway_handles_admin_provider_query_jina_embedding_model_test_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -709,7 +710,7 @@ async fn gateway_handles_admin_provider_query_openai_rerank_model_test_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -837,7 +838,7 @@ async fn gateway_handles_admin_provider_query_rerank_model_test_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

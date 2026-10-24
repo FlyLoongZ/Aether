@@ -1,6 +1,7 @@
 use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot_video as sample_auth_snapshot;
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use crate::tests::DEV_FERNET_KEY;
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
@@ -157,7 +158,7 @@ async fn gateway_executes_openai_video_create_via_local_decision_gate_with_local
         .expect("key should build")
         .with_transport_fields(
             Some(json!(["openai:video"])),
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "sk-upstream-openai-video")
+            encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "sk-upstream-openai-video")
                 .expect("api key should encrypt"),
             None,
             None,
@@ -385,7 +386,7 @@ async fn gateway_executes_openai_video_create_via_local_decision_gate_with_local
             candidate_selection_repository,
             provider_catalog_repository,
             Arc::clone(&request_candidate_repository),
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
         )
         .attach_proxy_node_repository_for_tests(video_proxy_node_repository([
             "proxy-node-openai-video-local",
@@ -734,7 +735,7 @@ async fn gateway_executes_openai_video_remix_via_data_backed_local_follow_up_wit
                 repository,
                 provider_catalog_repository,
                 Arc::clone(&request_candidate_repository),
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )
             .with_auth_api_key_reader(auth_repository),
         );

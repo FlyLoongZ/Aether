@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[tokio::test]
 async fn gateway_handles_public_catalog_site_info_without_proxying_upstream() {
@@ -996,7 +997,7 @@ async fn gateway_rejects_unauthenticated_test_connection_before_using_provider_c
             .expect("gateway should build")
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY,
+                DEV_FERNET_KEY,
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1074,7 +1075,7 @@ async fn gateway_rejects_non_admin_test_connection_before_using_provider_credent
             .with_data_state_for_tests(
                 GatewayDataState::with_provider_transport_reader_for_tests(
                     provider_catalog_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 )
                 .with_user_reader(user_repository),
             )

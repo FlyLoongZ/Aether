@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::auth_modules::InMemoryAuthModuleReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::management_tokens::{
@@ -28,6 +28,7 @@ use crate::constants::{
 };
 use crate::control::all_assignable_management_token_permissions;
 use crate::data::GatewayDataState;
+use crate::tests::DEV_FERNET_KEY;
 
 const ADMIN_ENDPOINT_HEALTH_DATA_UNAVAILABLE_DETAIL: &str =
     "Admin endpoint health data unavailable";
@@ -146,7 +147,7 @@ async fn assert_admin_modules_status_with_smtp_password(
         Vec::new(),
         Vec::new(),
     )))
-    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY)
+    .with_encryption_key_for_tests(DEV_FERNET_KEY)
     .with_system_config_values_for_tests(vec![
         ("module.management_tokens.enabled".to_string(), json!(true)),
         (
@@ -241,9 +242,8 @@ async fn assert_admin_modules_status_with_smtp_password(
 
 #[tokio::test]
 async fn gateway_handles_admin_modules_status_with_legacy_smtp_password() {
-    let ciphertext =
-        encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "legacy-smtp-password")
-            .expect("legacy SMTP password should encrypt");
+    let ciphertext = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "legacy-smtp-password")
+        .expect("legacy SMTP password should encrypt");
     let state = assert_admin_modules_status_with_smtp_password(&ciphertext, true, false).await;
     let stored = state
         .read_system_config_json_value_strong("smtp_password")
@@ -532,7 +532,7 @@ async fn gateway_handles_admin_health_summary_locally_with_trusted_admin_princip
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -616,7 +616,7 @@ async fn gateway_handles_admin_key_health_locally_with_trusted_admin_principal()
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -708,7 +708,7 @@ async fn gateway_admin_key_health_summary_treats_expired_unix_circuit_as_closed(
                 GatewayDataState::with_provider_catalog_reader_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

@@ -641,11 +641,9 @@ mod tests {
     use super::{admin_provider_ops_credential_snapshot, open_provider_ops_credential};
     use crate::data::GatewayDataState;
     use crate::handlers::admin::request::AdminAppState;
+    use crate::tests::DEV_FERNET_KEY;
     use crate::AppState;
-    use aether_crypto::{
-        encrypt_python_fernet_plaintext, looks_like_python_fernet_ciphertext,
-        DEVELOPMENT_ENCRYPTION_KEY,
-    };
+    use aether_crypto::{encrypt_python_fernet_plaintext, looks_like_python_fernet_ciphertext};
     use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogReadRepository, StoredProviderCatalogProvider,
@@ -704,7 +702,7 @@ mod tests {
             .expect("gateway state should build")
             .with_data_state_for_tests(
                 GatewayDataState::with_provider_catalog_repository_for_tests(repository.clone())
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY),
             );
         (state, repository)
     }
@@ -755,9 +753,8 @@ mod tests {
 
     #[tokio::test]
     async fn tampered_provider_ops_ciphertext_fails_closed() {
-        let mut tampered =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, TEST_API_KEY)
-                .expect("Provider Ops API key should encrypt");
+        let mut tampered = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, TEST_API_KEY)
+            .expect("Provider Ops API key should encrypt");
         tampered.replace_range(tampered.len() - 2.., "AA");
         assert!(looks_like_python_fernet_ciphertext(&tampered));
         let provider = provider_with_api_key(&tampered);

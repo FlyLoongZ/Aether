@@ -7,8 +7,9 @@ use super::{
     InMemoryProviderCatalogReadRepository, InMemoryRequestCandidateRepository,
     InMemoryUsageReadRepository, InMemoryWalletRepository, Json, Request, Router, StatusCode,
     StoredBillingModelContext, StoredWalletSnapshot, UsageReadRepository, UsageRuntimeConfig,
-    WalletLookupKey, WalletReadRepository, DEVELOPMENT_ENCRYPTION_KEY, TRACE_ID_HEADER,
+    WalletLookupKey, WalletReadRepository, TRACE_ID_HEADER,
 };
+use crate::tests::DEV_FERNET_KEY;
 use aether_data::repository::settlement::InMemorySettlementRepository;
 
 fn run_async_test_on_large_stack<F>(name: &'static str, future: F)
@@ -124,7 +125,7 @@ async fn gateway_settles_wallet_for_completed_execution_runtime_sync_usage_impl(
         usage_repository.clone(),
         billing_repository,
         wallet_repository.clone(),
-        DEVELOPMENT_ENCRYPTION_KEY,
+        DEV_FERNET_KEY,
     )
     .with_settlement_writer_for_tests(Arc::new(
         InMemorySettlementRepository::from_wallet_repository(wallet_repository.clone()),

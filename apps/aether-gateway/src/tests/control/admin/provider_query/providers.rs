@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_handles_admin_provider_query_models_fetches_windsurf_model_configs() {
@@ -103,7 +104,7 @@ async fn gateway_handles_admin_provider_query_models_fetches_windsurf_model_conf
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -224,7 +225,7 @@ async fn gateway_handles_admin_provider_query_models_with_openai_responses_endpo
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -343,7 +344,7 @@ async fn gateway_recovers_codex_slug_only_models_from_a_stale_legacy_cache_impl(
     let state = build_state_with_execution_runtime_override(execution_runtime_url)
         .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
             provider_catalog_repository,
-            DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+            DEV_FERNET_KEY.to_string(),
         ));
     state
         .runtime_state()
@@ -533,7 +534,7 @@ async fn gateway_handles_admin_provider_query_models_falls_back_to_codex_preset_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -672,7 +673,7 @@ async fn gateway_streams_codex_openai_responses_upstream_for_admin_pool_model_te
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -840,7 +841,7 @@ async fn gateway_executes_codex_search_admin_pool_model_test_with_search_contrac
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -987,7 +988,7 @@ async fn gateway_routes_grok_responses_admin_pool_model_test_through_grok_runtim
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1113,7 +1114,7 @@ async fn gateway_streams_windsurf_connect_upstream_for_admin_model_test_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1251,7 +1252,7 @@ async fn gateway_uses_pool_scheduler_order_for_admin_pool_model_test_impl() {
                 GatewayDataState::with_request_candidate_repository_for_tests(
                     request_candidate_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY.to_string())
+                .with_encryption_key_for_tests(DEV_FERNET_KEY.to_string())
                 .attach_provider_catalog_repository_for_tests(provider_catalog_repository),
             ),
     );
@@ -1409,7 +1410,7 @@ async fn gateway_handles_admin_provider_query_test_model_for_kiro_locally_impl()
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1560,7 +1561,7 @@ async fn gateway_uses_kiro_mapped_model_name_for_explicit_model_mapping_test_imp
             .with_data_state_for_tests(
                 GatewayDataState::with_provider_transport_reader_for_tests(
                     provider_catalog_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                    DEV_FERNET_KEY.to_string(),
                 )
                 .with_global_model_repository_for_tests(global_model_repository),
             ),
@@ -1736,7 +1737,7 @@ async fn gateway_handles_openai_image_test_model_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1801,7 +1802,7 @@ async fn gateway_reports_transport_unsupported_reason_for_non_kiro_provider_impl
             .expect("gateway should build")
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -1972,7 +1973,7 @@ async fn gateway_handles_antigravity_endpoint_test_model_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2148,7 +2149,7 @@ async fn gateway_hydrates_antigravity_project_id_from_load_code_assist_for_test_
                 GatewayDataState::with_provider_catalog_repository_for_tests(Arc::clone(
                     &provider_catalog_repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2278,7 +2279,7 @@ async fn gateway_prefers_supported_non_kiro_endpoint_when_api_format_is_omitted_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2385,7 +2386,7 @@ async fn gateway_prefers_transport_supported_non_kiro_endpoint_when_api_format_i
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2488,7 +2489,7 @@ async fn gateway_prefers_supported_non_kiro_endpoint_with_compatible_key_when_ap
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2590,7 +2591,7 @@ async fn gateway_uses_compatible_cli_endpoint_when_api_format_is_omitted_impl() 
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2695,7 +2696,7 @@ async fn gateway_uses_runnable_cli_endpoint_after_chat_preference_when_api_forma
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2792,7 +2793,7 @@ async fn gateway_handles_claude_cli_test_model_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2887,7 +2888,7 @@ async fn gateway_uses_compatible_claude_cli_endpoint_when_api_format_is_omitted_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2987,7 +2988,7 @@ async fn gateway_handles_gemini_cli_test_model_locally_impl() {
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -3111,7 +3112,7 @@ async fn gateway_handles_gemini_cli_test_model_with_oauth_header_fallback_impl()
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -3266,7 +3267,7 @@ async fn gateway_hydrates_gemini_cli_project_id_from_load_code_assist_for_test_m
                 GatewayDataState::with_provider_catalog_repository_for_tests(Arc::clone(
                     &provider_catalog_repository,
                 ))
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             ),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -3380,7 +3381,7 @@ async fn gateway_uses_compatible_gemini_cli_endpoint_when_api_format_is_omitted_
         build_state_with_execution_runtime_override(execution_runtime_url)
             .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
                 provider_catalog_repository,
-                DEVELOPMENT_ENCRYPTION_KEY.to_string(),
+                DEV_FERNET_KEY.to_string(),
             )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;

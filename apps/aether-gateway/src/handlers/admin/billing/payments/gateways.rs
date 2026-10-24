@@ -681,7 +681,8 @@ pub(super) async fn maybe_build_local_admin_payment_gateways_response(
 
 #[cfg(test)]
 mod tests {
-    use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+    use crate::tests::DEV_FERNET_KEY;
+    use aether_crypto::encrypt_python_fernet_plaintext;
     use aether_data_contracts::repository::billing::PaymentGatewayConfigRecord;
     use serde_json::{json, Value};
 
@@ -714,7 +715,7 @@ mod tests {
 
     #[test]
     fn legacy_secret_reuse_requires_reentry_after_binding_change() {
-        let legacy = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "legacy-secret")
+        let legacy = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "legacy-secret")
             .expect("legacy secret should encrypt");
         let old_record = gateway_record("https://api.stripe.com", "merchant-old", Some(legacy));
         let changed_binding =
@@ -738,7 +739,7 @@ mod tests {
 
     #[test]
     fn legacy_secret_reuse_is_allowed_only_for_same_binding_or_bound_v3() {
-        let legacy = encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "legacy-secret")
+        let legacy = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "legacy-secret")
             .expect("legacy secret should encrypt");
         let old_record =
             gateway_record("https://API.STRIPE.COM:443/", "merchant-old", Some(legacy));

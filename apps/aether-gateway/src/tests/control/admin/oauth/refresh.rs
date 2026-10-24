@@ -1,4 +1,5 @@
 use super::*;
+use crate::tests::DEV_FERNET_KEY;
 
 #[test]
 fn gateway_revalidates_kiro_device_poll_via_idc_refresh_and_backfills_email() {
@@ -112,7 +113,7 @@ async fn gateway_revalidates_kiro_device_poll_via_idc_refresh_and_backfills_emai
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_provider_oauth_device_session_entry_for_tests(
             "session-refresh-email",
@@ -312,7 +313,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_locally_with_trusted
     existing_key.is_active = false;
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","refresh_token":"old-refresh-token"}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -333,7 +334,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_locally_with_trusted
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", format!("{token_url}/oauth/token")),
     );
@@ -451,7 +452,7 @@ async fn gateway_imports_codex_access_token_without_refresh_token_as_temporary_a
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", format!("{token_url}/oauth/token")),
     );
@@ -553,7 +554,7 @@ async fn gateway_imports_chatgpt_web_access_token_without_refresh_token_as_tempo
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests(
                 "chatgpt_web",
@@ -691,7 +692,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_over_active_expired_
         Some("[REFRESH_FAILED] refresh_token 无效、已过期或已撤销，请重新登录授权".to_string());
     existing_key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","refresh_token":"old-refresh-token","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -712,7 +713,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_over_active_expired_
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", format!("{token_url}/oauth/token")),
     );
@@ -921,7 +922,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
                     provider_catalog_repository.clone(),
                 )
                 .attach_proxy_node_repository_for_tests(proxy_node_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", "https://oauth.example/oauth/token"),
     );
@@ -1051,7 +1052,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
                     "system_proxy_node_id".to_string(),
                     json!("proxy-node-codex-system"),
                 )])
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", "https://oauth.example/oauth/token"),
     );
@@ -1166,7 +1167,7 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
                     "system_proxy_node_id".to_string(),
                     json!("proxy-node-codex-system"),
                 )])
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", "https://oauth.example/oauth/token"),
     );
@@ -1242,7 +1243,7 @@ async fn gateway_import_refresh_token_surfaces_execution_runtime_error_detail_im
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_provider_oauth_token_url_for_tests("codex", "https://oauth.example/oauth/token"),
     );
@@ -1327,7 +1328,7 @@ async fn gateway_marks_lazy_codex_oauth_refresh_failures_as_invalid_impl() {
     key.expires_at_unix_secs = Some(1);
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"used-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1353,7 +1354,7 @@ async fn gateway_marks_lazy_codex_oauth_refresh_failures_as_invalid_impl() {
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
 
@@ -1547,7 +1548,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_with_trusted_admin_p
     }));
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1575,7 +1576,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_with_trusted_admin_p
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -1869,7 +1870,7 @@ async fn gateway_manual_codex_oauth_refresh_reconciles_missing_fixed_endpoint_im
     key.auth_type = "oauth".to_string();
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -1896,7 +1897,7 @@ async fn gateway_manual_codex_oauth_refresh_reconciles_missing_fixed_endpoint_im
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -2100,7 +2101,7 @@ async fn gateway_marks_manual_oauth_refresh_failures_as_invalid_in_pool_payload_
     }));
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"used-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":4102444800}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -2127,7 +2128,7 @@ async fn gateway_marks_manual_oauth_refresh_failures_as_invalid_in_pool_payload_
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository,
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -2272,7 +2273,7 @@ async fn gateway_auto_removes_manual_oauth_refresh_failure_after_access_token_ex
     key.expires_at_unix_secs = Some(1);
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"expired-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -2298,7 +2299,7 @@ async fn gateway_auto_removes_manual_oauth_refresh_failure_after_access_token_ex
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -2412,7 +2413,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
     key.auth_type = "oauth".to_string();
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -2454,7 +2455,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
                     "system_proxy_node_id".to_string(),
                     json!("proxy-node-system"),
                 )])
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -2577,7 +2578,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_via_proxy_node_with_direct_r
     key.auth_type = "oauth".to_string();
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -2608,7 +2609,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_via_proxy_node_with_direct_r
                     provider_catalog_repository,
                 )
                 .attach_proxy_node_repository_for_tests(proxy_node_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -2759,7 +2760,7 @@ async fn gateway_consecutive_manual_oauth_refresh_uses_rotated_refresh_token_imp
     key.auth_type = "oauth".to_string();
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -2786,7 +2787,7 @@ async fn gateway_consecutive_manual_oauth_refresh_uses_rotated_refresh_token_imp
                 GatewayDataState::with_provider_catalog_repository_for_tests(
                     provider_catalog_repository.clone(),
                 )
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -2965,7 +2966,7 @@ async fn gateway_concurrent_manual_oauth_refresh_reuses_winner_after_lock_wait_i
     key.proxy = Some(json!({"node_id":"proxy-node-key","enabled":true}));
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -3003,7 +3004,7 @@ async fn gateway_concurrent_manual_oauth_refresh_reuses_winner_after_lock_wait_i
                     provider_catalog_repository.clone(),
                 )
                 .attach_proxy_node_repository_for_tests(proxy_node_repository)
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );
@@ -3187,7 +3188,7 @@ async fn gateway_manual_oauth_refresh_prefers_fresher_transport_auth_config_over
     key.auth_type = "oauth".to_string();
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1,"updated_at":1700000001}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -3213,7 +3214,7 @@ async fn gateway_manual_oauth_refresh_prefers_fresher_transport_auth_config_over
             GatewayDataState::with_provider_catalog_repository_for_tests(
                 provider_catalog_repository.clone(),
             )
-            .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
         .with_oauth_refresh_coordinator_for_tests(oauth_refresh);
 
@@ -3378,7 +3379,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
     key.proxy = Some(json!({"node_id":"proxy-node-key","enabled":true}));
     key.encrypted_auth_config = Some(
         encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"provider_type":"codex","refresh_token":"old-codex-refresh-token","email":"alice@example.com","account_id":"acct-codex-123","plan_type":"plus","expires_at":1}"#,
         )
         .expect("auth config ciphertext should build"),
@@ -3424,7 +3425,7 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
                     "system_proxy_node_id".to_string(),
                     json!("proxy-node-system"),
                 )])
-                .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
             .with_oauth_refresh_coordinator_for_tests(oauth_refresh),
     );

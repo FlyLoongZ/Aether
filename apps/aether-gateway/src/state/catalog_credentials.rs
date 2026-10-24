@@ -213,9 +213,10 @@ fn provider_catalog_credential_error(message: &'static str) -> GatewayError {
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::DEV_FERNET_KEY;
     use std::sync::Arc;
 
-    use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
+    use aether_crypto::encrypt_python_fernet_plaintext;
     use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogKeyCredentialsCasUpdate, ProviderCatalogReadRepository,
@@ -268,7 +269,7 @@ mod tests {
             .expect("test state should build")
             .with_data_state_for_tests(
                 GatewayDataState::with_provider_catalog_repository_for_tests(repository)
-                    .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                    .with_encryption_key_for_tests(DEV_FERNET_KEY),
             )
     }
 
@@ -296,7 +297,7 @@ mod tests {
                 .expect("test state should build")
                 .with_data_state_for_tests(
                     GatewayDataState::with_provider_catalog_reader_for_tests(repository)
-                        .with_encryption_key_for_tests(DEVELOPMENT_ENCRYPTION_KEY),
+                        .with_encryption_key_for_tests(DEV_FERNET_KEY),
                 );
             let provider_ids = ["provider-1".to_string()];
 
@@ -318,11 +319,10 @@ mod tests {
 
     #[tokio::test]
     async fn app_state_migrates_both_legacy_fields_with_one_exact_cas() {
-        let legacy_api =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, "legacy-api-key")
-                .expect("legacy API key should encrypt");
+        let legacy_api = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "legacy-api-key")
+            .expect("legacy API key should encrypt");
         let legacy_auth = encrypt_python_fernet_plaintext(
-            DEVELOPMENT_ENCRYPTION_KEY,
+            DEV_FERNET_KEY,
             r#"{"refresh_token":"legacy-refresh"}"#,
         )
         .expect("legacy auth config should encrypt");

@@ -20,7 +20,7 @@ use aether_data_contracts::repository::provider_catalog::{
 
 use crate::data::GatewayDataState;
 use crate::tests::next_non_keepalive_chunk;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
+use crate::tests::DEV_FERNET_KEY;
 
 fn run_lifecycle_test<F, Fut>(test_name: &'static str, make_future: F)
 where
@@ -162,7 +162,7 @@ async fn gateway_completes_sync_response_on_local_execution_runtime_path_impl() 
                     candidate_selection_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );
@@ -285,7 +285,7 @@ async fn gateway_stops_execution_runtime_stream_when_client_disconnects_impl() {
                     candidate_selection_repository,
                     provider_catalog_repository,
                     request_candidate_repository,
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     ).await;
@@ -368,7 +368,7 @@ async fn gateway_settles_stream_attempt_when_client_disconnects_before_first_byt
                     candidate_selection_repository,
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     ).await;
@@ -502,7 +502,7 @@ async fn gateway_returns_error_body_when_prefetch_detects_embedded_stream_error_
                     candidate_selection_repository,
                     provider_catalog_repository,
                     Arc::clone(&request_candidate_repository),
-                    DEVELOPMENT_ENCRYPTION_KEY,
+                    DEV_FERNET_KEY,
                 ),
             ),
     );

@@ -1,5 +1,4 @@
 use super::json;
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_data::repository::announcements::{
     InMemoryAnnouncementReadRepository, StoredAnnouncement,
 };

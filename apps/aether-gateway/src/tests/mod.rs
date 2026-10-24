@@ -16,6 +16,8 @@ use sha2::{Digest, Sha256};
 /// per-module copies that had to be kept in sync by hand.
 pub(crate) const LARGE_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
+pub(crate) use support::DEV_FERNET_KEY;
+
 /// Wrap an async impl future in a deep-stack thread and a plain #[test].
 macro_rules! large_stack_async_test {
     ($test_name:ident, $impl_name:ident) => {
