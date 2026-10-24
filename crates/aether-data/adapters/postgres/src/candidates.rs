@@ -17,6 +17,68 @@ use aether_data_query::{push_eq, push_in, push_limit, WhereClause};
 use crate::error::SqlxResultExt;
 use crate::{PostgresTransaction, PostgresTransactionRunner};
 
+// Canonical upsert conflict projection shared by the single-row and
+// template upserts. Keeping it in one macro guarantees the terminal-state
+// guards cannot drift between them.
+macro_rules! candidate_upsert_conflict_expr {
+    () => {
+        r#"  status_code = CASE
+    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
+      AND EXCLUDED.status <> request_candidates.status
+      THEN request_candidates.status_code
+    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
+      THEN request_candidates.status_code
+    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
+      THEN request_candidates.status_code
+    ELSE COALESCE(EXCLUDED.status_code, request_candidates.status_code)
+  END,
+  error_type = CASE
+    WHEN (
+      request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
+      AND EXCLUDED.status <> request_candidates.status
+    ) OR (
+      request_candidates.status = 'pending'
+      AND EXCLUDED.status IN ('available', 'unused')
+    ) OR (
+      request_candidates.status = 'streaming'
+      AND EXCLUDED.status IN ('available', 'unused', 'pending')
+    ) OR EXCLUDED.error_type IS NULL
+      THEN __AETHER_SANITIZED_LEGACY_ERROR_TYPE__
+    ELSE EXCLUDED.error_type
+  END,
+  error_message = __AETHER_CANDIDATE_ERROR_MESSAGE__,
+  latency_ms = CASE
+    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
+      AND EXCLUDED.status <> request_candidates.status
+      THEN request_candidates.latency_ms
+    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
+      THEN request_candidates.latency_ms
+    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
+      THEN request_candidates.latency_ms
+    ELSE COALESCE(EXCLUDED.latency_ms, request_candidates.latency_ms)
+  END,
+  concurrent_requests = COALESCE(EXCLUDED.concurrent_requests, request_candidates.concurrent_requests),
+  extra_data = __AETHER_CANDIDATE_EXTRA_DATA__,
+  required_capabilities = EXCLUDED.required_capabilities,
+  created_at = CASE
+    WHEN request_candidates.created_at <= TO_TIMESTAMP(1)
+      THEN EXCLUDED.created_at
+    ELSE request_candidates.created_at
+  END,
+  started_at = COALESCE(request_candidates.started_at, EXCLUDED.started_at),
+  finished_at = CASE
+    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
+      AND EXCLUDED.status <> request_candidates.status
+      THEN request_candidates.finished_at
+    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
+      THEN request_candidates.finished_at
+    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
+      THEN request_candidates.finished_at
+    ELSE COALESCE(EXCLUDED.finished_at, request_candidates.finished_at)
+  END"#
+    };
+}
+
 const LIST_BY_REQUEST_ID_SQL: &str = r#"
 SELECT
   id,
@@ -82,7 +144,8 @@ SELECT
 FROM request_candidates
 "#;
 
-const UPSERT_SQL_TEMPLATE: &str = r#"
+const UPSERT_SQL_TEMPLATE: &str = concat!(
+    r#"
 INSERT INTO request_candidates (
   id,
   request_id,
@@ -163,60 +226,9 @@ DO UPDATE SET
   END,
   skip_reason = COALESCE(EXCLUDED.skip_reason, __AETHER_SANITIZED_LEGACY_SKIP_REASON__),
   is_cached = COALESCE($14, request_candidates.is_cached),
-  status_code = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.status_code
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.status_code
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.status_code
-    ELSE COALESCE(EXCLUDED.status_code, request_candidates.status_code)
-  END,
-  error_type = CASE
-    WHEN (
-      request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-    ) OR (
-      request_candidates.status = 'pending'
-      AND EXCLUDED.status IN ('available', 'unused')
-    ) OR (
-      request_candidates.status = 'streaming'
-      AND EXCLUDED.status IN ('available', 'unused', 'pending')
-    ) OR EXCLUDED.error_type IS NULL
-      THEN __AETHER_SANITIZED_LEGACY_ERROR_TYPE__
-    ELSE EXCLUDED.error_type
-  END,
-  error_message = __AETHER_CANDIDATE_ERROR_MESSAGE__,
-  latency_ms = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.latency_ms
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.latency_ms
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.latency_ms
-    ELSE COALESCE(EXCLUDED.latency_ms, request_candidates.latency_ms)
-  END,
-  concurrent_requests = COALESCE(EXCLUDED.concurrent_requests, request_candidates.concurrent_requests),
-  extra_data = __AETHER_CANDIDATE_EXTRA_DATA__,
-  required_capabilities = EXCLUDED.required_capabilities,
-  created_at = CASE
-    WHEN request_candidates.created_at <= TO_TIMESTAMP(1)
-      THEN EXCLUDED.created_at
-    ELSE request_candidates.created_at
-  END,
-  started_at = COALESCE(request_candidates.started_at, EXCLUDED.started_at),
-  finished_at = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.finished_at
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.finished_at
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.finished_at
-    ELSE COALESCE(EXCLUDED.finished_at, request_candidates.finished_at)
-  END
+"#,
+    candidate_upsert_conflict_expr!(),
+    r#"
 RETURNING
   id,
   request_id,
@@ -242,9 +254,11 @@ RETURNING
   CAST(EXTRACT(EPOCH FROM created_at) * 1000 AS BIGINT) AS created_at_unix_ms,
   CAST(EXTRACT(EPOCH FROM started_at) * 1000 AS BIGINT) AS started_at_unix_ms,
   CAST(EXTRACT(EPOCH FROM finished_at) * 1000 AS BIGINT) AS finished_at_unix_ms
-"#;
+"#
+);
 
-const UPSERT_CONFLICT_SQL_TEMPLATE: &str = r#"
+const UPSERT_CONFLICT_SQL_TEMPLATE: &str = concat!(
+    r#"
 ON CONFLICT (request_id, candidate_index, retry_index)
 DO UPDATE SET
   user_id = COALESCE(request_candidates.user_id, EXCLUDED.user_id),
@@ -266,63 +280,14 @@ DO UPDATE SET
   END,
   skip_reason = COALESCE(EXCLUDED.skip_reason, __AETHER_SANITIZED_LEGACY_SKIP_REASON__),
   is_cached = COALESCE(EXCLUDED.is_cached, request_candidates.is_cached),
-  status_code = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.status_code
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.status_code
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.status_code
-    ELSE COALESCE(EXCLUDED.status_code, request_candidates.status_code)
-  END,
-  error_type = CASE
-    WHEN (
-      request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-    ) OR (
-      request_candidates.status = 'pending'
-      AND EXCLUDED.status IN ('available', 'unused')
-    ) OR (
-      request_candidates.status = 'streaming'
-      AND EXCLUDED.status IN ('available', 'unused', 'pending')
-    ) OR EXCLUDED.error_type IS NULL
-      THEN __AETHER_SANITIZED_LEGACY_ERROR_TYPE__
-    ELSE EXCLUDED.error_type
-  END,
-  error_message = __AETHER_CANDIDATE_ERROR_MESSAGE__,
-  latency_ms = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.latency_ms
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.latency_ms
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.latency_ms
-    ELSE COALESCE(EXCLUDED.latency_ms, request_candidates.latency_ms)
-  END,
-  concurrent_requests = COALESCE(EXCLUDED.concurrent_requests, request_candidates.concurrent_requests),
-  extra_data = __AETHER_CANDIDATE_EXTRA_DATA__,
-  required_capabilities = EXCLUDED.required_capabilities,
-  created_at = CASE
-    WHEN request_candidates.created_at <= TO_TIMESTAMP(1)
-      THEN EXCLUDED.created_at
-    ELSE request_candidates.created_at
-  END,
-  started_at = COALESCE(request_candidates.started_at, EXCLUDED.started_at),
-  finished_at = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.finished_at
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.finished_at
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.finished_at
-    ELSE COALESCE(EXCLUDED.finished_at, request_candidates.finished_at)
-  END
-"#;
+"#,
+    candidate_upsert_conflict_expr!(),
+    r#"
+"#
+);
 
-const UPSERT_CONFLICT_INHERIT_IS_CACHED_SQL_TEMPLATE: &str = r#"
+const UPSERT_CONFLICT_INHERIT_IS_CACHED_SQL_TEMPLATE: &str = concat!(
+    r#"
 ON CONFLICT (request_id, candidate_index, retry_index)
 DO UPDATE SET
   user_id = COALESCE(request_candidates.user_id, EXCLUDED.user_id),
@@ -344,61 +309,11 @@ DO UPDATE SET
   END,
   skip_reason = COALESCE(EXCLUDED.skip_reason, __AETHER_SANITIZED_LEGACY_SKIP_REASON__),
   is_cached = request_candidates.is_cached,
-  status_code = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.status_code
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.status_code
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.status_code
-    ELSE COALESCE(EXCLUDED.status_code, request_candidates.status_code)
-  END,
-  error_type = CASE
-    WHEN (
-      request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-    ) OR (
-      request_candidates.status = 'pending'
-      AND EXCLUDED.status IN ('available', 'unused')
-    ) OR (
-      request_candidates.status = 'streaming'
-      AND EXCLUDED.status IN ('available', 'unused', 'pending')
-    ) OR EXCLUDED.error_type IS NULL
-      THEN __AETHER_SANITIZED_LEGACY_ERROR_TYPE__
-    ELSE EXCLUDED.error_type
-  END,
-  error_message = __AETHER_CANDIDATE_ERROR_MESSAGE__,
-  latency_ms = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.latency_ms
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.latency_ms
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.latency_ms
-    ELSE COALESCE(EXCLUDED.latency_ms, request_candidates.latency_ms)
-  END,
-  concurrent_requests = COALESCE(EXCLUDED.concurrent_requests, request_candidates.concurrent_requests),
-  extra_data = __AETHER_CANDIDATE_EXTRA_DATA__,
-  required_capabilities = EXCLUDED.required_capabilities,
-  created_at = CASE
-    WHEN request_candidates.created_at <= TO_TIMESTAMP(1)
-      THEN EXCLUDED.created_at
-    ELSE request_candidates.created_at
-  END,
-  started_at = COALESCE(request_candidates.started_at, EXCLUDED.started_at),
-  finished_at = CASE
-    WHEN request_candidates.status IN ('success', 'failed', 'cancelled', 'skipped')
-      AND EXCLUDED.status <> request_candidates.status
-      THEN request_candidates.finished_at
-    WHEN request_candidates.status = 'pending' AND EXCLUDED.status IN ('available', 'unused')
-      THEN request_candidates.finished_at
-    WHEN request_candidates.status = 'streaming' AND EXCLUDED.status IN ('available', 'unused', 'pending')
-      THEN request_candidates.finished_at
-    ELSE COALESCE(EXCLUDED.finished_at, request_candidates.finished_at)
-  END
-"#;
+"#,
+    candidate_upsert_conflict_expr!(),
+    r#"
+"#
+);
 
 const UPSERT_MANY_PREFIX_SQL: &str = r#"
 INSERT INTO request_candidates (

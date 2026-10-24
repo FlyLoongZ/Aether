@@ -60,6 +60,8 @@ use aether_data_contracts::repository::usage::{
 };
 use aether_data_contracts::DataLayerError;
 
+#[macro_use]
+mod sql_fragments;
 mod analytics;
 #[cfg(test)]
 mod analytics_tests;

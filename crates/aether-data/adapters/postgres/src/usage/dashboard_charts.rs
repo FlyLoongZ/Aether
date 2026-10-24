@@ -13,7 +13,8 @@ use sqlx::{Postgres, QueryBuilder, Row};
 // Committed request contributions are updated in the same transaction as the
 // top dashboard counters. Reuse them without detoasting large request metadata.
 // Rows predating that ledger retain DASHBOARD_TOTAL_FACTS_SQL token precedence.
-const DASHBOARD_CHART_FACTS_SQL: &str = r#"(
+const DASHBOARD_CHART_FACTS_SQL: &str = concat!(
+    r#"(
 SELECT u.created_at,u.model,u.provider_id,u.provider_name,u.status,u.response_time_ms,
   COALESCE(a.record_kind,'request') AS record_kind,
   COALESCE(s.billing_status,u.billing_status) AS settlement_status,s.allocation_status,
@@ -22,74 +23,9 @@ SELECT u.created_at,u.model,u.provider_id,u.provider_name,u.status,u.response_ti
   CASE WHEN c.request_id IS NOT NULL THEN
     CASE WHEN (c.metrics->>'usage_available_count')::bigint>0 THEN (c.metrics->>'total_tokens')::bigint END
   WHEN COALESCE(metadata.value->'usage_available', 'true'::jsonb) <> 'false'::jsonb THEN
-  GREATEST(
-    COALESCE(
-      CASE
-        WHEN s.billing_effective_input_tokens IS NOT NULL
-        THEN GREATEST(s.billing_effective_input_tokens, 0)
-          + GREATEST(COALESCE(s.billing_output_tokens, u.output_tokens, 0), 0)
-          + GREATEST(
-              COALESCE(
-                s.billing_cache_creation_tokens,
-                CASE
-                  WHEN s.billing_cache_creation_5m_tokens IS NOT NULL
-                    OR s.billing_cache_creation_1h_tokens IS NOT NULL
-                  THEN COALESCE(s.billing_cache_creation_5m_tokens, 0)
-                    + COALESCE(s.billing_cache_creation_1h_tokens, 0)
-                END,
-                CASE
-                  WHEN COALESCE(u.cache_creation_input_tokens, 0) = 0
-                       AND (
-                         COALESCE(u.cache_creation_input_tokens_5m, 0)
-                         + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                       ) > 0
-                  THEN COALESCE(u.cache_creation_input_tokens_5m, 0)
-                    + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                  ELSE COALESCE(u.cache_creation_input_tokens, 0)
-                END,
-                0
-              ),
-              0
-            )
-          + GREATEST(
-              COALESCE(
-                s.billing_cache_read_tokens,
-                u.cache_read_input_tokens,
-                0
-              ),
-              0
-            )
-        WHEN s.billing_total_input_context IS NOT NULL
-        THEN GREATEST(s.billing_total_input_context, 0)
-          + GREATEST(COALESCE(s.billing_output_tokens, u.output_tokens, 0), 0)
-      END,
-      NULLIF(GREATEST(COALESCE(u.total_tokens, 0), 0), 0),
-      CASE
-        WHEN split_part(lower(COALESCE(COALESCE(u.endpoint_api_format, u.api_format), '')), ':', 1)
-             IN ('openai', 'gemini', 'google')
-        THEN GREATEST(COALESCE(u.input_tokens, 0), 0)
-          + GREATEST(COALESCE(u.output_tokens, 0), 0)
-        ELSE GREATEST(COALESCE(u.input_tokens, 0), 0)
-          + GREATEST(COALESCE(u.output_tokens, 0), 0)
-          + GREATEST(
-              CASE
-                WHEN COALESCE(u.cache_creation_input_tokens, 0) = 0
-                     AND (
-                       COALESCE(u.cache_creation_input_tokens_5m, 0)
-                       + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                     ) > 0
-                THEN COALESCE(u.cache_creation_input_tokens_5m, 0)
-                  + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                ELSE COALESCE(u.cache_creation_input_tokens, 0)
-              END,
-              0
-            )
-          + GREATEST(COALESCE(u.cache_read_input_tokens, 0), 0)
-      END,
-      0
-    ),
-    0
-  )::bigint END AS total_tokens,
+"#,
+    dashboard_total_tokens_expr!(),
+    r#"
   CASE WHEN CASE WHEN c.request_id IS NOT NULL THEN (c.metrics->>'pricing_available_count')::bigint>0
     ELSE COALESCE(metadata.value->'usage_pricing_available','true'::jsonb)<>'false'::jsonb END
     AND (s.billing_total_cost_usd IS NOT NULL OR COALESCE(s.billing_status,u.billing_status)='settled')
@@ -108,7 +44,8 @@ LEFT JOIN public.usage_settlement_snapshots s USING(request_id)
 LEFT JOIN public.usage_attribution_snapshots a USING(request_id)
 LEFT JOIN LATERAL (SELECT u.request_metadata::jsonb AS value
   WHERE c.request_id IS NULL OFFSET 0) metadata ON true
-) AS chart_facts"#;
+) AS chart_facts"#
+);
 
 const DASHBOARD_CHART_METRICS_SQL: &str = r#"
 count(*)::bigint AS request_count,

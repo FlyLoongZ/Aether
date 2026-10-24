@@ -1,3 +1,44 @@
+// Canonical billing-aware token and cost projection shared by every daily
+// aggregate upsert. Keeping one definition prevents the cost-savings family
+// from drifting away from the plain stats family.
+macro_rules! usage_cost_columns_expr {
+    () => {
+        r#"        CAST(
+            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
+        ) AS cache_read_tokens,
+        CAST(
+            COALESCE(
+                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
+                0
+            ) AS DOUBLE PRECISION
+        ) AS cache_read_cost,
+        CAST(
+            COALESCE(
+                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
+                0
+            ) AS DOUBLE PRECISION
+        ) AS cache_creation_cost,
+        CAST(
+            COALESCE(
+                SUM(
+                    COALESCE(
+                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
+                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
+                        0
+                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
+                        / 1000000.0
+                ),
+                0
+            ) AS DOUBLE PRECISION
+        ) AS estimated_full_cost
+    FROM usage_billing_facts AS usage
+    LEFT JOIN usage_settlement_snapshots
+      ON usage_settlement_snapshots.request_id = usage.request_id
+    WHERE usage.created_at >= $1
+      AND usage.created_at < $2"#
+    };
+}
+
 pub(super) const SELECT_STATS_DAILY_AGGREGATE_SQL: &str = r#"
 SELECT
     CAST(COUNT(id) AS BIGINT) AS cache_hit_total_requests,
@@ -612,42 +653,13 @@ DO UPDATE SET
     response_time_samples = EXCLUDED.response_time_samples,
     updated_at = EXCLUDED.updated_at
 "#;
-pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_SQL: &str = r#"
+pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
 )
 INSERT INTO stats_daily_cost_savings (
     id,
@@ -676,44 +688,16 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
-pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_PROVIDER_SQL: &str = r#"
+"#
+);
+pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_PROVIDER_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
         COALESCE(usage.provider_name, '') AS provider_name,
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
     GROUP BY COALESCE(usage.provider_name, '')
 )
 INSERT INTO stats_daily_cost_savings_provider (
@@ -752,44 +736,16 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
-pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_MODEL_SQL: &str = r#"
+"#
+);
+pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_MODEL_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
         COALESCE(usage.model, '') AS model,
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
     GROUP BY COALESCE(usage.model, '')
 )
 INSERT INTO stats_daily_cost_savings_model (
@@ -828,45 +784,17 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
-pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_MODEL_PROVIDER_SQL: &str = r#"
+"#
+);
+pub(super) const UPSERT_STATS_DAILY_COST_SAVINGS_MODEL_PROVIDER_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
         COALESCE(usage.model, '') AS model,
         COALESCE(usage.provider_name, '') AS provider_name,
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
     GROUP BY COALESCE(usage.model, ''), COALESCE(usage.provider_name, '')
 )
 INSERT INTO stats_daily_cost_savings_model_provider (
@@ -909,7 +837,8 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
+"#
+);
 pub(super) const UPSERT_STATS_DAILY_API_KEY_SQL: &str = r#"
 WITH aggregated AS (
     SELECT
@@ -1882,44 +1811,15 @@ DO UPDATE SET
     response_time_samples = EXCLUDED.response_time_samples,
     updated_at = EXCLUDED.updated_at
 "#;
-pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_SQL: &str = r#"
+pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
         usage.user_id,
         MAX(usage.username) AS username,
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
       AND usage.user_id IS NOT NULL
     GROUP BY usage.user_id
 )
@@ -1962,46 +1862,18 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
-pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_PROVIDER_SQL: &str = r#"
+"#
+);
+pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_PROVIDER_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
         usage.user_id,
         MAX(usage.username) AS username,
         COALESCE(usage.provider_name, '') AS provider_name,
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
       AND usage.user_id IS NOT NULL
     GROUP BY usage.user_id, COALESCE(usage.provider_name, '')
 )
@@ -2048,46 +1920,18 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
-pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_MODEL_SQL: &str = r#"
+"#
+);
+pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_MODEL_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
         usage.user_id,
         MAX(usage.username) AS username,
         COALESCE(usage.model, '') AS model,
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
       AND usage.user_id IS NOT NULL
     GROUP BY usage.user_id, COALESCE(usage.model, '')
 )
@@ -2134,47 +1978,19 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
-pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_MODEL_PROVIDER_SQL: &str = r#"
+"#
+);
+pub(super) const UPSERT_STATS_USER_DAILY_COST_SAVINGS_MODEL_PROVIDER_SQL: &str = concat!(
+    r#"
 WITH aggregated AS (
     SELECT
         usage.user_id,
         MAX(usage.username) AS username,
         COALESCE(usage.model, '') AS model,
         COALESCE(usage.provider_name, '') AS provider_name,
-        CAST(
-            COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0) AS BIGINT
-        ) AS cache_read_tokens,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_read_cost,
-        CAST(
-            COALESCE(
-                SUM(COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0)),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS cache_creation_cost,
-        CAST(
-            COALESCE(
-                SUM(
-                    COALESCE(
-                        CAST(usage_settlement_snapshots.input_price_per_1m AS DOUBLE PRECISION),
-                        CAST(usage.input_price_per_1m AS DOUBLE PRECISION),
-                        0
-                    ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION
-                        / 1000000.0
-                ),
-                0
-            ) AS DOUBLE PRECISION
-        ) AS estimated_full_cost
-    FROM usage_billing_facts AS usage
-    LEFT JOIN usage_settlement_snapshots
-      ON usage_settlement_snapshots.request_id = usage.request_id
-    WHERE usage.created_at >= $1
-      AND usage.created_at < $2
+"#,
+    usage_cost_columns_expr!(),
+    r#"
       AND usage.user_id IS NOT NULL
     GROUP BY usage.user_id, COALESCE(usage.model, ''), COALESCE(usage.provider_name, '')
 )
@@ -2228,7 +2044,8 @@ DO UPDATE SET
     cache_creation_cost = EXCLUDED.cache_creation_cost,
     estimated_full_cost = EXCLUDED.estimated_full_cost,
     updated_at = EXCLUDED.updated_at
-"#;
+"#
+);
 pub(super) const SELECT_EXISTING_STATS_SUMMARY_ID_SQL: &str = r#"
 SELECT id
 FROM stats_summary
