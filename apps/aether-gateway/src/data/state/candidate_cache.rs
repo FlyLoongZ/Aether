@@ -1,8 +1,9 @@
+use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aether_cache::{optional_strings_weight, value_weight, CacheWeight, OnceMap};
+use aether_cache::{optional_strings_weight, value_weight, CacheBudget, CacheWeight, OnceMap};
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::candidate_selection::{
     MinimalCandidateSelectionReadRepository, StoredApiFormatCandidateRowsQuery,
@@ -10,27 +11,118 @@ use aether_data_contracts::repository::candidate_selection::{
     StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
     StoredProviderModelMapping, StoredRequestedModelCandidateRowsQuery,
 };
+use aether_scheduler_core::row_supports_requested_model_with_model_directives;
 use async_trait::async_trait;
 use tokio::time::timeout;
 use tracing::warn;
 
-const CANDIDATE_SELECTION_CACHE_TTL: Duration = Duration::from_secs(5);
-const CANDIDATE_SELECTION_CACHE_CAPACITY_BYTES: usize = 16 * 1024 * 1024;
-const CANDIDATE_SELECTION_CACHE_MAX_INFLIGHT: usize = 4096;
+const CANDIDATE_CACHE_TTL: Duration = Duration::from_secs(5);
+/// Pool windows are small, keyed by the pool member triple, and cannot be
+/// derived from the format snapshot (see [`CachedMinimalCandidateSelectionReadRepository`]).
+const CANDIDATE_POOL_ROWS_CAPACITY_BYTES: usize = 4 * 1024 * 1024;
+const CANDIDATE_CACHE_MAX_INFLIGHT: usize = 4096;
 #[cfg(not(test))]
-const CANDIDATE_SELECTION_CACHE_LOAD_TIMEOUT: Duration = Duration::from_secs(10);
+const CANDIDATE_CACHE_LOAD_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(test)]
-const CANDIDATE_SELECTION_CACHE_LOAD_TIMEOUT: Duration = Duration::from_millis(50);
+const CANDIDATE_CACHE_LOAD_TIMEOUT: Duration = Duration::from_millis(50);
 
-/// A cached candidate page.
+/// Every candidate row one api format can serve, as one immutable version.
 ///
-/// One row owns a dozen strings plus several JSON values, so its weight has to
-/// walk them. Only this crate caches pages of rows, so the impl lives here
-/// rather than on the contract type.
-#[derive(Debug, Clone)]
-struct CandidateRows(Vec<StoredMinimalCandidateSelectionRow>);
+/// The planner asks the same table five different ways — all rows, one page of
+/// them, one global model, one requested model, one page of that — and each
+/// shape used to be its own cache entry with its own five-second window. Two
+/// consequences: a first read paid one query per shape (a single request could
+/// do three), and after one configuration change the shapes could disagree
+/// about which version they were serving.
+///
+/// One load now produces one version, and every shape is answered from it in
+/// memory. The rows arrive already filtered by the query's own policy — which
+/// providers, endpoints and credentials may serve this format is decided by the
+/// repository, not here — so this cache only re-arranges them.
+///
+/// Order is the same one `list_for_exact_api_format_page` used to ask the
+/// database for, applied once at load time instead of once per page.
+struct CandidateFormatRows {
+    rows: Vec<StoredMinimalCandidateSelectionRow>,
+}
 
-impl CacheWeight for CandidateRows {
+impl CandidateFormatRows {
+    fn new(rows: Vec<StoredMinimalCandidateSelectionRow>) -> Self {
+        Self {
+            rows: normalize_rows(rows),
+        }
+    }
+
+    fn all(&self) -> Vec<StoredMinimalCandidateSelectionRow> {
+        self.rows.clone()
+    }
+
+    /// Rows `[offset, offset + limit)`, clamped to what the version holds.
+    fn window(&self, offset: u32, limit: u32) -> Vec<StoredMinimalCandidateSelectionRow> {
+        if limit == 0 {
+            return Vec::new();
+        }
+        let start = offset as usize;
+        if start >= self.rows.len() {
+            return Vec::new();
+        }
+        let end = start.saturating_add(limit as usize).min(self.rows.len());
+        self.rows[start..end].to_vec()
+    }
+
+    fn by_global_model(&self, global_model_name: &str) -> Vec<StoredMinimalCandidateSelectionRow> {
+        self.rows
+            .iter()
+            .filter(|row| row.global_model_name == global_model_name)
+            .cloned()
+            .collect()
+    }
+
+    /// The rows a request naming `requested_model_name` may consider.
+    ///
+    /// This is the same predicate the planner applies to the rows it receives,
+    /// so answering here changes nothing about the result — but a page of this
+    /// shape has to be cut from the filtered stream, or the caller's offsets
+    /// would address rows it never sees.
+    fn by_requested_model(
+        &self,
+        requested_model_name: &str,
+        api_format: &str,
+    ) -> Vec<StoredMinimalCandidateSelectionRow> {
+        self.rows
+            .iter()
+            .filter(|row| {
+                row_supports_requested_model_with_model_directives(
+                    row,
+                    requested_model_name,
+                    api_format,
+                    false,
+                )
+            })
+            .cloned()
+            .collect()
+    }
+}
+
+impl CacheWeight for CandidateFormatRows {
+    fn cache_weight(&self) -> usize {
+        value_weight::<Self>(
+            self.rows.capacity() * std::mem::size_of::<StoredMinimalCandidateSelectionRow>(),
+        )
+        .saturating_add(self.rows.iter().map(candidate_row_weight).sum())
+    }
+}
+
+/// One window of pool-key rows.
+///
+/// These stay on a keyed cache: their order comes from `pak.last_used_at` and
+/// from `md5(seed || key id)` on the database side, and
+/// `StoredMinimalCandidateSelectionRow` carries neither, so the format snapshot
+/// cannot reproduce them.
+#[derive(Debug, Clone)]
+struct CandidatePoolRows(Vec<StoredMinimalCandidateSelectionRow>);
+
+impl CacheWeight for CandidatePoolRows {
     fn cache_weight(&self) -> usize {
         value_weight::<Self>(
             self.0.capacity() * std::mem::size_of::<StoredMinimalCandidateSelectionRow>(),
@@ -86,65 +178,127 @@ fn candidate_row_weight(row: &StoredMinimalCandidateSelectionRow) -> usize {
 
 pub(super) struct CachedMinimalCandidateSelectionReadRepository {
     inner: Arc<dyn MinimalCandidateSelectionReadRepository>,
-    cache: OnceMap<CandidateSelectionCacheKey, CandidateRows, DataLayerError>,
+    /// A whole-format version can exceed the old 16 MiB query-page cap. Charge
+    /// it to the shared process ledger instead: retention stays bounded without
+    /// silently forcing large formats to relist on every request.
+    formats: OnceMap<String, CandidateFormatRows, DataLayerError>,
+    pools: OnceMap<CandidatePoolCacheKey, CandidatePoolRows, DataLayerError>,
 }
 
 impl CachedMinimalCandidateSelectionReadRepository {
     pub(super) fn new(inner: Arc<dyn MinimalCandidateSelectionReadRepository>) -> Self {
+        Self::with_budget(inner, CacheBudget::process())
+    }
+
+    fn with_budget(
+        inner: Arc<dyn MinimalCandidateSelectionReadRepository>,
+        budget: Arc<CacheBudget>,
+    ) -> Self {
         Self {
             inner,
-            cache: OnceMap::builder()
-                .capacity_bytes(CANDIDATE_SELECTION_CACHE_CAPACITY_BYTES)
-                .max_inflight(CANDIDATE_SELECTION_CACHE_MAX_INFLIGHT)
+            formats: OnceMap::builder()
+                .budget(Arc::clone(&budget))
+                .max_inflight(CANDIDATE_CACHE_MAX_INFLIGHT)
+                .build(),
+            pools: OnceMap::builder()
+                .capacity_bytes(CANDIDATE_POOL_ROWS_CAPACITY_BYTES)
+                .budget(budget)
+                .max_inflight(CANDIDATE_CACHE_MAX_INFLIGHT)
                 .build(),
         }
     }
-    async fn get_or_load<F, Fut>(
+
+    async fn format_rows(
         &self,
-        key: CandidateSelectionCacheKey,
+        api_format: &str,
+    ) -> Result<Arc<CandidateFormatRows>, DataLayerError> {
+        let cache_key = normalize_api_format_key(api_format);
+        self.formats
+            .get_or_load(cache_key.clone(), CANDIDATE_CACHE_TTL, || async move {
+                let rows =
+                    load_with_timeout(&cache_key, self.inner.list_for_exact_api_format(api_format))
+                        .await?;
+                Ok(CandidateFormatRows::new(rows))
+            })
+            .await
+            .map_err(|error| error.or_else_load(DataLayerError::TimedOut))
+    }
+
+    async fn pool_rows<F, Fut>(
+        &self,
+        key: CandidatePoolCacheKey,
         load: F,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>>,
     {
-        // The loader keeps its own deadline so a timeout is still logged.
         let load_key = key.clone();
         let rows = self
-            .cache
-            .get_or_load(key, CANDIDATE_SELECTION_CACHE_TTL, || async move {
-                load_candidate_selection_rows_with_timeout(&load_key, load())
+            .pools
+            .get_or_load(key, CANDIDATE_CACHE_TTL, || async move {
+                load_with_timeout(&load_key, load())
                     .await
-                    .map(CandidateRows)
+                    .map(CandidatePoolRows)
             })
             .await
             .map_err(|error| error.or_else_load(DataLayerError::TimedOut))?;
-        // The repository trait hands out owned rows; the cache keeps one shared
-        // page so concurrent readers never build it twice.
         Ok(rows.0.clone())
     }
 }
 
-async fn load_candidate_selection_rows_with_timeout<Fut>(
-    key: &CandidateSelectionCacheKey,
-    load: Fut,
-) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>
+/// Dedupes and orders one format's rows.
+///
+/// The repository concatenates one query per storage alias, so the same
+/// `(endpoint, key, model)` triple can arrive more than once; the first
+/// occurrence wins, exactly as the per-page query did. The order is the one the
+/// page query asked the database for, so a page cut here matches a page cut
+/// there.
+fn normalize_rows(
+    rows: Vec<StoredMinimalCandidateSelectionRow>,
+) -> Vec<StoredMinimalCandidateSelectionRow> {
+    let mut seen = HashSet::with_capacity(rows.len());
+    let mut rows = rows
+        .into_iter()
+        .filter(|row| {
+            seen.insert((
+                row.endpoint_id.clone(),
+                row.key_id.clone(),
+                row.model_id.clone(),
+            ))
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        left.global_model_name
+            .cmp(&right.global_model_name)
+            .then(left.provider_priority.cmp(&right.provider_priority))
+            .then(left.key_internal_priority.cmp(&right.key_internal_priority))
+            .then(left.provider_id.cmp(&right.provider_id))
+            .then(left.endpoint_id.cmp(&right.endpoint_id))
+            .then(left.key_id.cmp(&right.key_id))
+            .then(left.model_id.cmp(&right.model_id))
+    });
+    rows
+}
+
+async fn load_with_timeout<Fut, T, L>(label: &L, load: Fut) -> Result<T, DataLayerError>
 where
-    Fut: Future<Output = Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError>>,
+    Fut: Future<Output = Result<T, DataLayerError>>,
+    L: std::fmt::Debug + ?Sized,
 {
-    match timeout(CANDIDATE_SELECTION_CACHE_LOAD_TIMEOUT, load).await {
+    match timeout(CANDIDATE_CACHE_LOAD_TIMEOUT, load).await {
         Ok(result) => result,
         Err(_) => {
             warn!(
                 event_name = "candidate_selection_cache_load_timeout",
                 log_type = "ops",
-                cache_key = ?key,
-                timeout_ms = CANDIDATE_SELECTION_CACHE_LOAD_TIMEOUT.as_millis() as u64,
+                cache_key = ?label,
+                timeout_ms = CANDIDATE_CACHE_LOAD_TIMEOUT.as_millis() as u64,
                 "gateway candidate selection cache load timed out"
             );
             Err(DataLayerError::TimedOut(format!(
-                "candidate selection cache load exceeded {}ms for {key:?}",
-                CANDIDATE_SELECTION_CACHE_LOAD_TIMEOUT.as_millis()
+                "candidate selection cache load exceeded {}ms for {label:?}",
+                CANDIDATE_CACHE_LOAD_TIMEOUT.as_millis()
             )))
         }
     }
@@ -153,7 +307,8 @@ where
 #[async_trait]
 impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelectionReadRepository {
     fn clear_local_cache(&self) {
-        self.cache.invalidate_all();
+        self.formats.invalidate_all();
+        self.pools.invalidate_all();
         self.inner.clear_local_cache();
     }
 
@@ -161,24 +316,17 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
         &self,
         api_format: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let key = CandidateSelectionCacheKey::ApiFormat {
-            api_format: normalize_api_format_key(api_format),
-        };
-        self.get_or_load(key, || self.inner.list_for_exact_api_format(api_format))
-            .await
+        Ok(self.format_rows(api_format).await?.all())
     }
 
     async fn list_for_exact_api_format_page(
         &self,
         query: &StoredApiFormatCandidateRowsQuery,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let key = CandidateSelectionCacheKey::ApiFormatPage {
-            api_format: normalize_api_format_key(&query.api_format),
-            offset: query.offset,
-            limit: query.limit,
-        };
-        self.get_or_load(key, || self.inner.list_for_exact_api_format_page(query))
-            .await
+        Ok(self
+            .format_rows(&query.api_format)
+            .await?
+            .window(query.offset, query.limit))
     }
 
     async fn list_for_exact_api_format_and_global_model(
@@ -186,15 +334,10 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
         api_format: &str,
         global_model_name: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let key = CandidateSelectionCacheKey::ApiFormatAndGlobalModel {
-            api_format: normalize_api_format_key(api_format),
-            global_model_name: global_model_name.to_string(),
-        };
-        self.get_or_load(key, || {
-            self.inner
-                .list_for_exact_api_format_and_global_model(api_format, global_model_name)
-        })
-        .await
+        Ok(self
+            .format_rows(api_format)
+            .await?
+            .by_global_model(global_model_name))
     }
 
     async fn list_for_exact_api_format_and_requested_model(
@@ -202,49 +345,46 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
         api_format: &str,
         requested_model_name: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let key = CandidateSelectionCacheKey::ApiFormatAndRequestedModel {
-            api_format: normalize_api_format_key(api_format),
-            requested_model_name: requested_model_name.to_string(),
-        };
-        self.get_or_load(key, || {
-            self.inner
-                .list_for_exact_api_format_and_requested_model(api_format, requested_model_name)
-        })
-        .await
+        Ok(self
+            .format_rows(api_format)
+            .await?
+            .by_requested_model(requested_model_name, api_format))
     }
 
     async fn list_for_exact_api_format_and_requested_model_page(
         &self,
         query: &StoredRequestedModelCandidateRowsQuery,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let key = CandidateSelectionCacheKey::RequestedModelPage {
-            api_format: normalize_api_format_key(&query.api_format),
-            requested_model_name: query.requested_model_name.clone(),
-            offset: query.offset,
-            limit: query.limit,
-        };
-        self.get_or_load(key, || {
-            self.inner
-                .list_for_exact_api_format_and_requested_model_page(query)
-        })
-        .await
+        let rows = self.format_rows(&query.api_format).await?;
+        let matched = rows.by_requested_model(&query.requested_model_name, &query.api_format);
+        if query.limit == 0 {
+            return Ok(Vec::new());
+        }
+        let start = query.offset as usize;
+        if start >= matched.len() {
+            return Ok(Vec::new());
+        }
+        let end = start
+            .saturating_add(query.limit as usize)
+            .min(matched.len());
+        Ok(matched[start..end].to_vec())
     }
 
     async fn list_pool_key_rows_for_group(
         &self,
         query: &StoredPoolKeyCandidateRowsQuery,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let key = CandidateSelectionCacheKey::PoolKeyRowsForGroup {
+        let key = CandidatePoolCacheKey::Group {
             api_format: normalize_api_format_key(&query.api_format),
             provider_id: query.provider_id.clone(),
             endpoint_id: query.endpoint_id.clone(),
             model_id: query.model_id.clone(),
             selected_provider_model_name: query.selected_provider_model_name.clone(),
-            order: CandidateSelectionPoolOrderKey::from(&query.order),
+            order: CandidatePoolOrderKey::from(&query.order),
             offset: query.offset,
             limit: query.limit,
         };
-        self.get_or_load(key, || self.inner.list_pool_key_rows_for_group(query))
+        self.pool_rows(key, || self.inner.list_pool_key_rows_for_group(query))
             .await
     }
 
@@ -252,7 +392,7 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
         &self,
         query: &StoredPoolKeyCandidateRowsByKeyIdsQuery,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let key = CandidateSelectionCacheKey::PoolKeyRowsForGroupKeyIds {
+        let key = CandidatePoolCacheKey::GroupKeyIds {
             api_format: normalize_api_format_key(&query.api_format),
             provider_id: query.provider_id.clone(),
             endpoint_id: query.endpoint_id.clone(),
@@ -260,7 +400,7 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
             selected_provider_model_name: query.selected_provider_model_name.clone(),
             key_ids: query.key_ids.clone(),
         };
-        self.get_or_load(key, || {
+        self.pool_rows(key, || {
             self.inner.list_pool_key_rows_for_group_key_ids(query)
         })
         .await
@@ -268,40 +408,18 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum CandidateSelectionCacheKey {
-    ApiFormat {
-        api_format: String,
-    },
-    ApiFormatPage {
-        api_format: String,
-        offset: u32,
-        limit: u32,
-    },
-    ApiFormatAndGlobalModel {
-        api_format: String,
-        global_model_name: String,
-    },
-    ApiFormatAndRequestedModel {
-        api_format: String,
-        requested_model_name: String,
-    },
-    RequestedModelPage {
-        api_format: String,
-        requested_model_name: String,
-        offset: u32,
-        limit: u32,
-    },
-    PoolKeyRowsForGroup {
+enum CandidatePoolCacheKey {
+    Group {
         api_format: String,
         provider_id: String,
         endpoint_id: String,
         model_id: String,
         selected_provider_model_name: String,
-        order: CandidateSelectionPoolOrderKey,
+        order: CandidatePoolOrderKey,
         offset: u32,
         limit: u32,
     },
-    PoolKeyRowsForGroupKeyIds {
+    GroupKeyIds {
         api_format: String,
         provider_id: String,
         endpoint_id: String,
@@ -311,25 +429,10 @@ enum CandidateSelectionCacheKey {
     },
 }
 
-impl CacheWeight for CandidateSelectionCacheKey {
+impl CacheWeight for CandidatePoolCacheKey {
     fn cache_weight(&self) -> usize {
         let owned = match self {
-            Self::ApiFormat { api_format } => api_format.capacity(),
-            Self::ApiFormatPage { api_format, .. } => api_format.capacity(),
-            Self::ApiFormatAndGlobalModel {
-                api_format,
-                global_model_name,
-            } => api_format.capacity() + global_model_name.capacity(),
-            Self::ApiFormatAndRequestedModel {
-                api_format,
-                requested_model_name,
-            } => api_format.capacity() + requested_model_name.capacity(),
-            Self::RequestedModelPage {
-                api_format,
-                requested_model_name,
-                ..
-            } => api_format.capacity() + requested_model_name.capacity(),
-            Self::PoolKeyRowsForGroup {
+            Self::Group {
                 api_format,
                 provider_id,
                 endpoint_id,
@@ -345,7 +448,7 @@ impl CacheWeight for CandidateSelectionCacheKey {
                     + selected_provider_model_name.capacity()
                     + order.cache_weight()
             }
-            Self::PoolKeyRowsForGroupKeyIds {
+            Self::GroupKeyIds {
                 api_format,
                 provider_id,
                 endpoint_id,
@@ -368,7 +471,7 @@ impl CacheWeight for CandidateSelectionCacheKey {
     }
 }
 
-impl CacheWeight for CandidateSelectionPoolOrderKey {
+impl CacheWeight for CandidatePoolOrderKey {
     fn cache_weight(&self) -> usize {
         match self {
             Self::LoadBalance { seed } => seed.capacity(),
@@ -378,7 +481,7 @@ impl CacheWeight for CandidateSelectionPoolOrderKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum CandidateSelectionPoolOrderKey {
+enum CandidatePoolOrderKey {
     InternalPriority,
     Lru,
     CacheAffinity,
@@ -386,7 +489,7 @@ enum CandidateSelectionPoolOrderKey {
     LoadBalance { seed: String },
 }
 
-impl From<&StoredPoolKeyCandidateOrder> for CandidateSelectionPoolOrderKey {
+impl From<&StoredPoolKeyCandidateOrder> for CandidatePoolOrderKey {
     fn from(order: &StoredPoolKeyCandidateOrder) -> Self {
         match order {
             StoredPoolKeyCandidateOrder::InternalPriority => Self::InternalPriority,
@@ -422,6 +525,14 @@ mod tests {
                 calls: AtomicUsize::new(0),
                 delay,
                 rows: Vec::new(),
+            }
+        }
+
+        fn with_rows(delay: Duration, rows: Vec<StoredMinimalCandidateSelectionRow>) -> Self {
+            Self {
+                calls: AtomicUsize::new(0),
+                delay,
+                rows,
             }
         }
 
@@ -566,6 +677,14 @@ mod tests {
         }
     }
 
+    fn format_page(api_format: &str, offset: u32, limit: u32) -> StoredApiFormatCandidateRowsQuery {
+        StoredApiFormatCandidateRowsQuery {
+            api_format: api_format.to_string(),
+            offset,
+            limit,
+        }
+    }
+
     #[tokio::test]
     async fn concurrent_misses_load_once() {
         let inner = Arc::new(StubCandidateSelectionRepository::new(
@@ -601,28 +720,205 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pages_of_the_same_query_do_not_share_an_entry() {
+    async fn a_format_larger_than_the_old_page_cap_is_retained_within_the_shared_budget() {
+        const OLD_PAGE_CAP: usize = 16 * 1024 * 1024;
+        let mut row = sample_row_for("key-large", 1, "model-large");
+        row.provider_name = "p".repeat(OLD_PAGE_CAP);
+        let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
+            Duration::ZERO,
+            vec![row],
+        ));
+        let budget = Arc::new(CacheBudget::new(64 * 1024 * 1024));
+        let cache = CachedMinimalCandidateSelectionReadRepository::with_budget(
+            inner.clone(),
+            Arc::clone(&budget),
+        );
+
+        let first = cache.format_rows("openai:chat").await.unwrap();
+        let second = cache.format_rows("openai:chat").await.unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(
+            inner.calls(),
+            1,
+            "large formats must not be relisted per request"
+        );
+        assert!(budget.used() > OLD_PAGE_CAP);
+        assert!(budget.used() <= budget.limit());
+        assert_eq!(budget.rejections(), 0);
+
+        cache.clear_local_cache();
+        assert_eq!(budget.used(), 0);
+        let fresh = cache.format_rows("openai:chat").await.unwrap();
+        assert!(!Arc::ptr_eq(&first, &fresh));
+        assert_eq!(inner.calls(), 2);
+    }
+
+    /// The whole point of the version: five query shapes, one load.
+    #[tokio::test]
+    async fn every_shape_of_one_format_is_answered_from_one_load() {
+        let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
+            Duration::ZERO,
+            vec![sample_row_for("key-a", 1, "mock-model")],
+        ));
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
+
+        cache
+            .list_for_exact_api_format("openai:chat")
+            .await
+            .unwrap();
+        cache
+            .list_for_exact_api_format_page(&format_page("openai:chat", 0, 256))
+            .await
+            .unwrap();
+        cache
+            .list_for_exact_api_format_and_global_model("openai:chat", "mock-model")
+            .await
+            .unwrap();
+        cache
+            .list_for_exact_api_format_and_requested_model("openai:chat", "mock-model")
+            .await
+            .unwrap();
+        cache
+            .list_for_exact_api_format_and_requested_model_page(
+                &StoredRequestedModelCandidateRowsQuery {
+                    api_format: "openai:chat".to_string(),
+                    requested_model_name: "mock-model".to_string(),
+                    offset: 0,
+                    limit: 256,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(inner.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn pages_of_one_format_share_the_version() {
         let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
         let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
 
         cache
-            .list_for_exact_api_format_page(&StoredApiFormatCandidateRowsQuery {
-                api_format: "openai:chat".to_string(),
-                offset: 0,
-                limit: 256,
-            })
+            .list_for_exact_api_format_page(&format_page("openai:chat", 0, 256))
             .await
             .unwrap();
         cache
-            .list_for_exact_api_format_page(&StoredApiFormatCandidateRowsQuery {
-                api_format: "openai:chat".to_string(),
-                offset: 256,
-                limit: 256,
-            })
+            .list_for_exact_api_format_page(&format_page("openai:chat", 256, 256))
             .await
             .unwrap();
 
-        assert_eq!(inner.calls(), 2);
+        assert_eq!(inner.calls(), 1);
+    }
+
+    /// A page is a window of the version, so its bounds are the version's, not
+    /// a second query's.
+    #[tokio::test]
+    async fn pages_are_windows_of_the_version_in_query_order() {
+        let rows = vec![
+            sample_row_for("key-c", 3, "model-b"),
+            sample_row_for("key-a", 1, "model-a"),
+            sample_row_for("key-b", 2, "model-a"),
+        ];
+        let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
+            Duration::ZERO,
+            rows,
+        ));
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
+
+        let first = cache
+            .list_for_exact_api_format_page(&format_page("openai:chat", 0, 2))
+            .await
+            .unwrap();
+        assert_eq!(
+            vec!["model-a", "model-a"],
+            first
+                .iter()
+                .map(|row| row.global_model_name.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            vec!["key-a", "key-b"],
+            first
+                .iter()
+                .map(|row| row.key_id.as_str())
+                .collect::<Vec<_>>()
+        );
+
+        let second = cache
+            .list_for_exact_api_format_page(&format_page("openai:chat", 2, 2))
+            .await
+            .unwrap();
+        assert_eq!(1, second.len());
+        assert_eq!("key-c", second[0].key_id);
+
+        let past_the_end = cache
+            .list_for_exact_api_format_page(&format_page("openai:chat", 9, 2))
+            .await
+            .unwrap();
+        assert!(past_the_end.is_empty());
+
+        assert_eq!(inner.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_duplicate_row_is_only_cached_once() {
+        let rows = vec![
+            sample_row_for("key-a", 1, "model-a"),
+            sample_row_for("key-a", 1, "model-a"),
+        ];
+        let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
+            Duration::ZERO,
+            rows,
+        ));
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
+
+        let all = cache
+            .list_for_exact_api_format("openai:chat")
+            .await
+            .unwrap();
+
+        assert_eq!(1, all.len());
+    }
+
+    /// A requested-model page is cut from the filtered stream, so its offsets
+    /// address rows the caller will actually see.
+    #[tokio::test]
+    async fn a_requested_model_page_is_cut_from_the_filtered_rows() {
+        let rows = vec![
+            sample_row_for("key-a", 1, "wanted"),
+            sample_row_for("key-b", 2, "wanted"),
+            sample_row_for("key-c", 3, "unrelated"),
+        ];
+        let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
+            Duration::ZERO,
+            rows,
+        ));
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
+
+        let all = cache
+            .list_for_exact_api_format_and_requested_model("openai:chat", "wanted")
+            .await
+            .unwrap();
+        assert_eq!(
+            vec!["key-a", "key-b"],
+            all.iter()
+                .map(|row| row.key_id.as_str())
+                .collect::<Vec<_>>()
+        );
+
+        let page = cache
+            .list_for_exact_api_format_and_requested_model_page(
+                &StoredRequestedModelCandidateRowsQuery {
+                    api_format: "openai:chat".to_string(),
+                    requested_model_name: "wanted".to_string(),
+                    offset: 1,
+                    limit: 1,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(1, page.len());
+        assert_eq!("key-b", page[0].key_id);
     }
 
     #[tokio::test]
@@ -704,6 +1000,14 @@ mod tests {
     }
 
     fn sample_row(key_id: &str, key_internal_priority: i32) -> StoredMinimalCandidateSelectionRow {
+        sample_row_for(key_id, key_internal_priority, "mock-model")
+    }
+
+    fn sample_row_for(
+        key_id: &str,
+        key_internal_priority: i32,
+        global_model_name: &str,
+    ) -> StoredMinimalCandidateSelectionRow {
         StoredMinimalCandidateSelectionRow {
             provider_id: "provider-1".to_string(),
             provider_name: "provider".to_string(),
@@ -726,10 +1030,10 @@ mod tests {
             key_global_priority_by_format: None,
             model_id: "model-1".to_string(),
             global_model_id: "global-model-1".to_string(),
-            global_model_name: "mock-model".to_string(),
+            global_model_name: global_model_name.to_string(),
             global_model_mappings: None,
             global_model_supports_streaming: Some(true),
-            model_provider_model_name: "mock-model".to_string(),
+            model_provider_model_name: global_model_name.to_string(),
             model_provider_model_mappings: None,
             model_supports_streaming: Some(true),
             model_is_active: true,
