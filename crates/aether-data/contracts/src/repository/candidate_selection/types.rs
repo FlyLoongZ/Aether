@@ -170,19 +170,6 @@ pub trait MinimalCandidateSelectionReadRepository: Send + Sync {
         Ok(Arc::new(self.list_for_exact_api_format(api_format).await?))
     }
 
-    async fn list_for_exact_api_format_page(
-        &self,
-        query: &StoredApiFormatCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, crate::DataLayerError> {
-        Ok(self
-            .list_for_exact_api_format(&query.api_format)
-            .await?
-            .into_iter()
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
-            .collect())
-    }
-
     async fn list_for_exact_api_format_and_global_model(
         &self,
         api_format: &str,
@@ -193,11 +180,6 @@ pub trait MinimalCandidateSelectionReadRepository: Send + Sync {
         &self,
         api_format: &str,
         requested_model_name: &str,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, crate::DataLayerError>;
-
-    async fn list_for_exact_api_format_and_requested_model_page(
-        &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, crate::DataLayerError>;
 
     async fn list_pool_key_rows_for_group(

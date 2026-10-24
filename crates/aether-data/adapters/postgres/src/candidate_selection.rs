@@ -4,10 +4,9 @@ use sqlx::{PgPool, Row};
 use std::collections::BTreeSet;
 
 use aether_data_contracts::repository::candidate_selection::{
-    MinimalCandidateSelectionReadRepository, StoredApiFormatCandidateRowsQuery,
-    StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateOrder,
-    StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
-    StoredProviderModelMapping, StoredRequestedModelCandidateRowsQuery,
+    MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
+    StoredPoolKeyCandidateOrder, StoredPoolKeyCandidateRowsByKeyIdsQuery,
+    StoredPoolKeyCandidateRowsQuery, StoredProviderModelMapping,
 };
 use aether_data_contracts::DataLayerError;
 
@@ -454,44 +453,6 @@ impl SqlxMinimalCandidateSelectionReadRepository {
         Ok(dedupe_candidate_selection_rows(rows))
     }
 
-    pub async fn list_for_exact_api_format_page(
-        &self,
-        query: &StoredApiFormatCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        if query.limit == 0 {
-            return Ok(Vec::new());
-        }
-        let canonical_api_format = normalize_api_format(&query.api_format);
-        let storage_aliases = api_format_aliases(&canonical_api_format);
-        let sql_match_aliases =
-            sql_match_aliases(&api_format_permission_aliases(&canonical_api_format));
-        let fetch_limit = i64::from(query.offset.saturating_add(query.limit));
-        let sql = format!("{}\nLIMIT $4\nOFFSET $5", list_for_exact_api_format_sql());
-        let mut rows = Vec::new();
-        for api_format in storage_aliases {
-            rows.extend(
-                Self::collect_query_rows(
-                    sqlx::query(sql.as_str())
-                        .bind(api_format)
-                        .bind(sql_match_aliases.clone())
-                        .bind(canonical_api_format.clone())
-                        .bind(fetch_limit)
-                        .bind(0_i64)
-                        .fetch(&self.pool),
-                    map_candidate_selection_row,
-                )
-                .await?,
-            );
-        }
-        let mut rows = dedupe_candidate_selection_rows(rows);
-        sort_candidate_selection_rows(&mut rows, true);
-        Ok(rows
-            .into_iter()
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
-            .collect())
-    }
-
     pub async fn list_for_exact_api_format_and_global_model(
         &self,
         api_format: &str,
@@ -538,37 +499,6 @@ impl SqlxMinimalCandidateSelectionReadRepository {
                         .bind(requested_model_name)
                         .bind(sql_match_aliases.clone())
                         .bind(canonical_api_format.clone())
-                        .fetch(&self.pool),
-                    map_candidate_selection_row,
-                )
-                .await?,
-            );
-        }
-        Ok(dedupe_candidate_selection_rows(rows))
-    }
-
-    pub async fn list_for_exact_api_format_and_requested_model_page(
-        &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let mut rows = Vec::new();
-        let canonical_api_format = normalize_api_format(&query.api_format);
-        let storage_aliases = api_format_aliases(&canonical_api_format);
-        let sql_match_aliases =
-            sql_match_aliases(&api_format_permission_aliases(&canonical_api_format));
-        let limit = i64::from(query.limit.max(1));
-        let offset = i64::from(query.offset);
-        let sql = requested_model_selection_page_sql();
-        for api_format in storage_aliases {
-            rows.extend(
-                Self::collect_query_rows(
-                    sqlx::query(sql.as_str())
-                        .bind(api_format)
-                        .bind(query.requested_model_name.as_str())
-                        .bind(sql_match_aliases.clone())
-                        .bind(canonical_api_format.clone())
-                        .bind(limit)
-                        .bind(offset)
                         .fetch(&self.pool),
                     map_candidate_selection_row,
                 )
@@ -931,10 +861,6 @@ fn base_requested_model_selection_sql() -> String {
         )
 }
 
-fn requested_model_selection_page_sql() -> String {
-    format!("{}\nLIMIT $5\nOFFSET $6", requested_model_selection_sql())
-}
-
 fn api_format_aliases(api_format: &str) -> Vec<String> {
     aether_ai_formats::api_format_storage_aliases(api_format)
 }
@@ -969,26 +895,6 @@ fn dedupe_candidate_selection_rows(
         .collect()
 }
 
-fn sort_candidate_selection_rows(
-    rows: &mut [StoredMinimalCandidateSelectionRow],
-    include_global_model: bool,
-) {
-    rows.sort_by(|left, right| {
-        let global_model_order = if include_global_model {
-            left.global_model_name.cmp(&right.global_model_name)
-        } else {
-            std::cmp::Ordering::Equal
-        };
-        global_model_order
-            .then(left.provider_priority.cmp(&right.provider_priority))
-            .then(left.key_internal_priority.cmp(&right.key_internal_priority))
-            .then(left.provider_id.cmp(&right.provider_id))
-            .then(left.endpoint_id.cmp(&right.endpoint_id))
-            .then(left.key_id.cmp(&right.key_id))
-            .then(left.model_id.cmp(&right.model_id))
-    });
-}
-
 #[async_trait]
 impl MinimalCandidateSelectionReadRepository for SqlxMinimalCandidateSelectionReadRepository {
     async fn list_for_exact_api_format(
@@ -996,13 +902,6 @@ impl MinimalCandidateSelectionReadRepository for SqlxMinimalCandidateSelectionRe
         api_format: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
         Self::list_for_exact_api_format(self, api_format).await
-    }
-
-    async fn list_for_exact_api_format_page(
-        &self,
-        query: &StoredApiFormatCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        Self::list_for_exact_api_format_page(self, query).await
     }
 
     async fn list_for_exact_api_format_and_global_model(
@@ -1020,13 +919,6 @@ impl MinimalCandidateSelectionReadRepository for SqlxMinimalCandidateSelectionRe
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
         Self::list_for_exact_api_format_and_requested_model(self, api_format, requested_model_name)
             .await
-    }
-
-    async fn list_for_exact_api_format_and_requested_model_page(
-        &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        Self::list_for_exact_api_format_and_requested_model_page(self, query).await
     }
 
     async fn list_pool_key_rows_for_group(
@@ -1388,8 +1280,8 @@ mod tests {
         list_for_exact_api_format_and_global_model_sql, list_for_exact_api_format_sql,
         list_pool_keys_for_group_sql, parse_key_policy_string_list, parse_provider_model_mappings,
         parse_string_list, pool_key_candidate_selection_by_key_ids_sql,
-        pool_key_candidate_selection_sql, requested_model_selection_page_sql,
-        requested_model_selection_sql, PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_MARKER,
+        pool_key_candidate_selection_sql, requested_model_selection_sql,
+        PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_MARKER,
         PROVIDER_MODEL_MAPPING_API_FORMAT_MATCH_SQL,
     };
     use aether_data_contracts::repository::candidate_selection::{
@@ -1494,11 +1386,6 @@ mod tests {
                 4,
             ),
             ("requested_model", requested_model_selection_sql(), 4),
-            (
-                "requested_model_page",
-                requested_model_selection_page_sql(),
-                6,
-            ),
             (
                 "pool_keys",
                 pool_key_candidate_selection_sql(&StoredPoolKeyCandidateOrder::Lru),
@@ -1669,13 +1556,6 @@ mod tests {
             assert!(!sql.contains("('vertex_ai', 'api_key', false, 'claude:messages')"));
             assert!(sql.contains("'vertex_ai'"));
         }
-    }
-
-    #[test]
-    fn requested_model_selection_page_sql_adds_limit_and_offset() {
-        let sql = requested_model_selection_page_sql();
-
-        assert!(sql.ends_with("LIMIT $5\nOFFSET $6"));
     }
 
     #[test]

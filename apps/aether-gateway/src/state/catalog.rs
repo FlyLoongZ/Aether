@@ -1321,7 +1321,6 @@ mod tests {
     use aether_data_contracts::repository::candidate_selection::{
         MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
         StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
-        StoredRequestedModelCandidateRowsQuery,
     };
     use aether_data_contracts::repository::global_models::{
         CreateAdminGlobalModelRecord, StoredAdminGlobalModel, UpdateAdminGlobalModelRecord,
@@ -1491,13 +1490,6 @@ mod tests {
             &self,
             _api_format: &str,
             _requested_model_name: &str,
-        ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            Ok(Vec::new())
-        }
-
-        async fn list_for_exact_api_format_and_requested_model_page(
-            &self,
-            _query: &StoredRequestedModelCandidateRowsQuery,
         ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
             Ok(Vec::new())
         }
