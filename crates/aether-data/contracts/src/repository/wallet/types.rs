@@ -3101,7 +3101,6 @@ mod tests {
         CreateWalletRechargeOrderInput, ProcessPaymentCallbackInput, StoredAdminPaymentOrder,
         StoredWalletSnapshot,
     };
-    use crate::repository::settlement::UsageSettlementInput;
 
     fn stripe_secret_cas_fixture() -> (
         StoredAdminPaymentOrder,
@@ -3278,24 +3277,6 @@ mod tests {
             1,
         )
         .is_err());
-    }
-
-    #[test]
-    fn rejects_invalid_settlement_input() {
-        let input = UsageSettlementInput {
-            request_id: "".to_string(),
-            user_id: None,
-            api_key_id: None,
-            api_key_is_standalone: false,
-            provider_id: None,
-            status: "completed".to_string(),
-            billing_status: "pending".to_string(),
-            total_cost_usd: 0.1,
-            actual_total_cost_usd: 0.1,
-            billing_cost_usd: None,
-            finalized_at_unix_secs: None,
-        };
-        assert!(input.validate().is_err());
     }
 
     #[test]

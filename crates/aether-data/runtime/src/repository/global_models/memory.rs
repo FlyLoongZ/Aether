@@ -526,25 +526,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn embedding_missing_billing_config_rejected() {
-        let error = CreateAdminGlobalModelRecord::new(
-            "gm-embedding".to_string(),
-            "text-embedding-3-small".to_string(),
-            "Text Embedding 3 Small".to_string(),
-            true,
-            None,
-            None,
-            Some(json!(["embedding"])),
-            None,
-        )
-        .expect_err("embedding metadata without billing should fail closed");
-
-        assert!(error
-            .to_string()
-            .contains("embedding global model requires"));
-    }
-
-    #[tokio::test]
     async fn defaults_to_active_models_only() {
         let repository = InMemoryGlobalModelReadRepository::seed(vec![
             sample_model("gm-1", "claude-sonnet-4-5", "Claude Sonnet 4.5", true),

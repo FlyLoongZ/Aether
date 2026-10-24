@@ -3202,41 +3202,6 @@ mod tests {
     }
 
     #[test]
-    fn list_policy_unions_multiple_group_restrictions_legacy_case() {
-        let groups = vec![
-            sample_group(
-                "team-a",
-                10,
-                Some(vec!["gpt-5", "gpt-4.1"]),
-                "specific",
-                None,
-                "system",
-            ),
-            sample_group(
-                "team-b",
-                20,
-                Some(vec!["gpt-4.1", "gemini-2.5-pro"]),
-                "specific",
-                None,
-                "system",
-            ),
-        ];
-
-        let policy = resolve_effective_list_policy(None, "unrestricted", &groups, |group| {
-            (&group.allowed_models_mode, group.allowed_models.clone())
-        });
-
-        assert_eq!(
-            policy,
-            Some(vec![
-                "gemini-2.5-pro".to_string(),
-                "gpt-4.1".to_string(),
-                "gpt-5".to_string()
-            ])
-        );
-    }
-
-    #[test]
     fn list_policy_unions_multiple_group_restrictions() {
         let groups = vec![
             sample_group(

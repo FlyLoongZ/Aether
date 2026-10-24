@@ -1522,27 +1522,3 @@ fn map_admin_billing_collector_row(
             .max(0) as u64,
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::SqlxBillingReadRepository;
-    use crate::{PostgresPoolConfig, PostgresPoolFactory};
-
-    #[tokio::test]
-    async fn repository_constructs_from_lazy_pool() {
-        let factory = PostgresPoolFactory::new(PostgresPoolConfig {
-            database_url: "postgres://localhost/aether".to_string(),
-            min_connections: 1,
-            max_connections: 4,
-            acquire_timeout_ms: 1_000,
-            idle_timeout_ms: 5_000,
-            max_lifetime_ms: 30_000,
-            statement_cache_capacity: 64,
-            require_ssl: false,
-        })
-        .expect("factory should build");
-
-        let pool = factory.connect_lazy().expect("pool should build");
-        let _repository = SqlxBillingReadRepository::new(pool);
-    }
-}

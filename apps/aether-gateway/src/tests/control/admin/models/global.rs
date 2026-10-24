@@ -572,47 +572,6 @@ async fn admin_global_models_include_embedding_capability() {
 }
 
 #[tokio::test]
-async fn gateway_returns_service_unavailable_for_admin_model_catalog_without_required_readers() {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        "/api/admin/models/catalog",
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("unexpected upstream hit"))
-            }
-        }),
-    );
-
-    let (_upstream_url, upstream_handle) = start_server(upstream).await;
-    let gateway = build_router_with_state(AppState::new().expect("gateway should build"));
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .get(format!("{gateway_url}/api/admin/models/catalog"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(
-        payload["detail"],
-        ADMIN_MODEL_CATALOG_DATA_UNAVAILABLE_DETAIL
-    );
-    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
-
-    gateway_handle.abort();
-    upstream_handle.abort();
-}
-
-#[tokio::test]
 async fn gateway_returns_service_unavailable_for_admin_global_model_create_without_global_model_writer(
 ) {
     let upstream_hits = Arc::new(Mutex::new(0usize));

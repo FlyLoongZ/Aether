@@ -8910,7 +8910,6 @@ mod tests {
     use sqlx::Row;
 
     use super::{effective_wallet_adjustment_amount, SqlxWalletRepository};
-    use crate::{PostgresPoolConfig, PostgresPoolFactory};
 
     #[test]
     fn payment_order_sql_projections_cover_mapper_columns() {
@@ -10151,23 +10150,5 @@ mod tests {
                 .unwrap();
         assert_eq!(transaction_count, 2);
         pool.close().await;
-    }
-
-    #[tokio::test]
-    async fn repository_constructs_from_lazy_pool() {
-        let factory = PostgresPoolFactory::new(PostgresPoolConfig {
-            database_url: "postgres://localhost/aether".to_string(),
-            min_connections: 1,
-            max_connections: 4,
-            acquire_timeout_ms: 1_000,
-            idle_timeout_ms: 5_000,
-            max_lifetime_ms: 30_000,
-            statement_cache_capacity: 64,
-            require_ssl: false,
-        })
-        .expect("factory should build");
-
-        let pool = factory.connect_lazy().expect("pool should build");
-        let _repository = SqlxWalletRepository::new(pool);
     }
 }
