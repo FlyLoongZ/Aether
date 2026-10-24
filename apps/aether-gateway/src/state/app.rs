@@ -415,7 +415,6 @@ pub struct AppState {
     pub(crate) overview_total_cache: Arc<OverviewTotalCache>,
     pub(crate) system_config_cache: Arc<SystemConfigCache>,
     pub(crate) endpoint_response_header_rules_cache: Arc<JsonValueCache<String>>,
-    pub(crate) candidate_row_page_cache: Arc<super::super::cache::CandidateRowPageCache>,
     pub(crate) candidate_page_cache: Arc<super::super::cache::CandidatePageCache>,
     pub(crate) candidate_resolved_page_cache: Arc<super::super::cache::CandidateResolvedPageCache>,
     pub(crate) chat_pii_redaction_runtime_config_cache:

@@ -20,8 +20,7 @@ use crate::ai_serving::planner::candidate_resolution::SkippedLocalExecutionCandi
 use crate::ai_serving::{GatewayAuthApiKeySnapshot, PlannerAppState};
 use crate::cache::{
     candidate_page_cache_stale_ttl, candidate_page_cache_ttl_from_env,
-    record_candidate_page_cache_none, record_candidate_row_page_cache_none, CandidatePageCacheKey,
-    CandidatePageSnapshot, CandidateRowPageCacheKey,
+    record_candidate_page_cache_none, CandidatePageCacheKey, CandidatePageSnapshot,
 };
 use crate::clock::request_distribution_seed;
 use crate::data::candidate_selection::{
@@ -974,6 +973,13 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         }
     }
 
+    /// The candidate rows behind one requested-model page.
+    ///
+    /// The data layer already caches this page (five seconds, per query
+    /// shape), so a second application-level page cache here only widened
+    /// staleness without saving a query: it was keyed by the same fields and
+    /// served rows up to its own fallback window while the data layer had
+    /// already refreshed them.
     async fn read_requested_model_rows_fast_path_page_cached(
         &self,
         normalized_api_format: &str,
@@ -982,50 +988,17 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         offset: u32,
         limit: u32,
     ) -> Result<RequestedModelCandidateRowsPage, GatewayError> {
-        let key = CandidateRowPageCacheKey::new(
+        read_requested_model_rows_fast_path_page(
+            self.state.app().data.as_ref(),
             normalized_api_format,
             routing_model,
             requested_name,
             offset,
             limit,
             false,
-        );
-        let cache = self.state.app().candidate_row_page_cache.clone();
-        let ttl = candidate_page_cache_ttl_from_env();
-        let stale_ttl = candidate_page_cache_stale_ttl(ttl);
-        let cached = cache
-            .get_or_load(key, stale_ttl, || async {
-                let page = read_requested_model_rows_fast_path_page(
-                    self.state.app().data.as_ref(),
-                    normalized_api_format,
-                    routing_model,
-                    requested_name,
-                    offset,
-                    limit,
-                    false,
-                )
-                .await
-                .map_err(|err| GatewayError::Internal(err.to_string()))?;
-                Ok::<_, GatewayError>(Some(Arc::new(page)))
-            })
-            .await?;
-
-        match cached {
-            Some(page) => {
-                if page.rows.is_empty() {
-                    record_candidate_row_page_cache_none();
-                }
-                Ok(page.as_ref().clone())
-            }
-            None => {
-                record_candidate_row_page_cache_none();
-                Ok(RequestedModelCandidateRowsPage {
-                    rows: Vec::new(),
-                    scanned_rows: 0,
-                    end_of_requested_name: true,
-                })
-            }
-        }
+        )
+        .await
+        .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
     async fn read_api_format_rows_fallback_page_cached(
@@ -1034,45 +1007,14 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         offset: u32,
         limit: u32,
     ) -> Result<RequestedModelCandidateRowsPage, GatewayError> {
-        let key = CandidateRowPageCacheKey::for_api_format_fallback(
+        read_api_format_rows_fallback_page(
+            self.state.app().data.as_ref(),
             normalized_api_format,
             offset,
             limit,
-            self.fallback_scan_epoch,
-        );
-        let cache = self.state.app().candidate_row_page_cache.clone();
-        let ttl = candidate_page_cache_ttl_from_env();
-        let stale_ttl = candidate_page_cache_stale_ttl(ttl);
-        let cached = cache
-            .get_or_load(key, stale_ttl, || async {
-                let page = read_api_format_rows_fallback_page(
-                    self.state.app().data.as_ref(),
-                    normalized_api_format,
-                    offset,
-                    limit,
-                )
-                .await
-                .map_err(|err| GatewayError::Internal(err.to_string()))?;
-                Ok::<_, GatewayError>(Some(Arc::new(page)))
-            })
-            .await?;
-
-        match cached {
-            Some(page) => {
-                if page.rows.is_empty() {
-                    record_candidate_row_page_cache_none();
-                }
-                Ok(page.as_ref().clone())
-            }
-            None => {
-                record_candidate_row_page_cache_none();
-                Ok(RequestedModelCandidateRowsPage {
-                    rows: Vec::new(),
-                    scanned_rows: 0,
-                    end_of_requested_name: true,
-                })
-            }
-        }
+        )
+        .await
+        .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
     async fn next_fallback_page_for_api_format(

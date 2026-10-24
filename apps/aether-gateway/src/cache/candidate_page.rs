@@ -17,8 +17,6 @@ use sha2::Digest as _;
 use crate::ai_serving::{
     EligibleLocalExecutionCandidate, GatewayAuthApiKeySnapshot, SkippedLocalExecutionCandidate,
 };
-use crate::data::candidate_selection::RequestedModelCandidateRowsPage;
-
 const DEFAULT_CANDIDATE_PAGE_CACHE_TTL_MS: u64 = 250;
 const MIN_CANDIDATE_PAGE_CACHE_TTL_MS: u64 = 50;
 const MAX_CANDIDATE_PAGE_CACHE_TTL_MS: u64 = 1_000;
@@ -35,9 +33,6 @@ pub(crate) type CandidatePageSnapshot = AiCandidatePreselectionOutcome<
 
 pub(crate) type CandidatePageCache =
     super::ValueCache<CandidatePageCacheKey, Arc<CandidatePageSnapshot>>;
-
-pub(crate) type CandidateRowPageCache =
-    super::ValueCache<CandidateRowPageCacheKey, Arc<RequestedModelCandidateRowsPage>>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct CandidateResolvedPageSnapshot {
@@ -62,31 +57,6 @@ struct CandidatePageCacheMetrics {
     resolve_load_total: AtomicU64,
     resolve_follower_wait_total: AtomicU64,
     resolve_miss_total: AtomicU64,
-    row_hit_total: AtomicU64,
-    row_load_total: AtomicU64,
-    row_follower_wait_total: AtomicU64,
-    row_miss_total: AtomicU64,
-    row_none_total: AtomicU64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct CandidateRowPageCacheKey {
-    api_format: String,
-    kind: CandidateRowPageCacheKind,
-    offset: u32,
-    limit: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-enum CandidateRowPageCacheKind {
-    RequestedModel {
-        requested_model_name: String,
-        requested_name: String,
-        enable_model_directives: bool,
-    },
-    ApiFormatFallback {
-        scan_epoch: u32,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -116,27 +86,6 @@ enum CandidatePageAuthIdentity {
 pub(crate) struct CandidateResolvedPageCacheKey {
     page_key: CandidatePageCacheKey,
     resolution_mode: &'static str,
-}
-
-impl aether_cache::CacheWeight for CandidateRowPageCacheKey {
-    fn cache_weight(&self) -> usize {
-        aether_cache::value_weight::<Self>(self.api_format.capacity() + self.kind.cache_weight())
-    }
-}
-
-impl aether_cache::CacheWeight for CandidateRowPageCacheKind {
-    fn cache_weight(&self) -> usize {
-        match self {
-            Self::RequestedModel {
-                requested_model_name,
-                requested_name,
-                ..
-            } => aether_cache::value_weight::<Self>(
-                requested_model_name.capacity() + requested_name.capacity(),
-            ),
-            Self::ApiFormatFallback { .. } => aether_cache::value_weight::<Self>(0),
-        }
-    }
 }
 
 impl aether_cache::CacheWeight for CandidatePageCacheKey {
@@ -184,42 +133,6 @@ impl aether_cache::CacheWeight for CandidateResolvedPageSnapshot {
                 &self.resolved_skipped,
                 aether_cache::CacheWeight::cache_weight,
             )
-    }
-}
-
-impl CandidateRowPageCacheKey {
-    pub(crate) fn new(
-        api_format: &str,
-        requested_model_name: &str,
-        requested_name: &str,
-        offset: u32,
-        limit: u32,
-        enable_model_directives: bool,
-    ) -> Self {
-        Self {
-            api_format: normalize_api_format(api_format),
-            kind: CandidateRowPageCacheKind::RequestedModel {
-                requested_model_name: normalize_text_key(requested_model_name),
-                requested_name: normalize_text_key(requested_name),
-                enable_model_directives,
-            },
-            offset,
-            limit,
-        }
-    }
-
-    pub(crate) fn for_api_format_fallback(
-        api_format: &str,
-        offset: u32,
-        limit: u32,
-        scan_epoch: u32,
-    ) -> Self {
-        Self {
-            api_format: normalize_api_format(api_format),
-            kind: CandidateRowPageCacheKind::ApiFormatFallback { scan_epoch },
-            offset,
-            limit,
-        }
     }
 }
 
@@ -421,36 +334,6 @@ pub(crate) fn record_candidate_page_resolve_cache_follower_wait() {
         .fetch_add(1, Ordering::Relaxed);
 }
 
-pub(crate) fn record_candidate_row_page_cache_hit() {
-    CANDIDATE_PAGE_CACHE_METRICS
-        .row_hit_total
-        .fetch_add(1, Ordering::Relaxed);
-}
-
-pub(crate) fn record_candidate_row_page_cache_miss() {
-    CANDIDATE_PAGE_CACHE_METRICS
-        .row_miss_total
-        .fetch_add(1, Ordering::Relaxed);
-}
-
-pub(crate) fn record_candidate_row_page_cache_load() {
-    CANDIDATE_PAGE_CACHE_METRICS
-        .row_load_total
-        .fetch_add(1, Ordering::Relaxed);
-}
-
-pub(crate) fn record_candidate_row_page_cache_follower_wait() {
-    CANDIDATE_PAGE_CACHE_METRICS
-        .row_follower_wait_total
-        .fetch_add(1, Ordering::Relaxed);
-}
-
-pub(crate) fn record_candidate_row_page_cache_none() {
-    CANDIDATE_PAGE_CACHE_METRICS
-        .row_none_total
-        .fetch_add(1, Ordering::Relaxed);
-}
-
 pub(crate) fn candidate_page_cache_metric_samples() -> Vec<MetricSample> {
     vec![
         MetricSample::new(
@@ -523,46 +406,6 @@ pub(crate) fn candidate_page_cache_metric_samples() -> Vec<MetricSample> {
             MetricKind::Counter,
             CANDIDATE_PAGE_CACHE_METRICS
                 .resolve_follower_wait_total
-                .load(Ordering::Relaxed),
-        ),
-        MetricSample::new(
-            "candidate_row_page_cache_hit_total",
-            "Total candidate DB row page cache hits.",
-            MetricKind::Counter,
-            CANDIDATE_PAGE_CACHE_METRICS
-                .row_hit_total
-                .load(Ordering::Relaxed),
-        ),
-        MetricSample::new(
-            "candidate_row_page_cache_miss_total",
-            "Total candidate DB row page cache misses before singleflight registration.",
-            MetricKind::Counter,
-            CANDIDATE_PAGE_CACHE_METRICS
-                .row_miss_total
-                .load(Ordering::Relaxed),
-        ),
-        MetricSample::new(
-            "candidate_row_page_cache_load_total",
-            "Total candidate DB row page cache loader executions.",
-            MetricKind::Counter,
-            CANDIDATE_PAGE_CACHE_METRICS
-                .row_load_total
-                .load(Ordering::Relaxed),
-        ),
-        MetricSample::new(
-            "candidate_row_page_cache_follower_wait_total",
-            "Total candidate DB row page cache requests that waited for another loader.",
-            MetricKind::Counter,
-            CANDIDATE_PAGE_CACHE_METRICS
-                .row_follower_wait_total
-                .load(Ordering::Relaxed),
-        ),
-        MetricSample::new(
-            "candidate_row_page_cache_none_total",
-            "Total candidate DB row page cache lookups that resolved to no rows.",
-            MetricKind::Counter,
-            CANDIDATE_PAGE_CACHE_METRICS
-                .row_none_total
                 .load(Ordering::Relaxed),
         ),
     ]
