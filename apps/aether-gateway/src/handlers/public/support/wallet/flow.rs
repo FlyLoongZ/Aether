@@ -1,8 +1,7 @@
 use super::{
-    build_auth_error_response, build_auth_json_response, build_wallet_daily_usage_payload,
+    build_auth_json_response, build_wallet_daily_usage_payload,
     build_wallet_live_today_usage_payload_for_user, build_wallet_payload,
-    build_wallet_zero_today_entry, http, parse_wallet_limit, parse_wallet_offset,
-    resolve_authenticated_local_user, unix_secs_to_rfc3339, wallet_fixed_offset,
+    build_wallet_zero_today_entry, http, unix_secs_to_rfc3339, wallet_fixed_offset,
     wallet_transaction_payload_from_record, AppState, Body, GatewayPublicRequestContext, Response,
     WALLET_LEGACY_TIMEZONE,
 };
@@ -51,37 +50,14 @@ pub(super) async fn handle_wallet_flow(
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
 ) -> Response<Body> {
-    let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
-        Ok(value) => value,
+    let super::WalletRequestScope {
+        auth,
+        wallet,
+        limit,
+        offset,
+    } = match super::resolve_wallet_request_scope(state, request_context, headers).await {
+        Ok(scope) => scope,
         Err(response) => return response,
-    };
-    let query = request_context.request_query_string.as_deref();
-    let limit = match parse_wallet_limit(query) {
-        Ok(value) => value,
-        Err(detail) => {
-            return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
-        }
-    };
-    let offset = match parse_wallet_offset(query) {
-        Ok(value) => value,
-        Err(detail) => {
-            return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
-        }
-    };
-    let wallet = match state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
-            &auth.user.id,
-        ))
-        .await
-    {
-        Ok(value) => value,
-        Err(err) => {
-            return build_auth_error_response(
-                http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("wallet lookup failed: {err:?}"),
-                false,
-            )
-        }
     };
     let Some(wallet) = wallet else {
         let mut payload = json!({

@@ -5,10 +5,9 @@ use super::super::support_payment::payment_epay::{
 };
 use super::{
     build_auth_error_response, build_auth_json_response, build_wallet_payload,
-    build_wallet_recharge_storage_unavailable_response, http, parse_wallet_limit,
-    parse_wallet_offset, resolve_authenticated_local_user, unix_secs_to_rfc3339,
-    wallet_normalize_optional_string_field, AppState, Body, GatewayPublicRequestContext, Response,
-    WALLET_SAFE_GATEWAY_RESPONSE_KEYS,
+    build_wallet_recharge_storage_unavailable_response, http, resolve_authenticated_local_user,
+    unix_secs_to_rfc3339, wallet_normalize_optional_string_field, AppState, Body,
+    GatewayPublicRequestContext, Response, WALLET_SAFE_GATEWAY_RESPONSE_KEYS,
 };
 
 const MAX_PAYMENT_GATEWAY_RESPONSE_BYTES: usize = 1024 * 1024;
@@ -2597,37 +2596,14 @@ pub(super) async fn handle_wallet_recharge_list(
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
 ) -> Response<Body> {
-    let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
-        Ok(value) => value,
+    let super::WalletRequestScope {
+        auth,
+        wallet,
+        limit,
+        offset,
+    } = match super::resolve_wallet_request_scope(state, request_context, headers).await {
+        Ok(scope) => scope,
         Err(response) => return response,
-    };
-    let query = request_context.request_query_string.as_deref();
-    let limit = match parse_wallet_limit(query) {
-        Ok(value) => value,
-        Err(detail) => {
-            return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
-        }
-    };
-    let offset = match parse_wallet_offset(query) {
-        Ok(value) => value,
-        Err(detail) => {
-            return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
-        }
-    };
-    let wallet = match state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
-            &auth.user.id,
-        ))
-        .await
-    {
-        Ok(value) => value,
-        Err(err) => {
-            return build_auth_error_response(
-                http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("wallet lookup failed: {err:?}"),
-                false,
-            )
-        }
     };
 
     let (items, total) = match state

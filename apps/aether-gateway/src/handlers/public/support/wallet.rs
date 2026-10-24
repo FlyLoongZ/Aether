@@ -1,7 +1,7 @@
 pub(super) use super::{
     build_auth_error_response, build_auth_json_response, build_auth_wallet_summary_payload,
     query_param_value, resolve_authenticated_local_user, unix_secs_to_rfc3339, AppState,
-    GatewayPublicRequestContext,
+    AuthenticatedLocalUserContext, GatewayPublicRequestContext,
 };
 pub(super) use axum::{body::Body, http, response::Response};
 
@@ -28,6 +28,48 @@ mod redeem;
 #[path = "wallet/refunds.rs"]
 mod refunds;
 use self::flow::handle_wallet_flow;
+
+/// Auth context, paging window and wallet snapshot shared by every wallet
+/// handler before it renders its own payload.
+pub(super) struct WalletRequestScope {
+    pub(super) auth: AuthenticatedLocalUserContext,
+    pub(super) wallet: Option<aether_data::repository::wallet::StoredWalletSnapshot>,
+    pub(super) limit: usize,
+    pub(super) offset: usize,
+}
+
+pub(super) async fn resolve_wallet_request_scope(
+    state: &AppState,
+    request_context: &GatewayPublicRequestContext,
+    headers: &http::HeaderMap,
+) -> Result<WalletRequestScope, Response<Body>> {
+    let auth = resolve_authenticated_local_user(state, request_context, headers).await?;
+    let query = request_context.request_query_string.as_deref();
+    let limit = parse_wallet_limit(query).map_err(|detail| {
+        build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
+    })?;
+    let offset = parse_wallet_offset(query).map_err(|detail| {
+        build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
+    })?;
+    let wallet = state
+        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+            &auth.user.id,
+        ))
+        .await
+        .map_err(|err| {
+            build_auth_error_response(
+                http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("wallet lookup failed: {err:?}"),
+                false,
+            )
+        })?;
+    Ok(WalletRequestScope {
+        auth,
+        wallet,
+        limit,
+        offset,
+    })
+}
 pub(in crate::handlers::public::support) use self::reads::{
     build_wallet_balance_payload_for_auth_scope, build_wallet_balance_payload_for_user,
     build_wallet_live_today_usage_payload_for_api_key,

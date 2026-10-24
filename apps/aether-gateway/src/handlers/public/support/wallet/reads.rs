@@ -373,37 +373,14 @@ pub(super) async fn handle_wallet_transactions(
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
 ) -> Response<Body> {
-    let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
-        Ok(value) => value,
+    let super::WalletRequestScope {
+        auth: _,
+        wallet,
+        limit,
+        offset,
+    } = match super::resolve_wallet_request_scope(state, request_context, headers).await {
+        Ok(scope) => scope,
         Err(response) => return response,
-    };
-    let query = request_context.request_query_string.as_deref();
-    let limit = match parse_wallet_limit(query) {
-        Ok(value) => value,
-        Err(detail) => {
-            return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
-        }
-    };
-    let offset = match parse_wallet_offset(query) {
-        Ok(value) => value,
-        Err(detail) => {
-            return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
-        }
-    };
-    let wallet = match state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
-            &auth.user.id,
-        ))
-        .await
-    {
-        Ok(value) => value,
-        Err(err) => {
-            return build_auth_error_response(
-                http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("wallet lookup failed: {err:?}"),
-                false,
-            )
-        }
     };
     let Some(wallet) = wallet else {
         return build_auth_json_response(
