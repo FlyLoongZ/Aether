@@ -361,6 +361,7 @@ where
             }
         };
         self.abort_flight_if(&key, stale);
+        self.inner.maintain();
     }
 
     /// Stores a value derived from a read that began at `read_started_at`,
@@ -408,6 +409,7 @@ where
         // The write bumped the generation, so an in-flight load is already
         // obsolete; no flight has to be aborted for correctness here.
         let _ = stale;
+        self.inner.maintain();
         true
     }
 
@@ -486,6 +488,10 @@ where
         for flight in stale_flights {
             flight.complete(Completion::Invalidated);
         }
+        // `clear` only empties the containers; returning their capacity is
+        // structural maintenance and belongs outside the write section, like
+        // every other compaction in this file.
+        self.inner.maintain();
     }
 
     /// Entries currently resident, expired ones included: reclamation happens
@@ -888,6 +894,7 @@ where
             );
             self.inner.reap(&mut store, now);
         }
+        self.inner.maintain();
         value
     }
 
@@ -971,6 +978,7 @@ where
                 self.inner.reap(&mut store, now);
             }
         }
+        self.inner.maintain();
 
         self.retire(Completion::Loaded(Arc::clone(&value)));
         value
@@ -1100,6 +1108,24 @@ where
             store.reap_tombstones(now, &|key: &K| inflight.contains_key(key));
         }
         store.reap_entries(now);
+    }
+
+    /// Runs the structural reclamation the write path has only *flagged*.
+    ///
+    /// Compaction rebuilds and re-sorts the insertion queue and shrinking
+    /// rehashes the maps; both are O(n) and both used to run inside the same
+    /// write section as the insert that triggered them, so one publish could
+    /// hold the map for a full-table walk. They now run once, in their own
+    /// short section, and only if nobody else has already done the work.
+    fn maintain(&self) {
+        let Ok(mut store) = self.store.write() else {
+            return;
+        };
+        if !store.maintenance_due() {
+            return;
+        }
+        store.compact();
+        store.shrink();
     }
 }
 
@@ -1253,8 +1279,6 @@ where
         for key in expired {
             self.take_entry(&key);
         }
-        self.compact();
-        self.shrink();
     }
 
     /// Evicts the oldest live entry. Returns whether anything was evicted.
@@ -1325,9 +1349,6 @@ where
             self.order.pop_front();
             self.take_entry(&key);
         }
-
-        self.compact();
-        self.shrink();
     }
 
     /// Tombstones only have to outlive the loads that could republish under
@@ -1351,6 +1372,22 @@ where
                 self.weight = self.weight.saturating_sub(removed.weight);
             }
         }
+    }
+
+    /// Whether the queues or the buckets have grown far beyond the live set.
+    ///
+    /// Bucket capacity is part of the footprint, so it is part of the trigger:
+    /// without this a burst's high-water mark is kept for the process lifetime.
+    fn maintenance_due(&self) -> bool {
+        let order_bloated =
+            self.order.len() > self.entries.len().saturating_mul(2).saturating_add(64);
+        let tombs_bloated =
+            self.tomb_order.len() > self.tombstones.len().saturating_mul(2).saturating_add(64);
+        let entries_bloated =
+            self.entries.capacity() > self.entries.len().saturating_mul(4).saturating_add(64);
+        let tombs_capacity_bloated =
+            self.tombstones.capacity() > self.tombstones.len().saturating_mul(4).saturating_add(64);
+        order_bloated || tombs_bloated || entries_bloated || tombs_capacity_bloated
     }
 
     fn compact(&mut self) {
@@ -2148,9 +2185,8 @@ mod tests {
     async fn a_value_larger_than_the_capacity_is_not_retained() {
         // One small entry plus half again: room for the small one, not the big.
         let capacity = entry_weight(0) * 3 / 2;
-        let map: OnceMap<String, String, String> = OnceMap::builder()
-            .capacity_bytes(capacity)
-            .build();
+        let map: OnceMap<String, String, String> =
+            OnceMap::builder().capacity_bytes(capacity).build();
 
         map.publish("small".to_string(), String::new(), WINDOW);
         assert!(map.peek_within(&"small".to_string(), WINDOW).is_some());
