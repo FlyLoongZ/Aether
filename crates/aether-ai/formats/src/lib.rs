@@ -115,3 +115,5 @@ pub use protocol::canonical::{
     CanonicalRole, CanonicalStopReason, CanonicalStreamEvent, CanonicalStreamFrame,
     CanonicalThinkingConfig, CanonicalToolChoice, CanonicalToolDefinition, CanonicalUsage,
 };
+
+pub mod multipart;

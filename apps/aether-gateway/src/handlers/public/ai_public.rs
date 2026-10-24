@@ -5,9 +5,8 @@ use crate::async_task::CancelVideoTaskError;
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
 use crate::handlers::shared::{
-    find_multipart_boundary, find_multipart_boundary_after_crlf, parse_multipart_boundary,
-    query_param_value, unix_ms_to_rfc3339, unix_secs_to_rfc3339, MAX_MULTIPART_PARTS,
-    MAX_MULTIPART_PART_HEADER_BYTES,
+    parse_multipart_boundary, parse_multipart_fields, query_param_value, unix_ms_to_rfc3339,
+    unix_secs_to_rfc3339, MultipartField,
 };
 use crate::image_capabilities::openai_image_gateway_max_generation_count;
 use crate::{AppState, GatewayError};
@@ -1034,230 +1033,12 @@ fn parse_bool_string(value: &str) -> Option<bool> {
     }
 }
 
-#[derive(Debug)]
-struct MultipartField {
-    name: String,
-    data: Vec<u8>,
-}
-
 fn multipart_text_field(fields: &[MultipartField], name: &str) -> Option<String> {
     fields
         .iter()
         .find(|field| field.name.trim() == name)
         .map(|field| String::from_utf8_lossy(&field.data).trim().to_string())
         .filter(|value| !value.is_empty())
-}
-
-fn parse_multipart_fields(body: &[u8], boundary: &str) -> Vec<MultipartField> {
-    let delimiter = format!("--{boundary}").into_bytes();
-    let mut parts = Vec::new();
-    let mut cursor = 0usize;
-    let mut part_count = 0usize;
-
-    while let Some(index) = find_multipart_boundary(&body[cursor..], &delimiter) {
-        let start = cursor + index + delimiter.len();
-        if body.get(start..start + 2) == Some(b"--") {
-            let closing_suffix = body.get(start + 2..).unwrap_or_default();
-            if !(closing_suffix.is_empty() || closing_suffix.starts_with(b"\r\n")) {
-                return Vec::new();
-            }
-            break;
-        }
-        part_count = part_count.saturating_add(1);
-        if part_count > MAX_MULTIPART_PARTS {
-            return Vec::new();
-        }
-        let mut part = &body[start..];
-        if part.starts_with(b"\r\n") {
-            part = &part[2..];
-        }
-        // A multipart body is only valid once a real (CRLF-delimited) next
-        // boundary has been found.  Returning the fields parsed so far here
-        // would let a truncated request pass validation.
-        let Some(next) = find_multipart_boundary_after_crlf(part, &delimiter) else {
-            return Vec::new();
-        };
-        let raw = &part[..next];
-        let raw = raw.strip_suffix(b"\r\n").unwrap_or(raw);
-        if find_subslice(raw, b"\r\n\r\n")
-            .is_some_and(|header_end| header_end > MAX_MULTIPART_PART_HEADER_BYTES)
-        {
-            return Vec::new();
-        }
-        let Some(field) = parse_multipart_field(raw) else {
-            return Vec::new();
-        };
-        parts.push(field);
-        cursor = start + next;
-    }
-
-    parts
-}
-
-fn parse_multipart_field(raw: &[u8]) -> Option<MultipartField> {
-    let header_end = find_subslice(raw, b"\r\n\r\n")?;
-    let headers = &raw[..header_end];
-    let data = raw.get(header_end + 4..)?.to_vec();
-    let header_text = std::str::from_utf8(headers).ok()?;
-
-    let mut name = None;
-    let mut disposition_seen = false;
-    for line in header_text.split("\r\n") {
-        let (header_name, header_value) = line.split_once(':')?;
-        let header_name = header_name.trim();
-        if header_name.eq_ignore_ascii_case("content-disposition") {
-            if disposition_seen {
-                return None;
-            }
-            disposition_seen = true;
-            name = parse_multipart_content_disposition_name(header_value.trim());
-        }
-    }
-
-    Some(MultipartField { name: name?, data })
-}
-
-fn parse_multipart_content_disposition_name(value: &str) -> Option<String> {
-    let segments = split_multipart_header_parameters(value)?;
-    let disposition = segments.first()?.trim();
-    if !disposition.eq_ignore_ascii_case("form-data") {
-        return None;
-    }
-
-    let mut seen_keys = Vec::new();
-    let mut name = None;
-    for segment in segments.into_iter().skip(1) {
-        let segment = segment.trim();
-        if segment.is_empty() {
-            return None;
-        }
-        let (raw_key, raw_value) = segment.split_once('=')?;
-        let key = raw_key.trim();
-        if key.is_empty() || !key.as_bytes().iter().copied().all(is_multipart_token_byte) {
-            return None;
-        }
-        if seen_keys
-            .iter()
-            .any(|seen: &String| seen.eq_ignore_ascii_case(key))
-        {
-            return None;
-        }
-        seen_keys.push(key.to_ascii_lowercase());
-
-        let parsed_value = parse_multipart_header_parameter_value(raw_value.trim())?;
-        if key.eq_ignore_ascii_case("name") {
-            if parsed_value.is_empty() {
-                return None;
-            }
-            name = Some(parsed_value);
-        }
-    }
-
-    name
-}
-
-fn split_multipart_header_parameters(value: &str) -> Option<Vec<&str>> {
-    let mut segments = Vec::new();
-    let mut start = 0usize;
-    let mut in_quotes = false;
-    let mut escaped = false;
-
-    for (index, byte) in value.as_bytes().iter().copied().enumerate() {
-        if in_quotes {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == b'"' {
-                in_quotes = false;
-            }
-        } else if byte == b'"' {
-            in_quotes = true;
-        } else if byte == b';' {
-            segments.push(&value[start..index]);
-            start = index + 1;
-        }
-    }
-
-    if in_quotes || escaped {
-        return None;
-    }
-    segments.push(&value[start..]);
-    Some(segments)
-}
-
-fn parse_multipart_header_parameter_value(value: &str) -> Option<String> {
-    if value.is_empty() {
-        return None;
-    }
-    if value.starts_with('"') {
-        if value.len() < 2 || !value.ends_with('"') {
-            return None;
-        }
-        let inner = &value[1..value.len() - 1];
-        let mut parsed = String::with_capacity(inner.len());
-        let mut escaped = false;
-        for character in inner.chars() {
-            if escaped {
-                if character.is_control() {
-                    return None;
-                }
-                parsed.push(character);
-                escaped = false;
-            } else if character == '\\' {
-                escaped = true;
-            } else {
-                if character == '"' || character.is_control() {
-                    return None;
-                }
-                parsed.push(character);
-            }
-        }
-        if escaped {
-            return None;
-        }
-        return Some(parsed);
-    }
-
-    value
-        .as_bytes()
-        .iter()
-        .copied()
-        .all(is_multipart_token_byte)
-        .then(|| value.to_string())
-}
-
-fn is_multipart_token_byte(byte: u8) -> bool {
-    matches!(
-        byte,
-        b'0'..=b'9'
-            | b'A'..=b'Z'
-            | b'a'..=b'z'
-            | b'!'
-            | b'#'
-            | b'$'
-            | b'%'
-            | b'&'
-            | b'\''
-            | b'*'
-            | b'+'
-            | b'-'
-            | b'.'
-            | b'^'
-            | b'_'
-            | b'`'
-            | b'|'
-            | b'~'
-    )
-}
-
-fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
-    if needle.is_empty() || haystack.len() < needle.len() {
-        return None;
-    }
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
 }
 
 fn maybe_build_local_ai_public_route_guard_response(
@@ -2083,13 +1864,11 @@ mod tests {
     use super::{
         build_ai_public_error_response, build_ai_public_upstream_error_response,
         build_gemini_file_mapping_payload, gemini_video_task_error_projection,
-        parse_multipart_fields, parse_openai_image_validation_input,
-        validate_claude_count_tokens_request, validate_openai_image_n, OpenAiImageOperation,
-        StoredGeminiFileMapping, AI_PUBLIC_UPSTREAM_ERROR_DETAIL,
-        CLAUDE_COUNT_TOKENS_BODY_REQUIRED_DETAIL, CLAUDE_COUNT_TOKENS_INVALID_JSON_DETAIL,
-        CLAUDE_COUNT_TOKENS_MESSAGES_REQUIRED_DETAIL, CLAUDE_COUNT_TOKENS_MODEL_REQUIRED_DETAIL,
-        MAX_MULTIPART_PARTS, MAX_MULTIPART_PART_HEADER_BYTES,
-        OPENAI_IMAGE_INVALID_MULTIPART_DETAIL,
+        parse_openai_image_validation_input, validate_claude_count_tokens_request,
+        validate_openai_image_n, OpenAiImageOperation, StoredGeminiFileMapping,
+        AI_PUBLIC_UPSTREAM_ERROR_DETAIL, CLAUDE_COUNT_TOKENS_BODY_REQUIRED_DETAIL,
+        CLAUDE_COUNT_TOKENS_INVALID_JSON_DETAIL, CLAUDE_COUNT_TOKENS_MESSAGES_REQUIRED_DETAIL,
+        CLAUDE_COUNT_TOKENS_MODEL_REQUIRED_DETAIL, OPENAI_IMAGE_INVALID_MULTIPART_DETAIL,
     };
     use aether_data_contracts::repository::video_tasks::{StoredVideoTask, VideoTaskStatus};
     use axum::body::{to_bytes, Body, Bytes};
@@ -2305,123 +2084,6 @@ mod tests {
                 Err(OPENAI_IMAGE_INVALID_MULTIPART_DETAIL)
             ));
         }
-    }
-
-    #[test]
-    fn multipart_parser_caps_part_count_and_header_size() {
-        let boundary = "bounded-parts";
-        let mut accepted_body = Vec::new();
-        for index in 0..MAX_MULTIPART_PARTS {
-            accepted_body.extend_from_slice(
-                format!(
-                    "--{boundary}\r\nContent-Disposition: form-data; name=\"field-{index}\"\r\n\r\nvalue\r\n"
-                )
-                .as_bytes(),
-            );
-        }
-        accepted_body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
-        assert_eq!(
-            parse_multipart_fields(&accepted_body, boundary).len(),
-            MAX_MULTIPART_PARTS
-        );
-
-        let mut body = Vec::new();
-        for index in 0..(MAX_MULTIPART_PARTS + 1) {
-            body.extend_from_slice(
-                format!(
-                    "--{boundary}\r\nContent-Disposition: form-data; name=\"field-{index}\"\r\n\r\nvalue\r\n"
-                )
-                .as_bytes(),
-            );
-        }
-        body.extend_from_slice(format!("--{boundary}--\r\n").as_bytes());
-        assert!(parse_multipart_fields(&body, boundary).is_empty());
-
-        let mut oversized_header =
-            format!("--{boundary}\r\nContent-Disposition: form-data; name=\"field\"; x=\"")
-                .into_bytes();
-        oversized_header.extend(std::iter::repeat_n(b'x', MAX_MULTIPART_PART_HEADER_BYTES));
-        oversized_header
-            .extend_from_slice(format!("\"\r\n\r\nvalue\r\n--{boundary}--\r\n").as_bytes());
-        assert!(parse_multipart_fields(&oversized_header, boundary).is_empty());
-    }
-
-    #[test]
-    fn multipart_parser_preserves_boundary_like_payload_and_fails_closed() {
-        let boundary = "payload-boundary";
-        let body = format!(
-            concat!(
-                "--{boundary}\r\n",
-                "Content-Disposition: form-data; name=\"prompt\"\r\n\r\n",
-                "prefix\r\n--{boundary}X\r\nsuffix--{boundary}\r\n",
-                "--{boundary}--\r\n"
-            ),
-            boundary = boundary,
-        );
-        let fields = parse_multipart_fields(body.as_bytes(), boundary);
-        assert_eq!(fields.len(), 1);
-        assert_eq!(fields[0].name, "prompt");
-        assert_eq!(
-            fields[0].data,
-            format!("prefix\r\n--{boundary}X\r\nsuffix--{boundary}").into_bytes()
-        );
-
-        // A valid first part must not make a truncated second part appear
-        // valid.  The only marker after the second part has an invalid
-        // suffix and there is no closing boundary.
-        let malformed = format!(
-            concat!(
-                "--{boundary}\r\n",
-                "Content-Disposition: form-data; name=\"first\"\r\n\r\n",
-                "ok\r\n",
-                "--{boundary}\r\n",
-                "Content-Disposition: form-data; name=\"second\"\r\n\r\n",
-                "truncated\r\n--{boundary}X\r\n"
-            ),
-            boundary = boundary,
-        );
-        assert!(parse_multipart_fields(malformed.as_bytes(), boundary).is_empty());
-    }
-
-    #[test]
-    fn multipart_parser_does_not_extract_name_from_filename_and_rejects_duplicates() {
-        let boundary = "header-parameters";
-        let filename_only = format!(
-            concat!(
-                "--{boundary}\r\n",
-                "Content-Disposition: form-data; filename=\"name=\\\"prompt\\\"\"\r\n\r\n",
-                "attacker-value\r\n",
-                "--{boundary}--\r\n"
-            ),
-            boundary = boundary,
-        );
-        assert!(parse_multipart_fields(filename_only.as_bytes(), boundary).is_empty());
-
-        let duplicate_name = format!(
-            concat!(
-                "--{boundary}\r\n",
-                "Content-Disposition: form-data; name=\"prompt\"; name=\"image\"\r\n\r\n",
-                "ambiguous-value\r\n",
-                "--{boundary}--\r\n"
-            ),
-            boundary = boundary,
-        );
-        assert!(parse_multipart_fields(duplicate_name.as_bytes(), boundary).is_empty());
-    }
-
-    #[test]
-    fn multipart_parser_rejects_garbage_after_closing_boundary() {
-        let boundary = "closing-suffix";
-        let body = format!(
-            concat!(
-                "--{boundary}\r\n",
-                "Content-Disposition: form-data; name=\"prompt\"\r\n\r\n",
-                "value\r\n",
-                "--{boundary}--junk"
-            ),
-            boundary = boundary,
-        );
-        assert!(parse_multipart_fields(body.as_bytes(), boundary).is_empty());
     }
 
     #[test]
