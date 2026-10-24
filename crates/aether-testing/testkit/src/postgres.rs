@@ -23,7 +23,7 @@ pub struct ManagedPostgresServer {
 
 impl ManagedPostgresServer {
     pub async fn start() -> Result<Self, Box<dyn std::error::Error>> {
-        let port = reserve_local_port()?;
+        let port = crate::server::reserve_local_port()?;
         // pid+port is not unique: cargo test shares one PID, and ephemeral ports
         // are reused after the listener is dropped. Parallel e2e tests then hit
         // create_dir AlreadyExists.
@@ -218,13 +218,6 @@ pub async fn prepare_aether_postgres_schema(
     }
 
     Ok(())
-}
-
-fn reserve_local_port() -> Result<u16, std::io::Error> {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-    let port = listener.local_addr()?.port();
-    drop(listener);
-    Ok(port)
 }
 
 #[cfg(test)]
