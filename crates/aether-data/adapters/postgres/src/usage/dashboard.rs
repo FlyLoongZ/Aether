@@ -12,7 +12,8 @@ use sqlx::{Postgres, QueryBuilder, Row};
 // once. Joining the two public fact views reads and hashes the entire usage table
 // twice. Extract both availability flags together so large JSON metadata is parsed
 // once per row. Live database regressions compare these fields with the canonical view.
-const DASHBOARD_TOTAL_FACTS_SQL: &str = r#"(
+const DASHBOARD_TOTAL_FACTS_SQL: &str = concat!(
+    r#"(
 SELECT u.created_at, u.api_key_id, u.model, u.provider_id, u.api_format, u.endpoint_kind,
   u.request_type, u.status, u.is_stream, u.has_format_conversion, u.failure_origin,
   'request'::text AS record_kind,
@@ -21,74 +22,9 @@ SELECT u.created_at, u.api_key_id, u.model, u.provider_id, u.api_format, u.endpo
   COALESCE(metadata.value->'usage_pricing_available', 'true'::jsonb) <> 'false'::jsonb
     AND (s.billing_total_cost_usd IS NOT NULL OR COALESCE(s.billing_status, u.billing_status) = 'settled') AS pricing_available,
   CASE WHEN COALESCE(metadata.value->'usage_available', 'true'::jsonb) <> 'false'::jsonb THEN
-  GREATEST(
-    COALESCE(
-      CASE
-        WHEN s.billing_effective_input_tokens IS NOT NULL
-        THEN GREATEST(s.billing_effective_input_tokens, 0)
-          + GREATEST(COALESCE(s.billing_output_tokens, u.output_tokens, 0), 0)
-          + GREATEST(
-              COALESCE(
-                s.billing_cache_creation_tokens,
-                CASE
-                  WHEN s.billing_cache_creation_5m_tokens IS NOT NULL
-                    OR s.billing_cache_creation_1h_tokens IS NOT NULL
-                  THEN COALESCE(s.billing_cache_creation_5m_tokens, 0)
-                    + COALESCE(s.billing_cache_creation_1h_tokens, 0)
-                END,
-                CASE
-                  WHEN COALESCE(u.cache_creation_input_tokens, 0) = 0
-                       AND (
-                         COALESCE(u.cache_creation_input_tokens_5m, 0)
-                         + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                       ) > 0
-                  THEN COALESCE(u.cache_creation_input_tokens_5m, 0)
-                    + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                  ELSE COALESCE(u.cache_creation_input_tokens, 0)
-                END,
-                0
-              ),
-              0
-            )
-          + GREATEST(
-              COALESCE(
-                s.billing_cache_read_tokens,
-                u.cache_read_input_tokens,
-                0
-              ),
-              0
-            )
-        WHEN s.billing_total_input_context IS NOT NULL
-        THEN GREATEST(s.billing_total_input_context, 0)
-          + GREATEST(COALESCE(s.billing_output_tokens, u.output_tokens, 0), 0)
-      END,
-      NULLIF(GREATEST(COALESCE(u.total_tokens, 0), 0), 0),
-      CASE
-        WHEN split_part(lower(COALESCE(COALESCE(u.endpoint_api_format, u.api_format), '')), ':', 1)
-             IN ('openai', 'gemini', 'google')
-        THEN GREATEST(COALESCE(u.input_tokens, 0), 0)
-          + GREATEST(COALESCE(u.output_tokens, 0), 0)
-        ELSE GREATEST(COALESCE(u.input_tokens, 0), 0)
-          + GREATEST(COALESCE(u.output_tokens, 0), 0)
-          + GREATEST(
-              CASE
-                WHEN COALESCE(u.cache_creation_input_tokens, 0) = 0
-                     AND (
-                       COALESCE(u.cache_creation_input_tokens_5m, 0)
-                       + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                     ) > 0
-                THEN COALESCE(u.cache_creation_input_tokens_5m, 0)
-                  + COALESCE(u.cache_creation_input_tokens_1h, 0)
-                ELSE COALESCE(u.cache_creation_input_tokens, 0)
-              END,
-              0
-            )
-          + GREATEST(COALESCE(u.cache_read_input_tokens, 0), 0)
-      END,
-      0
-    ),
-    0
-  )::bigint END AS total_tokens,
+"#,
+    dashboard_total_tokens_expr!(),
+    r#"
   CASE WHEN COALESCE(metadata.value->'usage_pricing_available', 'true'::jsonb) <> 'false'::jsonb
     AND (s.billing_actual_total_cost_usd IS NOT NULL OR COALESCE(s.billing_status, u.billing_status) = 'settled')
     THEN public.usage_customer_billable_amount(metadata.value,
@@ -100,7 +36,8 @@ LEFT JOIN public.usage_settlement_snapshots s USING (request_id)
 CROSS JOIN LATERAL (SELECT u.request_metadata::jsonb AS value OFFSET 0) metadata
 WHERE NOT EXISTS (SELECT 1 FROM public.usage_attribution_snapshots a
   WHERE a.request_id=u.request_id AND a.record_kind='session')
-) AS usage_analytics_facts_v1"#;
+) AS usage_analytics_facts_v1"#
+);
 
 pub(super) fn push_dashboard_total_filter(
     builder: &mut QueryBuilder<'_, Postgres>,
