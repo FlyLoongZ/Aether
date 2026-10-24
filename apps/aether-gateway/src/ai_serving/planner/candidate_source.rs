@@ -19,7 +19,7 @@ use crate::ai_serving::planner::candidate_affinity_cache::has_explicit_session_a
 use crate::ai_serving::planner::candidate_resolution::SkippedLocalExecutionCandidate;
 use crate::ai_serving::{GatewayAuthApiKeySnapshot, PlannerAppState};
 use crate::cache::{
-    candidate_page_cache_stale_ttl, candidate_page_cache_ttl_from_env,
+    candidate_page_cache_max_stale_age, candidate_page_cache_ttl_from_env,
     record_candidate_page_cache_none, CandidatePageCacheKey, CandidatePageSnapshot,
 };
 use crate::clock::request_distribution_seed;
@@ -665,7 +665,7 @@ impl<'a> LocalCandidatePreselectionPageCursor<'a> {
         // nor replayed out of order. Freshness is therefore write-driven — a
         // catalog, routing or health change clears the cache — and the window
         // below is only the fallback for a missed cross-node invalidation.
-        let window = candidate_page_cache_stale_ttl(candidate_page_cache_ttl_from_env());
+        let window = candidate_page_cache_max_stale_age(candidate_page_cache_ttl_from_env());
         let cached = cache
             .get_or_load(key, window, || async {
                 let page = self.next_priority_page_with_planning_gate().await?;

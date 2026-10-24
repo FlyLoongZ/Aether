@@ -15,7 +15,7 @@ pub(crate) use auth_runtime::{
     JsonValueCache, ValueCache,
 };
 pub(crate) use candidate_page::{
-    candidate_page_cache_metric_samples, candidate_page_cache_stale_ttl,
+    candidate_page_cache_max_stale_age, candidate_page_cache_metric_samples,
     candidate_page_cache_ttl_from_env, record_candidate_page_cache_follower_wait,
     record_candidate_page_cache_hit, record_candidate_page_cache_load,
     record_candidate_page_cache_miss, record_candidate_page_cache_none,

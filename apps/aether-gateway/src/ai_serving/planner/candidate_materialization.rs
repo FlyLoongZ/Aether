@@ -39,7 +39,7 @@ use crate::ai_serving::planner::runtime_miss::record_local_runtime_candidate_ski
 use crate::ai_serving::planner::CandidateFailureDiagnostic;
 use crate::ai_serving::{GatewayAuthApiKeySnapshot, PlannerAppState};
 use crate::cache::{
-    candidate_page_cache_stale_ttl, candidate_page_cache_ttl_from_env,
+    candidate_page_cache_max_stale_age, candidate_page_cache_ttl_from_env,
     CandidateResolvedPageCacheKey, CandidateResolvedPageSnapshot,
 };
 use crate::clock::current_unix_ms;
@@ -1329,7 +1329,7 @@ async fn resolve_priority_candidate_page_with_cache(
     let app = cursor.state.app();
     let cache = app.candidate_resolved_page_cache.clone();
     let ttl = candidate_page_cache_ttl_from_env();
-    let stale_ttl = candidate_page_cache_stale_ttl(ttl);
+    let stale_ttl = candidate_page_cache_max_stale_age(ttl);
     // Keep request-owned planner inputs borrowed until the cache tells us a
     // cold load or stale refresh is actually needed. Fresh hits must not pay
     // for deep copies of candidate pages and auth/routing snapshots.
