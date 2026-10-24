@@ -1,12 +1,10 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use aether_data::DataLayerError;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredRequestedModelCandidateRowsQuery,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
 };
@@ -120,10 +118,13 @@ fn limited_auth() -> GatewayAuthApiKeySnapshot {
 
 #[async_trait]
 impl MinimalCandidateSelectionRowSource for CountingState {
-    async fn read_minimal_candidate_selection_rows_for_api_format_and_requested_model_page(
+    /// One candidate-row read per enumeration: the version the pages are cut
+    /// from. The counters, the delay and the injected failure all describe that
+    /// read, because it is the only one that reaches the data layer.
+    async fn pin_minimal_candidate_selection_rows_for_api_format(
         &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
+        api_format: &str,
+    ) -> Result<Arc<Vec<StoredMinimalCandidateSelectionRow>>, DataLayerError> {
         let read = self.row_reads.fetch_add(1, Ordering::SeqCst) + 1;
         if read == 1 && !self.first_row_delay.is_zero() {
             tokio::time::sleep(self.first_row_delay).await;
@@ -133,19 +134,15 @@ impl MinimalCandidateSelectionRowSource for CountingState {
                 "candidate query failed".to_string(),
             ));
         }
-        Ok(self
-            .rows
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|row| {
-                row.endpoint_api_format == query.api_format
-                    && row.global_model_name == query.requested_model_name
-            })
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
-            .cloned()
-            .collect())
+        Ok(Arc::new(
+            self.rows
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|row| row.endpoint_api_format == api_format)
+                .cloned()
+                .collect::<Vec<_>>(),
+        ))
     }
 
     async fn read_minimal_candidate_selection_rows_for_api_format(

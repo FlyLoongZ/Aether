@@ -53,6 +53,7 @@ struct EmptyFallbackCountingRepository {
 struct PagedFallbackRepository {
     total_rows: u32,
     page_queries: Mutex<Vec<StoredApiFormatCandidateRowsQuery>>,
+    pin_queries: Mutex<Vec<String>>,
 }
 
 impl PagedFallbackRepository {
@@ -60,7 +61,15 @@ impl PagedFallbackRepository {
         Self {
             total_rows,
             page_queries: Mutex::new(Vec::new()),
+            pin_queries: Mutex::new(Vec::new()),
         }
+    }
+
+    fn pin_queries(&self) -> Vec<String> {
+        self.pin_queries
+            .lock()
+            .expect("fallback query lock")
+            .clone()
     }
 
     fn page_queries(&self) -> Vec<StoredApiFormatCandidateRowsQuery> {
@@ -78,6 +87,31 @@ impl MinimalCandidateSelectionReadRepository for PagedFallbackRepository {
         _api_format: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
         panic!("routing fallback must not use the unbounded API-format query")
+    }
+
+    /// The repository hands out one version; the cursor pages through it.
+    async fn pin_api_format_rows(
+        &self,
+        api_format: &str,
+    ) -> Result<Arc<Vec<StoredMinimalCandidateSelectionRow>>, DataLayerError> {
+        self.pin_queries
+            .lock()
+            .expect("fallback query lock")
+            .push(api_format.to_string());
+        if normalize_api_format(api_format) != "openai:chat" {
+            return Ok(Arc::new(Vec::new()));
+        }
+        Ok(Arc::new(
+            (0..self.total_rows)
+                .map(|index| {
+                    standard_candidate_row(
+                        format!("fallback-provider-{index:04}").as_str(),
+                        "openai:chat",
+                        i32::try_from(index).expect("test provider priority should fit"),
+                    )
+                })
+                .collect(),
+        ))
     }
 
     async fn list_for_exact_api_format_page(
@@ -322,7 +356,7 @@ async fn restart_scan_clears_exhaustion_and_allows_fallback_to_be_read_again() {
 }
 
 #[tokio::test]
-async fn fallback_can_supply_a_real_second_candidate_after_fast_path_page() {
+async fn a_pinned_version_supplies_every_row_the_request_can_use() {
     let mut first = standard_candidate_row("provider-first", "openai:chat", 0);
     first.global_model_name = "gpt-5".to_string();
     first.global_model_mappings = Some(vec!["gpt-5(?:\\.\\d+)?".to_string()]);
@@ -364,21 +398,23 @@ async fn fallback_can_supply_a_real_second_candidate_after_fast_path_page() {
     )
     .await;
 
+    // Both providers map `gpt-5.x` onto their own upstream model, so both serve
+    // the request. They are found in the same version and offered in the same
+    // page: there is no second query that could surface one the other missed.
     let first_page = cursor
         .next_page()
         .await
-        .expect("fast-path candidate should load")
-        .expect("first candidate should be present");
-    assert_eq!(first_page.candidates.len(), 1);
-    assert_eq!(first_page.candidates[0].provider_id, "provider-first");
+        .expect("pinned candidate should load")
+        .expect("candidates should be present");
+    assert_eq!(
+        first_page
+            .candidates
+            .iter()
+            .map(|candidate| candidate.provider_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["provider-first", "provider-second"]
+    );
 
-    let second_page = cursor
-        .next_page()
-        .await
-        .expect("fallback candidate should load")
-        .expect("second candidate should not be skipped");
-    assert_eq!(second_page.candidates.len(), 1);
-    assert_eq!(second_page.candidates[0].provider_id, "provider-second");
     assert!(cursor
         .next_page()
         .await
@@ -710,23 +746,26 @@ async fn routing_fallback_uses_bounded_api_format_pages() {
         .await
         .expect("bounded routing fallback should be exhausted")
         .is_none());
-    let page_queries = repository
-        .page_queries()
-        .into_iter()
-        .filter(|query| normalize_api_format(&query.api_format) == "openai:chat")
-        .collect::<Vec<_>>();
+    // The scan is bounded by the collected-row budget, and every window it
+    // walked came from the one version the repository handed out: one pin per
+    // api format the request may serve, never one per page.
+    let pins = repository.pin_queries();
     assert_eq!(
-        page_queries.len(),
-        (REQUESTED_MODEL_MAX_COLLECTED_ROWS / REQUESTED_MODEL_CANDIDATE_PAGE_SIZE) as usize
+        pins.iter()
+            .filter(|format| *format == "openai:chat")
+            .count(),
+        1,
+        "a format is pinned once per cursor, not once per page: {pins:?}"
     );
-    for (index, query) in page_queries.iter().enumerate() {
-        assert_eq!(query.limit, REQUESTED_MODEL_CANDIDATE_PAGE_SIZE);
-        assert_eq!(
-            query.offset,
-            u32::try_from(index).expect("page index should fit")
-                * REQUESTED_MODEL_CANDIDATE_PAGE_SIZE
-        );
-    }
+    assert_eq!(
+        pins.len(),
+        pins.iter().collect::<std::collections::BTreeSet<_>>().len(),
+        "no api format may be pinned twice in one scan: {pins:?}"
+    );
+    assert!(
+        repository.page_queries().is_empty(),
+        "windows are cut from the version, not asked of the data layer"
+    );
 }
 
 #[tokio::test]

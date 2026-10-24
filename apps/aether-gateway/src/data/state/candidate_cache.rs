@@ -43,18 +43,23 @@ const CANDIDATE_CACHE_LOAD_TIMEOUT: Duration = Duration::from_millis(50);
 /// Order is the same one `list_for_exact_api_format_page` used to ask the
 /// database for, applied once at load time instead of once per page.
 struct CandidateFormatRows {
-    rows: Vec<StoredMinimalCandidateSelectionRow>,
+    rows: Arc<Vec<StoredMinimalCandidateSelectionRow>>,
 }
 
 impl CandidateFormatRows {
     fn new(rows: Vec<StoredMinimalCandidateSelectionRow>) -> Self {
         Self {
-            rows: normalize_rows(rows),
+            rows: Arc::new(normalize_rows(rows)),
         }
     }
 
     fn all(&self) -> Vec<StoredMinimalCandidateSelectionRow> {
-        self.rows.clone()
+        self.rows.as_ref().clone()
+    }
+
+    /// The version itself, so a caller that pages can hold it.
+    fn pinned(&self) -> Arc<Vec<StoredMinimalCandidateSelectionRow>> {
+        Arc::clone(&self.rows)
     }
 
     /// Rows `[offset, offset + limit)`, clamped to what the version holds.
@@ -317,6 +322,16 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
         api_format: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
         Ok(self.format_rows(api_format).await?.all())
+    }
+
+    /// The cache already holds exactly one version per format, so pinning is a
+    /// refcount bump. The caller keeps being answered from the rows it started
+    /// with even if the entry is invalidated between its pages.
+    async fn pin_api_format_rows(
+        &self,
+        api_format: &str,
+    ) -> Result<Arc<Vec<StoredMinimalCandidateSelectionRow>>, DataLayerError> {
+        Ok(self.format_rows(api_format).await?.pinned())
     }
 
     async fn list_for_exact_api_format_page(
@@ -962,6 +977,37 @@ mod tests {
             .unwrap();
         assert_eq!(inner.calls(), 2);
         assert_eq!(repeated.len(), 3);
+    }
+
+    /// A caller that paged through a version keeps reading that version even
+    /// after the entry is invalidated: its offsets address the rows it started
+    /// with, and no second read can move them.
+    #[tokio::test]
+    async fn a_pinned_version_outlives_an_invalidation() {
+        let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
+            Duration::ZERO,
+            vec![
+                sample_row_for("key-a", 1, "model-a"),
+                sample_row_for("key-b", 2, "model-a"),
+            ],
+        ));
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
+
+        let pinned = cache.pin_api_format_rows("openai:chat").await.unwrap();
+        assert_eq!(pinned.len(), 2);
+
+        cache.clear_local_cache();
+        assert_eq!(
+            pinned.len(),
+            2,
+            "the handle the caller holds is the version, not a lookup"
+        );
+
+        // A reader that arrives after the invalidation gets a fresh version,
+        // and that costs exactly one load.
+        let reloaded = cache.pin_api_format_rows("openai:chat").await.unwrap();
+        assert_eq!(reloaded.len(), 2);
+        assert_eq!(inner.calls(), 2);
     }
 
     #[tokio::test]
