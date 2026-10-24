@@ -75,11 +75,54 @@ pub(crate) async fn resolve_reserved_global_model_name(
 pub(crate) const REQUESTED_MODEL_CANDIDATE_PAGE_SIZE: u32 = 256;
 pub(crate) const REQUESTED_MODEL_MAX_SCANNED_ROWS: u32 = 2048;
 
+/// One window of candidate rows read from the data layer.
+///
+/// The three fields answer three different questions and must never be derived
+/// from one another:
+///
+/// - `rows` — the rows this request may consider, after per-request filtering;
+/// - `scanned_rows` — how much of the query shape's row set this window has
+///   consumed, which is what a caller charges against its scan budget;
+/// - `scan_exhausted` — whether the query shape had nothing left after it.
+///
+/// A short window usually means the shape is exhausted, but not always: a
+/// window can come back full while the shape still has nothing more that
+/// matches. Treating "page is not full" as "stop looking" is how a bounded scan
+/// silently turns into a partial answer.
 #[derive(Debug, Clone)]
 pub(crate) struct RequestedModelCandidateRowsPage {
     pub(crate) rows: Vec<StoredMinimalCandidateSelectionRow>,
     pub(crate) scanned_rows: u32,
-    pub(crate) end_of_requested_name: bool,
+    pub(crate) scan_exhausted: bool,
+}
+
+/// How much of one API format's row set a single request may walk.
+///
+/// The budget is the *cost* bound of a plan, not the bound of its result: when
+/// it runs out the scan stops even though rows remain, and callers must report
+/// that as "the budget ended" rather than as "there is nothing else".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CandidateScanBudget {
+    used: u32,
+    limit: u32,
+}
+
+impl CandidateScanBudget {
+    pub(crate) const fn new(limit: u32) -> Self {
+        Self { used: 0, limit }
+    }
+
+    pub(crate) const fn remaining(&self) -> u32 {
+        self.limit.saturating_sub(self.used)
+    }
+
+    pub(crate) const fn is_exhausted(&self) -> bool {
+        self.remaining() == 0
+    }
+
+    pub(crate) fn consume(&mut self, rows: u32) {
+        self.used = self.used.saturating_add(rows).min(self.limit);
+    }
 }
 
 pub(crate) async fn read_requested_model_rows(
@@ -248,7 +291,7 @@ pub(crate) async fn read_requested_model_rows_fast_path_page(
         )
         .await?;
     let scanned_rows = page.len() as u32;
-    let end_of_requested_name = scanned_rows < limit;
+    let scan_exhausted = scanned_rows < limit;
     let rows = filter_rows_for_requested_model(
         page,
         requested_model_name,
@@ -258,7 +301,7 @@ pub(crate) async fn read_requested_model_rows_fast_path_page(
     Ok(RequestedModelCandidateRowsPage {
         rows,
         scanned_rows,
-        end_of_requested_name,
+        scan_exhausted,
     })
 }
 
@@ -282,7 +325,7 @@ pub(crate) async fn read_api_format_rows_fallback_page(
     Ok(RequestedModelCandidateRowsPage {
         rows,
         scanned_rows,
-        end_of_requested_name: scanned_rows < limit,
+        scan_exhausted: scanned_rows < limit,
     })
 }
 
@@ -629,7 +672,7 @@ mod tests {
         .expect("page read should succeed");
 
         assert_eq!(page.scanned_rows, 3);
-        assert!(!page.end_of_requested_name);
+        assert!(!page.scan_exhausted);
         assert_eq!(
             page.rows
                 .iter()
@@ -642,7 +685,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn requested_model_rows_page_reports_end_of_requested_name() {
+    async fn requested_model_rows_page_reports_an_exhausted_scan() {
         let source = CountingSelectionSource::new(vec![sample_row("gpt-5")], Vec::new());
 
         let page = read_requested_model_rows_fast_path_page(
@@ -658,7 +701,7 @@ mod tests {
         .expect("page read should succeed");
 
         assert_eq!(page.scanned_rows, 1);
-        assert!(page.end_of_requested_name);
+        assert!(page.scan_exhausted);
         assert_eq!(page.rows.len(), 1);
         assert_eq!(source.fast_calls.load(Ordering::SeqCst), 1);
         assert_eq!(source.fallback_calls.load(Ordering::SeqCst), 0);
