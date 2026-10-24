@@ -35,7 +35,6 @@ fn auth_email_storage_key_digest_for_tests(domain: &str, parts: &[&str]) -> Stri
         .collect()
 }
 
-#[cfg(test)]
 impl AppState {
     pub(crate) fn with_data_state_for_tests(mut self, data_state: GatewayDataState) -> Self {
         // Request-execution fixtures provide candidate and provider data but

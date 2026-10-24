@@ -32,7 +32,6 @@ mod announcements;
 mod video_tasks;
 
 impl GatewayDataState {
-    #[cfg(test)]
     pub(crate) fn with_user_preferences_for_tests(
         mut self,
         preferences: impl IntoIterator<Item = StoredUserPreferenceRecord>,
@@ -46,60 +45,15 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_request_candidate_reader_for_tests(
         repository: Arc<dyn RequestCandidateReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
             request_candidate_reader: Some(repository),
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_request_candidate_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: RequestCandidateRepository + 'static,
@@ -108,108 +62,20 @@ impl GatewayDataState {
         let request_candidate_writer: Arc<dyn RequestCandidateWriteRepository> = repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
             request_candidate_reader: Some(request_candidate_reader),
             request_candidate_writer: Some(request_candidate_writer),
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_catalog_reader_for_tests(
         repository: Arc<dyn ProviderCatalogReadRepository>,
     ) -> Self {
-        Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: Some(repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
-        }
+        GatewayDataStateFixture::new()
+            .with_provider_catalog_reader(repository)
+            .build()
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_catalog_reader(
         mut self,
         repository: Arc<dyn ProviderCatalogReadRepository>,
@@ -218,7 +84,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_cached_provider_catalog_reader_for_tests<T>(
         mut self,
         repository: Arc<T>,
@@ -233,7 +98,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_request_candidate_reader(
         mut self,
         repository: Arc<dyn RequestCandidateReadRepository>,
@@ -242,7 +106,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_settlement_writer_for_tests(
         mut self,
         repository: Arc<dyn SettlementWriteRepository>,
@@ -251,7 +114,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_encryption_key_for_tests(
         mut self,
         encryption_key: impl Into<String>,
@@ -263,7 +125,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_system_config_values_for_tests<I>(mut self, entries: I) -> Self
     where
         I: IntoIterator<Item = (String, serde_json::Value)>,
@@ -288,7 +149,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_background_task_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
         T: BackgroundTaskReadRepository + BackgroundTaskWriteRepository + 'static,
@@ -300,7 +160,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_global_model_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
         T: GlobalModelReadRepository + GlobalModelWriteRepository + 'static,
@@ -312,7 +171,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_global_model_reader(
         mut self,
         repository: Arc<dyn GlobalModelReadRepository>,
@@ -321,7 +179,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_catalog_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
@@ -329,55 +186,12 @@ impl GatewayDataState {
         let provider_catalog_reader: Arc<dyn ProviderCatalogReadRepository> = repository.clone();
         let provider_catalog_writer: Arc<dyn ProviderCatalogWriteRepository> = repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_reader),
             provider_catalog_writer: Some(provider_catalog_writer),
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn attach_provider_catalog_repository_for_tests<T>(
         mut self,
         repository: Arc<T>,
@@ -392,7 +206,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_pool_score_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
         T: PoolMemberScoreRepository + 'static,
@@ -404,61 +217,17 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_catalog_and_request_candidate_reader_for_tests(
         provider_catalog_repository: Arc<dyn ProviderCatalogReadRepository>,
         request_candidate_repository: Arc<dyn RequestCandidateReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
             request_candidate_reader: Some(request_candidate_repository),
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_catalog_global_model_and_quota_readers_for_tests<T>(
         provider_catalog_repository: Arc<dyn ProviderCatalogReadRepository>,
         global_model_repository: Arc<dyn GlobalModelReadRepository>,
@@ -472,162 +241,34 @@ impl GatewayDataState {
         let provider_quota_writer: Arc<dyn ProviderQuotaWriteRepository> =
             provider_quota_repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
             global_model_reader: Some(global_model_repository),
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
             provider_quota_reader: Some(provider_quota_reader),
             provider_quota_writer: Some(provider_quota_writer),
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_global_model_reader_for_tests(
         repository: Arc<dyn GlobalModelReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
             global_model_reader: Some(repository),
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_catalog_and_minimal_candidate_selection_for_tests(
         provider_catalog_repository: Arc<dyn ProviderCatalogReadRepository>,
         candidate_selection_repository: Arc<dyn MinimalCandidateSelectionReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
             minimal_candidate_selection_reader: Some(candidate_selection_repository),
-            request_candidate_reader: None,
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_request_candidate_and_usage_repository_for_tests<T, U>(
         request_candidate_repository: Arc<T>,
         usage_repository: Arc<U>,
@@ -644,55 +285,14 @@ impl GatewayDataState {
         let usage_writer: Arc<dyn UsageWriteRepository> = usage_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
             request_candidate_reader: Some(request_candidate_reader),
             request_candidate_writer: Some(request_candidate_writer),
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(usage_reader),
             usage_writer: Some(usage_writer),
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_request_candidate_and_gemini_file_mapping_repository_for_tests<T, U>(
         request_candidate_repository: Arc<T>,
         gemini_file_mapping_repository: Arc<U>,
@@ -711,112 +311,26 @@ impl GatewayDataState {
             gemini_file_mapping_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
             gemini_file_mapping_reader: Some(gemini_file_mapping_reader),
             gemini_file_mapping_writer: Some(gemini_file_mapping_writer),
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
             request_candidate_reader: Some(request_candidate_reader),
             request_candidate_writer: Some(request_candidate_writer),
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_usage_reader_for_tests(repository: Arc<dyn UsageReadRepository>) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(repository),
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_user_reader(mut self, repository: Arc<dyn UserReadRepository>) -> Self {
         self.user_reader = Some(repository);
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_routing_group_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
         T: RoutingGroupReadRepository + RoutingGroupWriteRepository + 'static,
@@ -826,7 +340,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_system_default_routing_group_for_tests(self) -> Self {
         let now = 1;
         let repository = Arc::new(InMemoryRoutingGroupRepository::seed(
@@ -850,7 +363,6 @@ impl GatewayDataState {
         self.with_routing_group_repository_for_tests(repository)
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_api_key_reader(
         mut self,
         repository: Arc<dyn AuthApiKeyReadRepository>,
@@ -859,58 +371,13 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_user_reader_for_tests(repository: Arc<dyn UserReadRepository>) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
             user_reader: Some(repository),
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_user_and_wallet_for_tests<T>(
         user_repository: Arc<dyn UserReadRepository>,
         wallet_repository: Arc<T>,
@@ -921,55 +388,13 @@ impl GatewayDataState {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
             user_reader: Some(user_repository),
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
             wallet_reader: Some(wallet_reader),
             wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_user_billing_and_wallet_for_tests<T>(
         user_repository: Arc<dyn UserReadRepository>,
         billing_repository: Arc<dyn BillingReadRepository>,
@@ -981,55 +406,14 @@ impl GatewayDataState {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
             billing_reader: Some(billing_repository),
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
             user_reader: Some(user_repository),
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
             wallet_reader: Some(wallet_reader),
             wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_user_wallet_and_usage_for_tests<TUsage, TWallet>(
         user_repository: Arc<dyn UserReadRepository>,
         wallet_repository: Arc<TWallet>,
@@ -1045,55 +429,15 @@ impl GatewayDataState {
         let usage_writer: Arc<dyn UsageWriteRepository> = usage_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(usage_reader),
             usage_writer: Some(usage_writer),
             user_reader: Some(user_repository),
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
             wallet_reader: Some(wallet_reader),
             wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_announcement_user_and_wallet_for_tests<T, U>(
         announcement_repository: Arc<T>,
         user_repository: Arc<dyn UserReadRepository>,
@@ -1110,55 +454,15 @@ impl GatewayDataState {
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
             announcement_reader: Some(announcement_reader),
             announcement_writer: Some(announcement_writer),
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
             user_reader: Some(user_repository),
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
             wallet_reader: Some(wallet_reader),
             wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_catalog_and_usage_reader_for_tests<T, U>(
         provider_catalog_repository: Arc<T>,
         usage_repository: Arc<U>,
@@ -1174,161 +478,31 @@ impl GatewayDataState {
         let usage_reader: Arc<dyn UsageReadRepository> = usage_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_reader),
             provider_catalog_writer: Some(provider_catalog_writer),
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(usage_reader),
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_api_key_reader_for_tests(
         repository: Arc<dyn AuthApiKeyReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
             auth_api_key_reader: Some(repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_module_reader_for_tests(
         repository: Arc<dyn AuthModuleReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
             auth_module_reader: Some(repository),
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_module_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: AuthModuleReadRepository + AuthModuleWriteRepository + 'static,
@@ -1336,55 +510,12 @@ impl GatewayDataState {
         let auth_module_reader: Arc<dyn AuthModuleReadRepository> = repository.clone();
         let auth_module_writer: Arc<dyn AuthModuleWriteRepository> = repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
             auth_module_reader: Some(auth_module_reader),
             auth_module_writer: Some(auth_module_writer),
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn attach_auth_module_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
         T: AuthModuleReadRepository + AuthModuleWriteRepository + 'static,
@@ -1396,7 +527,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_management_token_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: aether_data::repository::management_tokens::ManagementTokenReadRepository
@@ -1406,108 +536,21 @@ impl GatewayDataState {
         let management_token_reader: Arc<dyn ManagementTokenReadRepository> = repository.clone();
         let management_token_writer: Arc<dyn ManagementTokenWriteRepository> = repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
             management_token_reader: Some(management_token_reader),
             management_token_writer: Some(management_token_writer),
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_management_token_reader_for_tests(
         repository: Arc<dyn ManagementTokenReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
             management_token_reader: Some(repository),
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_oauth_provider_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: aether_data::repository::oauth_providers::OAuthProviderReadRepository
@@ -1517,55 +560,12 @@ impl GatewayDataState {
         let oauth_provider_reader: Arc<dyn OAuthProviderReadRepository> = repository.clone();
         let oauth_provider_writer: Arc<dyn OAuthProviderWriteRepository> = repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
             oauth_provider_reader: Some(oauth_provider_reader),
             oauth_provider_writer: Some(oauth_provider_writer),
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn attach_oauth_provider_repository_for_tests<T>(
         mut self,
         repository: Arc<T>,
@@ -1582,7 +582,6 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_proxy_node_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: aether_data::repository::proxy_nodes::ProxyNodeReadRepository
@@ -1592,55 +591,12 @@ impl GatewayDataState {
         let proxy_node_reader: Arc<dyn ProxyNodeReadRepository> = repository.clone();
         let proxy_node_writer: Arc<dyn ProxyNodeWriteRepository> = repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
             proxy_node_reader: Some(proxy_node_reader),
             proxy_node_writer: Some(proxy_node_writer),
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn attach_proxy_node_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
         T: aether_data::repository::proxy_nodes::ProxyNodeReadRepository
@@ -1654,63 +610,15 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_api_key_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: aether_data::repository::auth::AuthRepository + 'static,
     {
-        let auth_api_key_reader: Arc<dyn AuthApiKeyReadRepository> = repository.clone();
-        let auth_api_key_writer: Arc<dyn AuthApiKeyWriteRepository> = repository;
-        Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: Some(auth_api_key_reader),
-            auth_api_key_writer: Some(auth_api_key_writer),
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
-        }
+        GatewayDataStateFixture::new()
+            .with_auth_api_key_repository(repository)
+            .build()
     }
 
-    #[cfg(test)]
     pub(crate) fn attach_auth_api_key_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
         T: aether_data::repository::auth::AuthRepository + 'static,
@@ -1722,115 +630,28 @@ impl GatewayDataState {
         self
     }
 
-    #[cfg(test)]
     pub(crate) fn with_decision_trace_readers_for_tests(
         request_candidate_repository: Arc<dyn RequestCandidateReadRepository>,
         provider_catalog_repository: Arc<dyn ProviderCatalogReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
             request_candidate_reader: Some(request_candidate_repository),
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_transport_reader_for_tests(
         repository: Arc<dyn ProviderCatalogReadRepository>,
         encryption_key: impl Into<String>,
     ) -> Self {
         Self {
             config: GatewayDataConfig::disabled().with_encryption_key(encryption_key),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
             provider_catalog_reader: Some(repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_request_audit_readers_for_tests(
         auth_api_key_repository: Arc<dyn AuthApiKeyReadRepository>,
         request_candidate_repository: Arc<dyn RequestCandidateReadRepository>,
@@ -1838,217 +659,46 @@ impl GatewayDataState {
         usage_repository: Arc<dyn UsageReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
             auth_api_key_reader: Some(auth_api_key_repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
             request_candidate_reader: Some(request_candidate_repository),
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(usage_repository),
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     #[allow(dead_code)]
     pub(crate) fn with_minimal_candidate_selection_reader_for_tests(
         repository: Arc<dyn MinimalCandidateSelectionReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
             minimal_candidate_selection_reader: Some(repository),
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_minimal_candidate_selection_and_billing_for_tests(
         candidate_selection_repository: Arc<dyn MinimalCandidateSelectionReadRepository>,
         billing_repository: Arc<dyn BillingReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
             billing_reader: Some(billing_repository),
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
             minimal_candidate_selection_reader: Some(candidate_selection_repository),
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_minimal_candidate_selection_and_auth_for_tests(
         candidate_selection_repository: Arc<dyn MinimalCandidateSelectionReadRepository>,
         auth_api_key_repository: Arc<dyn AuthApiKeyReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
             auth_api_key_reader: Some(auth_api_key_repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
             minimal_candidate_selection_reader: Some(candidate_selection_repository),
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_candidate_selection_and_quota_for_tests<T>(
         candidate_selection_repository: Arc<dyn MinimalCandidateSelectionReadRepository>,
         provider_quota_repository: Arc<T>,
@@ -2062,55 +712,13 @@ impl GatewayDataState {
             provider_quota_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
             minimal_candidate_selection_reader: Some(candidate_selection_repository),
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
             provider_quota_reader: Some(provider_quota_reader),
             provider_quota_writer: Some(provider_quota_writer),
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_candidate_selection_quota_and_request_candidates_for_tests<T>(
         candidate_selection_repository: Arc<dyn MinimalCandidateSelectionReadRepository>,
         provider_quota_repository: Arc<T>,
@@ -2125,55 +733,14 @@ impl GatewayDataState {
             provider_quota_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
             minimal_candidate_selection_reader: Some(candidate_selection_repository),
             request_candidate_reader: Some(request_candidate_repository),
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
             provider_quota_reader: Some(provider_quota_reader),
             provider_quota_writer: Some(provider_quota_writer),
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_candidate_selection_provider_catalog_quota_and_request_candidates_for_tests<
         T,
     >(
@@ -2191,55 +758,15 @@ impl GatewayDataState {
             provider_quota_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
             minimal_candidate_selection_reader: Some(candidate_selection_repository),
             request_candidate_reader: Some(request_candidate_repository),
-            request_candidate_writer: None,
             provider_catalog_reader: Some(provider_catalog_repository),
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
             provider_quota_reader: Some(provider_quota_reader),
             provider_quota_writer: Some(provider_quota_writer),
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_candidate_selection_provider_catalog_and_request_candidate_repository_for_tests<
         T,
         U,
@@ -2254,64 +781,15 @@ impl GatewayDataState {
         T: RequestCandidateRepository + 'static,
         U: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
     {
-        let request_candidate_reader: Arc<dyn RequestCandidateReadRepository> =
-            request_candidate_repository.clone();
-        let request_candidate_writer: Arc<dyn RequestCandidateWriteRepository> =
-            request_candidate_repository;
-        let provider_catalog_reader: Arc<dyn ProviderCatalogReadRepository> =
-            provider_catalog_repository.clone();
-        let provider_catalog_writer: Arc<dyn ProviderCatalogWriteRepository> =
-            provider_catalog_repository;
-        Self {
-            config: GatewayDataConfig::disabled().with_encryption_key(encryption_key),
-            backends: None,
-            auth_api_key_reader: Some(auth_api_key_repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: Some(candidate_selection_repository),
-            request_candidate_reader: Some(request_candidate_reader),
-            request_candidate_writer: Some(request_candidate_writer),
-            provider_catalog_reader: Some(provider_catalog_reader),
-            provider_catalog_writer: Some(provider_catalog_writer),
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
-        }
+        GatewayDataStateFixture::new()
+            .with_encryption_key(encryption_key)
+            .with_auth_api_key_reader(auth_api_key_repository)
+            .with_candidate_selection_reader(candidate_selection_repository)
+            .with_provider_catalog_repository(provider_catalog_repository)
+            .with_request_candidate_repository(request_candidate_repository)
+            .build()
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_candidate_selection_provider_catalog_request_candidate_and_gemini_file_mapping_repositories_for_tests<
         T,
         U,
@@ -2329,19 +807,16 @@ impl GatewayDataState {
         U: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
         V: aether_data::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
     {
-        let mut state = Self::with_auth_candidate_selection_provider_catalog_and_request_candidate_repository_for_tests(
-            auth_api_key_repository,
-            candidate_selection_repository,
-            provider_catalog_repository,
-            request_candidate_repository,
-            encryption_key,
-        );
-        state.gemini_file_mapping_reader = Some(gemini_file_mapping_repository.clone());
-        state.gemini_file_mapping_writer = Some(gemini_file_mapping_repository);
-        state
+        GatewayDataStateFixture::new()
+            .with_encryption_key(encryption_key)
+            .with_auth_api_key_reader(auth_api_key_repository)
+            .with_candidate_selection_reader(candidate_selection_repository)
+            .with_provider_catalog_repository(provider_catalog_repository)
+            .with_request_candidate_repository(request_candidate_repository)
+            .with_gemini_file_mapping_repository(gemini_file_mapping_repository)
+            .build()
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_candidate_selection_provider_catalog_request_candidates_and_usage_for_tests<
         T,
         U,
@@ -2359,66 +834,16 @@ impl GatewayDataState {
         U: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
         V: UsageRepository + 'static,
     {
-        let request_candidate_reader: Arc<dyn RequestCandidateReadRepository> =
-            request_candidate_repository.clone();
-        let request_candidate_writer: Arc<dyn RequestCandidateWriteRepository> =
-            request_candidate_repository;
-        let provider_catalog_reader: Arc<dyn ProviderCatalogReadRepository> =
-            provider_catalog_repository.clone();
-        let provider_catalog_writer: Arc<dyn ProviderCatalogWriteRepository> =
-            provider_catalog_repository;
-        let usage_reader: Arc<dyn UsageReadRepository> = usage_repository.clone();
-        let usage_writer: Arc<dyn UsageWriteRepository> = usage_repository;
-        Self {
-            config: GatewayDataConfig::disabled().with_encryption_key(encryption_key),
-            backends: None,
-            auth_api_key_reader: Some(auth_api_key_repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: Some(candidate_selection_repository),
-            request_candidate_reader: Some(request_candidate_reader),
-            request_candidate_writer: Some(request_candidate_writer),
-            provider_catalog_reader: Some(provider_catalog_reader),
-            provider_catalog_writer: Some(provider_catalog_writer),
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: Some(usage_reader),
-            usage_writer: Some(usage_writer),
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
-        }
+        GatewayDataStateFixture::new()
+            .with_encryption_key(encryption_key)
+            .with_auth_api_key_reader(auth_api_key_repository)
+            .with_candidate_selection_reader(candidate_selection_repository)
+            .with_provider_catalog_repository(provider_catalog_repository)
+            .with_request_candidate_repository(request_candidate_repository)
+            .with_usage_repository(usage_repository)
+            .build()
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_candidate_selection_provider_catalog_request_candidates_usage_billing_and_wallet_for_tests<
         T,
         U,
@@ -2440,70 +865,18 @@ impl GatewayDataState {
         V: UsageRepository + 'static,
         W: aether_data::repository::wallet::WalletRepository + 'static,
     {
-        let request_candidate_reader: Arc<dyn RequestCandidateReadRepository> =
-            request_candidate_repository.clone();
-        let request_candidate_writer: Arc<dyn RequestCandidateWriteRepository> =
-            request_candidate_repository;
-        let provider_catalog_reader: Arc<dyn ProviderCatalogReadRepository> =
-            provider_catalog_repository.clone();
-        let provider_catalog_writer: Arc<dyn ProviderCatalogWriteRepository> =
-            provider_catalog_repository;
-        let usage_reader: Arc<dyn UsageReadRepository> = usage_repository.clone();
-        let usage_writer: Arc<dyn UsageWriteRepository> = usage_repository;
-        let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
-        let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
-
-        Self {
-            config: GatewayDataConfig::disabled().with_encryption_key(encryption_key),
-            backends: None,
-            auth_api_key_reader: Some(auth_api_key_repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: Some(billing_repository),
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: Some(candidate_selection_repository),
-            request_candidate_reader: Some(request_candidate_reader),
-            request_candidate_writer: Some(request_candidate_writer),
-            provider_catalog_reader: Some(provider_catalog_reader),
-            provider_catalog_writer: Some(provider_catalog_writer),
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: Some(usage_reader),
-            usage_writer: Some(usage_writer),
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: Some(wallet_reader),
-            wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
-        }
+        GatewayDataStateFixture::new()
+            .with_encryption_key(encryption_key)
+            .with_auth_api_key_reader(auth_api_key_repository)
+            .with_candidate_selection_reader(candidate_selection_repository)
+            .with_provider_catalog_repository(provider_catalog_repository)
+            .with_request_candidate_repository(request_candidate_repository)
+            .with_usage_repository(usage_repository)
+            .with_billing_reader(billing_repository)
+            .with_wallet_repository(wallet_repository)
+            .build()
     }
 
-    #[cfg(test)]
-    #[cfg(test)]
     pub(crate) fn with_usage_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: UsageRepository + 'static,
@@ -2512,108 +885,21 @@ impl GatewayDataState {
         let usage_writer: Arc<dyn UsageWriteRepository> = repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(usage_reader),
             usage_writer: Some(usage_writer),
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_billing_reader_for_tests(
         repository: Arc<dyn BillingReadRepository>,
     ) -> Self {
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
             billing_reader: Some(repository),
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_and_wallet_for_tests<T>(
         auth_api_key_repository: Arc<dyn AuthApiKeyReadRepository>,
         wallet_repository: Arc<T>,
@@ -2624,55 +910,13 @@ impl GatewayDataState {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
             auth_api_key_reader: Some(auth_api_key_repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
             wallet_reader: Some(wallet_reader),
             wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_auth_wallet_and_usage_for_tests<TWallet, TUsage>(
         auth_api_key_repository: Arc<dyn AuthApiKeyReadRepository>,
         wallet_repository: Arc<TWallet>,
@@ -2687,55 +931,15 @@ impl GatewayDataState {
         let usage_reader: Arc<dyn UsageReadRepository> = usage_repository.clone();
         let usage_writer: Arc<dyn UsageWriteRepository> = usage_repository;
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
             auth_api_key_reader: Some(auth_api_key_repository),
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(usage_reader),
             usage_writer: Some(usage_writer),
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
             wallet_reader: Some(wallet_reader),
             wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_usage_billing_and_wallet_for_tests<TUsage, TWallet>(
         usage_repository: Arc<TUsage>,
         billing_repository: Arc<dyn BillingReadRepository>,
@@ -2751,55 +955,15 @@ impl GatewayDataState {
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
             billing_reader: Some(billing_repository),
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
-            provider_quota_reader: None,
-            provider_quota_writer: None,
-            routing_group_reader: None,
-            routing_group_writer: None,
             usage_reader: Some(usage_reader),
             usage_writer: Some(usage_writer),
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
             wallet_reader: Some(wallet_reader),
             wallet_writer: Some(wallet_writer),
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
     }
 
-    #[cfg(test)]
     pub(crate) fn with_provider_quota_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
         T: ProviderQuotaRepository + 'static,
@@ -2808,51 +972,133 @@ impl GatewayDataState {
         let provider_quota_writer: Arc<dyn ProviderQuotaWriteRepository> = repository;
 
         Self {
-            config: GatewayDataConfig::disabled(),
-            backends: None,
-            auth_api_key_reader: None,
-            auth_api_key_writer: None,
-            auth_module_reader: None,
-            auth_module_writer: None,
-            announcement_reader: None,
-            announcement_writer: None,
-            management_token_reader: None,
-            management_token_writer: None,
-            oauth_provider_reader: None,
-            oauth_provider_writer: None,
-            proxy_node_reader: None,
-            proxy_node_writer: None,
-            billing_reader: None,
-            gemini_file_mapping_reader: None,
-            gemini_file_mapping_writer: None,
-            global_model_reader: None,
-            global_model_writer: None,
-            minimal_candidate_selection_reader: None,
-            request_candidate_reader: None,
-            request_candidate_writer: None,
-            provider_catalog_reader: None,
-            provider_catalog_writer: None,
-            pool_score_reader: None,
-            pool_score_writer: None,
             provider_quota_reader: Some(provider_quota_reader),
             provider_quota_writer: Some(provider_quota_writer),
-            routing_group_reader: None,
-            routing_group_writer: None,
-            usage_reader: None,
-            usage_writer: None,
-            user_reader: None,
-            user_preferences: None,
-            usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
-            background_task_reader: None,
-            background_task_writer: None,
-            wallet_reader: None,
-            wallet_writer: None,
-            settlement_writer: None,
-            system_config_values: None,
-            system_config_value_cache: Default::default(),
-            billing_model_context_cache: Default::default(),
+            ..Self::default()
         }
+    }
+}
+
+/// Test-only builder for GatewayDataState fixtures.
+///
+/// Repository setters install the reader and writer halves from a single
+/// concrete Arc<T>; this is exactly what every with_a_b_c_d_for_tests
+/// permutation spelled out by hand. Slots that are never set stay None and
+/// config defaults to GatewayDataConfig::disabled(), so a fixture reads as the
+/// list of repositories it actually needs. New fixtures should compose these
+/// setters instead of adding another permutation constructor.
+pub(crate) struct GatewayDataStateFixture {
+    state: GatewayDataState,
+}
+
+impl GatewayDataStateFixture {
+    pub(crate) fn new() -> Self {
+        Self {
+            state: GatewayDataState::default(),
+        }
+    }
+
+    pub(crate) fn with_encryption_key(mut self, encryption_key: impl Into<String>) -> Self {
+        self.state.config = GatewayDataConfig::disabled().with_encryption_key(encryption_key);
+        self
+    }
+
+    pub(crate) fn with_auth_api_key_reader(
+        mut self,
+        repository: Arc<dyn AuthApiKeyReadRepository>,
+    ) -> Self {
+        self.state.auth_api_key_reader = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_auth_api_key_repository<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: AuthApiKeyReadRepository + AuthApiKeyWriteRepository + 'static,
+    {
+        self.state.auth_api_key_reader = Some(repository.clone());
+        self.state.auth_api_key_writer = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_candidate_selection_reader(
+        mut self,
+        repository: Arc<dyn MinimalCandidateSelectionReadRepository>,
+    ) -> Self {
+        self.state.minimal_candidate_selection_reader = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_provider_catalog_reader(
+        mut self,
+        repository: Arc<dyn ProviderCatalogReadRepository>,
+    ) -> Self {
+        self.state.provider_catalog_reader = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_provider_catalog_repository<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
+    {
+        self.state.provider_catalog_reader = Some(repository.clone());
+        self.state.provider_catalog_writer = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_request_candidate_repository<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: RequestCandidateRepository + 'static,
+    {
+        self.state.request_candidate_reader = Some(repository.clone());
+        self.state.request_candidate_writer = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_usage_repository<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: UsageRepository + 'static,
+    {
+        self.state.usage_reader = Some(repository.clone());
+        self.state.usage_writer = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_billing_reader(
+        mut self,
+        repository: Arc<dyn BillingReadRepository>,
+    ) -> Self {
+        self.state.billing_reader = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_wallet_repository<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: aether_data::repository::wallet::WalletRepository + 'static,
+    {
+        self.state.wallet_reader = Some(repository.clone());
+        self.state.wallet_writer = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_gemini_file_mapping_repository<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: aether_data::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
+    {
+        self.state.gemini_file_mapping_reader = Some(repository.clone());
+        self.state.gemini_file_mapping_writer = Some(repository);
+        self
+    }
+
+    pub(crate) fn with_video_task_repository<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: aether_data_contracts::repository::video_tasks::VideoTaskRepository + 'static,
+    {
+        self.state.video_task_reader = Some(repository.clone());
+        self.state.video_task_writer = Some(repository);
+        self
+    }
+
+    pub(crate) fn build(self) -> GatewayDataState {
+        self.state
     }
 }
