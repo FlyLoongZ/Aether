@@ -414,16 +414,10 @@ jobs:
         run: sccache --show-stats
 
   check_data_features:
-    name: Check (Data Feature - ${{ matrix.feature }})
+    name: Check (Data Features)
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        feature:
-          - postgres
-          - all-drivers
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -439,11 +433,13 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
-      - name: Check selected data driver
+      # aether-data 的 default = ["postgres"] 且 all-drivers = ["postgres"]，
+      # 两个 feature 集合完全等价，一次编译检查即可覆盖，无需矩阵重复构建。
+      - name: Check data driver features
         env:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: "true"
-        run: cargo check -p aether-data --no-default-features --features ${{ matrix.feature }}
+        run: cargo check -p aether-data --no-default-features --features postgres
 
       - name: Show sccache stats
         if: always()
@@ -492,15 +488,10 @@ jobs:
         run: sccache --show-stats
 
   test_data_adapters:
-    name: Test (Data Adapter - ${{ matrix.package }})
+    name: Test (Data Adapter)
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - aether-data-postgres
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -523,7 +514,7 @@ jobs:
         env:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: "true"
-        run: cargo nextest run -p ${{ matrix.package }}
+        run: cargo nextest run -p aether-data-postgres
 
       - name: Show sccache stats
         if: always()
