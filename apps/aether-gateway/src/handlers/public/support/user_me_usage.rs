@@ -422,80 +422,6 @@ fn users_me_usage_metadata_u64(item: &StoredRequestUsageAudit, key: &str) -> Opt
         .and_then(serde_json::Value::as_u64)
 }
 
-fn infer_client_family_from_user_agent(user_agent: &str) -> Option<&'static str> {
-    let normalized = user_agent.trim().to_ascii_lowercase();
-    if normalized.is_empty() {
-        return None;
-    }
-    if normalized.starts_with("codex_vscode") {
-        return Some("codex_vscode");
-    }
-    if normalized.starts_with("codex") {
-        return Some("codex");
-    }
-    if normalized.contains("claude-code") || normalized.contains("claude_code") {
-        return Some("claude_code");
-    }
-    if normalized.contains("opencode") {
-        return Some("opencode");
-    }
-    if normalized.contains("geminicli") || normalized.contains("gemini-cli") {
-        return Some("gemini_cli");
-    }
-    if normalized.contains("qwencode") {
-        return Some("qwen_code");
-    }
-    if normalized.contains("roo-code") || normalized.contains("roocode") {
-        return Some("roo_code");
-    }
-    if normalized.contains("kilo-code") || normalized.contains("kilocode") {
-        return Some("kilocode");
-    }
-    if normalized.contains("cherrystudio") || normalized.contains("cherry-studio") {
-        return Some("cherrystudio");
-    }
-    if normalized.contains("openui-agent-manager") || normalized.contains("openui") {
-        return Some("openui");
-    }
-    if normalized.contains("cursor") {
-        return Some("cursor");
-    }
-    if normalized.contains("windsurf") {
-        return Some("windsurf");
-    }
-    if normalized.contains("continue") {
-        return Some("continue");
-    }
-    if normalized.contains("cline") {
-        return Some("cline");
-    }
-    if normalized.contains("aider") {
-        return Some("aider");
-    }
-    if normalized.contains("langchain") {
-        return Some("langchain");
-    }
-    if normalized.contains("llamaindex") || normalized.contains("llama-index") {
-        return Some("llamaindex");
-    }
-    if normalized.starts_with("openai/js") {
-        return Some("openai_js_sdk");
-    }
-    if normalized.starts_with("openai/python") {
-        return Some("openai_python_sdk");
-    }
-    if normalized.starts_with("anthropic/js") || normalized.contains("anthropic-sdk-typescript") {
-        return Some("anthropic_js_sdk");
-    }
-    if normalized.starts_with("anthropic/python") || normalized.contains("anthropic-sdk-python") {
-        return Some("anthropic_python_sdk");
-    }
-    if normalized.contains("/js ") || normalized.contains("/python ") {
-        return Some("sdk");
-    }
-    Some("unknown")
-}
-
 fn users_me_usage_chat_pii_redacted(item: &StoredRequestUsageAudit) -> bool {
     item.request_metadata
         .as_ref()
@@ -533,7 +459,7 @@ fn users_me_usage_client_family(item: &StoredRequestUsageAudit) -> Option<&str> 
         })
         .or_else(|| {
             users_me_usage_metadata_string(item, "user_agent")
-                .and_then(infer_client_family_from_user_agent)
+                .and_then(aether_data_contracts::repository::usage::infer_client_family)
         })
 }
 
