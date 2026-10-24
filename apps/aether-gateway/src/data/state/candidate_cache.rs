@@ -6,10 +6,9 @@ use std::time::Duration;
 use aether_cache::{optional_strings_weight, value_weight, CacheBudget, CacheWeight, OnceMap};
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::candidate_selection::{
-    MinimalCandidateSelectionReadRepository, StoredApiFormatCandidateRowsQuery,
-    StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateOrder,
-    StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
-    StoredProviderModelMapping, StoredRequestedModelCandidateRowsQuery,
+    MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
+    StoredPoolKeyCandidateOrder, StoredPoolKeyCandidateRowsByKeyIdsQuery,
+    StoredPoolKeyCandidateRowsQuery, StoredProviderModelMapping,
 };
 use aether_scheduler_core::row_supports_requested_model_with_model_directives;
 use async_trait::async_trait;
@@ -60,19 +59,6 @@ impl CandidateFormatRows {
     /// The version itself, so a caller that pages can hold it.
     fn pinned(&self) -> Arc<Vec<StoredMinimalCandidateSelectionRow>> {
         Arc::clone(&self.rows)
-    }
-
-    /// Rows `[offset, offset + limit)`, clamped to what the version holds.
-    fn window(&self, offset: u32, limit: u32) -> Vec<StoredMinimalCandidateSelectionRow> {
-        if limit == 0 {
-            return Vec::new();
-        }
-        let start = offset as usize;
-        if start >= self.rows.len() {
-            return Vec::new();
-        }
-        let end = start.saturating_add(limit as usize).min(self.rows.len());
-        self.rows[start..end].to_vec()
     }
 
     fn by_global_model(&self, global_model_name: &str) -> Vec<StoredMinimalCandidateSelectionRow> {
@@ -334,16 +320,6 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
         Ok(self.format_rows(api_format).await?.pinned())
     }
 
-    async fn list_for_exact_api_format_page(
-        &self,
-        query: &StoredApiFormatCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        Ok(self
-            .format_rows(&query.api_format)
-            .await?
-            .window(query.offset, query.limit))
-    }
-
     async fn list_for_exact_api_format_and_global_model(
         &self,
         api_format: &str,
@@ -364,25 +340,6 @@ impl MinimalCandidateSelectionReadRepository for CachedMinimalCandidateSelection
             .format_rows(api_format)
             .await?
             .by_requested_model(requested_model_name, api_format))
-    }
-
-    async fn list_for_exact_api_format_and_requested_model_page(
-        &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let rows = self.format_rows(&query.api_format).await?;
-        let matched = rows.by_requested_model(&query.requested_model_name, &query.api_format);
-        if query.limit == 0 {
-            return Ok(Vec::new());
-        }
-        let start = query.offset as usize;
-        if start >= matched.len() {
-            return Ok(Vec::new());
-        }
-        let end = start
-            .saturating_add(query.limit as usize)
-            .min(matched.len());
-        Ok(matched[start..end].to_vec())
     }
 
     async fn list_pool_key_rows_for_group(
@@ -589,13 +546,6 @@ mod tests {
             self.load().await
         }
 
-        async fn list_for_exact_api_format_and_requested_model_page(
-            &self,
-            _query: &StoredRequestedModelCandidateRowsQuery,
-        ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            self.load().await
-        }
-
         async fn list_pool_key_rows_for_group(
             &self,
             _query: &StoredPoolKeyCandidateRowsQuery,
@@ -661,13 +611,6 @@ mod tests {
             self.load().await
         }
 
-        async fn list_for_exact_api_format_and_requested_model_page(
-            &self,
-            _query: &StoredRequestedModelCandidateRowsQuery,
-        ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-            self.load().await
-        }
-
         async fn list_pool_key_rows_for_group(
             &self,
             _query: &StoredPoolKeyCandidateRowsQuery,
@@ -680,23 +623,6 @@ mod tests {
             _query: &StoredPoolKeyCandidateRowsByKeyIdsQuery,
         ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
             self.load().await
-        }
-    }
-
-    fn requested_model_page(offset: u32, limit: u32) -> StoredRequestedModelCandidateRowsQuery {
-        StoredRequestedModelCandidateRowsQuery {
-            api_format: "openai:chat".to_string(),
-            requested_model_name: "gpt-5.5".to_string(),
-            offset,
-            limit,
-        }
-    }
-
-    fn format_page(api_format: &str, offset: u32, limit: u32) -> StoredApiFormatCandidateRowsQuery {
-        StoredApiFormatCandidateRowsQuery {
-            api_format: api_format.to_string(),
-            offset,
-            limit,
         }
     }
 
@@ -768,7 +694,8 @@ mod tests {
         assert_eq!(inner.calls(), 2);
     }
 
-    /// The whole point of the version: five query shapes, one load.
+    /// The whole point of the version: every query shape of one format, one
+    /// load.
     #[tokio::test]
     async fn every_shape_of_one_format_is_answered_from_one_load() {
         let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
@@ -781,10 +708,7 @@ mod tests {
             .list_for_exact_api_format("openai:chat")
             .await
             .unwrap();
-        cache
-            .list_for_exact_api_format_page(&format_page("openai:chat", 0, 256))
-            .await
-            .unwrap();
+        cache.pin_api_format_rows("openai:chat").await.unwrap();
         cache
             .list_for_exact_api_format_and_global_model("openai:chat", "mock-model")
             .await
@@ -793,42 +717,32 @@ mod tests {
             .list_for_exact_api_format_and_requested_model("openai:chat", "mock-model")
             .await
             .unwrap();
-        cache
-            .list_for_exact_api_format_and_requested_model_page(
-                &StoredRequestedModelCandidateRowsQuery {
-                    api_format: "openai:chat".to_string(),
-                    requested_model_name: "mock-model".to_string(),
-                    offset: 0,
-                    limit: 256,
-                },
-            )
-            .await
-            .unwrap();
 
         assert_eq!(inner.calls(), 1);
     }
 
+    /// Two pins of the same format are the same version, not two copies of it:
+    /// that is what lets a caller page with one and keep its offsets valid.
     #[tokio::test]
-    async fn pages_of_one_format_share_the_version() {
-        let inner = Arc::new(StubCandidateSelectionRepository::new(Duration::ZERO));
+    async fn pinning_the_same_format_twice_returns_one_version() {
+        let inner = Arc::new(StubCandidateSelectionRepository::with_rows(
+            Duration::ZERO,
+            vec![sample_row_for("key-a", 1, "model-a")],
+        ));
         let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
 
-        cache
-            .list_for_exact_api_format_page(&format_page("openai:chat", 0, 256))
-            .await
-            .unwrap();
-        cache
-            .list_for_exact_api_format_page(&format_page("openai:chat", 256, 256))
-            .await
-            .unwrap();
+        let first = cache.pin_api_format_rows("openai:chat").await.unwrap();
+        let second = cache.pin_api_format_rows("openai:chat").await.unwrap();
 
+        assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(inner.calls(), 1);
     }
 
-    /// A page is a window of the version, so its bounds are the version's, not
-    /// a second query's.
+    /// The version is ordered once, at load time, in the order the per-page
+    /// query used to ask the database for, so a window cut from it addresses
+    /// the same rows in the same sequence.
     #[tokio::test]
-    async fn pages_are_windows_of_the_version_in_query_order() {
+    async fn the_version_is_ordered_the_way_the_page_query_was() {
         let rows = vec![
             sample_row_for("key-c", 3, "model-b"),
             sample_row_for("key-a", 1, "model-a"),
@@ -838,41 +752,21 @@ mod tests {
             Duration::ZERO,
             rows,
         ));
-        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
+        let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
 
-        let first = cache
-            .list_for_exact_api_format_page(&format_page("openai:chat", 0, 2))
-            .await
-            .unwrap();
+        let pinned = cache.pin_api_format_rows("openai:chat").await.unwrap();
+
         assert_eq!(
-            vec!["model-a", "model-a"],
-            first
+            pinned
                 .iter()
-                .map(|row| row.global_model_name.as_str())
-                .collect::<Vec<_>>()
+                .map(|row| (row.global_model_name.as_str(), row.key_id.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("model-a", "key-a"),
+                ("model-a", "key-b"),
+                ("model-b", "key-c")
+            ]
         );
-        assert_eq!(
-            vec!["key-a", "key-b"],
-            first
-                .iter()
-                .map(|row| row.key_id.as_str())
-                .collect::<Vec<_>>()
-        );
-
-        let second = cache
-            .list_for_exact_api_format_page(&format_page("openai:chat", 2, 2))
-            .await
-            .unwrap();
-        assert_eq!(1, second.len());
-        assert_eq!("key-c", second[0].key_id);
-
-        let past_the_end = cache
-            .list_for_exact_api_format_page(&format_page("openai:chat", 9, 2))
-            .await
-            .unwrap();
-        assert!(past_the_end.is_empty());
-
-        assert_eq!(inner.calls(), 1);
     }
 
     #[tokio::test]
@@ -895,10 +789,9 @@ mod tests {
         assert_eq!(1, all.len());
     }
 
-    /// A requested-model page is cut from the filtered stream, so its offsets
-    /// address rows the caller will actually see.
+    /// A requested-model read only returns rows the request can actually use.
     #[tokio::test]
-    async fn a_requested_model_page_is_cut_from_the_filtered_rows() {
+    async fn a_requested_model_read_returns_only_matching_rows() {
         let rows = vec![
             sample_row_for("key-a", 1, "wanted"),
             sample_row_for("key-b", 2, "wanted"),
@@ -910,30 +803,18 @@ mod tests {
         ));
         let cache = CachedMinimalCandidateSelectionReadRepository::new(inner);
 
-        let all = cache
+        let matched = cache
             .list_for_exact_api_format_and_requested_model("openai:chat", "wanted")
             .await
             .unwrap();
-        assert_eq!(
-            vec!["key-a", "key-b"],
-            all.iter()
-                .map(|row| row.key_id.as_str())
-                .collect::<Vec<_>>()
-        );
 
-        let page = cache
-            .list_for_exact_api_format_and_requested_model_page(
-                &StoredRequestedModelCandidateRowsQuery {
-                    api_format: "openai:chat".to_string(),
-                    requested_model_name: "wanted".to_string(),
-                    offset: 1,
-                    limit: 1,
-                },
-            )
-            .await
-            .unwrap();
-        assert_eq!(1, page.len());
-        assert_eq!("key-b", page[0].key_id);
+        assert_eq!(
+            matched
+                .iter()
+                .map(|row| row.key_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["key-a", "key-b"]
+        );
     }
 
     #[tokio::test]
@@ -1030,17 +911,11 @@ mod tests {
         let inner = Arc::new(FirstLoadPendingThenFastRepository::new());
         let cache = CachedMinimalCandidateSelectionReadRepository::new(inner.clone());
 
-        let error = cache
-            .list_for_exact_api_format_and_requested_model_page(&requested_model_page(0, 64))
-            .await
-            .unwrap_err();
+        let error = cache.pin_api_format_rows("openai:chat").await.unwrap_err();
         assert!(matches!(error, DataLayerError::TimedOut(_)));
 
         // The timed-out flight must not keep the key pinned.
-        cache
-            .list_for_exact_api_format_and_requested_model_page(&requested_model_page(0, 64))
-            .await
-            .unwrap();
+        cache.pin_api_format_rows("openai:chat").await.unwrap();
 
         assert_eq!(inner.calls(), 2);
     }

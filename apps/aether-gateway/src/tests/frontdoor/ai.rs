@@ -24,7 +24,6 @@ use aether_data_contracts::repository::auth::AuthApiKeyWriteRepository;
 use aether_data_contracts::repository::candidate_selection::{
     MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
     StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
-    StoredRequestedModelCandidateRowsQuery,
 };
 use aether_data_contracts::repository::global_models::{
     StoredAdminGlobalModel, UpdateAdminGlobalModelRecord,
@@ -522,13 +521,6 @@ impl MinimalCandidateSelectionReadRepository for PendingMinimalCandidateSelectio
         self.pending_rows().await
     }
 
-    async fn list_for_exact_api_format_and_requested_model_page(
-        &self,
-        _query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        self.pending_rows().await
-    }
-
     async fn list_pool_key_rows_for_group(
         &self,
         _query: &StoredPoolKeyCandidateRowsQuery,
@@ -627,19 +619,6 @@ impl MinimalCandidateSelectionReadRepository
             .rows_for_api_format(api_format)
             .into_iter()
             .filter(|row| row.global_model_name == requested_model_name)
-            .collect())
-    }
-
-    async fn list_for_exact_api_format_and_requested_model_page(
-        &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        Ok(self
-            .rows_for_api_format(&query.api_format)
-            .into_iter()
-            .filter(|row| row.global_model_name == query.requested_model_name)
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
             .collect())
     }
 

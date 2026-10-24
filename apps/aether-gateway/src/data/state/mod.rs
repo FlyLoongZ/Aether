@@ -98,9 +98,8 @@ use aether_data_contracts::repository::billing::{
     StoredBillingModelContext, UserDailyQuotaAvailabilityRecord, UserPlanEntitlementRecord,
 };
 use aether_data_contracts::repository::candidate_selection::{
-    MinimalCandidateSelectionReadRepository, StoredApiFormatCandidateRowsQuery,
-    StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateRowsByKeyIdsQuery,
-    StoredPoolKeyCandidateRowsQuery, StoredRequestedModelCandidateRowsQuery,
+    MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
+    StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
 };
 use aether_data_contracts::repository::candidates::{
     PublicHealthStatusCount, PublicHealthTimelineBucket, RequestCandidateReadRepository,

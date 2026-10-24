@@ -4,10 +4,9 @@ use aether_data_contracts::repository::candidate_selection::provider_model_mappi
 use async_trait::async_trait;
 
 use super::{
-    MinimalCandidateSelectionReadRepository, StoredApiFormatCandidateRowsQuery,
-    StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateOrder,
-    StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
-    StoredRequestedModelCandidateRowsQuery,
+    MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
+    StoredPoolKeyCandidateOrder, StoredPoolKeyCandidateRowsByKeyIdsQuery,
+    StoredPoolKeyCandidateRowsQuery,
 };
 use crate::DataLayerError;
 
@@ -63,19 +62,6 @@ impl MinimalCandidateSelectionReadRepository for InMemoryMinimalCandidateSelecti
         Ok(rows)
     }
 
-    async fn list_for_exact_api_format_page(
-        &self,
-        query: &StoredApiFormatCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        Ok(self
-            .list_for_exact_api_format(&query.api_format)
-            .await?
-            .into_iter()
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
-            .collect())
-    }
-
     async fn list_for_exact_api_format_and_global_model(
         &self,
         api_format: &str,
@@ -93,27 +79,10 @@ impl MinimalCandidateSelectionReadRepository for InMemoryMinimalCandidateSelecti
         api_format: &str,
         requested_model_name: &str,
     ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        self.list_for_exact_api_format_and_requested_model_page(
-            &StoredRequestedModelCandidateRowsQuery {
-                api_format: api_format.to_string(),
-                requested_model_name: requested_model_name.to_string(),
-                offset: 0,
-                limit: u32::MAX,
-            },
-        )
-        .await
-    }
-
-    async fn list_for_exact_api_format_and_requested_model_page(
-        &self,
-        query: &StoredRequestedModelCandidateRowsQuery,
-    ) -> Result<Vec<StoredMinimalCandidateSelectionRow>, DataLayerError> {
-        let rows = self.list_for_exact_api_format(&query.api_format).await?;
+        let rows = self.list_for_exact_api_format(api_format).await?;
         let mut rows = rows
             .into_iter()
-            .filter(|row| {
-                row_matches_requested_model(row, &query.requested_model_name, &query.api_format)
-            })
+            .filter(|row| row_matches_requested_model(row, requested_model_name, api_format))
             .collect::<Vec<_>>();
         rows.sort_by(|left, right| {
             left.global_model_name
@@ -125,11 +94,7 @@ impl MinimalCandidateSelectionReadRepository for InMemoryMinimalCandidateSelecti
                 .then(left.key_id.cmp(&right.key_id))
                 .then(left.model_id.cmp(&right.model_id))
         });
-        Ok(rows
-            .into_iter()
-            .skip(query.offset as usize)
-            .take(query.limit as usize)
-            .collect())
+        Ok(rows)
     }
 
     async fn list_pool_key_rows_for_group(
@@ -338,10 +303,8 @@ fn key_auth_channel_matches(row: &StoredMinimalCandidateSelectionRow, api_format
 mod tests {
     use super::InMemoryMinimalCandidateSelectionReadRepository;
     use crate::repository::candidate_selection::{
-        MinimalCandidateSelectionReadRepository, StoredApiFormatCandidateRowsQuery,
-        StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateOrder,
-        StoredPoolKeyCandidateRowsQuery, StoredProviderModelMapping,
-        StoredRequestedModelCandidateRowsQuery,
+        MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
+        StoredPoolKeyCandidateOrder, StoredPoolKeyCandidateRowsQuery, StoredProviderModelMapping,
     };
 
     fn sample_row(
@@ -692,36 +655,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn requested_model_page_returns_requested_slice_only() {
-        let mut rows = Vec::new();
-        for index in 0..5 {
-            let mut row = sample_row(&format!("provider-{index}"), "openai:chat", "gpt-5", index);
-            row.key_internal_priority = index;
-            rows.push(row);
-        }
-        let repository = InMemoryMinimalCandidateSelectionReadRepository::seed(rows);
-
-        let page = repository
-            .list_for_exact_api_format_and_requested_model_page(
-                &StoredRequestedModelCandidateRowsQuery {
-                    api_format: "openai:chat".to_string(),
-                    requested_model_name: "gpt-5".to_string(),
-                    offset: 2,
-                    limit: 2,
-                },
-            )
-            .await
-            .expect("page should load");
-
-        assert_eq!(
-            page.iter()
-                .map(|row| row.provider_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["provider-2", "provider-3"]
-        );
-    }
-
-    #[tokio::test]
     async fn auth_channel_gate_preserves_case_and_explicit_format_capabilities() {
         for (provider, auth, format, expected) in [
             (" Codex ", " OAUTH ", "openai:responses", true),
@@ -861,24 +794,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn lists_exact_api_format_in_stable_pages() {
+    async fn lists_exact_api_format_in_stable_order() {
         let repository = InMemoryMinimalCandidateSelectionReadRepository::seed(vec![
             sample_row("provider-3", "openai:chat", "gpt-4.1", 30),
             sample_row("provider-1", "openai:chat", "gpt-4.1", 10),
             sample_row("provider-2", "openai:chat", "gpt-4.1", 20),
         ]);
 
-        let page = repository
-            .list_for_exact_api_format_page(&StoredApiFormatCandidateRowsQuery {
-                api_format: "openai:chat".to_string(),
-                offset: 1,
-                limit: 1,
-            })
+        // Paging is a window of this order, so the order itself is the
+        // contract the repository owes its callers.
+        let rows = repository
+            .list_for_exact_api_format("openai:chat")
             .await
-            .expect("API-format page should load");
+            .expect("API-format rows should load");
 
-        assert_eq!(page.len(), 1);
-        assert_eq!(page[0].provider_id, "provider-2");
+        assert_eq!(
+            rows.iter()
+                .map(|row| row.provider_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["provider-1", "provider-2", "provider-3"]
+        );
     }
 
     #[tokio::test]
