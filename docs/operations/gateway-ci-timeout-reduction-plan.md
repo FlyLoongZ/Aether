@@ -5,6 +5,7 @@
 - 优化目标：**缩短 CI 耗时**，不减少安全/回归断言
 - 关联审计：`docs/operations/system-slimming-audit-2026-09-08.md`
 - **第一批（A1+A2+A4）已实施**，待 CI 前后对照确认分钟数。
+- **冗余 CI 步骤清理已实施**：移除 Nightly 空 doctest、收敛重复的 data feature / adapter 矩阵，并清掉 Tunnel 遗留的测试参数与重复 `#[cfg(test)]` 标注（见 2.1、A1、B4、C3）。
 
 本文只新增方案文档，不修改业务代码、测试或工作流。文中收益均为基于历史日志与源码结构的**估计值**，每批改动落地后须用同一提交做前后对照实测。
 
@@ -32,22 +33,20 @@
 
 ### 2.1 Job 做什么
 
-`.github/workflows/rust-ci.yml` 中 `test_gateway` 关键步骤：
+`test_gateway` 关键步骤（下表为 **A1/A2/A4 落地前** 的基线，保留用于对照历史耗时）：
 
-| 步骤 | 行号 | 命令 / 配置 |
+| 步骤 | 基线配置 | 现状 |
 | --- | --- | --- |
-| Rust cache | 247-251 | `shared-key: rust-ci-${{ runner.os }}`（与 Data/Rest/Integration 等共用） |
-| Setup mold | 256-257 | **仅此 job** 安装 mold |
-| Test lib | 265-271 | `cargo nextest run -p aether-gateway --lib` |
-| Test bins | 273-279 | `cargo nextest run -p aether-gateway --bins` |
+| Rust cache | `shared-key: rust-ci-${{ runner.os }}`（与 Data/Rest/Integration 等共用） | 已拆为 `rust-ci-gateway-test-${{ runner.os }}` |
+| Setup mold | 仅此 job 安装 mold | 不变 |
+| Test lib | `cargo nextest run -p aether-gateway --lib` | 不变 |
+| Test bins | `cargo nextest run -p aether-gateway --bins` | 不变 |
+| Test integration targets | 无 | 新增，覆盖 `architecture_guard` 与 `admin_unsigned_identity_headers` |
 
-两个测试 step 的环境变量：`RUSTC_WRAPPER=sccache`、`RUST_MIN_STACK=16777216`、`RUSTFLAGS: "-C link-arg=-fuse-ld=mold"`（**RUSTFLAGS 只在 step 级，未提到 job 级**）。
-
-Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0`、`CARGO_PROFILE_TEST_DEBUG=0`。
-
-**未发现** `.config/nextest.toml` 或任何 nextest 配置文件；CI 使用 nextest 默认并行度。
-
-**未执行**：`apps/aether-gateway/tests/admin_unsigned_identity_headers.rs`（1 个安全集成用例）——两条 nextest 命令只覆盖 `--lib` 与 `--bins`。
+- 构建指纹：基线把 `RUSTC_WRAPPER=sccache`、`RUST_MIN_STACK=16777216`、`RUSTFLAGS: "-C link-arg=-fuse-ld=mold"` 放在 **step 级**；A2 已统一上移到 **job 级 `env`**。
+- Workflow 级 env：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0`、`CARGO_PROFILE_TEST_DEBUG=0`。
+- nextest 配置：`.config/nextest.toml` 只固定 `slow-timeout`（60s 标记慢测试、连续两轮未结束即终止），**不固定** `test-threads`，CI 仍用 nextest 默认并行度。
+- 覆盖缺口已补齐：基线时两条 nextest 命令只覆盖 `--lib` 与 `--bins`，`tests/admin_unsigned_identity_headers.rs` 不在 CI 中；A4 已新增 integration 步骤执行它。
 
 ### 2.2 耗时拆分（历史日志）
 
@@ -67,25 +66,25 @@ Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0
 
 范围：`apps/aether-gateway`。
 
-| 分区 | 约 `#[test]` / `#[tokio::test]` 数量 |
+| 分区 | `#[test]` / `#[tokio::test]` 数量 |
 | --- | --- |
-| `src/handlers` 内联 | 1224 |
-| `src/tests/` 测试树（含 control 727、frontdoor 217、architecture 208 等） | ~1358 |
-| `src/execution_runtime` 内联 | ~591 |
-| `src/control` 内联 | 459 |
-| `src/ai_serving` 内联 | 302 |
-| `src/main.rs` + `src/bin/*`（bins 目标） | ~77 |
-| 其余分散内联 | ~1500+ |
-| **合计** | **约 5380～5400** |
+| `src/handlers` 内联 | 1233 |
+| `src/tests/` 测试树（其中 control 700、frontdoor 224） | 1118 |
+| `src/execution_runtime` 内联 | 576 |
+| `src/control` 内联 | 461 |
+| `src/ai_serving` 内联 | 301 |
+| `src/main.rs` + `src/bin/*`（bins 目标） | 69 |
+| 其余分散内联 | ~1322 |
+| **合计** | **5080** |
 
-与 CI 实测（lib 5139 + bins 78）同量级；差异来自 cfg 门控与统计口径。
+数据为 2026-10-24 静态统计（`rg -c '#\[(tokio::)?test(\([^)]*\))?\]'`），与 nextest 实测条数差异来自 cfg 门控口径。
 
-架构守卫：已迁至 `apps/aether-gateway/tests/architecture/`（入口 `tests/architecture_guard.rs`），共 13 文件、约 **14,925 行、208 个 `#[test]`**，断言全部是 `fs::read_to_string` + 字符串/`Cargo.toml` 规则检查，**不依赖 gateway 私有类型**。CI 由 `Test integration targets` 步骤执行（`cargo nextest run -p aether-gateway --tests`）。
+架构守卫：已迁出 lib，落在独立集成目标 `apps/aether-gateway/tests/architecture_guard.rs`，现为 **1 个文件、468 行、16 个 `#[test]`**（迁出时的 208 项字符串断言已按「只保留编译器无法表达的检查」合并）。断言全部是 `fs::read_to_string` + 字符串/`Cargo.toml` 规则检查，**不依赖 gateway 私有类型**。CI 由 `Test integration targets` 步骤执行。
 
 ### 2.4 编译为何是单点瓶颈
 
-- `apps/aether-gateway/src/lib.rs:235-236` 把整棵 `tests/` 树挂进**同一个** lib test binary。
-- `src/tests/` 约 130 个文件、17 万行；连同业务代码，单 rustc 调用编译约 53 万行。
+- `apps/aether-gateway/src/lib.rs` 的 `pub(crate) mod tests;` 把整棵 `tests/` 树挂进**同一个** lib test binary。
+- `src/tests/` 现为 140 个文件、约 14.5 万行；连同业务代码，单 rustc 调用编译约 53 万行。
 - 历史记录（`openai-responses-websocket-plan.md`）：单进程 rustc 峰值约 **7GB**，极端时 RSS 8.9GB 并触发 `oom_kill`；`-j` / `--test-threads` **不影响**该单进程峰值。
 - 对照实验：临时裁掉无关测试模块后，编译可降至约 3 分钟内且零 OOM——证明“编译面”而非“并行度”是主因。
 - 本地 `RUSTC_WRAPPER=sccache` 命中率曾低至约 1.5%；CI 样本 sccache 命中约 95% 仍要数分钟——剩余问题在 **crate-type 不可缓存调用与 RUSTFLAGS 指纹不一致**，不是“再加一层缓存”。
@@ -94,12 +93,12 @@ Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0
 
 | 优先级 | 模式 | 位置 | 估计可省 |
 | --- | --- | --- | --- |
-| 1 | 池调度超大夹具（1700/2048 账号，每 key 真实 `seal_provider_catalog_key_api_key`） | `src/dispatch/pool_scheduler.rs`（`large_pool_fixture` 约 :5036；慢用例约 :4048、:3967、:4641） | **30～50s**（Top4 中 3 项） |
-| 2 | 备份 v1 兼容 + 17 个 historical 密钥各走 10 万次 PBKDF2 | `src/backup/executor.rs:1222` 一带；`python_fernet.rs` | **10～15s**（与上表 14.3s 重叠） |
+| 1【已实施】 | 池调度超大夹具（1700/2048 账号，每 key 真实 `seal_provider_catalog_key_api_key`） | `src/dispatch/pool_scheduler/tests.rs` 的 `large_pool_fixture`；现留空凭据，只验证扫描/跳过/游标语义 | **30～50s**（Top4 中 3 项） |
+| 2【已实施】 | 备份 v1 兼容 + 17 个 historical 密钥各走 10 万次 PBKDF2 | `src/backup/executor.rs`；17 个计数用密钥已改为直接 base64 直接密钥，跳过 PBKDF2 | **10～15s**（与上表 14.3s 重叠） |
 | 3 | 每测试独立进程重复付 DEVELOPMENT_ENCRYPTION_KEY 的 PBKDF2（nextest 无法跨用例共享缓存） | 全包大量 `encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, …)` | **10～25s**（非密码学夹具改直接密钥后） |
 | 4 | 真实 `start_server` 起服极多（tests 树约 1794 次）+ `AppState::new()`（tests 树约 816 次） | `src/tests/mod.rs:33-47` 等 | **15～40s**（改 oneshot 仅限纯路由断言） |
 | 5 | 固定 `sleep(100ms)` 扇出、个别 mock 内 5s/30s sleep | `tests/ai_execute/**`、`stream_pump.rs` 等 | **5～20s** |
-| 6 | 架构守卫重复全树扫描（迁出后不再计入 lib） | `tests/architecture/*` | 执行 **~3-10s** + 编译见阶段 A |
+| 6 | 架构守卫重复全树扫描（迁出后不再计入 lib） | `tests/architecture_guard.rs` | 执行 **~3-10s** + 编译见阶段 A |
 
 **执行优化硬顶**：即使执行砍掉一半，关键路径大约只省 **40～80 秒**；样本间 214s vs 390s 的抖动本身就 ±176s。因此**编译侧（阶段 A/C）才是分钟级收益来源**。
 
@@ -111,23 +110,23 @@ Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0
 
 #### A1. 架构守卫迁出独立测试目标【已实施】
 
-- **改动**：`src/tests/architecture/**`（208 项 / 约 1.5 万行）已迁至 `apps/aether-gateway/tests/architecture/`，入口 `apps/aether-gateway/tests/architecture_guard.rs`；已从 `src/tests/mod.rs` 移除 `mod architecture;`。
+- **改动**：`src/tests/architecture/**`（208 项 / 约 1.5 万行）已迁出 `src/tests`，落到独立集成目标 `apps/aether-gateway/tests/architecture_guard.rs`，并从 `src/tests/mod.rs` 移除 `mod architecture;`。迁出后进一步合并为 **单文件 16 项 / 468 行**，只保留 SQL 归属、敏感日志字段、依赖分层、已移除组件等编译器无法表达的检查。
 - **为什么省**：从巨型 lib `cfg(test)` 编译单元削掉约 15k 行，压低 rustc 7GB 峰值，降低 OOM 与编译墙钟；对照实验表明裁测试面可明显缩短编译。
 - **收益估计**：编译 **-20～60s**，执行 **-数秒**；OOM 风险显著下降。
 - **风险**：低。断言逻辑一字不改，仅更换宿主；helper 已改为 `pub(crate)`。
 - **CI**：`test_gateway` 新增 `Test integration targets`：`cargo nextest run -p aether-gateway --tests`（同时覆盖 A4 的 `admin_unsigned_identity_headers`）。
-- **验收**：架构 208 项 + 安全 1 项在新 target 全绿（本地实测 209 passed）；lib 测试数减少约 208；lib 编译时间与 rustc 峰值待 CI 对照。
+- **验收**：架构 16 项 + 安全 1 项在新 target 全绿；lib 测试数相应减少；lib 编译时间与 rustc 峰值待 CI 对照。
 
-#### A2. 统一构建指纹（RUSTFLAGS + 工具链提到 job 级）【已实施】
+#### A2. 统一构建指纹（RUSTFLAGS 提到 job 级）【已实施】
 
 - **改动**：
   1. `test_gateway` 的 mold `RUSTFLAGS`、`RUST_MIN_STACK`、`RUSTC_WRAPPER` 已上移至 **job 级 `env`**，lib/bins/integration 三步共用同一指纹。
-  2. `rust-ci.yml` 中**全部** `Install Rust toolchain` 步骤已钉住 `toolchain: 1.95.0`（与 `rust-toolchain.toml`、fmt/clippy 一致），消除浮动 stable 漂移。
-  3. `test_gateway` 的 `shared-key` 改为 `rust-ci-gateway-test-${{ runner.os }}`，避免 mold 指纹与无 mold 的 job 互相污染共享缓存（一次冷缓存成本）。
-- **为什么省**：原先 step 级 RUSTFLAGS + 浮动 stable + 十余个 job 共用同一 cache key，造成“看似命中、实际重编”，放大 4:57 vs 6:22 的波动；stable 漂移还会触发偶发全量重编。
-- **收益估计**：热缓存编译 **-1～2 分钟波动收窄**；避免偶发 **-5～10 分钟** 尖峰；gateway 独立 cache key 后与 Rest/Data 不再争抢/覆盖。
-- **风险**：低。mold 本就在用；独立 key 首次为冷缓存。
-- **验收**：连续多次 run 的 lib 编译时间方差下降；全 workflow 无未钉 toolchain 步骤。
+  2. **不钉工具链版本**：仓库已删除 `rust-toolchain.toml`，`rust-ci.yml` / `nightly.yml` / `release.yml` 全部改用最新 stable（`dtolnay/rust-toolchain` 不传 `toolchain:` 输入）。缓存隔离交给 rust-cache：它默认把 `rustc -vV` 哈希进缓存 key，stable 升级会自然换 key，不需要人工同步版本号。
+  3. `test_gateway` 的 `shared-key` 改为 `rust-ci-gateway-test-${{ runner.os }}`，避免 mold 指纹与无 mold 的 job 互相污染共享缓存（一次冷缓存成本）；`nightly` 的 `shared-key` 也不再写入版本号。
+- **为什么省**：原先 step 级 RUSTFLAGS + 十余个 job 共用同一 cache key，造成“看似命中、实际重编”，放大 4:57 vs 6:22 的波动。
+- **收益估计**：热缓存编译 **-1～2 分钟波动收窄**；gateway 独立 cache key 后与 Rest/Data 不再争抢/覆盖。
+- **风险**：低。mold 本就在用；独立 key 首次为冷缓存。浮动 stable 意味着小版本升级时会全量重编一次（rust-cache key 随 rustc 版本变），属预期行为；如需可复现性可用环境变量临时钉版本，但不写回 workflow。
+- **验收**：连续多次 run 的 lib 编译时间方差下降；workflow 中不再出现 `toolchain: 1.95.0` 之类的手工版本号。
 
 #### A3.（可选，紧随 A2）按用途拆分 rust-cache key
 
@@ -143,20 +142,23 @@ Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0
 
 ### 阶段 B：只动测试代码（预计执行段省 40～70 秒）
 
-#### B1. 池调度大夹具轻量化
+#### B1. 池调度大夹具轻量化【已实施】
 
-- **改动**：`large_pool_fixture` 对非“规模/扫描预算语义”的用例，改为轻量 repository/credential fixture 或预构造行；**保留**：
-  - 扫描预算、跳过计数、分页/游标语义断言；
-  - **至少 1～2 条** 1700/2048 规模边界用例（可保留真实加密封装）。
+- **改动**：`large_pool_fixture` 生产的 key 改为留空凭据（`encrypted_api_key = None`），使纯调度用例不再为每个 key 支付 Fernet 加解密；扫描预算、跳过计数、分页/游标语义断言与 1700/2048 规模边界全部保留。
 - **收益估计**：执行 **-30～50s**。
 - **风险**：中。不得把池规模缩到失去原回归条件；不得删断言。
 
-#### B2. PBKDF2 夹具去重
+#### B2. PBKDF2 夹具去重【已实施（加密侧夹具）】
 
-- **改动**：对**不测密码学语义**的夹具，改用直接 32 字节 base64 密钥（`decode_direct_fernet_key` 路径）或预制密文，绕开每进程 10 万次迭代。
-- **必须保留**：备份 historical 密钥兼容、生产强度派生、显式 PBKDF2 行为测试（如 `python_fernet` 相关用例）。
+- **改动**：对**不测密码学语义**的夹具，改用直接 32 字节 base64 密钥（`decode_direct_fernet_key` 路径），绕开每进程 10 万次迭代。
+  - `apps/aether-gateway/src/tests/support.rs` 定义 `DEV_FERNET_KEY`（由 `DEVELOPMENT_ENCRYPTION_KEY` 预派生），单元测试 `dev_fernet_key_is_the_derived_development_key` 保证常量与生产派生一致；`src/tests/**` 以及 17 个模块内测试（`orchestration/effects`、`state/oauth`、`execution_runtime/stream/execution`、`handlers/shared/system_config_values` 等）统一改用该常量。
+  - 验收口径：`rg 'encrypt_python_fernet_plaintext\(DEVELOPMENT_ENCRYPTION_KEY' apps/aether-gateway/src` 只剩 `src/testkit.rs` 与 `monitoring/test_support.rs` 两个**非测试门控**模块（生产/`testkit` feature 构建也会编译，无法引用 `crate::tests::DEV_FERNET_KEY`），其余用例已不再同时支付加密+解密两次派生。
+  - `src/backup/executor.rs` 中「legacy 候选 >16」的 17 个计数用密钥改为直接 base64 密钥，跳过 PBKDF2。
+- **仍保留**：
+  - `backup/*`、`python_fernet` 等**备份/密码学语义**用例继续用口令形式，它们验证的正是派生与 historical 兼容路径。
+  - 非测试门控的辅助模块（`src/testkit.rs`、`monitoring/test_support.rs`）无法引用 `crate::tests::DEV_FERNET_KEY`（生产构建也会编译），保持原样；它们只是状态配置，每进程只派生一次。
 - **收益估计**：执行 **-10～25s**。
-- **风险**：中。**绝不降低迭代次数**。
+- **风险**：中。**绝不降低迭代次数**；`DEV_FERNET_KEY` 只用于夹具，不进入生产路径。
 
 #### B3.（可选，后置）起服与 helper 瘦身
 
@@ -165,18 +167,19 @@ Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0
 - 固定 `sleep` 改为 channel/notify 事件驱动，**不删除等待本身**（防 flaky）。
 - **收益估计**：执行 **-15～40s**；改动面大于 B1/B2，单独 PR。
 
-#### B4. nextest 稳定性配置（非直接减分钟）
+#### B4. nextest 稳定性配置（非直接减分钟）【已实施】
 
-- 新增 `.config/nextest.toml`：显式 `test-threads`（对齐 runner vCPU，避免规格漂移）、`slow-timeout`（防单测卡死拖满 job）。
+- `.config/nextest.toml` 只保留 `slow-timeout = { period = "60s", terminate-after = 2, grace-period = "10s" }`，用于防止单个挂起用例拖满整个 job。
+- **不固定** `test-threads`：nextest 默认按 num-cpus 并发，写死数值会在更大规格 runner 上反而压低并发。
 - **不要**为提速下调 `RUST_MIN_STACK`（16MB 为深栈/管理面用例正确性所需）。
 
 ### 阶段 C：流水线级（主要缩短累计 runner，间接稳定 Gateway 缓存）
 
 | # | 改动 | 收益 | 风险 |
 | --- | --- | --- | --- |
-| C1 | **解除 Tunnel → Gateway dev-dependency**（`apps/aether-tunnel/Cargo.toml:48-49`；端到端场景迁到 integration package） | Rest/Clippy 不再重复编 Gateway → 流水线累计约 **-8～10 分钟 runner**；缓解共享缓存污染 | 中：须迁移 `src/tunnel/mod.rs` 中依赖 `AppState`/`build_router_with_state` 的用例并比对测试清单 |
-| C2 | **路径过滤分层**（`rust-ci.yml` push/PR paths）：README、安装脚本、Compose、部分 `tests/*.sh` 不再触发全量 Rust 编译 | 非 Rust 变更 **整段跳过 Test (Gateway)**；须保留稳定 gate 防止 required check 永久 pending；补 `rust-toolchain.toml`、`.cargo/**` 触发项 | 中 |
-| C3 | Nightly 空 doctest、重复 adapter/feature job 治理（见既有瘦身审计） | 流水线约 **-4 分钟**，**不在**本 job 关键路径 | 低-中 |
+| C1【已完成】 | **移除 Tunnel 组件**（`apps/aether-tunnel`、`crates/aether-gateway/tunnel`、`src/tunnel` 均已删除，端到端场景迁入 integration package） | Rest/Clippy 不再重复编 Gateway → 流水线累计约 **-8～10 分钟 runner**；共享缓存不再被污染 | 已由 `architecture_guard::tunnel_feature_is_removed` 守卫，禁止回流 |
+| C2 | **路径过滤分层**（`rust-ci.yml` push/PR paths）：README、安装脚本、Compose、部分 `tests/*.sh` 不再触发全量 Rust 编译 | 非 Rust 变更 **整段跳过 Test (Gateway)**；须保留稳定 gate 防止 required check 永久 pending；补 `Cargo.toml`/`Cargo.lock`/`.cargo/**` 等触发项 | 中 |
+| C3【已完成】 | Nightly 空 doctest、重复 adapter/feature job 治理 | 全仓无 doctest，删除 Nightly `cargo test --doc` 步骤；`check_data_features` 的 `postgres`/`all-drivers` 与 `test_data_adapters` 的单元素矩阵均收敛为单次构建 | 低 |
 
 ---
 
@@ -184,10 +187,11 @@ Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0
 
 | 批次 | 内容 | 预期（估计） | 验收标准 |
 | --- | --- | --- | --- |
-| **第一批 PR** | A1 架构守卫迁出 + A2 指纹统一 + A4 补安全集成测试【已实施】 | 单 job **-1～2 分钟** + 覆盖补齐 | 架构 208 + 安全 1 本地 209 全绿；CI 对照编译时间下降 |
-| **第二批 PR** | B1 池调度夹具 + B2 PBKDF2 去重 | 执行 **-40～70s** | 断言集合不减；4 个历史慢用例计时明显下降；密码学用例仍为生产强度 |
-| **第三批 PR** | A3 拆缓存 key + C1 Tunnel 解耦 + C2 路径过滤 | 缓存更稳 + 流水线累计大幅下降 | Rest 依赖闭包不再含 Gateway；无关路径 PR 不再拉起全量编译；Gateway 编译方差下降 |
-| **可选** | B3 起服/helper、B4 nextest.toml | 再 **-15～40s** + 稳定性 | 无新增 flaky；慢测试超时有告警 |
+| **第一批 PR** | A1 架构守卫迁出 + A2 指纹统一 + A4 补安全集成测试【已实施】 | 单 job **-1～2 分钟** + 覆盖补齐 | 架构 16 + 安全 1 全绿；CI 对照编译时间下降 |
+| **第二批 PR** | 冗余 CI 步骤清理：Nightly 空 doctest、重复 feature/adapter 矩阵、Tunnel 遗留测试参数、重复 `#[cfg(test)]`【已实施】 | 流水线约 **-2～4 分钟** runner | 无断言减少；`cargo check`/`nextest` 命令与清理前等价 |
+| **第三批 PR** | B1 池调度夹具 + B2 PBKDF2 去重 | 执行 **-40～70s** | 断言集合不减；4 个历史慢用例计时明显下降；密码学用例仍为生产强度 |
+| **第四批 PR** | A3 拆缓存 key + C2 路径过滤 | 缓存更稳 + 流水线累计大幅下降 | 无关路径 PR 不再拉起全量编译；Gateway 编译方差下降 |
+| **可选** | B3 起服/helper | 再 **-15～40s** + 稳定性 | 无新增 flaky；慢测试超时有告警 |
 
 ### 对照方法（每批必做）
 
@@ -212,18 +216,21 @@ Workflow 级（72-76 行）：`CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0
 rg -c '#\[(tokio::)?test\]' apps/aether-gateway/src -g '*.rs' | awk -F: '{s+=$2} END {print s}'
 rg -c '#\[(tokio::)?test\]' apps/aether-gateway/src/main.rs apps/aether-gateway/src/bin -g '*.rs'
 
-# 架构守卫规模（迁移后）
-rg -c '#\[(tokio::)?test\]' apps/aether-gateway/tests/architecture -g '*.rs'
-wc -l apps/aether-gateway/tests/architecture/*.rs
+# 架构守卫规模（迁移并合并后）
+rg -c '#\[(tokio::)?test(\([^)]*\))?\]' apps/aether-gateway/tests/architecture_guard.rs
+wc -l apps/aether-gateway/tests/architecture_guard.rs
 
 # CI 集成测试步骤与指纹
-rg -n 'Test integration targets|rust-ci-gateway-test|toolchain: 1.95.0|RUSTFLAGS' .github/workflows/rust-ci.yml
+rg -n 'Test integration targets|rust-ci-gateway-test|RUSTFLAGS' .github/workflows/rust-ci.yml
 
-# 是否存在 nextest 配置
-ls .config/nextest.toml 2>/dev/null || echo 'no nextest.toml'
+# 工具链不钉版本（应为空）
+rg -n 'toolchain: 1\.' .github/workflows/
 
-# Tunnel 反向依赖
-rg -n 'aether-gateway' apps/aether-tunnel/Cargo.toml
+# nextest 稳定性配置
+cat .config/nextest.toml
+
+# Tunnel 组件不得回流
+ls apps/aether-tunnel 2>/dev/null || echo 'tunnel removed'
 
 # CI 中 mold/RUSTFLAGS/缓存 key
 rg -n 'mold|RUSTFLAGS|shared-key|nextest run -p aether-gateway' .github/workflows/rust-ci.yml
@@ -237,11 +244,11 @@ rg -n 'mold|RUSTFLAGS|shared-key|nextest run -p aether-gateway' .github/workflow
 
 | 风险 | 缓解 |
 | --- | --- |
-| 迁出架构守卫后漏挂模块 | 迁移前后对比 208 项清单；CI 显式跑新 target |
+| 迁出架构守卫后漏挂模块 | 迁移前后对比检查清单；CI 显式跑新 target |
 | RUSTFLAGS 上移后某 job 链接失败 | 先在 `test_gateway` job 级验证，再推广到其它 job；保留 step 级回滚 diff |
 | 夹具轻量化导致规模回归失效 | 强制保留 ≥1 条大规模边界用例；PR 中 diff 审查断言 |
 | 路径过滤导致 required check 永久 pending | 增加始终运行的轻量 gate job |
-| Tunnel 解耦丢失端到端场景 | 迁移前后测试清单比对；场景迁入 integration job |
+| Tunnel 组件回流 | `architecture_guard::tunnel_feature_is_removed` 在 integration target 中持续守卫 |
 
 回滚单位按 **PR 批次**：每批独立可 revert，不把 A/B/C 混在同一提交。
 
@@ -251,7 +258,7 @@ rg -n 'mold|RUSTFLAGS|shared-key|nextest run -p aether-gateway' .github/workflow
 
 | 类别 | 主要位置（约） | 说明 |
 | --- | --- | --- |
-| OAuth 导入/刷新/吊销 | `src/tests/control/admin/oauth.rs` 等 | 账户安全核心 |
+| OAuth 导入/刷新/吊销 | `src/tests/control/admin/oauth/` 等 | 账户安全核心 |
 | 配额与失效删 key | `src/tests/control/admin/endpoints/quota.rs` 等 | 计费与授权正确性 |
 | 安全头 / 管理面访问 | `security.rs`、`health_access.rs`、`operational_auth` | 未签名身份头等 |
 | 并发门禁 | `src/tests/concurrency.rs` | 过载拒绝与独立准入 |
