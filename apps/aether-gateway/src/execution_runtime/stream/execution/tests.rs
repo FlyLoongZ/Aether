@@ -165,6 +165,120 @@ fn provider_catalog_for_plan(
     InMemoryProviderCatalogReadRepository::seed(vec![provider], vec![endpoint], vec![key])
 }
 
+#[tokio::test]
+async fn stream_error_finalize_applies_client_header_rules_without_changing_provider_capture() {
+    let plan = aether_video_tasks_core::build_internal_finalize_video_plan(
+        "trace-stream-header-rules",
+        "openai:video",
+        None,
+    )
+    .expect("plan should build");
+    let mut endpoint = StoredProviderCatalogEndpoint::new(
+        plan.endpoint_id.clone(),
+        plan.provider_id.clone(),
+        plan.provider_api_format.clone(),
+        None,
+        None,
+        true,
+    )
+    .expect("endpoint should build");
+    endpoint.config = Some(json!({"response_header_rules": [
+        {"action": "drop", "key": "x-private"},
+        {"action": "set", "key": "x-marker", "value": "ok"},
+        {"action": "rename", "from": "x-original", "to": "x-renamed"},
+        {"action": "set", "key": "set-cookie", "value": "session=blocked"},
+        {"action": "set", "key": "location", "value": "https://provider.example"}
+    ]}));
+    let state = AppState::new()
+        .expect("app state should build")
+        .with_data_state_for_tests(
+            crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(Arc::new(
+                InMemoryProviderCatalogReadRepository::seed(vec![], vec![endpoint], vec![]),
+            )),
+        );
+    let provider_headers = BTreeMap::from([
+        ("content-type".to_string(), "application/json".to_string()),
+        ("x-private".to_string(), "provider-secret".to_string()),
+        ("x-original".to_string(), "upstream-value".to_string()),
+    ]);
+    let mut client_headers = provider_headers.clone();
+    assert!(crate::provider_transport::apply_local_header_rules(
+        &mut client_headers,
+        Some(&json!([
+            {"action": "drop", "key": "x-private"},
+            {"action": "set", "key": "x-marker", "value": "ok"},
+            {"action": "rename", "from": "x-original", "to": "x-renamed"},
+            {"action": "set", "key": "set-cookie", "value": "session=blocked"},
+            {"action": "set", "key": "location", "value": "https://provider.example"}
+        ])),
+        &["content-length"],
+        &Value::Null,
+        None,
+    ));
+
+    for (report_kind, client_format) in [
+        ("openai_chat_sync_finalize", "openai:chat"),
+        ("claude_chat_sync_finalize", "claude:messages"),
+        ("gemini_chat_sync_finalize", "gemini:generate_content"),
+    ] {
+        let payload = super::build_stream_error_sync_payload(
+            "trace-stream-header-rules",
+            report_kind.to_string(),
+            Some(json!({
+                "client_api_format": client_format,
+                "provider_api_format": "openai:chat"
+            })),
+            400,
+            provider_headers.clone(),
+            Some(json!({"error": {"type": "invalid_request_error", "message": "bad request"}})),
+            None,
+            client_headers.clone(),
+            None,
+            None,
+        );
+        let capture = aether_usage_runtime::build_sync_terminal_usage_payload_seed(&payload);
+        assert_eq!(
+            capture.provider_response_headers.as_ref().unwrap()["x-private"],
+            "provider-secret"
+        );
+        assert!(capture
+            .client_response_headers
+            .as_ref()
+            .unwrap()
+            .get("x-private")
+            .is_none());
+        assert_eq!(
+            capture.client_response_headers.as_ref().unwrap()["x-marker"],
+            "ok"
+        );
+
+        let decision = GatewayControlDecision::synthetic(
+            "/v1/chat/completions",
+            Some("ai_public".to_string()),
+            None,
+            None,
+            Some(client_format.to_string()),
+        );
+        let response =
+            crate::execution_runtime::submission::submit_local_core_error_or_sync_finalize(
+                &state,
+                &plan,
+                "trace-stream-header-rules",
+                &decision,
+                payload,
+            )
+            .await
+            .expect("error response should build");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(response.headers().get("x-private").is_none());
+        assert!(response.headers().get("x-original").is_none());
+        assert_eq!(response.headers()["x-marker"], "ok");
+        assert_eq!(response.headers()["x-renamed"], "upstream-value");
+        assert!(response.headers().get("set-cookie").is_none());
+        assert!(response.headers().get("location").is_none());
+    }
+}
+
 #[test]
 fn non_json_upstream_error_body_is_not_projected_to_clients() {
     let secret = b"Bearer upstream-secret https://user:password@example.test/private";
@@ -1217,6 +1331,10 @@ fn direct_anthropic_test_finalizer(request_id: &str) -> DirectPassthroughFinaliz
         deferred_request_candidate_status_record: None,
         candidate_started_unix_secs: crate::clock::current_unix_ms(),
         status_code: 200,
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
         headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
         stream_usage_report_context: None,
         stream_usage_observer: None,
@@ -1321,6 +1439,7 @@ async fn stream_capture_budget_exhaustion_preserves_inline_bytes_and_terminal_us
             "openai_chat_stream".to_string(),
             core.stream_usage_report_context.clone(),
             200,
+            BTreeMap::new(),
             BTreeMap::new(),
             &core.provider_buffered_body,
             core.provider_body_truncated,
@@ -1460,6 +1579,7 @@ fn stream_capture_budget_zero_preserves_conversion_bytes_and_usage() {
             Some(context.clone()),
             200,
             BTreeMap::new(),
+            BTreeMap::new(),
             &provider,
             provider_truncated,
             &client,
@@ -1534,6 +1654,7 @@ fn stream_capture_budget_zero_preserves_sync_json_bridge_terminal_usage_and_tier
         "openai_chat_stream".to_string(),
         None,
         200,
+        BTreeMap::new(),
         BTreeMap::new(),
         &provider,
         provider_truncated,
@@ -2678,6 +2799,7 @@ async fn inline_first_chunk_does_not_wait_for_candidate_streaming_persistence() 
         deferred_request_candidate_status_record: None,
         candidate_started_unix_secs: crate::clock::current_unix_ms(),
         status_code: 200,
+        provider_headers: BTreeMap::new(),
         headers: BTreeMap::new(),
         stream_usage_report_context: None,
         stream_usage_observer: None,

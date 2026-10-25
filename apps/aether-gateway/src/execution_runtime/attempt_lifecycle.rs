@@ -652,7 +652,8 @@ impl ExecutionAttemptLifecycle {
             report_kind: std::mem::take(&mut self.report_kind),
             report_context: self.report_context.take(),
             status_code: attempt_status_code(facts),
-            headers: provider_headers,
+            provider_headers,
+            client_headers: None,
             provider_body_base64,
             provider_body_state,
             client_body_base64,
@@ -758,7 +759,7 @@ impl ExecutionAttemptLifecycle {
                             .unwrap_or(reason);
                         let mut effect = LocalStreamFailureEffect::new(
                             settlement.status_code,
-                            &payload.headers,
+                            &payload.provider_headers,
                             Some(response_text),
                         );
                         if facts.provider.stream_timeout() {

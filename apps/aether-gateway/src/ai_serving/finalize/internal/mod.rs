@@ -1,8 +1,7 @@
-use axum::body::Body;
-use axum::http::Response;
 use serde_json::Value;
 
 use crate::ai_serving::GatewayControlDecision;
+use crate::execution_runtime::ResponseHeaderContext;
 use crate::{usage::GatewaySyncReportRequest, GatewayError};
 
 #[path = "stream_rewrite.rs"]
@@ -18,23 +17,22 @@ pub(crate) use sync_to_stream::{
     maybe_bridge_standard_sync_json_to_stream, SyncToStreamBridgeOutcome,
 };
 
-pub(crate) fn maybe_build_sync_finalize_outcome(
+pub(crate) async fn maybe_build_sync_finalize_outcome(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
     payload: &GatewaySyncReportRequest,
 ) -> Result<Option<LocalCoreSyncFinalizeOutcome>, GatewayError> {
-    sync::maybe_build_local_core_sync_finalize_response(trace_id, decision, payload)
+    sync::maybe_build_local_core_sync_finalize_response(context, trace_id, decision, payload).await
 }
 
-pub(crate) fn maybe_compile_sync_finalize_response(
+pub(crate) async fn maybe_compile_sync_finalize_response(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
     payload: &GatewaySyncReportRequest,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    Ok(
-        maybe_build_sync_finalize_outcome(trace_id, decision, payload)?
-            .map(|outcome| outcome.response),
-    )
+) -> Result<Option<LocalCoreSyncFinalizeOutcome>, GatewayError> {
+    maybe_build_sync_finalize_outcome(context, trace_id, decision, payload).await
 }
 
 pub(crate) fn maybe_build_stream_response_rewriter(

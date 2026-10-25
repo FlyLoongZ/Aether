@@ -102,7 +102,6 @@ const INTERNAL_REPORT_OBSERVATION_FIELDS: &[&str] = &[
     "provider_response_headers_observed_at_unix_ms",
     "provider_request_order_id",
     "client_response_status_code",
-    "client_response_headers",
     "upstream_response",
     "error_flow",
     "analytics_failure",

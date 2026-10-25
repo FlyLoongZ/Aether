@@ -66,10 +66,10 @@ use crate::execution_runtime::transport::{
 use crate::execution_runtime::windsurf::maybe_execute_windsurf_sync;
 use crate::execution_runtime::{
     ai_attempt_retry_scope_from_failure_disposition, analyze_local_candidate_failover_sync,
-    apply_endpoint_response_header_rules, attach_provider_response_headers_to_report_context,
-    build_exhaustion_fallback, local_failover_response_text,
-    resolve_core_sync_error_finalize_report_kind, should_fallback_to_control_sync,
-    should_finalize_sync_response, ExhaustionFallbackInput, LocalFailoverDecision,
+    attach_provider_response_headers_to_report_context, build_exhaustion_fallback,
+    local_failover_response_text, resolve_core_sync_error_finalize_report_kind,
+    should_fallback_to_control_sync, should_finalize_sync_response, ExhaustionFallbackInput,
+    LocalFailoverDecision,
 };
 use crate::log_ids::short_request_id;
 use crate::orchestration::{
@@ -704,7 +704,8 @@ fn build_sync_report_payload(
     report_kind: String,
     report_context: Option<serde_json::Value>,
     status_code: u16,
-    headers: BTreeMap<String, String>,
+    provider_headers: BTreeMap<String, String>,
+    client_headers: BTreeMap<String, String>,
     body_json: Option<serde_json::Value>,
     body_base64: Option<String>,
     telemetry: Option<ExecutionTelemetry>,
@@ -714,7 +715,8 @@ fn build_sync_report_payload(
         report_kind,
         report_context,
         status_code,
-        headers,
+        provider_headers,
+        client_headers: Some(client_headers),
         body_json,
         client_body_json: None,
         body_base64,
@@ -2980,24 +2982,37 @@ async fn execute_execution_runtime_sync_impl(
         }
         seed_kiro_sync_report_context_prompt_cache_usage(state, &plan, &mut report_context).await;
     }
-    let mut client_headers = headers.clone();
-    apply_endpoint_response_header_rules(state, &plan, &mut client_headers, body_json.as_ref())
-        .await?;
+    let client_headers = crate::execution_runtime::prepare_client_response_headers(
+        state,
+        Some(&plan),
+        headers.clone(),
+        if body_json.is_some() {
+            crate::execution_runtime::ClientResponseBodyMode::RebuiltJson
+        } else {
+            crate::execution_runtime::ClientResponseBodyMode::UpstreamBytes
+        },
+        body_json.as_ref(),
+    )
+    .await?;
+    let report_context = report_context;
     let explicit_finalize = should_finalize_sync_response(report_kind.as_deref());
     let mapped_error_finalize_kind =
         resolve_core_sync_error_finalize_report_kind(plan_kind, &result, body_json.as_ref());
     let implicit_finalize = if !explicit_finalize && mapped_error_finalize_kind.is_none() {
         maybe_build_implicit_sync_finalize_outcome(
+            crate::execution_runtime::ResponseHeaderContext::new(state, &plan),
             trace_id,
             decision,
             plan_kind,
             &report_context,
             status_code,
+            &headers,
             &client_headers,
             &body_json,
             &body_base64,
             &result.telemetry,
-        )?
+        )
+        .await?
     } else {
         None
     };
@@ -3139,17 +3154,25 @@ async fn execute_execution_runtime_sync_impl(
     };
 
     if let Some(finalize_report_kind) = finalize_report_kind {
-        let payload = build_sync_report_payload(
+        let mut payload = build_sync_report_payload(
             trace_id,
             finalize_report_kind,
             report_context,
             status_code,
+            headers,
             client_headers,
             body_json,
             body_base64,
             telemetry,
         );
-        if let Some(outcome) = maybe_build_sync_finalize_outcome(trace_id, decision, &payload)? {
+        if let Some(outcome) = maybe_build_sync_finalize_outcome(
+            crate::execution_runtime::ResponseHeaderContext::new(state, &plan),
+            trace_id,
+            decision,
+            &payload,
+        )
+        .await? {
+            payload.client_headers = Some(outcome.client_headers.clone());
             let usage_payload = outcome.background_report.as_ref().unwrap_or(&payload);
             if status_code < 400 {
                 apply_sync_success_effects(
@@ -3188,12 +3211,12 @@ async fn execute_execution_runtime_sync_impl(
             )?));
         }
         let mut payload = match maybe_build_local_video_success_outcome(
+            state,
             trace_id,
             decision,
             payload,
-            &state.video_tasks,
             &plan,
-        )? {
+        ).await? {
             LocalVideoSyncSuccessBuild::Handled(outcome) => {
                 let LocalVideoSyncSuccessOutcome {
                     response,
@@ -3240,7 +3263,7 @@ async fn execute_execution_runtime_sync_impl(
             LocalVideoSyncSuccessBuild::NotHandled(payload) => payload,
         };
         if let Some(response) =
-            maybe_build_local_sync_finalize_response(trace_id, decision, &payload)?
+            maybe_build_local_sync_finalize_response(state, &plan, trace_id, decision, &mut payload).await?
         {
             let background_success_report_kind =
                 resolve_local_sync_success_background_report_kind(payload.report_kind.as_str());
@@ -3288,7 +3311,7 @@ async fn execute_execution_runtime_sync_impl(
             )?));
         }
         if let Some(response) =
-            maybe_build_local_video_error_response(trace_id, decision, &payload)?
+            maybe_build_local_video_error_response(state, &plan, trace_id, decision, &mut payload).await?
         {
             let background_error_report_kind =
                 resolve_local_sync_error_background_report_kind(payload.report_kind.as_str());
@@ -3335,7 +3358,9 @@ async fn execute_execution_runtime_sync_impl(
         )
         .await;
         let response =
-            submit_local_core_error_or_sync_finalize(state, trace_id, decision, payload).await?;
+            submit_local_core_error_or_sync_finalize(
+                state, &plan, trace_id, decision, payload,
+            ).await?;
         return Ok(Some(attach_control_metadata_headers(
             response,
             request_id,
@@ -3348,6 +3373,7 @@ async fn execute_execution_runtime_sync_impl(
         report_kind.unwrap_or_default(),
         report_context,
         status_code,
+        headers,
         client_headers,
         body_json,
         body_base64,
@@ -3375,7 +3401,7 @@ async fn execute_execution_runtime_sync_impl(
     let response = attach_control_metadata_headers(
         build_client_response_from_parts(
             status_code,
-            &usage_payload.headers,
+            usage_payload.client_headers.as_ref().expect("client headers are prepared"),
             Body::from(body_bytes),
             trace_id,
             Some(decision),
@@ -3412,13 +3438,15 @@ async fn execute_execution_runtime_sync_impl(
 }
 
 #[allow(clippy::too_many_arguments)] // mirrors sync execution context
-fn maybe_build_implicit_sync_finalize_outcome(
+async fn maybe_build_implicit_sync_finalize_outcome(
+    context: crate::execution_runtime::ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
     plan_kind: &str,
     report_context: &Option<serde_json::Value>,
     status_code: u16,
     headers: &BTreeMap<String, String>,
+    client_headers: &BTreeMap<String, String>,
     body_json: &Option<serde_json::Value>,
     body_base64: &Option<String>,
     telemetry: &Option<ExecutionTelemetry>,
@@ -3438,20 +3466,24 @@ fn maybe_build_implicit_sync_finalize_outcome(
         return Ok(None);
     };
 
-    let payload = GatewaySyncReportRequest {
+    let mut payload = GatewaySyncReportRequest {
         trace_id: trace_id.to_string(),
         report_kind: report_kind.to_string(),
         report_context: report_context.clone(),
         status_code,
-        headers: headers.clone(),
+        provider_headers: headers.clone(),
+        client_headers: Some(client_headers.clone()),
         body_json: body_json.clone(),
         client_body_json: None,
         body_base64: body_base64.clone(),
         telemetry: telemetry.clone(),
     };
-    let Some(outcome) = maybe_build_sync_finalize_outcome(trace_id, decision, &payload)? else {
+    let Some(outcome) =
+        maybe_build_sync_finalize_outcome(context, trace_id, decision, &payload).await?
+    else {
         return Ok(None);
     };
+    payload.client_headers = Some(outcome.client_headers.clone());
 
     Ok(Some(ImplicitSyncFinalizeOutcome { payload, outcome }))
 }
@@ -3684,16 +3716,19 @@ mod tests {
         }));
 
         let implicit = maybe_build_implicit_sync_finalize_outcome(
+            crate::execution_runtime::ResponseHeaderContext::none(),
             "trace-namespace-sync",
             &decision,
             "openai_responses_sync",
             &report_context,
             StatusCode::OK.as_u16(),
             &BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+            &BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
             &provider_body,
             &None,
             &None,
         )
+        .await
         .expect("cross-format sync JSON finalize should not error")
         .expect("cross-format sync JSON should be finalized");
         let response_body = axum::body::to_bytes(implicit.outcome.response.into_body(), usize::MAX)
@@ -3713,8 +3748,8 @@ mod tests {
         assert_eq!(response_json["output"][0]["call_id"], "call_report_1");
     }
 
-    #[test]
-    fn implicit_sync_finalize_leaves_same_format_json_on_passthrough_path() {
+    #[tokio::test]
+    async fn implicit_sync_finalize_leaves_same_format_json_on_passthrough_path() {
         let report_context = Some(json!({
             "provider_api_format": "openai:responses",
             "client_api_format": "openai:responses",
@@ -3728,6 +3763,7 @@ mod tests {
         }));
 
         let outcome = maybe_build_implicit_sync_finalize_outcome(
+            crate::execution_runtime::ResponseHeaderContext::none(),
             "trace-same-format-sync",
             &GatewayControlDecision::synthetic(
                 "/v1/responses",
@@ -3740,10 +3776,12 @@ mod tests {
             &report_context,
             StatusCode::OK.as_u16(),
             &BTreeMap::new(),
+            &BTreeMap::new(),
             &body_json,
             &None,
             &None,
         )
+        .await
         .expect("same-format sync JSON guard should not error");
 
         assert!(outcome.is_none());

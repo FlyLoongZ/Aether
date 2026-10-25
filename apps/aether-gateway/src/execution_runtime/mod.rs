@@ -4,6 +4,7 @@ pub(crate) mod admission;
 pub(crate) mod attempt_cancellation;
 pub(crate) mod attempt_lifecycle;
 mod chatgpt_web_image;
+mod client_response_headers;
 mod constants;
 mod exhaustion_fallback;
 mod fallback;
@@ -29,6 +30,10 @@ pub(crate) use self::admission::{
     acquire_upstream_execution_gate, UpstreamExecutionGateProvider, UPSTREAM_EXECUTION_GATE_NAME,
 };
 pub(crate) use self::chatgpt_web_image::maybe_execute_chatgpt_web_image_sync;
+pub(crate) use self::client_response_headers::{
+    prepare_client_response_headers, prepare_final_client_headers, ClientResponseBodyMode,
+    ResponseHeaderContext,
+};
 pub(crate) use self::constants::{
     MAX_ERROR_BODY_BYTES, MAX_EXECUTION_STREAM_FRAME_LINE_BYTES, MAX_STREAM_BODY_CAPTURE_BYTES,
     MAX_STREAM_PREFETCH_BYTES, MAX_STREAM_PREFETCH_FRAMES,

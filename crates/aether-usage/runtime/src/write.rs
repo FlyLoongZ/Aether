@@ -954,9 +954,8 @@ pub fn build_sync_terminal_usage_payload_seed(
     ));
     let context = payload.report_context.as_ref().and_then(Value::as_object);
     let provider_response_headers = context_usage_value(context, "provider_response_headers")
-        .or_else(|| headers_to_json(&payload.headers));
-    let client_response_headers = context_usage_value(context, "client_response_headers")
-        .or_else(|| headers_to_json(&payload.headers));
+        .or_else(|| headers_to_json(&payload.provider_headers));
+    let client_response_headers = payload.client_headers.as_ref().and_then(headers_to_json);
     let standardized_usage = kiro_simulated_cache_standardized_usage_from_context(context);
     SyncTerminalUsagePayloadSeed {
         report_kind: payload.report_kind.clone(),
@@ -993,8 +992,8 @@ pub fn build_stream_terminal_usage_payload_seed(
 ) -> StreamTerminalUsagePayloadSeed {
     let context = payload.report_context.as_ref().and_then(Value::as_object);
     let provider_response_headers = context_usage_value(context, "provider_response_headers")
-        .or_else(|| headers_to_json(&payload.headers));
-    let client_response_headers = headers_to_json(&payload.headers);
+        .or_else(|| headers_to_json(&payload.provider_headers));
+    let client_response_headers = payload.client_headers.as_ref().and_then(headers_to_json);
     let observed_stream_finish = payload
         .terminal_summary
         .as_ref()

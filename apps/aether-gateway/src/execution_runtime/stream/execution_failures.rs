@@ -22,6 +22,7 @@ use crate::execution_runtime::submission::{
     resolve_core_error_background_report_kind, submit_local_core_error_or_sync_finalize,
 };
 use crate::execution_runtime::{build_exhaustion_fallback, ExhaustionFallbackInput};
+use crate::execution_runtime::{prepare_client_response_headers, ClientResponseBodyMode};
 use crate::log_ids::short_request_id;
 use crate::orchestration::{
     apply_local_execution_effect, classify_failure_disposition,
@@ -323,6 +324,7 @@ fn build_stream_failure_sync_payload(
     let transport_error = failure.transport_error;
     let analytics_failure = failure.analytics_failure.clone();
     let (body, client_body) = failure.into_body_jsons();
+    let provider_headers = headers.clone();
     headers.retain(|name, _| {
         !name.eq_ignore_ascii_case("content-encoding")
             && !name.eq_ignore_ascii_case("content-length")
@@ -334,7 +336,7 @@ fn build_stream_failure_sync_payload(
             with_upstream_response_report_context(
                 report_context.as_ref(),
                 upstream_status_code,
-                Some(&headers),
+                Some(&provider_headers),
                 Some(&body),
                 None,
                 None,
@@ -346,14 +348,11 @@ fn build_stream_failure_sync_payload(
             if let Some(failure) = analytics_failure {
                 object.insert("analytics_failure".into(), failure);
             }
-            let response_headers = serde_json::to_value(&headers).unwrap_or(Value::Null);
             if upstream_status_code.is_some() {
-                object.insert(
-                    "provider_response_headers".to_string(),
-                    response_headers.clone(),
-                );
+                let provider_headers =
+                    serde_json::to_value(&provider_headers).unwrap_or(Value::Null);
+                object.insert("provider_response_headers".to_string(), provider_headers);
             }
-            object.insert("client_response_headers".to_string(), response_headers);
             if transport_error {
                 object.insert("transport_error".to_string(), Value::Bool(true));
             }
@@ -366,12 +365,42 @@ fn build_stream_failure_sync_payload(
         report_kind,
         report_context,
         status_code,
-        headers,
+        provider_headers,
+        client_headers: Some(headers),
         body_json: Some(body),
         client_body_json: client_body,
         body_base64: encode_bounded_stream_capture(provider_buffered_body),
         telemetry,
     }
+}
+
+/// Prefetch failures build a JSON client error after the upstream response is
+/// gone. Apply the same representation normalization and endpoint header rules
+/// before the terminal response and usage capture are built.
+async fn prepare_stream_failure_client_headers(
+    state: &AppState,
+    plan: &ExecutionPlan,
+    payload: &mut GatewaySyncReportRequest,
+) -> Result<(), GatewayError> {
+    let response_body = payload
+        .client_body_json
+        .as_ref()
+        .or(payload.body_json.as_ref());
+    let headers = payload
+        .client_headers
+        .take()
+        .unwrap_or_else(|| payload.provider_headers.clone());
+    payload.client_headers = Some(
+        prepare_client_response_headers(
+            state,
+            Some(plan),
+            headers,
+            ClientResponseBodyMode::RebuiltJson,
+            response_body,
+        )
+        .await?,
+    );
+    Ok(())
 }
 
 fn stream_failure_body_field<'a>(
@@ -442,7 +471,7 @@ async fn record_stream_sync_failure(
         LocalExecutionEffect::AdaptiveRateLimit(LocalAdaptiveRateLimitEffect {
             status_code: payload.status_code,
             classification: failure_analysis.classification,
-            headers: Some(&payload.headers),
+            headers: Some(&payload.provider_headers),
         }),
     )
     .await;
@@ -479,7 +508,7 @@ async fn record_stream_sync_failure(
         LocalExecutionEffect::PoolError(LocalPoolErrorEffect {
             status_code: payload.status_code,
             classification: failure_analysis.classification,
-            headers: &payload.headers,
+            headers: &payload.provider_headers,
             error_body: error_body.as_deref(),
         }),
     )
@@ -565,17 +594,19 @@ pub(super) async fn handle_prefetch_provider_private_stream_error(
     headers.remove("content-length");
     headers.insert("content-type".to_string(), "application/json".to_string());
 
-    let payload = GatewaySyncReportRequest {
+    let mut payload = GatewaySyncReportRequest {
         trace_id: trace_id.to_string(),
         report_kind: report_kind.to_string(),
         report_context,
         status_code,
-        headers,
+        provider_headers: headers,
+        client_headers: None,
         body_json: Some(body_json),
         client_body_json: None,
         body_base64: encode_bounded_stream_capture(buffered_body),
         telemetry,
     };
+    prepare_stream_failure_client_headers(state, plan, &mut payload).await?;
     let failure_analysis = record_stream_sync_failure(
         state,
         plan,
@@ -645,7 +676,7 @@ pub(super) async fn handle_prefetch_provider_private_stream_error(
     }
 
     let response =
-        submit_local_core_error_or_sync_finalize(state, trace_id, decision, payload).await?;
+        submit_local_core_error_or_sync_finalize(state, plan, trace_id, decision, payload).await?;
     Ok(Some(attach_control_metadata_headers(
         response,
         Some(request_id),
@@ -688,6 +719,7 @@ pub(super) async fn handle_prefetch_stream_failure(
         buffered_body,
         failure,
     );
+    prepare_stream_failure_client_headers(state, plan, &mut payload).await?;
     if transport_error {
         let telemetry = payload.telemetry.get_or_insert(ExecutionTelemetry {
             ttfb_ms: None,
@@ -776,7 +808,7 @@ pub(super) async fn handle_prefetch_stream_failure(
     }
 
     let response =
-        submit_local_core_error_or_sync_finalize(state, trace_id, decision, payload).await?;
+        submit_local_core_error_or_sync_finalize(state, plan, trace_id, decision, payload).await?;
     Ok(Some(attach_control_metadata_headers(
         response,
         Some(request_id),
@@ -892,7 +924,7 @@ async fn handle_prefetch_transport_stream_failure(
     }
 
     let response =
-        submit_local_core_error_or_sync_finalize(state, trace_id, decision, payload).await?;
+        submit_local_core_error_or_sync_finalize(state, plan, trace_id, decision, payload).await?;
     Ok(Some(attach_control_metadata_headers(
         response,
         Some(request_id),
@@ -959,8 +991,11 @@ pub(super) async fn submit_midstream_stream_failure(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::sync::Arc;
 
     use aether_contracts::{ExecutionError, ExecutionErrorKind, ExecutionPhase};
+    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+    use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
     use base64::Engine as _;
     use serde_json::json;
 
@@ -980,6 +1015,66 @@ mod tests {
 
         assert_eq!(decoded, b"abc");
         assert!(encode_stream_capture_with_limit(b"abc", 0).is_none());
+    }
+
+    #[tokio::test]
+    async fn prefetch_failure_client_headers_apply_endpoint_rules() {
+        let plan = aether_video_tasks_core::build_internal_finalize_video_plan(
+            "trace-prefetch-rules",
+            "openai:video",
+            None,
+        )
+        .expect("plan should build");
+        let mut endpoint = StoredProviderCatalogEndpoint::new(
+            plan.endpoint_id.clone(),
+            plan.provider_id.clone(),
+            plan.provider_api_format.clone(),
+            None,
+            None,
+            true,
+        )
+        .expect("endpoint should build");
+        endpoint.config = Some(json!({"response_header_rules": [
+            {"action": "set", "key": "x-marker", "value": "ok"},
+            {"action": "drop", "key": "x-private"},
+            {"action": "set", "key": "content-type", "value": "application/problem+json"}
+        ]}));
+        let state = crate::AppState::new()
+            .expect("state should build")
+            .with_data_state_for_tests(
+                crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(
+                    Arc::new(InMemoryProviderCatalogReadRepository::seed(
+                        vec![],
+                        vec![endpoint],
+                        vec![],
+                    )),
+                ),
+            );
+        let mut payload = build_stream_failure_sync_payload(
+            "trace-prefetch-rules",
+            "openai_chat_sync_error".to_string(),
+            None,
+            BTreeMap::from([
+                ("content-type".to_string(), "text/event-stream".to_string()),
+                ("content-encoding".to_string(), "gzip".to_string()),
+                ("x-private".to_string(), "provider-secret".to_string()),
+            ]),
+            None,
+            b"",
+            build_stream_failure_report("execution_runtime_stream_read_error", "failed", 502),
+        );
+        let provider_headers = payload.provider_headers.clone();
+
+        super::prepare_stream_failure_client_headers(&state, &plan, &mut payload)
+            .await
+            .expect("client headers should prepare");
+
+        let client_headers = payload.client_headers.as_ref().expect("client headers");
+        assert_eq!(client_headers["x-marker"], "ok");
+        assert_eq!(client_headers["content-type"], "application/problem+json");
+        assert!(!client_headers.contains_key("x-private"));
+        assert!(!client_headers.contains_key("content-encoding"));
+        assert_eq!(payload.provider_headers, provider_headers);
     }
 
     #[test]
@@ -1145,8 +1240,8 @@ mod tests {
             payload
                 .report_context
                 .as_ref()
-                .and_then(|context| context.pointer("/upstream_response/headers/content-type")),
-            Some(&json!("application/json"))
+                .and_then(|context| context.pointer("/upstream_response/headers/Content-Type")),
+            Some(&json!("text/event-stream"))
         );
         assert_eq!(
             payload
@@ -1159,15 +1254,16 @@ mod tests {
             payload
                 .report_context
                 .as_ref()
-                .and_then(|context| context.pointer("/provider_response_headers/content-type")),
-            Some(&json!("application/json"))
+                .and_then(|context| context.pointer("/provider_response_headers/Content-Type")),
+            Some(&json!("text/event-stream"))
         );
         assert_eq!(
             payload
-                .report_context
+                .client_headers
                 .as_ref()
-                .and_then(|context| context.pointer("/client_response_headers/content-type")),
-            Some(&json!("application/json"))
+                .and_then(|headers| headers.get("content-type"))
+                .map(String::as_str),
+            Some("application/json")
         );
         let trace_headers = payload
             .report_context
@@ -1175,22 +1271,35 @@ mod tests {
             .and_then(|context| context.pointer("/upstream_response/headers"))
             .and_then(serde_json::Value::as_object)
             .expect("candidate trace should include terminal JSON headers");
-        assert!(!trace_headers
-            .keys()
-            .any(|name| name.eq_ignore_ascii_case("content-encoding")));
-        assert!(!trace_headers
-            .keys()
-            .any(|name| name.eq_ignore_ascii_case("content-length")));
         assert_eq!(
-            payload.headers.get("content-type").map(String::as_str),
-            Some("application/json")
+            trace_headers
+                .get("Content-Encoding")
+                .and_then(|value| value.as_str()),
+            Some("gzip")
+        );
+        assert_eq!(
+            trace_headers
+                .get("Content-Length")
+                .and_then(|value| value.as_str()),
+            Some("4096")
+        );
+        assert_eq!(
+            payload
+                .provider_headers
+                .get("Content-Type")
+                .map(String::as_str),
+            Some("text/event-stream")
         );
         assert!(!payload
-            .headers
+            .client_headers
+            .as_ref()
+            .expect("client headers")
             .keys()
             .any(|name| name.eq_ignore_ascii_case("content-encoding")));
         assert!(!payload
-            .headers
+            .client_headers
+            .as_ref()
+            .expect("client headers")
             .keys()
             .any(|name| name.eq_ignore_ascii_case("content-length")));
         assert_eq!(
