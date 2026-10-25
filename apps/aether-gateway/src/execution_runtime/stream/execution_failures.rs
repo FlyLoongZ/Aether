@@ -18,12 +18,10 @@ use crate::api::response::attach_control_metadata_headers;
 use crate::clock::current_unix_ms as current_request_candidate_unix_ms;
 use crate::control::GatewayControlDecision;
 use crate::execution_runtime::ai_attempt_retry_scope_from_failure_disposition;
-use crate::execution_runtime::{
-    build_exhaustion_fallback, ExhaustionFallbackInput,
-};
 use crate::execution_runtime::submission::{
     resolve_core_error_background_report_kind, submit_local_core_error_or_sync_finalize,
 };
+use crate::execution_runtime::{build_exhaustion_fallback, ExhaustionFallbackInput};
 use crate::log_ids::short_request_id;
 use crate::orchestration::{
     apply_local_execution_effect, classify_failure_disposition,
@@ -72,11 +70,6 @@ enum StreamFailureHandling {
     HonorLocalFailover,
 }
 
-const UPSTREAM_STREAM_FAILURE_MESSAGE: &str = "Upstream response stream failed";
-const EXECUTION_STREAM_PROTOCOL_FAILURE_MESSAGE: &str = "Execution runtime stream protocol failed";
-const EXECUTION_STREAM_PROCESSING_FAILURE_MESSAGE: &str =
-    "Execution runtime stream processing failed";
-
 fn encode_bounded_stream_capture(body: &[u8]) -> Option<String> {
     encode_stream_capture_with_limit(
         body,
@@ -90,40 +83,22 @@ fn encode_stream_capture_with_limit(body: &[u8], max_bytes: usize) -> Option<Str
 }
 
 fn stable_stream_failure_message(error_type: &str) -> &'static str {
-    match error_type {
-        "first_byte_timeout" => "Upstream response timed out before the first byte",
-        "read_timeout" => "Upstream response stream timed out",
-        "execution_runtime_stream_read_error" => UPSTREAM_STREAM_FAILURE_MESSAGE,
-        "execution_runtime_stream_frame_decode_error"
-        | "execution_runtime_stream_chunk_decode_error" => {
-            EXECUTION_STREAM_PROTOCOL_FAILURE_MESSAGE
-        }
-        "execution_runtime_sync_json_stream_bridge_error"
-        | "execution_runtime_stream_rewrite_error"
-        | "execution_runtime_stream_rewrite_flush_error" => {
-            EXECUTION_STREAM_PROCESSING_FAILURE_MESSAGE
-        }
-        _ => "Execution runtime stream failed",
-    }
+    crate::execution_runtime::client_message_for_error_type(error_type)
+        .unwrap_or("Execution runtime stream failed")
 }
 
 fn public_execution_error_message(error: &ExecutionError) -> String {
-    match &error.kind {
-        ExecutionErrorKind::ConnectTimeout => "Upstream connection timed out".to_string(),
-        ExecutionErrorKind::FirstByteTimeout => {
-            "Upstream response timed out before the first byte".to_string()
-        }
-        ExecutionErrorKind::ReadTimeout => "Upstream response stream timed out".to_string(),
-        ExecutionErrorKind::Upstream4xx | ExecutionErrorKind::Upstream5xx => error
-            .upstream_status
-            .map(|status| format!("Upstream request returned HTTP {status}"))
-            .unwrap_or_else(|| "Upstream request failed".to_string()),
-        ExecutionErrorKind::TlsError => "Upstream TLS connection failed".to_string(),
-        ExecutionErrorKind::ProxyError => "Upstream proxy request failed".to_string(),
-        ExecutionErrorKind::ProtocolError => UPSTREAM_STREAM_FAILURE_MESSAGE.to_string(),
-        ExecutionErrorKind::Cancelled => "Request was cancelled".to_string(),
-        ExecutionErrorKind::Internal => "Execution runtime stream failed".to_string(),
+    if let Some(message) =
+        crate::execution_runtime::client_message_for_execution_error_kind(&error.kind)
+    {
+        return message.to_string();
     }
+    // Only the upstream-status kinds land here; they are described by the code
+    // the provider returned rather than by the failure kind.
+    error
+        .upstream_status
+        .map(|status| format!("Upstream request returned HTTP {status}"))
+        .unwrap_or_else(|| "Upstream request failed".to_string())
 }
 
 impl StreamFailureReport {
@@ -630,12 +605,11 @@ pub(super) async fn handle_prefetch_provider_private_stream_error(
                 // Keep the derived error status and rebuild the body in the
                 // client protocol instead of returning a success status with
                 // an SSE body.
-                let (fallback_status_code, rebuild_client_body) =
-                    if upstream_status_code >= 400 {
-                        (upstream_status_code, false)
-                    } else {
-                        (status_code, true)
-                    };
+                let (fallback_status_code, rebuild_client_body) = if upstream_status_code >= 400 {
+                    (upstream_status_code, false)
+                } else {
+                    (status_code, true)
+                };
                 *retry_fallback = Some(
                     build_exhaustion_fallback(
                         state,
