@@ -1521,6 +1521,7 @@ const RESERVED_HEADERS = new Set([
 
 const RESERVED_RESPONSE_HEADERS = new Set([
   'content-length',
+  'content-encoding',
 ])
 
 const RESPONSE_HEADER_RULES_CONFIG_KEY = 'response_header_rules'
@@ -1613,9 +1614,18 @@ function reservedHeaderRuleError(raw: string): string | null {
   return name && RESERVED_HEADERS.has(name) ? `"${raw}" ${legacyT('是系统保留的请求头')}` : null
 }
 
-function reservedResponseHeaderRuleError(raw: string): string | null {
+function responseHeaderRuleNameError(raw: string): string | null {
   const name = normalizeHeaderRuleName(raw)
-  return name && RESERVED_RESPONSE_HEADERS.has(name) ? `"${raw}" ${legacyT('是系统保留的响应头')}` : null
+  if (!/^[!#$%&'*+.^_`|~0-9a-z-]+$/.test(name)) return legacyT('响应头名称不符合 HTTP 规范')
+  return RESERVED_RESPONSE_HEADERS.has(name) ? `"${raw}" ${legacyT('是系统保留的响应头')}` : null
+}
+
+function responseHeaderRuleValueError(raw: string): string | null {
+  const invalid = Array.from(raw).some(char => {
+    const code = char.charCodeAt(0)
+    return (code < 0x20 && code !== 0x09) || code === 0x7f
+  })
+  return invalid ? legacyT('响应头值包含非法 HTTP 字符') : null
 }
 
 function bodyRuleTopLevelField(rawPath: string): string | null {
@@ -1637,7 +1647,8 @@ function validateHeaderRuleJson(
   rule: unknown,
   label: string,
   index: number,
-  reservedNameError: (raw: string) => string | null = reservedHeaderRuleError
+  reservedNameError: (raw: string) => string | null = reservedHeaderRuleError,
+  validateValue: (raw: string) => string | null = () => null,
 ): string | null {
   if (!isJsonObject(rule)) return formatJsonRuleError(label, index, '必须是对象')
   if (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') {
@@ -1651,6 +1662,7 @@ function validateHeaderRuleJson(
     return requireJsonString(rule, 'key', label, index)
       || reservedNameError(rule.key as string)
       || requireJsonString(rule, 'value', label, index)
+      || validateValue(rule.value as string)
       || validateJsonCondition(rule, label, index)
   }
   if (action === 'drop') {
@@ -1746,7 +1758,8 @@ function parseEndpointRulesJsonDraft(draft: string): { value: EndpointRulesJsonP
       response.value[i],
       'response_header_rules ',
       i,
-      reservedResponseHeaderRuleError,
+      responseHeaderRuleNameError,
+      responseHeaderRuleValueError,
     )
     if (error) return { value: null, error }
   }
@@ -3262,14 +3275,17 @@ function validateResponseHeaderNameForEndpoint(endpointId: string, name: string,
   const trimmedName = name.trim().toLowerCase()
   if (!trimmedName) return null
 
-  const reservedErr = reservedResponseHeaderRuleError(name)
+  const reservedErr = responseHeaderRuleNameError(name)
   if (reservedErr) return reservedErr
 
   const rules = getEndpointEditResponseRules(endpointId)
   const currentRule = rules[index]
   if (currentRule && !currentRule.enabled) return null
+  // Conditional rules may deliberately target the same header on disjoint
+  // branches; they run in order, so only an unconditional duplicate is ambiguous.
+  if (currentRule?.condition) return null
   const duplicate = rules.findIndex(
-    (r, i) => i !== index && r.enabled && (
+    (r, i) => i !== index && r.enabled && !r.condition && (
       ((r.action === 'set' || r.action === 'drop') && r.key.trim().toLowerCase() === trimmedName) ||
       (r.action === 'rename' && (field === 'from'
         ? r.from.trim().toLowerCase() === trimmedName
@@ -3292,6 +3308,10 @@ function getResponseHeaderValidationErrorForEndpoint(endpointId: string): string
     if (rule.action === 'set' || rule.action === 'drop') {
       const err = validateResponseHeaderNameForEndpoint(endpointId, rule.key, i, 'key')
       if (err) return `${prefix}${err}`
+      if (rule.action === 'set') {
+        const valueErr = responseHeaderRuleValueError(rule.value)
+        if (valueErr) return `${prefix}${valueErr}`
+      }
     } else if (rule.action === 'rename') {
       const fromErr = validateResponseHeaderNameForEndpoint(endpointId, rule.from, i, 'from')
       if (fromErr) return `${prefix}${fromErr}`

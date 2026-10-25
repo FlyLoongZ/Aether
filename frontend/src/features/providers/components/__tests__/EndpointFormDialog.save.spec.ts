@@ -39,6 +39,9 @@ interface DialogState {
   updateEndpointRulesJsonDraft: (endpointId: string, value: string) => void
   getEndpointEditRules: (endpointId: string) => Array<{ value: string, retainValue: boolean }>
   updateEndpointRuleField: (endpointId: string, index: number, field: 'value', value: string) => void
+  handleAddEndpointResponseRule: (endpointId: string) => void
+  updateEndpointResponseRuleField: (endpointId: string, index: number, field: 'key' | 'value' | 'from' | 'to', value: string) => void
+  updateEndpointResponseRuleAction: (endpointId: string, index: number, action: 'set' | 'drop' | 'rename') => void
   hasRulePanelChanges: (endpoint: ProviderEndpoint) => boolean
   saveEndpoint: (endpoint: ProviderEndpoint) => Promise<void>
 }
@@ -88,6 +91,74 @@ afterEach(() => {
 })
 
 describe('endpoint rule saving', () => {
+  it.each([
+    ['bad header', 'ok'],
+    ['x-test:', 'ok'],
+    ['响应头', 'ok'],
+    ['x-valid', 'secret\r\nInjected: yes'],
+    ['x-valid', 'secret\u0000'],
+    ['x-valid', 'secret\u007f'],
+    ['content-encoding', 'gzip'],
+  ])('rejects invalid response header syntax in the visual editor (%j)', async (key, value) => {
+    const { state } = await mountDialog()
+    state.handleAddEndpointResponseRule(endpoint.id)
+    state.updateEndpointResponseRuleField(endpoint.id, 0, 'key', key)
+    state.updateEndpointResponseRuleField(endpoint.id, 0, 'value', value)
+    await state.saveEndpoint(state.localEndpoints[0])
+    expect(api.updateEndpoint).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { action: 'set', key: 'bad header', value: 'ok' },
+    { action: 'set', key: 'x-valid', value: 'secret\r\nInjected: yes' },
+    { action: 'rename', from: 'x-valid', to: 'invalid:' },
+    { action: 'rename', from: 'invalid:', to: 'x-valid' },
+  ])('rejects invalid response header syntax in JSON mode (%j)', async rule => {
+    const { state } = await mountDialog()
+    state.enterEndpointRulesJsonMode(state.localEndpoints[0])
+    state.updateEndpointRulesJsonDraft(endpoint.id, JSON.stringify({ response_header_rules: [rule] }))
+    await state.saveEndpoint(state.localEndpoints[0])
+    expect(api.updateEndpoint).not.toHaveBeenCalled()
+  })
+
+  it('allows conditional response rules that target the same header', async () => {
+    const { state } = await mountDialog()
+    state.enterEndpointRulesJsonMode(state.localEndpoints[0])
+    state.updateEndpointRulesJsonDraft(endpoint.id, JSON.stringify({
+      response_header_rules: [
+        { action: 'set', key: 'x-mode', value: 'a', condition: { path: 'mode', op: 'eq', value: 'a' } },
+        { action: 'set', key: 'x-mode', value: 'b', condition: { path: 'mode', op: 'eq', value: 'b' } },
+      ],
+    }))
+    await state.saveEndpoint(state.localEndpoints[0])
+    expect(api.updateEndpoint).toHaveBeenCalledTimes(1)
+    const payload = api.updateEndpoint.mock.calls[0][1] as { config: { response_header_rules: unknown[] } }
+    expect(payload.config.response_header_rules).toHaveLength(2)
+  })
+
+  it('rejects invalid response header rename targets in the visual editor', async () => {
+    const { state } = await mountDialog()
+    state.handleAddEndpointResponseRule(endpoint.id)
+    state.updateEndpointResponseRuleAction(endpoint.id, 0, 'rename')
+    state.updateEndpointResponseRuleField(endpoint.id, 0, 'from', 'x-valid')
+    state.updateEndpointResponseRuleField(endpoint.id, 0, 'to', 'invalid:')
+    await state.saveEndpoint(state.localEndpoints[0])
+    expect(api.updateEndpoint).not.toHaveBeenCalled()
+  })
+
+  it('accepts HTTP token names and tab or Unicode response header values', async () => {
+    const { state } = await mountDialog()
+    state.handleAddEndpointResponseRule(endpoint.id)
+    const key = "x-valid!#$%&'*+-.^_`|~"
+    const value = '\t中文 value'
+    state.updateEndpointResponseRuleField(endpoint.id, 0, 'key', key)
+    state.updateEndpointResponseRuleField(endpoint.id, 0, 'value', value)
+    await state.saveEndpoint(state.localEndpoints[0])
+    expect(api.updateEndpoint).toHaveBeenCalledWith(endpoint.id, {
+      config: { response_header_rules: [{ action: 'set', key, value }] },
+    })
+  })
+
   it('resets dirty state from the saved projection and preserves the new secret marker', async () => {
     const { state } = await mountDialog()
     state.updateEndpointRuleField(endpoint.id, 0, 'value', 'replacement-secret')
