@@ -1612,6 +1612,9 @@ async fn proxy_request_inner(
                 .unwrap_or_default(),
             local_execution_failure_log
         );
+        let exhaustion_status_code = local_execution_exhaustion
+            .as_ref()
+            .and_then(|exhaustion| exhaustion.last_failure_status_code());
         if let Some(exhaustion) = local_execution_exhaustion {
             record_failed_usage_for_exhausted_request(
                 &state,
@@ -1637,10 +1640,13 @@ async fn proxy_request_inner(
             )
             .await;
         }
+        let response_status = exhaustion_status_code
+            .and_then(|status| http::StatusCode::from_u16(status).ok())
+            .unwrap_or_else(|| local_execution_runtime_miss_status(provider_key_capacity_limited));
         let mut response = build_local_http_error_response(
             &trace_id,
             control_decision,
-            local_execution_runtime_miss_status(provider_key_capacity_limited),
+            response_status,
             local_execution_runtime_miss_client_message(
                 local_execution_runtime_miss_detail.as_str(),
             )

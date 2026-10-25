@@ -532,6 +532,8 @@ async fn execute_prefetched_codex_cyber_policy_failure(
 }
 
 async fn execute_prefetched_transport_failure(
+    kind: ExecutionErrorKind,
+    phase: ExecutionPhase,
     stop_on_transport_errors: bool,
 ) -> AiAttemptExecutionOutcome<axum::http::Response<Body>> {
     let request_id = if stop_on_transport_errors {
@@ -571,8 +573,8 @@ async fn execute_prefetched_transport_failure(
             frame_type: StreamFrameType::Error,
             payload: StreamFramePayload::Error {
                 error: ExecutionError {
-                    kind: ExecutionErrorKind::Internal,
-                    phase: ExecutionPhase::StreamRead,
+                    kind,
+                    phase,
                     message: "connection reset before first body byte".to_string(),
                     upstream_status: None,
                     retryable: true,
@@ -583,6 +585,7 @@ async fn execute_prefetched_transport_failure(
     }
     .boxed();
     let mut retry_scope = AiAttemptRetryScope::Provider;
+    let mut retry_fallback = None;
     let response = execute_stream_from_frame_stream_with_retry_scope(
         &state,
         plan,
@@ -606,7 +609,7 @@ async fn execute_prefetched_transport_failure(
         false,
         None,
         Some(&mut retry_scope),
-        None,
+        Some(&mut retry_fallback),
         None,
     )
     .await
@@ -616,7 +619,7 @@ async fn execute_prefetched_transport_failure(
         Some(response) => AiAttemptExecutionOutcome::Responded(response),
         None => AiAttemptExecutionOutcome::Retry {
             scope: retry_scope,
-            fallback_response: None,
+            fallback_response: retry_fallback,
         },
     }
 }
@@ -3437,20 +3440,47 @@ async fn prefetched_codex_cyber_policy_violation_retries_when_routing_strategy_i
 }
 
 #[tokio::test]
-async fn prefetched_transport_failure_retries_by_default() {
-    assert!(matches!(
-        execute_prefetched_transport_failure(false).await,
-        AiAttemptExecutionOutcome::Retry {
-            scope: AiAttemptRetryScope::Candidate,
-            fallback_response: None,
-        }
-    ));
+async fn prefetched_transport_failure_retries_with_a_preserved_fallback() {
+    let AiAttemptExecutionOutcome::Retry {
+        scope: AiAttemptRetryScope::Candidate,
+        fallback_response: Some(response),
+    } = execute_prefetched_transport_failure(
+        ExecutionErrorKind::Internal,
+        ExecutionPhase::StreamRead,
+        false,
+    )
+    .await
+    else {
+        panic!("transport failure should retry with a preserved fallback response");
+    };
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+}
+
+#[tokio::test]
+async fn prefetched_first_byte_timeout_preserves_a_504_fallback() {
+    let AiAttemptExecutionOutcome::Retry {
+        scope: AiAttemptRetryScope::Candidate,
+        fallback_response: Some(response),
+    } = execute_prefetched_transport_failure(
+        ExecutionErrorKind::FirstByteTimeout,
+        ExecutionPhase::FirstByte,
+        false,
+    )
+    .await
+    else {
+        panic!("first byte timeout should retry with a preserved 504 fallback");
+    };
+    assert_eq!(response.status(), StatusCode::GATEWAY_TIMEOUT);
 }
 
 #[tokio::test]
 async fn prefetched_transport_failure_can_stop_without_matching_http_status_rules() {
-    let AiAttemptExecutionOutcome::Responded(response) =
-        execute_prefetched_transport_failure(true).await
+    let AiAttemptExecutionOutcome::Responded(response) = execute_prefetched_transport_failure(
+        ExecutionErrorKind::Internal,
+        ExecutionPhase::StreamRead,
+        true,
+    )
+    .await
     else {
         panic!("transport stop policy should return a local response");
     };

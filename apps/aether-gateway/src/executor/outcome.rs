@@ -65,6 +65,12 @@ pub(crate) struct LocalExecutionExhaustion {
     upstream_error_type: Option<String>,
 }
 
+impl LocalExecutionExhaustion {
+    pub(crate) fn last_failure_status_code(&self) -> Option<u16> {
+        self.upstream_status_code
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub(crate) struct LocalExecutionRuntimeMissContext {
     pub(crate) auth_user_id: Option<String>,
@@ -398,8 +404,9 @@ pub(crate) async fn record_failed_usage_for_exhausted_request(
         upstream_error_type,
     } = exhaustion;
 
-    let status_code = http::StatusCode::SERVICE_UNAVAILABLE.as_u16();
-    let candidate_status_code = upstream_status_code.unwrap_or(status_code);
+    let candidate_status_code =
+        upstream_status_code.unwrap_or(http::StatusCode::SERVICE_UNAVAILABLE.as_u16());
+    let status_code = candidate_status_code;
     data.status_code = Some(status_code);
     data.error_message = Some(local_execution_runtime_miss_detail.to_string());
     data.error_category = error_category_for_failed_status(status_code);

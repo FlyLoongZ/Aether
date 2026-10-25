@@ -37,17 +37,50 @@ use crate::request_diagnostics::attach_current_request_diagnostics_and_candidate
 use crate::usage::submit_sync_report;
 use crate::{usage::GatewaySyncReportRequest, AppState, GatewayError};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StreamFailureKind {
+    UpstreamHttp,
+    TransportTimeout,
+    TransportOther,
+    InternalGateway,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct StreamFailureDisposition {
+    client_status: u16,
+    rebuild_client_body: bool,
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct StreamFailureReport {
     pub(super) status_code: u16,
     pub(super) error_type: String,
     pub(super) error_message: String,
+    kind: StreamFailureKind,
     upstream_status_code: Option<u16>,
     transport_error: bool,
     honor_http_failover: bool,
     extra_error_fields: Map<String, Value>,
     provider_body_json: Option<Value>,
     analytics_failure: Option<Value>,
+}
+
+impl StreamFailureReport {
+    pub(super) fn disposition(&self) -> StreamFailureDisposition {
+        StreamFailureDisposition {
+            client_status: self.status_code,
+            rebuild_client_body: !matches!(self.kind, StreamFailureKind::UpstreamHttp),
+        }
+    }
+}
+
+fn transport_failure_kind(error_type: &str) -> StreamFailureKind {
+    let lowered = error_type.trim().to_ascii_lowercase();
+    if lowered.contains("timeout") || lowered.contains("timed_out") {
+        StreamFailureKind::TransportTimeout
+    } else {
+        StreamFailureKind::TransportOther
+    }
 }
 
 #[derive(Serialize)]
@@ -108,6 +141,7 @@ impl StreamFailureReport {
             status_code,
             error_type,
             error_message,
+            kind: _,
             upstream_status_code: _,
             transport_error: _,
             honor_http_failover: _,
@@ -154,6 +188,7 @@ pub(super) fn build_stream_failure_report(
         status_code,
         error_type,
         error_message,
+        kind: StreamFailureKind::InternalGateway,
         upstream_status_code: Some(status_code),
         transport_error: false,
         honor_http_failover: false,
@@ -172,6 +207,7 @@ pub(super) fn build_stream_transport_failure_report(
     StreamFailureReport {
         status_code,
         error_message: stable_stream_failure_message(error_type.as_str()).to_string(),
+        kind: transport_failure_kind(error_type.as_str()),
         error_type,
         upstream_status_code: None,
         transport_error: true,
@@ -215,10 +251,23 @@ pub(super) fn build_stream_failure_from_execution_error(
         error_object.insert("upstream_status".to_string(), Value::from(upstream_status));
     }
 
+    let kind = if error.upstream_status.is_some() {
+        StreamFailureKind::UpstreamHttp
+    } else if matches!(
+        error.kind,
+        ExecutionErrorKind::ConnectTimeout
+            | ExecutionErrorKind::FirstByteTimeout
+            | ExecutionErrorKind::ReadTimeout
+    ) {
+        StreamFailureKind::TransportTimeout
+    } else {
+        StreamFailureKind::TransportOther
+    };
     StreamFailureReport {
         status_code,
         error_type,
         error_message,
+        kind,
         upstream_status_code: error.upstream_status,
         transport_error,
         honor_http_failover: error.upstream_status.is_some(),
@@ -253,6 +302,7 @@ pub(super) fn build_stream_failure_from_provider_error_body(
         status_code,
         error_type,
         error_message,
+        kind: StreamFailureKind::UpstreamHttp,
         upstream_status_code: Some(status_code),
         transport_error: false,
         honor_http_failover: true,
@@ -401,6 +451,38 @@ async fn prepare_stream_failure_client_headers(
         .await?,
     );
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn build_stream_failure_fallback(
+    state: &AppState,
+    plan: &ExecutionPlan,
+    decision: &GatewayControlDecision,
+    trace_id: &str,
+    request_id: &str,
+    candidate_id: Option<&str>,
+    payload: &GatewaySyncReportRequest,
+    provider_headers: &std::collections::BTreeMap<String, String>,
+    provider_body: &[u8],
+    disposition: StreamFailureDisposition,
+) -> Result<Response<Body>, GatewayError> {
+    build_exhaustion_fallback(
+        state,
+        ExhaustionFallbackInput {
+            plan,
+            report_context: payload.report_context.as_ref(),
+            trace_id,
+            decision,
+            status_code: disposition.client_status,
+            provider_headers,
+            provider_body,
+            provider_body_json: payload.body_json.as_ref(),
+            rebuild_client_body: disposition.rebuild_client_body,
+            request_id: Some(request_id),
+            candidate_id,
+        },
+    )
+    .await
 }
 
 fn stream_failure_body_field<'a>(
@@ -642,20 +724,19 @@ pub(super) async fn handle_prefetch_provider_private_stream_error(
                     (status_code, true)
                 };
                 *retry_fallback = Some(
-                    build_exhaustion_fallback(
+                    build_stream_failure_fallback(
                         state,
-                        ExhaustionFallbackInput {
-                            plan,
-                            report_context: payload.report_context.as_ref(),
-                            trace_id,
-                            decision,
-                            status_code: fallback_status_code,
-                            provider_headers: &upstream_headers,
-                            provider_body: buffered_body,
-                            provider_body_json: payload.body_json.as_ref(),
+                        plan,
+                        decision,
+                        trace_id,
+                        request_id,
+                        candidate_id,
+                        &payload,
+                        &upstream_headers,
+                        buffered_body,
+                        StreamFailureDisposition {
+                            client_status: fallback_status_code,
                             rebuild_client_body,
-                            request_id: Some(request_id),
-                            candidate_id,
                         },
                     )
                     .await?,
@@ -704,6 +785,7 @@ pub(super) async fn handle_prefetch_stream_failure(
     retry_fallback_out: Option<&mut Option<Response<Body>>>,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let transport_error = failure.transport_error;
+    let stream_failure_disposition = failure.disposition();
     let candidate_status_code = failure.upstream_status_code;
     let honor_http_failover = failure.honor_http_failover;
     // Captured before `build_stream_failure_sync_payload` normalizes the header
@@ -735,9 +817,12 @@ pub(super) async fn handle_prefetch_stream_failure(
             request_id,
             candidate_id,
             payload,
+            buffered_body,
+            stream_failure_disposition,
             candidate_started_unix_ms,
             candidate_elapsed_ms,
             retry_scope_out,
+            retry_fallback_out,
         )
         .await;
     }
@@ -774,21 +859,17 @@ pub(super) async fn handle_prefetch_stream_failure(
         if failure_disposition.preserve_upstream_error {
             if let Some(retry_fallback) = retry_fallback_out {
                 *retry_fallback = Some(
-                    build_exhaustion_fallback(
+                    build_stream_failure_fallback(
                         state,
-                        ExhaustionFallbackInput {
-                            plan,
-                            report_context: payload.report_context.as_ref(),
-                            trace_id,
-                            decision,
-                            status_code: payload.status_code,
-                            provider_headers: &upstream_headers,
-                            provider_body: buffered_body,
-                            provider_body_json: payload.body_json.as_ref(),
-                            rebuild_client_body: false,
-                            request_id: Some(request_id),
-                            candidate_id,
-                        },
+                        plan,
+                        decision,
+                        trace_id,
+                        request_id,
+                        candidate_id,
+                        &payload,
+                        &upstream_headers,
+                        buffered_body,
+                        stream_failure_disposition,
                     )
                     .await?,
                 );
@@ -825,9 +906,12 @@ async fn handle_prefetch_transport_stream_failure(
     request_id: &str,
     candidate_id: Option<&str>,
     payload: GatewaySyncReportRequest,
+    buffered_body: &[u8],
+    disposition: StreamFailureDisposition,
     candidate_started_unix_ms: u64,
     candidate_elapsed_ms: u64,
     retry_scope_out: Option<&mut AiAttemptRetryScope>,
+    retry_fallback_out: Option<&mut Option<Response<Body>>>,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let error_type = stream_failure_body_field(&payload, "type").unwrap_or("internal");
     let error_message = stream_failure_body_field(&payload, "message").unwrap_or_default();
@@ -893,7 +977,7 @@ async fn handle_prefetch_transport_stream_failure(
         payload.report_context.as_ref(),
         SchedulerRequestCandidateStatusUpdate {
             status: RequestCandidateStatus::Failed,
-            status_code: None,
+            status_code: Some(payload.status_code),
             error_type: Some(error_type.to_string()),
             error_message: Some(error_message.to_string()),
             latency_ms: payload
@@ -908,6 +992,23 @@ async fn handle_prefetch_transport_stream_failure(
     .await;
 
     if retrying_next_candidate {
+        if let Some(retry_fallback) = retry_fallback_out {
+            *retry_fallback = Some(
+                build_stream_failure_fallback(
+                    state,
+                    plan,
+                    decision,
+                    trace_id,
+                    request_id,
+                    candidate_id,
+                    &payload,
+                    &payload.provider_headers,
+                    buffered_body,
+                    disposition,
+                )
+                .await?,
+            );
+        }
         if let Some(retry_scope) = retry_scope_out {
             *retry_scope = AiAttemptRetryScope::Candidate;
         }
