@@ -14,7 +14,7 @@ const PROVIDER_REQUEST_STARTED_AT_UNIX_MS_CONTEXT_KEY: &str = "provider_request_
 const PROVIDER_REQUEST_ORDER_ID_CONTEXT_KEY: &str = "provider_request_order_id";
 const PROVIDER_RESPONSE_HEADERS_OBSERVED_AT_UNIX_MS_CONTEXT_KEY: &str =
     "provider_response_headers_observed_at_unix_ms";
-const RESPONSE_HEADER_RULE_PROTECTED_KEYS: &[&str] = &["content-length"];
+const RESPONSE_HEADER_RULE_PROTECTED_KEYS: &[&str] = &["content-length", "content-encoding"];
 const RESPONSE_HEADER_RULES_CACHE_TTL: Duration = Duration::from_secs(5);
 
 fn endpoint_response_header_rules_from_config(config: Option<&Value>) -> Option<&Value> {
@@ -73,7 +73,7 @@ pub(crate) async fn apply_endpoint_response_header_rules(
         return Ok(());
     };
 
-    if !rules.is_array() {
+    let Some(rules) = rules.as_array() else {
         warn!(
             event_name = "response_header_rules_invalid_shape",
             log_type = "ops",
@@ -81,8 +81,41 @@ pub(crate) async fn apply_endpoint_response_header_rules(
             "gateway skipped endpoint response header rules because response_header_rules is not an array"
         );
         return Ok(());
-    }
+    };
 
+    apply_response_header_rules(headers, rules, response_body, &plan.endpoint_id)
+}
+
+fn apply_response_header_rules(
+    headers: &mut BTreeMap<String, String>,
+    rules: &[Value],
+    response_body: Option<&Value>,
+    endpoint_id: &str,
+) -> Result<(), GatewayError> {
+    // Historical/imported configurations can bypass admin validation. Skip only
+    // malformed rules, so valid drops and edits still protect the response.
+    let rules = Value::Array(
+        rules
+            .iter()
+            .enumerate()
+            .filter_map(|(index, rule)| {
+                match aether_provider_transport::rules::validate_response_header_rule(rule) {
+                    Ok(()) => Some(rule.clone()),
+                    Err(reason) => {
+                        warn!(
+                            event_name = "response_header_rule_invalid",
+                            log_type = "ops",
+                            endpoint_id,
+                            rule_index = index + 1,
+                            reason,
+                            "gateway skipped an invalid response header rule"
+                        );
+                        None
+                    }
+                }
+            })
+            .collect(),
+    );
     let empty_body = Value::Null;
     let body = response_body.unwrap_or(&empty_body);
     if !crate::provider_transport::apply_local_header_rules(
@@ -141,6 +174,44 @@ pub(crate) fn attach_provider_response_headers_to_report_context(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn invalid_legacy_response_header_rules_do_not_break_client_responses() {
+        let mut headers = BTreeMap::from([
+            ("content-type".to_string(), "application/json".to_string()),
+            ("x-private".to_string(), "provider-only".to_string()),
+        ]);
+        let rules = json!([
+            {"action": "set", "key": "bad header", "value": "secret"},
+            {"action": "set", "key": "x-bad-value", "value": "secret\r\nInjected: true"},
+            {"action": "rename", "from": "content-type", "to": "bad target:"},
+            {"action": "drop", "key": "x-private"},
+            {"action": "set", "key": "x-marker", "value": "ok"},
+            {"action": "rename", "from": "x-marker", "to": "x-renamed"},
+            {"action": "set", "key": "content-encoding", "value": "gzip"},
+            {"action": "rename", "from": "x-renamed", "to": "content-encoding"}
+        ]);
+        apply_response_header_rules(
+            &mut headers,
+            rules.as_array().unwrap(),
+            None,
+            "endpoint-test",
+        )
+        .expect("invalid rules should be skipped");
+        let response = crate::api::response::build_client_response_from_parts(
+            200,
+            &headers,
+            axum::body::Body::empty(),
+            "trace-test",
+            None,
+        )
+        .expect("legacy rules must not turn a completed request into a 500");
+        assert_eq!(response.headers()["content-type"], "application/json");
+        assert_eq!(response.headers()["x-renamed"], "ok");
+        assert!(response.headers().get("x-private").is_none());
+        assert!(response.headers().get("x-bad-value").is_none());
+        assert!(response.headers().get("content-encoding").is_none());
+    }
 
     #[test]
     fn provider_response_observation_is_first_write_wins() {

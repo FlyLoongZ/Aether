@@ -202,6 +202,48 @@ mod endpoint_key_count_tests {
     }
 
     #[test]
+    fn endpoint_create_and_update_reject_invalid_response_header_rules() {
+        for key in ["response_header_rules", "responseHeaderRules"] {
+            for rule in [
+                json!({"action": "set", "key": "bad header", "value": "secret"}),
+                json!({"action": "set", "key": "x-test", "value": "secret\r\nInjected: yes"}),
+                json!({"action": "rename", "from": "x-test", "to": "invalid:"}),
+            ] {
+                let config = json!({(key): [rule]});
+                let created = super::build_admin_provider_endpoint_record(
+                    "ep-new".into(),
+                    "provider".into(),
+                    "openai:chat".into(),
+                    "openai".into(),
+                    "chat".into(),
+                    "https://example.test".into(),
+                    None,
+                    None,
+                    None,
+                    0,
+                    Some(config.clone()),
+                    None,
+                    None,
+                    0,
+                );
+                let error = created.expect_err("invalid response rules must not be created");
+                assert!(!error.contains("secret"));
+                let error = super::apply_admin_provider_endpoint_update_fields(
+                    &sample_endpoint("chat", "openai:chat"),
+                    |field| field == "config",
+                    |_| false,
+                    &super::AdminProviderEndpointUpdateFields {
+                        config: Some(config),
+                        ..Default::default()
+                    },
+                )
+                .expect_err("invalid response rules must not be updated");
+                assert!(!error.contains("secret"));
+            }
+        }
+    }
+
+    #[test]
     fn endpoint_updates_reject_unresolved_rule_masks_before_persistence() {
         let header_rules = json!([{"action": "set", "key": "x-auth", "value": "header-secret"}]);
         let body_rules = json!([{"action": "set", "path": "auth.token", "value": "body-secret"}]);
@@ -324,6 +366,15 @@ fn trimmed_non_empty_string(value: Option<String>) -> Option<String> {
     })
 }
 
+fn validate_endpoint_response_header_rules(config: Option<&Value>) -> Result<(), String> {
+    for key in ["response_header_rules", "responseHeaderRules"] {
+        if let Some(rules) = config.and_then(|config| config.get(key)) {
+            aether_provider_transport::rules::validate_response_header_rules(rules)?;
+        }
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn build_admin_provider_endpoint_record(
     id: String,
@@ -341,6 +392,7 @@ pub fn build_admin_provider_endpoint_record(
     format_acceptance_config: Option<Value>,
     now_unix_secs: u64,
 ) -> Result<StoredProviderCatalogEndpoint, String> {
+    validate_endpoint_response_header_rules(config.as_ref())?;
     StoredProviderCatalogEndpoint::new(
         id,
         provider_id,
@@ -474,10 +526,10 @@ where
                     rules,
                 )?;
             }
-            Some(admin_restore_secret_safe_json(
-                existing_endpoint.config.as_ref(),
-                config,
-            ))
+            let restored =
+                admin_restore_secret_safe_json(existing_endpoint.config.as_ref(), config);
+            validate_endpoint_response_header_rules(Some(&restored))?;
+            Some(restored)
         };
     }
 
