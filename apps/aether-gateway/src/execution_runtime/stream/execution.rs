@@ -3967,7 +3967,6 @@ async fn maybe_build_stream_transport_error_stop_response(
         report_context,
         trace_id,
         decision,
-        http::StatusCode::BAD_GATEWAY.as_u16(),
         error_type,
         error_message,
         elapsed_ms,

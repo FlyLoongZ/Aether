@@ -156,7 +156,8 @@ pub(crate) use transport::{
     DirectUpstreamStreamExecution, ExecutionRuntimeTransportError,
 };
 pub(crate) use transport_failure::{
-    build_transport_error_stop_response, mark_stream_candidate_watchdog_terminal_started,
+    build_transport_error_stop_response, client_message_for_error_type,
+    client_message_for_execution_error_kind, mark_stream_candidate_watchdog_terminal_started,
     StreamCandidateWatchdogProgress,
 };
 

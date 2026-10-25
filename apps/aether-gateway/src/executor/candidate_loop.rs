@@ -1360,7 +1360,6 @@ where
                         watchdog_report_context,
                         self.trace_id,
                         self.decision,
-                        http::StatusCode::GATEWAY_TIMEOUT.as_u16(),
                         "local_stream_candidate_watchdog_timeout",
                         stream_candidate_watchdog_timeout_message(),
                         watchdog_started_at.elapsed().as_millis() as u64,

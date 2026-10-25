@@ -531,7 +531,6 @@ async fn maybe_build_sync_transport_error_stop_response(
         report_context,
         trace_id,
         decision,
-        StatusCode::BAD_GATEWAY.as_u16(),
         error_type,
         error_message,
         elapsed_ms,
