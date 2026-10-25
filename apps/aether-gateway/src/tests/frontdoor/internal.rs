@@ -302,7 +302,7 @@ async fn post_internal_sync_report(
             "report_kind": report_kind,
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {
@@ -936,7 +936,7 @@ async fn gateway_handles_internal_gateway_report_sync_locally() {
             "report_kind": report_kind,
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {
@@ -997,7 +997,7 @@ async fn gateway_handles_internal_gateway_report_stream_locally() {
             "report_kind": report_kind,
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "text/event-stream",
             },
             "body_base64": base64::engine::general_purpose::STANDARD.encode("data: [DONE]\\n\\n"),
@@ -1170,10 +1170,6 @@ async fn gateway_allows_internal_gateway_report_observation_fields() {
         "provider_response_headers".to_string(),
         json!({"x-request-id": "upstream-request-123"}),
     );
-    context.insert(
-        "client_response_headers".to_string(),
-        json!({"content-type": "application/json"}),
-    );
     context.insert("upstream_response".to_string(), json!({"status_code": 200}));
     context.insert("error_flow".to_string(), json!({"attempted": false}));
 
@@ -1232,7 +1228,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_locally() {
             "report_kind": "openai_chat_sync_finalize",
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {
@@ -1316,7 +1312,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_openai_video_locally() {
             "report_kind": report_kind,
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {
@@ -1397,7 +1393,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_gemini_video_locally() {
             "report_kind": report_kind,
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {
@@ -1480,7 +1476,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_openai_video_delete_loca
             "report_kind": report_kind,
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {}
@@ -1562,7 +1558,7 @@ async fn gateway_handles_internal_gateway_finalize_sync_gemini_video_cancel_loca
             "report_kind": report_kind,
             "report_context": report_context,
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {}
@@ -1613,7 +1609,7 @@ async fn gateway_rejects_internal_gateway_finalize_sync_unknown_kind_locally() {
             "report_kind": "openai_video_unknown_sync_finalize",
             "report_context": {},
             "status_code": 200,
-            "headers": {
+            "provider_headers": {
                 "content-type": "application/json",
             },
             "body_json": {}

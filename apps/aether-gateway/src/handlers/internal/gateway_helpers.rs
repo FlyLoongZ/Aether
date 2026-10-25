@@ -291,45 +291,43 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
         return Ok(None);
     };
 
-    let mut payload = match maybe_build_local_video_success_outcome(
-        trace_id,
-        decision,
-        payload,
-        &state.video_tasks,
-        &plan,
-    )? {
-        LocalVideoSyncSuccessBuild::Handled(outcome) => {
-            let crate::execution_runtime::LocalVideoSyncSuccessOutcome {
-                response,
-                report_payload,
-                original_report_context: _,
-                report_mode,
-                local_task_snapshot,
-            } = outcome;
-            if let Some(snapshot) = local_task_snapshot {
-                let _ = state.upsert_video_task_snapshot(&snapshot).await?;
-                state.video_tasks.record_snapshot(snapshot);
-            }
-            match report_mode {
-                crate::video_tasks::VideoTaskSyncReportMode::InlineSync => {
-                    crate::usage::submit_sync_report(state, report_payload).await?;
+    let mut payload =
+        match maybe_build_local_video_success_outcome(state, trace_id, decision, payload, &plan)
+            .await?
+        {
+            LocalVideoSyncSuccessBuild::Handled(outcome) => {
+                let crate::execution_runtime::LocalVideoSyncSuccessOutcome {
+                    response,
+                    report_payload,
+                    original_report_context: _,
+                    report_mode,
+                    local_task_snapshot,
+                } = outcome;
+                if let Some(snapshot) = local_task_snapshot {
+                    let _ = state.upsert_video_task_snapshot(&snapshot).await?;
+                    state.video_tasks.record_snapshot(snapshot);
                 }
-                crate::video_tasks::VideoTaskSyncReportMode::Background => {
-                    crate::usage::spawn_sync_report(state.clone(), report_payload);
+                match report_mode {
+                    crate::video_tasks::VideoTaskSyncReportMode::InlineSync => {
+                        crate::usage::submit_sync_report(state, report_payload).await?;
+                    }
+                    crate::video_tasks::VideoTaskSyncReportMode::Background => {
+                        crate::usage::spawn_sync_report(state.clone(), report_payload);
+                    }
                 }
+                let mut response = response;
+                response.headers_mut().insert(
+                    HeaderName::from_static(CONTROL_EXECUTED_HEADER),
+                    HeaderValue::from_static("true"),
+                );
+                return Ok(Some(response));
             }
-            let mut response = response;
-            response.headers_mut().insert(
-                HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                HeaderValue::from_static("true"),
-            );
-            return Ok(Some(response));
-        }
-        LocalVideoSyncSuccessBuild::NotHandled(payload) => payload,
-    };
+            LocalVideoSyncSuccessBuild::NotHandled(payload) => payload,
+        };
 
     if let Some(mut response) =
-        maybe_build_local_sync_finalize_response(trace_id, decision, &payload)?
+        maybe_build_local_sync_finalize_response(state, &plan, trace_id, decision, &mut payload)
+            .await?
     {
         let request_path = build_local_sync_finalize_request_path(
             payload.report_kind.as_str(),
@@ -361,7 +359,8 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
     }
 
     if let Some(mut response) =
-        maybe_build_local_video_error_response(trace_id, decision, &payload)?
+        maybe_build_local_video_error_response(state, &plan, trace_id, decision, &mut payload)
+            .await?
     {
         if let Some(error_report_kind) =
             resolve_local_sync_error_background_report_kind(payload.report_kind.as_str())

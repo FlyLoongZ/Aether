@@ -1,4 +1,5 @@
 use crate::ai_serving::GatewayControlDecision;
+use crate::execution_runtime::ResponseHeaderContext;
 use crate::{usage::GatewaySyncReportRequest, GatewayError};
 
 pub(crate) use crate::ai_serving::finalize::common::{
@@ -19,13 +20,15 @@ pub(crate) use crate::ai_serving::{
     convert_gemini_chat_response_to_openai_chat, convert_gemini_response_to_openai_responses,
 };
 
-pub(crate) fn maybe_build_local_core_sync_finalize_response(
+pub(crate) async fn maybe_build_local_core_sync_finalize_response(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
     payload: &GatewaySyncReportRequest,
 ) -> Result<Option<LocalCoreSyncFinalizeOutcome>, GatewayError> {
     if let Some(outcome) =
-        maybe_build_local_openai_image_sync_finalize_response(trace_id, decision, payload)?
+        maybe_build_local_openai_image_sync_finalize_response(context, trace_id, decision, payload)
+            .await?
     {
         return Ok(Some(outcome));
     }
@@ -60,9 +63,10 @@ pub(crate) fn maybe_build_local_core_sync_finalize_response(
             else {
                 return Ok(None);
             };
-            Ok(Some(build_local_success_outcome(
-                trace_id, decision, payload, body_json,
-            )?))
+            Ok(Some(
+                build_local_success_outcome(context, trace_id, decision, payload, body_json)
+                    .await?,
+            ))
         }
         StandardSyncFinalizeNormalizedProduct::CrossFormat(product) => {
             let Some(provider_body_json) =
@@ -70,18 +74,23 @@ pub(crate) fn maybe_build_local_core_sync_finalize_response(
             else {
                 return Ok(None);
             };
-            Ok(Some(build_local_success_outcome_with_conversion_report(
-                trace_id,
-                decision,
-                payload,
-                product.client_body_json,
-                provider_body_json,
-            )?))
+            Ok(Some(
+                build_local_success_outcome_with_conversion_report(
+                    context,
+                    trace_id,
+                    decision,
+                    payload,
+                    product.client_body_json,
+                    provider_body_json,
+                )
+                .await?,
+            ))
         }
     }
 }
 
-fn maybe_build_local_openai_image_sync_finalize_response(
+async fn maybe_build_local_openai_image_sync_finalize_response(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
     payload: &GatewaySyncReportRequest,
@@ -98,13 +107,17 @@ fn maybe_build_local_openai_image_sync_finalize_response(
         return Ok(None);
     };
 
-    Ok(Some(build_local_success_outcome_with_conversion_report(
-        trace_id,
-        decision,
-        payload,
-        product.client_body_json,
-        product.provider_body_json,
-    )?))
+    Ok(Some(
+        build_local_success_outcome_with_conversion_report(
+            context,
+            trace_id,
+            decision,
+            payload,
+            product.client_body_json,
+            product.provider_body_json,
+        )
+        .await?,
+    ))
 }
 
 #[cfg(test)]

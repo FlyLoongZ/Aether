@@ -11,7 +11,8 @@ pub struct LocalSyncReportParts {
     pub report_kind: String,
     pub report_context: Option<Value>,
     pub status_code: u16,
-    pub headers: BTreeMap<String, String>,
+    pub provider_headers: BTreeMap<String, String>,
+    pub client_headers: Option<BTreeMap<String, String>>,
     pub body_json: Option<Value>,
     pub client_body_json: Option<Value>,
     pub body_base64: Option<String>,
@@ -116,7 +117,8 @@ fn should_capture_client_sync_success_body(payload: &LocalSyncReportParts) -> bo
 pub fn build_local_success_background_report(
     payload: &LocalSyncReportParts,
     body_json: Value,
-    headers: BTreeMap<String, String>,
+    provider_headers: BTreeMap<String, String>,
+    client_headers: BTreeMap<String, String>,
 ) -> Option<LocalSyncReportParts> {
     let report_kind = core_success_background_report_kind(payload.report_kind.as_str())?;
     let upstream_is_stream = should_capture_client_sync_success_body(payload);
@@ -137,7 +139,8 @@ pub fn build_local_success_background_report(
         report_kind: report_kind.to_string(),
         report_context: payload.report_context.clone(),
         status_code: payload.status_code,
-        headers,
+        provider_headers,
+        client_headers: Some(client_headers),
         body_json: provider_body_json,
         client_body_json,
         body_base64: provider_body_base64,
@@ -156,7 +159,8 @@ pub fn build_local_success_conversion_background_report(
         report_kind: report_kind.to_string(),
         report_context: payload.report_context.clone(),
         status_code: payload.status_code,
-        headers: payload.headers.clone(),
+        provider_headers: payload.provider_headers.clone(),
+        client_headers: payload.client_headers.clone(),
         body_json: Some(provider_body_json),
         client_body_json: Some(client_body_json),
         body_base64: None,
@@ -335,7 +339,8 @@ mod tests {
             report_kind: "openai_chat_sync_finalize".to_string(),
             report_context: Some(serde_json::json!({"request_id": "req-1"})),
             status_code: 200,
-            headers: BTreeMap::from([("x-test".to_string(), "1".to_string())]),
+            provider_headers: BTreeMap::from([("x-test".to_string(), "1".to_string())]),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -344,7 +349,8 @@ mod tests {
         let report = build_local_success_background_report(
             &payload,
             serde_json::json!({"id": "resp-1"}),
-            payload.headers.clone(),
+            payload.provider_headers.clone(),
+            payload.provider_headers.clone(),
         )
         .expect("success report should be built");
 
@@ -363,7 +369,8 @@ mod tests {
                 "upstream_is_stream": true
             })),
             status_code: 200,
-            headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+            provider_headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: Some(base64::engine::general_purpose::STANDARD.encode(
@@ -381,7 +388,8 @@ mod tests {
         let report = build_local_success_background_report(
             &payload,
             serde_json::json!({"id": "resp-1b"}),
-            payload.headers.clone(),
+            payload.provider_headers.clone(),
+            payload.provider_headers.clone(),
         )
         .expect("success report should be built");
 
@@ -400,7 +408,11 @@ mod tests {
             report_kind: "openai_chat_sync_finalize".to_string(),
             report_context: Some(serde_json::json!({"request_id": "req-2"})),
             status_code: 200,
-            headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+            provider_headers: BTreeMap::from([(
+                "content-type".to_string(),
+                "application/json".to_string(),
+            )]),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,

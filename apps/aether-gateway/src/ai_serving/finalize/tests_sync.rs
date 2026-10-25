@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
+use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
 use axum::body::to_bytes;
 use base64::Engine as _;
 use serde_json::json;
@@ -16,6 +19,7 @@ use crate::ai_serving::{
     convert_openai_responses_response_to_openai_chat, openai_responses_message_item_id,
     GatewayControlDecision,
 };
+use crate::execution_runtime::ResponseHeaderContext;
 use crate::tests::support::{
     encode_kiro_error_frame, encode_kiro_event_frame, encode_kiro_exception_frame,
 };
@@ -59,10 +63,11 @@ fn build_kiro_claude_cli_sync_finalize_payload(body_bytes: Vec<u8>) -> GatewaySy
             }
         })),
         status_code: 200,
-        headers: BTreeMap::from([(
+        provider_headers: BTreeMap::from([(
             "content-type".to_string(),
             "application/vnd.amazon.eventstream".to_string(),
         )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(body_bytes)),
@@ -70,8 +75,117 @@ fn build_kiro_claude_cli_sync_finalize_payload(body_bytes: Vec<u8>) -> GatewaySy
     }
 }
 
-#[test]
-fn aggregates_openai_chat_stream_text_chunks_to_final_response() {
+#[tokio::test]
+async fn local_finalize_preserves_content_type_decided_by_response_rules() {
+    let mut payload = build_kiro_claude_cli_sync_finalize_payload(encode_kiro_event_frame(
+        "assistantResponseEvent",
+        json!({"content": "Hello"}),
+    ));
+    payload.client_headers = Some(BTreeMap::from([(
+        "content-type".to_string(),
+        "application/problem+json".to_string(),
+    )]));
+
+    let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
+        "trace-kiro-cli-content-type",
+        &test_decision(),
+        &payload,
+    )
+    .await
+    .expect("local finalize should succeed")
+    .expect("local finalize should match");
+    assert_eq!(
+        outcome.response.headers()["content-type"],
+        "application/problem+json"
+    );
+
+    payload.client_headers = Some(BTreeMap::new());
+    let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
+        "trace-kiro-cli-content-type-dropped",
+        &test_decision(),
+        &payload,
+    )
+    .await
+    .expect("local finalize should succeed")
+    .expect("local finalize should match");
+    assert!(outcome.response.headers().get("content-type").is_none());
+}
+
+fn state_and_plan_with_response_header_rules() -> (crate::AppState, aether_contracts::ExecutionPlan)
+{
+    let plan = aether_video_tasks_core::build_internal_finalize_video_plan(
+        "trace-finalize-rules",
+        "openai:video",
+        None,
+    )
+    .expect("plan should build");
+    let mut endpoint = StoredProviderCatalogEndpoint::new(
+        plan.endpoint_id.clone(),
+        plan.provider_id.clone(),
+        plan.provider_api_format.clone(),
+        None,
+        None,
+        true,
+    )
+    .expect("endpoint should build");
+    endpoint.config = Some(json!({"response_header_rules": [
+        {"action": "set", "key": "content-type", "value": "application/problem+json"},
+        {"action": "set", "key": "x-marker", "value": "rule"},
+        {"action": "drop", "key": "x-private"}
+    ]}));
+    let state = crate::AppState::new()
+        .expect("state should build")
+        .with_data_state_for_tests(
+            crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(Arc::new(
+                InMemoryProviderCatalogReadRepository::seed(vec![], vec![endpoint], vec![]),
+            )),
+        );
+    (state, plan)
+}
+
+#[tokio::test]
+async fn local_finalize_recomputes_headers_from_provider_headers_and_rules() {
+    let (state, plan) = state_and_plan_with_response_header_rules();
+    let mut payload = build_kiro_claude_cli_sync_finalize_payload(encode_kiro_event_frame(
+        "assistantResponseEvent",
+        json!({"content": "Hello"}),
+    ));
+    payload.provider_headers = BTreeMap::from([
+        ("content-type".to_string(), "text/event-stream".to_string()),
+        ("x-private".to_string(), "provider-only".to_string()),
+    ]);
+    // Stale prepared headers must not be treated as the rule source.
+    payload.client_headers = Some(BTreeMap::from([
+        ("content-type".to_string(), "application/json".to_string()),
+        ("x-private".to_string(), "stale".to_string()),
+    ]));
+
+    let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::new(&state, &plan),
+        "trace-kiro-cli-rule-recompute",
+        &test_decision(),
+        &payload,
+    )
+    .await
+    .expect("local finalize should succeed")
+    .expect("local finalize should match");
+
+    assert_eq!(
+        outcome.response.headers()["content-type"],
+        "application/problem+json"
+    );
+    assert_eq!(outcome.response.headers()["x-marker"], "rule");
+    assert!(outcome.response.headers().get("x-private").is_none());
+    assert_eq!(
+        outcome.client_headers["content-type"],
+        "application/problem+json"
+    );
+}
+
+#[tokio::test]
+async fn aggregates_openai_chat_stream_text_chunks_to_final_response() {
     let body = concat!(
         "data: {\"id\":\"chatcmpl_123\",\"object\":\"chat.completion.chunk\",\"created\":1,",
         "\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hel\"},\"finish_reason\":null}]}\n\n",
@@ -110,8 +224,8 @@ fn aggregates_openai_chat_stream_text_chunks_to_final_response() {
     );
 }
 
-#[test]
-fn aggregates_openai_responses_stream_completed_event_to_final_response() {
+#[tokio::test]
+async fn aggregates_openai_responses_stream_completed_event_to_final_response() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\",\"object\":\"response\",\"model\":\"gpt-5\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
@@ -157,8 +271,8 @@ fn aggregates_openai_responses_stream_completed_event_to_final_response() {
     );
 }
 
-#[test]
-fn aggregates_openai_responses_stream_tool_call_events_to_final_response() {
+#[tokio::test]
+async fn aggregates_openai_responses_stream_tool_call_events_to_final_response() {
     let body = concat!(
         "event: response.created\n",
         "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_tool_123\",\"object\":\"response\",\"model\":\"gpt-5\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
@@ -203,8 +317,8 @@ fn aggregates_openai_responses_stream_tool_call_events_to_final_response() {
     );
 }
 
-#[test]
-fn aggregates_claude_stream_events_to_final_response() {
+#[tokio::test]
+async fn aggregates_claude_stream_events_to_final_response() {
     let body = concat!(
         "event: message_start\n",
         "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-3-5-sonnet-latest\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null}}\n\n",
@@ -244,8 +358,8 @@ fn aggregates_claude_stream_events_to_final_response() {
     );
 }
 
-#[test]
-fn aggregates_gemini_stream_events_to_final_response() {
+#[tokio::test]
+async fn aggregates_gemini_stream_events_to_final_response() {
     let body = concat!(
         "data: {\"responseId\":\"resp_gemini_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"he\"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-1.5-flash\"}\n\n",
         "data: {\"responseId\":\"resp_gemini_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hello\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-1.5-flash\",\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":7,\"totalTokenCount\":12}}\n\n",
@@ -276,8 +390,8 @@ fn aggregates_gemini_stream_events_to_final_response() {
     );
 }
 
-#[test]
-fn converts_claude_chat_response_to_openai_chat_response() {
+#[tokio::test]
+async fn converts_claude_chat_response_to_openai_chat_response() {
     let result = convert_claude_chat_response_to_openai_chat(
         &json!({
             "id": "msg_123",
@@ -325,8 +439,8 @@ fn converts_claude_chat_response_to_openai_chat_response() {
     );
 }
 
-#[test]
-fn converts_claude_chat_tool_use_to_openai_chat_tool_calls() {
+#[tokio::test]
+async fn converts_claude_chat_tool_use_to_openai_chat_tool_calls() {
     let result = convert_claude_chat_response_to_openai_chat(
         &json!({
             "id": "msg_tool_123",
@@ -387,8 +501,8 @@ fn converts_claude_chat_tool_use_to_openai_chat_tool_calls() {
     );
 }
 
-#[test]
-fn converts_claude_chat_thinking_block_to_openai_reasoning_content() {
+#[tokio::test]
+async fn converts_claude_chat_thinking_block_to_openai_reasoning_content() {
     let result = convert_claude_chat_response_to_openai_chat(
         &json!({
             "id": "msg_think_123",
@@ -420,8 +534,8 @@ fn converts_claude_chat_thinking_block_to_openai_reasoning_content() {
     assert_eq!(result["choices"][0]["message"]["content"], "Final answer");
 }
 
-#[test]
-fn converts_gemini_chat_response_to_openai_chat_response() {
+#[tokio::test]
+async fn converts_gemini_chat_response_to_openai_chat_response() {
     let result = convert_gemini_chat_response_to_openai_chat(
         &json!({
             "responseId": "resp_123",
@@ -471,8 +585,8 @@ fn converts_gemini_chat_response_to_openai_chat_response() {
     );
 }
 
-#[test]
-fn converts_gemini_chat_function_call_to_openai_chat_tool_calls() {
+#[tokio::test]
+async fn converts_gemini_chat_function_call_to_openai_chat_tool_calls() {
     let result = convert_gemini_chat_response_to_openai_chat(
         &json!({
             "responseId": "resp_tool_123",
@@ -533,8 +647,8 @@ fn converts_gemini_chat_function_call_to_openai_chat_tool_calls() {
     );
 }
 
-#[test]
-fn converts_gemini_chat_thought_part_to_openai_reasoning_content() {
+#[tokio::test]
+async fn converts_gemini_chat_thought_part_to_openai_reasoning_content() {
     let result = convert_gemini_chat_response_to_openai_chat(
         &json!({
             "responseId": "resp_think_123",
@@ -571,8 +685,8 @@ fn converts_gemini_chat_thought_part_to_openai_reasoning_content() {
     assert_eq!(result["choices"][0]["message"]["content"], "Visible answer");
 }
 
-#[test]
-fn converts_gemini_chat_inline_data_to_openai_chat_image_part() {
+#[tokio::test]
+async fn converts_gemini_chat_inline_data_to_openai_chat_image_part() {
     let result = convert_gemini_chat_response_to_openai_chat(
         &json!({
             "responseId": "resp_img_123",
@@ -615,8 +729,8 @@ fn converts_gemini_chat_inline_data_to_openai_chat_image_part() {
     );
 }
 
-#[test]
-fn converts_openai_responses_reasoning_item_to_openai_chat_reasoning_content() {
+#[tokio::test]
+async fn converts_openai_responses_reasoning_item_to_openai_chat_reasoning_content() {
     let result = convert_openai_responses_response_to_openai_chat(
         &json!({
             "id": "resp_reason_123",
@@ -664,8 +778,8 @@ fn converts_openai_responses_reasoning_item_to_openai_chat_reasoning_content() {
     assert_eq!(result["choices"][0]["message"]["content"], "Final answer");
 }
 
-#[test]
-fn converts_openai_responses_output_image_to_openai_chat_image_part() {
+#[tokio::test]
+async fn converts_openai_responses_output_image_to_openai_chat_image_part() {
     let result = convert_openai_responses_response_to_openai_chat(
         &json!({
             "id": "resp_img_cli_123",
@@ -706,8 +820,8 @@ fn converts_openai_responses_output_image_to_openai_chat_image_part() {
     );
 }
 
-#[test]
-fn converts_openai_chat_image_part_to_openai_responses_output_image() {
+#[tokio::test]
+async fn converts_openai_chat_image_part_to_openai_responses_output_image() {
     let result = convert_openai_chat_response_to_openai_responses(
         &json!({
             "id": "chatcmpl_img_123",
@@ -750,8 +864,8 @@ fn converts_openai_chat_image_part_to_openai_responses_output_image() {
     );
 }
 
-#[test]
-fn converts_claude_cli_response_to_openai_responses_response() {
+#[tokio::test]
+async fn converts_claude_cli_response_to_openai_responses_response() {
     let result = convert_claude_response_to_openai_responses(
         &json!({
             "id": "msg_cli_123",
@@ -808,8 +922,8 @@ fn converts_claude_cli_response_to_openai_responses_response() {
     );
 }
 
-#[test]
-fn converts_claude_cli_tool_use_to_openai_responses_function_call() {
+#[tokio::test]
+async fn converts_claude_cli_tool_use_to_openai_responses_function_call() {
     let result = convert_claude_response_to_openai_responses(
         &json!({
             "id": "msg_cli_tool_123",
@@ -880,8 +994,8 @@ fn converts_claude_cli_tool_use_to_openai_responses_function_call() {
     );
 }
 
-#[test]
-fn converts_gemini_cli_response_to_openai_responses_response() {
+#[tokio::test]
+async fn converts_gemini_cli_response_to_openai_responses_response() {
     let result = convert_gemini_response_to_openai_responses(
         &json!({
             "responseId": "resp_cli_123",
@@ -945,8 +1059,8 @@ fn converts_gemini_cli_response_to_openai_responses_response() {
     );
 }
 
-#[test]
-fn converts_gemini_cli_function_call_to_openai_responses_function_call() {
+#[tokio::test]
+async fn converts_gemini_cli_function_call_to_openai_responses_function_call() {
     let result = convert_gemini_response_to_openai_responses(
         &json!({
             "responseId": "resp_cli_tool_123",
@@ -1022,8 +1136,8 @@ fn converts_gemini_cli_function_call_to_openai_responses_function_call() {
     );
 }
 
-#[test]
-fn converts_gemini_cli_inline_data_to_openai_responses_output_image() {
+#[tokio::test]
+async fn converts_gemini_cli_inline_data_to_openai_responses_output_image() {
     let result = convert_gemini_response_to_openai_responses(
         &json!({
             "responseId": "resp_cli_img_123",
@@ -1065,8 +1179,8 @@ fn converts_gemini_cli_inline_data_to_openai_responses_output_image() {
     );
 }
 
-#[test]
-fn local_finalize_handles_openai_responses_compact_cross_format_sync_response() {
+#[tokio::test]
+async fn local_finalize_handles_openai_responses_compact_cross_format_sync_response() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-compact-sync-123".to_string(),
         report_kind: "openai_responses_compact_sync_finalize".to_string(),
@@ -1078,7 +1192,11 @@ fn local_finalize_handles_openai_responses_compact_cross_format_sync_response() 
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "responseId": "resp_cli_123",
             "candidates": [{
@@ -1103,10 +1221,12 @@ fn local_finalize_handles_openai_responses_compact_cross_format_sync_response() 
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-compact-sync-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1121,8 +1241,8 @@ fn local_finalize_handles_openai_responses_compact_cross_format_sync_response() 
     );
 }
 
-#[test]
-fn local_finalize_handles_openai_responses_compact_cross_format_function_call_response() {
+#[tokio::test]
+async fn local_finalize_handles_openai_responses_compact_cross_format_function_call_response() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-compact-tool-123".to_string(),
         report_kind: "openai_responses_compact_sync_finalize".to_string(),
@@ -1134,7 +1254,11 @@ fn local_finalize_handles_openai_responses_compact_cross_format_function_call_re
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "responseId": "resp_cli_tool_123",
             "candidates": [{
@@ -1162,10 +1286,12 @@ fn local_finalize_handles_openai_responses_compact_cross_format_function_call_re
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-compact-tool-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1177,8 +1303,8 @@ fn local_finalize_handles_openai_responses_compact_cross_format_function_call_re
     assert_eq!(client_body["output"][1]["type"], "function_call");
 }
 
-#[test]
-fn local_finalize_handles_openai_responses_openai_family_sync_response_even_when_conversion_flagged(
+#[tokio::test]
+async fn local_finalize_handles_openai_responses_openai_family_sync_response_even_when_conversion_flagged(
 ) {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-openai-responses-family-conversion-123".to_string(),
@@ -1191,7 +1317,11 @@ fn local_finalize_handles_openai_responses_openai_family_sync_response_even_when
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "id": "resp_cli_family_123",
             "object": "response",
@@ -1220,10 +1350,12 @@ fn local_finalize_handles_openai_responses_openai_family_sync_response_even_when
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-responses-family-conversion-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1252,7 +1384,11 @@ async fn local_finalize_converts_openai_responses_null_error_to_claude_cli() {
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "id": "resp_completed_cli_123",
             "object": "response",
@@ -1277,10 +1413,12 @@ async fn local_finalize_converts_openai_responses_null_error_to_claude_cli() {
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-responses-to-claude-cli-success",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should convert the response");
 
@@ -1295,8 +1433,8 @@ async fn local_finalize_converts_openai_responses_null_error_to_claude_cli() {
     assert_eq!(body["stop_reason"], "end_turn");
 }
 
-#[test]
-fn local_finalize_handles_openai_chat_stream_response_from_openai_chat() {
+#[tokio::test]
+async fn local_finalize_handles_openai_chat_stream_response_from_openai_chat() {
     let body = concat!(
         "data: {\"id\":\"chatcmpl_stream_direct_123\",\"object\":\"chat.completion.chunk\",\"created\":1,",
         "\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
@@ -1318,7 +1456,11 @@ fn local_finalize_handles_openai_chat_stream_response_from_openai_chat() {
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(body.as_bytes())),
@@ -1326,10 +1468,12 @@ fn local_finalize_handles_openai_chat_stream_response_from_openai_chat() {
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-chat-stream-sync-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1345,8 +1489,8 @@ fn local_finalize_handles_openai_chat_stream_response_from_openai_chat() {
     );
 }
 
-#[test]
-fn local_finalize_handles_openai_responses_cross_format_stream_response_from_gemini() {
+#[tokio::test]
+async fn local_finalize_handles_openai_responses_cross_format_stream_response_from_gemini() {
     let body = concat!(
         "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello \"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\"}\n\n",
         "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini CLI\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
@@ -1363,7 +1507,11 @@ fn local_finalize_handles_openai_responses_cross_format_stream_response_from_gem
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(body.as_bytes())),
@@ -1371,10 +1519,12 @@ fn local_finalize_handles_openai_responses_cross_format_stream_response_from_gem
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-responses-xfmt-stream-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1390,8 +1540,8 @@ fn local_finalize_handles_openai_responses_cross_format_stream_response_from_gem
     );
 }
 
-#[test]
-fn local_finalize_rejects_antigravity_usage_only_gemini_wrapper() {
+#[tokio::test]
+async fn local_finalize_rejects_antigravity_usage_only_gemini_wrapper() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-antigravity-empty-gemini-wrapper".to_string(),
         report_kind: "gemini_chat_sync_finalize".to_string(),
@@ -1406,7 +1556,11 @@ fn local_finalize_rejects_antigravity_usage_only_gemini_wrapper() {
             "upstream_is_stream": true,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "chunks": [{
                 "response": {
@@ -1432,17 +1586,19 @@ fn local_finalize_rejects_antigravity_usage_only_gemini_wrapper() {
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-antigravity-empty-gemini-wrapper",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should evaluate payload");
 
     assert!(outcome.is_none());
 }
 
-#[test]
-fn local_finalize_handles_openai_responses_compact_openai_family_stream_response_even_when_conversion_flagged(
+#[tokio::test]
+async fn local_finalize_handles_openai_responses_compact_openai_family_stream_response_even_when_conversion_flagged(
 ) {
     let body = concat!(
         "event: response.completed\n",
@@ -1460,7 +1616,11 @@ fn local_finalize_handles_openai_responses_compact_openai_family_stream_response
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(body.as_bytes())),
@@ -1468,10 +1628,12 @@ fn local_finalize_handles_openai_responses_compact_openai_family_stream_response
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-compact-family-stream-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1484,8 +1646,8 @@ fn local_finalize_handles_openai_responses_compact_openai_family_stream_response
     assert_eq!(provider_body["status"], "completed");
 }
 
-#[test]
-fn local_finalize_preserves_provider_stream_body_for_same_format_stream_aggregated_to_sync() {
+#[tokio::test]
+async fn local_finalize_preserves_provider_stream_body_for_same_format_stream_aggregated_to_sync() {
     let body = concat!(
         "event: response.output_text.delta\n",
         "data: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello sync\"}\n\n",
@@ -1505,7 +1667,11 @@ fn local_finalize_preserves_provider_stream_body_for_same_format_stream_aggregat
             "upstream_is_stream": true,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(body.as_bytes())),
@@ -1513,10 +1679,12 @@ fn local_finalize_preserves_provider_stream_body_for_same_format_stream_aggregat
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-responses-samefmt-stream-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1534,8 +1702,8 @@ fn local_finalize_preserves_provider_stream_body_for_same_format_stream_aggregat
     assert_eq!(client_body["output"][0]["content"][0]["text"], "Hello sync");
 }
 
-#[test]
-fn local_finalize_handles_openai_chat_cross_format_sync_response_from_claude() {
+#[tokio::test]
+async fn local_finalize_handles_openai_chat_cross_format_sync_response_from_claude() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-openai-chat-xfmt-claude-sync-123".to_string(),
         report_kind: "openai_chat_sync_finalize".to_string(),
@@ -1548,7 +1716,11 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_claude() {
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "id": "msg_claude_direct_123",
             "type": "message",
@@ -1567,10 +1739,12 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_claude() {
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-chat-xfmt-claude-sync-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1590,8 +1764,8 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_claude() {
     );
 }
 
-#[test]
-fn local_finalize_handles_openai_chat_cross_format_sync_response_from_gemini() {
+#[tokio::test]
+async fn local_finalize_handles_openai_chat_cross_format_sync_response_from_gemini() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-openai-chat-xfmt-gemini-sync-123".to_string(),
         report_kind: "openai_chat_sync_finalize".to_string(),
@@ -1604,7 +1778,11 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_gemini() {
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "responseId": "resp_gemini_direct_123",
             "candidates": [{
@@ -1628,10 +1806,12 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_gemini() {
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-chat-xfmt-gemini-sync-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1653,8 +1833,8 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_gemini() {
     assert_eq!(client_body["usage"]["total_tokens"], 3);
 }
 
-#[test]
-fn local_finalize_handles_openai_chat_cross_format_sync_response_from_openai_responses() {
+#[tokio::test]
+async fn local_finalize_handles_openai_chat_cross_format_sync_response_from_openai_responses() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-openai-chat-xfmt-openai-responses-sync-123".to_string(),
         report_kind: "openai_chat_sync_finalize".to_string(),
@@ -1667,7 +1847,11 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_openai_res
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "id": "resp_cli_direct_123",
             "object": "response",
@@ -1705,10 +1889,12 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_openai_res
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-chat-xfmt-openai-responses-sync-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1740,8 +1926,8 @@ fn local_finalize_handles_openai_chat_cross_format_sync_response_from_openai_res
     assert_eq!(client_body["usage"]["total_tokens"], 5);
 }
 
-#[test]
-fn local_finalize_aggregates_openai_responses_capture_envelope_before_chat_conversion() {
+#[tokio::test]
+async fn local_finalize_aggregates_openai_responses_capture_envelope_before_chat_conversion() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-openai-chat-capture-envelope-sync-123".to_string(),
         report_kind: "openai_chat_sync_finalize".to_string(),
@@ -1754,7 +1940,11 @@ fn local_finalize_aggregates_openai_responses_capture_envelope_before_chat_conve
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "chunks": [
                 {
@@ -1795,10 +1985,12 @@ fn local_finalize_aggregates_openai_responses_capture_envelope_before_chat_conve
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-chat-capture-envelope-sync-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("capture envelope finalize should succeed")
     .expect("capture envelope finalize should match");
 
@@ -1827,8 +2019,8 @@ fn local_finalize_aggregates_openai_responses_capture_envelope_before_chat_conve
     assert_eq!(client_body["usage"]["total_tokens"], 5);
 }
 
-#[test]
-fn local_finalize_handles_claude_chat_cross_format_sync_response_from_openai_chat() {
+#[tokio::test]
+async fn local_finalize_handles_claude_chat_cross_format_sync_response_from_openai_chat() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-claude-chat-xfmt-openai-sync-123".to_string(),
         report_kind: "claude_chat_sync_finalize".to_string(),
@@ -1841,7 +2033,11 @@ fn local_finalize_handles_claude_chat_cross_format_sync_response_from_openai_cha
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "id": "chatcmpl_openai_to_claude_123",
             "object": "chat.completion",
@@ -1866,6 +2062,7 @@ fn local_finalize_handles_claude_chat_cross_format_sync_response_from_openai_cha
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-claude-chat-xfmt-openai-sync-123",
         &GatewayControlDecision {
             public_path: "/v1/messages".to_string(),
@@ -1886,6 +2083,7 @@ fn local_finalize_handles_claude_chat_cross_format_sync_response_from_openai_cha
         },
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1901,8 +2099,8 @@ fn local_finalize_handles_claude_chat_cross_format_sync_response_from_openai_cha
     assert_eq!(client_body["usage"]["output_tokens"], 3);
 }
 
-#[test]
-fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claude_cli() {
+#[tokio::test]
+async fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claude_cli() {
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-gemini-cli-xfmt-claude-sync-123".to_string(),
         report_kind: "gemini_cli_sync_finalize".to_string(),
@@ -1915,7 +2113,11 @@ fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claude_cli(
             "has_envelope": false,
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "id": "msg_claude_cli_to_gemini_123",
             "type": "message",
@@ -1937,6 +2139,7 @@ fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claude_cli(
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-gemini-cli-xfmt-claude-sync-123",
         &GatewayControlDecision {
             public_path: "/v1beta/models/gemini-cli:generateContent".to_string(),
@@ -1957,6 +2160,7 @@ fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claude_cli(
         },
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -1973,8 +2177,8 @@ fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claude_cli(
     assert_eq!(client_body["usageMetadata"]["candidatesTokenCount"], 6);
 }
 
-#[test]
-fn local_finalize_handles_kiro_claude_cli_stream_tool_use_response() {
+#[tokio::test]
+async fn local_finalize_handles_kiro_claude_cli_stream_tool_use_response() {
     let payload = build_kiro_claude_cli_sync_finalize_payload(
         [
             encode_kiro_event_frame("assistantResponseEvent", json!({"content": "Need a tool."})),
@@ -1992,10 +2196,12 @@ fn local_finalize_handles_kiro_claude_cli_stream_tool_use_response() {
     );
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-kiro-cli-tool-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -2012,8 +2218,8 @@ fn local_finalize_handles_kiro_claude_cli_stream_tool_use_response() {
     assert_eq!(body["stop_reason"], "tool_use");
 }
 
-#[test]
-fn local_finalize_handles_kiro_claude_cli_stream_content_length_exceeded_response() {
+#[tokio::test]
+async fn local_finalize_handles_kiro_claude_cli_stream_content_length_exceeded_response() {
     let payload = build_kiro_claude_cli_sync_finalize_payload(
         [
             encode_kiro_event_frame(
@@ -2026,10 +2232,12 @@ fn local_finalize_handles_kiro_claude_cli_stream_content_length_exceeded_respons
     );
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-kiro-cli-max-tokens-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should succeed")
     .expect("local finalize should match");
 
@@ -2041,8 +2249,8 @@ fn local_finalize_handles_kiro_claude_cli_stream_content_length_exceeded_respons
     assert_eq!(body["stop_reason"], "max_tokens");
 }
 
-#[test]
-fn local_finalize_rejects_kiro_claude_cli_stream_upstream_error_frame() {
+#[tokio::test]
+async fn local_finalize_rejects_kiro_claude_cli_stream_upstream_error_frame() {
     let payload = build_kiro_claude_cli_sync_finalize_payload(
         [
             encode_kiro_event_frame(
@@ -2055,10 +2263,12 @@ fn local_finalize_rejects_kiro_claude_cli_stream_upstream_error_frame() {
     );
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-kiro-cli-error-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("local finalize should not error");
 
     assert!(
@@ -2084,10 +2294,11 @@ async fn local_finalize_handles_openai_image_stream_response_from_output_item_do
             }
         })),
         status_code: 200,
-        headers: BTreeMap::from([(
+        provider_headers: BTreeMap::from([(
             "content-type".to_string(),
             "text/event-stream".to_string(),
         )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(
@@ -2105,10 +2316,12 @@ async fn local_finalize_handles_openai_image_stream_response_from_output_item_do
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-image-finalize-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("image finalize should succeed")
     .expect("image finalize should match");
 
@@ -2156,10 +2369,11 @@ async fn local_finalize_returns_b64_json_even_when_url_response_format_requested
             }
         })),
         status_code: 200,
-        headers: BTreeMap::from([(
+        provider_headers: BTreeMap::from([(
             "content-type".to_string(),
             "text/event-stream".to_string(),
         )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(
@@ -2177,10 +2391,12 @@ async fn local_finalize_returns_b64_json_even_when_url_response_format_requested
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-image-finalize-url-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("image finalize should succeed")
     .expect("image finalize should match");
 
@@ -2213,10 +2429,11 @@ async fn local_finalize_defaults_gpt_image_stream_response_to_b64_json() {
             }
         })),
         status_code: 200,
-        headers: BTreeMap::from([(
+        provider_headers: BTreeMap::from([(
             "content-type".to_string(),
             "text/event-stream".to_string(),
         )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(
@@ -2232,10 +2449,12 @@ async fn local_finalize_defaults_gpt_image_stream_response_to_b64_json() {
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-image-finalize-default-b64-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("image finalize should succeed")
     .expect("image finalize should match");
 
@@ -2265,10 +2484,11 @@ async fn local_finalize_forces_gpt_image_stream_response_to_b64_json_even_when_u
             }
         })),
         status_code: 200,
-        headers: BTreeMap::from([(
+        provider_headers: BTreeMap::from([(
             "content-type".to_string(),
             "text/event-stream".to_string(),
         )]),
+        client_headers: None,
         body_json: None,
         client_body_json: None,
         body_base64: Some(base64::engine::general_purpose::STANDARD.encode(
@@ -2284,10 +2504,12 @@ async fn local_finalize_forces_gpt_image_stream_response_to_b64_json_even_when_u
     };
 
     let outcome = maybe_build_local_core_sync_finalize_response(
+        ResponseHeaderContext::none(),
         "trace-openai-image-finalize-force-b64-123",
         &test_decision(),
         &payload,
     )
+    .await
     .expect("image finalize should succeed")
     .expect("image finalize should match");
 

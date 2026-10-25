@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::ai_serving::api::{
     build_core_error_body_for_client_format, core_error_background_report_kind,
     core_error_default_client_api_format, core_success_background_report_kind,
@@ -7,8 +9,12 @@ use crate::ai_serving::api::{
 };
 use crate::api::response::build_client_response_from_parts;
 use crate::control::GatewayControlDecision;
+use crate::execution_runtime::{
+    prepare_final_client_headers, ClientResponseBodyMode, ResponseHeaderContext,
+};
 use crate::usage::spawn_sync_report;
 use crate::{usage::GatewaySyncReportRequest, AppState, GatewayError};
+use aether_contracts::ExecutionPlan;
 use aether_usage_runtime::decode_internal_report_body_base64;
 use axum::body::Body;
 use axum::http::{Response, StatusCode};
@@ -21,10 +27,29 @@ struct LocalSyncErrorDetails {
     kind: LocalCoreSyncErrorKind,
 }
 
-pub(super) fn maybe_build_local_core_error_response(
+/// Derive the headers for a rebuilt JSON body from the raw provider map. This
+/// runs after the finalizer has chosen the body, so endpoint rules always see
+/// the final body and are never overwritten by a later rebuild.
+async fn local_json_response_headers(
+    context: ResponseHeaderContext<'_>,
+    payload: &GatewaySyncReportRequest,
+    body_json: &serde_json::Value,
+) -> Result<BTreeMap<String, String>, GatewayError> {
+    prepare_final_client_headers(
+        context,
+        &payload.provider_headers,
+        payload.client_headers.as_ref(),
+        ClientResponseBodyMode::RebuiltJson,
+        Some(body_json),
+    )
+    .await
+}
+
+pub(super) async fn maybe_build_local_core_error_response(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
-    payload: &GatewaySyncReportRequest,
+    payload: &mut GatewaySyncReportRequest,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     if !is_core_error_finalize_kind(payload.report_kind.as_str()) {
         return Ok(None);
@@ -41,14 +66,11 @@ pub(super) fn maybe_build_local_core_error_response(
         return Ok(None);
     }
 
-    let mut response_headers = payload.headers.clone();
-    response_headers.remove("content-encoding");
-    response_headers.remove("content-length");
-    response_headers.insert("content-type".to_string(), "application/json".to_string());
-
+    let response_headers =
+        local_json_response_headers(context, payload, &response_body_json).await?;
+    payload.client_headers = Some(response_headers.clone());
     let body_bytes = serde_json::to_vec(&response_body_json)
         .map_err(|err| GatewayError::Internal(err.to_string()))?;
-    response_headers.insert("content-length".to_string(), body_bytes.len().to_string());
 
     Ok(Some(build_client_response_from_parts(
         status_source_json
@@ -79,10 +101,11 @@ fn maybe_resolve_local_sync_response_body_json(
     resolve_local_sync_source_body_json(payload)
 }
 
-fn build_local_sync_response_from_json(
+async fn build_local_sync_response_from_json(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
-    payload: &GatewaySyncReportRequest,
+    payload: &mut GatewaySyncReportRequest,
     body_json: serde_json::Value,
 ) -> Result<Response<Body>, GatewayError> {
     let body_has_error = has_nested_error(&body_json);
@@ -94,14 +117,10 @@ fn build_local_sync_response_from_json(
         payload.status_code
     };
 
-    let mut response_headers = payload.headers.clone();
-    response_headers.remove("content-encoding");
-    response_headers.remove("content-length");
-    response_headers.insert("content-type".to_string(), "application/json".to_string());
-
+    let response_headers = local_json_response_headers(context, payload, &body_json).await?;
+    payload.client_headers = Some(response_headers.clone());
     let body_bytes =
         serde_json::to_vec(&body_json).map_err(|err| GatewayError::Internal(err.to_string()))?;
-    response_headers.insert("content-length".to_string(), body_bytes.len().to_string());
 
     build_client_response_from_parts(
         status_code,
@@ -112,18 +131,27 @@ fn build_local_sync_response_from_json(
     )
 }
 
-fn build_local_sync_response_from_bytes(
+async fn build_local_sync_response_from_bytes(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
-    payload: &GatewaySyncReportRequest,
+    payload: &mut GatewaySyncReportRequest,
     body_bytes: Vec<u8>,
 ) -> Result<Response<Body>, GatewayError> {
-    let mut response_headers = payload.headers.clone();
-    response_headers.remove("content-length");
-    if body_bytes.is_empty() {
-        response_headers.remove("content-encoding");
-    }
-    response_headers.insert("content-length".to_string(), body_bytes.len().to_string());
+    let body_mode = if body_bytes.is_empty() {
+        ClientResponseBodyMode::Empty
+    } else {
+        ClientResponseBodyMode::UpstreamBytes
+    };
+    let response_headers = prepare_final_client_headers(
+        context,
+        &payload.provider_headers,
+        payload.client_headers.as_ref(),
+        body_mode,
+        None,
+    )
+    .await?;
+    payload.client_headers = Some(response_headers.clone());
 
     build_client_response_from_parts(
         payload.status_code,
@@ -134,28 +162,36 @@ fn build_local_sync_response_from_bytes(
     )
 }
 
-fn build_local_core_sync_finalize_fallback_response(
+async fn build_local_core_sync_finalize_fallback_response(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
-    payload: &GatewaySyncReportRequest,
+    payload: &mut GatewaySyncReportRequest,
 ) -> Result<Response<Body>, GatewayError> {
     if let Some(body_json) = maybe_resolve_local_sync_response_body_json(payload)? {
-        return build_local_sync_response_from_json(trace_id, decision, payload, body_json);
+        return build_local_sync_response_from_json(
+            context, trace_id, decision, payload, body_json,
+        )
+        .await;
     }
 
     if let Some(body_base64) = payload.body_base64.as_ref() {
         let body_bytes =
             decode_internal_report_body_base64(body_base64).map_err(GatewayError::Internal)?;
-        return build_local_sync_response_from_bytes(trace_id, decision, payload, body_bytes);
+        return build_local_sync_response_from_bytes(
+            context, trace_id, decision, payload, body_bytes,
+        )
+        .await;
     }
 
-    build_local_sync_response_from_bytes(trace_id, decision, payload, Vec::new())
+    build_local_sync_response_from_bytes(context, trace_id, decision, payload, Vec::new()).await
 }
 
-fn maybe_build_invalid_provider_success_finalize_response(
+async fn maybe_build_invalid_provider_success_finalize_response(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
-    payload: &GatewaySyncReportRequest,
+    payload: &mut GatewaySyncReportRequest,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     if !local_core_sync_finalize_has_invalid_provider_success(payload)? {
         return Ok(None);
@@ -179,13 +215,10 @@ fn maybe_build_invalid_provider_success_finalize_response(
         })
     });
 
-    let mut response_headers = payload.headers.clone();
-    response_headers.remove("content-encoding");
-    response_headers.remove("content-length");
-    response_headers.insert("content-type".to_string(), "application/json".to_string());
+    let response_headers = local_json_response_headers(context, payload, &body_json).await?;
+    payload.client_headers = Some(response_headers.clone());
     let body_bytes =
         serde_json::to_vec(&body_json).map_err(|err| GatewayError::Internal(err.to_string()))?;
-    response_headers.insert("content-length".to_string(), body_bytes.len().to_string());
 
     Ok(Some(build_client_response_from_parts(
         StatusCode::BAD_GATEWAY.as_u16(),
@@ -207,10 +240,11 @@ fn local_sync_needs_conversion(payload: &GatewaySyncReportRequest) -> bool {
 
 /// A successful upstream response that needed conversion but could not be
 /// converted must not reach the client in the provider's own format.
-fn maybe_build_unconverted_cross_format_success_response(
+async fn maybe_build_unconverted_cross_format_success_response(
+    context: ResponseHeaderContext<'_>,
     trace_id: &str,
     decision: &GatewayControlDecision,
-    payload: &GatewaySyncReportRequest,
+    payload: &mut GatewaySyncReportRequest,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     if payload.status_code >= 400
         || !local_sync_needs_conversion(payload)
@@ -251,13 +285,10 @@ fn maybe_build_unconverted_cross_format_success_response(
         })
     });
 
-    let mut response_headers = payload.headers.clone();
-    response_headers.remove("content-encoding");
-    response_headers.remove("content-length");
-    response_headers.insert("content-type".to_string(), "application/json".to_string());
+    let response_headers = local_json_response_headers(context, payload, &body_json).await?;
+    payload.client_headers = Some(response_headers.clone());
     let body_bytes =
         serde_json::to_vec(&body_json).map_err(|err| GatewayError::Internal(err.to_string()))?;
-    response_headers.insert("content-length".to_string(), body_bytes.len().to_string());
 
     Ok(Some(build_client_response_from_parts(
         StatusCode::BAD_GATEWAY.as_u16(),
@@ -728,24 +759,53 @@ pub(crate) fn has_nested_error(value: &serde_json::Value) -> bool {
 
 pub(crate) async fn submit_local_core_error_or_sync_finalize(
     state: &AppState,
+    plan: &ExecutionPlan,
     trace_id: &str,
     decision: &GatewayControlDecision,
     payload: GatewaySyncReportRequest,
 ) -> Result<Response<Body>, GatewayError> {
-    let response = if let Some(response) =
-        maybe_compile_sync_finalize_response(trace_id, decision, &payload)?
+    submit_local_core_error_or_sync_finalize_inner(
+        state,
+        ResponseHeaderContext::new(state, plan),
+        trace_id,
+        decision,
+        payload,
+    )
+    .await
+}
+
+async fn submit_local_core_error_or_sync_finalize_inner(
+    state: &AppState,
+    context: ResponseHeaderContext<'_>,
+    trace_id: &str,
+    decision: &GatewayControlDecision,
+    mut payload: GatewaySyncReportRequest,
+) -> Result<Response<Body>, GatewayError> {
+    let response = if let Some(outcome) =
+        maybe_compile_sync_finalize_response(context, trace_id, decision, &payload).await?
+    {
+        payload.client_headers = Some(outcome.client_headers.clone());
+        outcome.response
+    } else if let Some(response) = maybe_build_invalid_provider_success_finalize_response(
+        context,
+        trace_id,
+        decision,
+        &mut payload,
+    )
+    .await?
     {
         response
     } else if let Some(response) =
-        maybe_build_invalid_provider_success_finalize_response(trace_id, decision, &payload)?
+        maybe_build_local_core_error_response(context, trace_id, decision, &mut payload).await?
     {
         response
-    } else if let Some(response) =
-        maybe_build_local_core_error_response(trace_id, decision, &payload)?
-    {
-        response
-    } else if let Some(response) =
-        maybe_build_unconverted_cross_format_success_response(trace_id, decision, &payload)?
+    } else if let Some(response) = maybe_build_unconverted_cross_format_success_response(
+        context,
+        trace_id,
+        decision,
+        &mut payload,
+    )
+    .await?
     {
         response
     } else {
@@ -761,7 +821,8 @@ pub(crate) async fn submit_local_core_error_or_sync_finalize(
             needs_conversion = payload.report_context.as_ref().and_then(|value| value.get("needs_conversion")).and_then(|value| value.as_bool()).unwrap_or(false),
             "gateway local core finalize fell back to raw response body"
         );
-        build_local_core_sync_finalize_fallback_response(trace_id, decision, &payload)?
+        build_local_core_sync_finalize_fallback_response(context, trace_id, decision, &mut payload)
+            .await?
     };
 
     let response_status = response.status();
@@ -811,11 +872,17 @@ mod tests {
             assert_eq!(super::resolve_local_sync_error_status_code(200, &body), 500);
         }
     }
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+    use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
     use axum::body::to_bytes;
     use serde_json::json;
 
     use super::{maybe_build_local_core_error_response, submit_local_core_error_or_sync_finalize};
     use crate::control::GatewayControlDecision;
+    use crate::execution_runtime::ResponseHeaderContext;
     use crate::usage::GatewaySyncReportRequest;
     use crate::AppState;
 
@@ -828,6 +895,15 @@ mod tests {
             Some("openai:chat".to_string()),
         )
         .with_execution_runtime_candidate(true)
+    }
+
+    fn test_plan() -> aether_contracts::ExecutionPlan {
+        aether_video_tasks_core::build_internal_finalize_video_plan(
+            "trace-submit-finalize-tests",
+            "openai:video",
+            None,
+        )
+        .expect("test plan should build")
     }
 
     fn core_finalize_payload(
@@ -845,7 +921,8 @@ mod tests {
                 "provider_api_format": provider_api_format,
             })),
             status_code,
-            headers: Default::default(),
+            provider_headers: Default::default(),
+            client_headers: None,
             body_json: Some(body_json),
             client_body_json: None,
             body_base64: None,
@@ -854,8 +931,126 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn error_finalize_preserves_content_type_decided_by_response_rules() {
+        let mut payload = core_finalize_payload(
+            "openai_chat_sync_finalize",
+            "openai:chat",
+            "openai:chat",
+            400,
+            json!({"error": {"type": "invalid_request_error", "message": "bad"}}),
+        );
+        payload.client_headers = Some(BTreeMap::from([(
+            "content-type".to_string(),
+            "application/problem+json".to_string(),
+        )]));
+
+        let response = maybe_build_local_core_error_response(
+            ResponseHeaderContext::none(),
+            "trace-sync-content-type",
+            &test_decision(),
+            &mut payload,
+        )
+        .await
+        .expect("response build should not error")
+        .expect("response should exist");
+        assert_eq!(
+            response.headers()["content-type"],
+            "application/problem+json"
+        );
+
+        payload.client_headers = Some(BTreeMap::new());
+        let response = maybe_build_local_core_error_response(
+            ResponseHeaderContext::none(),
+            "trace-sync-content-type-dropped",
+            &test_decision(),
+            &mut payload,
+        )
+        .await
+        .expect("response build should not error")
+        .expect("response should exist");
+        assert!(response.headers().get("content-type").is_none());
+    }
+
+    fn state_and_plan_with_response_header_rules() -> (AppState, aether_contracts::ExecutionPlan) {
+        let plan = aether_video_tasks_core::build_internal_finalize_video_plan(
+            "trace-error-finalize-rules",
+            "openai:video",
+            None,
+        )
+        .expect("plan should build");
+        let mut endpoint = StoredProviderCatalogEndpoint::new(
+            plan.endpoint_id.clone(),
+            plan.provider_id.clone(),
+            plan.provider_api_format.clone(),
+            None,
+            None,
+            true,
+        )
+        .expect("endpoint should build");
+        endpoint.config = Some(json!({"response_header_rules": [
+            {"action": "set", "key": "content-type", "value": "application/problem+json"},
+            {"action": "set", "key": "x-marker", "value": "rule"},
+            {"action": "drop", "key": "x-private"}
+        ]}));
+        let state = AppState::new()
+            .expect("state should build")
+            .with_data_state_for_tests(
+                crate::data::GatewayDataState::with_provider_catalog_repository_for_tests(
+                    Arc::new(InMemoryProviderCatalogReadRepository::seed(
+                        vec![],
+                        vec![endpoint],
+                        vec![],
+                    )),
+                ),
+            );
+        (state, plan)
+    }
+
+    #[tokio::test]
+    async fn error_finalize_recomputes_headers_from_provider_headers_and_rules() {
+        let (state, plan) = state_and_plan_with_response_header_rules();
+        let mut payload = core_finalize_payload(
+            "openai_chat_sync_finalize",
+            "openai:chat",
+            "openai:chat",
+            400,
+            json!({"error": {"type": "invalid_request_error", "message": "bad"}}),
+        );
+        payload.provider_headers = BTreeMap::from([
+            ("content-type".to_string(), "text/event-stream".to_string()),
+            ("x-private".to_string(), "provider-only".to_string()),
+        ]);
+        // Stale prepared headers must not be treated as the rule source.
+        payload.client_headers = Some(BTreeMap::from([
+            ("content-type".to_string(), "application/json".to_string()),
+            ("x-private".to_string(), "stale".to_string()),
+        ]));
+
+        let response = maybe_build_local_core_error_response(
+            ResponseHeaderContext::new(&state, &plan),
+            "trace-sync-rule-recompute",
+            &test_decision(),
+            &mut payload,
+        )
+        .await
+        .expect("response build should not error")
+        .expect("response should exist");
+
+        assert_eq!(
+            response.headers()["content-type"],
+            "application/problem+json"
+        );
+        assert_eq!(response.headers()["x-marker"], "rule");
+        assert!(response.headers().get("x-private").is_none());
+        assert_eq!(
+            payload.client_headers.as_ref().unwrap()["content-type"],
+            "application/problem+json"
+        );
+    }
+
+    #[tokio::test]
     async fn maybe_build_local_core_error_response_infers_status_from_semantic_error_type() {
-        let payload = core_finalize_payload(
+        let mut payload = core_finalize_payload(
             "openai_chat_sync_finalize",
             "openai:chat",
             "claude:messages",
@@ -870,10 +1065,12 @@ mod tests {
         );
 
         let response = maybe_build_local_core_error_response(
+            ResponseHeaderContext::none(),
             "trace-sync-status-type",
             &test_decision(),
-            &payload,
+            &mut payload,
         )
+        .await
         .expect("response build should not error")
         .expect("response should exist");
 
@@ -896,7 +1093,7 @@ mod tests {
 
     #[tokio::test]
     async fn maybe_build_local_core_error_response_infers_status_from_gemini_status_text() {
-        let payload = core_finalize_payload(
+        let mut payload = core_finalize_payload(
             "gemini_chat_sync_finalize",
             "gemini:generate_content",
             "gemini:generate_content",
@@ -910,10 +1107,12 @@ mod tests {
         );
 
         let response = maybe_build_local_core_error_response(
+            ResponseHeaderContext::none(),
             "trace-sync-status-gemini",
             &test_decision(),
-            &payload,
+            &mut payload,
         )
+        .await
         .expect("response build should not error")
         .expect("response should exist");
 
@@ -936,7 +1135,7 @@ mod tests {
 
     #[tokio::test]
     async fn local_core_error_maps_request_too_large_without_changing_openai_shape() {
-        let claude_payload = core_finalize_payload(
+        let mut claude_payload = core_finalize_payload(
             "claude_chat_sync_finalize",
             "claude:messages",
             "openai:chat",
@@ -949,10 +1148,12 @@ mod tests {
             }),
         );
         let claude_response = maybe_build_local_core_error_response(
+            ResponseHeaderContext::none(),
             "trace-sync-claude-too-large",
             &test_decision(),
-            &claude_payload,
+            &mut claude_payload,
         )
+        .await
         .expect("response build should not error")
         .expect("response should exist");
         assert_eq!(
@@ -968,7 +1169,7 @@ mod tests {
         assert_eq!(claude_body["type"], "error");
         assert_eq!(claude_body["error"]["type"], "request_too_large");
 
-        let openai_payload = core_finalize_payload(
+        let mut openai_payload = core_finalize_payload(
             "openai_chat_sync_finalize",
             "openai:chat",
             "claude:messages",
@@ -982,10 +1183,12 @@ mod tests {
             }),
         );
         let openai_response = maybe_build_local_core_error_response(
+            ResponseHeaderContext::none(),
             "trace-sync-openai-too-large",
             &test_decision(),
-            &openai_payload,
+            &mut openai_payload,
         )
+        .await
         .expect("response build should not error")
         .expect("response should exist");
         assert_eq!(
@@ -1036,6 +1239,7 @@ mod tests {
         let state = AppState::new().expect("state should build");
         let response = submit_local_core_error_or_sync_finalize(
             &state,
+            &test_plan(),
             "trace-invalid-gemini-200",
             &test_decision(),
             payload,
@@ -1098,6 +1302,7 @@ mod tests {
         let state = AppState::new().expect("state should build");
         let response = submit_local_core_error_or_sync_finalize(
             &state,
+            &test_plan(),
             "trace-forced-responses-gemini",
             &test_decision(),
             payload,
@@ -1148,16 +1353,19 @@ mod tests {
         }));
 
         assert!(maybe_build_local_core_error_response(
+            ResponseHeaderContext::none(),
             "trace-raw-success-sse",
             &test_decision(),
-            &payload,
+            &mut payload,
         )
+        .await
         .expect("response build should not error")
         .is_none());
 
         let state = AppState::new().expect("state should build");
         let response = submit_local_core_error_or_sync_finalize(
             &state,
+            &test_plan(),
             "trace-raw-success-sse",
             &test_decision(),
             payload,
@@ -1199,6 +1407,7 @@ mod tests {
         let state = AppState::new().expect("state should build");
         let response = submit_local_core_error_or_sync_finalize(
             &state,
+            &test_plan(),
             "trace-image-success-200",
             &test_decision(),
             payload,

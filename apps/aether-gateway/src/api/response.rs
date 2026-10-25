@@ -117,6 +117,30 @@ fn collect_safe_response_headers(headers: &http::HeaderMap) -> BTreeMap<String, 
         .collect()
 }
 
+/// Applies the client-facing boundary filter to a candidate header map.
+///
+/// Recording the result, rather than the pre-filter map, keeps usage reports
+/// aligned with what can actually reach the client: rules may set `location`
+/// or `x-aether-*`, but those never survive the boundary.
+pub(crate) fn filter_client_response_headers(
+    headers: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let connection_declared = aether_http::connection_declared_header_names(
+        headers
+            .iter()
+            .filter(|(name, _)| name.eq_ignore_ascii_case(http::header::CONNECTION.as_str()))
+            .map(|(_, value)| value.as_str()),
+    );
+    headers
+        .iter()
+        .filter(|(name, _)| {
+            !should_skip_client_response_header(name)
+                && !connection_declared.contains(&name.to_ascii_lowercase())
+        })
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect()
+}
+
 fn should_skip_client_response_header(name: &str) -> bool {
     should_skip_response_header(name)
         // A provider Location is relative to the provider, not to the gateway.
@@ -160,23 +184,11 @@ where
         .body(body)
         .map_err(|err| GatewayError::Internal(err.to_string()))?;
 
-    let connection_declared = aether_http::connection_declared_header_names(
-        upstream_headers
-            .iter()
-            .filter(|(name, _)| name.eq_ignore_ascii_case(http::header::CONNECTION.as_str()))
-            .map(|(_, value)| value.as_str()),
-    );
-
-    for (name, value) in upstream_headers {
-        if should_skip_client_response_header(name.as_str())
-            || connection_declared.contains(&name.to_ascii_lowercase())
-        {
-            continue;
-        }
+    for (name, value) in filter_client_response_headers(upstream_headers) {
         let header_name = HeaderName::from_bytes(name.as_bytes())
             .map_err(|err| GatewayError::Internal(err.to_string()))?;
         let header_value =
-            HeaderValue::from_str(value).map_err(|err| GatewayError::Internal(err.to_string()))?;
+            HeaderValue::from_str(&value).map_err(|err| GatewayError::Internal(err.to_string()))?;
         response.headers_mut().insert(header_name, header_value);
     }
     mutate_headers(response.headers_mut())?;

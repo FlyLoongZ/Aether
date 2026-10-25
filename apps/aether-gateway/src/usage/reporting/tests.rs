@@ -363,10 +363,6 @@ async fn internal_report_capability_validates_once_without_candidate_persistence
             ("upstream_response".to_string(), json!({"id": "resp-123"})),
             ("error_flow".to_string(), json!({"stage": "upstream"})),
             ("analytics_failure".to_string(), json!({"origin": "upstream", "stage": "response", "reason": "upstream_response_error", "schema_version": 1})),
-            (
-                "client_response_headers".to_string(),
-                json!({"content-type": "application/json"}),
-            ),
         ]);
 
     let resolved = resolve_bound_internal_gateway_report_context(
@@ -809,7 +805,8 @@ async fn submit_sync_report_handles_request_id_only_context_locally_when_unique_
                 "client_api_format": "openai:chat"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -852,7 +849,8 @@ async fn submit_sync_report_handles_openai_image_success_locally_when_unique_can
                 "client_api_format": "openai:image"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: Some(json!({
                 "created": 1776855978,
                 "data": [{
@@ -895,7 +893,8 @@ async fn submit_sync_report_treats_null_error_field_as_success() {
                 "provider_api_format": "openai:responses"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: Some(json!({
                 "id": "resp_1",
                 "status": "completed",
@@ -936,7 +935,8 @@ async fn submit_stream_report_handles_request_id_only_context_locally_when_uniqu
                 "client_api_format": "openai:chat"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             provider_body_base64: None,
             provider_body_state: None,
             client_body_base64: None,
@@ -988,7 +988,8 @@ async fn submit_openai_responses_stream_report_marks_missing_terminal_event_as_f
                 "provider_api_format": "openai:responses"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             provider_body_base64: Some(
                 base64::engine::general_purpose::STANDARD.encode(provider_sse.as_bytes()),
             ),
@@ -1049,7 +1050,8 @@ async fn submit_sync_report_updates_codex_quota_from_response_headers() {
                 "key_id": "key-codex-sync"
             })),
             status_code: 200,
-            headers: sample_codex_paid_headers(),
+            provider_headers: sample_codex_paid_headers(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1113,7 +1115,8 @@ async fn submit_sync_report_updates_codex_quota_from_provider_response_headers()
                 "provider_response_headers": sample_codex_paid_headers()
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1165,7 +1168,8 @@ async fn submit_stream_report_updates_codex_quota_from_response_headers() {
                 "key_id": "key-codex-stream"
             })),
             status_code: 200,
-            headers: sample_codex_paid_headers(),
+            provider_headers: sample_codex_paid_headers(),
+            client_headers: None,
             provider_body_base64: None,
             provider_body_state: None,
             client_body_base64: None,
@@ -1248,7 +1252,8 @@ async fn submit_stream_report_updates_codex_quota_from_websocket_response_body()
                 "websocket_mode": true
             })),
             status_code: 200,
-            headers: sample_codex_paid_headers(),
+            provider_headers: sample_codex_paid_headers(),
+            client_headers: None,
             provider_body_base64: Some(
                 base64::engine::general_purpose::STANDARD.encode(body.as_bytes()),
             ),
@@ -1338,7 +1343,8 @@ async fn submit_stream_report_marks_codex_websocket_usage_limit_error_exhausted(
                 "websocket_mode": true,
             })),
             status_code: 429,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             provider_body_base64: Some(
                 base64::engine::general_purpose::STANDARD.encode(body.as_bytes()),
             ),
@@ -1410,7 +1416,8 @@ async fn submit_stream_report_updates_codex_quota_from_provider_response_headers
                 "provider_response_headers": sample_codex_paid_headers()
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             provider_body_base64: None,
             provider_body_state: None,
             client_body_base64: None,
@@ -1464,7 +1471,11 @@ async fn submit_sync_report_stores_gemini_file_mapping_locally_when_payload_cont
                 "user_id": "user-reporting-tests-123",
             })),
             status_code: 200,
-            headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+            provider_headers: BTreeMap::from([(
+                "content-type".to_string(),
+                "application/json".to_string(),
+            )]),
+            client_headers: None,
             body_json: Some(json!({
                 "file": {
                     "name": "abc123",
@@ -1511,7 +1522,11 @@ async fn submit_sync_report_stores_gemini_file_mapping_without_actionable_candid
                 "user_id": "user-reporting-tests-123",
             })),
             status_code: 200,
-            headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+            provider_headers: BTreeMap::from([(
+                "content-type".to_string(),
+                "application/json".to_string(),
+            )]),
+            client_headers: None,
             body_json: Some(json!({
                 "file": {
                     "name": "fallback123",
@@ -1578,7 +1593,8 @@ async fn submit_sync_report_deletes_gemini_file_mapping_locally_on_success() {
                 "file_name": "delete-me",
             })),
             status_code: 204,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1617,7 +1633,8 @@ async fn submit_sync_report_treats_openai_video_delete_404_success_as_local_succ
                 "key_id": "key-reporting-tests-123",
             })),
             status_code: 404,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1676,7 +1693,8 @@ async fn submit_sync_report_handles_local_task_id_only_context_locally_when_vide
                 "local_task_id": "task-openai-video-reporting-123"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1735,7 +1753,8 @@ async fn submit_sync_report_handles_local_short_id_only_context_locally_when_vid
                 "local_short_id": "short-gemini-video-reporting-123"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1784,7 +1803,8 @@ async fn submit_sync_report_handles_task_id_only_context_locally_when_video_task
                 "task_id": "task-openai-video-task-id-123"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1845,7 +1865,8 @@ async fn submit_sync_report_handles_external_task_id_context_locally_when_video_
                 "task_id": "models/veo-3/operations/ext-gemini-video-123"
             })),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,

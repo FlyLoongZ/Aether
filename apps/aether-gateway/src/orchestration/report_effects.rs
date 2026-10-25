@@ -555,7 +555,7 @@ async fn apply_local_sync_report_effect(state: &AppState, payload: &GatewaySyncR
         if let Err(err) = sync_claude_code_quota_from_response_headers(
             state,
             payload.report_context.as_ref(),
-            &payload.headers,
+            &payload.provider_headers,
         )
         .await
         {
@@ -573,7 +573,7 @@ async fn apply_local_sync_report_effect(state: &AppState, payload: &GatewaySyncR
         if let Err(err) = sync_codex_quota_from_response_headers(
             state,
             payload.report_context.as_ref(),
-            &payload.headers,
+            &payload.provider_headers,
         )
         .await
         {
@@ -645,7 +645,7 @@ async fn apply_local_stream_report_effect(state: &AppState, payload: &GatewayStr
         if let Err(err) = sync_codex_quota_from_response_headers(
             state,
             payload.report_context.as_ref(),
-            &payload.headers,
+            &payload.provider_headers,
         )
         .await
         {
@@ -663,7 +663,7 @@ async fn apply_local_stream_report_effect(state: &AppState, payload: &GatewayStr
         if let Err(err) = sync_claude_code_quota_from_response_headers(
             state,
             payload.report_context.as_ref(),
-            &payload.headers,
+            &payload.provider_headers,
         )
         .await
         {
@@ -1339,7 +1339,8 @@ mod tests {
             report_kind: "openai_responses_sync_error".to_string(),
             report_context: Some(json!({"key_id": key_id})),
             status_code: 401,
-            headers: codex_headers(85.0, 2_000_000_000),
+            provider_headers: codex_headers(85.0, 2_000_000_000),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -1366,7 +1367,8 @@ mod tests {
             report_kind: "openai_responses_stream_error".to_string(),
             report_context: Some(json!({"key_id": key_id})),
             status_code: 429,
-            headers: codex_headers(95.0, 2_000_000_000),
+            provider_headers: codex_headers(95.0, 2_000_000_000),
+            client_headers: None,
             provider_body_base64: None,
             provider_body_state: None,
             client_body_base64: None,

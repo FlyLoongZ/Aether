@@ -9,7 +9,6 @@ use crate::api::response::{attach_control_metadata_headers, build_client_respons
 use crate::control::GatewayControlDecision;
 use crate::{AppState, GatewayError};
 
-use super::apply_endpoint_response_header_rules;
 use super::submission::{
     align_gemini_error_code_with_status, build_client_error_body_for_provider_error,
 };
@@ -34,7 +33,9 @@ pub(crate) struct ExhaustionFallbackInput<'a> {
 
 /// Both sides of a preserved upstream error, captured while both are still
 /// available so the terminal usage row can show the upstream response and the
-/// response the client actually received.
+/// business client headers/body. The client side is post-rules and
+/// post-boundary-filter; gateway-added trace/control/security headers are not
+/// part of this capture.
 #[derive(Debug, Clone)]
 pub(crate) struct ExhaustionFallbackCapture {
     pub(crate) status_code: u16,
@@ -116,28 +117,34 @@ pub(crate) async fn build_exhaustion_fallback(
         align_gemini_error_code_with_status(client_api_format, body, status_code);
     }
 
-    let (client_body_bytes, mut headers) = match converted.as_ref() {
+    let (client_body_bytes, mut headers, body_mode) = match converted.as_ref() {
         Some(converted) => {
             let body = serde_json::to_vec(converted)
                 .map_err(|err| GatewayError::Internal(err.to_string()))?;
-            let mut headers = provider_headers.clone();
-            // The rebuilt body is plain JSON, so a provider content-encoding
-            // would make the client decode bytes that are no longer encoded.
-            headers.retain(|name, _| !name.eq_ignore_ascii_case("content-encoding"));
-            // Replace the retained content-type by a case-insensitive removal:
-            // the upstream key is lowercase today, but a transport that keeps the
-            // provider's casing would otherwise leave two content-type headers.
-            headers.retain(|name, _| !name.eq_ignore_ascii_case("content-type"));
-            headers.insert("content-type".to_string(), "application/json".to_string());
-            (body, headers)
+            (
+                body,
+                provider_headers.clone(),
+                super::ClientResponseBodyMode::RebuiltJson,
+            )
         }
         None => (
             provider_body.to_vec(),
             provider_headers.clone(),
+            super::ClientResponseBodyMode::UpstreamBytes,
         ),
     };
 
-    apply_endpoint_response_header_rules(state, plan, &mut headers, provider_body_json).await?;
+    // Success and preserved-error responses share one header pipeline: the
+    // provider set goes through body alignment, endpoint rules, then the final
+    // security filter in `build_client_response_from_parts`.
+    let headers = super::prepare_client_response_headers(
+        state,
+        Some(plan),
+        std::mem::take(&mut headers),
+        body_mode,
+        provider_body_json,
+    )
+    .await?;
 
     let response = build_client_response_from_parts(
         status_code,
@@ -370,8 +377,8 @@ mod tests {
                 "error": {"type": "rate_limit_error", "message": "slow down"}
             }))
         );
-        // Client side is the rebuilt body plus the upstream headers that are
-        // allowed through the shared filter.
+        // Client side is the rebuilt body; upstream metadata stays visible
+        // because success and error responses share one filter.
         assert_eq!(
             capture.client_body,
             Some(json!({"error": {"message": "slow down", "type": "rate_limit_error"}}))

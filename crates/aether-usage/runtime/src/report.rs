@@ -40,7 +40,9 @@ pub struct GatewaySyncReportRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report_context: Option<serde_json::Value>,
     pub status_code: u16,
-    pub headers: BTreeMap<String, String>,
+    pub provider_headers: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_headers: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body_json: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -58,7 +60,9 @@ pub struct GatewayStreamReportRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report_context: Option<serde_json::Value>,
     pub status_code: u16,
-    pub headers: BTreeMap<String, String>,
+    pub provider_headers: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_headers: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_body_base64: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -845,7 +849,7 @@ fn extract_sync_report_body_json(payload: &GatewaySyncReportRequest) -> Option<V
     if let Some(client_body_json) = payload.client_body_json.as_ref() {
         return Some(client_body_json.clone());
     }
-    if !content_type_starts_with(&payload.headers, "application/json") {
+    if !content_type_starts_with(&payload.provider_headers, "application/json") {
         return None;
     }
 
@@ -893,7 +897,8 @@ mod tests {
             report_kind: report_kind.to_string(),
             report_context: None,
             status_code,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -910,7 +915,8 @@ mod tests {
             report_kind: report_kind.to_string(),
             report_context: Some(report_context),
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: None,
@@ -924,7 +930,8 @@ mod tests {
             report_kind: report_kind.to_string(),
             report_context: None,
             status_code,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             provider_body_base64: None,
             provider_body_state: None,
             client_body_base64: None,
@@ -1245,7 +1252,8 @@ mod tests {
             report_kind: "gemini_files_store_mapping".to_string(),
             report_context: None,
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: Some(json!({
                 "name": "abc123",
                 "displayName": "root-name",
@@ -1305,10 +1313,11 @@ mod tests {
             report_kind: "gemini_files_store_mapping".to_string(),
             report_context: None,
             status_code: 200,
-            headers: BTreeMap::from([(
+            provider_headers: BTreeMap::from([(
                 "content-type".to_string(),
                 "application/json; charset=utf-8".to_string(),
             )]),
+            client_headers: None,
             body_json: None,
             client_body_json: None,
             body_base64: Some(encoded_body),
@@ -1327,7 +1336,8 @@ mod tests {
             report_kind: "gemini_files_store_mapping".to_string(),
             report_context: None,
             status_code: 200,
-            headers: BTreeMap::new(),
+            provider_headers: BTreeMap::new(),
+            client_headers: None,
             body_json: Some(json!({
                 "name": "safe-file",
                 "displayName": "d".repeat(GEMINI_FILE_MAPPING_MAX_DISPLAY_NAME_CHARS + 1),

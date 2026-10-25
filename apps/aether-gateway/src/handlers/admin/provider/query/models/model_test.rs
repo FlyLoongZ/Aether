@@ -1818,7 +1818,8 @@ async fn provider_query_finalize_kiro_result(
             "original_request_body": original_request_body,
         })),
         status_code: result.status_code,
-        headers: result.headers.clone(),
+        provider_headers: result.headers.clone(),
+        client_headers: None,
         body_json: provider_query_execution_json_body(result),
         client_body_json: None,
         body_base64: result
@@ -1828,7 +1829,14 @@ async fn provider_query_finalize_kiro_result(
         telemetry: result.telemetry.clone(),
     };
 
-    let Some(outcome) = maybe_build_sync_finalize_outcome(trace_id, &decision, &payload)? else {
+    let Some(outcome) = maybe_build_sync_finalize_outcome(
+        crate::execution_runtime::ResponseHeaderContext::none(),
+        trace_id,
+        &decision,
+        &payload,
+    )
+    .await?
+    else {
         return Ok(None);
     };
     let bytes = to_bytes(
@@ -2048,7 +2056,8 @@ async fn provider_query_finalize_windsurf_result(
             "original_request_body": original_request_body,
         })),
         status_code: result.status_code,
-        headers: result.headers.clone(),
+        provider_headers: result.headers.clone(),
+        client_headers: None,
         body_json: result.body.as_ref().and_then(|body| body.json_body.clone()),
         client_body_json: None,
         body_base64: result
@@ -2058,7 +2067,14 @@ async fn provider_query_finalize_windsurf_result(
         telemetry: result.telemetry.clone(),
     };
 
-    let Some(outcome) = maybe_build_sync_finalize_outcome(trace_id, &decision, &payload)? else {
+    let Some(outcome) = maybe_build_sync_finalize_outcome(
+        crate::execution_runtime::ResponseHeaderContext::none(),
+        trace_id,
+        &decision,
+        &payload,
+    )
+    .await?
+    else {
         return Ok(None);
     };
     let bytes = to_bytes(
@@ -2169,7 +2185,8 @@ async fn provider_query_finalize_openai_image_result(
             "image_request": image_request,
         })),
         status_code: result.status_code,
-        headers: result.headers.clone(),
+        provider_headers: result.headers.clone(),
+        client_headers: None,
         body_json: provider_query_execution_json_body(result),
         client_body_json: None,
         body_base64: result
@@ -2179,7 +2196,14 @@ async fn provider_query_finalize_openai_image_result(
         telemetry: result.telemetry.clone(),
     };
 
-    let Some(outcome) = maybe_build_sync_finalize_outcome(trace_id, &decision, &payload)? else {
+    let Some(outcome) = maybe_build_sync_finalize_outcome(
+        crate::execution_runtime::ResponseHeaderContext::none(),
+        trace_id,
+        &decision,
+        &payload,
+    )
+    .await?
+    else {
         return Ok(None);
     };
     let bytes = to_bytes(
@@ -2576,7 +2600,8 @@ async fn provider_query_finalize_antigravity_result(
             "original_request_body": original_request_body,
         })),
         status_code: result.status_code,
-        headers: result.headers.clone(),
+        provider_headers: result.headers.clone(),
+        client_headers: None,
         body_json: result.body.as_ref().and_then(|body| body.json_body.clone()),
         client_body_json: None,
         body_base64: result
@@ -2586,7 +2611,14 @@ async fn provider_query_finalize_antigravity_result(
         telemetry: result.telemetry.clone(),
     };
 
-    let Some(outcome) = maybe_build_sync_finalize_outcome(trace_id, &decision, &payload)? else {
+    let Some(outcome) = maybe_build_sync_finalize_outcome(
+        crate::execution_runtime::ResponseHeaderContext::none(),
+        trace_id,
+        &decision,
+        &payload,
+    )
+    .await?
+    else {
         return Ok(None);
     };
     let bytes = to_bytes(

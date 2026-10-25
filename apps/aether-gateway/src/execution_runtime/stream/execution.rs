@@ -118,12 +118,14 @@ use crate::execution_runtime::transport::{
 };
 use crate::execution_runtime::windsurf::maybe_execute_windsurf_stream;
 use crate::execution_runtime::{
-    ai_attempt_retry_scope_from_failure_disposition, apply_endpoint_response_header_rules,
+    ai_attempt_retry_scope_from_failure_disposition,
     attach_provider_response_headers_to_report_context, build_exhaustion_fallback,
-    local_failover_response_text, resolve_core_stream_direct_finalize_report_kind,
+    local_failover_response_text, prepare_client_response_headers,
+    resolve_core_stream_direct_finalize_report_kind,
     resolve_core_stream_error_finalize_report_kind,
     resolve_local_candidate_failover_analysis_stream, should_fallback_to_control_stream,
-    should_retry_next_local_candidate_stream, ExhaustionFallbackInput, LocalFailoverDecision,
+    should_retry_next_local_candidate_stream, ClientResponseBodyMode, ExhaustionFallbackInput,
+    LocalFailoverDecision,
 };
 use crate::execution_runtime::{
     MAX_ERROR_BODY_BYTES, MAX_STREAM_PREFETCH_BYTES, MAX_STREAM_PREFETCH_FRAMES,
@@ -533,7 +535,8 @@ fn build_stream_sync_payload(
         report_kind,
         report_context,
         status_code,
-        headers,
+        provider_headers: headers,
+        client_headers: None,
         body_json,
         client_body_json: None,
         body_base64,
@@ -567,10 +570,6 @@ fn build_stream_error_sync_payload(
             "client_response_status_code".to_string(),
             Value::from(client_status_code),
         );
-        object.insert(
-            "client_response_headers".to_string(),
-            serde_json::to_value(client_headers).unwrap_or(Value::Null),
-        );
         report_context = Some(Value::Object(object));
     }
 
@@ -579,7 +578,8 @@ fn build_stream_error_sync_payload(
         report_kind,
         report_context,
         status_code: upstream_status_code,
-        headers: provider_headers,
+        provider_headers,
+        client_headers: Some(client_headers),
         body_json: provider_body_json,
         client_body_json,
         body_base64: provider_body_base64,
@@ -741,7 +741,8 @@ fn build_stream_usage_payload(
     report_kind: String,
     report_context: Option<Value>,
     status_code: u16,
-    headers: BTreeMap<String, String>,
+    provider_headers: BTreeMap<String, String>,
+    client_headers: BTreeMap<String, String>,
     provider_body: &[u8],
     provider_body_truncated: bool,
     client_body: &[u8],
@@ -758,7 +759,8 @@ fn build_stream_usage_payload(
         report_kind,
         report_context,
         status_code,
-        headers,
+        provider_headers,
+        client_headers: Some(client_headers),
         provider_body_base64,
         provider_body_state,
         client_body_base64,
@@ -1927,6 +1929,7 @@ struct DirectPassthroughFinalizerCore {
     deferred_request_candidate_status_record: Option<UpsertRequestCandidateRecord>,
     candidate_started_unix_secs: u64,
     status_code: u16,
+    provider_headers: BTreeMap<String, String>,
     headers: BTreeMap<String, String>,
     stream_usage_report_context: Option<Value>,
     stream_usage_observer: Option<StreamingStandardTerminalObserver>,
@@ -2303,6 +2306,7 @@ impl DirectPassthroughFinalizerCore {
             deferred_request_candidate_status_record,
             candidate_started_unix_secs,
             status_code,
+            provider_headers,
             headers,
             stream_usage_report_context,
             stream_usage_observer: _,
@@ -2408,6 +2412,7 @@ impl DirectPassthroughFinalizerCore {
                 report_kind.unwrap_or_default(),
                 report_context_for_payload,
                 499,
+                provider_headers,
                 headers,
                 &provider_buffered_body,
                 provider_body_truncated,
@@ -2502,6 +2507,7 @@ impl DirectPassthroughFinalizerCore {
             report_kind.unwrap_or_default(),
             report_context_for_payload,
             status_code,
+            provider_headers,
             headers,
             &provider_buffered_body,
             provider_body_truncated,
@@ -3008,7 +3014,7 @@ async fn execute_stream_from_direct_passthrough(
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let DirectUpstreamStreamExecution {
         status_code,
-        mut headers,
+        headers,
         upstream_content_length: _,
         provider_api_format: _,
         stream_summary_report_context: _,
@@ -3089,8 +3095,16 @@ async fn execute_stream_from_direct_passthrough(
         }
     }
 
+    let provider_headers = headers.clone();
     let response_header_rules_started_at = Instant::now();
-    apply_endpoint_response_header_rules(state, &plan, &mut headers, None).await?;
+    let mut headers = prepare_client_response_headers(
+        state,
+        Some(&plan),
+        headers,
+        ClientResponseBodyMode::UpstreamBytes,
+        None,
+    )
+    .await?;
     observe_gateway_stage_ms(
         "stream_response_header_rules",
         response_header_rules_started_at.elapsed().as_millis() as u64,
@@ -3151,6 +3165,7 @@ async fn execute_stream_from_direct_passthrough(
             deferred_request_candidate_status_record: None,
             candidate_started_unix_secs,
             status_code,
+            provider_headers,
             headers: headers_for_report,
             stream_usage_report_context,
             stream_usage_observer,
@@ -3601,6 +3616,7 @@ async fn execute_stream_from_direct_passthrough(
                 report_kind_owned.unwrap_or_default(),
                 report_context_for_payload,
                 499,
+                provider_headers,
                 headers_for_report,
                 &provider_buffered_body,
                 provider_body_truncated,
@@ -3730,6 +3746,7 @@ async fn execute_stream_from_direct_passthrough(
             report_kind_owned.unwrap_or_default(),
             report_context_for_payload,
             status_code,
+            provider_headers,
             headers_for_report,
             &provider_buffered_body,
             provider_body_truncated,
@@ -6407,10 +6424,15 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
             client_headers.remove("content-length");
             client_headers.insert("content-type".to_string(), "application/json".to_string());
         }
-        apply_endpoint_response_header_rules(
+        let client_headers = prepare_client_response_headers(
             state,
-            &plan,
-            &mut client_headers,
+            Some(&plan),
+            client_headers,
+            if provider_private_error_decoded || (300..400).contains(&status_code) {
+                ClientResponseBodyMode::RebuiltJson
+            } else {
+                ClientResponseBodyMode::UpstreamBytes
+            },
             client_body_json.as_ref(),
         )
         .await?;
@@ -6468,7 +6490,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
         .await;
         if stream_error_finalize_kind.is_some() {
             let response =
-                submit_local_core_error_or_sync_finalize(state, trace_id, decision, payload)
+                submit_local_core_error_or_sync_finalize(state, &plan, trace_id, decision, payload)
                     .await?;
             return Ok(Some(attach_control_metadata_headers(
                 response,
@@ -7329,7 +7351,17 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
         .await;
     }
 
-    apply_endpoint_response_header_rules(state, &plan, &mut headers, None).await?;
+    let provider_headers = upstream_headers.clone();
+    let stream_body_mode = if response_headers_indicate_sse(&headers)
+        && response_headers_have_only_identity_content_encoding(&headers)
+    {
+        ClientResponseBodyMode::RebuiltSse
+    } else {
+        ClientResponseBodyMode::UpstreamBytes
+    };
+    let mut headers =
+        prepare_client_response_headers(state, Some(&plan), headers, stream_body_mode, None)
+            .await?;
 
     let request_id = request_id.to_string();
     let candidate_id = candidate_id.map(ToOwned::to_owned);
@@ -8280,6 +8312,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                 report_kind_owned.unwrap_or_default(),
                 report_context_for_payload,
                 499,
+                provider_headers,
                 headers_for_report,
                 &provider_buffered_body,
                 provider_body_truncated,
@@ -8410,6 +8443,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
             report_kind_owned.unwrap_or_default(),
             report_context_for_payload,
             status_code,
+            provider_headers,
             headers_for_report,
             &provider_buffered_body,
             provider_body_truncated,

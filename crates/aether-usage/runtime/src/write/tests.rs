@@ -585,7 +585,8 @@ fn sync_terminal_usage_preserves_overdeep_request_payloads_for_repo_body_storage
             "provider_request_body": {"input": "safe"}
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({"id": "resp-1"})),
         body_base64: None,
         client_body_json: Some(json!({"type": "message"})),
@@ -739,7 +740,8 @@ fn sync_terminal_usage_redacts_provider_request_body_secrets_from_context() {
             }
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({"id": "resp_1", "choices": []})),
         client_body_json: None,
         body_base64: None,
@@ -791,7 +793,8 @@ fn builds_stream_terminal_usage_from_provider_body_and_preserves_client_body() {
             "needs_conversion": true
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(
             base64::engine::general_purpose::STANDARD.encode(
                 serde_json::to_vec(&json!({
@@ -879,7 +882,8 @@ fn cancelled_stream_usage_does_not_estimate_tokens_from_request_or_partial_respo
             }
         })),
         status_code: 499,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(base64::engine::general_purpose::STANDARD.encode(sse_body)),
         provider_body_state: Some(UsageBodyCaptureState::Inline),
         client_body_base64: None,
@@ -922,7 +926,8 @@ fn cancelled_stream_usage_does_not_infer_cache_or_token_estimates_from_prompt_ca
             "provider_request_body": request_body
         })),
         status_code: 499,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(base64::engine::general_purpose::STANDARD.encode(
             "data: {\"type\":\"response.output_text.delta\",\"delta\":\"cached answer\"}\n\n",
         )),
@@ -967,7 +972,8 @@ fn cancelled_stream_usage_preserves_terminal_summary_usage() {
             "provider_api_format": "openai:responses"
         })),
         status_code: 499,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: None,
         provider_body_state: Some(UsageBodyCaptureState::None),
         client_body_base64: None,
@@ -1020,7 +1026,8 @@ fn failed_stream_usage_does_not_estimate_partial_response_tokens() {
             }
         })),
         status_code: 500,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(base64::engine::general_purpose::STANDARD.encode(
             "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial text\"}\n\n",
         )),
@@ -1074,10 +1081,11 @@ fn stream_terminal_usage_marks_redirect_status_as_failed() {
             "provider_api_format": "gemini:generate_content"
         })),
         status_code: 302,
-        headers: BTreeMap::from([
+        provider_headers: BTreeMap::from([
             ("content-type".to_string(), "application/json".to_string()),
             ("x-aether-upstream-status".to_string(), "302".to_string()),
         ]),
+        client_headers: None,
         provider_body_base64: Some(
             base64::engine::general_purpose::STANDARD
                 .encode(br#"{"error":{"message":"raw redirect body"}}"#),
@@ -1128,7 +1136,8 @@ fn builds_stream_terminal_usage_from_terminal_summary_usage_without_decoding_bod
             "needs_conversion": true
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: None,
         provider_body_state: Some(UsageBodyCaptureState::None),
         client_body_base64: None,
@@ -1185,7 +1194,8 @@ fn stream_terminal_usage_marks_missing_observed_finish_as_failed() {
             "provider_api_format": "openai:responses"
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: None,
         provider_body_state: Some(UsageBodyCaptureState::None),
         client_body_base64: None,
@@ -1234,7 +1244,8 @@ fn stream_terminal_usage_marks_empty_openai_responses_capture_as_missing_termina
             "provider_api_format": "openai:responses"
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: None,
         provider_body_state: Some(UsageBodyCaptureState::None),
         client_body_base64: None,
@@ -1296,7 +1307,11 @@ fn stream_terminal_usage_marks_missing_captured_openai_responses_terminal_as_fai
             "provider_api_format": "openai:responses"
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         provider_body_base64: Some(
             base64::engine::general_purpose::STANDARD.encode(provider_sse.as_bytes()),
         ),
@@ -1346,7 +1361,11 @@ fn stream_terminal_usage_ignores_missing_terminal_from_truncated_capture() {
             "provider_api_format": "openai:responses"
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         provider_body_base64: Some(
             base64::engine::general_purpose::STANDARD.encode(provider_sse.as_bytes()),
         ),
@@ -1392,7 +1411,11 @@ fn stream_terminal_usage_marks_http_200_response_failed_as_stream_terminal_error
             "provider_api_format": "openai:responses"
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         provider_body_base64: Some(base64::engine::general_purpose::STANDARD.encode(provider_sse)),
         provider_body_state: Some(UsageBodyCaptureState::Inline),
         client_body_base64: None,
@@ -1477,7 +1500,8 @@ fn completed_image_usage_estimates_request_tokens_when_provider_usage_is_missing
             }
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: None,
         provider_body_state: Some(UsageBodyCaptureState::None),
         client_body_base64: None,
@@ -1546,7 +1570,8 @@ fn sync_completed_openai_image_usage_infers_image_dimensions_from_response() {
             "provider_request_body": request_body
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({
             "created": 1_700_000_000,
             "data": [{ "b64_json": "abc" }]
@@ -1600,7 +1625,8 @@ fn sync_completed_openai_image_usage_preserves_native_usage_with_image_count() {
             "provider_request_body": request_body
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({
             "usage": {
                 "input_tokens": 11,
@@ -1692,7 +1718,8 @@ fn stream_terminal_usage_prefers_more_complete_provider_chunks_usage() {
             "provider_api_format": "openai:responses",
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(
             base64::engine::general_purpose::STANDARD.encode(provider_body.to_string()),
         ),
@@ -1747,7 +1774,8 @@ fn builds_stream_terminal_usage_from_sse_chunks_and_extracts_usage() {
             "provider_api_format": "openai:responses",
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(base64::engine::general_purpose::STANDARD.encode(sse_body)),
         provider_body_state: Some(UsageBodyCaptureState::Inline),
         client_body_base64: None,
@@ -1851,13 +1879,17 @@ fn builds_sync_terminal_usage_from_provider_body_and_preserves_client_body() {
             "needs_conversion": true
         })),
         status_code: 200,
-        headers: BTreeMap::from([
+        provider_headers: BTreeMap::from([
             (
                 "authorization".to_string(),
                 "Bearer very-secret-token".to_string(),
             ),
             ("content-type".to_string(), "application/json".to_string()),
         ]),
+        client_headers: Some(BTreeMap::from([
+            ("content-type".to_string(), "application/json".to_string()),
+            ("x-client".to_string(), "converted".to_string()),
+        ])),
         body_json: Some(json!({
             "usageMetadata": {
                 "promptTokenCount": 4,
@@ -1927,8 +1959,8 @@ fn builds_sync_terminal_usage_from_provider_body_and_preserves_client_body() {
     assert_eq!(
         event.data.client_response_headers,
         Some(json!({
-            "authorization": "Bearer very-secret-token",
-            "content-type": "application/json"
+            "content-type": "application/json",
+            "x-client": "converted"
         }))
     );
     assert_eq!(
@@ -1976,7 +2008,11 @@ fn sync_terminal_usage_prefers_upstream_stream_body_over_aggregated_sync_body() 
             "upstream_is_stream": true
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "id": "resp_sync_stream_123",
             "object": "response",
@@ -2072,7 +2108,11 @@ fn sync_terminal_usage_prefers_error_body_over_partial_upstream_stream_body() {
             "needs_conversion": true
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "text/event-stream".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "text/event-stream".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "error": {
                 "type": "internal",
@@ -2129,7 +2169,8 @@ fn sync_terminal_seed_path_matches_legacy_wrapper_event() {
             "needs_conversion": true
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({
             "usageMetadata": {
                 "promptTokenCount": 4,
@@ -2184,7 +2225,8 @@ fn sync_terminal_usage_exposes_provider_request_body_ref_as_typed_field() {
             "trace_id": "trace-sync-body-ref-1"
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({"id": "resp_123"})),
         client_body_json: None,
         body_base64: None,
@@ -2237,7 +2279,8 @@ fn sync_terminal_usage_records_human_readable_request_body_sizes_in_metadata() {
             }
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({"id": "resp_123"})),
         client_body_json: None,
         body_base64: None,
@@ -2301,7 +2344,8 @@ fn stream_terminal_usage_records_base64_response_sizes_in_metadata() {
             "trace_id": "trace-stream-bytes-1"
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(
             base64::engine::general_purpose::STANDARD.encode(provider_bytes),
         ),
@@ -2365,7 +2409,8 @@ fn stream_terminal_usage_preserves_large_sse_response_for_repo_body_storage() {
             "provider_api_format": "openai:responses",
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         provider_body_base64: Some(base64::engine::general_purpose::STANDARD.encode(&sse_body)),
         provider_body_state: Some(UsageBodyCaptureState::Truncated),
         client_body_base64: None,
@@ -2417,7 +2462,8 @@ fn sync_terminal_usage_does_not_fallback_request_body_to_plan_when_client_echo_i
             "original_request_body": null,
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({"id": "resp_1"})),
         client_body_json: None,
         body_base64: None,
@@ -2488,7 +2534,11 @@ fn openai_image_sync_terminal_usage_captures_request_and_response_bodies() {
             }
         })),
         status_code: 200,
-        headers: BTreeMap::from([("content-type".to_string(), "application/json".to_string())]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
+        client_headers: None,
         body_json: Some(json!({
             "created": 1776839946,
             "data": [{
@@ -2573,7 +2623,8 @@ fn sync_terminal_usage_applies_kiro_simulated_cache_context() {
             "cache_read_input_tokens": 300,
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({"id": "kiro-sync-response-1"})),
         client_body_json: None,
         body_base64: None,
@@ -2633,7 +2684,8 @@ fn sync_terminal_usage_treats_null_error_field_as_success() {
             "needs_conversion": true,
         })),
         status_code: 200,
-        headers: BTreeMap::new(),
+        provider_headers: BTreeMap::new(),
+        client_headers: None,
         body_json: Some(json!({
             "id": "resp_1",
             "status": "completed",

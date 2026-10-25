@@ -878,10 +878,13 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                 };
                 let trace_id = payload.trace_id.clone();
                 if let Some(outcome) = api::maybe_build_sync_finalize_outcome(
+                    crate::execution_runtime::ResponseHeaderContext::none(),
                     trace_id.as_str(),
                     &synthetic_decision,
                     &payload,
-                )? {
+                )
+                .await?
+                {
                     if let Some(background_report) = outcome.background_report {
                         crate::usage::spawn_sync_report(state.clone(), background_report);
                     }
