@@ -53,43 +53,6 @@ impl AppState {
     }
 
     #[cfg(test)]
-    pub(crate) async fn read_cached_auth_api_key_snapshot_by_key_hash(
-        &self,
-        key_hash: &str,
-        now_unix_secs: u64,
-    ) -> Result<Option<Arc<GatewayAuthApiKeySnapshot>>, GatewayError> {
-        let cache_key = AuthSnapshotCacheKey::key_hash(key_hash);
-        if cache_key.is_empty() {
-            return Ok(None);
-        }
-        let read_started_at = std::time::Instant::now();
-        let snapshot = self
-            .auth_snapshot_cache
-            .get_or_load(
-                cache_key.clone(),
-                AUTH_API_KEY_SNAPSHOT_RUNTIME_CACHE_TTL,
-                || async move {
-                    let _permit = self.acquire_auth_snapshot_load_gate().await?;
-                    self.data
-                        .read_auth_api_key_snapshot_by_key_hash_strong(key_hash, now_unix_secs)
-                        .await
-                        .map(|snapshot| snapshot.map(Arc::new))
-                        .map_err(|err| GatewayError::Internal(err.to_string()))
-                },
-            )
-            .await?;
-        if let Some(snapshot) = snapshot.as_ref() {
-            self.auth_snapshot_cache.insert_if_not_invalidated_since(
-                AuthSnapshotCacheKey::user_api_key_ids(&snapshot.user_id, &snapshot.api_key_id),
-                Some(Arc::clone(snapshot)),
-                AUTH_API_KEY_SNAPSHOT_RUNTIME_CACHE_TTL,
-                read_started_at,
-            );
-        }
-        Ok(snapshot)
-    }
-
-    #[cfg(test)]
     pub(crate) async fn resolve_auth_api_key_snapshots_by_ids(
         &self,
         api_key_ids: &[String],

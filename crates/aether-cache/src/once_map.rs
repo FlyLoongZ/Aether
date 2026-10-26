@@ -222,9 +222,6 @@ struct Store<K, V> {
     seq: u64,
     /// Global generation. `invalidate_all` bumps it instead of walking keys.
     epoch: u64,
-    /// When `invalidate_all` last ran. Tombstones are cleared with the values,
-    /// so derived writes need this to know a clear happened after their read.
-    cleared_at: Option<Instant>,
     weight: usize,
     capacity_bytes: usize,
     tombstone_ttl: Duration,
@@ -362,55 +359,6 @@ where
         };
         self.abort_flight_if(&key, stale);
         self.inner.maintain();
-    }
-
-    /// Stores a value derived from a read that began at `read_started_at`,
-    /// unless the key was invalidated after that point.
-    ///
-    /// Derived writes (mirrors, warm-ups) use this instead of a generation
-    /// token: it can be repeated for the same read, and it still refuses to
-    /// resurrect what a mutation dropped in the meantime.
-    pub fn publish_if_not_invalidated_since(
-        &self,
-        key: K,
-        value: V,
-        window: Duration,
-        read_started_at: Instant,
-    ) -> bool {
-        let key_weight = key.cache_weight();
-        let now = Instant::now();
-        let stale = match self.inner.store.write() {
-            Ok(mut store) => {
-                let invalidated_after_read = store
-                    .tombstones
-                    .get(&key)
-                    .is_some_and(|tombstone| tombstone.at > read_started_at)
-                    || store
-                        .cleared_at
-                        .is_some_and(|cleared_at| cleared_at > read_started_at);
-                if invalidated_after_read {
-                    return false;
-                }
-                let stale = store.stamp(&key);
-                store.invalidate(&key, key_weight, now);
-                store.insert(
-                    key.clone(),
-                    Arc::new(value),
-                    window,
-                    stale.key_epoch.wrapping_add(1),
-                    key_weight,
-                    now,
-                );
-                self.inner.reap(&mut store, now);
-                stale
-            }
-            Err(_) => return false,
-        };
-        // The write bumped the generation, so an in-flight load is already
-        // obsolete; no flight has to be aborted for correctness here.
-        let _ = stale;
-        self.inner.maintain();
-        true
     }
 
     /// Drops the cached value and returns it. A load in flight for the key is
@@ -1543,7 +1491,6 @@ impl<K, V, E> OnceMapBuilder<K, V, E> {
                     tomb_order: VecDeque::new(),
                     seq: 0,
                     epoch: 0,
-                    cleared_at: None,
                     weight: 0,
                     capacity_bytes: self.capacity_bytes,
                     tombstone_ttl: self.tombstone_ttl,
@@ -1571,7 +1518,7 @@ mod tests {
     use crate::weight::CacheWeight;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     const WINDOW: Duration = Duration::from_secs(60);
 
@@ -1790,60 +1737,6 @@ mod tests {
             "second",
             map.peek_within(&"k".to_string(), WINDOW).unwrap().as_str()
         );
-    }
-
-    #[tokio::test]
-    async fn a_derived_write_is_repeatable_and_refuses_to_resurrect() {
-        let map = cache();
-        let key = "k".to_string();
-        let read_started_at = Instant::now();
-
-        assert!(map.publish_if_not_invalidated_since(
-            key.clone(),
-            "first".to_string(),
-            WINDOW,
-            read_started_at
-        ));
-        // Same read, second mirror target: still allowed.
-        assert!(map.publish_if_not_invalidated_since(
-            key.clone(),
-            "second".to_string(),
-            WINDOW,
-            read_started_at
-        ));
-        assert_eq!("second", map.peek_within(&key, WINDOW).unwrap().as_str());
-
-        // A mutation after the read began must win over a late derived write.
-        tokio::time::sleep(Duration::from_millis(5)).await;
-        map.invalidate(&key);
-        assert!(!map.publish_if_not_invalidated_since(
-            key.clone(),
-            "resurrected".to_string(),
-            WINDOW,
-            read_started_at
-        ));
-        assert_eq!(None, map.peek_within(&key, WINDOW));
-    }
-
-    #[tokio::test]
-    async fn clearing_the_cache_also_blocks_derived_writes() {
-        let map = cache();
-        let key = "k".to_string();
-        let read_started_at = Instant::now();
-        tokio::time::sleep(Duration::from_millis(2)).await;
-
-        map.invalidate_all();
-
-        assert!(
-            !map.publish_if_not_invalidated_since(
-                key.clone(),
-                "late".to_string(),
-                WINDOW,
-                read_started_at
-            ),
-            "a whole-cache clear must win over a mirror of the previous read"
-        );
-        assert_eq!(None, map.peek_within(&key, WINDOW));
     }
 
     #[tokio::test]

@@ -66,42 +66,28 @@ impl CacheWeight for AuthApiKeyFeatureCacheKey {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum AuthSnapshotCacheKey {
-    #[cfg(test)]
-    KeyHash(String),
     UserApiKeyIds(AuthApiKeyIdentityCacheKey),
 }
 
 impl AuthSnapshotCacheKey {
-    #[cfg(test)]
-    pub(crate) fn key_hash(key_hash: &str) -> Self {
-        Self::KeyHash(key_hash.trim().to_string())
-    }
-
     pub(crate) fn user_api_key_ids(user_id: &str, api_key_id: &str) -> Self {
         Self::UserApiKeyIds(AuthApiKeyIdentityCacheKey::new(user_id, api_key_id))
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        match self {
-            #[cfg(test)]
-            Self::KeyHash(key_hash) => key_hash.is_empty(),
-            Self::UserApiKeyIds(key) => key.is_empty(),
-        }
+        let Self::UserApiKeyIds(key) = self;
+        key.is_empty()
     }
 }
 
 impl CacheWeight for AuthSnapshotCacheKey {
     fn cache_weight(&self) -> usize {
-        match self {
-            #[cfg(test)]
-            Self::KeyHash(key_hash) => value_weight::<Self>(key_hash.capacity()),
-            Self::UserApiKeyIds(key) => value_weight::<Self>(key.cache_weight()),
-        }
+        let Self::UserApiKeyIds(key) = self;
+        value_weight::<Self>(key.cache_weight())
     }
 }
 
-/// Resolved API-key snapshots. A key hash resolves to the same snapshot as its
-/// `(user, key)` pair, so both keyings share one map.
+/// Resolved API-key snapshots, keyed by the `(user, key)` pair.
 ///
 /// It is a `ValueCache` like every other runtime lookup; the alias stays so the
 /// call sites read as "the auth snapshot cache".
@@ -151,6 +137,9 @@ where
     K: Clone + Eq + Hash + CacheWeight + Send + Sync + 'static,
     V: Clone + CacheWeight + Send + Sync + 'static,
 {
+    /// Test-only view of a cached entry; production paths go through
+    /// `get_or_load`, so this is not part of the runtime API.
+    #[cfg(test)]
     pub(crate) fn get(&self, key: &K, ttl: Duration) -> Option<Option<V>> {
         self.entries
             .peek_within(key, ttl)
@@ -197,20 +186,6 @@ where
             .await
             .map(|value| (*value).clone())
             .map_err(|error| error.or_else_load(crate::GatewayError::Internal))
-    }
-
-    /// Mirrors a value under a second key without resurrecting one an
-    /// invalidation already dropped, and without making the write one-shot:
-    /// any number of derived writes may start from the same read.
-    pub(crate) fn insert_if_not_invalidated_since(
-        &self,
-        key: K,
-        value: Option<V>,
-        window: Duration,
-        read_started_at: std::time::Instant,
-    ) -> bool {
-        self.entries
-            .publish_if_not_invalidated_since(key, value, window, read_started_at)
     }
 
     pub(crate) fn clear(&self) {
@@ -277,56 +252,6 @@ mod tests {
         assert_eq!(loads.load(Ordering::SeqCst), 1);
     }
 
-    #[test]
-    fn a_mirror_write_does_not_resurrect_a_cleared_snapshot() {
-        let cache = AuthSnapshotCache::default();
-        let key = AuthSnapshotCacheKey::user_api_key_ids("user-a", "key-a");
-        let mirror_key = AuthSnapshotCacheKey::key_hash("hash-a");
-
-        // The read this mirror derives from starts before the clear.
-        let read_started_at = std::time::Instant::now();
-        std::thread::sleep(Duration::from_millis(2));
-        cache.clear();
-
-        assert!(!cache.insert_if_not_invalidated_since(
-            key.clone(),
-            None,
-            Duration::from_secs(60),
-            read_started_at
-        ));
-        assert!(!cache.insert_if_not_invalidated_since(
-            mirror_key.clone(),
-            None,
-            Duration::from_secs(60),
-            read_started_at
-        ));
-        assert!(cache
-            .entries
-            .peek_within(&key, Duration::from_secs(60))
-            .is_none());
-        assert!(cache
-            .entries
-            .peek_within(&mirror_key, Duration::from_secs(60))
-            .is_none());
-    }
-
-    #[test]
-    fn a_mirror_write_can_repeat_for_the_same_read() {
-        let cache = AuthSnapshotCache::default();
-        let key = AuthSnapshotCacheKey::user_api_key_ids("user-a", "key-a");
-        let mirror_key = AuthSnapshotCacheKey::key_hash("hash-a");
-        let read_started_at = std::time::Instant::now();
-
-        for target in [key.clone(), mirror_key.clone()] {
-            assert!(cache.insert_if_not_invalidated_since(
-                target,
-                None,
-                Duration::from_secs(60),
-                read_started_at
-            ));
-        }
-    }
-
     #[tokio::test]
     async fn json_values_are_served_from_the_cache() {
         let cache = JsonValueCache::<String>::default();
@@ -362,10 +287,13 @@ mod tests {
 
         cache.insert("user-a".to_string(), Some(2.0), Duration::from_secs(60));
 
-        assert_eq!(
-            cache.get(&"user-a".to_string(), Duration::from_secs(60)),
-            Some(Some(2.0))
-        );
+        let value = cache
+            .get_or_load("user-a".to_string(), Duration::from_secs(60), || async {
+                unreachable!("an inserted value must be served without a load")
+            })
+            .await
+            .expect("cached read should succeed");
+        assert_eq!(value, Some(2.0));
     }
 
     #[tokio::test]
@@ -410,7 +338,13 @@ mod tests {
 
         let refreshed = tokio::time::timeout(Duration::from_secs(1), async {
             loop {
-                if cache.get(&"user-a".to_string(), Duration::from_secs(60)) == Some(Some(3.0)) {
+                let current = cache
+                    .get_or_load("user-a".to_string(), Duration::from_secs(60), || async {
+                        unreachable!("a published value must be served without a load")
+                    })
+                    .await
+                    .expect("polled read should succeed");
+                if current == Some(3.0) {
                     break Some(3.0);
                 }
                 tokio::task::yield_now().await;
