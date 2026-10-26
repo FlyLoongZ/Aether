@@ -2074,12 +2074,12 @@ async fn admin_created_user_keys_inherit_owner_group_policy() {
         .expect("request should succeed");
     assert_eq!(response.status(), StatusCode::OK);
     let payload: serde_json::Value = response.json().await.expect("response should parse");
-    let plaintext_key = payload["key"].as_str().expect("plaintext key should exist");
     let api_key_id = payload["id"].as_str().expect("key id should exist");
 
     let resolved = inspection_state
-        .read_cached_auth_api_key_snapshot_by_key_hash(
-            &hash_api_key(plaintext_key),
+        .read_cached_auth_api_key_snapshot(
+            "target-user",
+            api_key_id,
             chrono::Utc::now().timestamp().max(0) as u64,
         )
         .await
@@ -2121,8 +2121,9 @@ async fn admin_created_user_keys_inherit_owner_group_policy() {
         .expect("target group should update")
         .expect("target group should still exist");
     let updated = inspection_state
-        .read_cached_auth_api_key_snapshot_by_key_hash(
-            &hash_api_key(plaintext_key),
+        .read_cached_auth_api_key_snapshot(
+            "target-user",
+            api_key_id,
             chrono::Utc::now().timestamp().max(0) as u64,
         )
         .await
@@ -2172,11 +2173,12 @@ async fn admin_created_user_keys_inherit_owner_group_policy() {
         .expect("request should succeed");
     assert_eq!(response.status(), StatusCode::OK);
     let payload: serde_json::Value = response.json().await.expect("response should parse");
-    let plaintext_key = payload["key"].as_str().expect("plaintext key should exist");
+    let admin_key_id = payload["id"].as_str().expect("key id should exist");
 
     let resolved = inspection_state
-        .read_cached_auth_api_key_snapshot_by_key_hash(
-            &hash_api_key(plaintext_key),
+        .read_cached_auth_api_key_snapshot(
+            "admin-user",
+            admin_key_id,
             chrono::Utc::now().timestamp().max(0) as u64,
         )
         .await

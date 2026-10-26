@@ -720,7 +720,11 @@ async fn auth_context_hard_miss_bypasses_fresh_snapshot_allow_caches() {
         .with_data_state_for_tests(data);
 
     let primed = state
-        .read_cached_auth_api_key_snapshot_by_key_hash(&key_hash, super::current_unix_secs())
+        .read_cached_auth_api_key_snapshot(
+            "user-hard-miss-lock",
+            "key-hard-miss-lock",
+            super::current_unix_secs(),
+        )
         .await
         .expect("snapshot cache prime should succeed")
         .expect("snapshot should exist");
@@ -757,8 +761,8 @@ async fn auth_context_hard_miss_bypasses_fresh_snapshot_allow_caches() {
     );
     assert_eq!(
         auth_repository.key_hash_lookup_count(&key_hash),
-        2,
-        "hard miss must bypass both fresh snapshot cache layers"
+        1,
+        "hard miss must bypass the fresh snapshot cache layers"
     );
 }
 
