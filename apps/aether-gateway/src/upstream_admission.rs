@@ -366,14 +366,9 @@ pub(crate) fn upstream_target_key_from_url(
     upstream_url: &str,
     proxy: Option<&str>,
 ) -> Option<String> {
-    let parsed = Url::parse(upstream_url).ok();
-    let Some(url) = parsed else {
-        return None;
-    };
+    let url = Url::parse(upstream_url).ok()?;
     let scheme = url.scheme().to_ascii_lowercase();
-    let Some(host) = url.host_str().map(|host| host.to_ascii_lowercase()) else {
-        return None;
-    };
+    let host = url.host_str().map(|host| host.to_ascii_lowercase())?;
     let port = url
         .port_or_known_default()
         .map(|port| port.to_string())

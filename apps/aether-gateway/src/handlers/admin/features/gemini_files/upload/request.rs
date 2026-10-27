@@ -209,10 +209,8 @@ fn admin_gemini_files_parse_content_disposition(value: &str) -> Option<(String, 
                 return None;
             }
             name = Some(parsed_value);
-        } else if key.eq_ignore_ascii_case("filename") {
-            if !parsed_value.is_empty() {
-                filename = Some(parsed_value);
-            }
+        } else if key.eq_ignore_ascii_case("filename") && !parsed_value.is_empty() {
+            filename = Some(parsed_value);
         }
     }
 

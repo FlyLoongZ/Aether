@@ -11,10 +11,13 @@ use async_trait::async_trait;
 const RECENT_REQUEST_CANDIDATES_TTL: Duration = Duration::from_millis(100);
 const RECENT_REQUEST_CANDIDATES_MAX_CACHE_KEYS: usize = 8;
 
+type RecentRequestCandidateCache =
+    Arc<RwLock<BTreeMap<usize, (Instant, Vec<StoredRequestCandidate>)>>>;
+
 #[derive(Clone)]
 pub(super) struct CachedRequestCandidateReadRepository {
     inner: Arc<dyn RequestCandidateReadRepository>,
-    recent: Arc<RwLock<BTreeMap<usize, (Instant, Vec<StoredRequestCandidate>)>>>,
+    recent: RecentRequestCandidateCache,
     recent_load_guard: Arc<tokio::sync::Mutex<()>>,
 }
 

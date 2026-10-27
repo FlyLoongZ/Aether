@@ -107,7 +107,7 @@ async fn copy_and_commit(
     }
 
     let nonce = uuid::Uuid::new_v4();
-    for window in plan[1..].chunks_exact(3) {
+    for window in plan[1..].as_chunks::<3>().0 {
         let [index, expired, live] = [window[0], window[1], window[2]];
         let key = usize::try_from(index - 1)
             .ok()
@@ -154,7 +154,7 @@ async fn copy_and_commit(
         .arg(&*temporary_keys)
         .arg(keys.len());
     usage_args(&mut commit, input);
-    for window in plan[1..].chunks_exact(3) {
+    for window in plan[1..].as_chunks::<3>().0 {
         commit.arg(window[0]).arg(window[2]);
     }
     lease.query(&cmd("MULTI")).await?;

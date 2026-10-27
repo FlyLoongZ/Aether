@@ -4391,7 +4391,7 @@ fn is_valid_payment_card(value: &str) -> bool {
     {
         return false;
     }
-    if !matches!(digits.as_bytes().first(), Some(b'3' | b'4' | b'5' | b'6')) {
+    if !matches!(digits.as_bytes().first(), Some(b'3'..=b'6')) {
         return false;
     }
     luhn_valid(&digits)

@@ -1193,12 +1193,13 @@ impl GatewayDataState {
             // user's only financial reference. Check again before falling
             // through to the user deletion path when no SQL atomic guard is
             // available (notably in-memory/test repositories).
-            if removed && !database_backend_has_atomic_guard {
-                if self.wallet_exists_for_user_or_api_key(user_id).await? {
-                    return Err(DataLayerError::UnexpectedValue(format!(
+            if removed
+                && !database_backend_has_atomic_guard
+                && self.wallet_exists_for_user_or_api_key(user_id).await?
+            {
+                return Err(DataLayerError::UnexpectedValue(format!(
                         "refusing to delete provisional auth user {user_id}: another wallet reference exists"
                     )));
-                }
             }
             removed
         } else if database_backend_has_atomic_guard {

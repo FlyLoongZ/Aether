@@ -566,14 +566,13 @@ fn standard_openai_image_item_to_image_data(item: &Value) -> Option<Value> {
     let mut image = Map::new();
     if let Some(b64_json) = b64_json {
         image.insert("b64_json".to_string(), Value::String(b64_json.to_string()));
-    } else if let Some(url) = url {
+    } else {
+        let url = url?;
         if let Some((_, b64_json)) = parse_data_url(&url) {
             image.insert("b64_json".to_string(), Value::String(b64_json));
         } else {
             image.insert("url".to_string(), Value::String(url));
         }
-    } else {
-        return None;
     }
 
     if let Some(output_format) = object

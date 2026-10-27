@@ -195,48 +195,6 @@ impl GatewayUserSessionView {
     }
 }
 
-#[cfg(test)]
-mod gateway_user_session_view_tests {
-    use super::GatewayUserSessionView;
-    use chrono::{Duration, Utc};
-
-    fn session_with_rotation(rotated_at: chrono::DateTime<Utc>) -> GatewayUserSessionView {
-        GatewayUserSessionView::new(
-            "session-1".to_string(),
-            "user-1".to_string(),
-            "device-1".to_string(),
-            None,
-            GatewayUserSessionView::hash_refresh_token("current-token"),
-            Some(GatewayUserSessionView::hash_refresh_token("previous-token")),
-            Some(rotated_at),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-        .expect("session should build")
-    }
-
-    #[test]
-    fn refresh_grace_rejects_future_rotation_timestamps() {
-        let now = Utc::now();
-        assert_eq!(
-            session_with_rotation(now - Duration::seconds(1))
-                .verify_refresh_token("previous-token", now),
-            (true, true)
-        );
-        assert_eq!(
-            session_with_rotation(now + Duration::milliseconds(1))
-                .verify_refresh_token("previous-token", now),
-            (false, false)
-        );
-    }
-}
-
 impl From<crate::data::state::StoredUserSessionRecord> for GatewayUserSessionView {
     fn from(value: crate::data::state::StoredUserSessionRecord) -> Self {
         Self {
@@ -430,5 +388,47 @@ impl From<super::AdminPaymentCallbackRecord> for GatewayAdminPaymentCallbackView
             created_at_unix_ms: value.created_at_unix_ms,
             processed_at_unix_secs: value.processed_at_unix_secs,
         }
+    }
+}
+
+#[cfg(test)]
+mod gateway_user_session_view_tests {
+    use super::GatewayUserSessionView;
+    use chrono::{Duration, Utc};
+
+    fn session_with_rotation(rotated_at: chrono::DateTime<Utc>) -> GatewayUserSessionView {
+        GatewayUserSessionView::new(
+            "session-1".to_string(),
+            "user-1".to_string(),
+            "device-1".to_string(),
+            None,
+            GatewayUserSessionView::hash_refresh_token("current-token"),
+            Some(GatewayUserSessionView::hash_refresh_token("previous-token")),
+            Some(rotated_at),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("session should build")
+    }
+
+    #[test]
+    fn refresh_grace_rejects_future_rotation_timestamps() {
+        let now = Utc::now();
+        assert_eq!(
+            session_with_rotation(now - Duration::seconds(1))
+                .verify_refresh_token("previous-token", now),
+            (true, true)
+        );
+        assert_eq!(
+            session_with_rotation(now + Duration::milliseconds(1))
+                .verify_refresh_token("previous-token", now),
+            (false, false)
+        );
     }
 }

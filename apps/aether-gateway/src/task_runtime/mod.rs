@@ -526,9 +526,7 @@ pub(crate) async fn update_run_status(
     started_at_unix_secs: Option<u64>,
     finished_at_unix_secs: Option<u64>,
 ) -> Option<StoredBackgroundTaskRun> {
-    let Some(mut existing) = app.find_background_task_run(run_id).await.ok().flatten() else {
-        return None;
-    };
+    let mut existing = app.find_background_task_run(run_id).await.ok().flatten()?;
     existing.status = status;
     if let Some(progress_percent) = progress_percent {
         existing.progress_percent = progress_percent.min(100);

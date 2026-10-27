@@ -3878,7 +3878,7 @@ fn sha3_512(input: &[u8]) -> [u8; 64] {
 }
 
 fn absorb_sha3_block(state: &mut [u64; 25], block: &[u8]) {
-    for (index, chunk) in block.chunks_exact(8).enumerate() {
+    for (index, chunk) in block.as_chunks::<8>().0.iter().enumerate() {
         state[index] ^= u64::from_le_bytes([
             chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
         ]);

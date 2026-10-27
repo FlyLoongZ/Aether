@@ -310,8 +310,8 @@ pub(in super::super) async fn build_admin_update_user_response(
         }
     }
 
-    if role.is_some() || payload.is_active.is_some() {
-        if state
+    if (role.is_some() || payload.is_active.is_some())
+        && state
             .update_local_auth_user_admin_fields(
                 &user_id,
                 role,
@@ -327,13 +327,12 @@ pub(in super::super) async fn build_admin_update_user_response(
             )
             .await?
             .is_none()
-        {
-            return Ok((
-                http::StatusCode::NOT_FOUND,
-                Json(json!({ "detail": "用户不存在" })),
-            )
-                .into_response());
-        }
+    {
+        return Ok((
+            http::StatusCode::NOT_FOUND,
+            Json(json!({ "detail": "用户不存在" })),
+        )
+            .into_response());
     }
     if let Some(unlimited) = payload.unlimited {
         match state
@@ -344,14 +343,13 @@ pub(in super::super) async fn build_admin_update_user_response(
         {
             Some(wallet) => {
                 let desired_limit_mode = if unlimited { "unlimited" } else { "finite" };
-                if !wallet.limit_mode.eq_ignore_ascii_case(desired_limit_mode) {
-                    if state
+                if !wallet.limit_mode.eq_ignore_ascii_case(desired_limit_mode)
+                    && state
                         .update_auth_user_wallet_limit_mode(&user_id, desired_limit_mode)
                         .await?
                         .is_none()
-                    {
-                        return Ok(build_admin_users_data_unavailable_response());
-                    }
+                {
+                    return Ok(build_admin_users_data_unavailable_response());
                 }
             }
             None => {

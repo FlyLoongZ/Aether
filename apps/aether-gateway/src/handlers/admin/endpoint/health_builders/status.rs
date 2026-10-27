@@ -212,7 +212,7 @@ pub(crate) async fn build_admin_endpoint_health_status_payload(
                 "timeline": timeline,
                 "timeline_details": timeline_details,
                 "time_range_start": time_range_start.and_then(unix_ms_to_rfc3339),
-                "time_range_end": time_range_end.map(|ms| unix_ms_to_rfc3339(ms)).unwrap_or_else(|| unix_secs_to_rfc3339(now_unix_secs)),
+                "time_range_end": time_range_end.map(unix_ms_to_rfc3339).unwrap_or_else(|| unix_secs_to_rfc3339(now_unix_secs)),
                 "total_endpoints": endpoint_ids.len(),
                 "total_keys": total_keys,
                 "active_keys": active_keys_by_format.get(&api_format).map(BTreeSet::len).unwrap_or(0),

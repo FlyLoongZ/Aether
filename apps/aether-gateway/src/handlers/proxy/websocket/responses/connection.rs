@@ -787,10 +787,7 @@ fn prepare_persisted_continuation_registration(
     frame: &ParsedResponsesWebSocketFrame<'_>,
 ) -> Option<PendingContinuationRegistration> {
     let logical = bound.turn_state.logical();
-    let Some(response_id) = persistable_terminal_response_id(logical, frame).map(str::to_string)
-    else {
-        return None;
-    };
+    let response_id = persistable_terminal_response_id(logical, frame).map(str::to_string)?;
     let logical = logical.expect("a persistable terminal requires an active logical turn");
     let Some(auth_context) = logical
         .turn_control

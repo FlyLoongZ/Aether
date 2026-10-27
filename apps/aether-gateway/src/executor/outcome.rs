@@ -183,14 +183,9 @@ async fn write_deferred_usage_event(
         Some("all local candidates failed; returning preserved upstream error".to_string());
     data.error_category = error_category_for_failed_status(status_code)
         .or_else(|| Some("upstream_error".to_string()));
-    data.response_headers = Some(
-        context
-            .provider_headers
-            .unwrap_or_else(|| json_header_map()),
-    );
+    data.response_headers = Some(context.provider_headers.unwrap_or_else(json_header_map));
     data.response_body = context.provider_body;
-    data.client_response_headers =
-        Some(context.client_headers.unwrap_or_else(|| json_header_map()));
+    data.client_response_headers = Some(context.client_headers.unwrap_or_else(json_header_map));
     data.client_response_body = context.client_body;
 
     state

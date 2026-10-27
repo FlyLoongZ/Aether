@@ -762,6 +762,84 @@ fn multiply_image_price_range(
     )
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BillingUsageInput {
+    pub task_type: String,
+    pub api_format: Option<String>,
+    #[serde(default)]
+    pub requested_processing_tier: Option<String>,
+    #[serde(default)]
+    pub actual_processing_tier: Option<String>,
+    pub request_count: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_creation_tokens: i64,
+    pub cache_creation_ephemeral_5m_tokens: i64,
+    pub cache_creation_ephemeral_1h_tokens: i64,
+    pub cache_read_tokens: i64,
+    pub image_count: i64,
+    pub image_size: Option<String>,
+    pub image_quality: Option<String>,
+    pub image_output_format: Option<String>,
+    pub cache_ttl_minutes: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BillingAuthorizationEstimateInput {
+    pub task_type: String,
+    pub api_format: Option<String>,
+    pub requested_processing_tier: Option<String>,
+    #[serde(default)]
+    pub cache_ttl_minutes: Option<i64>,
+    pub input_tokens: i64,
+    pub max_output_tokens: Option<i64>,
+}
+
+impl BillingAuthorizationEstimateInput {
+    pub fn new(task_type: impl Into<String>, input_tokens: i64) -> Self {
+        Self {
+            task_type: task_type.into(),
+            api_format: None,
+            requested_processing_tier: None,
+            cache_ttl_minutes: None,
+            input_tokens: input_tokens.max(0),
+            max_output_tokens: None,
+        }
+    }
+}
+
+impl BillingUsageInput {
+    pub fn new(task_type: impl Into<String>) -> Self {
+        Self {
+            task_type: task_type.into(),
+            api_format: None,
+            requested_processing_tier: None,
+            actual_processing_tier: None,
+            request_count: 1,
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_creation_tokens: 0,
+            cache_creation_ephemeral_5m_tokens: 0,
+            cache_creation_ephemeral_1h_tokens: 0,
+            cache_read_tokens: 0,
+            image_count: 0,
+            image_size: None,
+            image_quality: None,
+            image_output_format: None,
+            cache_ttl_minutes: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BillingComputation {
+    pub cost_result: crate::CostResult,
+    pub actual_total_cost: f64,
+    pub rate_multiplier: f64,
+    pub is_free_tier: bool,
+    pub pricing_resolution: BillingPricingResolution,
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -1475,82 +1553,4 @@ mod tests {
         );
         assert_eq!(priority.processing_tier_price_multiplier, Some(2.5));
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BillingUsageInput {
-    pub task_type: String,
-    pub api_format: Option<String>,
-    #[serde(default)]
-    pub requested_processing_tier: Option<String>,
-    #[serde(default)]
-    pub actual_processing_tier: Option<String>,
-    pub request_count: i64,
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub cache_creation_tokens: i64,
-    pub cache_creation_ephemeral_5m_tokens: i64,
-    pub cache_creation_ephemeral_1h_tokens: i64,
-    pub cache_read_tokens: i64,
-    pub image_count: i64,
-    pub image_size: Option<String>,
-    pub image_quality: Option<String>,
-    pub image_output_format: Option<String>,
-    pub cache_ttl_minutes: Option<i64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BillingAuthorizationEstimateInput {
-    pub task_type: String,
-    pub api_format: Option<String>,
-    pub requested_processing_tier: Option<String>,
-    #[serde(default)]
-    pub cache_ttl_minutes: Option<i64>,
-    pub input_tokens: i64,
-    pub max_output_tokens: Option<i64>,
-}
-
-impl BillingAuthorizationEstimateInput {
-    pub fn new(task_type: impl Into<String>, input_tokens: i64) -> Self {
-        Self {
-            task_type: task_type.into(),
-            api_format: None,
-            requested_processing_tier: None,
-            cache_ttl_minutes: None,
-            input_tokens: input_tokens.max(0),
-            max_output_tokens: None,
-        }
-    }
-}
-
-impl BillingUsageInput {
-    pub fn new(task_type: impl Into<String>) -> Self {
-        Self {
-            task_type: task_type.into(),
-            api_format: None,
-            requested_processing_tier: None,
-            actual_processing_tier: None,
-            request_count: 1,
-            input_tokens: 0,
-            output_tokens: 0,
-            cache_creation_tokens: 0,
-            cache_creation_ephemeral_5m_tokens: 0,
-            cache_creation_ephemeral_1h_tokens: 0,
-            cache_read_tokens: 0,
-            image_count: 0,
-            image_size: None,
-            image_quality: None,
-            image_output_format: None,
-            cache_ttl_minutes: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BillingComputation {
-    pub cost_result: crate::CostResult,
-    pub actual_total_cost: f64,
-    pub rate_multiplier: f64,
-    pub is_free_tier: bool,
-    pub pricing_resolution: BillingPricingResolution,
 }

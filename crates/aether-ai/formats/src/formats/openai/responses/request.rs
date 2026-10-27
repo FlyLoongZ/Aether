@@ -1346,11 +1346,8 @@ fn claude_tool_result_parts_to_responses_payload(
                 }
             }
             "image" => {
-                if let Some(part) = claude_image_block_to_responses_input_part(part_object) {
-                    extra_user_content.push(part);
-                } else {
-                    return None;
-                }
+                let part = claude_image_block_to_responses_input_part(part_object)?;
+                extra_user_content.push(part);
             }
             "document" | "file" => {
                 if let Some(text) = claude_text_document_block_to_responses_output_text(part_object)
@@ -1358,12 +1355,9 @@ fn claude_tool_result_parts_to_responses_payload(
                     if !text.is_empty() {
                         output_texts.push(text.to_string());
                     }
-                } else if let Some(part) =
-                    claude_document_block_to_responses_input_part(part_object)
-                {
-                    extra_user_content.push(part);
                 } else {
-                    return None;
+                    let part = claude_document_block_to_responses_input_part(part_object)?;
+                    extra_user_content.push(part);
                 }
             }
             _ => return None,

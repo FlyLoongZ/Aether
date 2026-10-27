@@ -131,187 +131,6 @@ pub fn endpoint_key_counts_by_format(
     (total, active)
 }
 
-#[cfg(test)]
-mod endpoint_key_count_tests {
-    use super::*;
-
-    fn sample_endpoint(id: &str, api_format: &str) -> StoredProviderCatalogEndpoint {
-        StoredProviderCatalogEndpoint::new(
-            id.to_string(),
-            "provider-1".to_string(),
-            api_format.to_string(),
-            None,
-            None,
-            true,
-        )
-        .expect("endpoint should build")
-    }
-
-    fn sample_key(id: &str, api_format: Option<&str>) -> StoredProviderCatalogKey {
-        let mut key = StoredProviderCatalogKey::new(
-            id.to_string(),
-            "provider-1".to_string(),
-            id.to_string(),
-            "api_key".to_string(),
-            None,
-            true,
-        )
-        .expect("key should build");
-        key.api_formats = api_format.map(|api_format| json!([api_format]));
-        key
-    }
-
-    #[test]
-    fn endpoint_counts_follow_one_way_format_permissions() {
-        let endpoints = vec![
-            sample_endpoint("responses", "openai:responses"),
-            sample_endpoint("search", "openai:search"),
-        ];
-        let mut empty_scope_key = sample_key("empty-scope-key", None);
-        empty_scope_key.api_formats = Some(json!([]));
-        let keys = vec![
-            sample_key("responses-key", Some("openai:responses")),
-            sample_key("search-key", Some("openai:search")),
-            sample_key("unrestricted-key", None),
-            empty_scope_key,
-        ];
-
-        let (total, active) = endpoint_key_counts_by_format("custom", &endpoints, &keys);
-
-        assert_eq!(total.get("openai:responses"), Some(&2));
-        assert_eq!(total.get("openai:search"), Some(&3));
-        assert_eq!(active, total);
-    }
-
-    #[test]
-    fn endpoint_counts_keep_scoped_keys_visible_on_inactive_endpoints() {
-        let mut endpoint = sample_endpoint("chat", "openai:chat");
-        endpoint.is_active = false;
-        let mut empty_scope_key = sample_key("empty-scope-key", None);
-        empty_scope_key.api_formats = Some(json!([]));
-        let keys = vec![
-            sample_key("chat-key", Some("openai:chat")),
-            sample_key("unrestricted-key", None),
-            empty_scope_key,
-        ];
-
-        let (total, active) = endpoint_key_counts_by_format("custom", &[endpoint], &keys);
-
-        assert_eq!(total.get("openai:chat"), Some(&2));
-        assert_eq!(active, total);
-    }
-
-    #[test]
-    fn endpoint_create_and_update_reject_invalid_response_header_rules() {
-        for key in ["response_header_rules", "responseHeaderRules"] {
-            for rule in [
-                json!({"action": "set", "key": "bad header", "value": "secret"}),
-                json!({"action": "set", "key": "x-test", "value": "secret\r\nInjected: yes"}),
-                json!({"action": "rename", "from": "x-test", "to": "invalid:"}),
-            ] {
-                let config = json!({(key): [rule]});
-                let created = super::build_admin_provider_endpoint_record(
-                    "ep-new".into(),
-                    "provider".into(),
-                    "openai:chat".into(),
-                    "openai".into(),
-                    "chat".into(),
-                    "https://example.test".into(),
-                    None,
-                    None,
-                    None,
-                    0,
-                    Some(config.clone()),
-                    None,
-                    None,
-                    0,
-                );
-                let error = created.expect_err("invalid response rules must not be created");
-                assert!(!error.contains("secret"));
-                let error = super::apply_admin_provider_endpoint_update_fields(
-                    &sample_endpoint("chat", "openai:chat"),
-                    |field| field == "config",
-                    |_| false,
-                    &super::AdminProviderEndpointUpdateFields {
-                        config: Some(config),
-                        ..Default::default()
-                    },
-                )
-                .expect_err("invalid response rules must not be updated");
-                assert!(!error.contains("secret"));
-            }
-        }
-    }
-
-    #[test]
-    fn endpoint_updates_reject_unresolved_rule_masks_before_persistence() {
-        let header_rules = json!([{"action": "set", "key": "x-auth", "value": "header-secret"}]);
-        let body_rules = json!([{"action": "set", "path": "auth.token", "value": "body-secret"}]);
-        let mut endpoint = sample_endpoint("chat", "openai:chat");
-        endpoint.header_rules = Some(header_rules.clone());
-        endpoint.body_rules = Some(body_rules.clone());
-        endpoint.config = Some(json!({"response_header_rules": header_rules}));
-        let moved_header =
-            json!([{"action": "set", "key": "x-other-auth", "value": "***", "has_value": true}]);
-        let cases = [
-            (
-                "header_rules",
-                super::AdminProviderEndpointUpdateFields {
-                    header_rules: Some(moved_header.clone()),
-                    ..Default::default()
-                },
-            ),
-            (
-                "body_rules",
-                super::AdminProviderEndpointUpdateFields {
-                    body_rules: Some(
-                        json!([{"action": "set", "path": "auth.api_key", "value": "***", "has_value": true}]),
-                    ),
-                    ..Default::default()
-                },
-            ),
-            (
-                "config",
-                super::AdminProviderEndpointUpdateFields {
-                    config: Some(json!({"response_header_rules": moved_header})),
-                    ..Default::default()
-                },
-            ),
-        ];
-        for (field, payload) in cases {
-            let error = super::apply_admin_provider_endpoint_update_fields(
-                &endpoint,
-                |key| key == field,
-                |_| false,
-                &payload,
-            )
-            .expect_err("unresolved masks must not overwrite saved secrets");
-            assert!(error.contains("无法匹配"));
-            assert!(!error.contains("header-secret"));
-            assert!(!error.contains("body-secret"));
-        }
-    }
-
-    #[test]
-    fn inherited_endpoint_counts_only_include_active_formats() {
-        let responses_endpoint = sample_endpoint("responses", "openai:responses");
-        let mut search_endpoint = sample_endpoint("search", "openai:search");
-        search_endpoint.is_active = false;
-        let mut inherited_key = sample_key("codex-key", Some("legacy:mismatch"));
-        inherited_key.auth_type = "oauth".to_string();
-
-        let (total, active) = endpoint_key_counts_by_format(
-            "codex",
-            &[responses_endpoint, search_endpoint],
-            &[inherited_key],
-        );
-
-        assert_eq!(total.get("openai:responses"), Some(&1));
-        assert!(!total.contains_key("openai:search"));
-        assert_eq!(active, total);
-    }
-}
-
 fn endpoint_timestamp_or_now(value: Option<u64>, now_unix_secs: u64) -> serde_json::Value {
     unix_secs_to_rfc3339(value.unwrap_or(now_unix_secs))
         .map(serde_json::Value::String)
@@ -566,4 +385,185 @@ where
     }
 
     Ok(updated)
+}
+
+#[cfg(test)]
+mod endpoint_key_count_tests {
+    use super::*;
+
+    fn sample_endpoint(id: &str, api_format: &str) -> StoredProviderCatalogEndpoint {
+        StoredProviderCatalogEndpoint::new(
+            id.to_string(),
+            "provider-1".to_string(),
+            api_format.to_string(),
+            None,
+            None,
+            true,
+        )
+        .expect("endpoint should build")
+    }
+
+    fn sample_key(id: &str, api_format: Option<&str>) -> StoredProviderCatalogKey {
+        let mut key = StoredProviderCatalogKey::new(
+            id.to_string(),
+            "provider-1".to_string(),
+            id.to_string(),
+            "api_key".to_string(),
+            None,
+            true,
+        )
+        .expect("key should build");
+        key.api_formats = api_format.map(|api_format| json!([api_format]));
+        key
+    }
+
+    #[test]
+    fn endpoint_counts_follow_one_way_format_permissions() {
+        let endpoints = vec![
+            sample_endpoint("responses", "openai:responses"),
+            sample_endpoint("search", "openai:search"),
+        ];
+        let mut empty_scope_key = sample_key("empty-scope-key", None);
+        empty_scope_key.api_formats = Some(json!([]));
+        let keys = vec![
+            sample_key("responses-key", Some("openai:responses")),
+            sample_key("search-key", Some("openai:search")),
+            sample_key("unrestricted-key", None),
+            empty_scope_key,
+        ];
+
+        let (total, active) = endpoint_key_counts_by_format("custom", &endpoints, &keys);
+
+        assert_eq!(total.get("openai:responses"), Some(&2));
+        assert_eq!(total.get("openai:search"), Some(&3));
+        assert_eq!(active, total);
+    }
+
+    #[test]
+    fn endpoint_counts_keep_scoped_keys_visible_on_inactive_endpoints() {
+        let mut endpoint = sample_endpoint("chat", "openai:chat");
+        endpoint.is_active = false;
+        let mut empty_scope_key = sample_key("empty-scope-key", None);
+        empty_scope_key.api_formats = Some(json!([]));
+        let keys = vec![
+            sample_key("chat-key", Some("openai:chat")),
+            sample_key("unrestricted-key", None),
+            empty_scope_key,
+        ];
+
+        let (total, active) = endpoint_key_counts_by_format("custom", &[endpoint], &keys);
+
+        assert_eq!(total.get("openai:chat"), Some(&2));
+        assert_eq!(active, total);
+    }
+
+    #[test]
+    fn endpoint_create_and_update_reject_invalid_response_header_rules() {
+        for key in ["response_header_rules", "responseHeaderRules"] {
+            for rule in [
+                json!({"action": "set", "key": "bad header", "value": "secret"}),
+                json!({"action": "set", "key": "x-test", "value": "secret\r\nInjected: yes"}),
+                json!({"action": "rename", "from": "x-test", "to": "invalid:"}),
+            ] {
+                let config = json!({(key): [rule]});
+                let created = super::build_admin_provider_endpoint_record(
+                    "ep-new".into(),
+                    "provider".into(),
+                    "openai:chat".into(),
+                    "openai".into(),
+                    "chat".into(),
+                    "https://example.test".into(),
+                    None,
+                    None,
+                    None,
+                    0,
+                    Some(config.clone()),
+                    None,
+                    None,
+                    0,
+                );
+                let error = created.expect_err("invalid response rules must not be created");
+                assert!(!error.contains("secret"));
+                let error = super::apply_admin_provider_endpoint_update_fields(
+                    &sample_endpoint("chat", "openai:chat"),
+                    |field| field == "config",
+                    |_| false,
+                    &super::AdminProviderEndpointUpdateFields {
+                        config: Some(config),
+                        ..Default::default()
+                    },
+                )
+                .expect_err("invalid response rules must not be updated");
+                assert!(!error.contains("secret"));
+            }
+        }
+    }
+
+    #[test]
+    fn endpoint_updates_reject_unresolved_rule_masks_before_persistence() {
+        let header_rules = json!([{"action": "set", "key": "x-auth", "value": "header-secret"}]);
+        let body_rules = json!([{"action": "set", "path": "auth.token", "value": "body-secret"}]);
+        let mut endpoint = sample_endpoint("chat", "openai:chat");
+        endpoint.header_rules = Some(header_rules.clone());
+        endpoint.body_rules = Some(body_rules.clone());
+        endpoint.config = Some(json!({"response_header_rules": header_rules}));
+        let moved_header =
+            json!([{"action": "set", "key": "x-other-auth", "value": "***", "has_value": true}]);
+        let cases = [
+            (
+                "header_rules",
+                super::AdminProviderEndpointUpdateFields {
+                    header_rules: Some(moved_header.clone()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "body_rules",
+                super::AdminProviderEndpointUpdateFields {
+                    body_rules: Some(
+                        json!([{"action": "set", "path": "auth.api_key", "value": "***", "has_value": true}]),
+                    ),
+                    ..Default::default()
+                },
+            ),
+            (
+                "config",
+                super::AdminProviderEndpointUpdateFields {
+                    config: Some(json!({"response_header_rules": moved_header})),
+                    ..Default::default()
+                },
+            ),
+        ];
+        for (field, payload) in cases {
+            let error = super::apply_admin_provider_endpoint_update_fields(
+                &endpoint,
+                |key| key == field,
+                |_| false,
+                &payload,
+            )
+            .expect_err("unresolved masks must not overwrite saved secrets");
+            assert!(error.contains("无法匹配"));
+            assert!(!error.contains("header-secret"));
+            assert!(!error.contains("body-secret"));
+        }
+    }
+
+    #[test]
+    fn inherited_endpoint_counts_only_include_active_formats() {
+        let responses_endpoint = sample_endpoint("responses", "openai:responses");
+        let mut search_endpoint = sample_endpoint("search", "openai:search");
+        search_endpoint.is_active = false;
+        let mut inherited_key = sample_key("codex-key", Some("legacy:mismatch"));
+        inherited_key.auth_type = "oauth".to_string();
+
+        let (total, active) = endpoint_key_counts_by_format(
+            "codex",
+            &[responses_endpoint, search_endpoint],
+            &[inherited_key],
+        );
+
+        assert_eq!(total.get("openai:responses"), Some(&1));
+        assert!(!total.contains_key("openai:search"));
+        assert_eq!(active, total);
+    }
 }

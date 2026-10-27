@@ -126,11 +126,13 @@ fn http_connection_metrics_export_all_budget_counters() {
 
 #[test]
 fn usage_runtime_metrics_export_queue_payload_limit_and_attempt_counters() {
-    let mut snapshot = crate::usage::UsageRuntimeMetricsSnapshot::default();
-    snapshot.queue_payload_max_bytes = 1024 * 1024;
-    snapshot.queue_payload_downgraded_total = 11;
-    snapshot.queue_payload_rejected_total = 3;
-    snapshot.enqueue_retry_permanent_failure_total = 2;
+    let snapshot = crate::usage::UsageRuntimeMetricsSnapshot {
+        queue_payload_max_bytes: 1024 * 1024,
+        queue_payload_downgraded_total: 11,
+        queue_payload_rejected_total: 3,
+        enqueue_retry_permanent_failure_total: 2,
+        ..Default::default()
+    };
     let samples = usage_runtime_metric_samples(&snapshot);
     for (name, kind, value) in [
         (
@@ -169,11 +171,13 @@ fn usage_runtime_metrics_export_queue_payload_limit_and_attempt_counters() {
 
 #[test]
 fn usage_runtime_metrics_export_first_byte_batch_counters() {
-    let mut snapshot = crate::usage::UsageRuntimeMetricsSnapshot::default();
-    snapshot.first_byte_persistence_batch_flush_total = 7;
-    snapshot.first_byte_persistence_batch_records_total = 896;
-    snapshot.first_byte_persistence_max_batch_size = 128;
-    snapshot.first_byte_persistence_batch_failed_total = 2;
+    let snapshot = crate::usage::UsageRuntimeMetricsSnapshot {
+        first_byte_persistence_batch_flush_total: 7,
+        first_byte_persistence_batch_records_total: 896,
+        first_byte_persistence_max_batch_size: 128,
+        first_byte_persistence_batch_failed_total: 2,
+        ..Default::default()
+    };
 
     let samples = usage_runtime_metric_samples(&snapshot);
     let value = |name: &str| {
@@ -204,26 +208,28 @@ fn usage_runtime_metrics_export_first_byte_batch_counters() {
 
 #[test]
 fn usage_runtime_metrics_export_lifecycle_submission_health() {
-    let mut snapshot = crate::usage::UsageRuntimeMetricsSnapshot::default();
-    snapshot.lifecycle_submission_capacity = 32_768;
-    snapshot.lifecycle_submission_workers = 64;
-    snapshot.lifecycle_submission_pending = 123;
-    snapshot.lifecycle_submission_max_pending = 4_567;
-    snapshot.lifecycle_submission_enqueued_total = 20_000;
-    snapshot.lifecycle_submission_coalesced_total = 18_000;
-    snapshot.lifecycle_submission_overflow_total = 3;
-    snapshot.lifecycle_submission_processed_total = 19_877;
-    snapshot.ordered_lifecycle_pending = 321;
-    snapshot.ordered_lifecycle_max_pending = 8_765;
-    snapshot.pending_persistence_capacity = 65_536;
-    snapshot.pending_persistence_pending = 222;
-    snapshot.pending_persistence_max_pending = 7_654;
-    snapshot.pending_persistence_batch_flush_total = 40;
-    snapshot.pending_persistence_batch_records_total = 10_000;
-    snapshot.pending_persistence_max_batch_size = 512;
-    snapshot.pending_persistence_batch_failed_total = 2;
-    snapshot.pending_persistence_retried_total = 9;
-    snapshot.pending_persistence_overflow_total = 4;
+    let snapshot = crate::usage::UsageRuntimeMetricsSnapshot {
+        lifecycle_submission_capacity: 32_768,
+        lifecycle_submission_workers: 64,
+        lifecycle_submission_pending: 123,
+        lifecycle_submission_max_pending: 4_567,
+        lifecycle_submission_enqueued_total: 20_000,
+        lifecycle_submission_coalesced_total: 18_000,
+        lifecycle_submission_overflow_total: 3,
+        lifecycle_submission_processed_total: 19_877,
+        ordered_lifecycle_pending: 321,
+        ordered_lifecycle_max_pending: 8_765,
+        pending_persistence_capacity: 65_536,
+        pending_persistence_pending: 222,
+        pending_persistence_max_pending: 7_654,
+        pending_persistence_batch_flush_total: 40,
+        pending_persistence_batch_records_total: 10_000,
+        pending_persistence_max_batch_size: 512,
+        pending_persistence_batch_failed_total: 2,
+        pending_persistence_retried_total: 9,
+        pending_persistence_overflow_total: 4,
+        ..Default::default()
+    };
 
     let samples = usage_runtime_metric_samples(&snapshot);
     let value = |name: &str| {

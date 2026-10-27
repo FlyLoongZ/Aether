@@ -468,9 +468,7 @@ pub(super) async fn run_pending_cleanup_once(app: &AppState) -> Result<(), DataL
             "gateway cleaned stale pending and streaming requests"
         );
     }
-    if let Err(error) = cleanup_result {
-        return Err(error);
-    }
+    cleanup_result?;
     if let Some(Err(error)) = referral_result {
         return Err(DataLayerError::UnexpectedValue(error.into_message()));
     }

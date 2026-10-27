@@ -272,9 +272,7 @@ pub(super) async fn maybe_build_local_test_connection_route_response(
             api_operation: None,
         },
     );
-    let Some(upstream_url) = upstream_url else {
-        return None;
-    };
+    let upstream_url = upstream_url?;
 
     let mut provider_request_headers =
         BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);

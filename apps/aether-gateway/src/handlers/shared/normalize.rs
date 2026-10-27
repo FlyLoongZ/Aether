@@ -359,7 +359,8 @@ fn normalize_chat_pii_redaction_feature_object(
     feature: &mut Map<String, Value>,
 ) -> Result<(), String> {
     feature.remove("inject_model_instruction");
-    for key in ["enabled"] {
+    {
+        let key = "enabled";
         if let Some(value) = feature.get(key) {
             if !value.is_boolean() {
                 return Err(format!("chat_pii_redaction.{key} 必须是布尔值"));
@@ -394,7 +395,8 @@ fn normalize_notification_push_service_feature_settings(
 fn normalize_notification_push_service_feature_object(
     feature: &mut Map<String, Value>,
 ) -> Result<(), String> {
-    for key in ["enabled"] {
+    {
+        let key = "enabled";
         if let Some(value) = feature.get(key) {
             if !value.is_boolean() {
                 return Err(format!("notification_push_service.{key} 必须是布尔值"));

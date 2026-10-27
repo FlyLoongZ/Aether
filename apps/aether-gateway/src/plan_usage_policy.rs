@@ -685,7 +685,7 @@ async fn check_and_acquire_compiled_plan_usage_policy(
     let (runtime_request_rules, durable_request_rules): (Vec<_>, Vec<_>) = policy
         .request_rules
         .iter()
-        .partition(|rule| request_rule_uses_runtime_state(rule));
+        .partition(request_rule_uses_runtime_state);
     let runtime_rules = runtime_request_rules
         .iter()
         .map(|rule| runtime_request_rule(subject_id, rule, now_unix_secs))

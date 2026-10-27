@@ -123,7 +123,7 @@ pub(crate) fn validate_auth_register_password(password: &str, policy: &str) -> R
     if password.is_empty() {
         return Err("密码不能为空".to_string());
     }
-    if password.as_bytes().len() > 72 {
+    if password.len() > 72 {
         return Err("密码长度不能超过72字节".to_string());
     }
     let min_len = if matches!(policy, "medium" | "strong") {

@@ -90,7 +90,7 @@ pub(super) async fn maybe_build_local_admin_background_tasks_response(
             let pages = if response.total == 0 {
                 0
             } else {
-                (response.total + page_size - 1) / page_size
+                response.total.div_ceil(page_size)
             };
 
             let items = response

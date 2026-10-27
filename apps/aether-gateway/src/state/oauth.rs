@@ -2151,7 +2151,7 @@ impl AppState {
         let encrypted_auth_config = entry
             .metadata
             .as_ref()
-            .map(|value| serde_json::to_string(value))
+            .map(serde_json::to_string)
             .transpose()
             .map_err(|err| GatewayError::Internal(err.to_string()))?
             .map(|value| {

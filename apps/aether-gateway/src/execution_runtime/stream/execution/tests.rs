@@ -3654,7 +3654,7 @@ fn post_stop_reader_yields_after_bounded_empty_chunks() {
             std::task::Poll::Ready(Some(Ok::<Bytes, std::io::Error>(Bytes::from_static(b"x"))))
         }
     });
-    let mut reader = Box::pin(PostStopLimitedStreamReader::new(
+    let mut reader = std::pin::pin!(PostStopLimitedStreamReader::new(
         stream,
         PostStopFrameReadBudget::new(),
     ));

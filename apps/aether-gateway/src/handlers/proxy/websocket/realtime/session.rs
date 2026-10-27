@@ -309,9 +309,7 @@ async fn relay_realtime(
                             _ = writer_control.cancelled() => return None,
                             message = queue_rx.recv() => message,
                         };
-                        let Some(message) = message else {
-                            return None;
-                        };
+                        let message = message?;
                         let result = writer_control
                             .send(async { upstream_write.send(message).await.map_err(|_| ()) })
                             .await;
@@ -402,9 +400,7 @@ async fn relay_realtime(
                             _ = writer_control.cancelled() => return None,
                             message = queue_rx.recv() => message,
                         };
-                        let Some(message) = message else {
-                            return None;
-                        };
+                        let message = message?;
                         let result = writer_control
                             .send(async { client_write.send(message).await.map_err(|_| ()) })
                             .await;

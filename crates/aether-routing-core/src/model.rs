@@ -128,139 +128,6 @@ fn is_false(value: &bool) -> bool {
     !*value
 }
 
-#[cfg(test)]
-mod execution_policy_tests {
-    use super::*;
-
-    #[test]
-    fn group_visibility_is_opt_in_and_round_trips_without_losing_policy() {
-        let legacy: RoutingGroupConfig = serde_json::from_str("{}").unwrap();
-        assert!(!legacy.user_visible);
-        assert!(!RoutingGroupConfig::default().user_visible);
-        for user_visible in [false, true] {
-            let config: RoutingGroupConfig = serde_json::from_value(serde_json::json!({
-                "user_visible": user_visible,
-                "billing_multiplier": 0.5,
-                "disabled_providers": ["private-provider"],
-                "default_policy": { "scheduling_mode": "fixed_order" }
-            }))
-            .unwrap();
-            let encoded = serde_json::to_value(&config).unwrap();
-            assert_eq!(encoded["user_visible"], user_visible);
-            assert_eq!(config.billing_multiplier, 0.5);
-            assert_eq!(config.disabled_providers, ["private-provider"]);
-            assert_eq!(
-                serde_json::from_value::<RoutingGroupConfig>(encoded).unwrap(),
-                config
-            );
-        }
-        for invalid in [
-            serde_json::json!(null),
-            serde_json::json!("true"),
-            serde_json::json!(1),
-        ] {
-            assert!(
-                serde_json::from_value::<RoutingGroupConfig>(serde_json::json!({
-                    "user_visible": invalid
-                }))
-                .is_err()
-            );
-        }
-    }
-
-    #[test]
-    fn group_billing_multiplier_defaults_to_one_and_rejects_invalid_values() {
-        let legacy: RoutingGroupConfig = serde_json::from_str("{}").unwrap();
-        assert_eq!(legacy.billing_multiplier, 1.0);
-        assert_eq!(RoutingGroupConfig::default().billing_multiplier, 1.0);
-        for multiplier in [0.0, 0.25, 1.0, 2.5] {
-            let config: RoutingGroupConfig = serde_json::from_value(serde_json::json!({
-                "billing_multiplier": multiplier
-            }))
-            .unwrap();
-            crate::validate_routing_group_config(&config).unwrap();
-            assert_eq!(config.billing_multiplier, multiplier);
-            assert_eq!(
-                serde_json::from_value::<RoutingGroupConfig>(
-                    serde_json::to_value(&config).unwrap()
-                )
-                .unwrap(),
-                config
-            );
-        }
-        for multiplier in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
-            let config = RoutingGroupConfig {
-                billing_multiplier: multiplier,
-                ..RoutingGroupConfig::default()
-            };
-            assert!(matches!(
-                crate::validate_routing_group_config(&config),
-                Err(crate::RoutingValidationError::InvalidBillingMultiplier)
-            ));
-        }
-        for value in [
-            serde_json::json!(null),
-            serde_json::json!("2"),
-            serde_json::json!(false),
-        ] {
-            assert!(
-                serde_json::from_value::<RoutingGroupConfig>(serde_json::json!({
-                    "billing_multiplier": value
-                }))
-                .is_err()
-            );
-        }
-    }
-
-    #[test]
-    fn routing_failover_configuration_round_trips_and_validates() {
-        let config: RoutingGroupConfig = serde_json::from_value(serde_json::json!({
-            "default_policy": {
-                "max_transfer_count": 3,
-                "max_transfer_timeout_seconds": 90,
-                "failover_rules": {
-                    "success_failover_patterns": [{ "pattern": "(?i)capacity" }],
-                    "error_stop_patterns": [{ "status_codes": [400, 413] }]
-                }
-            }
-        }))
-        .unwrap();
-        crate::validate_routing_group_config(&config).unwrap();
-        assert_eq!(config.default_policy.execution_policy.max_transfer_count, 3);
-        let value = serde_json::to_value(&config).unwrap();
-        assert_eq!(value["default_policy"]["max_transfer_timeout_seconds"], 90);
-        assert_eq!(
-            serde_json::from_value::<RoutingGroupConfig>(value).unwrap(),
-            config
-        );
-    }
-
-    #[test]
-    fn cancellation_defaults_off_and_round_trips_with_legacy_heartbeat() {
-        let default: RoutingDefaultPolicy = serde_json::from_str("{}").unwrap();
-        assert!(!default.execution_policy.cancel_on_client_disconnect);
-        let policy: RoutingDefaultPolicy = serde_json::from_value(serde_json::json!({
-            "cancel_on_client_disconnect": true,
-            "enable_standard_text_sync_heartbeat": true
-        }))
-        .unwrap();
-        assert!(policy.execution_policy.cancel_on_client_disconnect);
-        assert!(policy.execution_policy.enable_cf_heartbeat);
-        let encoded = serde_json::to_value(&policy).unwrap();
-        assert_eq!(encoded["cancel_on_client_disconnect"], true);
-        assert_eq!(
-            serde_json::from_value::<RoutingDefaultPolicy>(encoded).unwrap(),
-            policy
-        );
-        assert!(
-            serde_json::from_value::<RoutingDefaultPolicy>(serde_json::json!({
-                "cancel_on_client_disconnect": "true"
-            }))
-            .is_err()
-        );
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RoutingModelPolicy {
     pub model: String,
@@ -396,4 +263,137 @@ pub struct RoutingGroupVersionRecord {
 
 fn default_true() -> bool {
     true
+}
+
+#[cfg(test)]
+mod execution_policy_tests {
+    use super::*;
+
+    #[test]
+    fn group_visibility_is_opt_in_and_round_trips_without_losing_policy() {
+        let legacy: RoutingGroupConfig = serde_json::from_str("{}").unwrap();
+        assert!(!legacy.user_visible);
+        assert!(!RoutingGroupConfig::default().user_visible);
+        for user_visible in [false, true] {
+            let config: RoutingGroupConfig = serde_json::from_value(serde_json::json!({
+                "user_visible": user_visible,
+                "billing_multiplier": 0.5,
+                "disabled_providers": ["private-provider"],
+                "default_policy": { "scheduling_mode": "fixed_order" }
+            }))
+            .unwrap();
+            let encoded = serde_json::to_value(&config).unwrap();
+            assert_eq!(encoded["user_visible"], user_visible);
+            assert_eq!(config.billing_multiplier, 0.5);
+            assert_eq!(config.disabled_providers, ["private-provider"]);
+            assert_eq!(
+                serde_json::from_value::<RoutingGroupConfig>(encoded).unwrap(),
+                config
+            );
+        }
+        for invalid in [
+            serde_json::json!(null),
+            serde_json::json!("true"),
+            serde_json::json!(1),
+        ] {
+            assert!(
+                serde_json::from_value::<RoutingGroupConfig>(serde_json::json!({
+                    "user_visible": invalid
+                }))
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn group_billing_multiplier_defaults_to_one_and_rejects_invalid_values() {
+        let legacy: RoutingGroupConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.billing_multiplier, 1.0);
+        assert_eq!(RoutingGroupConfig::default().billing_multiplier, 1.0);
+        for multiplier in [0.0, 0.25, 1.0, 2.5] {
+            let config: RoutingGroupConfig = serde_json::from_value(serde_json::json!({
+                "billing_multiplier": multiplier
+            }))
+            .unwrap();
+            crate::validate_routing_group_config(&config).unwrap();
+            assert_eq!(config.billing_multiplier, multiplier);
+            assert_eq!(
+                serde_json::from_value::<RoutingGroupConfig>(
+                    serde_json::to_value(&config).unwrap()
+                )
+                .unwrap(),
+                config
+            );
+        }
+        for multiplier in [-1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let config = RoutingGroupConfig {
+                billing_multiplier: multiplier,
+                ..RoutingGroupConfig::default()
+            };
+            assert!(matches!(
+                crate::validate_routing_group_config(&config),
+                Err(crate::RoutingValidationError::InvalidBillingMultiplier)
+            ));
+        }
+        for value in [
+            serde_json::json!(null),
+            serde_json::json!("2"),
+            serde_json::json!(false),
+        ] {
+            assert!(
+                serde_json::from_value::<RoutingGroupConfig>(serde_json::json!({
+                    "billing_multiplier": value
+                }))
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn routing_failover_configuration_round_trips_and_validates() {
+        let config: RoutingGroupConfig = serde_json::from_value(serde_json::json!({
+            "default_policy": {
+                "max_transfer_count": 3,
+                "max_transfer_timeout_seconds": 90,
+                "failover_rules": {
+                    "success_failover_patterns": [{ "pattern": "(?i)capacity" }],
+                    "error_stop_patterns": [{ "status_codes": [400, 413] }]
+                }
+            }
+        }))
+        .unwrap();
+        crate::validate_routing_group_config(&config).unwrap();
+        assert_eq!(config.default_policy.execution_policy.max_transfer_count, 3);
+        let value = serde_json::to_value(&config).unwrap();
+        assert_eq!(value["default_policy"]["max_transfer_timeout_seconds"], 90);
+        assert_eq!(
+            serde_json::from_value::<RoutingGroupConfig>(value).unwrap(),
+            config
+        );
+    }
+
+    #[test]
+    fn cancellation_defaults_off_and_round_trips_with_legacy_heartbeat() {
+        let default: RoutingDefaultPolicy = serde_json::from_str("{}").unwrap();
+        assert!(!default.execution_policy.cancel_on_client_disconnect);
+        let policy: RoutingDefaultPolicy = serde_json::from_value(serde_json::json!({
+            "cancel_on_client_disconnect": true,
+            "enable_standard_text_sync_heartbeat": true
+        }))
+        .unwrap();
+        assert!(policy.execution_policy.cancel_on_client_disconnect);
+        assert!(policy.execution_policy.enable_cf_heartbeat);
+        let encoded = serde_json::to_value(&policy).unwrap();
+        assert_eq!(encoded["cancel_on_client_disconnect"], true);
+        assert_eq!(
+            serde_json::from_value::<RoutingDefaultPolicy>(encoded).unwrap(),
+            policy
+        );
+        assert!(
+            serde_json::from_value::<RoutingDefaultPolicy>(serde_json::json!({
+                "cancel_on_client_disconnect": "true"
+            }))
+            .is_err()
+        );
+    }
 }

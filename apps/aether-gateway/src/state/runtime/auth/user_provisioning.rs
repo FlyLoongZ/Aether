@@ -194,10 +194,7 @@ impl AppState {
                 return Ok(false);
             }
             let mut wallets = store.lock().expect("auth wallet store should lock");
-            if !wallets
-                .get(&wallet.id)
-                .is_some_and(|current| owner_matches(current))
-            {
+            if !wallets.get(&wallet.id).is_some_and(owner_matches) {
                 return Ok(false);
             }
             let removed = wallets.remove(&wallet.id).is_some();

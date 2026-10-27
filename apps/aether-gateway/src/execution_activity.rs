@@ -518,8 +518,10 @@ mod tests {
 
     #[test]
     fn sampling_limits_report_incomplete_coverage_until_unobserved_work_expires() {
-        let mut history = History::default();
-        history.request_dimensions = MAX_REQUEST_DIMENSIONS;
+        let mut history = History {
+            request_dimensions: MAX_REQUEST_DIMENSIONS,
+            ..Default::default()
+        };
         let untracked = begin(&mut history, 0, "request", "provider");
         assert_eq!(value(&mut history, 1)["coverage"], "partial");
         assert_eq!(value(&mut history, 2 * WINDOW_US)["coverage"], "partial");

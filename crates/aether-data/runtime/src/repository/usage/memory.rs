@@ -397,7 +397,7 @@ fn usage_matches_list_query(
             return false;
         }
     }
-    if query.error_only
+    !(query.error_only
         && item.status != "failed"
         && item.status_code.unwrap_or_default() < 400
         && item
@@ -405,12 +405,7 @@ fn usage_matches_list_query(
             .as_deref()
             .map(str::trim)
             .unwrap_or_default()
-            .is_empty()
-    {
-        return false;
-    }
-
-    true
+            .is_empty())
 }
 
 fn usage_matches_keyword_search_query(

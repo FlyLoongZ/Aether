@@ -26,7 +26,7 @@ use axum::{
 };
 use serde_json::json;
 
-fn normalize_keyword<'a>(keyword: Option<&'a String>) -> Option<String> {
+fn normalize_keyword(keyword: Option<&String>) -> Option<String> {
     keyword.map(|value| value.to_ascii_lowercase())
 }
 

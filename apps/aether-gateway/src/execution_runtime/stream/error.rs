@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn oversized_base64_error_frame_is_rejected_before_decode() {
         let mut body = Vec::new();
-        let encoded = "x".repeat((MAX_ERROR_BODY_BYTES + 2) / 3 * 4 + 1);
+        let encoded = "x".repeat(MAX_ERROR_BODY_BYTES.div_ceil(3) * 4 + 1);
 
         let keep_reading = append_error_frame_payload(&mut body, Some(&encoded), None)
             .expect("oversized frame should be handled without a decode error");

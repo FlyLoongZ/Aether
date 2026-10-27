@@ -232,9 +232,7 @@ fn windsurf_register_user_execution_result(request_id: &str) -> serde_json::Valu
     })
 }
 
-fn assert_single_provider_oauth_refresh_token_plan<'a>(
-    plans: &'a [ExecutionPlan],
-) -> &'a ExecutionPlan {
+fn assert_single_provider_oauth_refresh_token_plan(plans: &[ExecutionPlan]) -> &ExecutionPlan {
     let token_plans = plans
         .iter()
         .filter(|plan| plan.request_id == "provider-oauth:refresh-token")

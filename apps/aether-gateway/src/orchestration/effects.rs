@@ -821,11 +821,8 @@ async fn resolve_pool_feedback_context(
         }
     };
 
-    let Some(mut pool_config) =
-        admin_provider_pool_config_from_config_value(transport.provider.config.as_ref())
-    else {
-        return None;
-    };
+    let mut pool_config =
+        admin_provider_pool_config_from_config_value(transport.provider.config.as_ref())?;
 
     if let Some(override_policy) = context
         .report_context

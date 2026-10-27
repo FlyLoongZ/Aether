@@ -883,9 +883,7 @@ fn provider_query_select_kiro_endpoint<'a>(
 ) -> Result<Option<&'a StoredProviderCatalogEndpoint>, &'static str> {
     if let Some(endpoint_id) = endpoint_id {
         let endpoint = endpoints.iter().find(|endpoint| endpoint.id == endpoint_id);
-        return endpoint
-            .ok_or("Endpoint not found")
-            .map(|endpoint| Some(endpoint));
+        return endpoint.ok_or("Endpoint not found").map(Some);
     }
 
     if let Some(api_format) = api_format {
@@ -1508,9 +1506,9 @@ async fn provider_query_build_kiro_test_candidates(
                 ADMIN_PROVIDER_QUERY_INVALID_MAPPED_MODEL_DETAIL,
             ));
         }
-    } else if test_mode.eq_ignore_ascii_case("direct") {
-        requested_model.clone()
-    } else if !provider_query_should_apply_model_mapping(payload) {
+    } else if test_mode.eq_ignore_ascii_case("direct")
+        || !provider_query_should_apply_model_mapping(payload)
+    {
         requested_model.clone()
     } else {
         provider_query_resolve_global_effective_model(
@@ -3881,9 +3879,7 @@ async fn build_admin_provider_query_kiro_failover_response(
         ));
     };
 
-    let requested_models = if is_kiro {
-        vec![requested_model.clone()]
-    } else if failover_models.is_empty() {
+    let requested_models = if is_kiro || failover_models.is_empty() {
         vec![requested_model.clone()]
     } else {
         failover_models.clone()

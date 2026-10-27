@@ -269,49 +269,6 @@ impl std::fmt::Debug for PaymentGatewayConfigCasWriteInput {
     }
 }
 
-#[cfg(test)]
-mod payment_gateway_debug_tests {
-    use super::{PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigWriteInput};
-
-    #[test]
-    fn payment_gateway_config_debug_output_redacts_credential_material() {
-        let input = PaymentGatewayConfigCasWriteInput {
-            input: PaymentGatewayConfigWriteInput {
-                provider: "stripe".to_string(),
-                enabled: true,
-                endpoint_url: "https://endpoint.example/?key=endpoint-canary".to_string(),
-                callback_base_url: Some(
-                    "https://callback.example/?token=callback-canary".to_string(),
-                ),
-                merchant_id: "merchant".to_string(),
-                merchant_key_encrypted: Some("merchant-key-canary".to_string()),
-                preserve_existing_secret: false,
-                pay_currency: "USD".to_string(),
-                usd_exchange_rate: 1.0,
-                min_recharge_usd: 1.0,
-                channels_json: serde_json::json!({"secret": "channels-canary"}),
-            },
-            expected_existing: true,
-            expected_merchant_key_encrypted: Some("expected-merchant-key-canary".to_string()),
-        };
-
-        let debug = format!("{input:?}");
-        assert!(debug.contains("[REDACTED]"));
-        for secret in [
-            "endpoint-canary",
-            "callback-canary",
-            "merchant-key-canary",
-            "channels-canary",
-            "expected-merchant-key-canary",
-        ] {
-            assert!(
-                !debug.contains(secret),
-                "debug output leaked {secret}: {debug}"
-            );
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct BillingPlanRecord {
     pub id: String,
@@ -694,5 +651,48 @@ pub trait BillingReadRepository: Send + Sync {
     ) -> Result<Option<UserDailyQuotaAvailabilityRecord>, crate::DataLayerError> {
         let _ = user_id;
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod payment_gateway_debug_tests {
+    use super::{PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigWriteInput};
+
+    #[test]
+    fn payment_gateway_config_debug_output_redacts_credential_material() {
+        let input = PaymentGatewayConfigCasWriteInput {
+            input: PaymentGatewayConfigWriteInput {
+                provider: "stripe".to_string(),
+                enabled: true,
+                endpoint_url: "https://endpoint.example/?key=endpoint-canary".to_string(),
+                callback_base_url: Some(
+                    "https://callback.example/?token=callback-canary".to_string(),
+                ),
+                merchant_id: "merchant".to_string(),
+                merchant_key_encrypted: Some("merchant-key-canary".to_string()),
+                preserve_existing_secret: false,
+                pay_currency: "USD".to_string(),
+                usd_exchange_rate: 1.0,
+                min_recharge_usd: 1.0,
+                channels_json: serde_json::json!({"secret": "channels-canary"}),
+            },
+            expected_existing: true,
+            expected_merchant_key_encrypted: Some("expected-merchant-key-canary".to_string()),
+        };
+
+        let debug = format!("{input:?}");
+        assert!(debug.contains("[REDACTED]"));
+        for secret in [
+            "endpoint-canary",
+            "callback-canary",
+            "merchant-key-canary",
+            "channels-canary",
+            "expected-merchant-key-canary",
+        ] {
+            assert!(
+                !debug.contains(secret),
+                "debug output leaked {secret}: {debug}"
+            );
+        }
     }
 }

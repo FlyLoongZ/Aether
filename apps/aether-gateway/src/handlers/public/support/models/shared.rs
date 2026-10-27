@@ -69,10 +69,8 @@ pub(super) fn models_query_api_formats(api_format: &str) -> &'static [&'static s
 pub(super) fn models_detail_id(request_path: &str) -> Option<String> {
     let raw = if let Some(value) = request_path.strip_prefix("/v1/models/") {
         value
-    } else if let Some(value) = request_path.strip_prefix("/v1beta/models/") {
-        value
     } else {
-        return None;
+        request_path.strip_prefix("/v1beta/models/")?
     };
     let normalized = raw.trim().trim_start_matches("models/").trim();
     if normalized.is_empty() {

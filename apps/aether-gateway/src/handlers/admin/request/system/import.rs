@@ -1682,16 +1682,15 @@ fn replace_simulated_imported_user(
     user: SimulatedImportedUser,
 ) {
     if let Some(previous) = users_by_id.remove(&user.id) {
-        if previous.email != user.email {
-            if previous
+        if previous.email != user.email
+            && previous
                 .email
                 .as_ref()
                 .is_some_and(|email| email_owners.get(email) == Some(&previous.id))
-            {
-                let previous_email = previous.email.as_deref().unwrap();
-                email_owners.remove(previous_email);
-                released_emails.insert(previous_email.to_string());
-            }
+        {
+            let previous_email = previous.email.as_deref().unwrap();
+            email_owners.remove(previous_email);
+            released_emails.insert(previous_email.to_string());
         }
         if previous.username != user.username
             && username_owners.get(&previous.username) == Some(&previous.id)
@@ -2379,9 +2378,7 @@ fn normalize_imported_user_api_formats(
     )?)
 }
 
-fn imported_ip_rules_field<'a>(
-    object: &'a Map<String, Value>,
-) -> (&'static str, Option<&'a Value>) {
+fn imported_ip_rules_field(object: &Map<String, Value>) -> (&'static str, Option<&Value>) {
     if let Some(value) = object.get("ip_rules") {
         ("ip_rules", Some(value))
     } else {
@@ -6664,7 +6661,7 @@ impl<'a> AdminAppState<'a> {
                                 &record,
                                 secret,
                             )
-                            .map_err(|message| invalid_request(message))
+                            .map_err(invalid_request)
                         )),
                         _ => EncryptedSecretUpdate::Preserve,
                     };

@@ -155,9 +155,7 @@ pub(crate) fn project_local_adaptive_success(
         return None;
     }
 
-    let Some(current_limit) = current_key.learned_rpm_limit.filter(|value| *value > 0) else {
-        return None;
-    };
+    let current_limit = current_key.learned_rpm_limit.filter(|value| *value > 0)?;
 
     let mut history = adaptive_history_records(current_key.adjustment_history.as_ref());
     let confidence = learning_confidence(
@@ -441,10 +439,10 @@ fn check_increase_conditions(
         .unwrap_or(DEFAULT_INITIAL_LIMIT);
     if samples.len() >= MIN_SAMPLES_FOR_DECISION {
         let high_util_ratio = high_utilization_ratio(samples);
-        if high_util_ratio >= HIGH_UTILIZATION_RATIO {
-            if known_boundary.is_none_or(|boundary| current_limit < boundary) {
-                return Some("high_utilization");
-            }
+        if high_util_ratio >= HIGH_UTILIZATION_RATIO
+            && known_boundary.is_none_or(|boundary| current_limit < boundary)
+        {
+            return Some("high_utilization");
         }
     }
 

@@ -492,9 +492,9 @@ fn admin_pool_apply_codex_window_usage_summaries(
     }
 }
 
-fn admin_pool_quota_windows<'a>(
-    quota_snapshot: &'a serde_json::Map<String, serde_json::Value>,
-) -> Vec<&'a serde_json::Map<String, serde_json::Value>> {
+fn admin_pool_quota_windows(
+    quota_snapshot: &serde_json::Map<String, serde_json::Value>,
+) -> Vec<&serde_json::Map<String, serde_json::Value>> {
     quota_snapshot
         .get("windows")
         .and_then(serde_json::Value::as_array)

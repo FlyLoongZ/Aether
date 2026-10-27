@@ -208,8 +208,6 @@ pub(crate) fn provider_key_auth_semantics(
         ProviderKeyCredentialKind::OAuthSession => {
             if provider_uses_bearer_oauth_runtime(provider_type) {
                 ProviderKeyRuntimeAuthKind::Bearer
-            } else if provider_uses_grok_session_runtime(provider_type) {
-                ProviderKeyRuntimeAuthKind::Unknown
             } else {
                 ProviderKeyRuntimeAuthKind::Unknown
             }

@@ -211,7 +211,7 @@ impl GatewayDataState {
             return 0;
         }
 
-        let ten_percent_ceil = (max_connections + 9) / 10;
+        let ten_percent_ceil = max_connections.div_ceil(10);
         ten_percent_ceil.clamp(2, 10).min(max_connections)
     }
 
@@ -1378,8 +1378,6 @@ impl GatewayDataState {
             None => Ok(None),
         }
     }
-
-    #[allow(dead_code)]
 
     pub(crate) async fn upsert_usage(
         &self,

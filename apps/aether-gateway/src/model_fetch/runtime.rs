@@ -714,6 +714,9 @@ mod tests {
         GatewayProviderTransportProvider, GatewayProviderTransportSnapshot,
     };
 
+    type CachedModels = Arc<Mutex<HashMap<(String, String), Vec<Value>>>>;
+    type UpstreamMetadataUpdates = Arc<Mutex<Vec<(String, String, Value, Option<u64>)>>>;
+
     #[derive(Clone, Default)]
     struct TestState {
         providers: Arc<Vec<StoredProviderCatalogProvider>>,
@@ -723,8 +726,8 @@ mod tests {
         transport_errors: Arc<HashMap<(String, String, String), String>>,
         execution_results: Arc<Mutex<VecDeque<ExecutionResult>>>,
         executed_plans: Arc<Mutex<Vec<ExecutionPlan>>>,
-        cached_models: Arc<Mutex<HashMap<(String, String), Vec<Value>>>>,
-        upstream_metadata_updates: Arc<Mutex<Vec<(String, String, Value, Option<u64>)>>>,
+        cached_models: CachedModels,
+        upstream_metadata_updates: UpstreamMetadataUpdates,
     }
 
     impl TestState {

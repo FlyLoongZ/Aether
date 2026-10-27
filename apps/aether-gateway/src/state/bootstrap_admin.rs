@@ -126,7 +126,7 @@ fn validate_bootstrap_admin_password(password: &str, policy: &str) -> Result<(),
             "bootstrap admin password cannot be empty".to_string(),
         ));
     }
-    if password.as_bytes().len() > 72 {
+    if password.len() > 72 {
         return Err(GatewayError::Internal(
             "bootstrap admin password must not exceed 72 bytes".to_string(),
         ));

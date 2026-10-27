@@ -5606,7 +5606,7 @@ ORDER BY request_count DESC, group_key ASC
             ),
         };
 
-        let mut builder = QueryBuilder::<Postgres>::new(&format!(
+        let mut builder = QueryBuilder::<Postgres>::new(format!(
             r#"
 WITH filtered_usage AS (
   SELECT

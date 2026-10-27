@@ -192,206 +192,532 @@ pub(crate) fn admin_proxy_local_requires_buffered_body(
                 return false;
             }
 
-            match (
-                decision.route_family.as_deref(),
-                request_context.request_method.clone(),
-                decision.route_kind.as_deref(),
-            ) {
-                (Some("endpoints_manage"), http::Method::POST, Some("create_provider_key"))
-                | (Some("endpoints_health"), http::Method::PUT, Some("health_v2_publication"))
-                | (Some("endpoints_manage"), http::Method::POST, Some("create_endpoint"))
-                | (Some("endpoints_manage"), http::Method::POST, Some("batch_delete_keys"))
-                | (Some("endpoints_manage"), http::Method::POST, Some("refresh_quota"))
-                | (
+            matches!(
+                (
+                    decision.route_family.as_deref(),
+                    request_context.request_method.clone(),
+                    decision.route_kind.as_deref(),
+                ),
+                (
+                    Some("endpoints_manage"),
+                    http::Method::POST,
+                    Some("create_provider_key")
+                ) | (
+                    Some("endpoints_health"),
+                    http::Method::PUT,
+                    Some("health_v2_publication")
+                ) | (
+                    Some("endpoints_manage"),
+                    http::Method::POST,
+                    Some("create_endpoint")
+                ) | (
+                    Some("endpoints_manage"),
+                    http::Method::POST,
+                    Some("batch_delete_keys")
+                ) | (
+                    Some("endpoints_manage"),
+                    http::Method::POST,
+                    Some("refresh_quota")
+                ) | (
                     Some("endpoints_manage"),
                     http::Method::POST,
                     Some("codex_reset_credit_consume"),
-                )
-                | (Some("endpoints_manage"), http::Method::PUT, Some("update_key"))
-                | (Some("endpoints_manage"), http::Method::PUT, Some("update_endpoint"))
-                | (Some("modules_manage"), http::Method::PUT, Some("set_enabled"))
-                | (Some("management_tokens_manage"), http::Method::POST, Some("create_token"))
-                | (Some("management_tokens_manage"), http::Method::PUT, Some("update_token"))
-                | (Some("oauth_manage"), http::Method::PUT, Some("upsert_provider"))
-                | (Some("oauth_manage"), http::Method::POST, Some("test_provider"))
-                | (Some("provider_oauth_manage"), http::Method::POST, Some("complete_key_oauth"))
-                | (
+                ) | (
+                    Some("endpoints_manage"),
+                    http::Method::PUT,
+                    Some("update_key")
+                ) | (
+                    Some("endpoints_manage"),
+                    http::Method::PUT,
+                    Some("update_endpoint")
+                ) | (
+                    Some("modules_manage"),
+                    http::Method::PUT,
+                    Some("set_enabled")
+                ) | (
+                    Some("management_tokens_manage"),
+                    http::Method::POST,
+                    Some("create_token")
+                ) | (
+                    Some("management_tokens_manage"),
+                    http::Method::PUT,
+                    Some("update_token")
+                ) | (
+                    Some("oauth_manage"),
+                    http::Method::PUT,
+                    Some("upsert_provider")
+                ) | (
+                    Some("oauth_manage"),
+                    http::Method::POST,
+                    Some("test_provider")
+                ) | (
+                    Some("provider_oauth_manage"),
+                    http::Method::POST,
+                    Some("complete_key_oauth")
+                ) | (
                     Some("provider_oauth_manage"),
                     http::Method::POST,
                     Some("complete_provider_oauth"),
-                )
-                | (
+                ) | (
                     Some("provider_oauth_manage"),
                     http::Method::POST,
                     Some("import_refresh_token"),
-                )
-                | (Some("provider_oauth_manage"), http::Method::POST, Some("cookie_authorize"))
-                | (
+                ) | (
+                    Some("provider_oauth_manage"),
+                    http::Method::POST,
+                    Some("cookie_authorize")
+                ) | (
                     Some("provider_oauth_manage"),
                     http::Method::POST,
                     Some("start_cookie_authorize_task"),
-                )
-                | (Some("provider_oauth_manage"), http::Method::POST, Some("batch_import_oauth"))
-                | (
+                ) | (
+                    Some("provider_oauth_manage"),
+                    http::Method::POST,
+                    Some("batch_import_oauth")
+                ) | (
                     Some("provider_oauth_manage"),
                     http::Method::POST,
                     Some("start_batch_import_oauth_task"),
-                )
-                | (Some("provider_oauth_manage"), http::Method::POST, Some("device_authorize"))
-                | (Some("provider_oauth_manage"), http::Method::POST, Some("device_poll"))
-                | (Some("system_manage"), http::Method::POST, Some("config_import"))
-                | (Some("system_manage"), http::Method::POST, Some("users_import"))
-                | (Some("system_manage"), http::Method::POST, Some("data_import"))
-                | (Some("system_manage"), http::Method::POST, Some("cleanup_usage_manual"))
-                | (Some("system_manage"), http::Method::POST, Some("smtp_test"))
-                | (Some("system_manage"), http::Method::POST, Some("prepare_update"))
-                | (Some("system_manage"), http::Method::POST, Some("apply_update"))
-                | (Some("system_manage"), http::Method::PUT, Some("settings_set"))
-                | (Some("system_manage"), http::Method::PUT, Some("config_set"))
-                | (Some("system_manage"), http::Method::PUT, Some("referral_settings_set"))
-                | (Some("system_manage"), http::Method::PUT, Some("email_template_set"))
-                | (Some("system_manage"), http::Method::POST, Some("email_template_preview"))
-                | (
+                ) | (
+                    Some("provider_oauth_manage"),
+                    http::Method::POST,
+                    Some("device_authorize")
+                ) | (
+                    Some("provider_oauth_manage"),
+                    http::Method::POST,
+                    Some("device_poll")
+                ) | (
                     Some("system_manage"),
                     http::Method::POST,
-                    Some("important_notification_test"),
-                )
-                | (
-                    Some("provider_models_manage"),
+                    Some("config_import")
+                ) | (
+                    Some("system_manage"),
                     http::Method::POST,
-                    Some("create_provider_model"),
-                )
-                | (
-                    Some("provider_models_manage"),
-                    http::Method::PATCH,
-                    Some("update_provider_model"),
-                )
-                | (
-                    Some("provider_models_manage"),
+                    Some("users_import")
+                ) | (
+                    Some("system_manage"),
                     http::Method::POST,
-                    Some("batch_create_provider_models"),
-                )
-                | (
-                    Some("provider_models_manage"),
+                    Some("data_import")
+                ) | (
+                    Some("system_manage"),
                     http::Method::POST,
-                    Some("assign_global_models"),
-                )
-                | (
-                    Some("provider_models_manage"),
-                    http::Method::POST,
-                    Some("import_from_upstream"),
-                )
-                | (Some("model_external_manage"), http::Method::PUT, Some("external_config_set"))
-                | (
-                    Some("provider_ops_manage"),
-                    http::Method::POST,
-                    Some("execute_provider_action"),
-                )
-                | (Some("provider_ops_manage"), http::Method::POST, Some("batch_balance"))
-                | (Some("provider_ops_manage"), http::Method::POST, Some("connect_provider"))
-                | (Some("provider_ops_manage"), http::Method::POST, Some("verify_provider"))
-                | (Some("provider_ops_manage"), http::Method::PUT, Some("save_provider_config"))
-                | (Some("announcements_manage"), http::Method::POST, Some("create_announcement"))
-                | (Some("announcements_manage"), http::Method::PUT, Some("update_announcement"))
-                | (
-                    Some("provider_strategy_manage"),
-                    http::Method::PUT,
-                    Some("update_provider_billing"),
-                )
-                | (
-                    Some("provider_query_manage"),
-                    http::Method::POST,
-                    Some("query_models" | "test_model" | "test_model_failover"),
-                )
-                | (Some("routing_profiles_manage"), http::Method::POST, Some("create_group"))
-                | (Some("routing_profiles_manage"), http::Method::PATCH, Some("update_group"))
-                | (Some("routing_profiles_manage"), http::Method::POST, Some("dry_run_group"))
-                | (Some("routing_profiles_manage"), http::Method::POST, Some("create_binding"))
-                | (Some("routing_profiles_manage"), http::Method::PATCH, Some("update_binding"))
-                | (Some("billing_manage"), http::Method::POST, Some("apply_preset"))
-                | (Some("billing_manage"), http::Method::POST, Some("create_rule"))
-                | (Some("billing_manage"), http::Method::PUT, Some("update_rule"))
-                | (Some("billing_manage"), http::Method::POST, Some("create_collector"))
-                | (Some("billing_manage"), http::Method::PUT, Some("update_collector"))
-                | (Some("billing_manage"), http::Method::POST, Some("create_provider_expense"))
-                | (Some("billing_manage"), http::Method::POST, Some("create_plan"))
-                | (Some("billing_manage"), http::Method::PUT, Some("update_plan"))
-                | (Some("billing_manage"), http::Method::PATCH, Some("set_plan_status"))
-                | (
-                    Some("payments_manage"),
-                    http::Method::PUT,
-                    Some("update_epay_gateway" | "update_payment_gateway"),
-                )
-                | (Some("payments_manage"), http::Method::POST, Some("credit_order"))
-                | (Some("payments_manage"), http::Method::POST, Some("create_redeem_code_batch"))
-                | (Some("payments_manage"), http::Method::POST, Some("delete_redeem_code_batch"))
-                | (
-                    Some("api_keys_manage"),
-                    http::Method::POST,
-                    Some("create_api_key" | "create_api_key_install_session"),
-                )
-                | (Some("api_keys_manage"), http::Method::PUT, Some("update_api_key"))
-                | (Some("api_keys_manage"), http::Method::PATCH, Some("toggle_api_key"))
-                | (Some("adaptive_manage"), http::Method::PATCH, Some("toggle_mode"))
-                | (Some("proxy_nodes_manage"), http::Method::POST, Some("create_manual_node"))
-                | (
-                    Some("proxy_nodes_manage"),
-                    http::Method::POST,
-                    Some("create_proxy_node_install_session"),
-                )
-                | (Some("proxy_nodes_manage"), http::Method::POST, Some("register_node"))
-                | (Some("proxy_nodes_manage"), http::Method::POST, Some("heartbeat_node"))
-                | (Some("proxy_nodes_manage"), http::Method::POST, Some("unregister_node"))
-                | (Some("proxy_nodes_manage"), http::Method::POST, Some("test_proxy_url"))
-                | (Some("proxy_nodes_manage"), http::Method::POST, Some("batch_upgrade_nodes"))
-                | (Some("proxy_nodes_manage"), http::Method::PATCH, Some("update_manual_node"))
-                | (Some("proxy_nodes_manage"), http::Method::PUT, Some("update_node_config"))
-                | (Some("security_manage"), http::Method::POST, Some("blacklist_add"))
-                | (Some("security_manage"), http::Method::POST, Some("whitelist_add"))
-                | (Some("users_manage"), http::Method::POST, Some("create_user"))
-                | (Some("users_manage"), http::Method::POST, Some("resolve_user_selection"))
-                | (Some("users_manage"), http::Method::POST, Some("batch_action_users"))
-                | (Some("users_manage"), http::Method::POST, Some("grant_user_billing_plan"))
-                | (Some("users_manage"), http::Method::PUT, Some("update_user"))
-                | (Some("users_manage"), http::Method::POST, Some("create_user_group"))
-                | (Some("users_manage"), http::Method::PUT, Some("update_user_group"))
-                | (
-                    Some("users_manage"),
-                    http::Method::PUT,
-                    Some("replace_user_group_members" | "set_default_user_group"),
-                )
-                | (Some("users_manage"), http::Method::POST, Some("create_user_api_key"))
-                | (Some("users_manage"), http::Method::PUT, Some("update_user_api_key"))
-                | (Some("users_manage"), http::Method::PATCH, Some("lock_user_api_key"))
-                | (Some("pool_manage"), http::Method::POST, Some("batch_import_keys"))
-                | (Some("pool_manage"), http::Method::POST, Some("batch_action_keys"))
-                | (Some("pool_manage"), http::Method::PATCH, Some("batch_update_keys"))
-                | (Some("pool_manage"), http::Method::POST, Some("resolve_selection"))
-                | (Some("usage_manage"), http::Method::POST, Some("replay"))
-                | (Some("wallets_manage"), http::Method::POST, Some("adjust_balance"))
-                | (Some("wallets_manage"), http::Method::POST, Some("recharge_balance"))
-                | (Some("wallets_manage"), http::Method::POST, Some("process_refund"))
-                | (Some("wallets_manage"), http::Method::POST, Some("complete_refund"))
-                | (Some("wallets_manage"), http::Method::POST, Some("fail_refund"))
-                | (Some("gemini_files_manage"), http::Method::POST, Some("upload"))
-                | (Some("ldap_manage"), http::Method::PUT, Some("set_config"))
-                | (Some("ldap_manage"), http::Method::POST, Some("test_connection"))
-                | (Some("global_models_manage"), http::Method::POST, Some("create_global_model"))
-                | (
-                    Some("global_models_manage"),
-                    http::Method::PATCH,
-                    Some("update_global_model"),
-                )
-                | (
-                    Some("global_models_manage"),
-                    http::Method::POST,
-                    Some("batch_delete_global_models"),
-                )
-                | (Some("global_models_manage"), http::Method::POST, Some("assign_to_providers"))
-                | (Some("providers_manage"), http::Method::POST, Some("create_provider"))
-                | (Some("providers_manage"), http::Method::PATCH, Some("update_provider")) => true,
-                _ => false,
-            }
+                    Some("cleanup_usage_manual")
+                ) | (Some("system_manage"), http::Method::POST, Some("smtp_test"))
+                    | (
+                        Some("system_manage"),
+                        http::Method::POST,
+                        Some("prepare_update")
+                    )
+                    | (
+                        Some("system_manage"),
+                        http::Method::POST,
+                        Some("apply_update")
+                    )
+                    | (
+                        Some("system_manage"),
+                        http::Method::PUT,
+                        Some("settings_set")
+                    )
+                    | (Some("system_manage"), http::Method::PUT, Some("config_set"))
+                    | (
+                        Some("system_manage"),
+                        http::Method::PUT,
+                        Some("referral_settings_set")
+                    )
+                    | (
+                        Some("system_manage"),
+                        http::Method::PUT,
+                        Some("email_template_set")
+                    )
+                    | (
+                        Some("system_manage"),
+                        http::Method::POST,
+                        Some("email_template_preview")
+                    )
+                    | (
+                        Some("system_manage"),
+                        http::Method::POST,
+                        Some("important_notification_test"),
+                    )
+                    | (
+                        Some("provider_models_manage"),
+                        http::Method::POST,
+                        Some("create_provider_model"),
+                    )
+                    | (
+                        Some("provider_models_manage"),
+                        http::Method::PATCH,
+                        Some("update_provider_model"),
+                    )
+                    | (
+                        Some("provider_models_manage"),
+                        http::Method::POST,
+                        Some("batch_create_provider_models"),
+                    )
+                    | (
+                        Some("provider_models_manage"),
+                        http::Method::POST,
+                        Some("assign_global_models"),
+                    )
+                    | (
+                        Some("provider_models_manage"),
+                        http::Method::POST,
+                        Some("import_from_upstream"),
+                    )
+                    | (
+                        Some("model_external_manage"),
+                        http::Method::PUT,
+                        Some("external_config_set")
+                    )
+                    | (
+                        Some("provider_ops_manage"),
+                        http::Method::POST,
+                        Some("execute_provider_action"),
+                    )
+                    | (
+                        Some("provider_ops_manage"),
+                        http::Method::POST,
+                        Some("batch_balance")
+                    )
+                    | (
+                        Some("provider_ops_manage"),
+                        http::Method::POST,
+                        Some("connect_provider")
+                    )
+                    | (
+                        Some("provider_ops_manage"),
+                        http::Method::POST,
+                        Some("verify_provider")
+                    )
+                    | (
+                        Some("provider_ops_manage"),
+                        http::Method::PUT,
+                        Some("save_provider_config")
+                    )
+                    | (
+                        Some("announcements_manage"),
+                        http::Method::POST,
+                        Some("create_announcement")
+                    )
+                    | (
+                        Some("announcements_manage"),
+                        http::Method::PUT,
+                        Some("update_announcement")
+                    )
+                    | (
+                        Some("provider_strategy_manage"),
+                        http::Method::PUT,
+                        Some("update_provider_billing"),
+                    )
+                    | (
+                        Some("provider_query_manage"),
+                        http::Method::POST,
+                        Some("query_models" | "test_model" | "test_model_failover"),
+                    )
+                    | (
+                        Some("routing_profiles_manage"),
+                        http::Method::POST,
+                        Some("create_group")
+                    )
+                    | (
+                        Some("routing_profiles_manage"),
+                        http::Method::PATCH,
+                        Some("update_group")
+                    )
+                    | (
+                        Some("routing_profiles_manage"),
+                        http::Method::POST,
+                        Some("dry_run_group")
+                    )
+                    | (
+                        Some("routing_profiles_manage"),
+                        http::Method::POST,
+                        Some("create_binding")
+                    )
+                    | (
+                        Some("routing_profiles_manage"),
+                        http::Method::PATCH,
+                        Some("update_binding")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::POST,
+                        Some("apply_preset")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::POST,
+                        Some("create_rule")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::PUT,
+                        Some("update_rule")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::POST,
+                        Some("create_collector")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::PUT,
+                        Some("update_collector")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::POST,
+                        Some("create_provider_expense")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::POST,
+                        Some("create_plan")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::PUT,
+                        Some("update_plan")
+                    )
+                    | (
+                        Some("billing_manage"),
+                        http::Method::PATCH,
+                        Some("set_plan_status")
+                    )
+                    | (
+                        Some("payments_manage"),
+                        http::Method::PUT,
+                        Some("update_epay_gateway" | "update_payment_gateway"),
+                    )
+                    | (
+                        Some("payments_manage"),
+                        http::Method::POST,
+                        Some("credit_order")
+                    )
+                    | (
+                        Some("payments_manage"),
+                        http::Method::POST,
+                        Some("create_redeem_code_batch")
+                    )
+                    | (
+                        Some("payments_manage"),
+                        http::Method::POST,
+                        Some("delete_redeem_code_batch")
+                    )
+                    | (
+                        Some("api_keys_manage"),
+                        http::Method::POST,
+                        Some("create_api_key" | "create_api_key_install_session"),
+                    )
+                    | (
+                        Some("api_keys_manage"),
+                        http::Method::PUT,
+                        Some("update_api_key")
+                    )
+                    | (
+                        Some("api_keys_manage"),
+                        http::Method::PATCH,
+                        Some("toggle_api_key")
+                    )
+                    | (
+                        Some("adaptive_manage"),
+                        http::Method::PATCH,
+                        Some("toggle_mode")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::POST,
+                        Some("create_manual_node")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::POST,
+                        Some("create_proxy_node_install_session"),
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::POST,
+                        Some("register_node")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::POST,
+                        Some("heartbeat_node")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::POST,
+                        Some("unregister_node")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::POST,
+                        Some("test_proxy_url")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::POST,
+                        Some("batch_upgrade_nodes")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::PATCH,
+                        Some("update_manual_node")
+                    )
+                    | (
+                        Some("proxy_nodes_manage"),
+                        http::Method::PUT,
+                        Some("update_node_config")
+                    )
+                    | (
+                        Some("security_manage"),
+                        http::Method::POST,
+                        Some("blacklist_add")
+                    )
+                    | (
+                        Some("security_manage"),
+                        http::Method::POST,
+                        Some("whitelist_add")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::POST,
+                        Some("create_user")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::POST,
+                        Some("resolve_user_selection")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::POST,
+                        Some("batch_action_users")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::POST,
+                        Some("grant_user_billing_plan")
+                    )
+                    | (Some("users_manage"), http::Method::PUT, Some("update_user"))
+                    | (
+                        Some("users_manage"),
+                        http::Method::POST,
+                        Some("create_user_group")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::PUT,
+                        Some("update_user_group")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::PUT,
+                        Some("replace_user_group_members" | "set_default_user_group"),
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::POST,
+                        Some("create_user_api_key")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::PUT,
+                        Some("update_user_api_key")
+                    )
+                    | (
+                        Some("users_manage"),
+                        http::Method::PATCH,
+                        Some("lock_user_api_key")
+                    )
+                    | (
+                        Some("pool_manage"),
+                        http::Method::POST,
+                        Some("batch_import_keys")
+                    )
+                    | (
+                        Some("pool_manage"),
+                        http::Method::POST,
+                        Some("batch_action_keys")
+                    )
+                    | (
+                        Some("pool_manage"),
+                        http::Method::PATCH,
+                        Some("batch_update_keys")
+                    )
+                    | (
+                        Some("pool_manage"),
+                        http::Method::POST,
+                        Some("resolve_selection")
+                    )
+                    | (Some("usage_manage"), http::Method::POST, Some("replay"))
+                    | (
+                        Some("wallets_manage"),
+                        http::Method::POST,
+                        Some("adjust_balance")
+                    )
+                    | (
+                        Some("wallets_manage"),
+                        http::Method::POST,
+                        Some("recharge_balance")
+                    )
+                    | (
+                        Some("wallets_manage"),
+                        http::Method::POST,
+                        Some("process_refund")
+                    )
+                    | (
+                        Some("wallets_manage"),
+                        http::Method::POST,
+                        Some("complete_refund")
+                    )
+                    | (
+                        Some("wallets_manage"),
+                        http::Method::POST,
+                        Some("fail_refund")
+                    )
+                    | (
+                        Some("gemini_files_manage"),
+                        http::Method::POST,
+                        Some("upload")
+                    )
+                    | (Some("ldap_manage"), http::Method::PUT, Some("set_config"))
+                    | (
+                        Some("ldap_manage"),
+                        http::Method::POST,
+                        Some("test_connection")
+                    )
+                    | (
+                        Some("global_models_manage"),
+                        http::Method::POST,
+                        Some("create_global_model")
+                    )
+                    | (
+                        Some("global_models_manage"),
+                        http::Method::PATCH,
+                        Some("update_global_model"),
+                    )
+                    | (
+                        Some("global_models_manage"),
+                        http::Method::POST,
+                        Some("batch_delete_global_models"),
+                    )
+                    | (
+                        Some("global_models_manage"),
+                        http::Method::POST,
+                        Some("assign_to_providers")
+                    )
+                    | (
+                        Some("providers_manage"),
+                        http::Method::POST,
+                        Some("create_provider")
+                    )
+                    | (
+                        Some("providers_manage"),
+                        http::Method::PATCH,
+                        Some("update_provider")
+                    )
+            )
         })
 }
 

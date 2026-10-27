@@ -1734,13 +1734,10 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_with_trusted_admin_p
                 .and_then(serde_json::Value::as_str),
             Some("已失效")
         );
-        assert_eq!(
-            oauth_snapshot
-                .get("reason")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|reason| !reason.trim().is_empty()),
-            true
-        );
+        assert!(oauth_snapshot
+            .get("reason")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|reason| !reason.trim().is_empty()));
         assert_eq!(
             oauth_snapshot
                 .get("requires_reauth")
