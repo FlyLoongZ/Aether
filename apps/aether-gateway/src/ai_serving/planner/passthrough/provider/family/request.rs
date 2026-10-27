@@ -146,19 +146,21 @@ pub(crate) async fn resolve_local_same_format_provider_candidate_payload_parts(
 
     let Some(base_provider_request) =
         super::super::request::build_same_format_provider_request_body_with_compatibility_report(
-            body_json,
-            prepared.provider_api_format.as_str(),
-            &prepared.mapped_model,
-            spec,
-            prepared.transport.endpoint.body_rules.as_ref(),
-            Some(effective_headers),
-            prepared.upstream_is_stream,
-            prepared.force_body_stream_field,
-            prepared.kiro_auth.as_ref(),
-            prepared.is_claude_code,
-            prepared.behavior.is_vertex,
-            false,
-            reasoning_replay_policy,
+            super::super::request::SameFormatBodyBuildInput {
+                body_json,
+                provider_api_format: prepared.provider_api_format.as_str(),
+                mapped_model: &prepared.mapped_model,
+                spec,
+                body_rules: prepared.transport.endpoint.body_rules.as_ref(),
+                request_headers: Some(effective_headers),
+                upstream_is_stream: prepared.upstream_is_stream,
+                force_body_stream_field: prepared.force_body_stream_field,
+                kiro_auth: prepared.kiro_auth.as_ref(),
+                is_claude_code: prepared.is_claude_code,
+                is_vertex: prepared.behavior.is_vertex,
+                enable_model_directives: false,
+                reasoning_replay_policy,
+            },
         )
     else {
         mark_skipped_local_same_format_provider_candidate_with_extra_data(

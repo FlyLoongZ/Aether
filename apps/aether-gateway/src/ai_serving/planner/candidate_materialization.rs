@@ -1,3 +1,4 @@
+use crate::request_candidate_runtime::LocalCandidatePersistenceInput;
 #[cfg(test)]
 use aether_ai_serving::AiAvailableCandidatePersistencePort;
 use aether_ai_serving::{
@@ -512,17 +513,22 @@ where
         Ok(self
             .state
             .persist_available_local_candidate(
-                self.trace_id,
-                self.user_id,
-                self.api_key_id,
-                &candidate.candidate,
-                candidate_index,
-                effective_retry_index(retry_index, candidate.orchestration.pool_key_index),
-                generated_candidate_id,
-                self.required_capabilities,
-                extra_data,
+                LocalCandidatePersistenceInput {
+                    trace_id: self.trace_id,
+                    user_id: self.user_id,
+                    api_key_id: self.api_key_id,
+                    candidate: &candidate.candidate,
+                    candidate_index,
+                    retry_index: effective_retry_index(
+                        retry_index,
+                        candidate.orchestration.pool_key_index,
+                    ),
+                    candidate_id: generated_candidate_id,
+                    required_capabilities: self.required_capabilities,
+                    extra_data,
+                    error_context: self.error_context,
+                },
                 self.created_at_unix_ms,
-                self.error_context,
             )
             .await)
     }
@@ -1609,17 +1615,19 @@ where
     let candidate_id = if should_persist_available_local_candidate(&candidate) {
         state
             .persist_available_local_candidate(
-                trace_id,
-                context.user_id,
-                context.api_key_id,
-                &candidate.candidate,
-                candidate_index,
-                retry_index,
-                generated_candidate_id.as_str(),
-                context.required_capabilities,
-                extra_data,
+                LocalCandidatePersistenceInput {
+                    trace_id,
+                    user_id: context.user_id,
+                    api_key_id: context.api_key_id,
+                    candidate: &candidate.candidate,
+                    candidate_index,
+                    retry_index,
+                    candidate_id: generated_candidate_id.as_str(),
+                    required_capabilities: context.required_capabilities,
+                    extra_data,
+                    error_context: context.error_context,
+                },
                 current_unix_ms(),
-                context.error_context,
             )
             .await
     } else {
@@ -1951,18 +1959,20 @@ pub(crate) async fn persist_skipped_local_execution_candidate(
 
     PlannerAppState::new(state)
         .persist_skipped_local_candidate(
-            trace_id,
-            user_id,
-            api_key_id,
-            candidate,
-            candidate_index,
-            0,
-            candidate_id,
-            required_capabilities,
+            LocalCandidatePersistenceInput {
+                trace_id,
+                user_id,
+                api_key_id,
+                candidate,
+                candidate_index,
+                retry_index: 0,
+                candidate_id,
+                required_capabilities,
+                extra_data,
+                error_context,
+            },
             skip_reason,
-            extra_data,
             current_unix_ms(),
-            error_context,
         )
         .await;
 }

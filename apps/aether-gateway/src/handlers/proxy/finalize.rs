@@ -8,7 +8,6 @@ use crate::constants::{
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
 use crate::middleware::{sanitize_access_log_path, should_downgrade_access_log, RequestLogEmitted};
-use crate::AppState;
 use aether_runtime::{maybe_hold_axum_response_permit, AdmissionPermit};
 use axum::body::Body;
 use axum::http::{self, header::HeaderName, header::HeaderValue, Response};
@@ -47,7 +46,6 @@ pub(super) fn request_wants_stream(
 }
 
 pub(super) fn finalize_gateway_response(
-    _statee: &AppState,
     mut response: Response<Body>,
     trace_id: &str,
     remote_addr: &std::net::SocketAddr,
@@ -294,7 +292,6 @@ fn attach_control_decision_headers(
 }
 
 pub(super) fn finalize_gateway_response_with_context(
-    state: &AppState,
     response: Response<Body>,
     remote_addr: &std::net::SocketAddr,
     request_context: &GatewayPublicRequestContext,
@@ -308,7 +305,6 @@ pub(super) fn finalize_gateway_response_with_context(
         .and_then(|value| value.parse().ok())
         .unwrap_or_else(|| remote_addr.ip());
     finalize_gateway_response(
-        state,
         response,
         &request_context.trace_id,
         remote_addr,
@@ -328,7 +324,6 @@ mod tests {
         apply_sensitive_route_cache_policy, finalize_gateway_response, request_wants_stream,
     };
     use crate::control::{GatewayControlDecision, GatewayPublicRequestContext};
-    use crate::AppState;
     use axum::body::{Body, Bytes};
     use axum::http::{HeaderMap, HeaderValue, Method, Response, StatusCode};
     use std::sync::{Arc, Mutex};
@@ -522,7 +517,6 @@ mod tests {
 
     #[test]
     fn finalize_gateway_response_logs_sanitized_path_and_query() {
-        let state = AppState::new().expect("gateway state should build");
         let writer = SharedBuffer::default();
         let subscriber = tracing_subscriber::registry().with(
             tracing_subscriber::fmt::layer()
@@ -552,7 +546,6 @@ mod tests {
             .expect("response should build");
 
         let _response = finalize_gateway_response(
-            &state,
             response,
             "trace-finalize",
             &remote_addr,

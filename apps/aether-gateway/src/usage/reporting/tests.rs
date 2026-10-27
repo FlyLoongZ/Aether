@@ -263,6 +263,8 @@ fn sample_codex_paid_headers() -> BTreeMap<String, String> {
     ])
 }
 
+#[allow(clippy::too_many_arguments)]
+// Test fixture builder; explicit fields keep assertions readable.
 async fn seed_video_task(
     repository: &InMemoryVideoTaskRepository,
     id: &str,

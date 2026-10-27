@@ -189,7 +189,7 @@ fn wallet_today_usage_window() -> Result<(String, String, u64, u64), String> {
     ))
 }
 
-pub(super) fn build_wallet_daily_usage_payload(
+pub(super) struct WalletDailyUsagePayload {
     id: Option<String>,
     date: String,
     timezone: String,
@@ -203,7 +203,51 @@ pub(super) fn build_wallet_daily_usage_payload(
     last_finalized_at: Option<String>,
     aggregated_at: Option<String>,
     is_today: bool,
-) -> serde_json::Value {
+}
+
+impl WalletDailyUsagePayload {
+    fn from_ledger(
+        entry: &aether_data::repository::wallet::StoredWalletDailyUsageLedger,
+        is_today: bool,
+    ) -> Self {
+        Self {
+            id: entry.id.clone(),
+            date: entry.billing_date.clone(),
+            timezone: entry.billing_timezone.clone(),
+            total_cost: entry.total_cost_usd,
+            total_requests: entry.total_requests,
+            input_tokens: entry.input_tokens,
+            output_tokens: entry.output_tokens,
+            cache_creation_tokens: entry.cache_creation_tokens,
+            cache_read_tokens: entry.cache_read_tokens,
+            first_finalized_at: entry
+                .first_finalized_at_unix_secs
+                .and_then(unix_secs_to_rfc3339),
+            last_finalized_at: entry
+                .last_finalized_at_unix_secs
+                .and_then(unix_secs_to_rfc3339),
+            aggregated_at: entry.aggregated_at_unix_secs.and_then(unix_secs_to_rfc3339),
+            is_today,
+        }
+    }
+}
+
+fn build_wallet_daily_usage_payload(payload: WalletDailyUsagePayload) -> serde_json::Value {
+    let WalletDailyUsagePayload {
+        id,
+        date,
+        timezone,
+        total_cost,
+        total_requests,
+        input_tokens,
+        output_tokens,
+        cache_creation_tokens,
+        cache_read_tokens,
+        first_finalized_at,
+        last_finalized_at,
+        aggregated_at,
+        is_today,
+    } = payload;
     json!({
         "id": id,
         "date": date,
@@ -221,22 +265,29 @@ pub(super) fn build_wallet_daily_usage_payload(
     })
 }
 
+pub(super) fn build_wallet_daily_usage_payload_from_ledger(
+    entry: &aether_data::repository::wallet::StoredWalletDailyUsageLedger,
+    is_today: bool,
+) -> serde_json::Value {
+    build_wallet_daily_usage_payload(WalletDailyUsagePayload::from_ledger(entry, is_today))
+}
+
 pub(super) fn build_wallet_zero_today_entry() -> serde_json::Value {
-    build_wallet_daily_usage_payload(
-        None,
-        wallet_today_billing_date_string(),
-        WALLET_LEGACY_TIMEZONE.to_string(),
-        0.0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        None,
-        None,
-        Some(Utc::now().to_rfc3339()),
-        true,
-    )
+    build_wallet_daily_usage_payload(WalletDailyUsagePayload {
+        id: None,
+        date: wallet_today_billing_date_string(),
+        timezone: WALLET_LEGACY_TIMEZONE.to_string(),
+        total_cost: 0.0,
+        total_requests: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_tokens: 0,
+        cache_read_tokens: 0,
+        first_finalized_at: None,
+        last_finalized_at: None,
+        aggregated_at: Some(Utc::now().to_rfc3339()),
+        is_today: true,
+    })
 }
 
 async fn build_wallet_live_today_usage_payload_for_auth_scope(
@@ -258,23 +309,25 @@ async fn build_wallet_live_today_usage_payload_for_auth_scope(
         .await
         .map_err(|err| format!("wallet today cost lookup failed: {err:?}"))?;
     Ok(Some(build_wallet_daily_usage_payload(
-        None,
-        date,
-        timezone,
-        summary.total_cost_usd,
-        summary.total_requests,
-        summary.input_tokens,
-        summary.output_tokens,
-        summary.cache_creation_tokens,
-        summary.cache_read_tokens,
-        summary
-            .first_finalized_at_unix_secs
-            .and_then(unix_secs_to_rfc3339),
-        summary
-            .last_finalized_at_unix_secs
-            .and_then(unix_secs_to_rfc3339),
-        Some(Utc::now().to_rfc3339()),
-        true,
+        WalletDailyUsagePayload {
+            id: None,
+            date,
+            timezone,
+            total_cost: summary.total_cost_usd,
+            total_requests: summary.total_requests,
+            input_tokens: summary.input_tokens,
+            output_tokens: summary.output_tokens,
+            cache_creation_tokens: summary.cache_creation_tokens,
+            cache_read_tokens: summary.cache_read_tokens,
+            first_finalized_at: summary
+                .first_finalized_at_unix_secs
+                .and_then(unix_secs_to_rfc3339),
+            last_finalized_at: summary
+                .last_finalized_at_unix_secs
+                .and_then(unix_secs_to_rfc3339),
+            aggregated_at: Some(Utc::now().to_rfc3339()),
+            is_today: true,
+        },
     )))
 }
 

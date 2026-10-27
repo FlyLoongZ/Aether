@@ -154,9 +154,9 @@ use aether_data_contracts::repository::video_tasks::{
 use aether_runtime_state::RuntimeQueueStore;
 
 pub(crate) use self::referrals::{
-    ReferralAdminStats, ReferralReconciliationSummary, ReferralRelationshipListQuery,
-    ReferralRelationshipRecord, ReferralRewardConfig, ReferralRewardDetail,
-    ReferralRewardListQuery, ReferralRewardRecord, ReferralUserDashboard,
+    LocalAuthRegistration, ReferralAdminStats, ReferralReconciliationSummary,
+    ReferralRelationshipListQuery, ReferralRelationshipRecord, ReferralRewardConfig,
+    ReferralRewardDetail, ReferralRewardListQuery, ReferralRewardRecord, ReferralUserDashboard,
 };
 
 #[derive(Clone, Default)]

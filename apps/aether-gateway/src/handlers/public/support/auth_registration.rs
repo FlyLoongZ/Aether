@@ -17,6 +17,8 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 use std::net::IpAddr;
 
+use crate::data::state::LocalAuthRegistration;
+
 const AUTH_REGISTRATION_STORAGE_UNAVAILABLE_DETAIL: &str = "注册数据存储暂不可用";
 const AUTH_REGISTRATION_UNAVAILABLE_DETAIL: &str = "注册暂不可用，请稍后重试";
 const AUTH_REGISTRATION_IDENTITY_UNAVAILABLE_DETAIL: &str = "无法使用该注册信息";
@@ -728,20 +730,21 @@ pub(super) async fn handle_auth_register(
     }
     let registration = if atomic_registration {
         state
-            .register_local_auth_user_with_referral(
-                email.clone(),
-                require_verification && email.is_some(),
-                username.clone(),
+            .register_local_auth_user_with_referral(LocalAuthRegistration {
+                email: email.clone(),
+                email_verified: require_verification && email.is_some(),
+                username: username.clone(),
                 password_hash,
-                initial_gift,
+                initial_gift_usd: initial_gift,
+                unlimited: false,
                 invite_code,
-                Some(referral_source),
-                referral_config.clone(),
-                privacy_policy
+                source: Some(referral_source),
+                config: referral_config.clone(),
+                privacy_version: privacy_policy
                     .enabled
                     .then_some(privacy_policy.version.as_str()),
-                default_group_id.as_deref(),
-            )
+                default_group_id: default_group_id.as_deref(),
+            })
             .await
     } else {
         state

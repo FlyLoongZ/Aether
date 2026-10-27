@@ -103,7 +103,6 @@ const LOCAL_EXECUTION_PLANNING_TIMEOUT_DETAIL: &str =
     "当前 AI 请求在本地执行规划阶段超时，请稍后重试";
 const EXECUTION_PATH_CODEX_LIVE_CALL: &str = "codex_live_call";
 fn finalize_request_body_buffer_rejection(
-    state: &AppState,
     request_context: &GatewayPublicRequestContext,
     remote_addr: &std::net::SocketAddr,
     started_at: &std::time::Instant,
@@ -118,7 +117,6 @@ fn finalize_request_body_buffer_rejection(
         EXECUTION_PATH_LOCAL_INVALID_REQUEST
     };
     Ok(finalize_gateway_response_with_context(
-        state,
         response,
         remote_addr,
         request_context,
@@ -138,7 +136,6 @@ fn local_execution_planning_timeout_parts(error: &GatewayError) -> Option<(&'sta
 }
 
 fn finalize_local_execution_planning_timeout(
-    state: &AppState,
     request_context: &GatewayPublicRequestContext,
     remote_addr: &std::net::SocketAddr,
     started_at: &std::time::Instant,
@@ -173,7 +170,6 @@ fn finalize_local_execution_planning_timeout(
         LOCAL_EXECUTION_PLANNING_TIMEOUT_DETAIL,
     )?;
     Ok(finalize_gateway_response_with_context(
-        state,
         response,
         remote_addr,
         request_context,
@@ -453,7 +449,6 @@ async fn proxy_request_inner(
                 limit,
             )?;
             return Ok(finalize_gateway_response(
-                &state,
                 response,
                 &trace_id,
                 &remote_addr,
@@ -490,7 +485,6 @@ async fn proxy_request_inner(
                 limit,
             )?;
             return Ok(finalize_gateway_response(
-                &state,
                 response,
                 &trace_id,
                 &remote_addr,
@@ -534,7 +528,6 @@ async fn proxy_request_inner(
                 "当前 IP 已被禁止访问",
             )?;
             return Ok(finalize_gateway_response(
-                &state,
                 response,
                 &trace_id,
                 &remote_addr,
@@ -569,7 +562,6 @@ async fn proxy_request_inner(
                 "IP 访问控制暂时不可用",
             )?;
             return Ok(finalize_gateway_response(
-                &state,
                 response,
                 &trace_id,
                 &remote_addr,
@@ -614,7 +606,6 @@ async fn proxy_request_inner(
             LOCAL_EXECUTION_LOOP_DETECTED_DETAIL,
         )?;
         return Ok(finalize_gateway_response(
-            &state,
             response,
             &trace_id,
             &remote_addr,
@@ -664,7 +655,6 @@ async fn proxy_request_inner(
                 &rejection,
             )?;
             return Ok(finalize_gateway_response_with_context(
-                &state,
                 response,
                 &remote_addr,
                 &request_context,
@@ -718,7 +708,6 @@ async fn proxy_request_inner(
             Ok(body) => Some(body),
             Err(err) => {
                 return finalize_request_body_buffer_rejection(
-                    &state,
                     &request_context,
                     &remote_addr,
                     &started_at,
@@ -747,7 +736,6 @@ async fn proxy_request_inner(
         let execution_path =
             resolve_local_proxy_execution_path(&response, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH);
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -768,7 +756,6 @@ async fn proxy_request_inner(
         let execution_path =
             resolve_local_proxy_execution_path(&response, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH);
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -787,7 +774,6 @@ async fn proxy_request_inner(
     {
         let response = build_admin_proxy_auth_required_response(&request_context);
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -806,7 +792,6 @@ async fn proxy_request_inner(
     {
         let response = build_unhandled_admin_proxy_response(&request_context);
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -818,7 +803,6 @@ async fn proxy_request_inner(
     if request_context.request_path.starts_with("/api/admin/") {
         let response = build_unhandled_admin_proxy_response(&request_context);
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -840,7 +824,6 @@ async fn proxy_request_inner(
         let execution_path =
             resolve_local_proxy_execution_path(&response, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH);
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -857,7 +840,6 @@ async fn proxy_request_inner(
     {
         let response = super::public::build_unhandled_public_support_response(&request_context);
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -910,7 +892,6 @@ async fn proxy_request_inner(
             Ok(body) => Some(body),
             Err(err) => {
                 return finalize_request_body_buffer_rejection(
-                    &state,
                     &request_context,
                     &remote_addr,
                     &started_at,
@@ -928,7 +909,6 @@ async fn proxy_request_inner(
         let response =
             build_local_auth_rejection_response(&trace_id, control_decision, &rejection)?;
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -956,7 +936,6 @@ async fn proxy_request_inner(
             let response =
                 build_local_auth_rejection_response(&trace_id, control_decision, &rejection)?;
             return Ok(finalize_gateway_response_with_context(
-                &state,
                 response,
                 &remote_addr,
                 &request_context,
@@ -1025,7 +1004,6 @@ async fn proxy_request_inner(
         let response =
             build_local_user_rpm_limited_response(&trace_id, control_decision, rejection)?;
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -1045,7 +1023,6 @@ async fn proxy_request_inner(
     .await?
     {
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -1075,7 +1052,6 @@ async fn proxy_request_inner(
                     &rejection,
                 )?;
                 return Ok(finalize_gateway_response_with_context(
-                    &state,
                     response,
                     &remote_addr,
                     &request_context,
@@ -1099,7 +1075,6 @@ async fn proxy_request_inner(
                     &rejection,
                 )?;
                 return Ok(finalize_gateway_response_with_context(
-                    &state,
                     response,
                     &remote_addr,
                     &request_context,
@@ -1119,7 +1094,6 @@ async fn proxy_request_inner(
                     limit,
                 )?;
                 return Ok(finalize_gateway_response_with_context(
-                    &state,
                     response,
                     &remote_addr,
                     &request_context,
@@ -1181,7 +1155,6 @@ async fn proxy_request_inner(
     );
     if let Some(response) = local_ai_public_response {
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -1200,7 +1173,6 @@ async fn proxy_request_inner(
             LOCAL_ROUTE_NOT_FOUND_DETAIL,
         )?;
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -1238,7 +1210,6 @@ async fn proxy_request_inner(
                     if let Some((phase, timeout_ms)) = local_execution_planning_timeout_parts(&err)
                     {
                         return finalize_local_execution_planning_timeout(
-                            &state,
                             &request_context,
                             &remote_addr,
                             &started_at,
@@ -1285,7 +1256,6 @@ async fn proxy_request_inner(
                     )?;
                     state.clear_local_execution_runtime_miss_diagnostic(&trace_id);
                     return Ok(finalize_gateway_response_with_context(
-                        &state,
                         execution_runtime_response,
                         &remote_addr,
                         &request_context,
@@ -1318,7 +1288,6 @@ async fn proxy_request_inner(
                 );
                 if let Some((phase, timeout_ms)) = local_execution_planning_timeout_parts(&err) {
                     return finalize_local_execution_planning_timeout(
-                        &state,
                         &request_context,
                         &remote_addr,
                         &started_at,
@@ -1350,7 +1319,6 @@ async fn proxy_request_inner(
                 .await?;
                 state.clear_local_execution_runtime_miss_diagnostic(&trace_id);
                 return Ok(finalize_gateway_response_with_context(
-                    &state,
                     execution_runtime_response,
                     &remote_addr,
                     &request_context,
@@ -1384,7 +1352,6 @@ async fn proxy_request_inner(
                     if let Some((phase, timeout_ms)) = local_execution_planning_timeout_parts(&err)
                     {
                         return finalize_local_execution_planning_timeout(
-                            &state,
                             &request_context,
                             &remote_addr,
                             &started_at,
@@ -1415,7 +1382,6 @@ async fn proxy_request_inner(
                     )?;
                     state.clear_local_execution_runtime_miss_diagnostic(&trace_id);
                     return Ok(finalize_gateway_response_with_context(
-                        &state,
                         execution_runtime_response,
                         &remote_addr,
                         &request_context,
@@ -1483,7 +1449,6 @@ async fn proxy_request_inner(
                         HeaderValue::from_static(reason.as_label_value()),
                     );
                     return Ok(finalize_gateway_response_with_context(
-                        &state,
                         control_response,
                         &remote_addr,
                         &request_context,
@@ -1669,7 +1634,6 @@ async fn proxy_request_inner(
             );
         }
         return Ok(finalize_gateway_response_with_context(
-            &state,
             response,
             &remote_addr,
             &request_context,
@@ -1686,7 +1650,6 @@ async fn proxy_request_inner(
         LOCAL_PROXY_PASSTHROUGH_REMOVED_DETAIL,
     )?;
     Ok(finalize_gateway_response_with_context(
-        &state,
         response,
         &remote_addr,
         &request_context,

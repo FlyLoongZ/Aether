@@ -7,7 +7,7 @@ use super::super::state::{
     authorize_admin_provider_oauth_with_cookie,
     build_admin_provider_oauth_backend_unavailable_response,
 };
-use super::batch::build_admin_provider_oauth_batch_task_state;
+use super::batch::{build_admin_provider_oauth_batch_task_state, AdminProviderOAuthBatchTaskState};
 use super::cookie::normalize_claude_session_key;
 use crate::handlers::admin::provider::shared::paths::admin_provider_oauth_cookie_task_provider_id;
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
@@ -104,25 +104,26 @@ pub(super) async fn handle_admin_provider_oauth_start_cookie_task(
     let task_id = format!("{CLAUDE_COOKIE_TASK_ID_PREFIX}{}", Uuid::new_v4());
     let total = payload.entries.len();
     let created_at = now_unix_secs();
-    let submitted_state = build_admin_provider_oauth_batch_task_state(
-        &task_id,
-        &provider_id,
-        &provider_type,
-        CLAUDE_COOKIE_TASK_IMPORT_KIND,
-        "submitted",
-        total,
-        0,
-        0,
-        0,
-        0,
-        0,
-        Some("任务已提交，等待执行"),
-        None,
-        Vec::new(),
-        created_at,
-        None,
-        None,
-    );
+    let submitted_state =
+        build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+            task_id: &task_id,
+            provider_id: &provider_id,
+            provider_type: &provider_type,
+            import_kind: CLAUDE_COOKIE_TASK_IMPORT_KIND,
+            status: "submitted",
+            total,
+            processed: 0,
+            success: 0,
+            failed: 0,
+            created_count: 0,
+            replaced_count: 0,
+            message: Some("任务已提交，等待执行"),
+            error: None,
+            error_samples: Vec::new(),
+            created_at,
+            started_at: None,
+            finished_at: None,
+        });
     if state
         .save_provider_oauth_batch_task_payload(&task_id, &submitted_state)
         .await
@@ -387,25 +388,26 @@ async fn save_cookie_task_state(
     started_at: u64,
     finished_at: Option<u64>,
 ) {
-    let task_state = build_admin_provider_oauth_batch_task_state(
-        task_id,
-        provider_id,
-        provider_type,
-        CLAUDE_COOKIE_TASK_IMPORT_KIND,
-        status,
-        total,
-        processed,
-        success,
-        failed,
-        created_count,
-        replaced_count,
-        message,
-        None,
-        error_samples,
-        created_at,
-        Some(started_at),
-        finished_at,
-    );
+    let task_state =
+        build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+            task_id,
+            provider_id,
+            provider_type,
+            import_kind: CLAUDE_COOKIE_TASK_IMPORT_KIND,
+            status,
+            total,
+            processed,
+            success,
+            failed,
+            created_count,
+            replaced_count,
+            message,
+            error: None,
+            error_samples,
+            created_at,
+            started_at: Some(started_at),
+            finished_at,
+        });
     let _ = state
         .save_provider_oauth_batch_task_payload(task_id, &task_state)
         .await;

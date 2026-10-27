@@ -77,16 +77,7 @@ impl AppState {
 
     pub(crate) async fn register_local_auth_user_with_referral(
         &self,
-        email: Option<String>,
-        email_verified: bool,
-        username: String,
-        password_hash: String,
-        initial_gift_usd: f64,
-        invite_code: Option<&str>,
-        source: Option<serde_json::Value>,
-        config: Option<ReferralRewardConfig>,
-        privacy_version: Option<&str>,
-        default_group_id: Option<&str>,
+        input: crate::data::state::LocalAuthRegistration<'_>,
     ) -> Result<
         Option<(
             aether_data::repository::users::StoredUserAuthRecord,
@@ -96,19 +87,10 @@ impl AppState {
         GatewayError,
     > {
         self.data
-            .register_local_auth_user_with_referral(
-                email,
-                email_verified,
-                username,
-                password_hash,
-                initial_gift_usd,
-                false,
-                invite_code,
-                source,
-                config,
-                privacy_version,
-                default_group_id,
-            )
+            .register_local_auth_user_with_referral(crate::data::state::LocalAuthRegistration {
+                unlimited: false,
+                ..input
+            })
             .await
             .map_err(referral_data_error)
     }

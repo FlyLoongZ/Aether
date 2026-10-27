@@ -498,7 +498,7 @@ pub(super) async fn forward_client_message(
                 }
             };
             if is_pinned_continuation {
-                return forward_pinned_continuation(
+                return forward_pinned_continuation(ForwardPinnedContinuationInput {
                     bound,
                     client_socket,
                     state,
@@ -511,10 +511,10 @@ pub(super) async fn forward_client_message(
                     turn_redaction_session,
                     plan_usage_permit,
                     plan_usage_policy_snapshot,
-                )
+                })
                 .await;
             }
-            forward_replanned_response_create(
+            forward_replanned_response_create(ForwardReplannedResponseInput {
                 bound,
                 client_socket,
                 state,
@@ -525,12 +525,12 @@ pub(super) async fn forward_client_message(
                 logical_turn_id,
                 codex_fingerprint_context,
                 turn_control,
-                raw_responses_lite_static_config
+                raw_responses_lite_static_config: raw_responses_lite_static_config
                     .expect("independent turns always retain their raw static config"),
                 turn_redaction_session,
                 plan_usage_permit,
                 plan_usage_policy_snapshot,
-            )
+            })
             .await
         }
         AxumWsMessage::Binary(_) => {
@@ -566,11 +566,11 @@ pub(super) async fn forward_client_message(
 /// state. This deliberately plans only the pinned provider/endpoint/key: an
 /// eligible alternate key is valid for an independent turn, but not for an
 /// in-flight response chain.
-async fn forward_pinned_continuation(
-    bound: &mut BoundResponsesConnection,
-    client_socket: &mut WebSocket,
-    state: &AppState,
-    context: &WebSocketRequestContext,
+struct ForwardPinnedContinuationInput<'a> {
+    bound: &'a mut BoundResponsesConnection,
+    client_socket: &'a mut WebSocket,
+    state: &'a AppState,
+    context: &'a WebSocketRequestContext,
     planning_parts: http::request::Parts,
     client_event: Value,
     logical_turn_id: String,
@@ -579,7 +579,25 @@ async fn forward_pinned_continuation(
     turn_redaction_session: Option<RedactionSession>,
     plan_usage_permit: Option<aether_runtime::AdmissionPermit>,
     plan_usage_policy_snapshot: Option<PlanUsagePolicySnapshot>,
+}
+
+async fn forward_pinned_continuation(
+    input: ForwardPinnedContinuationInput<'_>,
 ) -> RelayDisposition {
+    let ForwardPinnedContinuationInput {
+        bound,
+        client_socket,
+        state,
+        context,
+        planning_parts,
+        client_event,
+        logical_turn_id,
+        codex_fingerprint_context,
+        turn_control,
+        turn_redaction_session,
+        plan_usage_permit,
+        plan_usage_policy_snapshot,
+    } = input;
     let Some(pinned_candidate) =
         ResponsesWebSocketPinnedCandidate::from_decision(&bound.decision_template)
     else {
@@ -882,11 +900,11 @@ async fn forward_pinned_continuation(
 /// `planning_parts` 与 `client_event` 都由调用方准备：事件已经过请求侧脱敏，
 /// Parts 携带这一轮的 `RedactionSessionSlot`，所以 planner 里的候选级脱敏对
 /// 已脱敏内容是幂等的 no-op，上游请求体与审计 body 都保持脱敏态。
-async fn forward_replanned_response_create(
-    bound: &mut BoundResponsesConnection,
-    client_socket: &mut WebSocket,
-    state: &AppState,
-    context: &WebSocketRequestContext,
+struct ForwardReplannedResponseInput<'a> {
+    bound: &'a mut BoundResponsesConnection,
+    client_socket: &'a mut WebSocket,
+    state: &'a AppState,
+    context: &'a WebSocketRequestContext,
     planning_parts: http::request::Parts,
     client_event: Value,
     requested_model: String,
@@ -897,7 +915,27 @@ async fn forward_replanned_response_create(
     turn_redaction_session: Option<RedactionSession>,
     plan_usage_permit: Option<aether_runtime::AdmissionPermit>,
     plan_usage_policy_snapshot: Option<PlanUsagePolicySnapshot>,
+}
+
+async fn forward_replanned_response_create(
+    input: ForwardReplannedResponseInput<'_>,
 ) -> RelayDisposition {
+    let ForwardReplannedResponseInput {
+        bound,
+        client_socket,
+        state,
+        context,
+        planning_parts,
+        client_event,
+        requested_model,
+        logical_turn_id,
+        codex_fingerprint_context,
+        turn_control,
+        raw_responses_lite_static_config,
+        turn_redaction_session,
+        plan_usage_permit,
+        plan_usage_policy_snapshot,
+    } = input;
     let client_event_pii_redacted = turn_redaction_session.is_some();
     let turn_request_id = Uuid::new_v4().to_string();
     let now_unix_secs = current_unix_secs();

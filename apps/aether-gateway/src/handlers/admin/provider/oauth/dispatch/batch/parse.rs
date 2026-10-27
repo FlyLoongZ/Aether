@@ -970,25 +970,48 @@ pub(super) fn build_admin_provider_oauth_batch_import_response(
     }))
 }
 
+pub(in super::super) struct AdminProviderOAuthBatchTaskState<'a> {
+    pub task_id: &'a str,
+    pub provider_id: &'a str,
+    pub provider_type: &'a str,
+    pub import_kind: &'a str,
+    pub status: &'a str,
+    pub total: usize,
+    pub processed: usize,
+    pub success: usize,
+    pub failed: usize,
+    pub created_count: usize,
+    pub replaced_count: usize,
+    pub message: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub error_samples: Vec<serde_json::Value>,
+    pub created_at: u64,
+    pub started_at: Option<u64>,
+    pub finished_at: Option<u64>,
+}
+
 pub(in super::super) fn build_admin_provider_oauth_batch_task_state(
-    task_id: &str,
-    provider_id: &str,
-    provider_type: &str,
-    import_kind: &str,
-    status: &str,
-    total: usize,
-    processed: usize,
-    success: usize,
-    failed: usize,
-    created_count: usize,
-    replaced_count: usize,
-    message: Option<&str>,
-    error: Option<&str>,
-    error_samples: Vec<serde_json::Value>,
-    created_at: u64,
-    started_at: Option<u64>,
-    finished_at: Option<u64>,
+    state: AdminProviderOAuthBatchTaskState<'_>,
 ) -> serde_json::Value {
+    let AdminProviderOAuthBatchTaskState {
+        task_id,
+        provider_id,
+        provider_type,
+        import_kind,
+        status,
+        total,
+        processed,
+        success,
+        failed,
+        created_count,
+        replaced_count,
+        message,
+        error,
+        error_samples,
+        created_at,
+        started_at,
+        finished_at,
+    } = state;
     let updated_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .ok()

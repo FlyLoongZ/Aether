@@ -1,7 +1,7 @@
 use super::{
-    build_auth_json_response, build_wallet_daily_usage_payload,
+    build_auth_json_response, build_wallet_daily_usage_payload_from_ledger,
     build_wallet_live_today_usage_payload_for_user, build_wallet_payload,
-    build_wallet_zero_today_entry, http, unix_secs_to_rfc3339, wallet_fixed_offset,
+    build_wallet_zero_today_entry, http, wallet_fixed_offset,
     wallet_transaction_payload_from_record, AppState, Body, GatewayPublicRequestContext, Response,
     WALLET_LEGACY_TIMEZONE,
 };
@@ -90,27 +90,7 @@ pub(super) async fn handle_wallet_flow(
             .find_wallet_today_usage(&wallet.id, WALLET_LEGACY_TIMEZONE)
             .await
         {
-            today_entry = build_wallet_daily_usage_payload(
-                today_usage.id,
-                today_usage.billing_date,
-                today_usage.billing_timezone,
-                today_usage.total_cost_usd,
-                today_usage.total_requests,
-                today_usage.input_tokens,
-                today_usage.output_tokens,
-                today_usage.cache_creation_tokens,
-                today_usage.cache_read_tokens,
-                today_usage
-                    .first_finalized_at_unix_secs
-                    .and_then(unix_secs_to_rfc3339),
-                today_usage
-                    .last_finalized_at_unix_secs
-                    .and_then(unix_secs_to_rfc3339),
-                today_usage
-                    .aggregated_at_unix_secs
-                    .and_then(unix_secs_to_rfc3339),
-                true,
-            );
+            today_entry = build_wallet_daily_usage_payload_from_ledger(&today_usage, true);
         }
     }
 
@@ -131,21 +111,7 @@ pub(super) async fn handle_wallet_flow(
     merged.extend(daily_page.items.iter().map(|entry| {
         json!({
             "type": "daily_usage",
-            "data": build_wallet_daily_usage_payload(
-                entry.id.clone(),
-                entry.billing_date.clone(),
-                entry.billing_timezone.clone(),
-                entry.total_cost_usd,
-                entry.total_requests,
-                entry.input_tokens,
-                entry.output_tokens,
-                entry.cache_creation_tokens,
-                entry.cache_read_tokens,
-                entry.first_finalized_at_unix_secs.and_then(unix_secs_to_rfc3339),
-                entry.last_finalized_at_unix_secs.and_then(unix_secs_to_rfc3339),
-                entry.aggregated_at_unix_secs.and_then(unix_secs_to_rfc3339),
-                false,
-            )
+            "data": build_wallet_daily_usage_payload_from_ledger(entry, false)
         })
     }));
     merged.sort_by(|left, right| {

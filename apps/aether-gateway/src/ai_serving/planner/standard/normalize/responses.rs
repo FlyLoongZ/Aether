@@ -172,7 +172,23 @@ fn build_local_openai_responses_request_body_with_codex_model_capabilities_and_w
     Some(provider_request_body)
 }
 
+pub(crate) struct CrossFormatResponsesBodyInput<'a> {
+    pub body_json: &'a Value,
+    pub mapped_model: &'a str,
+    pub client_api_format: &'a str,
+    pub provider_api_format: &'a str,
+    pub upstream_is_stream: bool,
+    pub force_body_stream_field: bool,
+    pub provider_type: &'a str,
+    pub body_rules: Option<&'a Value>,
+    pub request_headers: &'a http::HeaderMap,
+    pub history_scope: Option<&'a str>,
+    pub model_capabilities: Option<&'a crate::ai_serving::CodexResponsesModelCapabilities>,
+    pub enable_model_directives: bool,
+}
+
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_cross_format_openai_responses_request_body(
     body_json: &Value,
     mapped_model: &str,
@@ -187,6 +203,27 @@ pub(crate) fn build_cross_format_openai_responses_request_body(
     enable_model_directives: bool,
 ) -> Option<Value> {
     build_cross_format_openai_responses_request_body_with_codex_model_capabilities(
+        CrossFormatResponsesBodyInput {
+            body_json,
+            mapped_model,
+            client_api_format,
+            provider_api_format,
+            upstream_is_stream,
+            force_body_stream_field,
+            provider_type,
+            body_rules,
+            request_headers,
+            history_scope: user_api_key_id,
+            model_capabilities: None,
+            enable_model_directives,
+        },
+    )
+}
+
+pub(crate) fn build_cross_format_openai_responses_request_body_with_codex_model_capabilities(
+    input: CrossFormatResponsesBodyInput<'_>,
+) -> Option<Value> {
+    let CrossFormatResponsesBodyInput {
         body_json,
         mapped_model,
         client_api_format,
@@ -196,26 +233,10 @@ pub(crate) fn build_cross_format_openai_responses_request_body(
         provider_type,
         body_rules,
         request_headers,
-        user_api_key_id,
-        None,
+        history_scope,
+        model_capabilities,
         enable_model_directives,
-    )
-}
-
-pub(crate) fn build_cross_format_openai_responses_request_body_with_codex_model_capabilities(
-    body_json: &Value,
-    mapped_model: &str,
-    client_api_format: &str,
-    provider_api_format: &str,
-    upstream_is_stream: bool,
-    force_body_stream_field: bool,
-    provider_type: &str,
-    body_rules: Option<&Value>,
-    request_headers: &http::HeaderMap,
-    history_scope: Option<&str>,
-    model_capabilities: Option<&crate::ai_serving::CodexResponsesModelCapabilities>,
-    enable_model_directives: bool,
-) -> Option<Value> {
+    } = input;
     let provider_request_body = surface_build_cross_format_openai_responses_request_body(
         body_json,
         mapped_model,
@@ -308,18 +329,20 @@ mod antigravity_schema_tests {
         for provider in ["antigravity", "gemini"] {
             let output =
                 build_cross_format_openai_responses_request_body_with_codex_model_capabilities(
-                    &input,
-                    "claude-test",
-                    "openai:responses",
-                    "gemini:generate_content",
-                    true,
-                    false,
-                    provider,
-                    None,
-                    &http::HeaderMap::new(),
-                    Some("antigravity-schema-test"),
-                    None,
-                    false,
+                    CrossFormatResponsesBodyInput {
+                        body_json: &input,
+                        mapped_model: "claude-test",
+                        client_api_format: "openai:responses",
+                        provider_api_format: "gemini:generate_content",
+                        upstream_is_stream: true,
+                        force_body_stream_field: false,
+                        provider_type: provider,
+                        body_rules: None,
+                        request_headers: &http::HeaderMap::new(),
+                        history_scope: Some("antigravity-schema-test"),
+                        model_capabilities: None,
+                        enable_model_directives: false,
+                    },
                 )
                 .unwrap();
             let parameters = &output["tools"][0]["functionDeclarations"][0]["parameters"];

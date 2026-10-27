@@ -113,6 +113,8 @@ async fn assert_admin_usage_route_returns_local_503(
     upstream_handle.abort();
 }
 
+#[allow(clippy::too_many_arguments)]
+// Test fixture builder with one argument per stored usage field.
 fn sample_usage_row(
     id: &str,
     request_id: &str,
