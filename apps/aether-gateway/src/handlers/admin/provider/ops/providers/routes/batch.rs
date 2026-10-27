@@ -24,7 +24,7 @@ pub(super) async fn handle_admin_provider_ops_batch_balance(
     let requested_provider_ids = match request_body {
         Some(body) if !body.is_empty() => match parse_provider_ids(body) {
             Ok(provider_ids) => Some(provider_ids),
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         },
         _ => None,
     };
@@ -143,7 +143,7 @@ pub(super) async fn handle_admin_provider_ops_batch_balance(
     Ok(Json(serde_json::Value::Object(payload)).into_response())
 }
 
-fn parse_provider_ids(body: &Bytes) -> Result<Vec<String>, Response<Body>> {
+fn parse_provider_ids(body: &Bytes) -> Result<Vec<String>, crate::ApiError> {
     let raw_value = serde_json::from_slice::<serde_json::Value>(body).map_err(|_| {
         (
             http::StatusCode::BAD_REQUEST,
@@ -174,14 +174,16 @@ fn parse_provider_ids(body: &Bytes) -> Result<Vec<String>, Response<Body>> {
                 http::StatusCode::BAD_REQUEST,
                 Json(json!({ "detail": "provider_ids 必须是非空字符串数组" })),
             )
-                .into_response());
+                .into_response()
+                .into());
         };
         if provider_id.is_empty() {
             return Err((
                 http::StatusCode::BAD_REQUEST,
                 Json(json!({ "detail": "provider_ids 必须是非空字符串数组" })),
             )
-                .into_response());
+                .into_response()
+                .into());
         }
         if seen.insert(provider_id) {
             provider_ids.push(provider_id.to_string());

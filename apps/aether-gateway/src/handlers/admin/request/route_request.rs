@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 pub(crate) enum AdminCancelVideoTaskError {
     NotFound,
     InvalidStatus(aether_data_contracts::repository::video_tasks::VideoTaskStatus),
-    Response(Response<Body>),
+    Response(Box<Response<Body>>),
     Gateway(GatewayError),
 }
 

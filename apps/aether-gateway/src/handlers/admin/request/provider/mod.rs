@@ -3,8 +3,6 @@ use super::{
     AdminLocalOAuthRefreshError, AdminProviderOAuthTemplate,
 };
 use crate::GatewayError;
-use axum::body::Body;
-use axum::http::Response;
 use std::collections::BTreeMap;
 
 mod builders;

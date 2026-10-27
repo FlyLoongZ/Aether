@@ -377,7 +377,7 @@ async fn resolve_admin_provider_oauth_batch_import_tokens(
         {
             Ok(payload) => payload,
             Err(response) => {
-                let detail = extract_admin_provider_oauth_batch_error_detail(response).await;
+                let detail = extract_admin_provider_oauth_batch_error_detail(response.into()).await;
                 if can_fallback_batch_refresh_to_access_token(provider_type, access_token) {
                     if let Some(access_token) = access_token {
                         let (auth_config, expires_at) =

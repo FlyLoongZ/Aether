@@ -2115,7 +2115,7 @@ async fn bounded_priority_backpressure_preserves_fifo_order_while_db_is_blocked(
     let runtime_for_tail = Arc::clone(&runtime);
     let tail = tokio::spawn(async move {
         runtime_for_tail
-            .enqueue_or_fallback(overflow)
+            .enqueue_or_fallback(*overflow)
             .await
             .expect("streaming status should wait for bounded admission");
         runtime_for_tail
@@ -2271,7 +2271,7 @@ async fn sustained_db_failure_keeps_lifecycle_resident_set_bounded() {
     let runtime_for_overflow = Arc::clone(&runtime);
     let overflow_task = tokio::spawn(async move {
         runtime_for_overflow
-            .enqueue_or_fallback(overflow)
+            .enqueue_or_fallback(*overflow)
             .await
             .expect("lossless lifecycle overflow should resume after DB recovery");
     });
@@ -2529,7 +2529,7 @@ async fn closed_priority_fast_path_falls_back_without_terminal_regression() {
             .try_enqueue_priority_status(record("closed-priority-fallback", 0, 0, status))
             .expect_err("closed priority lane must return the unpersisted record");
         assert_eq!(fallback.status, status);
-        runtime.enqueue_or_fallback(fallback).await.unwrap();
+        runtime.enqueue_or_fallback(*fallback).await.unwrap();
     }
 
     let rows = repository

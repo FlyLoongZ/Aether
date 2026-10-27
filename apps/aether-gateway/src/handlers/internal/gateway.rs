@@ -26,12 +26,13 @@ use serde_json::{json, Value};
 
 fn reject_supplied_auth_context(
     auth_context: Option<&crate::control::GatewayControlAuthContext>,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     if auth_context.is_some() {
         return Err(build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
             "supplied auth_context is not accepted; authenticate through request headers",
-        ));
+        )
+        .into());
     }
     Ok(())
 }
@@ -55,7 +56,7 @@ async fn resolve_bound_internal_report_context(
     report_kind: &str,
     report_context: Option<&Value>,
     operation: &'static str,
-) -> Result<Value, Response<Body>> {
+) -> Result<Value, crate::ApiError> {
     match crate::usage::resolve_bound_internal_gateway_report_context(
         state,
         trace_id,
@@ -75,9 +76,10 @@ async fn resolve_bound_internal_report_context(
             Err(build_internal_control_error_response(
                 http::StatusCode::CONFLICT,
                 "internal gateway report context does not carry a valid planner capability",
-            ))
+            )
+            .into())
         }
-        Err(_) => Err(internal_gateway_data_error_response(operation)),
+        Err(_) => Err(internal_gateway_data_error_response(operation).into()),
     }
 }
 
@@ -149,7 +151,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     };
                 let headers = match build_internal_gateway_header_map(&payload.headers) {
                     Ok(headers) => headers,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let method = match http::Method::from_bytes(payload.method.as_bytes()) {
                     Ok(method) => method,
@@ -165,7 +167,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     payload.query_string.as_deref(),
                 ) {
                     Ok(uri) => uri,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let resolved = crate::control::resolve_control_route(
                     state,
@@ -205,11 +207,11 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     };
                 let headers = match build_internal_gateway_header_map(&payload.headers) {
                     Ok(headers) => headers,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let uri = match build_internal_gateway_uri("/", payload.query_string.as_deref()) {
                     Ok(uri) => uri,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let mut synthetic_decision = GatewayControlDecision::synthetic(
                     "/",
@@ -254,7 +256,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         }
                     };
                 if let Err(response) = reject_supplied_auth_context(payload.auth_context.as_ref()) {
-                    return Ok(Some(response));
+                    return Ok(Some(response.into()));
                 }
                 let parts = match build_internal_gateway_request_parts(
                     &payload.method,
@@ -263,7 +265,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     &payload.headers,
                 ) {
                     Ok(parts) => parts,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let trace_id = payload
                     .trace_id
@@ -346,7 +348,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         }
                     };
                 if let Err(response) = reject_supplied_auth_context(payload.auth_context.as_ref()) {
-                    return Ok(Some(response));
+                    return Ok(Some(response.into()));
                 }
                 let parts = match build_internal_gateway_request_parts(
                     &payload.method,
@@ -355,7 +357,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     &payload.headers,
                 ) {
                     Ok(parts) => parts,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let trace_id = payload
                     .trace_id
@@ -437,7 +439,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         }
                     };
                 if let Err(response) = reject_supplied_auth_context(payload.auth_context.as_ref()) {
-                    return Ok(Some(response));
+                    return Ok(Some(response.into()));
                 }
                 let parts = match build_internal_gateway_request_parts(
                     &payload.method,
@@ -446,7 +448,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     &payload.headers,
                 ) {
                     Ok(parts) => parts,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let trace_id = payload
                     .trace_id
@@ -523,7 +525,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         }
                     };
                 if let Err(response) = reject_supplied_auth_context(payload.auth_context.as_ref()) {
-                    return Ok(Some(response));
+                    return Ok(Some(response.into()));
                 }
                 let parts = match build_internal_gateway_request_parts(
                     &payload.method,
@@ -532,7 +534,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     &payload.headers,
                 ) {
                     Ok(parts) => parts,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let trace_id = payload
                     .trace_id
@@ -603,7 +605,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         }
                     };
                 if let Err(response) = reject_supplied_auth_context(payload.auth_context.as_ref()) {
-                    return Ok(Some(response));
+                    return Ok(Some(response.into()));
                 }
                 let parts = match build_internal_gateway_request_parts(
                     &payload.method,
@@ -612,7 +614,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     &payload.headers,
                 ) {
                     Ok(parts) => parts,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let trace_id = payload
                     .trace_id
@@ -692,7 +694,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                         }
                     };
                 if let Err(response) = reject_supplied_auth_context(payload.auth_context.as_ref()) {
-                    return Ok(Some(response));
+                    return Ok(Some(response.into()));
                 }
                 let parts = match build_internal_gateway_request_parts(
                     &payload.method,
@@ -701,7 +703,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     &payload.headers,
                 ) {
                     Ok(parts) => parts,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let trace_id = payload
                     .trace_id
@@ -785,7 +787,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     .await
                     {
                         Ok(report_context) => report_context,
-                        Err(response) => return Ok(Some(response)),
+                        Err(response) => return Ok(Some(response.into())),
                     },
                 );
                 crate::usage::submit_sync_report(state, payload).await?;
@@ -823,7 +825,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     .await
                     {
                         Ok(report_context) => report_context,
-                        Err(response) => return Ok(Some(response)),
+                        Err(response) => return Ok(Some(response.into())),
                     },
                 );
                 crate::usage::submit_stream_report(state, payload).await?;
@@ -867,7 +869,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     .await
                     {
                         Ok(report_context) => report_context,
-                        Err(response) => return Ok(Some(response)),
+                        Err(response) => return Ok(Some(response.into())),
                     },
                 );
                 let Some(synthetic_decision) = build_internal_finalize_decision(&payload) else {

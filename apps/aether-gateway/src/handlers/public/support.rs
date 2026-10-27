@@ -166,7 +166,7 @@ async fn build_local_public_support_response(
         if let Err(response) =
             resolve_authenticated_local_user(state, request_context, headers).await
         {
-            return Some(response);
+            return Some(response.into());
         }
         return Some(
             crate::handlers::shared::health_monitor::build_health_v2_response(

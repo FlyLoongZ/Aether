@@ -22,7 +22,7 @@ pub(super) async fn build_admin_apply_billing_preset_response(
 ) -> Result<Response<Body>, GatewayError> {
     let (preset, mode) = match parse_admin_billing_preset_apply_request(request_body) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let Some((resolved_preset, collectors)) = resolve_admin_billing_preset_collectors(&preset)
     else {

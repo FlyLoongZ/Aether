@@ -23,7 +23,7 @@ pub(super) async fn handle_admin_provider_ops_verify(
     let payload = match parse_json_object_payload::<AdminProviderOpsSaveConfigRequest>(request_body)
     {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     let provider_ids = [provider_id.to_string()];
@@ -158,20 +158,21 @@ pub(super) async fn handle_admin_provider_ops_verify(
     ))
 }
 
-fn parse_json_object_payload<T>(request_body: Option<&Bytes>) -> Result<T, Response<Body>>
+fn parse_json_object_payload<T>(request_body: Option<&Bytes>) -> Result<T, crate::ApiError>
 where
     T: serde::de::DeserializeOwned,
 {
     let Some(request_body) = request_body else {
-        return Err(bad_request_detail_response("请求体不能为空"));
+        return Err(bad_request_detail_response("请求体不能为空").into());
     };
-    let raw_value = serde_json::from_slice::<serde_json::Value>(request_body)
-        .map_err(|_| bad_request_detail_response("请求体必须是合法的 JSON 对象"))?;
+    let raw_value = serde_json::from_slice::<serde_json::Value>(request_body).map_err(|_| {
+        crate::ApiError::from(bad_request_detail_response("请求体必须是合法的 JSON 对象"))
+    })?;
     if !raw_value.is_object() {
-        return Err(bad_request_detail_response("请求体必须是合法的 JSON 对象"));
+        return Err(bad_request_detail_response("请求体必须是合法的 JSON 对象").into());
     }
     serde_json::from_value::<T>(raw_value)
-        .map_err(|_| bad_request_detail_response("请求体必须是合法的 JSON 对象"))
+        .map_err(|_| bad_request_detail_response("请求体必须是合法的 JSON 对象").into())
 }
 
 fn bad_request_detail_response(detail: &str) -> Response<Body> {

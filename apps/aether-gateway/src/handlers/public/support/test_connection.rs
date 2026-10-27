@@ -21,7 +21,7 @@ pub(super) async fn maybe_build_local_test_connection_response(
     }
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return Some(response),
+        Err(response) => return Some(response.into()),
     };
     if !crate::roles::can_write_admin_console(&auth.user.role) {
         return Some(build_auth_error_response(

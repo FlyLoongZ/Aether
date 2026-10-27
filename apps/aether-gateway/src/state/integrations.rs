@@ -619,7 +619,7 @@ impl RequestCandidateRuntimeWriter for AppState {
     fn try_enqueue_request_candidate_status(
         &self,
         candidate: UpsertRequestCandidateRecord,
-    ) -> Result<(), UpsertRequestCandidateRecord> {
+    ) -> Result<(), Box<UpsertRequestCandidateRecord>> {
         AppState::try_enqueue_request_candidate_status(self, candidate)
     }
 }

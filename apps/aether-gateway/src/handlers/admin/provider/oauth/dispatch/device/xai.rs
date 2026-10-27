@@ -111,7 +111,7 @@ pub(super) async fn handle_admin_provider_oauth_xai_device_authorize(
         )
         .await
     {
-        return Ok(response);
+        return Ok(response.into());
     }
 
     Ok(Json(json!({

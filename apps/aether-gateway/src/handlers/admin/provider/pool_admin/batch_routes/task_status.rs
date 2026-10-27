@@ -25,7 +25,7 @@ pub(super) async fn build_admin_pool_batch_delete_task_status_response(
     let task = match state.get_admin_pool_batch_delete_task_for_provider(&provider_id, &task_id) {
         Ok(task) => task,
         Err(response) => {
-            return Ok(response);
+            return Ok(response.into());
         }
     };
 

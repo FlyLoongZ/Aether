@@ -19,7 +19,7 @@ pub(super) async fn handle_users_me_routing_groups_get(
     headers: &http::HeaderMap,
 ) -> Response<Body> {
     if let Err(response) = resolve_authenticated_local_user(state, request_context, headers).await {
-        return response;
+        return response.into();
     }
     if !state.has_routing_group_data_reader() {
         return build_auth_error_response(

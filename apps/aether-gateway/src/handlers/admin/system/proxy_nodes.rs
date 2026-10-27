@@ -151,11 +151,11 @@ pub(crate) async fn maybe_build_local_admin_proxy_nodes_response(
         }
         let input = match parse_json_body::<ManualProxyNodeCreateRequest>(request_body) {
             Ok(input) => input,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         let mutation = match validate_manual_create_request(input, request_context) {
             Ok(mutation) => mutation,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         let Some(node) = state.create_manual_proxy_node(&mutation).await? else {
             return Ok(Some(build_admin_proxy_nodes_data_unavailable_response()));
@@ -180,11 +180,11 @@ pub(crate) async fn maybe_build_local_admin_proxy_nodes_response(
         };
         let input = match parse_json_body::<ManualProxyNodeUpdateRequest>(request_body) {
             Ok(input) => input,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         let mutation = match validate_manual_update_request(node_id, input) {
             Ok(mutation) => mutation,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         let Some(node) = state.update_manual_proxy_node(&mutation).await? else {
             return Ok(Some(build_admin_proxy_nodes_not_found_response()));
@@ -262,11 +262,11 @@ pub(crate) async fn maybe_build_local_admin_proxy_nodes_response(
     {
         let input = match parse_json_body::<ProxyNodeTestUrlRequest>(request_body) {
             Ok(input) => input,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         let normalized = match validate_proxy_test_url_request(input) {
             Ok(normalized) => normalized,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         return Ok(Some(
             Json(test_manual_proxy_connectivity(&normalized).await).into_response(),
@@ -661,7 +661,7 @@ async fn test_manual_proxy_connectivity_with_probe_url(
 fn validate_manual_create_request(
     input: ManualProxyNodeCreateRequest,
     request_context: &AdminRequestContext<'_>,
-) -> Result<aether_data::repository::proxy_nodes::ProxyNodeManualCreateMutation, Response<Body>> {
+) -> Result<aether_data::repository::proxy_nodes::ProxyNodeManualCreateMutation, crate::ApiError> {
     let endpoint = normalize_manual_proxy_endpoint(&input.proxy_url)?;
     let registered_by = request_context
         .decision()
@@ -686,7 +686,7 @@ fn validate_manual_create_request(
 fn validate_manual_update_request(
     node_id: String,
     input: ManualProxyNodeUpdateRequest,
-) -> Result<aether_data::repository::proxy_nodes::ProxyNodeManualUpdateMutation, Response<Body>> {
+) -> Result<aether_data::repository::proxy_nodes::ProxyNodeManualUpdateMutation, crate::ApiError> {
     let endpoint = match input.proxy_url.as_deref() {
         Some(proxy_url) => Some(normalize_manual_proxy_endpoint(proxy_url)?),
         None => None,
@@ -702,7 +702,7 @@ fn validate_manual_update_request(
         && proxy_password.is_none()
         && endpoint.is_none()
     {
-        return Err(bad_request_response("至少提供一个可更新字段"));
+        return Err(bad_request_response("至少提供一个可更新字段").into());
     }
 
     Ok(
@@ -721,16 +721,16 @@ fn validate_manual_update_request(
 
 fn validate_proxy_test_url_request(
     input: ProxyNodeTestUrlRequest,
-) -> Result<String, Response<Body>> {
+) -> Result<String, crate::ApiError> {
     let username = normalize_optional_string(input.username.as_deref(), "username", 255)?;
     let password = normalize_optional_string(input.password.as_deref(), "password", 500)?;
     let endpoint = normalize_manual_proxy_endpoint(&input.proxy_url)?;
-    proxy_url_with_auth(
+    Ok(proxy_url_with_auth(
         &endpoint.proxy_url,
         username.as_deref(),
         password.as_deref(),
     )
-    .ok_or_else(|| bad_request_response("password 需要非空 username，且代理 URL 必须支持认证"))
+    .ok_or_else(|| bad_request_response("password 需要非空 username，且代理 URL 必须支持认证"))?)
 }
 
 fn admin_proxy_node_node_id_from_path(path: &str) -> Option<String> {
@@ -754,20 +754,22 @@ fn admin_proxy_node_test_node_id_from_path(path: &str) -> Option<String> {
     }
 }
 
-fn parse_json_body<T: DeserializeOwned>(request_body: Option<&Bytes>) -> Result<T, Response<Body>> {
+fn parse_json_body<T: DeserializeOwned>(
+    request_body: Option<&Bytes>,
+) -> Result<T, crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(bad_request_response("请求体不能为空"));
+        return Err(bad_request_response("请求体不能为空").into());
     };
     let raw_value = serde_json::from_slice::<Value>(request_body)
         .map_err(|_| bad_request_response(JSON_OBJECT_REQUIRED_DETAIL))?;
-    serde_json::from_value::<T>(raw_value)
-        .map_err(|_| bad_request_response(JSON_OBJECT_REQUIRED_DETAIL))
+    Ok(serde_json::from_value::<T>(raw_value)
+        .map_err(|_| bad_request_response(JSON_OBJECT_REQUIRED_DETAIL))?)
 }
 
 fn normalize_manual_proxy_endpoint(
     proxy_url: &str,
-) -> Result<NormalizedManualProxyEndpoint, Response<Body>> {
-    parse_manual_proxy_endpoint(proxy_url, "proxy_url").map_err(bad_request_response)
+) -> Result<NormalizedManualProxyEndpoint, crate::ApiError> {
+    Ok(parse_manual_proxy_endpoint(proxy_url, "proxy_url").map_err(bad_request_response)?)
 }
 
 fn parse_manual_proxy_endpoint(
@@ -828,15 +830,13 @@ fn normalize_required_string(
     value: &str,
     field: &str,
     max_len: usize,
-) -> Result<String, Response<Body>> {
+) -> Result<String, crate::ApiError> {
     let normalized = value.trim();
     if normalized.is_empty() {
-        return Err(bad_request_response(format!("{field} 不能为空")));
+        return Err(bad_request_response(format!("{field} 不能为空")).into());
     }
     if normalized.chars().count() > max_len {
-        return Err(bad_request_response(format!(
-            "{field} 长度不能超过 {max_len}"
-        )));
+        return Err(bad_request_response(format!("{field} 长度不能超过 {max_len}")).into());
     }
     Ok(normalized.to_string())
 }
@@ -845,7 +845,7 @@ fn normalize_optional_string(
     value: Option<&str>,
     field: &str,
     max_len: usize,
-) -> Result<Option<String>, Response<Body>> {
+) -> Result<Option<String>, crate::ApiError> {
     let Some(value) = value else {
         return Ok(None);
     };
@@ -854,9 +854,7 @@ fn normalize_optional_string(
         return Ok(None);
     }
     if normalized.chars().count() > max_len {
-        return Err(bad_request_response(format!(
-            "{field} 长度不能超过 {max_len}"
-        )));
+        return Err(bad_request_response(format!("{field} 长度不能超过 {max_len}")).into());
     }
     Ok(Some(normalized.to_string()))
 }

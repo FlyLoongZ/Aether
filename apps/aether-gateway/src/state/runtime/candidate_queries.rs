@@ -137,10 +137,10 @@ impl AppState {
     pub(crate) fn try_enqueue_request_candidate_status(
         &self,
         mut candidate: candidates::UpsertRequestCandidateRecord,
-    ) -> Result<(), candidates::UpsertRequestCandidateRecord> {
+    ) -> Result<(), Box<candidates::UpsertRequestCandidateRecord>> {
         candidate.sanitize_for_persistence();
         let Some(queue) = self.request_candidate_queue.as_ref() else {
-            return Err(candidate);
+            return Err(Box::new(candidate));
         };
         queue.try_enqueue_priority_status(candidate)
     }

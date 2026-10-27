@@ -329,8 +329,8 @@ fn users_me_parse_management_token_update_input(
 
 fn build_users_me_management_token_user_summary(
     auth: &AuthenticatedLocalUserContext,
-) -> Result<StoredManagementTokenUserSummary, Response<Body>> {
-    StoredManagementTokenUserSummary::new(
+) -> Result<StoredManagementTokenUserSummary, crate::ApiError> {
+    Ok(StoredManagementTokenUserSummary::new(
         auth.user.id.clone(),
         auth.user.email.clone(),
         auth.user.username.clone(),
@@ -342,7 +342,7 @@ fn build_users_me_management_token_user_summary(
             format!("management token user summary build failed: {err:?}"),
             false,
         )
-    })
+    })?)
 }
 
 async fn list_users_me_management_tokens_for_user(
@@ -350,12 +350,14 @@ async fn list_users_me_management_tokens_for_user(
     user_id: &str,
     is_active: Option<bool>,
     limit: usize,
-) -> Result<aether_data::repository::management_tokens::StoredManagementTokenListPage, Response<Body>>
-{
+) -> Result<
+    aether_data::repository::management_tokens::StoredManagementTokenListPage,
+    crate::ApiError,
+> {
     if !state.has_management_token_reader() {
-        return Err(build_users_me_management_token_reader_unavailable_response());
+        return Err(build_users_me_management_token_reader_unavailable_response().into());
     }
-    state
+    Ok(state
         .list_management_tokens(&ManagementTokenListQuery {
             user_id: Some(user_id.to_string()),
             is_active,
@@ -369,17 +371,19 @@ async fn list_users_me_management_tokens_for_user(
                 format!("management token list failed: {err:?}"),
                 false,
             )
-        })
+        })?)
 }
 
 async fn resolve_users_me_management_token(
     state: &AppState,
     user_id: &str,
     token_id: &str,
-) -> Result<aether_data::repository::management_tokens::StoredManagementTokenWithUser, Response<Body>>
-{
+) -> Result<
+    aether_data::repository::management_tokens::StoredManagementTokenWithUser,
+    crate::ApiError,
+> {
     if !state.has_management_token_reader() {
-        return Err(build_users_me_management_token_reader_unavailable_response());
+        return Err(build_users_me_management_token_reader_unavailable_response().into());
     }
     match state.get_management_token_with_user(token_id).await {
         Ok(Some(token)) if token.token.user_id == user_id => Ok(token),
@@ -387,12 +391,14 @@ async fn resolve_users_me_management_token(
             http::StatusCode::NOT_FOUND,
             "Management Token 不存在",
             false,
-        )),
+        )
+        .into()),
         Err(err) => Err(build_auth_error_response(
             http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("management token lookup failed: {err:?}"),
             false,
-        )),
+        )
+        .into()),
     }
 }
 
@@ -407,7 +413,7 @@ pub(super) async fn handle_users_me_management_tokens_list(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let is_active =
         query_param_optional_bool(request_context.request_query_string.as_deref(), "is_active");
@@ -461,7 +467,7 @@ pub(super) async fn handle_users_me_management_token_create(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if !users_me_management_token_write_allowed(&auth.user.role) {
         return build_users_me_management_token_write_forbidden_response("创建");
@@ -485,7 +491,7 @@ pub(super) async fn handle_users_me_management_token_create(
     .await
     {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let max_tokens = users_me_management_token_max_per_user();
     if existing.total >= max_tokens {
@@ -513,7 +519,7 @@ pub(super) async fn handle_users_me_management_token_create(
         user_id: auth.user.id.clone(),
         user: match build_users_me_management_token_user_summary(&auth) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         },
         token_hash: hash_users_me_management_token(&raw_token),
         token_prefix: users_me_management_token_prefix(&raw_token),
@@ -563,7 +569,7 @@ pub(super) async fn handle_users_me_management_token_detail_get(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(token_id) = users_me_management_token_id_from_path(&request_context.request_path)
     else {
@@ -575,7 +581,7 @@ pub(super) async fn handle_users_me_management_token_detail_get(
     };
     match resolve_users_me_management_token(state, &auth.user.id, &token_id).await {
         Ok(token) => Json(build_management_token_payload(&token.token, None)).into_response(),
-        Err(response) => response,
+        Err(response) => response.into(),
     }
 }
 
@@ -591,7 +597,7 @@ pub(super) async fn handle_users_me_management_token_update(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if !users_me_management_token_write_allowed(&auth.user.role) {
         return build_users_me_management_token_write_forbidden_response("管理");
@@ -606,7 +612,7 @@ pub(super) async fn handle_users_me_management_token_update(
     };
     let existing = match resolve_users_me_management_token(state, &auth.user.id, &token_id).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少请求体", false);
@@ -635,7 +641,7 @@ pub(super) async fn handle_users_me_management_token_update(
             .await
             {
                 Ok(value) => value,
-                Err(response) => return response,
+                Err(response) => return response.into(),
             };
             if page
                 .items
@@ -703,7 +709,7 @@ pub(super) async fn handle_users_me_management_token_delete(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if !users_me_management_token_write_allowed(&auth.user.role) {
         return build_users_me_management_token_write_forbidden_response("管理");
@@ -718,7 +724,7 @@ pub(super) async fn handle_users_me_management_token_delete(
     };
     let existing = match resolve_users_me_management_token(state, &auth.user.id, &token_id).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     match state
         .delete_management_token_for_user(&existing.token.id, &auth.user.id)
@@ -749,7 +755,7 @@ pub(super) async fn handle_users_me_management_token_toggle(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if !users_me_management_token_write_allowed(&auth.user.role) {
         return build_users_me_management_token_write_forbidden_response("管理");
@@ -765,7 +771,7 @@ pub(super) async fn handle_users_me_management_token_toggle(
     };
     let existing = match resolve_users_me_management_token(state, &auth.user.id, &token_id).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     match state
         .set_management_token_active_for_user(
@@ -804,7 +810,7 @@ pub(super) async fn handle_users_me_management_token_regenerate(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if !users_me_management_token_write_allowed(&auth.user.role) {
         return build_users_me_management_token_write_forbidden_response("管理");
@@ -820,7 +826,7 @@ pub(super) async fn handle_users_me_management_token_regenerate(
     };
     let existing = match resolve_users_me_management_token(state, &auth.user.id, &token_id).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let raw_token = generate_users_me_management_token_plaintext();
     let mutation = RegenerateManagementTokenSecret {

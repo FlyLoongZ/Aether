@@ -236,7 +236,7 @@ pub(super) async fn handle_auth_send_verification_code(
     if let Err(response) =
         enforce_auth_ip_rate_limit(state, AUTH_SEND_VERIFICATION_RATE_LIMIT, client_ip).await
     {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "请求数据验证失败", false);
@@ -257,7 +257,7 @@ pub(super) async fn handle_auth_send_verification_code(
     if let Err(response) =
         enforce_auth_identity_rate_limit(state, AUTH_SEND_VERIFICATION_RATE_LIMIT, &email).await
     {
-        return response;
+        return response.into();
     }
 
     if let Err(response) = verify_auth_turnstile(
@@ -268,7 +268,7 @@ pub(super) async fn handle_auth_send_verification_code(
     )
     .await
     {
-        return response;
+        return response.into();
     }
 
     match validate_auth_email_suffix(state, &email).await {
@@ -393,7 +393,7 @@ pub(super) async fn handle_auth_register(
     if let Err(response) =
         enforce_auth_ip_rate_limit(state, AUTH_REGISTER_RATE_LIMIT, client_ip).await
     {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少请求体", false);
@@ -420,7 +420,7 @@ pub(super) async fn handle_auth_register(
         if let Err(response) =
             enforce_auth_identity_rate_limit(state, AUTH_REGISTER_RATE_LIMIT, email).await
         {
-            return response;
+            return response.into();
         }
     }
     let username_rate_limit_identity = format!("username:{}", username.to_ascii_lowercase());
@@ -431,7 +431,7 @@ pub(super) async fn handle_auth_register(
     )
     .await
     {
-        return response;
+        return response.into();
     }
     let password_policy = match auth_password_policy_level(state).await {
         Ok(value) => value,
@@ -497,7 +497,7 @@ pub(super) async fn handle_auth_register(
     )
     .await
     {
-        return response;
+        return response.into();
     }
 
     let email_configured = match auth_registration_email_configured(state).await {
@@ -861,7 +861,7 @@ pub(super) async fn handle_auth_verify_email(
     if let Err(response) =
         enforce_auth_ip_rate_limit(state, AUTH_VERIFY_EMAIL_RATE_LIMIT, client_ip).await
     {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少请求体", false);
@@ -878,7 +878,7 @@ pub(super) async fn handle_auth_verify_email(
     if let Err(response) =
         enforce_auth_identity_rate_limit(state, AUTH_VERIFY_EMAIL_RATE_LIMIT, &email).await
     {
-        return response;
+        return response.into();
     }
     let code = payload.code.trim();
     let verification_token = payload.verification_token.trim();
@@ -968,7 +968,7 @@ pub(super) async fn handle_auth_verify_email(
             }
             Err(response) => {
                 let _ = clear_auth_email_pending_code(state, &email).await;
-                return response;
+                return response.into();
             }
         }
     }
@@ -1024,7 +1024,7 @@ pub(super) async fn handle_auth_verification_status(
     if let Err(response) =
         enforce_auth_ip_rate_limit(state, AUTH_VERIFICATION_STATUS_RATE_LIMIT, client_ip).await
     {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少请求体", false);
@@ -1049,7 +1049,7 @@ pub(super) async fn handle_auth_verification_status(
     if let Err(response) =
         enforce_auth_identity_rate_limit(state, AUTH_VERIFICATION_STATUS_RATE_LIMIT, &email).await
     {
-        return response;
+        return response.into();
     }
     let pending = read_auth_email_verification_code(state, &email)
         .await

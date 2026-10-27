@@ -57,7 +57,7 @@ pub(super) async fn handle_wallet_flow(
         offset,
     } = match super::resolve_wallet_request_scope(state, request_context, headers).await {
         Ok(scope) => scope,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(wallet) = wallet else {
         let mut payload = json!({

@@ -967,7 +967,7 @@ pub(super) async fn handle_users_me_usage_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let query = request_context.request_query_string.as_deref();
     let time_range = match AdminStatsTimeRange::resolve_optional(query) {
@@ -1320,7 +1320,7 @@ pub(super) async fn handle_users_me_usage_active_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let ids = match parse_users_me_usage_ids(request_context.request_query_string.as_deref()) {
         Ok(value) => value,
@@ -1435,7 +1435,7 @@ pub(super) async fn handle_users_me_usage_interval_timeline_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let query = request_context.request_query_string.as_deref();
     let hours = match parse_users_me_usage_hours(query) {
@@ -1502,7 +1502,7 @@ pub(super) async fn handle_users_me_usage_heatmap_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let today = Utc::now().date_naive();
     let start_date = today

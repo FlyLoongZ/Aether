@@ -17,7 +17,7 @@ pub(super) async fn handle_users_me_referral_get(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if !state.has_referral_data_backend() {
         return build_auth_error_response(

@@ -114,7 +114,7 @@ async fn acquire_provider_agent_identity_import_locks(
     provider_id: &str,
     lock_keys: &[String],
     task_id: &str,
-) -> Result<Vec<RuntimeLockLease>, Response> {
+) -> Result<Vec<RuntimeLockLease>, crate::ApiError> {
     let owner = format!("aether-gateway-agent-identity-import-{task_id}");
     let mut leases = Vec::with_capacity(lock_keys.len());
     for lock_key in lock_keys {
@@ -133,7 +133,8 @@ async fn acquire_provider_agent_identity_import_locks(
                 return Err(build_internal_control_error_response(
                     http::StatusCode::CONFLICT,
                     "其中一个 Agent Identity 正在导入或创建，请稍后重试",
-                ));
+                )
+                .into());
             }
             Err(_) => {
                 tracing::warn!(
@@ -145,7 +146,8 @@ async fn acquire_provider_agent_identity_import_locks(
                 return Err(build_internal_control_error_response(
                     http::StatusCode::SERVICE_UNAVAILABLE,
                     "Agent Identity 导入锁暂不可用，请稍后重试",
-                ));
+                )
+                .into());
             }
         }
     }
@@ -282,7 +284,7 @@ async fn handle_admin_provider_oauth_start_import_task(
     };
     let payload = match parse_admin_provider_oauth_batch_import_request(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     if !agent_identity_only
         && admin_provider_oauth_batch_contains_agent_identity(&payload.credentials)
@@ -370,7 +372,7 @@ async fn handle_admin_provider_oauth_start_import_task(
             .await
             {
                 Ok(leases) => leases,
-                Err(response) => return Ok(response),
+                Err(response) => return Ok(response.into()),
             }
         } else {
             Vec::new()

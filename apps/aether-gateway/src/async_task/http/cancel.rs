@@ -16,7 +16,7 @@ use super::current_unix_secs;
 pub(crate) enum CancelVideoTaskError {
     NotFound,
     InvalidStatus(VideoTaskStatus),
-    Response(axum::response::Response),
+    Response(Box<axum::response::Response>),
     Gateway(GatewayError),
 }
 
@@ -112,7 +112,7 @@ async fn cancel_video_task_record_inner(
         if let Some(follow_up) = follow_up {
             execute_video_task_cancel_plan(state, &trace_id, follow_up.plan)
                 .await
-                .map_err(CancelVideoTaskError::Response)?;
+                .map_err(|response| CancelVideoTaskError::Response(Box::new(response.into())))?;
             finalize_mutation = Some((
                 cancel_plan.request_path,
                 cancel_plan.report_kind.to_string(),
@@ -192,7 +192,7 @@ async fn execute_video_task_cancel_plan(
     state: &AppState,
     trace_id: &str,
     plan: aether_contracts::ExecutionPlan,
-) -> Result<(), axum::response::Response> {
+) -> Result<(), crate::ApiError> {
     let result =
         crate::execution_runtime::execute_execution_runtime_sync_plan(state, Some(trace_id), &plan)
             .await
@@ -205,7 +205,7 @@ async fn execute_video_task_cancel_plan(
             })?;
 
     if result.status_code >= 400 {
-        return Err(build_video_task_cancel_upstream_error_response(&result));
+        return Err(build_video_task_cancel_upstream_error_response(&result).into());
     }
 
     Ok(())

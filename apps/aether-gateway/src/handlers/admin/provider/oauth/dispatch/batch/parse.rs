@@ -61,13 +61,14 @@ pub(super) struct AdminProviderOAuthBatchImportOutcome {
 
 pub(super) fn parse_admin_provider_oauth_batch_import_request(
     request_body: Option<&Bytes>,
-) -> Result<AdminProviderOAuthBatchImportRequest, Response<Body>> {
+) -> Result<AdminProviderOAuthBatchImportRequest, crate::ApiError> {
     let Some(request_body) = request_body else {
         return Err(
             crate::handlers::admin::provider::oauth::errors::build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "请求体必须是合法的 JSON 对象",
-            ),
+            )
+            .into(),
         );
     };
     match serde_json::from_slice::<AdminProviderOAuthBatchImportRequest>(request_body) {
@@ -76,7 +77,8 @@ pub(super) fn parse_admin_provider_oauth_batch_import_request(
             crate::handlers::admin::provider::oauth::errors::build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "请求体必须是合法的 JSON 对象",
-            ),
+            )
+            .into(),
         ),
     }
 }

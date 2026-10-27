@@ -297,7 +297,7 @@ impl<'a> AdminAppState<'a> {
         state_nonce: &str,
         pkce_verifier: Option<&str>,
         proxy: Option<ProxySnapshot>,
-    ) -> Result<serde_json::Value, Response<Body>> {
+    ) -> Result<serde_json::Value, crate::ApiError> {
         crate::handlers::admin::provider::oauth::state::exchange_admin_provider_oauth_code(
             self,
             template,
@@ -314,7 +314,7 @@ impl<'a> AdminAppState<'a> {
         template: AdminProviderOAuthTemplate,
         refresh_token: &str,
         proxy: Option<ProxySnapshot>,
-    ) -> Result<serde_json::Value, Response<Body>> {
+    ) -> Result<serde_json::Value, crate::ApiError> {
         crate::handlers::admin::provider::oauth::state::exchange_admin_provider_oauth_refresh_token(
             self,
             template,
@@ -405,12 +405,13 @@ impl<'a> AdminAppState<'a> {
         session_id: &str,
         session: &StoredAdminProviderOAuthDeviceSession,
         ttl_seconds: u64,
-    ) -> Result<(), Response<Body>> {
+    ) -> Result<(), crate::ApiError> {
         if validate_admin_provider_oauth_device_session(session_id, session).is_err() {
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "provider oauth device session is invalid",
-            ));
+            )
+            .into());
         }
         let key = provider_oauth_device_session_storage_key(session_id);
         let value = serde_json::to_string(session).map_err(|_| {
@@ -462,7 +463,7 @@ impl<'a> AdminAppState<'a> {
         region: &str,
         start_url: &str,
         proxy: Option<ProxySnapshot>,
-    ) -> Result<serde_json::Value, Response<Body>> {
+    ) -> Result<serde_json::Value, crate::ApiError> {
         let region = aether_provider_transport::kiro::normalize_kiro_region(region);
         let payload = post_kiro_device_oidc_json(
             self,
@@ -496,7 +497,8 @@ impl<'a> AdminAppState<'a> {
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 format!("注册 OIDC 客户端失败: {error_code}"),
-            ));
+            )
+            .into());
         }
         Ok(payload)
     }
@@ -508,7 +510,7 @@ impl<'a> AdminAppState<'a> {
         client_secret: &str,
         start_url: &str,
         proxy: Option<ProxySnapshot>,
-    ) -> Result<serde_json::Value, Response<Body>> {
+    ) -> Result<serde_json::Value, crate::ApiError> {
         let region = aether_provider_transport::kiro::normalize_kiro_region(region);
         let payload = post_kiro_device_oidc_json(
             self,
@@ -531,7 +533,8 @@ impl<'a> AdminAppState<'a> {
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 format!("发起设备授权失败: {error_code}"),
-            ));
+            )
+            .into());
         }
         Ok(payload)
     }
@@ -543,7 +546,7 @@ impl<'a> AdminAppState<'a> {
         client_secret: &str,
         device_code: &str,
         proxy: Option<ProxySnapshot>,
-    ) -> Result<serde_json::Value, Response<Body>> {
+    ) -> Result<serde_json::Value, crate::ApiError> {
         let region = aether_provider_transport::kiro::normalize_kiro_region(region);
         post_kiro_device_oidc_json(
             self,
@@ -667,7 +670,7 @@ async fn post_kiro_device_oidc_json(
     default_url: String,
     body: serde_json::Value,
     proxy: Option<ProxySnapshot>,
-) -> Result<serde_json::Value, Response<Body>> {
+) -> Result<serde_json::Value, crate::ApiError> {
     let url = state.provider_oauth_token_url(endpoint_key, &default_url);
     let host = Url::parse(&url)
         .ok()

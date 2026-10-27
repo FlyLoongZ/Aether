@@ -472,7 +472,7 @@ async fn dashboard_summary_for_unix_range_raw(
     created_until_unix_secs: u64,
     user_id: Option<&str>,
     error_context: &str,
-) -> Result<StoredUsageDashboardSummary, Response<Body>> {
+) -> Result<StoredUsageDashboardSummary, crate::ApiError> {
     match state
         .summarize_dashboard_usage(&UsageDashboardSummaryQuery {
             created_from_unix_secs,
@@ -486,7 +486,8 @@ async fn dashboard_summary_for_unix_range_raw(
             http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("{error_context}: {err:?}"),
             false,
-        )),
+        )
+        .into()),
     }
 }
 
@@ -495,7 +496,7 @@ async fn dashboard_summary_for_range_raw(
     range: DashboardDateRange,
     user_id: Option<&str>,
     error_context: &str,
-) -> Result<StoredUsageDashboardSummary, Response<Body>> {
+) -> Result<StoredUsageDashboardSummary, crate::ApiError> {
     let Some((created_from_unix_secs, created_until_unix_secs)) =
         dashboard_range_bounds_unix(range)
     else {
@@ -503,7 +504,8 @@ async fn dashboard_summary_for_range_raw(
             http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("{error_context}: invalid time range"),
             false,
-        ));
+        )
+        .into());
     };
 
     dashboard_summary_for_unix_range_raw(
@@ -521,7 +523,7 @@ async fn dashboard_summary_for_range(
     range: DashboardDateRange,
     user_id: Option<&str>,
     error_context: &str,
-) -> Result<StoredUsageDashboardSummary, Response<Body>> {
+) -> Result<StoredUsageDashboardSummary, crate::ApiError> {
     dashboard_summary_for_range_raw(state, range, user_id, error_context).await
 }
 
@@ -530,7 +532,7 @@ async fn dashboard_stats_for_range(
     range: DashboardDateRange,
     user_id: Option<&str>,
     error_context: &str,
-) -> Result<StoredUsageDashboardStatsSummary, Response<Body>> {
+) -> Result<StoredUsageDashboardStatsSummary, crate::ApiError> {
     let Some((created_from_unix_secs, created_until_unix_secs)) =
         dashboard_range_bounds_unix(range)
     else {
@@ -538,7 +540,8 @@ async fn dashboard_stats_for_range(
             http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("{error_context}: invalid time range"),
             false,
-        ));
+        )
+        .into());
     };
 
     match state
@@ -554,7 +557,8 @@ async fn dashboard_stats_for_range(
             http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("{error_context}: {err:?}"),
             false,
-        )),
+        )
+        .into()),
     }
 }
 
@@ -563,7 +567,7 @@ async fn dashboard_daily_breakdown_for_range(
     range: DashboardDateRange,
     user_id: Option<&str>,
     error_context: &str,
-) -> Result<Vec<StoredUsageDashboardDailyBreakdownRow>, Response<Body>> {
+) -> Result<Vec<StoredUsageDashboardDailyBreakdownRow>, crate::ApiError> {
     let Some((created_from_unix_secs, created_until_unix_secs)) =
         dashboard_range_bounds_unix(range)
     else {
@@ -571,7 +575,8 @@ async fn dashboard_daily_breakdown_for_range(
             http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("{error_context}: invalid time range"),
             false,
-        ));
+        )
+        .into());
     };
 
     match state
@@ -588,7 +593,8 @@ async fn dashboard_daily_breakdown_for_range(
             http::StatusCode::INTERNAL_SERVER_ERROR,
             format!("{error_context}: {err:?}"),
             false,
-        )),
+        )
+        .into()),
     }
 }
 
@@ -874,7 +880,7 @@ pub(super) async fn handle_dashboard_stats_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let is_admin = dashboard_role_is_admin(&auth.user.role);
 
@@ -929,11 +935,11 @@ pub(super) async fn handle_dashboard_stats_get(
         );
         let period = match period_result {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
         let today = match today_result {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
         (
             dashboard_usage_totals_from_summary(&period.usage),
@@ -950,7 +956,7 @@ pub(super) async fn handle_dashboard_stats_get(
         .await
         {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
         let today_summary = match dashboard_summary_for_range(
             state,
@@ -961,7 +967,7 @@ pub(super) async fn handle_dashboard_stats_get(
         .await
         {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
         (
             dashboard_usage_totals_from_summary(&period_summary),
@@ -1017,7 +1023,7 @@ pub(super) async fn handle_dashboard_stats_get(
         .await
         {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
         let site_rate_totals = dashboard_usage_totals_from_summary(&site_rate_summary);
         let online_users = match dashboard_load_online_user_count(state, now_unix_secs).await {
@@ -1246,7 +1252,7 @@ pub(super) async fn handle_dashboard_daily_stats_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let is_admin = dashboard_role_is_admin(&auth.user.role);
 
@@ -1287,7 +1293,7 @@ pub(super) async fn handle_dashboard_daily_stats_get(
     .await
     {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
 
     let mut by_date =
@@ -1328,7 +1334,7 @@ pub(super) async fn handle_dashboard_recent_requests_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let query = request_context.request_query_string.as_deref();
     let limit = match dashboard_parse_limit(query, "limit", 10, 1, 100) {
@@ -1409,7 +1415,7 @@ pub(super) async fn handle_dashboard_provider_status_get(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
 
     if !dashboard_role_is_admin(&auth.user.role) {

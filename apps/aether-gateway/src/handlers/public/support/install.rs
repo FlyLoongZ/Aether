@@ -612,7 +612,7 @@ pub(super) async fn handle_users_me_api_key_install_session_create(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(api_key_id) =
         users_me_api_key_install_session_id_from_path(&request_context.request_path)

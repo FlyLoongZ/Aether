@@ -334,13 +334,14 @@ fn encrypted_gateway_secret(
     binding: &PaymentGatewaySecretBinding,
     payload: &PaymentGatewayConfigRequest,
     existing: Option<&aether_data_contracts::repository::billing::PaymentGatewayConfigRecord>,
-) -> Result<(Option<String>, Vec<Value>), Response<Body>> {
+) -> Result<(Option<String>, Vec<Value>), crate::ApiError> {
     let provider = binding.provider.as_str();
     let decrypt_existing = || {
         if legacy_secret_reuse_requires_reentry(existing, binding) {
             return Err(build_admin_payments_bad_request_response(
                 "endpoint_url or merchant_id changed; re-enter the gateway secret",
-            ));
+            )
+            .into());
         }
         existing
             .and_then(|record| record.merchant_key_encrypted.as_deref())
@@ -350,9 +351,9 @@ fn encrypted_gateway_secret(
                 )
                 .map(|projection| projection.plaintext)
                 .map_err(|_| {
-                    build_admin_payments_backend_unavailable_response(
+                    crate::ApiError::from(build_admin_payments_backend_unavailable_response(
                         "existing gateway secrets are not valid for the requested destination; re-enter the secret",
-                    )
+                    ))
                 })
             })
             .transpose()
@@ -374,9 +375,7 @@ fn encrypted_gateway_secret(
                 decrypt_existing()?;
                 Ok((None, existing_gateway_secret_keys(existing)))
             } else {
-                Err(build_admin_payments_bad_request_response(
-                    "secrets must be an object",
-                ))
+                Err(build_admin_payments_bad_request_response("secrets must be an object").into())
             };
         };
         let updates = secrets
@@ -396,7 +395,7 @@ fn encrypted_gateway_secret(
         let merged = match merge_gateway_secret_maps(existing_plaintext.as_deref(), updates) {
             Ok(value) => value,
             Err(detail) => {
-                return Err(build_admin_payments_backend_unavailable_response(detail));
+                return Err(build_admin_payments_backend_unavailable_response(detail).into());
             }
         };
         Some(Value::Object(merged).to_string())
@@ -591,7 +590,7 @@ pub(super) async fn maybe_build_local_admin_payment_gateways_response(
                     existing_record.as_ref(),
                 ) {
                     Ok(value) => value,
-                    Err(response) => return Ok(Some(response)),
+                    Err(response) => return Ok(Some(response.into())),
                 };
                 let channels_json = payment_gateway_channels_config_json(
                     channels.clone(),

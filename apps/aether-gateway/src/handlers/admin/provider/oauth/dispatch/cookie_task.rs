@@ -62,7 +62,7 @@ pub(super) async fn handle_admin_provider_oauth_start_cookie_task(
     };
     let payload = match parse_claude_cookie_task_request(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     let Some(provider) = state
@@ -471,9 +471,9 @@ fn cookie_task_error(index: usize, detail: &str) -> Value {
 
 fn parse_claude_cookie_task_request(
     request_body: Option<&Bytes>,
-) -> Result<ClaudeCookieTaskRequest, Response<Body>> {
+) -> Result<ClaudeCookieTaskRequest, crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(bad_cookie_task_request("请求体必须是合法的 JSON 对象"));
+        return Err(bad_cookie_task_request("请求体必须是合法的 JSON 对象").into());
     };
     let payload = serde_json::from_slice::<Value>(request_body)
         .ok()
@@ -484,24 +484,23 @@ fn parse_claude_cookie_task_request(
     let has_legacy_cookie = legacy_keys.iter().any(|key| payload.contains_key(*key));
     let raw_entries = if let Some(cookies) = payload.get("cookies") {
         if has_legacy_cookie {
-            return Err(bad_cookie_task_request("cookie 与 cookies 不能同时提供"));
+            return Err(bad_cookie_task_request("cookie 与 cookies 不能同时提供").into());
         }
         let cookies = cookies
             .as_array()
             .ok_or_else(|| bad_cookie_task_request("cookies 必须是字符串数组"))?;
         if cookies.is_empty() {
-            return Err(bad_cookie_task_request("Cookie 不能为空"));
+            return Err(bad_cookie_task_request("Cookie 不能为空").into());
         }
         if cookies.len() > MAX_CLAUDE_COOKIE_TASK_ENTRIES {
-            return Err(bad_cookie_task_request("Cookie 批量授权最多支持 20 条"));
+            return Err(bad_cookie_task_request("Cookie 批量授权最多支持 20 条").into());
         }
         cookies
             .iter()
             .map(|value| {
-                value
-                    .as_str()
-                    .map(ToOwned::to_owned)
-                    .ok_or_else(|| bad_cookie_task_request("cookies 必须是字符串数组"))
+                value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
+                    crate::ApiError::from(bad_cookie_task_request("cookies 必须是字符串数组"))
+                })
             })
             .collect::<Result<Vec<_>, _>>()?
     } else {
@@ -516,10 +515,10 @@ fn parse_claude_cookie_task_request(
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>();
         if entries.is_empty() {
-            return Err(bad_cookie_task_request("Cookie 不能为空"));
+            return Err(bad_cookie_task_request("Cookie 不能为空").into());
         }
         if entries.len() > MAX_CLAUDE_COOKIE_TASK_ENTRIES {
-            return Err(bad_cookie_task_request("Cookie 批量授权最多支持 20 条"));
+            return Err(bad_cookie_task_request("Cookie 批量授权最多支持 20 条").into());
         }
         entries
     };

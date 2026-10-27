@@ -1,0 +1,6 @@
+# HTTP handler helpers wrap response errors in `ApiError` (a boxed response),
+# so `result_large_err` can keep Clippy's default 128-byte threshold.
+
+# Internal planner/execution pipelines routinely pass 8-10 explicit
+# dependencies; treat 11+ as the point where a parameter struct is required.
+too-many-arguments-threshold = 10

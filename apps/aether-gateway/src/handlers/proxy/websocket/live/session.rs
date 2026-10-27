@@ -85,7 +85,7 @@ struct LiveRelayAdmission {
 
 struct LiveRelayAdmissionFailure {
     error: LiveRelayAdmissionError,
-    audit: Option<LiveSessionAudit>,
+    audit: Option<Box<LiveSessionAudit>>,
 }
 
 impl LiveRelayAdmissionError {
@@ -475,7 +475,7 @@ async fn prepare_direct_live_websocket(
                 termination,
                 failure.error.client_message(),
                 started_at,
-                failure.audit,
+                failure.audit.map(|audit| *audit),
             )
             .await);
         }
@@ -782,7 +782,7 @@ async fn prepare_sideband_live_websocket(
                 termination,
                 failure.error.client_message(),
                 started_at,
-                failure.audit,
+                failure.audit.map(|audit| *audit),
             )
             .await);
         }
@@ -1130,13 +1130,13 @@ async fn acquire_live_relay_admission(
         Ok(Some(_)) => {
             return Err(LiveRelayAdmissionFailure {
                 error: LiveRelayAdmissionError::BalanceRejected,
-                audit: Some(audit),
+                audit: Some(Box::new(audit)),
             });
         }
         Err(error) => {
             return Err(LiveRelayAdmissionFailure {
                 error: LiveRelayAdmissionError::Gateway(error),
-                audit: Some(audit),
+                audit: Some(Box::new(audit)),
             });
         }
     }
@@ -1151,7 +1151,7 @@ async fn acquire_live_relay_admission(
         Ok(capacity) => Ok(LiveRelayAdmission { capacity, audit }),
         Err(error) => Err(LiveRelayAdmissionFailure {
             error: LiveRelayAdmissionError::Gateway(error),
-            audit: Some(audit),
+            audit: Some(Box::new(audit)),
         }),
     }
 }

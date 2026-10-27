@@ -80,7 +80,7 @@ pub use self::backup::{
     DEFAULT_BACKUP_MAX_ENCRYPTED_BYTES, DEFAULT_BACKUP_MAX_JSON_BYTES,
 };
 pub use self::data::GatewayDataConfig;
-pub(crate) use self::error::GatewayError;
+pub(crate) use self::error::{ApiError, GatewayError};
 pub(crate) use self::execution_runtime::{
     append_execution_contract_fields_to_value, append_local_failover_policy_to_value,
     MAX_ERROR_BODY_BYTES, MAX_STREAM_PREFETCH_FRAMES,

@@ -74,20 +74,22 @@ impl<'a> AdminAppState<'a> {
         &self,
         provider_id: &str,
         task_id: &str,
-    ) -> Result<crate::LocalProviderDeleteTaskState, Response<Body>> {
+    ) -> Result<crate::LocalProviderDeleteTaskState, crate::ApiError> {
         let Some(task) = self.get_provider_delete_task(task_id) else {
             return Err((
                 http::StatusCode::NOT_FOUND,
                 Json(json!({ "detail": "批量删除任务不存在" })),
             )
-                .into_response());
+                .into_response()
+                .into());
         };
         if task.provider_id != provider_id {
             return Err((
                 http::StatusCode::NOT_FOUND,
                 Json(json!({ "detail": "批量删除任务不存在" })),
             )
-                .into_response());
+                .into_response()
+                .into());
         }
         Ok(task)
     }

@@ -13,6 +13,54 @@ use crate::ai_serving::AiSurfaceFinalizeError;
 use crate::constants::*;
 use crate::insert_header_if_missing;
 
+/// Error type for HTTP handler helpers that already built a response.
+///
+/// `http::Response<Body>` is about 128 bytes, so keeping it directly in a
+/// `Result` makes every return slot that large. Boxing only the error path
+/// keeps handler helpers cheap while still implementing axum's
+/// `IntoResponse` contract.
+#[derive(Debug)]
+pub(crate) struct ApiError(Box<Response<Body>>);
+
+impl ApiError {
+    pub(crate) fn into_inner(self) -> Response<Body> {
+        *self.0
+    }
+
+    pub(crate) fn status(&self) -> StatusCode {
+        self.0.status()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn into_body(self) -> Body {
+        self.into_inner().into_body()
+    }
+}
+
+impl From<Response<Body>> for ApiError {
+    fn from(response: Response<Body>) -> Self {
+        Self(Box::new(response))
+    }
+}
+
+impl From<GatewayError> for ApiError {
+    fn from(error: GatewayError) -> Self {
+        Self::from(error.into_response())
+    }
+}
+
+impl From<ApiError> for Response<Body> {
+    fn from(error: ApiError) -> Self {
+        error.into_inner()
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response<Body> {
+        self.into_inner()
+    }
+}
+
 /// 开启后记录不截断但仍脱敏的内部错误详情，默认关闭。
 static GATEWAY_ERROR_DETAIL_LOGGING: LazyLock<bool> = LazyLock::new(|| {
     parse_gateway_error_detail_logging(

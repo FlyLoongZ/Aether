@@ -529,7 +529,7 @@ pub(super) async fn handle_admin_provider_oauth_device_poll(
             .await
         {
             Ok(payload) => payload,
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         };
 
         if token_result

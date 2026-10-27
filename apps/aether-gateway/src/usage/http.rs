@@ -18,7 +18,7 @@ pub(crate) struct GetRequestAuditBundleQuery {
 pub(crate) async fn get_request_usage_audit(
     State(state): State<AppState>,
     Path(request_id): Path<String>,
-) -> Result<Json<StoredRequestUsageAudit>, axum::response::Response> {
+) -> Result<Json<StoredRequestUsageAudit>, crate::ApiError> {
     let usage = state
         .data
         .read_request_usage_audit(&request_id)
@@ -35,7 +35,8 @@ pub(crate) async fn get_request_usage_audit(
                 }
             })),
         )
-            .into_response()),
+            .into_response()
+            .into()),
     }
 }
 
@@ -43,7 +44,7 @@ pub(crate) async fn get_request_audit_bundle(
     State(state): State<AppState>,
     Path(request_id): Path<String>,
     Query(query): Query<GetRequestAuditBundleQuery>,
-) -> Result<Json<RequestAuditBundle>, axum::response::Response> {
+) -> Result<Json<RequestAuditBundle>, crate::ApiError> {
     let attempted_only = query.attempted_only.unwrap_or(false);
     let bundle = state
         .data
@@ -66,7 +67,8 @@ pub(crate) async fn get_request_audit_bundle(
                 }
             })),
         )
-            .into_response()),
+            .into_response()
+            .into()),
     }
 }
 

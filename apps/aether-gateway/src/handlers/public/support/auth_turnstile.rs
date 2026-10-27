@@ -77,10 +77,10 @@ pub(super) async fn verify_auth_turnstile(
     client_ip: std::net::IpAddr,
     token: Option<&str>,
     action: AuthTurnstileAction,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     match verify_auth_turnstile_inner(state, client_ip, token, action).await {
         Ok(()) => Ok(()),
-        Err(err) => Err(err.into_response()),
+        Err(err) => Err(err.into_response().into()),
     }
 }
 

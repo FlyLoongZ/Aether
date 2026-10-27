@@ -38,7 +38,7 @@ pub(crate) struct ListVideoTasksQuery {
 pub(crate) async fn list_video_tasks(
     State(state): State<AppState>,
     Query(query): Query<ListVideoTasksQuery>,
-) -> Result<Json<super::query::VideoTaskPageResponse>, axum::response::Response> {
+) -> Result<Json<super::query::VideoTaskPageResponse>, crate::ApiError> {
     let filter = parse_filter(&query)?;
     let response = read_video_task_page(
         &state,
@@ -54,7 +54,7 @@ pub(crate) async fn list_video_tasks(
 pub(crate) async fn get_video_task_stats(
     State(state): State<AppState>,
     Query(query): Query<ListVideoTasksQuery>,
-) -> Result<Json<super::query::VideoTaskStatsResponse>, axum::response::Response> {
+) -> Result<Json<super::query::VideoTaskStatsResponse>, crate::ApiError> {
     let filter = parse_filter(&query)?;
     let response = read_video_task_stats(&state, &filter, current_unix_secs())
         .await
@@ -65,7 +65,7 @@ pub(crate) async fn get_video_task_stats(
 pub(crate) async fn get_video_task_detail(
     State(state): State<AppState>,
     Path(task_id): Path<String>,
-) -> Result<Json<StoredVideoTask>, axum::response::Response> {
+) -> Result<Json<StoredVideoTask>, crate::ApiError> {
     let task = read_video_task_detail(&state, &task_id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -80,14 +80,15 @@ pub(crate) async fn get_video_task_detail(
                 }
             })),
         )
-            .into_response()),
+            .into_response()
+            .into()),
     }
 }
 
 pub(crate) async fn cancel_video_task(
     State(state): State<AppState>,
     Path(task_id): Path<String>,
-) -> Result<Json<Value>, axum::response::Response> {
+) -> Result<Json<Value>, crate::ApiError> {
     let stored = cancel_video_task_record(&state, &task_id)
         .await
         .map_err(|err| match err {
@@ -112,7 +113,7 @@ pub(crate) async fn cancel_video_task(
                 })),
             )
                 .into_response(),
-            CancelVideoTaskError::Response(response) => response,
+            CancelVideoTaskError::Response(response) => *response,
             CancelVideoTaskError::Gateway(err) => err.into_response(),
         })?;
 
@@ -126,7 +127,7 @@ pub(crate) async fn cancel_video_task(
 pub(crate) async fn get_video_task_video(
     State(state): State<AppState>,
     Path(task_id): Path<String>,
-) -> Result<axum::response::Response, axum::response::Response> {
+) -> Result<axum::response::Response, crate::ApiError> {
     let Some(source) = read_video_task_video_source(&state, &task_id)
         .await
         .map_err(IntoResponse::into_response)?
@@ -139,12 +140,13 @@ pub(crate) async fn get_video_task_video(
                 }
             })),
         )
-            .into_response());
+            .into_response()
+            .into());
     };
 
-    build_video_task_video_response(&state, &task_id, source)
+    Ok(build_video_task_video_response(&state, &task_id, source)
         .await
-        .map_err(IntoResponse::into_response)
+        .map_err(IntoResponse::into_response)?)
 }
 
 pub(crate) async fn build_video_task_video_response(
@@ -166,9 +168,7 @@ pub(crate) async fn build_video_task_video_response(
     }
 }
 
-fn parse_filter(
-    query: &ListVideoTasksQuery,
-) -> Result<VideoTaskQueryFilter, axum::response::Response> {
+fn parse_filter(query: &ListVideoTasksQuery) -> Result<VideoTaskQueryFilter, crate::ApiError> {
     let status = match query.status.as_deref() {
         Some(value) => Some(VideoTaskStatus::from_database(value).map_err(|err| {
             (

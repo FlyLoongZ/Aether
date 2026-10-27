@@ -89,11 +89,11 @@ pub(super) async fn handle_admin_provider_oauth_complete_key(
     };
     let payload = match parse_admin_provider_oauth_complete_request_body(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let callback = match parse_admin_provider_oauth_complete_callback(&payload.callback_url) {
         Ok(callback) => callback,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     let preview = match state.load_provider_oauth_state(&callback.state_nonce).await {
@@ -248,7 +248,7 @@ pub(super) async fn handle_admin_provider_oauth_complete_key(
         .await
     {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     let Some(access_token) = json_non_empty_string(token_payload.get("access_token")) else {

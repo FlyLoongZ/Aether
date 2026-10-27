@@ -113,7 +113,7 @@ async fn build_admin_payment_get_order_response(
 async fn close_direct_gateway_order_before_terminal_mark(
     state: &AdminAppState<'_>,
     order_id: &str,
-) -> Result<Option<serde_json::Value>, Response<Body>> {
+) -> Result<Option<serde_json::Value>, crate::ApiError> {
     let order = match state.read_admin_payment_order(order_id).await {
         Ok(crate::AdminWalletMutationOutcome::Applied(order)) => order,
         Ok(crate::AdminWalletMutationOutcome::NotFound) => return Ok(None),
@@ -122,7 +122,8 @@ async fn close_direct_gateway_order_before_terminal_mark(
         Err(err) => {
             return Err(build_admin_payments_backend_unavailable_response(format!(
                 "Payment order read failed: {err:?}"
-            )))
+            ))
+            .into())
         }
     };
     if order.status != "pending"
@@ -130,13 +131,15 @@ async fn close_direct_gateway_order_before_terminal_mark(
     {
         return Ok(None);
     }
-    crate::handlers::shared::close_direct_gateway_order(state.app(), &order)
-        .await
-        .map_err(|detail| {
-            build_admin_payments_backend_unavailable_response(format!(
-                "payment gateway close failed: {detail}"
-            ))
-        })
+    Ok(
+        crate::handlers::shared::close_direct_gateway_order(state.app(), &order)
+            .await
+            .map_err(|detail| {
+                build_admin_payments_backend_unavailable_response(format!(
+                    "payment gateway close failed: {detail}"
+                ))
+            })?,
+    )
 }
 
 async fn build_admin_payment_expire_order_response(
@@ -150,7 +153,7 @@ async fn build_admin_payment_expire_order_response(
     let gateway_close =
         match close_direct_gateway_order_before_terminal_mark(state, &order_id).await {
             Ok(value) => value,
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         };
     match state.admin_expire_payment_order(&order_id).await? {
         crate::AdminWalletMutationOutcome::Applied((order, expired)) => {
@@ -299,7 +302,7 @@ async fn build_admin_payment_fail_order_response(
     let gateway_close =
         match close_direct_gateway_order_before_terminal_mark(state, &order_id).await {
             Ok(value) => value,
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         };
     match state.admin_fail_payment_order(&order_id).await? {
         crate::AdminWalletMutationOutcome::Applied(order) => Ok(attach_admin_audit_response(

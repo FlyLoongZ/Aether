@@ -324,7 +324,7 @@ pub(super) async fn handle_wallet_balance(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let wallet = state
         .read_wallet_snapshot_for_auth(&auth.user.id, "", false)
@@ -353,7 +353,7 @@ pub(super) async fn handle_wallet_today_cost(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     match build_wallet_live_today_usage_payload_for_user(state, &auth.user.id).await {
         Ok(Some(payload)) => build_auth_json_response(http::StatusCode::OK, payload, None),
@@ -380,7 +380,7 @@ pub(super) async fn handle_wallet_transactions(
         offset,
     } = match super::resolve_wallet_request_scope(state, request_context, headers).await {
         Ok(scope) => scope,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(wallet) = wallet else {
         return build_auth_json_response(

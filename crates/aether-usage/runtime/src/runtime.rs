@@ -5880,18 +5880,18 @@ impl LifecycleDelayDispatcher {
         data: T,
         event: UsageEvent,
         generation: u64,
-    ) -> Result<(), UsageEvent>
+    ) -> Result<(), Box<UsageEvent>>
     where
         T: UsageRuntimeAccess + Clone + 'static,
     {
         let Some(sender) = &self.sender else {
-            return Err(event);
+            return Err(Box::new(event));
         };
         let Ok(admission) = Arc::clone(&self.admission).try_acquire_owned() else {
-            return Err(event);
+            return Err(Box::new(event));
         };
         let Ok(permit) = sender.try_reserve() else {
-            return Err(event);
+            return Err(Box::new(event));
         };
         permit.send(DelayedLifecycleQueueItem {
             due_at: tokio::time::Instant::now() + self.delay,

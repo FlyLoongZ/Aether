@@ -188,7 +188,7 @@ async fn prepare_codex_agent_identity_enrollment(
     state: &AdminAppState<'_>,
     provider_id: &str,
     identity_hints: &serde_json::Map<String, serde_json::Value>,
-) -> Result<CodexAgentIdentityEnrollment, Response<Body>> {
+) -> Result<CodexAgentIdentityEnrollment, crate::ApiError> {
     let lock_keys =
         crate::handlers::admin::provider::oauth::duplicates::codex_agent_identity_account_lock_keys(
             provider_id,
@@ -198,7 +198,8 @@ async fn prepare_codex_agent_identity_enrollment(
         return Err(build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
             "ChatGPT Access Token 缺少账号身份字段",
-        ));
+        )
+        .into());
     }
     let owner = format!(
         "aether-gateway-agent-identity-enrollment-{}",
@@ -221,7 +222,8 @@ async fn prepare_codex_agent_identity_enrollment(
                 return Err(build_internal_control_error_response(
                     http::StatusCode::CONFLICT,
                     "该 ChatGPT 账号正在创建 Agent Identity，请稍后重试",
-                ));
+                )
+                .into());
             }
             Err(_) => {
                 tracing::warn!(
@@ -232,7 +234,8 @@ async fn prepare_codex_agent_identity_enrollment(
                 return Err(build_internal_control_error_response(
                     http::StatusCode::SERVICE_UNAVAILABLE,
                     "Agent Identity 创建锁暂不可用，请稍后重试",
-                ));
+                )
+                .into());
             }
         }
     }
@@ -255,7 +258,8 @@ async fn prepare_codex_agent_identity_enrollment(
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 detail,
-            ));
+            )
+            .into());
         }
     };
     Ok(CodexAgentIdentityEnrollment {
@@ -337,7 +341,7 @@ async fn resolve_admin_provider_oauth_codex_access_token_agent_identity_import(
     access_token: &str,
     identity_hints: serde_json::Map<String, serde_json::Value>,
     request_proxy: Option<ProxySnapshot>,
-) -> Result<AdminProviderOAuthSingleImportTokens, Response<Body>> {
+) -> Result<AdminProviderOAuthSingleImportTokens, crate::ApiError> {
     let executor = crate::oauth::GatewayOAuthHttpExecutor::new(*state);
     let is_fedramp_account = identity_hints
         .get("is_fedramp")
@@ -598,7 +602,7 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
     access_token: Option<&str>,
     imported_expires_at: Option<u64>,
     request_proxy: Option<ProxySnapshot>,
-) -> Result<AdminProviderOAuthSingleImportTokens, Response<Body>> {
+) -> Result<AdminProviderOAuthSingleImportTokens, crate::ApiError> {
     if let Some(refresh_token) = refresh_token
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -626,7 +630,8 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "该 Provider 不支持 Refresh Token 导入，请提供 sso_token 或 access_token",
-            ));
+            )
+            .into());
         };
 
         let token_payload = match state
@@ -671,7 +676,8 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "token refresh 返回缺少 access_token",
-            ));
+            )
+            .into());
         };
         let refresh_token = returned_refresh_token
             .or_else(|| Some(refresh_token.to_string()))
@@ -693,7 +699,8 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
         return Err(build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
             "Refresh Token 或 Access Token 不能为空",
-        ));
+        )
+        .into());
     };
     if provider_type.eq_ignore_ascii_case("claude_code") {
         let now_unix_secs = std::time::SystemTime::now()
@@ -707,14 +714,16 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 detail,
-            ));
+            )
+            .into());
         }
     }
     if !provider_type_supports_access_token_import(provider_type) {
         return Err(build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
             "Access Token 导入仅支持 Claude Code / Codex / ChatGPT Web / Grok / xAI Provider",
-        ));
+        )
+        .into());
     }
 
     let (auth_config, expires_at) = build_provider_access_token_import_auth_config(
@@ -738,7 +747,7 @@ async fn resolve_admin_provider_oauth_windsurf_single_import_tokens(
     raw_payload: &serde_json::Map<String, serde_json::Value>,
     refresh_token: Option<&str>,
     request_proxy: Option<ProxySnapshot>,
-) -> Result<AdminProviderOAuthSingleImportTokens, Response<Body>> {
+) -> Result<AdminProviderOAuthSingleImportTokens, crate::ApiError> {
     let ctx = ProviderOAuthTransportContext {
         provider_id: String::new(),
         provider_type: provider_type.to_string(),
@@ -780,7 +789,8 @@ async fn resolve_admin_provider_oauth_windsurf_single_import_tokens(
         return Err(build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
             "Windsurf 凭据验证返回缺少 apiKey/sessionToken",
-        ));
+        )
+        .into());
     }
     let auth_config = result.auth_config.as_object().cloned().ok_or_else(|| {
         build_internal_control_error_response(
@@ -977,7 +987,7 @@ pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
                 .await
             {
                 Ok(enrollment) => enrollment,
-                Err(response) => return Ok(response),
+                Err(response) => return Ok(response.into()),
             };
         match resolve_admin_provider_oauth_codex_access_token_agent_identity_import(
             state,
@@ -993,7 +1003,7 @@ pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
             }
             Err(response) => {
                 release_codex_agent_identity_enrollment(state, Some(enrollment)).await;
-                return Ok(response);
+                return Ok(response.into());
             }
         }
     } else if provider_type == "windsurf" {
@@ -1014,7 +1024,7 @@ pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
         .await
         {
             Ok(value) => value,
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         }
     } else {
         if refresh_token_input.is_none() && access_token_input.is_none() {
@@ -1035,7 +1045,7 @@ pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
         .await
         {
             Ok(value) => value,
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         }
     };
     let AdminProviderOAuthSingleImportTokens {

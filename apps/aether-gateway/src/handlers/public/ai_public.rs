@@ -1621,7 +1621,7 @@ async fn build_local_gemini_video_operation_cancel_response(
             ),
         ),
         Err(CancelVideoTaskError::Response(response)) => {
-            build_ai_public_upstream_error_response(response, "gemini_video_operation_cancel")
+            build_ai_public_upstream_error_response(*response, "gemini_video_operation_cancel")
         }
         Err(CancelVideoTaskError::Gateway(_)) => build_ai_public_internal_error_response(
             "gemini_video_operation_cancel",

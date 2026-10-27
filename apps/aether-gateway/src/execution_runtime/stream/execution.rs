@@ -2227,7 +2227,7 @@ fn enqueue_stream_candidate_status_update(
         return None;
     };
     if state.request_candidate_queue.is_some() {
-        return Some(record);
+        return Some(*record);
     }
 
     // Without an async queue, preserve the first-byte path's existing
@@ -2235,7 +2235,7 @@ fn enqueue_stream_candidate_status_update(
     // record above and does not create one task per waiter.
     let state = state.clone();
     tokio::spawn(async move {
-        persist_local_request_candidate_status_record(&state, record).await;
+        persist_local_request_candidate_status_record(&state, *record).await;
     });
     None
 }
