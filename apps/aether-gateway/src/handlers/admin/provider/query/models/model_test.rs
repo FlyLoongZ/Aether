@@ -1394,7 +1394,7 @@ async fn provider_query_build_kiro_test_candidates(
     provider: &StoredProviderCatalogProvider,
     payload: &Value,
     requested_model_override: Option<&str>,
-) -> Result<Vec<ProviderQueryTestCandidate>, Response<Body>> {
+) -> Result<Vec<ProviderQueryTestCandidate>, crate::ApiError> {
     provider_query_reconcile_fixed_provider_endpoints_for_test_model(state, provider).await?;
 
     let provider_ids = vec![provider.id.clone()];
@@ -1447,17 +1447,20 @@ async fn provider_query_build_kiro_test_candidates(
             Ok(None) => {
                 return Err(build_admin_provider_query_not_found_response(
                     ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL,
-                ));
+                )
+                .into());
             }
             Err("Endpoint not found") => {
                 return Err(build_admin_provider_query_not_found_response(
                     ADMIN_PROVIDER_QUERY_API_KEY_NOT_FOUND_DETAIL,
-                ));
+                )
+                .into());
             }
             Err(_) => {
                 return Err(build_admin_provider_query_not_found_response(
                     ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL,
-                ));
+                )
+                .into());
             }
         }
     };
@@ -1466,7 +1469,8 @@ async fn provider_query_build_kiro_test_candidates(
         if !provider_query_selected_key_ids_all_exist(selected_key_ids, &all_keys) {
             return Err(build_admin_provider_query_not_found_response(
                 ADMIN_PROVIDER_QUERY_API_KEY_NOT_FOUND_DETAIL,
-            ));
+            )
+            .into());
         }
     }
 
@@ -1504,7 +1508,8 @@ async fn provider_query_build_kiro_test_candidates(
         } else {
             return Err(build_admin_provider_query_bad_request_response(
                 ADMIN_PROVIDER_QUERY_INVALID_MAPPED_MODEL_DETAIL,
-            ));
+            )
+            .into());
         }
     } else if test_mode.eq_ignore_ascii_case("direct")
         || !provider_query_should_apply_model_mapping(payload)
@@ -1618,7 +1623,8 @@ async fn provider_query_build_kiro_test_candidates(
     if candidates.is_empty() {
         return Err(build_admin_provider_query_not_found_response(
             ADMIN_PROVIDER_QUERY_NO_ACTIVE_TEST_CANDIDATE_DETAIL,
-        ));
+        )
+        .into());
     }
 
     Ok(candidates)
@@ -1627,7 +1633,7 @@ async fn provider_query_build_kiro_test_candidates(
 async fn provider_query_reconcile_fixed_provider_endpoints_for_test_model(
     state: &AdminAppState<'_>,
     provider: &StoredProviderCatalogProvider,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     if state
         .fixed_provider_template(&provider.provider_type)
         .is_none()
@@ -1636,19 +1642,21 @@ async fn provider_query_reconcile_fixed_provider_endpoints_for_test_model(
         return Ok(());
     }
 
-    reconcile_admin_fixed_provider_template_endpoints(state, provider)
-        .await
-        .map_err(|err| {
-            warn!(
-                provider_id = %provider.id,
-                provider_type = %provider.provider_type,
-                error = ?err,
-                "admin provider-query test-model: failed to reconcile fixed provider endpoints"
-            );
-            build_admin_provider_query_bad_request_response(
-                ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL,
-            )
-        })
+    Ok(
+        reconcile_admin_fixed_provider_template_endpoints(state, provider)
+            .await
+            .map_err(|err| {
+                warn!(
+                    provider_id = %provider.id,
+                    provider_type = %provider.provider_type,
+                    error = ?err,
+                    "admin provider-query test-model: failed to reconcile fixed provider endpoints"
+                );
+                build_admin_provider_query_bad_request_response(
+                    ADMIN_PROVIDER_QUERY_NO_ACTIVE_API_KEY_DETAIL,
+                )
+            })?,
+    )
 }
 
 fn provider_query_decode_execution_body(
@@ -3895,7 +3903,7 @@ async fn build_admin_provider_query_kiro_failover_response(
         .await
         {
             Ok(mut built_candidates) => candidates.append(&mut built_candidates),
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         }
     }
     if !is_kiro && candidates.is_empty() {

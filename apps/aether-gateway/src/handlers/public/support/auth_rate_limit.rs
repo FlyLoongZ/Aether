@@ -190,7 +190,7 @@ async fn enforce_auth_rate_limit(
     dimension: &'static str,
     subject: &str,
     limit: u32,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     match consume_auth_rate_limit(
         state,
         policy.action,
@@ -202,10 +202,9 @@ async fn enforce_auth_rate_limit(
     .await
     {
         Ok(AuthRateLimitCheck::Allowed) => Ok(()),
-        Ok(AuthRateLimitCheck::Rejected { retry_after }) => Err(build_auth_rate_limited_response(
-            AUTH_RATE_LIMITED_DETAIL,
-            retry_after,
-        )),
+        Ok(AuthRateLimitCheck::Rejected { retry_after }) => {
+            Err(build_auth_rate_limited_response(AUTH_RATE_LIMITED_DETAIL, retry_after).into())
+        }
         Err(_) => {
             tracing::warn!(
                 event_name = "auth_rate_limit_check_failed",
@@ -213,7 +212,7 @@ async fn enforce_auth_rate_limit(
                 dimension,
                 "authentication request rejected because the rate-limit backend failed"
             );
-            Err(build_auth_rate_limit_unavailable_response())
+            Err(build_auth_rate_limit_unavailable_response().into())
         }
     }
 }
@@ -222,7 +221,7 @@ pub(super) async fn enforce_auth_ip_rate_limit(
     state: &AppState,
     policy: AuthRateLimitPolicy,
     client_ip: IpAddr,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     enforce_auth_rate_limit(state, policy, "ip", &client_ip.to_string(), policy.ip_limit).await
 }
 
@@ -230,7 +229,7 @@ pub(super) async fn enforce_auth_identity_rate_limit(
     state: &AppState,
     policy: AuthRateLimitPolicy,
     identity: &str,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     enforce_auth_rate_limit(state, policy, "identity", identity, policy.identity_limit).await
 }
 
@@ -240,7 +239,7 @@ pub(super) async fn record_auth_verification_failure(
     challenge_created_at: &str,
     challenge_code_hash: &str,
     challenge_ttl_seconds: u64,
-) -> Result<AuthVerificationFailureDecision, Response<Body>> {
+) -> Result<AuthVerificationFailureDecision, crate::ApiError> {
     let challenge_subject = format!("{email}\0{challenge_created_at}\0{challenge_code_hash}");
     match consume_auth_rate_limit(
         state,
@@ -261,7 +260,7 @@ pub(super) async fn record_auth_verification_failure(
                 event_name = "auth_verification_failure_count_failed",
                 "email verification challenge rejected because the failure counter failed"
             );
-            Err(build_auth_rate_limit_unavailable_response())
+            Err(build_auth_rate_limit_unavailable_response().into())
         }
     }
 }

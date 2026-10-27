@@ -152,7 +152,7 @@ pub(super) async fn handle_users_me_model_capabilities_get(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let settings = match state
         .read_user_model_capability_settings(&auth.user.id)
@@ -178,7 +178,7 @@ pub(super) async fn handle_users_me_preferences_get(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
 
     let preferences = match state.read_user_preferences(&auth.user.id).await {
@@ -208,7 +208,7 @@ pub(super) async fn handle_users_me_preferences_put(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少请求体", false);
@@ -382,7 +382,7 @@ pub(super) async fn handle_users_me_model_capabilities_put(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少请求体", false);

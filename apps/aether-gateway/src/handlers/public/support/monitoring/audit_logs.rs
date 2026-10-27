@@ -86,7 +86,7 @@ pub(super) async fn handle_user_audit_logs(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
 
     let query = request_context.request_query_string.as_deref();

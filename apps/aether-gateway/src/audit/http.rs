@@ -17,7 +17,7 @@ pub(crate) async fn get_request_candidate_trace(
     State(state): State<AppState>,
     Path(request_id): Path<String>,
     Query(query): Query<GetRequestCandidateTraceQuery>,
-) -> Result<Json<crate::data::candidates::RequestCandidateTrace>, axum::response::Response> {
+) -> Result<Json<crate::data::candidates::RequestCandidateTrace>, crate::ApiError> {
     let attempted_only = query.attempted_only.unwrap_or(false);
     let trace = state
         .data
@@ -38,7 +38,8 @@ pub(crate) async fn get_request_candidate_trace(
                 }
             })),
         )
-            .into_response()),
+            .into_response()
+            .into()),
     }
 }
 
@@ -46,7 +47,7 @@ pub(crate) async fn get_decision_trace(
     State(state): State<AppState>,
     Path(request_id): Path<String>,
     Query(query): Query<GetRequestCandidateTraceQuery>,
-) -> Result<Json<crate::data::decision_trace::DecisionTrace>, axum::response::Response> {
+) -> Result<Json<crate::data::decision_trace::DecisionTrace>, crate::ApiError> {
     let attempted_only = query.attempted_only.unwrap_or(false);
     let trace = state
         .data
@@ -67,14 +68,15 @@ pub(crate) async fn get_decision_trace(
                 }
             })),
         )
-            .into_response()),
+            .into_response()
+            .into()),
     }
 }
 
 pub(crate) async fn get_auth_api_key_snapshot(
     State(state): State<AppState>,
     Path((user_id, api_key_id)): Path<(String, String)>,
-) -> Result<Json<crate::data::auth::GatewayAuthApiKeySnapshot>, axum::response::Response> {
+) -> Result<Json<crate::data::auth::GatewayAuthApiKeySnapshot>, crate::ApiError> {
     let snapshot = state
         .data
         .read_auth_api_key_snapshot(&user_id, &api_key_id, current_unix_secs())
@@ -91,7 +93,8 @@ pub(crate) async fn get_auth_api_key_snapshot(
                 }
             })),
         )
-            .into_response()),
+            .into_response()
+            .into()),
     }
 }
 

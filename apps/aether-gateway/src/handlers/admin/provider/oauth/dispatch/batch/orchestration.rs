@@ -39,7 +39,7 @@ pub(in super::super) async fn handle_admin_provider_oauth_batch_import(
     };
     let payload = match parse_admin_provider_oauth_batch_import_request(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     if admin_provider_oauth_batch_contains_agent_identity(&payload.credentials) {
         return Ok(build_internal_control_error_response(

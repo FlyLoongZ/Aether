@@ -1,10 +1,7 @@
 use super::super::{
     build_admin_billing_bad_request_response, normalize_admin_billing_required_text,
 };
-use axum::{
-    body::{Body, Bytes},
-    response::Response,
-};
+use axum::body::Bytes;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -243,27 +240,29 @@ pub(super) fn resolve_admin_billing_preset_collectors(
 
 pub(super) fn parse_admin_billing_preset_apply_request(
     request_body: Option<&Bytes>,
-) -> Result<(String, String), Response<Body>> {
+) -> Result<(String, String), crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(build_admin_billing_bad_request_response("请求体不能为空"));
+        return Err(build_admin_billing_bad_request_response("请求体不能为空").into());
     };
     let request = match serde_json::from_slice::<AdminBillingPresetApplyRequest>(request_body) {
         Ok(value) => value,
         Err(err) => {
             return Err(build_admin_billing_bad_request_response(format!(
                 "Invalid request body: {err}"
-            )))
+            ))
+            .into())
         }
     };
     let preset = match normalize_admin_billing_required_text(&request.preset, "preset", 100) {
         Ok(value) => value,
-        Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+        Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
     let mode = request.mode.trim().to_ascii_lowercase();
     if !matches!(mode.as_str(), "merge" | "overwrite") {
         return Err(build_admin_billing_bad_request_response(
             "mode must be one of merge, overwrite",
-        ));
+        )
+        .into());
     }
     Ok((preset, mode))
 }

@@ -453,7 +453,7 @@ async fn chat_completions(State(app): State<App>, request: axum::extract::Reques
                 .take()
                 .expect("request completion guard should be present")
                 .complete();
-            return with_sequence(response, profile);
+            return with_sequence(*response, profile);
         }
     };
     let stream = request_wants_stream(&body);
@@ -571,7 +571,7 @@ async fn responses(State(app): State<App>, request: axum::extract::Request) -> R
                 .take()
                 .expect("request completion guard should be present")
                 .complete();
-            return with_sequence(response, profile);
+            return with_sequence(*response, profile);
         }
     };
     let stream = request_wants_stream(&body);
@@ -779,16 +779,21 @@ fn with_sequence(mut response: Response, profile: RequestProfile) -> Response {
     response
 }
 
-async fn read_request_body(app: &App, request: axum::extract::Request) -> Result<Bytes, Response> {
+async fn read_request_body(
+    app: &App,
+    request: axum::extract::Request,
+) -> Result<Bytes, Box<Response>> {
     let body_started_at = Instant::now();
     let body = to_bytes(request.into_body(), MAX_MOCK_REQUEST_BODY_BYTES)
         .await
         .map_err(|err| {
-            (
-                StatusCode::BAD_REQUEST,
-                format!("mock upstream failed to read request body: {err}\n"),
+            Box::new(
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("mock upstream failed to read request body: {err}\n"),
+                )
+                    .into_response(),
             )
-                .into_response()
         });
     record_request_body_read(app, body_started_at.elapsed());
     body

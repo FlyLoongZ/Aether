@@ -373,7 +373,7 @@ pub(crate) fn extract_cookie_value(headers: &http::HeaderMap, cookie_name: &str)
 pub(crate) fn extract_client_device_id(
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
-) -> Result<String, Response<Body>> {
+) -> Result<String, crate::ApiError> {
     let header_value = crate::headers::header_value_str(headers, "x-client-device-id");
     let query_value = request_context
         .request_query_string
@@ -395,14 +395,15 @@ pub(crate) fn extract_client_device_id(
             http::StatusCode::BAD_REQUEST,
             "缺少或无效的设备标识",
             false,
-        ));
+        )
+        .into());
     }
     Ok(candidate.to_string())
 }
 
 pub(crate) fn extract_client_device_id_header(
     headers: &http::HeaderMap,
-) -> Result<String, Response<Body>> {
+) -> Result<String, crate::ApiError> {
     let candidate =
         crate::headers::header_value_str(headers, "x-client-device-id").unwrap_or_default();
     let candidate = candidate.trim();
@@ -416,7 +417,8 @@ pub(crate) fn extract_client_device_id_header(
             http::StatusCode::BAD_REQUEST,
             "缺少或无效的设备标识",
             false,
-        ));
+        )
+        .into());
     }
     Ok(candidate.to_string())
 }

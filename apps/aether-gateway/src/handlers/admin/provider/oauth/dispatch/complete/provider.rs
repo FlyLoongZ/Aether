@@ -34,14 +34,14 @@ pub(super) async fn handle_admin_provider_oauth_complete_provider(
     };
     let payload = match parse_admin_provider_oauth_complete_request_body(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     if !state.has_provider_catalog_data_reader() {
         return Ok(build_admin_provider_oauth_backend_unavailable_response());
     }
     let callback = match parse_admin_provider_oauth_complete_callback(&payload.callback_url) {
         Ok(callback) => callback,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     let preview = match state.load_provider_oauth_state(&callback.state_nonce).await {
@@ -173,7 +173,7 @@ pub(super) async fn handle_admin_provider_oauth_complete_provider(
         .await
     {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     provision_provider_oauth_token_payload_for_provider(

@@ -80,7 +80,7 @@ fn users_me_allowed_provider_names(
 async fn resolve_users_me_allowed_global_model_ids(
     state: &AppState,
     allowed_providers: Option<&[String]>,
-) -> Result<Option<BTreeSet<String>>, Response<Body>> {
+) -> Result<Option<BTreeSet<String>>, crate::ApiError> {
     let Some(allowed_providers) = allowed_providers else {
         return Ok(None);
     };
@@ -93,7 +93,8 @@ async fn resolve_users_me_allowed_global_model_ids(
             http::StatusCode::SERVICE_UNAVAILABLE,
             USERS_ME_PROVIDER_CATALOG_UNAVAILABLE_DETAIL,
             false,
-        ));
+        )
+        .into());
     }
 
     let allowed_provider_names: BTreeSet<String> = allowed_providers
@@ -108,7 +109,8 @@ async fn resolve_users_me_allowed_global_model_ids(
                 http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("user provider lookup failed: {err:?}"),
                 false,
-            ))
+            )
+            .into())
         }
     };
     let provider_ids = providers
@@ -134,7 +136,8 @@ async fn resolve_users_me_allowed_global_model_ids(
                 http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("user provider model lookup failed: {err:?}"),
                 false,
-            ))
+            )
+            .into())
         }
     };
     Ok(Some(
@@ -159,7 +162,7 @@ pub(super) async fn handle_users_me_available_models(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let (skip, limit, search) =
         parse_users_me_available_models_query(request_context.request_query_string.as_deref());
@@ -194,7 +197,7 @@ pub(super) async fn handle_users_me_available_models(
         .await
         {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         }
     };
     let allowed_models: Option<BTreeSet<String>> = if auth.user.role.eq_ignore_ascii_case("admin") {
@@ -312,7 +315,7 @@ pub(super) async fn handle_users_me_providers_get(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let expose_provider_details = auth.user.role.eq_ignore_ascii_case("admin");
     let allowed_provider_names = if expose_provider_details {
@@ -470,7 +473,7 @@ pub(super) async fn handle_users_me_endpoint_status_get(
 ) -> Response<Body> {
     match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(_) => {}
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
 
     let Some(payload) =

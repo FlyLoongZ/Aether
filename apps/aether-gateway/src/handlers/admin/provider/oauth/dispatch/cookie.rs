@@ -31,7 +31,7 @@ pub(super) async fn handle_admin_provider_oauth_cookie_authorize(
     };
     let payload = match parse_claude_cookie_authorize_request(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     let Some(provider) = state
@@ -77,7 +77,7 @@ pub(super) async fn handle_admin_provider_oauth_cookie_authorize(
     .await
     {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
 
     provision_provider_oauth_token_payload_for_provider(
@@ -95,9 +95,9 @@ pub(super) async fn handle_admin_provider_oauth_cookie_authorize(
 
 fn parse_claude_cookie_authorize_request(
     request_body: Option<&axum::body::Bytes>,
-) -> Result<ClaudeCookieAuthorizeRequest, Response<Body>> {
+) -> Result<ClaudeCookieAuthorizeRequest, crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(bad_cookie_request("请求体必须是合法的 JSON 对象"));
+        return Err(bad_cookie_request("请求体必须是合法的 JSON 对象").into());
     };
     let payload = serde_json::from_slice::<serde_json::Value>(request_body)
         .ok()

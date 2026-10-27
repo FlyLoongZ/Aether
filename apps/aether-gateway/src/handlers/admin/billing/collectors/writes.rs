@@ -17,7 +17,7 @@ pub(super) async fn build_admin_create_dimension_collector_response(
 ) -> Result<Response<Body>, GatewayError> {
     let input = match parse_admin_billing_collector_request(state, request_body, None).await {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     match state.create_admin_billing_collector(&input).await? {
         crate::LocalMutationOutcome::Applied(record) => {
@@ -49,7 +49,7 @@ pub(super) async fn build_admin_update_dimension_collector_response(
         match parse_admin_billing_collector_request(state, request_body, Some(&collector_id)).await
         {
             Ok(value) => value,
-            Err(response) => return Ok(response),
+            Err(response) => return Ok(response.into()),
         };
     match state
         .update_admin_billing_collector(&collector_id, &input)

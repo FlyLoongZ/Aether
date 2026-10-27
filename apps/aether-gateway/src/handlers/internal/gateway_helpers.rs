@@ -147,7 +147,7 @@ pub(crate) fn resolve_local_proxy_execution_path(
 
 pub(crate) fn build_internal_gateway_header_map(
     headers: &BTreeMap<String, String>,
-) -> Result<http::HeaderMap, Response<Body>> {
+) -> Result<http::HeaderMap, crate::ApiError> {
     let mut mapped = http::HeaderMap::new();
     for (name, value) in headers {
         let header_name = match HeaderName::from_bytes(name.as_bytes()) {
@@ -156,7 +156,8 @@ pub(crate) fn build_internal_gateway_header_map(
                 return Err(build_internal_control_error_response(
                     http::StatusCode::BAD_REQUEST,
                     "invalid internal gateway header",
-                ));
+                )
+                .into());
             }
         };
         let header_value = match HeaderValue::from_str(value) {
@@ -165,7 +166,8 @@ pub(crate) fn build_internal_gateway_header_map(
                 return Err(build_internal_control_error_response(
                     http::StatusCode::BAD_REQUEST,
                     "invalid internal gateway header",
-                ));
+                )
+                .into());
             }
         };
         mapped.append(header_name, header_value);
@@ -178,7 +180,7 @@ pub(crate) fn build_internal_gateway_request_parts(
     path: &str,
     query_string: Option<&str>,
     headers: &BTreeMap<String, String>,
-) -> Result<http::request::Parts, Response<Body>> {
+) -> Result<http::request::Parts, crate::ApiError> {
     let mapped_headers = build_internal_gateway_header_map(headers)?;
     let method = match http::Method::from_bytes(method.as_bytes()) {
         Ok(method) => method,
@@ -186,7 +188,8 @@ pub(crate) fn build_internal_gateway_request_parts(
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "invalid internal gateway method",
-            ));
+            )
+            .into());
         }
     };
     let uri = build_internal_gateway_uri(path, query_string)?;
@@ -196,7 +199,8 @@ pub(crate) fn build_internal_gateway_request_parts(
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "invalid internal gateway request",
-            ));
+            )
+            .into());
         }
     };
     let (mut parts, _) = request.into_parts();
@@ -212,7 +216,7 @@ pub(crate) fn build_internal_gateway_request_parts(
 pub(crate) fn build_internal_gateway_uri(
     path: &str,
     query_string: Option<&str>,
-) -> Result<http::Uri, Response<Body>> {
+) -> Result<http::Uri, crate::ApiError> {
     let normalized_path = if path.starts_with('/') {
         path.to_string()
     } else {
@@ -223,12 +227,12 @@ pub(crate) fn build_internal_gateway_uri(
     } else {
         normalized_path
     };
-    uri_text.parse::<http::Uri>().map_err(|_| {
+    Ok(uri_text.parse::<http::Uri>().map_err(|_| {
         build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
             "invalid internal gateway uri",
         )
-    })
+    })?)
 }
 
 pub(crate) fn build_internal_finalize_decision(

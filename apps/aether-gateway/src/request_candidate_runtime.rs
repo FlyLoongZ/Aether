@@ -124,8 +124,8 @@ pub(crate) trait RequestCandidateRuntimeWriter: Sync {
     fn try_enqueue_request_candidate_status(
         &self,
         candidate: UpsertRequestCandidateRecord,
-    ) -> Result<(), UpsertRequestCandidateRecord> {
-        Err(candidate)
+    ) -> Result<(), Box<UpsertRequestCandidateRecord>> {
+        Err(Box::new(candidate))
     }
 }
 
@@ -475,7 +475,7 @@ pub(crate) fn try_enqueue_local_request_candidate_status_snapshot(
     state: &(impl RequestCandidateRuntimeWriter + ?Sized),
     snapshot: &LocalRequestCandidateStatusSnapshot,
     status_update: SchedulerRequestCandidateStatusUpdate,
-) -> Result<(), UpsertRequestCandidateRecord> {
+) -> Result<(), Box<UpsertRequestCandidateRecord>> {
     let record = build_local_request_candidate_status_snapshot_record(snapshot, status_update);
     if !should_persist_request_candidate_status(record.status) {
         return Ok(());
@@ -1027,7 +1027,7 @@ mod tests {
         fn try_enqueue_request_candidate_status(
             &self,
             candidate: UpsertRequestCandidateRecord,
-        ) -> Result<(), UpsertRequestCandidateRecord> {
+        ) -> Result<(), Box<UpsertRequestCandidateRecord>> {
             self.records
                 .lock()
                 .expect("synchronous status records lock")

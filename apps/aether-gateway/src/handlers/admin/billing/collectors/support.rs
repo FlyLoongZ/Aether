@@ -75,34 +75,35 @@ pub(super) async fn parse_admin_billing_collector_request(
     state: &AdminAppState<'_>,
     request_body: Option<&Bytes>,
     existing_id: Option<&str>,
-) -> Result<crate::AdminBillingCollectorWriteInput, Response<Body>> {
+) -> Result<crate::AdminBillingCollectorWriteInput, crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(build_admin_billing_bad_request_response("请求体不能为空"));
+        return Err(build_admin_billing_bad_request_response("请求体不能为空").into());
     };
     let request = match serde_json::from_slice::<AdminBillingCollectorUpsertRequest>(request_body) {
         Ok(value) => value,
         Err(err) => {
             return Err(build_admin_billing_bad_request_response(format!(
                 "Invalid request body: {err}"
-            )));
+            ))
+            .into());
         }
     };
 
     let api_format =
         match normalize_admin_billing_required_text(&request.api_format, "api_format", 50) {
             Ok(value) => value.to_ascii_uppercase(),
-            Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+            Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
         };
     let task_type = match normalize_admin_billing_required_text(&request.task_type, "task_type", 20)
     {
         Ok(value) => value.to_ascii_lowercase(),
-        Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+        Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
     let dimension_name =
         match normalize_admin_billing_required_text(&request.dimension_name, "dimension_name", 100)
         {
             Ok(value) => value,
-            Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+            Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
         };
     let source_type = request.source_type.trim().to_ascii_lowercase();
     if !matches!(
@@ -111,50 +112,56 @@ pub(super) async fn parse_admin_billing_collector_request(
     ) {
         return Err(build_admin_billing_bad_request_response(
             "source_type must be one of request, response, metadata, computed",
-        ));
+        )
+        .into());
     }
     let value_type = request.value_type.trim().to_ascii_lowercase();
     if !matches!(value_type.as_str(), "float" | "int" | "string") {
         return Err(build_admin_billing_bad_request_response(
             "value_type must be one of float, int, string",
-        ));
+        )
+        .into());
     }
     let source_path = match normalize_admin_billing_optional_text(request.source_path, 200) {
         Ok(value) => value,
-        Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+        Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
     let transform_expression =
         match normalize_admin_billing_optional_text(request.transform_expression, 4096) {
             Ok(value) => value,
-            Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+            Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
         };
     let default_value = match normalize_admin_billing_optional_text(request.default_value, 100) {
         Ok(value) => value,
-        Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+        Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
 
     if source_type == "computed" {
         if source_path.is_some() {
             return Err(build_admin_billing_bad_request_response(
                 "computed collector must have source_path=null",
-            ));
+            )
+            .into());
         }
         if transform_expression.is_none() {
             return Err(build_admin_billing_bad_request_response(
                 "computed collector must have transform_expression",
-            ));
+            )
+            .into());
         }
     } else if source_path.is_none() {
         return Err(build_admin_billing_bad_request_response(
             "non-computed collector must have source_path",
-        ));
+        )
+        .into());
     }
 
     if let Some(transform_expression) = transform_expression.as_deref() {
         if let Err(detail) = admin_billing_validate_safe_expression(transform_expression) {
             return Err(build_admin_billing_bad_request_response(format!(
                 "Invalid transform_expression: {detail}"
-            )));
+            ))
+            .into());
         }
     }
 
@@ -171,10 +178,11 @@ pub(super) async fn parse_admin_billing_collector_request(
             Ok(true) => {
                 return Err(build_admin_billing_bad_request_response(
                     "default_value already exists for this (api_format, task_type, dimension_name)",
-                ));
+                )
+                .into());
             }
             Ok(false) => {}
-            Err(_err) => return Err(build_admin_billing_internal_error_response()),
+            Err(_err) => return Err(build_admin_billing_internal_error_response().into()),
         }
     }
 

@@ -204,7 +204,7 @@ async fn handle_oauth_bindable_providers(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if auth.user.auth_source.eq_ignore_ascii_case("ldap") {
         return mark_sensitive_response_no_store(Json(json!({ "providers": [] })).into_response());
@@ -228,7 +228,7 @@ async fn handle_oauth_links(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     match crate::oauth::list_identity_oauth_links(state, &auth.user.id).await {
         Ok(links) => {
@@ -258,7 +258,7 @@ async fn handle_oauth_authorize(
     };
     let client_device_id = match extract_client_device_id(request_context, headers) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     start_identity_oauth(
         state,
@@ -287,7 +287,7 @@ async fn handle_oauth_bind_token(
     };
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if auth.user.auth_source.eq_ignore_ascii_case("ldap") {
         return build_auth_error_response(
@@ -309,7 +309,7 @@ async fn handle_oauth_bind_token(
     }
     let client_device_id = match extract_client_device_id(request_context, headers) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let user_id = auth.user.id.clone();
     let session_id = auth.session_id.clone();
@@ -324,7 +324,7 @@ async fn handle_oauth_bind_token(
     .await
     {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     // The response contains only the provider authorization URL. The binding
     // capability remains server-side in the one-time OAuth state record.
@@ -506,7 +506,7 @@ async fn handle_oauth_unbind(
     };
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let local_password_login_allowed =
         match local_password_login_allowed_for_user(state, Some(&auth.user)).await {
@@ -542,7 +542,7 @@ async fn build_identity_oauth_authorize_url(
     mode: crate::oauth::IdentityOAuthStateMode,
     bind_user_id: Option<String>,
     bind_session_id: Option<String>,
-) -> Result<(String, (String, String)), Response<Body>> {
+) -> Result<(String, (String, String)), crate::ApiError> {
     let config = match crate::oauth::get_enabled_identity_oauth_provider_config(
         state,
         provider_type,
@@ -555,9 +555,10 @@ async fn build_identity_oauth_authorize_url(
                 http::StatusCode::NOT_FOUND,
                 "OAuth Provider 不存在或已禁用",
                 false,
-            ))
+            )
+            .into())
         }
-        Err(err) => return Err(oauth_account_error_response(err)),
+        Err(err) => return Err(oauth_account_error_response(err).into()),
     };
     let pkce_verifier = generate_pkce_verifier();
     let code_challenge = pkce_s256(&pkce_verifier);
@@ -577,14 +578,16 @@ async fn build_identity_oauth_authorize_url(
                     http::StatusCode::BAD_REQUEST,
                     "缺少绑定用户",
                     false,
-                ));
+                )
+                .into());
             };
             let Some(session_id) = bind_session_id else {
                 return Err(build_auth_error_response(
                     http::StatusCode::BAD_REQUEST,
                     "缺少绑定会话",
                     false,
-                ));
+                )
+                .into());
             };
             crate::oauth::StoredIdentityOAuthState::bind(
                 provider_type,
@@ -604,7 +607,8 @@ async fn build_identity_oauth_authorize_url(
             http::StatusCode::SERVICE_UNAVAILABLE,
             "OAuth 状态存储不可用",
             false,
-        ));
+        )
+        .into());
     }
     let network = crate::oauth::resolve_identity_oauth_network_context(state).await;
     let state_nonce = stored.nonce.clone();
@@ -621,7 +625,8 @@ async fn build_identity_oauth_authorize_url(
                 http::StatusCode::BAD_REQUEST,
                 "OAuth Provider 不可用",
                 false,
-            ))
+            )
+            .into())
         }
     };
     Ok((authorize.authorize_url, (state_nonce, browser_binding)))
@@ -646,7 +651,7 @@ async fn start_identity_oauth(
     .await
     {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let response = redirect_to(&authorize_url, None);
     let (state_nonce, binding) = browser_cookie;

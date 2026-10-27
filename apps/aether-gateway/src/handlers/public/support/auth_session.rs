@@ -106,13 +106,14 @@ pub(crate) async fn resolve_authenticated_local_user(
     state: &AppState,
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
-) -> Result<AuthenticatedLocalUserContext, Response<Body>> {
+) -> Result<AuthenticatedLocalUserContext, crate::ApiError> {
     let Some(token) = extract_bearer_token(headers) else {
         return Err(build_auth_error_response(
             http::StatusCode::UNAUTHORIZED,
             "缺少用户凭证",
             false,
-        ));
+        )
+        .into());
     };
     let claims = match decode_auth_token(&token, LocalAuthTokenType::Access) {
         Ok(value) => value,
@@ -122,13 +123,15 @@ pub(crate) async fn resolve_authenticated_local_user(
                     "auth_access_token_decode_failed",
                     detail,
                     false,
-                ));
+                )
+                .into());
             }
             return Err(build_auth_error_response(
                 http::StatusCode::UNAUTHORIZED,
                 "无效的用户令牌",
                 false,
-            ));
+            )
+            .into());
         }
     };
     let Some(user_id) = claims.get("user_id").and_then(serde_json::Value::as_str) else {
@@ -136,14 +139,16 @@ pub(crate) async fn resolve_authenticated_local_user(
             http::StatusCode::UNAUTHORIZED,
             "无效的用户令牌",
             false,
-        ));
+        )
+        .into());
     };
     let Some(session_id) = claims.get("session_id").and_then(serde_json::Value::as_str) else {
         return Err(build_auth_error_response(
             http::StatusCode::UNAUTHORIZED,
             "登录会话已失效，请重新登录",
             false,
-        ));
+        )
+        .into());
     };
     let user = match state.find_user_auth_by_id(user_id).await {
         Ok(Some(user)) => user,
@@ -152,14 +157,16 @@ pub(crate) async fn resolve_authenticated_local_user(
                 http::StatusCode::FORBIDDEN,
                 "用户不存在或已禁用",
                 false,
-            ))
+            )
+            .into())
         }
         Err(err) => {
             return Err(build_auth_internal_error_response(
                 "auth_session_user_lookup_failed",
                 err,
                 false,
-            ))
+            )
+            .into())
         }
     };
     if !user.is_active || user.is_deleted {
@@ -167,14 +174,16 @@ pub(crate) async fn resolve_authenticated_local_user(
             http::StatusCode::FORBIDDEN,
             "用户不存在或已禁用",
             false,
-        ));
+        )
+        .into());
     }
     if !auth_token_identity_matches_user(&claims, &user) {
         return Err(build_auth_error_response(
             http::StatusCode::FORBIDDEN,
             "无效的用户令牌",
             false,
-        ));
+        )
+        .into());
     }
     let client_device_id = match extract_client_device_id(request_context, headers) {
         Ok(value) => value,
@@ -188,14 +197,16 @@ pub(crate) async fn resolve_authenticated_local_user(
                 "auth_session_lookup_failed",
                 err,
                 false,
-            ))
+            )
+            .into())
         }
     }) else {
         return Err(build_auth_error_response(
             http::StatusCode::UNAUTHORIZED,
             "登录会话已失效，请重新登录",
             false,
-        ));
+        )
+        .into());
     };
     if session.is_revoked()
         || session.is_expired(now)
@@ -205,14 +216,16 @@ pub(crate) async fn resolve_authenticated_local_user(
             http::StatusCode::UNAUTHORIZED,
             "登录会话已失效，请重新登录",
             false,
-        ));
+        )
+        .into());
     }
     if session.client_device_id != client_device_id {
         return Err(build_auth_error_response(
             http::StatusCode::UNAUTHORIZED,
             "设备标识与登录会话不匹配",
             false,
-        ));
+        )
+        .into());
     }
     if session.should_touch(now) {
         let _ = state
@@ -238,7 +251,7 @@ pub(crate) async fn handle_auth_me(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let wallet = state
         .read_wallet_snapshot_for_auth(&auth.user.id, "", false)
@@ -326,7 +339,7 @@ pub(super) async fn handle_auth_refresh(
     // cross-site forms from rotating a victim's session via a query parameter.
     let client_device_id = match extract_client_device_id_header(headers) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let now = auth_now();
     let Some(session) = (match state.find_user_session(user_id, session_id).await {
@@ -719,7 +732,7 @@ async fn try_auth_logout_with_refresh_cookie(
     // cross-site form can submit query parameters but cannot set this header.
     let client_device_id = match extract_client_device_id_header(headers) {
         Ok(value) => value,
-        Err(response) => return Some(response),
+        Err(response) => return Some(response.into()),
     };
     let now = auth_now();
     let session = match state.find_user_session(user_id, session_id).await {

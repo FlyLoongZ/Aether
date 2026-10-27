@@ -127,7 +127,7 @@ async fn handle_auth_login(
 ) -> Response<Body> {
     if let Err(response) = enforce_auth_ip_rate_limit(state, AUTH_LOGIN_RATE_LIMIT, client_ip).await
     {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少登录请求体", false);
@@ -153,7 +153,7 @@ async fn handle_auth_login(
     if let Err(response) =
         enforce_auth_identity_rate_limit(state, AUTH_LOGIN_RATE_LIMIT, &identifier).await
     {
-        return response;
+        return response.into();
     }
     if let Err(detail) = validate_auth_login_password(&payload.password) {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false);
@@ -162,7 +162,7 @@ async fn handle_auth_login(
     // cross-site forms from logging a victim's browser into an attacker's account.
     let client_device_id = match extract_client_device_id_header(headers) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let auth_type = payload.auth_type.trim().to_ascii_lowercase();
     let (user, expected_password_hash) = match auth_type.as_str() {
@@ -324,7 +324,7 @@ pub(super) async fn maybe_build_local_auth_response(
             if let Err(response) =
                 enforce_auth_ip_rate_limit(state, AUTH_INVITE_CODE_RATE_LIMIT, client_ip).await
             {
-                return Some(response);
+                return Some(response.into());
             }
             let code =
                 super::query_param_value(request_context.request_query_string.as_deref(), "code");

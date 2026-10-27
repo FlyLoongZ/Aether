@@ -126,7 +126,7 @@ async fn build_create_global_model_response(
     }
     let payload = match parse_required_json_body::<AdminGlobalModelCreateRequest>(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let record = match build_admin_global_model_create_record(state, payload).await {
         Ok(record) => record,
@@ -174,11 +174,11 @@ async fn build_update_global_model_response(
 
     let raw_value = match parse_required_json_value(request_body) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let raw_payload = match require_json_object(&raw_value) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let patch = match AdminGlobalModelUpdatePatch::from_object(raw_payload) {
         Ok(patch) => patch,
@@ -240,7 +240,7 @@ async fn build_batch_delete_global_models_response(
     }
     let payload = match parse_required_json_body::<AdminBatchDeleteIdsRequest>(request_body) {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let ids = match normalize_admin_global_model_batch_ids(payload.ids, "ids") {
         Ok(ids) => ids,
@@ -290,7 +290,7 @@ async fn build_assign_to_providers_response(
     let payload = match parse_required_json_body::<AdminBatchAssignToProvidersRequest>(request_body)
     {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let provider_ids =
         match normalize_admin_global_model_batch_ids(payload.provider_ids, "provider_ids") {

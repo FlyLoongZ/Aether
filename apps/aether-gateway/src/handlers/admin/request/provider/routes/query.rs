@@ -47,7 +47,7 @@ impl<'a> AdminAppState<'a> {
 
         let payload = match parse_admin_provider_query_body(request_body) {
             Ok(value) => value,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
 
         let route_kind = decision.route_kind.as_deref().unwrap_or("query_models");

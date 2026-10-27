@@ -42,29 +42,29 @@ pub(super) fn bad_request_response(detail: impl Into<String>) -> Response<Body> 
 
 pub(super) fn parse_required_json_body<T: DeserializeOwned>(
     request_body: Option<&Bytes>,
-) -> Result<T, Response<Body>> {
+) -> Result<T, crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(bad_request_response("请求体不能为空"));
+        return Err(bad_request_response("请求体不能为空").into());
     };
-    serde_json::from_slice::<T>(request_body)
-        .map_err(|_| bad_request_response("请求体必须是合法的 JSON 对象"))
+    Ok(serde_json::from_slice::<T>(request_body)
+        .map_err(|_| bad_request_response("请求体必须是合法的 JSON 对象"))?)
 }
 
 pub(super) fn parse_required_json_value(
     request_body: Option<&Bytes>,
-) -> Result<Value, Response<Body>> {
+) -> Result<Value, crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(bad_request_response("请求体不能为空"));
+        return Err(bad_request_response("请求体不能为空").into());
     };
-    serde_json::from_slice::<Value>(request_body)
-        .map_err(|_| bad_request_response("请求体必须是合法的 JSON 对象"))
+    Ok(serde_json::from_slice::<Value>(request_body)
+        .map_err(|_| bad_request_response("请求体必须是合法的 JSON 对象"))?)
 }
 
-pub(super) fn require_json_object(value: &Value) -> Result<Map<String, Value>, Response<Body>> {
+pub(super) fn require_json_object(value: &Value) -> Result<Map<String, Value>, crate::ApiError> {
     value
         .as_object()
         .cloned()
-        .ok_or_else(|| bad_request_response("请求体必须是合法的 JSON 对象"))
+        .ok_or_else(|| crate::ApiError::from(bad_request_response("请求体必须是合法的 JSON 对象")))
 }
 
 pub(super) fn current_unix_secs() -> u64 {

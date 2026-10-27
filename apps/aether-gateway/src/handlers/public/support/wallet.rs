@@ -42,7 +42,7 @@ pub(super) async fn resolve_wallet_request_scope(
     state: &AppState,
     request_context: &GatewayPublicRequestContext,
     headers: &http::HeaderMap,
-) -> Result<WalletRequestScope, Response<Body>> {
+) -> Result<WalletRequestScope, crate::ApiError> {
     let auth = resolve_authenticated_local_user(state, request_context, headers).await?;
     let query = request_context.request_query_string.as_deref();
     let limit = parse_wallet_limit(query).map_err(|detail| {

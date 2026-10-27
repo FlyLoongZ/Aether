@@ -759,7 +759,7 @@ pub(super) async fn handle_billing_entitlements(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let entitlements = match state.list_user_plan_entitlements(&auth.user.id).await {
         Ok(Some(value)) => value,
@@ -797,7 +797,7 @@ pub(super) async fn handle_billing_plan_checkout(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(plan_id) = plan_id_from_checkout_path(&request_context.request_path) else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少套餐ID", false);

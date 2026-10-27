@@ -315,7 +315,7 @@ pub(super) async fn handle_admin_provider_oauth_device_authorize(
             )
             .await
         {
-            return Ok(response);
+            return Ok(response.into());
         }
 
         return Ok(Json(json!({
@@ -397,7 +397,7 @@ pub(super) async fn handle_admin_provider_oauth_device_authorize(
             )
             .await
         {
-            return Ok(response);
+            return Ok(response.into());
         }
 
         return Ok(Json(json!({
@@ -433,7 +433,7 @@ pub(super) async fn handle_admin_provider_oauth_device_authorize(
         .await
     {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let Some(client_id) = json_non_empty_string(client_registration.get("clientId")) else {
         return Ok(build_internal_control_error_response(
@@ -459,7 +459,7 @@ pub(super) async fn handle_admin_provider_oauth_device_authorize(
         .await
     {
         Ok(payload) => payload,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let Some(device_code) = json_non_empty_string(
         device_authorization
@@ -538,7 +538,7 @@ pub(super) async fn handle_admin_provider_oauth_device_authorize(
         )
         .await
     {
-        return Ok(response);
+        return Ok(response.into());
     }
 
     Ok(Json(json!({

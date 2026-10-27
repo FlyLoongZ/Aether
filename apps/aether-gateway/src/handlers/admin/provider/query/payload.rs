@@ -1,22 +1,23 @@
 use axum::body::Bytes;
-use axum::response::Response;
 use serde_json::json;
 use std::collections::BTreeSet;
 
 pub(crate) fn parse_admin_provider_query_body(
     request_body: Option<&Bytes>,
-) -> Result<serde_json::Value, Response<axum::body::Body>> {
+) -> Result<serde_json::Value, crate::ApiError> {
     let Some(raw_body) = request_body else {
         return Ok(json!({}));
     };
     if raw_body.is_empty() {
         return Ok(json!({}));
     }
-    serde_json::from_slice::<serde_json::Value>(raw_body).map_err(|_| {
-        super::response::build_admin_provider_query_bad_request_response(
-            super::response::ADMIN_PROVIDER_QUERY_INVALID_JSON_DETAIL,
-        )
-    })
+    Ok(
+        serde_json::from_slice::<serde_json::Value>(raw_body).map_err(|_| {
+            super::response::build_admin_provider_query_bad_request_response(
+                super::response::ADMIN_PROVIDER_QUERY_INVALID_JSON_DETAIL,
+            )
+        })?,
+    )
 }
 
 pub(crate) fn provider_query_extract_provider_id(payload: &serde_json::Value) -> Option<String> {

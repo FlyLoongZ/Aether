@@ -260,7 +260,7 @@ async fn admin_management_token_user_summary(
     state: &AdminAppState<'_>,
     user_id: &str,
     trace_id: &str,
-) -> Result<StoredManagementTokenUserSummary, Response<Body>> {
+) -> Result<StoredManagementTokenUserSummary, crate::ApiError> {
     let Some(user) = state.find_user_auth_by_id(user_id).await.map_err(|err| {
         admin_management_token_internal_error_response(
             trace_id,
@@ -273,16 +273,18 @@ async fn admin_management_token_user_summary(
             http::StatusCode::NOT_FOUND,
             Json(json!({ "detail": "管理员用户不存在" })),
         )
-            .into_response());
+            .into_response()
+            .into());
     };
-    StoredManagementTokenUserSummary::new(user.id, user.email, user.username, user.role).map_err(
-        |err| {
-            admin_management_token_internal_error_response(
-                trace_id,
-                "admin_management_token_user_summary_build_failed",
-                err,
-            )
-        },
+    Ok(
+        StoredManagementTokenUserSummary::new(user.id, user.email, user.username, user.role)
+            .map_err(|err| {
+                admin_management_token_internal_error_response(
+                    trace_id,
+                    "admin_management_token_user_summary_build_failed",
+                    err,
+                )
+            })?,
     )
 }
 
@@ -390,7 +392,7 @@ pub(crate) async fn maybe_build_local_admin_management_tokens_response(
         .await
         {
             Ok(value) => value,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         let raw_token = generate_admin_management_token_plaintext();
         let record = CreateManagementTokenRecord {

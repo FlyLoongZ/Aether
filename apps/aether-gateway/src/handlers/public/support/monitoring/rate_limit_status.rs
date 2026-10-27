@@ -26,7 +26,7 @@ pub(super) async fn handle_user_rate_limit_status(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
 
     let limiter = state.frontdoor_user_rpm();

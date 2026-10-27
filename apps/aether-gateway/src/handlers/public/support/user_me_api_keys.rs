@@ -341,7 +341,7 @@ pub(super) async fn handle_users_me_api_keys_get(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let mut records = match state
         .list_auth_api_key_export_records_by_user_ids(std::slice::from_ref(&auth.user.id))
@@ -410,7 +410,7 @@ pub(super) async fn handle_users_me_api_key_detail_get(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(api_key_id) = users_me_api_key_detail_id_from_path(&request_context.request_path)
     else {
@@ -508,7 +508,7 @@ async fn resolve_users_me_api_key_snapshot_by_id(
     state: &AppState,
     user_id: &str,
     api_key_id: &str,
-) -> Result<crate::data::auth::GatewayAuthApiKeySnapshot, Response<Body>> {
+) -> Result<crate::data::auth::GatewayAuthApiKeySnapshot, crate::ApiError> {
     let snapshot = match state
         .data
         .read_auth_api_key_snapshot(
@@ -524,35 +524,36 @@ async fn resolve_users_me_api_key_snapshot_by_id(
                 http::StatusCode::NOT_FOUND,
                 "API密钥不存在",
                 false,
-            ))
+            )
+            .into())
         }
         Err(err) => {
             return Err(build_auth_error_response(
                 http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("user api key snapshot lookup failed: {err:?}"),
                 false,
-            ))
+            )
+            .into())
         }
     };
     if snapshot.api_key_is_standalone {
-        return Err(build_auth_error_response(
-            http::StatusCode::NOT_FOUND,
-            "API密钥不存在",
-            false,
-        ));
+        return Err(
+            build_auth_error_response(http::StatusCode::NOT_FOUND, "API密钥不存在", false).into(),
+        );
     }
     Ok(snapshot)
 }
 
 fn ensure_users_me_api_key_mutable(
     snapshot: &crate::data::auth::GatewayAuthApiKeySnapshot,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     if snapshot.api_key_is_locked {
         return Err(build_auth_error_response(
             http::StatusCode::FORBIDDEN,
             "该密钥已被管理员锁定，无法修改",
             false,
-        ));
+        )
+        .into());
     }
     Ok(())
 }
@@ -568,7 +569,7 @@ pub(super) async fn handle_users_me_api_key_create(
     }
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "请求数据验证失败", false);
@@ -607,7 +608,7 @@ pub(super) async fn handle_users_me_api_key_create(
     let routing_group_patch =
         match validate_routing_group_patch(state, None, Some(payload.routing_group_id)).await {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
     let feature_settings = match merge_api_key_feature_settings(
         None,
@@ -720,7 +721,7 @@ pub(super) async fn handle_users_me_api_key_update(
     }
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(api_key_id) = users_me_api_key_detail_id_from_path(&request_context.request_path)
     else {
@@ -729,10 +730,10 @@ pub(super) async fn handle_users_me_api_key_update(
     let snapshot =
         match resolve_users_me_api_key_snapshot_by_id(state, &auth.user.id, &api_key_id).await {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
     if let Err(response) = ensure_users_me_api_key_mutable(&snapshot) {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "请求数据验证失败", false);
@@ -796,7 +797,7 @@ pub(super) async fn handle_users_me_api_key_update(
     .await
     {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let feature_settings = match normalize_api_key_feature_settings_patch(payload.feature_settings)
     {
@@ -880,7 +881,7 @@ pub(super) async fn handle_users_me_api_key_patch(
     }
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(api_key_id) = users_me_api_key_detail_id_from_path(&request_context.request_path)
     else {
@@ -889,10 +890,10 @@ pub(super) async fn handle_users_me_api_key_patch(
     let snapshot =
         match resolve_users_me_api_key_snapshot_by_id(state, &auth.user.id, &api_key_id).await {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
     if let Err(response) = ensure_users_me_api_key_mutable(&snapshot) {
-        return response;
+        return response.into();
     }
     let desired_is_active = if let Some(request_body) = request_body {
         match serde_json::from_slice::<UsersMePatchApiKeyRequest>(request_body) {
@@ -943,7 +944,7 @@ pub(super) async fn handle_users_me_api_key_delete(
     }
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(api_key_id) = users_me_api_key_detail_id_from_path(&request_context.request_path)
     else {
@@ -952,10 +953,10 @@ pub(super) async fn handle_users_me_api_key_delete(
     let snapshot =
         match resolve_users_me_api_key_snapshot_by_id(state, &auth.user.id, &api_key_id).await {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
     if let Err(response) = ensure_users_me_api_key_mutable(&snapshot) {
-        return response;
+        return response.into();
     }
 
     match state
@@ -983,7 +984,7 @@ pub(super) async fn handle_users_me_api_key_providers_put(
     }
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(api_key_id) =
         users_me_api_key_nested_id_from_path(&request_context.request_path, "providers")
@@ -993,10 +994,10 @@ pub(super) async fn handle_users_me_api_key_providers_put(
     let snapshot =
         match resolve_users_me_api_key_snapshot_by_id(state, &auth.user.id, &api_key_id).await {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
     if let Err(response) = ensure_users_me_api_key_mutable(&snapshot) {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "请求数据验证失败", false);
@@ -1122,7 +1123,7 @@ pub(super) async fn handle_users_me_api_key_capabilities_put(
     }
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(api_key_id) =
         users_me_api_key_nested_id_from_path(&request_context.request_path, "capabilities")
@@ -1132,10 +1133,10 @@ pub(super) async fn handle_users_me_api_key_capabilities_put(
     let snapshot =
         match resolve_users_me_api_key_snapshot_by_id(state, &auth.user.id, &api_key_id).await {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return response.into(),
         };
     if let Err(response) = ensure_users_me_api_key_mutable(&snapshot) {
-        return response;
+        return response.into();
     }
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "请求数据验证失败", false);

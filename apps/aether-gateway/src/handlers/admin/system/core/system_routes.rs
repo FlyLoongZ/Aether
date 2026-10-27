@@ -282,7 +282,7 @@ pub(super) async fn maybe_build_local_admin_core_system_response(
         .await
         {
             Ok(result) => result,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         return Ok(Some(match import_result? {
             Ok(payload) => attach_admin_audit_response(
@@ -344,7 +344,7 @@ pub(super) async fn maybe_build_local_admin_core_system_response(
         .await
         {
             Ok(result) => result,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         return Ok(Some(match import_result? {
             Ok(payload) => attach_admin_audit_response(
@@ -406,7 +406,7 @@ pub(super) async fn maybe_build_local_admin_core_system_response(
         .await
         {
             Ok(result) => result,
-            Err(response) => return Ok(Some(response)),
+            Err(response) => return Ok(Some(response.into())),
         };
         return Ok(Some(match import_result? {
             Ok(payload) => attach_admin_audit_response(
@@ -882,7 +882,7 @@ async fn build_manual_usage_cleanup_response(
 ) -> Result<Response<Body>, GatewayError> {
     let options = match parse_manual_usage_cleanup_request(request_body) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let actor_user_id = request_context
         .decision()
@@ -932,14 +932,14 @@ async fn build_manual_usage_cleanup_preview_response(
 ) -> Result<Response<Body>, GatewayError> {
     let older_than_days = match parse_older_than_days_query(request_context.query_string()) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let options = match parse_manual_usage_cleanup_query_options(
         request_context.query_string(),
         older_than_days,
     ) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     let preview = crate::maintenance::preview_manual_usage_cleanup(&state.app().data, options)
         .await
@@ -964,7 +964,7 @@ async fn build_manual_usage_cleanup_preview_response(
 
 fn parse_manual_usage_cleanup_request(
     request_body: Option<&Bytes>,
-) -> Result<ManualUsageCleanupOptions, Response<Body>> {
+) -> Result<ManualUsageCleanupOptions, crate::ApiError> {
     let Some(body) = request_body else {
         return Ok(ManualUsageCleanupOptions::policy());
     };
@@ -978,11 +978,12 @@ fn parse_manual_usage_cleanup_request(
                 http::StatusCode::BAD_REQUEST,
                 Json(json!({ "detail": format!("请求体无效 JSON: {err}") })),
             )
-                .into_response())
+                .into_response()
+                .into())
         }
     };
     let Some(object) = parsed.as_object() else {
-        return Err(bad_manual_cleanup_request("请求体必须为 JSON 对象"));
+        return Err(bad_manual_cleanup_request("请求体必须为 JSON 对象").into());
     };
     parse_manual_usage_cleanup_options(
         object.get("mode").and_then(serde_json::Value::as_str),
@@ -994,7 +995,7 @@ fn parse_manual_usage_cleanup_request(
 fn parse_manual_usage_cleanup_query_options(
     query_string: Option<&str>,
     older_than_days: Option<u32>,
-) -> Result<ManualUsageCleanupOptions, Response<Body>> {
+) -> Result<ManualUsageCleanupOptions, crate::ApiError> {
     let mode = query_param(query_string, "mode");
     let targets = query_param(query_string, "targets").map(serde_json::Value::String);
     let older_value =
@@ -1006,46 +1007,42 @@ fn parse_manual_usage_cleanup_options(
     raw_mode: Option<&str>,
     older_than_days: Option<&serde_json::Value>,
     targets_value: Option<&serde_json::Value>,
-) -> Result<ManualUsageCleanupOptions, Response<Body>> {
+) -> Result<ManualUsageCleanupOptions, crate::ApiError> {
     let (requested_older_than_days, requested_before_now) =
         parse_manual_cleanup_older_than_days(older_than_days)?;
     let mode =
         parse_manual_cleanup_mode(raw_mode, requested_older_than_days, requested_before_now)?;
 
     if mode == ManualUsageCleanupMode::OlderThanDays && requested_older_than_days.is_none() {
-        return Err(bad_manual_cleanup_request(
-            "older_than_days 模式必须提供正整数天数",
-        ));
+        return Err(bad_manual_cleanup_request("older_than_days 模式必须提供正整数天数").into());
     }
     if mode == ManualUsageCleanupMode::BeforeNow && requested_older_than_days.is_some() {
-        return Err(bad_manual_cleanup_request(
-            "before_now 模式不能同时提供 older_than_days",
-        ));
+        return Err(
+            bad_manual_cleanup_request("before_now 模式不能同时提供 older_than_days").into(),
+        );
     }
     if raw_mode.is_some() && requested_before_now && mode != ManualUsageCleanupMode::BeforeNow {
-        return Err(bad_manual_cleanup_request(
-            "older_than_days 为 0 时必须使用 before_now 模式",
-        ));
+        return Err(
+            bad_manual_cleanup_request("older_than_days 为 0 时必须使用 before_now 模式").into(),
+        );
     }
     if raw_mode.is_some()
         && mode == ManualUsageCleanupMode::Policy
         && requested_older_than_days.is_some()
     {
-        return Err(bad_manual_cleanup_request(
-            "policy 模式不能同时提供 older_than_days",
-        ));
+        return Err(bad_manual_cleanup_request("policy 模式不能同时提供 older_than_days").into());
     }
 
     let targets = parse_manual_cleanup_targets(targets_value, mode)?;
     if !targets.any_selected() {
-        return Err(bad_manual_cleanup_request("至少选择一个清理范围"));
+        return Err(bad_manual_cleanup_request("至少选择一个清理范围").into());
     }
     if mode == ManualUsageCleanupMode::BeforeNow
         && (targets.headers || targets.records || targets.expired_keys)
     {
-        return Err(bad_manual_cleanup_request(
-            "清理当前时刻之前只允许选择详细请求体和压缩请求体",
-        ));
+        return Err(
+            bad_manual_cleanup_request("清理当前时刻之前只允许选择详细请求体和压缩请求体").into(),
+        );
     }
 
     Ok(ManualUsageCleanupOptions {
@@ -1059,7 +1056,7 @@ fn parse_manual_cleanup_mode(
     raw_mode: Option<&str>,
     requested_older_than_days: Option<u32>,
     requested_before_now: bool,
-) -> Result<ManualUsageCleanupMode, Response<Body>> {
+) -> Result<ManualUsageCleanupMode, crate::ApiError> {
     let Some(raw) = raw_mode.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(if requested_before_now {
             ManualUsageCleanupMode::BeforeNow
@@ -1073,20 +1070,20 @@ fn parse_manual_cleanup_mode(
         "policy" => Ok(ManualUsageCleanupMode::Policy),
         "older_than_days" => Ok(ManualUsageCleanupMode::OlderThanDays),
         "before_now" => Ok(ManualUsageCleanupMode::BeforeNow),
-        _ => Err(bad_manual_cleanup_request(
-            "mode 必须为 policy、older_than_days 或 before_now",
-        )),
+        _ => Err(
+            bad_manual_cleanup_request("mode 必须为 policy、older_than_days 或 before_now").into(),
+        ),
     }
 }
 
 fn parse_manual_cleanup_older_than_days(
     value: Option<&serde_json::Value>,
-) -> Result<(Option<u32>, bool), Response<Body>> {
+) -> Result<(Option<u32>, bool), crate::ApiError> {
     match value {
         None | Some(serde_json::Value::Null) => Ok((None, false)),
         Some(value) => {
             let Some(raw) = value.as_u64() else {
-                return Err(bad_manual_cleanup_request("older_than_days 必须为非负整数"));
+                return Err(bad_manual_cleanup_request("older_than_days 必须为非负整数").into());
             };
             if raw == 0 {
                 return Ok((None, true));
@@ -1103,7 +1100,7 @@ fn parse_manual_cleanup_older_than_days(
 fn parse_manual_cleanup_targets(
     value: Option<&serde_json::Value>,
     mode: ManualUsageCleanupMode,
-) -> Result<UsageCleanupTargets, Response<Body>> {
+) -> Result<UsageCleanupTargets, crate::ApiError> {
     let Some(value) = value else {
         return Ok(match mode {
             ManualUsageCleanupMode::BeforeNow => UsageCleanupTargets::body_targets(),
@@ -1125,9 +1122,9 @@ fn parse_manual_cleanup_targets(
         serde_json::Value::Array(items) => items
             .iter()
             .map(|item| {
-                item.as_str()
-                    .map(str::to_string)
-                    .ok_or_else(|| bad_manual_cleanup_request("targets 必须为字符串数组"))
+                item.as_str().map(str::to_string).ok_or_else(|| {
+                    crate::ApiError::from(bad_manual_cleanup_request("targets 必须为字符串数组"))
+                })
             })
             .collect::<Result<Vec<_>, _>>()?,
         serde_json::Value::String(raw) => raw
@@ -1136,7 +1133,7 @@ fn parse_manual_cleanup_targets(
             .filter(|item| !item.is_empty())
             .map(str::to_string)
             .collect(),
-        _ => return Err(bad_manual_cleanup_request("targets 必须为字符串数组")),
+        _ => return Err(bad_manual_cleanup_request("targets 必须为字符串数组").into()),
     };
 
     let mut targets = UsageCleanupTargets {
@@ -1153,9 +1150,9 @@ fn parse_manual_cleanup_targets(
             "expired_keys" => targets.expired_keys = true,
             "all" => targets = UsageCleanupTargets::all_policy_targets(),
             _ => {
-                return Err(bad_manual_cleanup_request(
-                    "targets 只能包含 body、headers、records",
-                ))
+                return Err(
+                    bad_manual_cleanup_request("targets 只能包含 body、headers、records").into(),
+                )
             }
         }
     }
@@ -1181,22 +1178,24 @@ fn sensitive_system_export_response(mut response: Response<Body>) -> Response<Bo
 #[cfg(test)]
 async fn acquire_admin_system_import_lock(
     state: &AdminAppState<'_>,
-) -> Result<RuntimeLockLease, Response<Body>> {
-    try_acquire_admin_system_import_lease(state.app())
+) -> Result<RuntimeLockLease, crate::ApiError> {
+    Ok(try_acquire_admin_system_import_lease(state.app())
         .await
-        .map_err(admin_system_import_lock_error_response)
+        .map_err(admin_system_import_lock_error_response)?)
 }
 
 async fn execute_admin_system_import_with_lock<F, T>(
     state: &AdminAppState<'_>,
     operation: F,
-) -> Result<T, Response<Body>>
+) -> Result<T, crate::ApiError>
 where
     F: Future<Output = T>,
 {
-    execute_admin_system_import_exclusively(state.app(), operation)
-        .await
-        .map_err(admin_system_import_lock_error_response)
+    Ok(
+        execute_admin_system_import_exclusively(state.app(), operation)
+            .await
+            .map_err(admin_system_import_lock_error_response)?,
+    )
 }
 
 fn admin_system_import_lock_error_response(error: AdminSystemImportLockError) -> Response<Body> {
@@ -1243,11 +1242,11 @@ fn query_flag(query_string: Option<&str>, name: &str) -> bool {
     })
 }
 
-fn parse_older_than_days_query(query_string: Option<&str>) -> Result<Option<u32>, Response<Body>> {
+fn parse_older_than_days_query(query_string: Option<&str>) -> Result<Option<u32>, crate::ApiError> {
     let Some(value) = query_param(query_string, "older_than_days") else {
         return Ok(None);
     };
-    value
+    Ok(value
         .parse::<u32>()
         .ok()
         .filter(|days| *days >= 1)
@@ -1260,7 +1259,7 @@ fn parse_older_than_days_query(query_string: Option<&str>) -> Result<Option<u32>
                 })),
             )
                 .into_response()
-        })
+        })?)
 }
 
 #[cfg(test)]

@@ -70,7 +70,7 @@ pub(super) async fn handle_payment_callback_input_with_wallet_repository(
     let payment_method = input.payment_method.clone();
     let outcome = match process_payment_callback_input_with_wallet_repository(state, input).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     if !reconcile_payment_callback_referral_rewards(state, &outcome, &payment_method).await {
         // The payment credit is durable, but referral creation/crediting uses
@@ -141,20 +141,20 @@ pub(super) async fn reconcile_payment_callback_referral_rewards(
 pub(super) async fn process_payment_callback_input_with_wallet_repository(
     state: &AppState,
     input: ProcessPaymentCallbackInput,
-) -> Result<ProcessPaymentCallbackOutcome, Response<Body>> {
+) -> Result<ProcessPaymentCallbackOutcome, crate::ApiError> {
     if !state.has_database_wallet_data_writer() {
-        return Err(build_payment_callback_storage_unavailable_response());
+        return Err(build_payment_callback_storage_unavailable_response().into());
     }
 
     match state.process_payment_callback(input).await {
         Ok(Some(value)) => Ok(value),
-        Ok(None) => Err(build_payment_callback_storage_unavailable_response()),
+        Ok(None) => Err(build_payment_callback_storage_unavailable_response().into()),
         Err(_) => {
             warn!(
                 error_category = "wallet_repository_failed",
                 "payment callback repository processing failed"
             );
-            Err(build_payment_callback_processing_failed_response())
+            Err(build_payment_callback_processing_failed_response().into())
         }
     }
 }

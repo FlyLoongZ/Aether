@@ -11,7 +11,7 @@ use aether_oauth::provider::providers::{
 use aether_oauth::provider::{
     ProviderOAuthCookieAuthorizationInput, ProviderOAuthService, ProviderOAuthTransportContext,
 };
-use axum::{body::Body, http, response::Response};
+use axum::http;
 use std::sync::Arc;
 
 fn provider_oauth_transport_error_detail(prefix: &str, _error: &str) -> String {
@@ -41,7 +41,7 @@ fn provider_oauth_service_for_template(
     template: AdminProviderOAuthTemplate,
     token_url: String,
     antigravity_user_info_url: String,
-) -> Result<ProviderOAuthService, Response<Body>> {
+) -> Result<ProviderOAuthService, crate::ApiError> {
     if template.provider_type.eq_ignore_ascii_case("antigravity") {
         let adapter = AntigravityProviderOAuthAdapter::default()
             .with_token_url_override(token_url)
@@ -53,26 +53,28 @@ fn provider_oauth_service_for_template(
         );
         return Ok(ProviderOAuthService::new().with_adapter(Arc::new(adapter)));
     }
-    GenericProviderOAuthAdapter::for_provider_type(template.provider_type)
-        .map(|adapter| adapter.with_token_url_override(token_url))
-        .map(|adapter| ProviderOAuthService::new().with_adapter(Arc::new(adapter)))
-        .ok_or_else(|| {
-            build_internal_control_error_response(
-                http::StatusCode::BAD_REQUEST,
-                "该 Provider 不支持 OAuth 授权",
-            )
-        })
+    Ok(
+        GenericProviderOAuthAdapter::for_provider_type(template.provider_type)
+            .map(|adapter| adapter.with_token_url_override(token_url))
+            .map(|adapter| ProviderOAuthService::new().with_adapter(Arc::new(adapter)))
+            .ok_or_else(|| {
+                build_internal_control_error_response(
+                    http::StatusCode::BAD_REQUEST,
+                    "该 Provider 不支持 OAuth 授权",
+                )
+            })?,
+    )
 }
 
 fn token_payload_from_provider_oauth_result(
     result: aether_oauth::provider::ProviderOAuthTokenSet,
-) -> Result<serde_json::Value, Response<Body>> {
-    result.token_set.raw_payload.ok_or_else(|| {
+) -> Result<serde_json::Value, crate::ApiError> {
+    Ok(result.token_set.raw_payload.ok_or_else(|| {
         build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
             "token exchange 返回缺少 access_token",
         )
-    })
+    })?)
 }
 
 pub(crate) async fn exchange_admin_provider_oauth_code(
@@ -82,7 +84,7 @@ pub(crate) async fn exchange_admin_provider_oauth_code(
     state_nonce: &str,
     pkce_verifier: Option<&str>,
     proxy: Option<ProxySnapshot>,
-) -> Result<serde_json::Value, Response<Body>> {
+) -> Result<serde_json::Value, crate::ApiError> {
     let token_url = state.provider_oauth_token_url(template.provider_type, template.token_url);
     let antigravity_user_info_url =
         state.provider_oauth_token_url("antigravity_user_info", ANTIGRAVITY_USER_INFO_URL);
@@ -113,7 +115,7 @@ pub(crate) async fn exchange_admin_provider_oauth_refresh_token(
     template: AdminProviderOAuthTemplate,
     refresh_token: &str,
     proxy: Option<ProxySnapshot>,
-) -> Result<serde_json::Value, Response<Body>> {
+) -> Result<serde_json::Value, crate::ApiError> {
     let token_url = state.provider_oauth_token_url(template.provider_type, template.token_url);
     let antigravity_user_info_url =
         state.provider_oauth_token_url("antigravity_user_info", ANTIGRAVITY_USER_INFO_URL);
@@ -153,19 +155,21 @@ pub(crate) async fn exchange_admin_provider_oauth_refresh_token(
                 ),
             ),
         })?;
-    token_payload_from_provider_oauth_result(result).map_err(|_| {
-        build_internal_control_error_response(
-            http::StatusCode::BAD_REQUEST,
-            "token refresh 返回缺少 access_token",
-        )
-    })
+    Ok(
+        token_payload_from_provider_oauth_result(result).map_err(|_| {
+            build_internal_control_error_response(
+                http::StatusCode::BAD_REQUEST,
+                "token refresh 返回缺少 access_token",
+            )
+        })?,
+    )
 }
 
 pub(crate) async fn authorize_admin_provider_oauth_with_cookie(
     state: &AdminAppState<'_>,
     session_key: String,
     proxy: Option<ProxySnapshot>,
-) -> Result<serde_json::Value, Response<Body>> {
+) -> Result<serde_json::Value, crate::ApiError> {
     let web_base_url =
         state.provider_oauth_token_url("claude_code_cookie_base_url", CLAUDE_CODE_WEB_BASE_URL);
     let token_url =
@@ -190,12 +194,14 @@ pub(crate) async fn authorize_admin_provider_oauth_with_cookie(
             };
             build_internal_control_error_response(http::StatusCode::BAD_REQUEST, detail)
         })?;
-    token_payload_from_provider_oauth_result(result).map_err(|_| {
-        build_internal_control_error_response(
-            http::StatusCode::BAD_REQUEST,
-            "Claude Cookie 授权返回缺少 access_token",
-        )
-    })
+    Ok(
+        token_payload_from_provider_oauth_result(result).map_err(|_| {
+            build_internal_control_error_response(
+                http::StatusCode::BAD_REQUEST,
+                "Claude Cookie 授权返回缺少 access_token",
+            )
+        })?,
+    )
 }
 
 #[cfg(test)]

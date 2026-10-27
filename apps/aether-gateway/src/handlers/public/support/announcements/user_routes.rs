@@ -24,12 +24,12 @@ struct AnnouncementReadStatusRequest {
 
 fn parse_announcement_read_status_request(
     request_body: Option<&axum::body::Bytes>,
-) -> Result<AnnouncementReadStatusRequest, Response<Body>> {
+) -> Result<AnnouncementReadStatusRequest, crate::ApiError> {
     match request_body {
-        Some(body) if !body.is_empty() => {
+        Some(body) if !body.is_empty() => Ok(
             serde_json::from_slice::<AnnouncementReadStatusRequest>(body)
-                .map_err(|_| announcements_bad_request_response("invalid read-status payload"))
-        }
+                .map_err(|_| announcements_bad_request_response("invalid read-status payload"))?,
+        ),
         _ => Ok(AnnouncementReadStatusRequest { is_read: true }),
     }
 }
@@ -84,7 +84,7 @@ pub(crate) async fn maybe_build_local_announcement_user_response(
 
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return Some(response),
+        Err(response) => return Some(response.into()),
     };
     let now_unix_secs = chrono::Utc::now().timestamp().max(0) as u64;
 
@@ -193,14 +193,14 @@ pub(crate) async fn maybe_build_local_announcement_user_response(
             if let Err(response) =
                 mark_all_announcements_read(state, &auth.user.id, now_unix_secs).await
             {
-                return Some(response);
+                return Some(response.into());
             }
             Some(Json(json!({ "message": "已全部标记为已读" })).into_response())
         }
         Some("read_status") if request_context.request_method == http::Method::PATCH => {
             let request = match parse_announcement_read_status_request(request_body) {
                 Ok(value) => value,
-                Err(response) => return Some(response),
+                Err(response) => return Some(response.into()),
             };
             if !request.is_read {
                 return Some(announcements_bad_request_response(
@@ -241,7 +241,7 @@ async fn mark_all_announcements_read(
     state: &AppState,
     user_id: &str,
     now_unix_secs: u64,
-) -> Result<(), Response<Body>> {
+) -> Result<(), crate::ApiError> {
     let mut offset = 0usize;
     const PAGE_SIZE: usize = 200;
 

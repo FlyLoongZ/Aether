@@ -97,7 +97,7 @@ pub(super) async fn handle_wallet_refund_eligible_providers(
     headers: &http::HeaderMap,
 ) -> Response<Body> {
     if let Err(response) = resolve_authenticated_local_user(state, request_context, headers).await {
-        return response;
+        return response.into();
     }
 
     let mut payment_methods = Vec::new();
@@ -170,7 +170,7 @@ pub(super) async fn handle_wallet_refunds_list(
         offset,
     } = match super::resolve_wallet_request_scope(state, request_context, headers).await {
         Ok(scope) => scope,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(wallet) = wallet else {
         let mut payload = json!({
@@ -261,7 +261,7 @@ pub(super) async fn handle_wallet_refund_detail(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(refund_id) = wallet_refund_id_from_path(&request_context.request_path) else {
         return build_auth_error_response(
@@ -329,7 +329,7 @@ pub(super) async fn handle_wallet_create_refund(
 ) -> Response<Body> {
     let auth = match resolve_authenticated_local_user(state, request_context, headers).await {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return response.into(),
     };
     let Some(request_body) = request_body else {
         return build_auth_error_response(http::StatusCode::BAD_REQUEST, "缺少请求体", false);

@@ -141,7 +141,7 @@ pub(super) async fn maybe_build_local_admin_video_tasks_response(
                 ));
             }
             Err(AdminCancelVideoTaskError::Response(response)) => {
-                return Ok(Some(response));
+                return Ok(Some(*response));
             }
             Err(AdminCancelVideoTaskError::Gateway(err)) => {
                 return Err(err);

@@ -203,8 +203,8 @@ enum RequestCandidateLifecycleLane {
 
 #[derive(Debug)]
 enum RequestCandidatePriorityEnqueueError {
-    Full(UpsertRequestCandidateRecord),
-    Closed(UpsertRequestCandidateRecord),
+    Full(Box<UpsertRequestCandidateRecord>),
+    Closed(Box<UpsertRequestCandidateRecord>),
 }
 
 #[derive(Clone)]
@@ -376,9 +376,9 @@ impl RequestCandidateQueueRuntime {
     pub(crate) fn try_enqueue_priority_status(
         &self,
         record: UpsertRequestCandidateRecord,
-    ) -> Result<(), UpsertRequestCandidateRecord> {
+    ) -> Result<(), Box<UpsertRequestCandidateRecord>> {
         if !request_candidate_status_is_priority(record.status) {
-            return Err(record);
+            return Err(Box::new(record));
         }
         let worker_index = self.worker_index_for(&record);
         match self.try_enqueue_priority(worker_index, record) {
@@ -401,7 +401,7 @@ impl RequestCandidateQueueRuntime {
             .await
         {
             Ok(()) => return Ok(()),
-            Err(record) => record,
+            Err(record) => *record,
         };
         self.metrics
             .sync_fallback_total
@@ -420,7 +420,9 @@ impl RequestCandidateQueueRuntime {
         if request_candidate_status_is_terminal(record.status) {
             return self.try_enqueue_terminal(worker_index, record);
         }
-        Err(RequestCandidatePriorityEnqueueError::Closed(record))
+        Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+            record,
+        )))
     }
 
     fn try_enqueue_active(
@@ -429,23 +431,31 @@ impl RequestCandidateQueueRuntime {
         record: UpsertRequestCandidateRecord,
     ) -> Result<(), RequestCandidatePriorityEnqueueError> {
         let Some(sender) = self.active_senders.get(worker_index) else {
-            return Err(RequestCandidatePriorityEnqueueError::Closed(record));
+            return Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+                record,
+            )));
         };
         let admission = match self.priority_admission.try_acquire() {
             Ok(admission) => admission,
             Err(tokio::sync::TryAcquireError::NoPermits) => {
-                return Err(RequestCandidatePriorityEnqueueError::Full(record));
+                return Err(RequestCandidatePriorityEnqueueError::Full(Box::new(record)));
             }
             Err(tokio::sync::TryAcquireError::Closed) => {
-                return Err(RequestCandidatePriorityEnqueueError::Closed(record));
+                return Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+                    record,
+                )));
             }
         };
         let sender_permit = match sender.try_reserve() {
             Ok(permit) => permit,
             Err(mpsc::error::TrySendError::Full(_)) => {
-                return Err(RequestCandidatePriorityEnqueueError::Full(record));
+                return Err(RequestCandidatePriorityEnqueueError::Full(Box::new(record)));
             }
-            Err(_) => return Err(RequestCandidatePriorityEnqueueError::Closed(record)),
+            Err(_) => {
+                return Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+                    record,
+                )))
+            }
         };
         self.begin_lifecycle_enqueue(RequestCandidateLifecycleLane::Active);
         sender_permit.send(RequestCandidateActiveQueueMessage::Record(Box::new(record)));
@@ -463,30 +473,42 @@ impl RequestCandidateQueueRuntime {
             self.active_senders.get(worker_index),
             self.terminal_senders.get(worker_index),
         ) else {
-            return Err(RequestCandidatePriorityEnqueueError::Closed(record));
+            return Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+                record,
+            )));
         };
         let admission = match self.priority_admission.try_acquire() {
             Ok(admission) => admission,
             Err(tokio::sync::TryAcquireError::NoPermits) => {
-                return Err(RequestCandidatePriorityEnqueueError::Full(record));
+                return Err(RequestCandidatePriorityEnqueueError::Full(Box::new(record)));
             }
             Err(tokio::sync::TryAcquireError::Closed) => {
-                return Err(RequestCandidatePriorityEnqueueError::Closed(record));
+                return Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+                    record,
+                )));
             }
         };
         let active_permit = match active_sender.try_reserve() {
             Ok(permit) => permit,
             Err(mpsc::error::TrySendError::Full(_)) => {
-                return Err(RequestCandidatePriorityEnqueueError::Full(record));
+                return Err(RequestCandidatePriorityEnqueueError::Full(Box::new(record)));
             }
-            Err(_) => return Err(RequestCandidatePriorityEnqueueError::Closed(record)),
+            Err(_) => {
+                return Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+                    record,
+                )))
+            }
         };
         let terminal_permit = match terminal_sender.try_reserve() {
             Ok(permit) => permit,
             Err(mpsc::error::TrySendError::Full(_)) => {
-                return Err(RequestCandidatePriorityEnqueueError::Full(record));
+                return Err(RequestCandidatePriorityEnqueueError::Full(Box::new(record)));
             }
-            Err(_) => return Err(RequestCandidatePriorityEnqueueError::Closed(record)),
+            Err(_) => {
+                return Err(RequestCandidatePriorityEnqueueError::Closed(Box::new(
+                    record,
+                )))
+            }
         };
         self.begin_lifecycle_enqueue(RequestCandidateLifecycleLane::Terminal);
         let barrier_pending = self
@@ -511,19 +533,19 @@ impl RequestCandidateQueueRuntime {
         &self,
         worker_index: usize,
         record: UpsertRequestCandidateRecord,
-    ) -> Result<(), UpsertRequestCandidateRecord> {
+    ) -> Result<(), Box<UpsertRequestCandidateRecord>> {
         let (Some(active_sender), Some(terminal_sender)) = (
             self.active_senders.get(worker_index),
             self.terminal_senders.get(worker_index),
         ) else {
-            return Err(record);
+            return Err(Box::new(record));
         };
         let lane = if request_candidate_status_is_active(record.status) {
             RequestCandidateLifecycleLane::Active
         } else if request_candidate_status_is_terminal(record.status) {
             RequestCandidateLifecycleLane::Terminal
         } else {
-            return Err(record);
+            return Err(Box::new(record));
         };
         if self.priority_admission.available_permits() == 0
             || active_sender.capacity() == 0
@@ -533,12 +555,12 @@ impl RequestCandidateQueueRuntime {
         }
         let active_permit = match active_sender.reserve().await {
             Ok(permit) => permit,
-            Err(_) => return Err(record),
+            Err(_) => return Err(Box::new(record)),
         };
         if lane == RequestCandidateLifecycleLane::Active {
             let admission = match Arc::clone(&self.priority_admission).acquire_owned().await {
                 Ok(admission) => admission,
-                Err(_) => return Err(record),
+                Err(_) => return Err(Box::new(record)),
             };
             self.begin_lifecycle_enqueue(lane);
             active_permit.send(RequestCandidateActiveQueueMessage::Record(Box::new(record)));
@@ -549,11 +571,11 @@ impl RequestCandidateQueueRuntime {
 
         let terminal_permit = match terminal_sender.reserve().await {
             Ok(permit) => permit,
-            Err(_) => return Err(record),
+            Err(_) => return Err(Box::new(record)),
         };
         let admission = match Arc::clone(&self.priority_admission).acquire_owned().await {
             Ok(admission) => admission,
-            Err(_) => return Err(record),
+            Err(_) => return Err(Box::new(record)),
         };
         self.begin_lifecycle_enqueue(lane);
         let barrier_pending = self

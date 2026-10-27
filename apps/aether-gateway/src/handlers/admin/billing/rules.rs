@@ -74,87 +74,97 @@ fn admin_billing_rule_id_from_path(request_path: &str) -> Option<String> {
 
 fn parse_admin_billing_rule_request(
     request_body: Option<&Bytes>,
-) -> Result<crate::AdminBillingRuleWriteInput, Response<Body>> {
+) -> Result<crate::AdminBillingRuleWriteInput, crate::ApiError> {
     let Some(request_body) = request_body else {
-        return Err(build_admin_billing_bad_request_response("请求体不能为空"));
+        return Err(build_admin_billing_bad_request_response("请求体不能为空").into());
     };
     let request = match serde_json::from_slice::<AdminBillingRuleUpsertRequest>(request_body) {
         Ok(value) => value,
         Err(err) => {
             return Err(build_admin_billing_bad_request_response(format!(
                 "Invalid request body: {err}"
-            )))
+            ))
+            .into())
         }
     };
 
     let name = match normalize_admin_billing_required_text(&request.name, "name", 100) {
         Ok(value) => value,
-        Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+        Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
     let task_type = request.task_type.trim().to_ascii_lowercase();
     if !matches!(task_type.as_str(), "chat" | "video" | "image" | "audio") {
         return Err(build_admin_billing_bad_request_response(
             "task_type must be one of chat, video, image, audio",
-        ));
+        )
+        .into());
     }
     let global_model_id = match normalize_admin_billing_optional_text(request.global_model_id, 64) {
         Ok(value) => value,
-        Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+        Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
     let model_id = match normalize_admin_billing_optional_text(request.model_id, 64) {
         Ok(value) => value,
-        Err(detail) => return Err(build_admin_billing_bad_request_response(detail)),
+        Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
     if global_model_id.is_some() == model_id.is_some() {
         return Err(build_admin_billing_bad_request_response(
             "Exactly one of global_model_id or model_id must be provided",
-        ));
+        )
+        .into());
     }
     let expression = request.expression.trim().to_string();
     if let Err(detail) = admin_billing_validate_safe_expression(&expression) {
         return Err(build_admin_billing_bad_request_response(format!(
             "Invalid expression: {detail}"
-        )));
+        ))
+        .into());
     }
 
     let Some(variables) = request.variables.as_object() else {
-        return Err(build_admin_billing_bad_request_response(
-            "variables must be a JSON object",
-        ));
+        return Err(
+            build_admin_billing_bad_request_response("variables must be a JSON object").into(),
+        );
     };
     for (key, value) in variables {
         if key.trim().is_empty() {
             return Err(build_admin_billing_bad_request_response(
                 "variables keys must be non-empty strings",
-            ));
+            )
+            .into());
         }
         if value.is_boolean() || !value.is_number() {
             return Err(build_admin_billing_bad_request_response(format!(
                 "variables['{key}'] must be a number"
-            )));
+            ))
+            .into());
         }
     }
 
     let Some(dimension_mappings) = request.dimension_mappings.as_object() else {
         return Err(build_admin_billing_bad_request_response(
             "dimension_mappings must be a JSON object",
-        ));
+        )
+        .into());
     };
     for (key, value) in dimension_mappings {
         if key.trim().is_empty() {
             return Err(build_admin_billing_bad_request_response(
                 "dimension_mappings keys must be non-empty strings",
-            ));
+            )
+            .into());
         }
         let Some(mapping) = value.as_object() else {
             return Err(build_admin_billing_bad_request_response(format!(
                 "dimension_mappings['{key}'] must be an object"
-            )));
+            ))
+            .into());
         };
         if !mapping.contains_key("source") {
             return Err(build_admin_billing_bad_request_response(format!(
                 "dimension_mappings['{key}'].source is required"
-            )));
+            ))
+            .into());
         }
     }
 
@@ -237,7 +247,7 @@ async fn build_admin_create_billing_rule_response(
 ) -> Result<Response<Body>, GatewayError> {
     let input = match parse_admin_billing_rule_request(request_body) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     match state.create_admin_billing_rule(&input).await? {
         crate::LocalMutationOutcome::Applied(record) => {
@@ -265,7 +275,7 @@ async fn build_admin_update_billing_rule_response(
     };
     let input = match parse_admin_billing_rule_request(request_body) {
         Ok(value) => value,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(response.into()),
     };
     match state.update_admin_billing_rule(&rule_id, &input).await? {
         crate::LocalMutationOutcome::Applied(record) => {

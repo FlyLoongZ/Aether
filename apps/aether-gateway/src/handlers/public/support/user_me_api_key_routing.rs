@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use aether_data_contracts::repository::routing_profiles::RoutingGroupLookupKey;
-use axum::{body::Body, http::StatusCode, response::Response};
+use axum::http::StatusCode;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
@@ -31,7 +31,7 @@ pub(super) async fn validate_routing_group_patch(
     state: &AppState,
     current: Option<&Value>,
     requested: Option<Option<String>>,
-) -> Result<Option<Option<String>>, Response<Body>> {
+) -> Result<Option<Option<String>>, crate::ApiError> {
     let Some(Some(requested)) = requested else {
         return Ok(requested);
     };
@@ -41,7 +41,8 @@ pub(super) async fn validate_routing_group_patch(
             StatusCode::BAD_REQUEST,
             "routing_group_id 必须是有效的策略分组 ID；跟随默认请传 null",
             false,
-        ));
+        )
+        .into());
     }
     // A group can become hidden or disabled after selection. An unrelated edit
     // (including a form resubmitting its unchanged selection) must remain valid.
@@ -53,7 +54,8 @@ pub(super) async fn validate_routing_group_patch(
             StatusCode::SERVICE_UNAVAILABLE,
             "策略分组目录暂不可用",
             false,
-        ));
+        )
+        .into());
     }
     let group = state
         .find_routing_group(RoutingGroupLookupKey::Id(id))
@@ -73,7 +75,8 @@ pub(super) async fn validate_routing_group_patch(
             StatusCode::BAD_REQUEST,
             "所选策略分组不存在或当前不可选",
             false,
-        ));
+        )
+        .into());
     }
     Ok(Some(Some(id.to_string())))
 }
