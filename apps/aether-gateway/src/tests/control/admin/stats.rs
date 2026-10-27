@@ -34,6 +34,8 @@ use super::super::helpers::admin_request;
 
 use super::super::helpers::start_unreachable_upstream;
 
+#[allow(clippy::too_many_arguments)]
+// Test fixture builder with one argument per stored usage field.
 fn sample_usage_row(
     id: &str,
     request_id: &str,

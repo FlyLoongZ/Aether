@@ -10,20 +10,28 @@ pub(crate) use aether_data::backend::{
     ReferralUserDashboard,
 };
 
+/// 本地账号注册与邀请返利绑定的输入。
+///
+/// 这些字段会在数据层注册事务里一次性消费；用结构体承载后，`unlimited`
+/// 这类同类型布尔/字符串参数不再依赖位置区分。
+pub(crate) struct LocalAuthRegistration<'a> {
+    pub(crate) email: Option<String>,
+    pub(crate) email_verified: bool,
+    pub(crate) username: String,
+    pub(crate) password_hash: String,
+    pub(crate) initial_gift_usd: f64,
+    pub(crate) unlimited: bool,
+    pub(crate) invite_code: Option<&'a str>,
+    pub(crate) source: Option<serde_json::Value>,
+    pub(crate) config: Option<ReferralRewardConfig>,
+    pub(crate) privacy_version: Option<&'a str>,
+    pub(crate) default_group_id: Option<&'a str>,
+}
+
 impl GatewayDataState {
     pub(crate) async fn register_local_auth_user_with_referral(
         &self,
-        email: Option<String>,
-        email_verified: bool,
-        username: String,
-        password_hash: String,
-        initial_gift_usd: f64,
-        unlimited: bool,
-        invite_code: Option<&str>,
-        source: Option<serde_json::Value>,
-        config: Option<ReferralRewardConfig>,
-        privacy_version: Option<&str>,
-        default_group_id: Option<&str>,
+        input: LocalAuthRegistration<'_>,
     ) -> Result<
         Option<(
             aether_data::repository::users::StoredUserAuthRecord,
@@ -34,17 +42,17 @@ impl GatewayDataState {
     > {
         self.referrals()
             .register_local_auth_user_with_referral(
-                email,
-                email_verified,
-                username,
-                password_hash,
-                initial_gift_usd,
-                unlimited,
-                invite_code,
-                source,
-                config,
-                privacy_version,
-                default_group_id,
+                input.email,
+                input.email_verified,
+                input.username,
+                input.password_hash,
+                input.initial_gift_usd,
+                input.unlimited,
+                input.invite_code,
+                input.source,
+                input.config,
+                input.privacy_version,
+                input.default_group_id,
             )
             .await
     }

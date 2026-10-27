@@ -5976,6 +5976,9 @@ where
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+// Test-only pipeline driver; the explicit arguments keep each scenario's
+// setup visible at the call site.
 async fn execute_stream_from_frame_stream(
     state: &AppState,
     plan: ExecutionPlan,

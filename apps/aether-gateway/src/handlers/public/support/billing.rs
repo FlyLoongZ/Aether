@@ -139,19 +139,32 @@ fn plan_id_from_checkout_path(path: &str) -> Option<String> {
 /// original 30-minute pending window expires, while retries in the same
 /// window reuse the provider-side idempotency key (Stripe) and merchant order
 /// number (EPay/Alipay/WxPay).
-fn billing_order_no(
-    user_id: &str,
-    plan_id: &str,
-    payment_method: &str,
-    payment_provider: &str,
-    payment_channel: &str,
+#[derive(Clone, Copy)]
+struct BillingCheckoutIdentity<'a> {
+    user_id: &'a str,
+    plan_id: &'a str,
+    payment_method: &'a str,
+    payment_provider: &'a str,
+    payment_channel: &'a str,
     amount_usd: f64,
     pay_amount: f64,
-    pay_currency: &str,
+    pay_currency: &'a str,
     exchange_rate: f64,
+}
+
+fn billing_order_no(
+    identity: &BillingCheckoutIdentity<'_>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> String {
-    billing_order_no_with_salt(
+    billing_order_no_with_salt(identity, None, now)
+}
+
+fn billing_order_no_with_salt(
+    identity: &BillingCheckoutIdentity<'_>,
+    salt: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    let BillingCheckoutIdentity {
         user_id,
         plan_id,
         payment_method,
@@ -161,24 +174,7 @@ fn billing_order_no(
         pay_amount,
         pay_currency,
         exchange_rate,
-        None,
-        now,
-    )
-}
-
-fn billing_order_no_with_salt(
-    user_id: &str,
-    plan_id: &str,
-    payment_method: &str,
-    payment_provider: &str,
-    payment_channel: &str,
-    amount_usd: f64,
-    pay_amount: f64,
-    pay_currency: &str,
-    exchange_rate: f64,
-    salt: Option<&str>,
-    now: chrono::DateTime<chrono::Utc>,
-) -> String {
+    } = *identity;
     let bucket = now.timestamp().max(0) as u64 / BILLING_ORDER_IDENTITY_BUCKET_SECS;
     let identity = json!({
         "version": 2,
@@ -202,31 +198,11 @@ fn billing_order_no_with_salt(
 }
 
 fn billing_order_no_with_nonce(
-    user_id: &str,
-    plan_id: &str,
-    payment_method: &str,
-    payment_provider: &str,
-    payment_channel: &str,
-    amount_usd: f64,
-    pay_amount: f64,
-    pay_currency: &str,
-    exchange_rate: f64,
+    identity: &BillingCheckoutIdentity<'_>,
     nonce: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> String {
-    billing_order_no_with_salt(
-        user_id,
-        plan_id,
-        payment_method,
-        payment_provider,
-        payment_channel,
-        amount_usd,
-        pay_amount,
-        pay_currency,
-        exchange_rate,
-        Some(nonce),
-        now,
-    )
+    billing_order_no_with_salt(identity, Some(nonce), now)
 }
 
 fn payment_amounts_match(expected: f64, stored: f64) -> bool {
@@ -255,15 +231,19 @@ fn plan_order_metadata_string<'a>(
 /// currency, rate, or amount change from receiving stale instructions.
 fn plan_purchase_order_matches_checkout(
     order: &aether_data::repository::wallet::StoredAdminPaymentOrder,
-    plan_id: &str,
-    payment_method: &str,
-    payment_provider: &str,
-    payment_channel: &str,
-    amount_usd: f64,
-    pay_amount: f64,
-    pay_currency: &str,
-    exchange_rate: f64,
+    identity: &BillingCheckoutIdentity<'_>,
 ) -> bool {
+    let BillingCheckoutIdentity {
+        plan_id,
+        payment_method,
+        payment_provider,
+        payment_channel,
+        amount_usd,
+        pay_amount,
+        pay_currency,
+        exchange_rate,
+        ..
+    } = *identity;
     if !order.status.eq_ignore_ascii_case("pending")
         || !order
             .expires_at_unix_secs
@@ -320,33 +300,16 @@ fn plan_purchase_order_matches_checkout(
 
 async fn find_matching_pending_plan_purchase_order(
     state: &AppState,
-    user_id: &str,
-    plan_id: &str,
-    payment_method: &str,
-    payment_provider: &str,
-    payment_channel: &str,
-    amount_usd: f64,
-    pay_amount: f64,
-    pay_currency: &str,
-    exchange_rate: f64,
+    identity: &BillingCheckoutIdentity<'_>,
 ) -> Result<Option<aether_data::repository::wallet::StoredAdminPaymentOrder>, String> {
+    let BillingCheckoutIdentity {
+        user_id, plan_id, ..
+    } = *identity;
     let order = state
         .find_pending_plan_purchase_order_by_user_id(user_id, plan_id)
         .await
         .map_err(|err| format!("pending billing checkout lookup failed: {err:?}"))?;
-    Ok(order.filter(|order| {
-        plan_purchase_order_matches_checkout(
-            order,
-            plan_id,
-            payment_method,
-            payment_provider,
-            payment_channel,
-            amount_usd,
-            pay_amount,
-            pay_currency,
-            exchange_rate,
-        )
-    }))
+    Ok(order.filter(|order| plan_purchase_order_matches_checkout(order, identity)))
 }
 
 enum PlanOrderNoChoice {
@@ -359,46 +322,18 @@ enum PlanOrderNoChoice {
 /// unrelated) row occupying that number receives a fresh high-entropy number.
 async fn choose_plan_order_no(
     state: &AppState,
-    user_id: &str,
-    plan_id: &str,
-    payment_method: &str,
-    payment_provider: &str,
-    payment_channel: &str,
-    amount_usd: f64,
-    pay_amount: f64,
-    pay_currency: &str,
-    exchange_rate: f64,
+    identity: &BillingCheckoutIdentity<'_>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<PlanOrderNoChoice, String> {
-    let base = billing_order_no(
-        user_id,
-        plan_id,
-        payment_method,
-        payment_provider,
-        payment_channel,
-        amount_usd,
-        pay_amount,
-        pay_currency,
-        exchange_rate,
-        now,
-    );
+    let BillingCheckoutIdentity { user_id, .. } = *identity;
+    let base = billing_order_no(identity, now);
     let existing = state
         .find_payment_order_by_order_no(&base)
         .await
         .map_err(|err| format!("billing order number lookup failed: {err:?}"))?;
     if let Some(existing) = existing {
         if existing.user_id.as_deref() == Some(user_id)
-            && plan_purchase_order_matches_checkout(
-                &existing,
-                plan_id,
-                payment_method,
-                payment_provider,
-                payment_channel,
-                amount_usd,
-                pay_amount,
-                pay_currency,
-                exchange_rate,
-            )
+            && plan_purchase_order_matches_checkout(&existing, identity)
         {
             return Ok(PlanOrderNoChoice::Reuse(Box::new(existing)));
         }
@@ -408,19 +343,7 @@ async fn choose_plan_order_no(
         // remains the final authority for a concurrent writer.
         for _ in 0..4 {
             let nonce = Uuid::new_v4().simple().to_string();
-            let candidate = billing_order_no_with_nonce(
-                user_id,
-                plan_id,
-                payment_method,
-                payment_provider,
-                payment_channel,
-                amount_usd,
-                pay_amount,
-                pay_currency,
-                exchange_rate,
-                &nonce,
-                now,
-            );
+            let candidate = billing_order_no_with_nonce(identity, &nonce, now);
             if state
                 .find_payment_order_by_order_no(&candidate)
                 .await
@@ -443,32 +366,12 @@ enum PlanCreateFailureResolution {
 
 async fn fresh_plan_order_no(
     state: &AppState,
-    user_id: &str,
-    plan_id: &str,
-    payment_method: &str,
-    payment_provider: &str,
-    payment_channel: &str,
-    amount_usd: f64,
-    pay_amount: f64,
-    pay_currency: &str,
-    exchange_rate: f64,
+    identity: &BillingCheckoutIdentity<'_>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<String, String> {
     for _ in 0..4 {
         let nonce = Uuid::new_v4().simple().to_string();
-        let candidate = billing_order_no_with_nonce(
-            user_id,
-            plan_id,
-            payment_method,
-            payment_provider,
-            payment_channel,
-            amount_usd,
-            pay_amount,
-            pay_currency,
-            exchange_rate,
-            &nonce,
-            now,
-        );
+        let candidate = billing_order_no_with_nonce(identity, &nonce, now);
         if state
             .find_payment_order_by_order_no(&candidate)
             .await
@@ -483,17 +386,11 @@ async fn fresh_plan_order_no(
 
 async fn resolve_plan_order_after_create_failure(
     state: &AppState,
-    user_id: &str,
+    identity: &BillingCheckoutIdentity<'_>,
     plan: &aether_data_contracts::repository::billing::BillingPlanRecord,
-    provider: &str,
-    payment_method: &str,
-    payment_channel: &str,
-    amount_usd: f64,
-    pay_amount: f64,
-    pay_currency: &str,
-    exchange_rate: f64,
     order_no: &str,
 ) -> Result<PlanCreateFailureResolution, String> {
+    let BillingCheckoutIdentity { user_id, .. } = *identity;
     let Some(order) = state
         .find_payment_order_by_order_no(order_no)
         .await
@@ -502,17 +399,7 @@ async fn resolve_plan_order_after_create_failure(
         return Ok(PlanCreateFailureResolution::Missing);
     };
     if order.user_id.as_deref() != Some(user_id)
-        || !plan_purchase_order_matches_checkout(
-            &order,
-            &plan.id,
-            payment_method,
-            provider,
-            payment_channel,
-            amount_usd,
-            pay_amount,
-            pay_currency,
-            exchange_rate,
-        )
+        || !plan_purchase_order_matches_checkout(&order, identity)
     {
         return Ok(PlanCreateFailureResolution::Occupied);
     }
@@ -874,49 +761,34 @@ pub(super) async fn handle_billing_plan_checkout(
                 return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
             }
         };
-        let pending_order = match find_matching_pending_plan_purchase_order(
-            state,
-            &auth.user.id,
-            &plan.id,
-            &payment_method,
-            requested_provider,
-            &payment_channel_id,
+        let checkout_identity = BillingCheckoutIdentity {
+            user_id: &auth.user.id,
+            plan_id: &plan.id,
+            payment_method: &payment_method,
+            payment_provider: requested_provider,
+            payment_channel: &payment_channel_id,
             amount_usd,
             pay_amount,
-            &config.pay_currency,
-            config.usd_exchange_rate,
-        )
-        .await
-        {
-            Ok(value) => value,
-            Err(detail) => {
-                return build_auth_error_response(
-                    http::StatusCode::INTERNAL_SERVER_ERROR,
-                    detail,
-                    false,
-                )
-            }
+            pay_currency: &config.pay_currency,
+            exchange_rate: config.usd_exchange_rate,
         };
+        let pending_order =
+            match find_matching_pending_plan_purchase_order(state, &checkout_identity).await {
+                Ok(value) => value,
+                Err(detail) => {
+                    return build_auth_error_response(
+                        http::StatusCode::INTERNAL_SERVER_ERROR,
+                        detail,
+                        false,
+                    )
+                }
+            };
         if let Some(order) = pending_order {
             return plan_checkout_replay_response(state, &order, &plan).await;
         }
         let now = Utc::now();
         let expires_at = now + chrono::Duration::minutes(30);
-        let order_no = match choose_plan_order_no(
-            state,
-            &auth.user.id,
-            &plan.id,
-            &payment_method,
-            requested_provider,
-            &payment_channel_id,
-            amount_usd,
-            pay_amount,
-            &config.pay_currency,
-            config.usd_exchange_rate,
-            now,
-        )
-        .await
-        {
+        let order_no = match choose_plan_order_no(state, &checkout_identity, now).await {
             Ok(PlanOrderNoChoice::Fresh(order_no)) => order_no,
             Ok(PlanOrderNoChoice::Reuse(order)) => {
                 return plan_checkout_replay_response(state, order.as_ref(), &plan).await
@@ -996,15 +868,8 @@ pub(super) async fn handle_billing_plan_checkout(
             Err(err) => {
                 match resolve_plan_order_after_create_failure(
                     state,
-                    &auth.user.id,
+                    &checkout_identity,
                     &plan,
-                    requested_provider,
-                    &payment_method,
-                    &payment_channel_id,
-                    amount_usd,
-                    pay_amount,
-                    &config.pay_currency,
-                    config.usd_exchange_rate,
                     &order_no,
                 )
                 .await
@@ -1111,49 +976,34 @@ pub(super) async fn handle_billing_plan_checkout(
                     return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
                 }
             };
-        let pending_order = match find_matching_pending_plan_purchase_order(
-            state,
-            &auth.user.id,
-            &plan.id,
-            &payment_method,
-            requested_provider,
-            &payment_channel,
+        let checkout_identity = BillingCheckoutIdentity {
+            user_id: &auth.user.id,
+            plan_id: &plan.id,
+            payment_method: &payment_method,
+            payment_provider: requested_provider,
+            payment_channel: &payment_channel,
             amount_usd,
             pay_amount,
-            &pay_currency,
-            usd_exchange_rate,
-        )
-        .await
-        {
-            Ok(value) => value,
-            Err(detail) => {
-                return build_auth_error_response(
-                    http::StatusCode::INTERNAL_SERVER_ERROR,
-                    detail,
-                    false,
-                )
-            }
+            pay_currency: &pay_currency,
+            exchange_rate: usd_exchange_rate,
         };
+        let pending_order =
+            match find_matching_pending_plan_purchase_order(state, &checkout_identity).await {
+                Ok(value) => value,
+                Err(detail) => {
+                    return build_auth_error_response(
+                        http::StatusCode::INTERNAL_SERVER_ERROR,
+                        detail,
+                        false,
+                    )
+                }
+            };
         if let Some(order) = pending_order {
             return plan_checkout_replay_response(state, &order, &plan).await;
         }
         let now = Utc::now();
         let expires_at = now + chrono::Duration::minutes(30);
-        let mut order_no = match choose_plan_order_no(
-            state,
-            &auth.user.id,
-            &plan.id,
-            &payment_method,
-            requested_provider,
-            &payment_channel,
-            amount_usd,
-            pay_amount,
-            &pay_currency,
-            usd_exchange_rate,
-            now,
-        )
-        .await
-        {
+        let mut order_no = match choose_plan_order_no(state, &checkout_identity, now).await {
             Ok(PlanOrderNoChoice::Fresh(order_no)) => order_no,
             Ok(PlanOrderNoChoice::Reuse(order)) => {
                 return plan_checkout_replay_response(state, order.as_ref(), &plan).await
@@ -1206,21 +1056,7 @@ pub(super) async fn handle_billing_plan_checkout(
                     // key.  Move to a fresh merchant identity before retrying;
                     // otherwise Stripe would return the same unusable intent.
                     checkout_attempt = 1;
-                    order_no = match fresh_plan_order_no(
-                        state,
-                        &auth.user.id,
-                        &plan.id,
-                        &payment_method,
-                        requested_provider,
-                        &payment_channel,
-                        amount_usd,
-                        pay_amount,
-                        &pay_currency,
-                        usd_exchange_rate,
-                        now,
-                    )
-                    .await
-                    {
+                    order_no = match fresh_plan_order_no(state, &checkout_identity, now).await {
                         Ok(value) => value,
                         Err(detail) => {
                             return build_auth_error_response(
@@ -1331,15 +1167,8 @@ pub(super) async fn handle_billing_plan_checkout(
                 let create_error = format!("billing checkout create failed: {err:?}");
                 match resolve_plan_order_after_create_failure(
                     state,
-                    &auth.user.id,
+                    &checkout_identity,
                     &plan,
-                    requested_provider,
-                    &payment_method,
-                    &payment_channel,
-                    amount_usd,
-                    pay_amount,
-                    &pay_currency,
-                    usd_exchange_rate,
                     &order_no,
                 )
                 .await
@@ -1453,7 +1282,7 @@ mod tests {
         billing_order_no, billing_order_no_with_nonce, compute_plan_payment_amounts,
         normalize_checkout_request, plan_purchase_order_matches_checkout,
         prepare_billing_gateway_response_for_storage, wallet_payment_instructions_from_stored,
-        AppState, BillingPlanCheckoutRequest,
+        AppState, BillingCheckoutIdentity, BillingPlanCheckoutRequest,
     };
     use aether_data_contracts::repository::{
         billing::BillingPlanRecord, wallet::StoredAdminPaymentOrder,
@@ -1470,6 +1299,20 @@ mod tests {
             payment_method: payment_method.map(str::to_string),
             payment_provider: payment_provider.map(str::to_string),
             payment_channel: payment_channel.map(str::to_string),
+        }
+    }
+
+    fn test_billing_identity() -> BillingCheckoutIdentity<'static> {
+        BillingCheckoutIdentity {
+            user_id: "user-test",
+            plan_id: "plan-test",
+            payment_method: "stripe",
+            payment_provider: "stripe",
+            payment_channel: "card",
+            amount_usd: 10.0,
+            pay_amount: 72.5,
+            pay_currency: "CNY",
+            exchange_rate: 7.25,
         }
     }
 
@@ -1689,18 +1532,9 @@ mod tests {
                 "product_id": "plan-test"
             }),
         );
+        let identity = test_billing_identity();
         let matches = |order: &StoredAdminPaymentOrder| {
-            plan_purchase_order_matches_checkout(
-                order,
-                "plan-test",
-                "stripe",
-                "stripe",
-                "card",
-                10.0,
-                72.5,
-                "CNY",
-                7.25,
-            )
+            plan_purchase_order_matches_checkout(order, &identity)
         };
         assert!(matches(&order));
 
@@ -1742,70 +1576,36 @@ mod tests {
                 "product_id": "plan-test"
             }),
         );
-        assert!(plan_purchase_order_matches_checkout(
-            &order,
-            "plan-test",
-            "epay",
-            "epay",
-            "alipay",
-            10.0,
-            72.5,
-            "CNY",
-            7.25,
-        ));
+        let identity = BillingCheckoutIdentity {
+            payment_method: "epay",
+            payment_provider: "epay",
+            payment_channel: "alipay",
+            ..test_billing_identity()
+        };
+        assert!(plan_purchase_order_matches_checkout(&order, &identity));
         assert!(!plan_purchase_order_matches_checkout(
             &order,
-            "plan-test",
-            "epay",
-            "epay",
-            "wxpay",
-            10.0,
-            72.5,
-            "CNY",
-            7.25,
+            &BillingCheckoutIdentity {
+                payment_channel: "wxpay",
+                ..identity
+            },
         ));
     }
 
     #[test]
     fn billing_order_number_is_stable_for_retries_and_changes_with_payment_identity() {
         let now = Utc::now();
-        let first = billing_order_no(
-            "user-test",
-            "plan-test",
-            "stripe",
-            "stripe",
-            "card",
-            10.0,
-            72.5,
-            "CNY",
-            7.25,
-            now,
-        );
-        let retry = billing_order_no(
-            "user-test",
-            "plan-test",
-            "stripe",
-            "stripe",
-            "card",
-            10.0,
-            72.5,
-            "CNY",
-            7.25,
-            now,
-        );
+        let identity = test_billing_identity();
+        let first = billing_order_no(&identity, now);
+        let retry = billing_order_no(&identity, now);
         assert_eq!(first, retry);
         assert!(first.starts_with("pp_"));
         assert!(first.len() <= 64);
         let different_channel = billing_order_no(
-            "user-test",
-            "plan-test",
-            "stripe",
-            "stripe",
-            "link",
-            10.0,
-            72.5,
-            "CNY",
-            7.25,
+            &BillingCheckoutIdentity {
+                payment_channel: "link",
+                ..identity
+            },
             now,
         );
         assert_ne!(first, different_channel);
@@ -1814,31 +1614,9 @@ mod tests {
     #[test]
     fn cancelled_stripe_retry_uses_a_new_merchant_order_identity() {
         let now = Utc::now();
-        let original = billing_order_no(
-            "user-test",
-            "plan-test",
-            "stripe",
-            "stripe",
-            "card",
-            10.0,
-            72.5,
-            "CNY",
-            7.25,
-            now,
-        );
-        let recovered = billing_order_no_with_nonce(
-            "user-test",
-            "plan-test",
-            "stripe",
-            "stripe",
-            "card",
-            10.0,
-            72.5,
-            "CNY",
-            7.25,
-            "stripe-cancelled-recovery",
-            now,
-        );
+        let identity = test_billing_identity();
+        let original = billing_order_no(&identity, now);
+        let recovered = billing_order_no_with_nonce(&identity, "stripe-cancelled-recovery", now);
         assert_ne!(original, recovered);
         assert!(recovered.starts_with("pp_"));
         assert!(recovered.len() <= 64);

@@ -47,6 +47,8 @@ pub(super) fn is_exact_all_skipped_by_auth_limit(
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+// Test-only selection harness with explicit scenario inputs.
 pub(super) async fn select_minimal_candidate(
     selection_row_source: &(impl MinimalCandidateSelectionRowSource + Sync),
     runtime_state: &impl SchedulerRuntimeState,

@@ -488,22 +488,24 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
         )
     } else if needs_bidirectional_conversion {
         build_cross_format_openai_responses_request_body_with_codex_model_capabilities(
-            body_json,
-            &mapped_model,
-            spec_metadata.api_format,
-            provider_api_format,
-            upstream_is_stream,
-            force_body_stream_field,
-            transport.provider.provider_type.as_str(),
-            if is_kiro_claude_cli || is_windsurf_cascade {
-                None
-            } else {
-                transport.endpoint.body_rules.as_ref()
+            crate::ai_serving::planner::standard::CrossFormatResponsesBodyInput {
+                body_json,
+                mapped_model: &mapped_model,
+                client_api_format: spec_metadata.api_format,
+                provider_api_format,
+                upstream_is_stream,
+                force_body_stream_field,
+                provider_type: transport.provider.provider_type.as_str(),
+                body_rules: if is_kiro_claude_cli || is_windsurf_cascade {
+                    None
+                } else {
+                    transport.endpoint.body_rules.as_ref()
+                },
+                request_headers: effective_headers,
+                history_scope: Some(input.auth_context.api_key_id.as_str()),
+                model_capabilities: codex_model_capabilities.as_ref(),
+                enable_model_directives: false,
             },
-            effective_headers,
-            Some(input.auth_context.api_key_id.as_str()),
-            codex_model_capabilities.as_ref(),
-            false,
         )
     } else if websocket_continuation {
         build_local_openai_responses_request_body_with_codex_model_capabilities_for_websocket_continuation(

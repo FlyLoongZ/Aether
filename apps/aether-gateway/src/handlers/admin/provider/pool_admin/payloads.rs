@@ -997,21 +997,40 @@ fn admin_pool_health_score(key: &StoredProviderCatalogKey) -> f64 {
     }
 }
 
-fn admin_pool_scheduling_payload(
-    key: &StoredProviderCatalogKey,
-    cooldown_reason: Option<&str>,
+struct AdminPoolSchedulingInput<'a> {
+    key: &'a StoredProviderCatalogKey,
+    cooldown_reason: Option<&'a str>,
     cooldown_ttl_seconds: Option<u64>,
     account_blocked: bool,
-    account_status_code: Option<&str>,
-    account_status_label: Option<&str>,
-    account_status_reason: Option<&str>,
-    account_status_source: Option<&str>,
+    account_status_code: Option<&'a str>,
+    account_status_label: Option<&'a str>,
+    account_status_reason: Option<&'a str>,
+    account_status_source: Option<&'a str>,
     account_quota_exhausted: bool,
-    oauth_status_code: Option<&str>,
-    oauth_status_label: Option<&str>,
-    oauth_status_reason: Option<&str>,
-    oauth_status_source: Option<&str>,
+    oauth_status_code: Option<&'a str>,
+    oauth_status_label: Option<&'a str>,
+    oauth_status_reason: Option<&'a str>,
+    oauth_status_source: Option<&'a str>,
+}
+
+fn admin_pool_scheduling_payload(
+    input: AdminPoolSchedulingInput<'_>,
 ) -> (String, String, String, Vec<serde_json::Value>) {
+    let AdminPoolSchedulingInput {
+        key,
+        cooldown_reason,
+        cooldown_ttl_seconds,
+        account_blocked,
+        account_status_code,
+        account_status_label,
+        account_status_reason,
+        account_status_source,
+        account_quota_exhausted,
+        oauth_status_code,
+        oauth_status_label,
+        oauth_status_reason,
+        oauth_status_source,
+    } = input;
     if !key.is_active {
         return (
             "blocked".to_string(),
@@ -1214,21 +1233,21 @@ pub(super) fn build_admin_pool_key_payload(
     let oauth_status_source =
         admin_pool_trimmed_string(oauth_snapshot.and_then(|item| item.get("source")));
     let (scheduling_status, scheduling_reason, scheduling_label, scheduling_reasons) =
-        admin_pool_scheduling_payload(
+        admin_pool_scheduling_payload(AdminPoolSchedulingInput {
             key,
-            cooldown_reason.as_deref(),
+            cooldown_reason: cooldown_reason.as_deref(),
             cooldown_ttl_seconds,
-            account_status_blocked,
-            account_status_code.as_deref(),
-            account_status_label.as_deref(),
-            account_status_reason.as_deref(),
-            account_status_source.as_deref(),
+            account_blocked: account_status_blocked,
+            account_status_code: account_status_code.as_deref(),
+            account_status_label: account_status_label.as_deref(),
+            account_status_reason: account_status_reason.as_deref(),
+            account_status_source: account_status_source.as_deref(),
             account_quota_exhausted,
-            oauth_status_code.as_deref(),
-            oauth_status_label.as_deref(),
-            oauth_status_reason.as_deref(),
-            oauth_status_source.as_deref(),
-        );
+            oauth_status_code: oauth_status_code.as_deref(),
+            oauth_status_label: oauth_status_label.as_deref(),
+            oauth_status_reason: oauth_status_reason.as_deref(),
+            oauth_status_source: oauth_status_source.as_deref(),
+        });
 
     let mut payload = serde_json::Map::new();
     payload.insert("key_id".to_string(), json!(key.id));

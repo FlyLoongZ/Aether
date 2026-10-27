@@ -6,7 +6,7 @@ use super::parse::{
     admin_provider_oauth_batch_contains_agent_identity,
     build_admin_provider_oauth_batch_task_state,
     parse_admin_provider_oauth_agent_identity_import_entries,
-    parse_admin_provider_oauth_batch_import_request,
+    parse_admin_provider_oauth_batch_import_request, AdminProviderOAuthBatchTaskState,
 };
 use super::progress::{
     AdminProviderOAuthBatchImportProgress, AdminProviderOAuthBatchProgressReporter,
@@ -221,25 +221,26 @@ impl AdminProviderOAuthBatchProgressReporter for BatchTaskProgressReporter {
         }
 
         let message = format!("处理中 {}/{}", progress.processed, progress.total);
-        let progress_state = build_admin_provider_oauth_batch_task_state(
-            &self.task_id,
-            &self.provider_id,
-            &self.provider_type,
-            self.import_kind,
-            "processing",
-            progress.total,
-            progress.processed,
-            progress.success,
-            progress.failed,
-            progress.created_count,
-            progress.replaced_count,
-            Some(message.as_str()),
-            None,
-            self.error_samples.clone(),
-            self.created_at,
-            Some(self.started_at),
-            None,
-        );
+        let progress_state =
+            build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+                task_id: &self.task_id,
+                provider_id: &self.provider_id,
+                provider_type: &self.provider_type,
+                import_kind: self.import_kind,
+                status: "processing",
+                total: progress.total,
+                processed: progress.processed,
+                success: progress.success,
+                failed: progress.failed,
+                created_count: progress.created_count,
+                replaced_count: progress.replaced_count,
+                message: Some(message.as_str()),
+                error: None,
+                error_samples: self.error_samples.clone(),
+                created_at: self.created_at,
+                started_at: Some(self.started_at),
+                finished_at: None,
+            });
         let _ = AdminAppState::new(&self.app)
             .save_provider_oauth_batch_task_payload(&self.task_id, &progress_state)
             .await;
@@ -379,25 +380,26 @@ async fn handle_admin_provider_oauth_start_import_task(
         };
     let import_kind = provider_oauth_import_kind(agent_identity_only);
     let created_at = now_unix_secs();
-    let submitted_state = build_admin_provider_oauth_batch_task_state(
-        &task_id,
-        &provider_id,
-        &provider_type,
-        import_kind,
-        "submitted",
-        total,
-        0,
-        0,
-        0,
-        0,
-        0,
-        Some("任务已提交，等待执行"),
-        None,
-        Vec::new(),
-        created_at,
-        None,
-        None,
-    );
+    let submitted_state =
+        build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+            task_id: &task_id,
+            provider_id: &provider_id,
+            provider_type: &provider_type,
+            import_kind,
+            status: "submitted",
+            total,
+            processed: 0,
+            success: 0,
+            failed: 0,
+            created_count: 0,
+            replaced_count: 0,
+            message: Some("任务已提交，等待执行"),
+            error: None,
+            error_samples: Vec::new(),
+            created_at,
+            started_at: None,
+            finished_at: None,
+        });
     if state
         .save_provider_oauth_batch_task_payload(&task_id, &submitted_state)
         .await
@@ -473,25 +475,26 @@ async fn handle_admin_provider_oauth_start_import_task(
             .ok()
             .map(|duration| duration.as_secs())
             .unwrap_or(created_at);
-        let processing_state = build_admin_provider_oauth_batch_task_state(
-            &task_id_for_worker,
-            &provider_id_for_worker,
-            &provider_type_for_worker,
-            import_kind,
-            "processing",
-            total,
-            0,
-            0,
-            0,
-            0,
-            0,
-            Some("任务开始执行"),
-            None,
-            Vec::new(),
-            created_at,
-            Some(started_at),
-            None,
-        );
+        let processing_state =
+            build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+                task_id: &task_id_for_worker,
+                provider_id: &provider_id_for_worker,
+                provider_type: &provider_type_for_worker,
+                import_kind,
+                status: "processing",
+                total,
+                processed: 0,
+                success: 0,
+                failed: 0,
+                created_count: 0,
+                replaced_count: 0,
+                message: Some("任务开始执行"),
+                error: None,
+                error_samples: Vec::new(),
+                created_at,
+                started_at: Some(started_at),
+                finished_at: None,
+            });
         let _ = AdminAppState::new(&task_state)
             .save_provider_oauth_batch_task_payload(&task_id_for_worker, &processing_state)
             .await;
@@ -600,25 +603,26 @@ async fn handle_admin_provider_oauth_start_import_task(
                     "导入完成：成功 {}，失败 {}",
                     outcome.success, outcome.failed
                 );
-                let completed_state = build_admin_provider_oauth_batch_task_state(
-                    &task_id_for_worker,
-                    &provider_id_for_worker,
-                    &provider_type_for_worker,
-                    import_kind,
-                    "completed",
-                    outcome.total,
-                    outcome.total,
-                    outcome.success,
-                    outcome.failed,
-                    created_count,
-                    replaced_count,
-                    Some(message.as_str()),
-                    None,
-                    error_samples,
-                    created_at,
-                    Some(started_at),
-                    Some(finished_at),
-                );
+                let completed_state =
+                    build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+                        task_id: &task_id_for_worker,
+                        provider_id: &provider_id_for_worker,
+                        provider_type: &provider_type_for_worker,
+                        import_kind,
+                        status: "completed",
+                        total: outcome.total,
+                        processed: outcome.total,
+                        success: outcome.success,
+                        failed: outcome.failed,
+                        created_count,
+                        replaced_count,
+                        message: Some(message.as_str()),
+                        error: None,
+                        error_samples,
+                        created_at,
+                        started_at: Some(started_at),
+                        finished_at: Some(finished_at),
+                    });
                 let _ = AdminAppState::new(&task_state)
                     .save_provider_oauth_batch_task_payload(&task_id_for_worker, &completed_state)
                     .await;
@@ -658,25 +662,26 @@ async fn handle_admin_provider_oauth_start_import_task(
                     .ok()
                     .map(|duration| duration.as_secs())
                     .unwrap_or(started_at);
-                let failed_state = build_admin_provider_oauth_batch_task_state(
-                    &task_id_for_worker,
-                    &provider_id_for_worker,
-                    &provider_type_for_worker,
-                    import_kind,
-                    "failed",
-                    total,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    Some("导入任务执行失败"),
-                    Some("provider_oauth_batch_import_failed"),
-                    Vec::new(),
-                    created_at,
-                    Some(started_at),
-                    Some(finished_at),
-                );
+                let failed_state =
+                    build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+                        task_id: &task_id_for_worker,
+                        provider_id: &provider_id_for_worker,
+                        provider_type: &provider_type_for_worker,
+                        import_kind,
+                        status: "failed",
+                        total,
+                        processed: 0,
+                        success: 0,
+                        failed: 0,
+                        created_count: 0,
+                        replaced_count: 0,
+                        message: Some("导入任务执行失败"),
+                        error: Some("provider_oauth_batch_import_failed"),
+                        error_samples: Vec::new(),
+                        created_at,
+                        started_at: Some(started_at),
+                        finished_at: Some(finished_at),
+                    });
                 let _ = AdminAppState::new(&task_state)
                     .save_provider_oauth_batch_task_payload(&task_id_for_worker, &failed_state)
                     .await;
@@ -712,25 +717,26 @@ async fn handle_admin_provider_oauth_start_import_task(
         }
     });
 
-    let submitted_response = build_admin_provider_oauth_batch_task_state(
-        &task_id,
-        &provider_id,
-        &provider_type,
-        import_kind,
-        "submitted",
-        total,
-        0,
-        0,
-        0,
-        0,
-        0,
-        Some("任务已提交，等待执行"),
-        None,
-        Vec::new(),
-        created_at,
-        None,
-        None,
-    );
+    let submitted_response =
+        build_admin_provider_oauth_batch_task_state(AdminProviderOAuthBatchTaskState {
+            task_id: &task_id,
+            provider_id: &provider_id,
+            provider_type: &provider_type,
+            import_kind,
+            status: "submitted",
+            total,
+            processed: 0,
+            success: 0,
+            failed: 0,
+            created_count: 0,
+            replaced_count: 0,
+            message: Some("任务已提交，等待执行"),
+            error: None,
+            error_samples: Vec::new(),
+            created_at,
+            started_at: None,
+            finished_at: None,
+        });
     Ok(Json(submitted_response).into_response())
 }
 

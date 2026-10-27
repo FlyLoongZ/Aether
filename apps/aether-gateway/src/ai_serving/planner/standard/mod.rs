@@ -30,7 +30,7 @@ pub(crate) use self::normalize::{
     build_local_openai_chat_upstream_url,
     build_local_openai_responses_request_body_with_codex_model_capabilities,
     build_local_openai_responses_request_body_with_codex_model_capabilities_for_websocket_continuation,
-    build_local_openai_responses_upstream_url,
+    build_local_openai_responses_upstream_url, CrossFormatResponsesBodyInput,
 };
 pub(crate) use self::openai::{
     build_local_openai_chat_stream_attempt_source_for_kind,

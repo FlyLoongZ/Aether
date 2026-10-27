@@ -1006,24 +1006,24 @@ async fn run_direct(
         audit.finish(state, terminal).await;
         return;
     }
-    let terminal = relay_live(
+    let terminal = relay_live(LiveRelayContext {
         client_socket,
-        &mut upstream,
+        upstream: &mut upstream,
         context,
-        "direct",
-        provider_id.as_str(),
-        endpoint_id.as_str(),
-        key_id.as_str(),
-        provider_model.as_str(),
-        &pool_lease,
-        None,
-        RelayStats {
+        mode: "direct",
+        provider_id: provider_id.as_str(),
+        endpoint_id: endpoint_id.as_str(),
+        key_id: key_id.as_str(),
+        provider_model: provider_model.as_str(),
+        pool_lease: &pool_lease,
+        sideband_lease: None,
+        stats: RelayStats {
             client_frames: 1,
             client_bytes: initial_bytes,
             ..RelayStats::default()
         },
-        session_started_at,
-    )
+        started_at: session_started_at,
+    })
     .await;
     let close_client = matches!(
         terminal.termination,
@@ -1061,20 +1061,20 @@ async fn run_sideband(
     // A sideband attaches to an already-created WebRTC session. Sending a
     // second synthetic `session.update` here would corrupt the protocol.
     let session_started_at = Instant::now();
-    let terminal = relay_live(
+    let terminal = relay_live(LiveRelayContext {
         client_socket,
-        &mut upstream,
+        upstream: &mut upstream,
         context,
-        "sideband",
-        provider_id.as_str(),
-        endpoint_id.as_str(),
-        key_id.as_str(),
-        provider_model.as_str(),
-        &pool_lease,
-        Some(&sideband_lease),
-        RelayStats::default(),
-        session_started_at,
-    )
+        mode: "sideband",
+        provider_id: provider_id.as_str(),
+        endpoint_id: endpoint_id.as_str(),
+        key_id: key_id.as_str(),
+        provider_model: provider_model.as_str(),
+        pool_lease: &pool_lease,
+        sideband_lease: Some(&sideband_lease),
+        stats: RelayStats::default(),
+        started_at: session_started_at,
+    })
     .await;
     let close_client = matches!(
         terminal.termination,
@@ -1370,20 +1370,36 @@ struct RelayStats {
     first_upstream_frame_ms: Option<u64>,
 }
 
-async fn relay_live(
-    client_socket: &mut WebSocket,
-    upstream: &mut wreq::ws::WebSocket,
-    context: &WebSocketRequestContext,
+struct LiveRelayContext<'a> {
+    client_socket: &'a mut WebSocket,
+    upstream: &'a mut wreq::ws::WebSocket,
+    context: &'a WebSocketRequestContext,
     mode: &'static str,
-    provider_id: &str,
-    endpoint_id: &str,
-    key_id: &str,
-    provider_model: &str,
-    pool_lease: &LivePoolLeaseGuard,
-    sideband_lease: Option<&LiveSidebandLease>,
+    provider_id: &'a str,
+    endpoint_id: &'a str,
+    key_id: &'a str,
+    provider_model: &'a str,
+    pool_lease: &'a LivePoolLeaseGuard,
+    sideband_lease: Option<&'a LiveSidebandLease>,
     stats: RelayStats,
     started_at: Instant,
-) -> LiveSessionTerminal {
+}
+
+async fn relay_live(input: LiveRelayContext<'_>) -> LiveSessionTerminal {
+    let LiveRelayContext {
+        client_socket,
+        upstream,
+        context,
+        mode,
+        provider_id,
+        endpoint_id,
+        key_id,
+        provider_model,
+        pool_lease,
+        sideband_lease,
+        stats,
+        started_at,
+    } = input;
     let connection_deadline = tokio::time::sleep_until(tokio::time::Instant::from_std(
         started_at + LIVE_WEBSOCKET_SESSION_LIMITS.max_connection_duration,
     ));

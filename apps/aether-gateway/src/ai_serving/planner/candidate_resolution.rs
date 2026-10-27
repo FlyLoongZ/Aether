@@ -294,6 +294,7 @@ pub(crate) async fn resolve_and_rank_local_execution_candidates(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn resolve_and_rank_logical_local_execution_candidates(
     state: PlannerAppState<'_>,
     candidates: Vec<SchedulerMinimalCandidateSelectionCandidate>,
@@ -328,6 +329,7 @@ pub(crate) async fn resolve_and_rank_logical_local_execution_candidates(
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 async fn resolve_and_rank_local_execution_candidates_with_mode(
     state: PlannerAppState<'_>,
     candidates: Vec<SchedulerMinimalCandidateSelectionCandidate>,

@@ -707,20 +707,36 @@ pub(crate) async fn ensure_execution_request_candidate_slot(
     ));
 }
 
+pub(crate) struct LocalCandidatePersistenceInput<'a> {
+    pub trace_id: &'a str,
+    pub user_id: &'a str,
+    pub api_key_id: &'a str,
+    pub candidate: &'a SchedulerMinimalCandidateSelectionCandidate,
+    pub candidate_index: u32,
+    pub retry_index: u32,
+    pub candidate_id: &'a str,
+    pub required_capabilities: Option<&'a Value>,
+    pub extra_data: Option<serde_json::Value>,
+    pub error_context: &'static str,
+}
+
 pub(crate) async fn persist_available_local_candidate(
     state: &(impl RequestCandidateRuntimeWriter + ?Sized),
-    trace_id: &str,
-    user_id: &str,
-    api_key_id: &str,
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
-    candidate_index: u32,
-    retry_index: u32,
-    candidate_id: &str,
-    required_capabilities: Option<&Value>,
-    extra_data: Option<serde_json::Value>,
+    input: LocalCandidatePersistenceInput<'_>,
     created_at_unix_ms: u64,
-    error_context: &'static str,
 ) -> String {
+    let LocalCandidatePersistenceInput {
+        trace_id,
+        user_id,
+        api_key_id,
+        candidate,
+        candidate_index,
+        retry_index,
+        candidate_id,
+        required_capabilities,
+        extra_data,
+        error_context,
+    } = input;
     if !should_persist_request_candidate_status(RequestCandidateStatus::Available) {
         return candidate_id.to_string();
     }
@@ -802,19 +818,22 @@ pub(crate) async fn persist_available_local_candidate(
 
 pub(crate) async fn persist_skipped_local_candidate(
     state: &(impl RequestCandidateRuntimeWriter + ?Sized),
-    trace_id: &str,
-    user_id: &str,
-    api_key_id: &str,
-    candidate: &SchedulerMinimalCandidateSelectionCandidate,
-    candidate_index: u32,
-    retry_index: u32,
-    candidate_id: &str,
-    required_capabilities: Option<&Value>,
+    input: LocalCandidatePersistenceInput<'_>,
     skip_reason: &str,
-    extra_data: Option<serde_json::Value>,
     finished_at_unix_ms: u64,
-    error_context: &'static str,
 ) {
+    let LocalCandidatePersistenceInput {
+        trace_id,
+        user_id,
+        api_key_id,
+        candidate,
+        candidate_index,
+        retry_index,
+        candidate_id,
+        required_capabilities,
+        extra_data,
+        error_context,
+    } = input;
     if !should_persist_request_candidate_status(RequestCandidateStatus::Skipped) {
         return;
     }
@@ -954,6 +973,7 @@ async fn resolve_report_request_candidate_slot(
 
 #[cfg(test)]
 mod tests {
+    use super::LocalCandidatePersistenceInput;
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
 
@@ -1441,17 +1461,19 @@ mod tests {
 
         persist_available_local_candidate(
             &state,
-            "req-runtime-cap-123",
-            "user-1",
-            "api-key-1",
-            &sample_minimal_candidate(),
-            0,
-            0,
-            "cand-runtime-cap-123",
-            Some(&required_capabilities),
-            None,
+            LocalCandidatePersistenceInput {
+                trace_id: "req-runtime-cap-123",
+                user_id: "user-1",
+                api_key_id: "api-key-1",
+                candidate: &sample_minimal_candidate(),
+                candidate_index: 0,
+                retry_index: 0,
+                candidate_id: "cand-runtime-cap-123",
+                required_capabilities: Some(&required_capabilities),
+                extra_data: None,
+                error_context: "request candidate persist should succeed",
+            },
             100_000,
-            "request candidate persist should succeed",
         )
         .await;
 

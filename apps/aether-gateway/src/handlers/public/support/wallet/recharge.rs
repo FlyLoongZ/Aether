@@ -638,7 +638,7 @@ pub(crate) async fn wallet_payment_instructions_from_stored(
     instructions
 }
 
-fn build_wallet_payment_order_payload(
+struct WalletPaymentOrderPayload {
     id: String,
     order_no: String,
     wallet_id: String,
@@ -657,7 +657,60 @@ fn build_wallet_payment_order_payload(
     paid_at: Option<String>,
     credited_at: Option<String>,
     expires_at: Option<String>,
-) -> serde_json::Value {
+}
+
+impl WalletPaymentOrderPayload {
+    fn from_record(record: &aether_data::repository::wallet::StoredAdminPaymentOrder) -> Self {
+        // The order history is durable, but checkout capabilities are not. An
+        // expired, paid, or credited order must not keep advertising a URL/form
+        // that the callback path will no longer accept.
+        let gateway_response = wallet_recharge_order_is_pending_and_live(record)
+            .then(|| record.gateway_response.clone())
+            .flatten();
+        Self {
+            id: record.id.clone(),
+            order_no: record.order_no.clone(),
+            wallet_id: record.wallet_id.clone(),
+            user_id: record.user_id.clone(),
+            amount_usd: record.amount_usd,
+            pay_amount: record.pay_amount,
+            pay_currency: record.pay_currency.clone(),
+            exchange_rate: record.exchange_rate,
+            refunded_amount_usd: record.refunded_amount_usd,
+            refundable_amount_usd: record.refundable_amount_usd,
+            payment_method: record.payment_method.clone(),
+            gateway_order_id: record.gateway_order_id.clone(),
+            gateway_response,
+            status: record.status.clone(),
+            created_at: unix_secs_to_rfc3339(wallet_recharge_order_created_at_unix_secs(record)),
+            paid_at: record.paid_at_unix_secs.and_then(unix_secs_to_rfc3339),
+            credited_at: record.credited_at_unix_secs.and_then(unix_secs_to_rfc3339),
+            expires_at: record.expires_at_unix_secs.and_then(unix_secs_to_rfc3339),
+        }
+    }
+}
+
+fn build_wallet_payment_order_payload(payload: WalletPaymentOrderPayload) -> serde_json::Value {
+    let WalletPaymentOrderPayload {
+        id,
+        order_no,
+        wallet_id,
+        user_id,
+        amount_usd,
+        pay_amount,
+        pay_currency,
+        exchange_rate,
+        refunded_amount_usd,
+        refundable_amount_usd,
+        payment_method,
+        gateway_order_id,
+        gateway_response,
+        status,
+        created_at,
+        paid_at,
+        credited_at,
+        expires_at,
+    } = payload;
     json!({
         "id": id,
         "order_no": order_no,
@@ -683,32 +736,7 @@ fn build_wallet_payment_order_payload(
 fn wallet_payment_order_payload_from_record(
     record: &aether_data::repository::wallet::StoredAdminPaymentOrder,
 ) -> serde_json::Value {
-    // The order history is durable, but checkout capabilities are not. An
-    // expired, paid, or credited order must not keep advertising a URL/form
-    // that the callback path will no longer accept.
-    let gateway_response = wallet_recharge_order_is_pending_and_live(record)
-        .then(|| record.gateway_response.clone())
-        .flatten();
-    build_wallet_payment_order_payload(
-        record.id.clone(),
-        record.order_no.clone(),
-        record.wallet_id.clone(),
-        record.user_id.clone(),
-        record.amount_usd,
-        record.pay_amount,
-        record.pay_currency.clone(),
-        record.exchange_rate,
-        record.refunded_amount_usd,
-        record.refundable_amount_usd,
-        record.payment_method.clone(),
-        record.gateway_order_id.clone(),
-        gateway_response,
-        record.status.clone(),
-        unix_secs_to_rfc3339(wallet_recharge_order_created_at_unix_secs(record)),
-        record.paid_at_unix_secs.and_then(unix_secs_to_rfc3339),
-        record.credited_at_unix_secs.and_then(unix_secs_to_rfc3339),
-        record.expires_at_unix_secs.and_then(unix_secs_to_rfc3339),
-    )
+    build_wallet_payment_order_payload(WalletPaymentOrderPayload::from_record(record))
 }
 
 fn wallet_recharge_order_has_checkout(
@@ -1626,26 +1654,26 @@ pub(super) async fn handle_wallet_create_recharge(
                     return build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false);
                 }
             };
-            let mut order_payload = build_wallet_payment_order_payload(
-                order_id,
-                order_no.clone(),
-                wallet.id.clone(),
-                Some(auth.user.id.clone()),
-                payload.amount_usd,
-                payload.pay_amount,
-                payload.pay_currency.clone(),
-                payload.exchange_rate,
-                0.0,
-                0.0,
-                payload.payment_method.clone(),
-                Some(checkout.gateway_order_id.clone()),
-                Some(checkout.gateway_response.clone()),
-                "pending".to_string(),
-                Some(now.to_rfc3339()),
-                None,
-                None,
-                Some(expires_at.to_rfc3339()),
-            );
+            let mut order_payload = build_wallet_payment_order_payload(WalletPaymentOrderPayload {
+                id: order_id,
+                order_no: order_no.clone(),
+                wallet_id: wallet.id.clone(),
+                user_id: Some(auth.user.id.clone()),
+                amount_usd: payload.amount_usd,
+                pay_amount: payload.pay_amount,
+                pay_currency: payload.pay_currency.clone(),
+                exchange_rate: payload.exchange_rate,
+                refunded_amount_usd: 0.0,
+                refundable_amount_usd: 0.0,
+                payment_method: payload.payment_method.clone(),
+                gateway_order_id: Some(checkout.gateway_order_id.clone()),
+                gateway_response: Some(checkout.gateway_response.clone()),
+                status: "pending".to_string(),
+                created_at: Some(now.to_rfc3339()),
+                paid_at: None,
+                credited_at: None,
+                expires_at: Some(expires_at.to_rfc3339()),
+            });
             if let Some(object) = order_payload.as_object_mut() {
                 object.insert(
                     "payment_provider".to_string(),
