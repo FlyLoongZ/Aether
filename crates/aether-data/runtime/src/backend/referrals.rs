@@ -306,7 +306,7 @@ fn parse_optional_json(value: Option<String>) -> Result<Option<serde_json::Value
 fn generate_invite_code() -> String {
     format!(
         "AE{}",
-        &uuid::Uuid::new_v4().simple().to_string()[..10].to_ascii_uppercase()
+        uuid::Uuid::new_v4().simple().to_string()[..10].to_ascii_uppercase()
     )
 }
 

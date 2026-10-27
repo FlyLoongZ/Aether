@@ -747,6 +747,153 @@ async fn complete_oauth_bind(
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallbackParamsError {
+    DuplicateState,
+    DuplicateCallbackParameter,
+}
+
+fn callback_params(
+    query: Option<&str>,
+) -> Result<std::collections::BTreeMap<String, String>, CallbackParamsError> {
+    let mut params = std::collections::BTreeMap::new();
+    for (key, value) in query
+        .into_iter()
+        .flat_map(|query| form_urlencoded::parse(query.as_bytes()))
+    {
+        let key = key.into_owned();
+        if matches!(key.as_str(), "state" | "code" | "error") && params.contains_key(&key) {
+            return Err(if key == "state" {
+                CallbackParamsError::DuplicateState
+            } else {
+                CallbackParamsError::DuplicateCallbackParameter
+            });
+        }
+        params.insert(key, value.into_owned());
+    }
+    Ok(params)
+}
+
+fn public_oauth_provider_from_path(path: &str, suffix: &str) -> Option<String> {
+    oauth_provider_from_path(path, "/api/oauth/", suffix)
+}
+
+fn user_oauth_provider_from_path(path: &str, suffix: &str) -> Option<String> {
+    oauth_provider_from_path(path, "/api/user/oauth/", suffix)
+}
+
+fn oauth_provider_from_path(path: &str, prefix: &str, suffix: &str) -> Option<String> {
+    let provider_type = path
+        .strip_prefix(prefix)?
+        .strip_suffix(&format!("/{suffix}"))?
+        .trim();
+    (!provider_type.is_empty() && !provider_type.contains('/'))
+        .then(|| provider_type.to_ascii_lowercase())
+}
+
+fn user_oauth_provider_from_path_without_suffix(path: &str) -> Option<String> {
+    let provider_type = path.strip_prefix("/api/user/oauth/")?.trim();
+    (!provider_type.is_empty() && !provider_type.contains('/'))
+        .then(|| provider_type.to_ascii_lowercase())
+}
+
+fn oauth_error_code(error: &OAuthError) -> &'static str {
+    match error {
+        OAuthError::InvalidState => "invalid_state",
+        OAuthError::UnsupportedProvider(_) | OAuthError::InvalidRequest(_) => {
+            "provider_unavailable"
+        }
+        OAuthError::HttpStatus { .. }
+        | OAuthError::InvalidResponse(_)
+        | OAuthError::Transport(_) => "token_exchange_failed",
+        OAuthError::Storage(_) | OAuthError::EncryptionUnavailable => "provider_unavailable",
+    }
+}
+
+fn oauth_account_error_response(error: crate::oauth::IdentityOAuthAccountError) -> Response<Body> {
+    let status = match error {
+        crate::oauth::IdentityOAuthAccountError::ProviderUnavailable
+        | crate::oauth::IdentityOAuthAccountError::Storage(_) => {
+            http::StatusCode::SERVICE_UNAVAILABLE
+        }
+        crate::oauth::IdentityOAuthAccountError::OAuthAlreadyBound
+        | crate::oauth::IdentityOAuthAccountError::AlreadyBoundProvider
+        | crate::oauth::IdentityOAuthAccountError::LastOAuthBinding
+        | crate::oauth::IdentityOAuthAccountError::LastLoginMethod => http::StatusCode::CONFLICT,
+        _ => http::StatusCode::BAD_REQUEST,
+    };
+    build_auth_error_response(status, error.detail(), false)
+}
+
+enum RedirectParams {
+    Query(Vec<(&'static str, String)>),
+}
+
+fn redirect_oauth_error(frontend_callback_url: Option<&str>, code: &str) -> Response<Body> {
+    redirect_to(
+        frontend_callback_url.unwrap_or("/auth/callback"),
+        Some(RedirectParams::Query(vec![(
+            "error_code",
+            code.to_string(),
+        )])),
+    )
+}
+
+fn redirect_to(target: &str, params: Option<RedirectParams>) -> Response<Body> {
+    let location = build_redirect_location(target, params);
+    let mut response = Response::new(Body::empty());
+    *response.status_mut() = http::StatusCode::FOUND;
+    if let Ok(value) = HeaderValue::from_str(&location) {
+        response.headers_mut().insert(LOCATION, value);
+    }
+    response
+}
+
+fn build_redirect_location(target: &str, params: Option<RedirectParams>) -> String {
+    let relative_target =
+        url::Url::parse(target).is_err() && target.starts_with('/') && !target.starts_with("//");
+    let parsed_target = url::Url::parse(target).or_else(|_| {
+        if relative_target {
+            url::Url::parse("http://aether.invalid").and_then(|base| base.join(target))
+        } else {
+            Err(url::ParseError::RelativeUrlWithoutBase)
+        }
+    });
+    let Ok(mut url) = parsed_target else {
+        return target.to_string();
+    };
+    match params {
+        Some(RedirectParams::Query(items)) => {
+            {
+                let mut query = url.query_pairs_mut();
+                for (key, value) in items {
+                    query.append_pair(key, &value);
+                }
+            }
+            if relative_target {
+                relative_url_string(&url)
+            } else {
+                url.to_string()
+            }
+        }
+        None if relative_target => relative_url_string(&url),
+        None => url.to_string(),
+    }
+}
+
+fn relative_url_string(url: &url::Url) -> String {
+    let mut target = url.path().to_string();
+    if let Some(query) = url.query() {
+        target.push('?');
+        target.push_str(query);
+    }
+    if let Some(fragment) = url.fragment() {
+        target.push('#');
+        target.push_str(fragment);
+    }
+    target
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -948,151 +1095,4 @@ mod tests {
             .expect("refresh cookie should be preserved");
         assert!(set_cookie.starts_with("aether_refresh_token=refresh-secret"));
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CallbackParamsError {
-    DuplicateState,
-    DuplicateCallbackParameter,
-}
-
-fn callback_params(
-    query: Option<&str>,
-) -> Result<std::collections::BTreeMap<String, String>, CallbackParamsError> {
-    let mut params = std::collections::BTreeMap::new();
-    for (key, value) in query
-        .into_iter()
-        .flat_map(|query| form_urlencoded::parse(query.as_bytes()))
-    {
-        let key = key.into_owned();
-        if matches!(key.as_str(), "state" | "code" | "error") && params.contains_key(&key) {
-            return Err(if key == "state" {
-                CallbackParamsError::DuplicateState
-            } else {
-                CallbackParamsError::DuplicateCallbackParameter
-            });
-        }
-        params.insert(key, value.into_owned());
-    }
-    Ok(params)
-}
-
-fn public_oauth_provider_from_path(path: &str, suffix: &str) -> Option<String> {
-    oauth_provider_from_path(path, "/api/oauth/", suffix)
-}
-
-fn user_oauth_provider_from_path(path: &str, suffix: &str) -> Option<String> {
-    oauth_provider_from_path(path, "/api/user/oauth/", suffix)
-}
-
-fn oauth_provider_from_path(path: &str, prefix: &str, suffix: &str) -> Option<String> {
-    let provider_type = path
-        .strip_prefix(prefix)?
-        .strip_suffix(&format!("/{suffix}"))?
-        .trim();
-    (!provider_type.is_empty() && !provider_type.contains('/'))
-        .then(|| provider_type.to_ascii_lowercase())
-}
-
-fn user_oauth_provider_from_path_without_suffix(path: &str) -> Option<String> {
-    let provider_type = path.strip_prefix("/api/user/oauth/")?.trim();
-    (!provider_type.is_empty() && !provider_type.contains('/'))
-        .then(|| provider_type.to_ascii_lowercase())
-}
-
-fn oauth_error_code(error: &OAuthError) -> &'static str {
-    match error {
-        OAuthError::InvalidState => "invalid_state",
-        OAuthError::UnsupportedProvider(_) | OAuthError::InvalidRequest(_) => {
-            "provider_unavailable"
-        }
-        OAuthError::HttpStatus { .. }
-        | OAuthError::InvalidResponse(_)
-        | OAuthError::Transport(_) => "token_exchange_failed",
-        OAuthError::Storage(_) | OAuthError::EncryptionUnavailable => "provider_unavailable",
-    }
-}
-
-fn oauth_account_error_response(error: crate::oauth::IdentityOAuthAccountError) -> Response<Body> {
-    let status = match error {
-        crate::oauth::IdentityOAuthAccountError::ProviderUnavailable
-        | crate::oauth::IdentityOAuthAccountError::Storage(_) => {
-            http::StatusCode::SERVICE_UNAVAILABLE
-        }
-        crate::oauth::IdentityOAuthAccountError::OAuthAlreadyBound
-        | crate::oauth::IdentityOAuthAccountError::AlreadyBoundProvider
-        | crate::oauth::IdentityOAuthAccountError::LastOAuthBinding
-        | crate::oauth::IdentityOAuthAccountError::LastLoginMethod => http::StatusCode::CONFLICT,
-        _ => http::StatusCode::BAD_REQUEST,
-    };
-    build_auth_error_response(status, error.detail(), false)
-}
-
-enum RedirectParams {
-    Query(Vec<(&'static str, String)>),
-}
-
-fn redirect_oauth_error(frontend_callback_url: Option<&str>, code: &str) -> Response<Body> {
-    redirect_to(
-        frontend_callback_url.unwrap_or("/auth/callback"),
-        Some(RedirectParams::Query(vec![(
-            "error_code",
-            code.to_string(),
-        )])),
-    )
-}
-
-fn redirect_to(target: &str, params: Option<RedirectParams>) -> Response<Body> {
-    let location = build_redirect_location(target, params);
-    let mut response = Response::new(Body::empty());
-    *response.status_mut() = http::StatusCode::FOUND;
-    if let Ok(value) = HeaderValue::from_str(&location) {
-        response.headers_mut().insert(LOCATION, value);
-    }
-    response
-}
-
-fn build_redirect_location(target: &str, params: Option<RedirectParams>) -> String {
-    let relative_target =
-        url::Url::parse(target).is_err() && target.starts_with('/') && !target.starts_with("//");
-    let parsed_target = url::Url::parse(target).or_else(|_| {
-        if relative_target {
-            url::Url::parse("http://aether.invalid").and_then(|base| base.join(target))
-        } else {
-            Err(url::ParseError::RelativeUrlWithoutBase)
-        }
-    });
-    let Ok(mut url) = parsed_target else {
-        return target.to_string();
-    };
-    match params {
-        Some(RedirectParams::Query(items)) => {
-            {
-                let mut query = url.query_pairs_mut();
-                for (key, value) in items {
-                    query.append_pair(key, &value);
-                }
-            }
-            if relative_target {
-                relative_url_string(&url)
-            } else {
-                url.to_string()
-            }
-        }
-        None if relative_target => relative_url_string(&url),
-        None => url.to_string(),
-    }
-}
-
-fn relative_url_string(url: &url::Url) -> String {
-    let mut target = url.path().to_string();
-    if let Some(query) = url.query() {
-        target.push('?');
-        target.push_str(query);
-    }
-    if let Some(fragment) = url.fragment() {
-        target.push('#');
-        target.push_str(fragment);
-    }
-    target
 }

@@ -223,10 +223,7 @@ fn keep_claude_code_block(
             && !signature.is_empty()
             && signature != DUMMY_THINKING_SIGNATURE;
     }
-    if block_type.is_empty() && block_object.contains_key("thinking") {
-        return false;
-    }
-    true
+    !(block_type.is_empty() && block_object.contains_key("thinking"))
 }
 
 #[cfg(test)]

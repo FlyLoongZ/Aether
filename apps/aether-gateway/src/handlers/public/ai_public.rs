@@ -493,9 +493,7 @@ fn maybe_build_local_openai_request_validation_response(
         return None;
     }
 
-    let Some(operation) = OpenAiImageOperation::from_path(&request_context.request_path) else {
-        return None;
-    };
+    let operation = OpenAiImageOperation::from_path(&request_context.request_path)?;
     let validation = match parse_openai_image_validation_input(
         operation,
         request_context.request_content_type.as_deref(),
@@ -1501,12 +1499,9 @@ async fn maybe_build_local_gemini_video_operations_response(
         });
     }
 
-    let Some(operation_path) = request_context
+    let operation_path = request_context
         .request_path
-        .strip_prefix("/v1beta/operations/")
-    else {
-        return None;
-    };
+        .strip_prefix("/v1beta/operations/")?;
 
     Some(match request_context.request_method {
         http::Method::GET => {

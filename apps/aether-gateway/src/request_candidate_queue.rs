@@ -83,31 +83,32 @@ impl Default for RequestCandidateQueueConfig {
 
 impl RequestCandidateQueueConfig {
     pub(crate) fn from_env() -> Self {
-        let mut config = Self::default();
-        config.mode = match env_string(MODE_ENV).as_deref() {
-            Some("sync") | Some("inline") => RequestCandidateWriteMode::Sync,
-            Some("async") | Some("queued") | Some("queue") => RequestCandidateWriteMode::Async,
-            _ => RequestCandidateWriteMode::Async,
-        };
-        config.capacity = env_usize(QUEUE_CAPACITY_ENV, DEFAULT_QUEUE_CAPACITY).max(1);
-        config.batch_size = env_usize(BATCH_SIZE_ENV, DEFAULT_BATCH_SIZE).max(1);
-        config.db_batch_size =
-            env_usize(DB_BATCH_SIZE_ENV, DEFAULT_DB_BATCH_SIZE).clamp(1, MAX_DB_BATCH_SIZE);
-        config.flush_interval =
-            Duration::from_millis(env_u64(FLUSH_INTERVAL_MS_ENV, DEFAULT_FLUSH_INTERVAL_MS).max(1));
-        config.workers = env_usize(WORKERS_ENV, DEFAULT_WORKERS).clamp(1, 32);
-        config.db_write_concurrency_limit =
-            env_optional_usize(DB_WRITE_CONCURRENCY_LIMIT_ENV).map(|limit| limit.clamp(1, 32));
-        config.full_policy = match env_string(QUEUE_FULL_ENV).as_deref() {
-            Some("drop") | Some("best_effort") | Some("best-effort") => {
-                RequestCandidateQueueFullPolicy::Drop
-            }
-            Some("sync") | Some("fallback_sync") | Some("fallback-sync") => {
-                RequestCandidateQueueFullPolicy::Sync
-            }
-            _ => RequestCandidateQueueFullPolicy::Sync,
-        };
-        config
+        Self {
+            mode: match env_string(MODE_ENV).as_deref() {
+                Some("sync") | Some("inline") => RequestCandidateWriteMode::Sync,
+                Some("async") | Some("queued") | Some("queue") => RequestCandidateWriteMode::Async,
+                _ => RequestCandidateWriteMode::Async,
+            },
+            capacity: env_usize(QUEUE_CAPACITY_ENV, DEFAULT_QUEUE_CAPACITY).max(1),
+            batch_size: env_usize(BATCH_SIZE_ENV, DEFAULT_BATCH_SIZE).max(1),
+            db_batch_size: env_usize(DB_BATCH_SIZE_ENV, DEFAULT_DB_BATCH_SIZE)
+                .clamp(1, MAX_DB_BATCH_SIZE),
+            flush_interval: Duration::from_millis(
+                env_u64(FLUSH_INTERVAL_MS_ENV, DEFAULT_FLUSH_INTERVAL_MS).max(1),
+            ),
+            workers: env_usize(WORKERS_ENV, DEFAULT_WORKERS).clamp(1, 32),
+            db_write_concurrency_limit: env_optional_usize(DB_WRITE_CONCURRENCY_LIMIT_ENV)
+                .map(|limit| limit.clamp(1, 32)),
+            full_policy: match env_string(QUEUE_FULL_ENV).as_deref() {
+                Some("drop") | Some("best_effort") | Some("best-effort") => {
+                    RequestCandidateQueueFullPolicy::Drop
+                }
+                Some("sync") | Some("fallback_sync") | Some("fallback-sync") => {
+                    RequestCandidateQueueFullPolicy::Sync
+                }
+                _ => RequestCandidateQueueFullPolicy::Sync,
+            },
+        }
     }
 
     pub(crate) fn async_enabled(&self) -> bool {

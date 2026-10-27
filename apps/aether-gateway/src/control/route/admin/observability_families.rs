@@ -675,24 +675,16 @@ pub(super) fn classify_admin_observability_family_route(
             "admin:monitoring",
             false,
         ))
-    } else if method == http::Method::GET
-        && (matches!(
+    } else if (method == http::Method::GET
+        && matches!(
             normalized_path,
             "/api/admin/monitoring/resilience-status"
                 | "/api/admin/monitoring/resilience-status/"
                 | "/api/admin/monitoring/resilience/circuit-history"
                 | "/api/admin/monitoring/resilience/circuit-history/"
-        ) || (normalized_path == "/api/admin/monitoring/resilience/error-stats"))
-    {
-        Some(classified(
-            "admin_proxy",
-            "monitoring",
-            "monitoring_resilience",
-            "admin:monitoring",
-            false,
         ))
-    } else if method == http::Method::DELETE
-        && normalized_path == "/api/admin/monitoring/resilience/error-stats"
+        || ((method == http::Method::GET || method == http::Method::DELETE)
+            && normalized_path == "/api/admin/monitoring/resilience/error-stats")
     {
         Some(classified(
             "admin_proxy",

@@ -303,7 +303,7 @@ fn validate_new_backup_encryption_secret(
     encryption_secret: &str,
 ) -> Result<(), BackupExecutionError> {
     let encryption_secret = encryption_secret.trim();
-    if encryption_secret.as_bytes().len() < MIN_NEW_BACKUP_ENCRYPTION_SECRET_BYTES {
+    if encryption_secret.len() < MIN_NEW_BACKUP_ENCRYPTION_SECRET_BYTES {
         return Err(BackupExecutionError::UnsafeEncryptionKey(
             "must contain at least 32 bytes",
         ));

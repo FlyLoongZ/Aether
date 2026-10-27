@@ -77,6 +77,21 @@ const MIN_AUTH_CAPACITY_CACHE_TTL_MS: u64 = 10;
 const MAX_AUTH_CAPACITY_CACHE_TTL_MS: u64 = 10_000;
 const AUTH_CAPACITY_CACHE_TTL_MS_ENV: &str = "AETHER_GATEWAY_AUTH_CAPACITY_CACHE_TTL_MS";
 
+/// 进程级指标采样快照句柄：`(采集时刻, 采样值集合)`。
+pub(crate) type MetricSnapshotHandle =
+    Arc<TokioRwLock<Option<(Instant, Vec<aether_runtime::MetricSample>)>>>;
+
+/// 测试用钱包批量调整存储：`(用户, 钱包) -> 批量结果`。
+#[cfg(test)]
+pub(crate) type AuthWalletBatchStoreForTests = Arc<
+    StdMutex<
+        HashMap<
+            (String, String),
+            aether_data::repository::wallet::StoredAdminUserWalletBalanceBatch,
+        >,
+    >,
+>;
+
 #[cfg(test)]
 type TestExecutionRuntimeSyncOverrideFn = dyn Fn(
         &aether_contracts::ExecutionPlan,
@@ -423,8 +438,7 @@ pub struct AppState {
     pub(crate) usage_counter_flush_metrics: Arc<UsageCounterFlushRuntimeMetrics>,
     pub(crate) task_supervisor_metrics: TaskSupervisorMetrics,
     pub(crate) process_resource_monitor: Arc<crate::process_metrics::GatewayProcessResourceMonitor>,
-    pub(crate) metric_snapshot:
-        Arc<TokioRwLock<Option<(Instant, Vec<aether_runtime::MetricSample>)>>>,
+    pub(crate) metric_snapshot: MetricSnapshotHandle,
     pub(crate) metric_snapshot_refresh: Arc<TokioMutex<()>>,
     pub(crate) usage_counter_exact_health_metric_snapshot:
         Arc<TokioRwLock<Option<(Instant, UsageCounterHealthSnapshot)>>>,
@@ -474,16 +488,7 @@ pub struct AppState {
     #[cfg(test)]
     pub(crate) auth_wallet_lookup_error_for_tests: Option<String>,
     #[cfg(test)]
-    pub(crate) auth_wallet_batch_store_for_tests: Option<
-        Arc<
-            StdMutex<
-                HashMap<
-                    (String, String),
-                    aether_data::repository::wallet::StoredAdminUserWalletBalanceBatch,
-                >,
-            >,
-        >,
-    >,
+    pub(crate) auth_wallet_batch_store_for_tests: Option<AuthWalletBatchStoreForTests>,
     #[cfg(test)]
     pub(crate) auth_wallet_batch_operation_lock_for_tests: Arc<TokioMutex<()>>,
     #[cfg(test)]

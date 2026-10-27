@@ -1421,10 +1421,9 @@ async fn execute_in_process_stream_with_oauth_retry(
     };
     let response_text = if let Some(failure) = analyzed_prefetched_failure.as_ref() {
         Some(failure.response_text.clone())
-    } else if execution.status_code == 403 && uses_oauth_credential {
-        prefetch_direct_stream_error_body(&mut execution).await
-    } else if execution.status_code == 401
-        && stream_plan_uses_codex_agent_identity(state, plan).await
+    } else if (execution.status_code == 403 && uses_oauth_credential)
+        || (execution.status_code == 401
+            && stream_plan_uses_codex_agent_identity(state, plan).await)
     {
         prefetch_direct_stream_error_body(&mut execution).await
     } else {
@@ -2990,10 +2989,7 @@ fn should_defer_stream_pending_for_direct_inline(
     }
     let normalized_stream_report_context =
         normalize_provider_private_report_context(report_context);
-    if maybe_build_stream_response_rewriter(normalized_stream_report_context.as_ref()).is_some() {
-        return false;
-    }
-    true
+    !maybe_build_stream_response_rewriter(normalized_stream_report_context.as_ref()).is_some()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -3871,6 +3867,9 @@ async fn execute_stream_from_direct_passthrough(
     )?))
 }
 
+type StreamExecutionFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Option<Response<Body>>, GatewayError>> + Send + 'a>>;
+
 #[allow(clippy::too_many_arguments)] // internal function, grouping would add unnecessary indirection
 pub(crate) fn execute_execution_runtime_stream<'a>(
     state: &'a AppState,
@@ -3880,7 +3879,7 @@ pub(crate) fn execute_execution_runtime_stream<'a>(
     plan_kind: &'a str,
     report_kind: Option<String>,
     report_context: Option<serde_json::Value>,
-) -> Pin<Box<dyn Future<Output = Result<Option<Response<Body>>, GatewayError>> + Send + 'a>> {
+) -> StreamExecutionFuture<'a> {
     Box::pin(async move {
         let mut cancellation_guard = AttemptCancellationGuard::disarmed(
             state,
@@ -3907,6 +3906,14 @@ pub(crate) fn execute_execution_runtime_stream<'a>(
     })
 }
 
+type StreamWithRetryScopeFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<AiAttemptExecutionOutcome<Response<Body>>, GatewayError>>
+            + Send
+            + 'a,
+    >,
+>;
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn execute_execution_runtime_stream_with_retry_scope<'a>(
     state: &'a AppState,
@@ -3916,13 +3923,7 @@ pub(crate) fn execute_execution_runtime_stream_with_retry_scope<'a>(
     plan_kind: &'a str,
     report_kind: Option<String>,
     report_context: Option<serde_json::Value>,
-) -> Pin<
-    Box<
-        dyn Future<Output = Result<AiAttemptExecutionOutcome<Response<Body>>, GatewayError>>
-            + Send
-            + 'a,
-    >,
-> {
+) -> StreamWithRetryScopeFuture<'a> {
     Box::pin(async move {
         let mut retry_scope = AiAttemptRetryScope::Candidate;
         let mut fallback_response = None;
@@ -4928,10 +4929,10 @@ fn success_failover_matchable_body<'body>(
         return (complete_end > 0).then_some(&body[..complete_end]);
     }
     let stripped = strip_utf8_bom_and_ws(body);
-    if stripped.starts_with(b"{") || stripped.starts_with(b"[") {
-        if serde_json::from_slice::<Value>(stripped).is_err_and(|error| error.is_eof()) {
-            return None;
-        }
+    if (stripped.starts_with(b"{") || stripped.starts_with(b"["))
+        && serde_json::from_slice::<Value>(stripped).is_err_and(|error| error.is_eof())
+    {
+        return None;
     }
     Some(body)
 }

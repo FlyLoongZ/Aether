@@ -424,15 +424,11 @@ async fn resolve_locally_actionable_request_candidate_report_context_with_retry(
     state: &AppState,
     context: &Value,
 ) -> Option<Value> {
-    if context
+    context
         .get("request_id")
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .is_none()
-    {
-        return None;
-    }
+        .filter(|value| !value.is_empty())?;
 
     for attempt in 0..=REQUEST_CANDIDATE_REPORT_CONTEXT_RETRY_ATTEMPTS {
         if let Some(resolved) =

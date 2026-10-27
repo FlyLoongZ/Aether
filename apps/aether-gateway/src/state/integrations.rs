@@ -210,9 +210,7 @@ impl AppState {
 
         let mut hydrated = transport.clone();
         hydrated.key.upstream_metadata = Some(merged_metadata.clone());
-        if provider_transport::resolve_gemini_cli_project_id(&hydrated).is_none() {
-            return None;
-        }
+        provider_transport::resolve_gemini_cli_project_id(&hydrated)?;
 
         if let Err(err) = self
             .update_provider_catalog_key_upstream_metadata(

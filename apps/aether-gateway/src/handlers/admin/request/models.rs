@@ -31,9 +31,7 @@ fn admin_model_repository_error(operation: &'static str) -> String {
 fn normalize_provider_model_mapping_scopes(
     value: Option<serde_json::Value>,
 ) -> Option<serde_json::Value> {
-    let Some(mut value) = value else {
-        return None;
-    };
+    let mut value = value?;
     let Some(items) = value.as_array_mut() else {
         return Some(value);
     };

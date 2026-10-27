@@ -717,13 +717,7 @@ fn windsurf_register_user_credential(payload: &Value) -> Option<String> {
         ],
     )
     .or_else(|| {
-        string_any(payload, &["token"]).and_then(|token| {
-            if windsurf_raw_api_key(&token).is_some() {
-                Some(token)
-            } else {
-                None
-            }
-        })
+        string_any(payload, &["token"]).filter(|token| windsurf_raw_api_key(token).is_some())
     })
     .or_else(|| extract_windsurf_session_token_from_text(&payload.to_string()))
 }

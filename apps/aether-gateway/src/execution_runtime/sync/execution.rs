@@ -1214,7 +1214,7 @@ impl<'a> OpenAiImageSyncProgressRecorder<'a> {
                 break;
             }
             let take = find_sse_block_end(remaining)
-                .map_or(remaining.len(), |block_end| block_end)
+                .unwrap_or(remaining.len())
                 .min(capacity);
             if take == 0 {
                 self.buffer.clear();
@@ -1497,7 +1497,7 @@ async fn execute_direct_sync_runtime_candidate(
 
     let started_at = Instant::now();
     let timeout_ms = resolve_openai_image_sync_total_timeout_ms(plan);
-    let mut execution = Box::pin(execute_openai_image_sync_upstream_sse_candidate(
+    let mut execution = std::pin::pin!(execute_openai_image_sync_upstream_sse_candidate(
         state,
         plan,
         report_context,
@@ -1506,7 +1506,7 @@ async fn execute_direct_sync_runtime_candidate(
     let mut idle_interval = tokio::time::interval(SYNC_EXECUTION_IDLE_LOG_INTERVAL);
     idle_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     idle_interval.tick().await;
-    let mut total_timeout = Box::pin(tokio::time::sleep(Duration::from_millis(timeout_ms)));
+    let mut total_timeout = std::pin::pin!(tokio::time::sleep(Duration::from_millis(timeout_ms)));
 
     loop {
         tokio::select! {

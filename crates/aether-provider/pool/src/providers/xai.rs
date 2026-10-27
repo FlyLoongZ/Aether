@@ -165,11 +165,7 @@ pub(crate) fn quota_exhausted_from_bucket(bucket: &Map<String, Value>) -> bool {
     let on_demand_enabled = provider_pool_json_bool(bucket.get("on_demand_enabled")) != Some(false);
     let on_demand_cap = provider_pool_json_f64(bucket.get("on_demand_cap")).unwrap_or(0.0);
     let on_demand_used = provider_pool_json_f64(bucket.get("on_demand_used")).unwrap_or(0.0);
-    if on_demand_enabled && on_demand_cap > 0.0 && on_demand_used < on_demand_cap {
-        return false;
-    }
-
-    true
+    !(on_demand_enabled && on_demand_cap > 0.0 && on_demand_used < on_demand_cap)
 }
 
 #[cfg(test)]

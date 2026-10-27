@@ -662,15 +662,14 @@ fn build_windsurf_stream_frame_stream(
                             return;
                         }
                     } else {
-                        if buffer_for_tool_calls && !content.is_empty() {
-                            if tx.send(encode_stream_frame_ndjson(&sse_data_frame(
+                        if buffer_for_tool_calls && !content.is_empty()
+                            && tx.send(encode_stream_frame_ndjson(&sse_data_frame(
                                 &prepared.request_id,
                                 &prepared.model,
                                 &content,
                             ))).await.is_err() {
                                 return;
                             }
-                        }
                         if tx.send(encode_stream_frame_ndjson(&sse_finish_frame_with_reason(
                             &prepared.request_id,
                             &prepared.model,

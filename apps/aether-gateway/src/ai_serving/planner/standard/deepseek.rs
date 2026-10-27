@@ -145,12 +145,11 @@ fn apply_deepseek_openai_chat_thinking_compat(
     let Some(object) = provider_request_body.as_object_mut() else {
         return;
     };
-    if disabled {
-        if reasoning_effort(&Value::Object(object.clone()))
+    if disabled
+        && reasoning_effort(&Value::Object(object.clone()))
             .is_some_and(|value| value.eq_ignore_ascii_case("none"))
-        {
-            object.remove("reasoning_effort");
-        }
+    {
+        object.remove("reasoning_effort");
     }
 }
 

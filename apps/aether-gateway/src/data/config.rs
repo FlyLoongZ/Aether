@@ -42,9 +42,11 @@ impl GatewayDataConfig {
     }
 
     pub fn from_postgres_url(database_url: impl Into<String>, require_ssl: bool) -> Self {
-        let mut postgres = PostgresPoolConfig::default();
-        postgres.database_url = database_url.into();
-        postgres.require_ssl = require_ssl;
+        let postgres = PostgresPoolConfig {
+            database_url: database_url.into(),
+            require_ssl,
+            ..Default::default()
+        };
         Self::from_postgres_config(postgres)
     }
 

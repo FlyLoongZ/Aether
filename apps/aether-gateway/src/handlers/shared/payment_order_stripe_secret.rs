@@ -80,7 +80,7 @@ fn validate_identity_component(
     if value.is_empty() {
         return Err("payment order secret binding contains an empty identity component");
     }
-    if value.as_bytes().len() > max_bytes {
+    if value.len() > max_bytes {
         return Err("payment order secret binding identity component is too long");
     }
     if value.chars().any(char::is_control) {

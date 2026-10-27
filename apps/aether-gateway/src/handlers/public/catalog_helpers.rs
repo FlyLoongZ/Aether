@@ -206,9 +206,7 @@ mod normalize_admin_base_url_tests {
 pub(crate) fn sanitize_public_model_config_for_user(
     config: Option<serde_json::Value>,
 ) -> Option<serde_json::Value> {
-    let Some(config) = config else {
-        return None;
-    };
+    let config = config?;
     let object = config.as_object()?;
     let mut public = serde_json::Map::new();
 
@@ -1004,7 +1002,7 @@ pub(crate) async fn build_api_format_health_monitor_payload(
             "timeline": timeline,
             "timeline_details": timeline_details,
             "time_range_start": time_range_start.and_then(unix_ms_to_rfc3339),
-            "time_range_end": time_range_end.map(|ms| unix_ms_to_rfc3339(ms)).unwrap_or_else(|| unix_secs_to_rfc3339(now_unix_secs)),
+            "time_range_end": time_range_end.map(unix_ms_to_rfc3339).unwrap_or_else(|| unix_secs_to_rfc3339(now_unix_secs)),
         });
         if options.include_api_path {
             format_payload["api_path"] = json!(public_api_format_local_path(&api_format));
@@ -1390,7 +1388,7 @@ pub(crate) async fn build_related_health_monitor_payload(
                         )
                     }
                 },
-                |row, events| related_model_display_meta(row, events),
+                related_model_display_meta,
             )
             .await;
 
@@ -1561,7 +1559,7 @@ pub(crate) async fn build_related_health_monitor_payload(
                         )
                     }
                 },
-                |row, events| related_model_display_meta(row, events),
+                related_model_display_meta,
             )
             .await;
         }

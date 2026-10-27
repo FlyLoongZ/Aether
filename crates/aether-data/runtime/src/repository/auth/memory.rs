@@ -856,7 +856,7 @@ impl AuthApiKeyWriteRepository for InMemoryAuthApiKeySnapshotRepository {
                 record.user_id.clone(),
                 format!(
                     "admin-{}",
-                    &record.user_id.chars().take(8).collect::<String>()
+                    record.user_id.chars().take(8).collect::<String>()
                 ),
                 None,
                 "admin".to_string(),

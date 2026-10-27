@@ -3630,9 +3630,7 @@ fn grok_data_image_parts_with_limit(
     raw_url: &str,
     decoded_limit: usize,
 ) -> Option<(String, String)> {
-    let Some((header, data)) = raw_url.trim().split_once(',') else {
-        return None;
-    };
+    let (header, data) = raw_url.trim().split_once(',')?;
     let metadata = header
         .get(..5)
         .filter(|prefix| prefix.eq_ignore_ascii_case("data:"))
@@ -3765,7 +3763,7 @@ fn estimated_text_tokens(text: &str) -> u64 {
         return 0;
     }
     let chars = text.chars().count() as u64;
-    ((chars + 3) / 4).max(1)
+    chars.div_ceil(4).max(1)
 }
 
 fn estimated_prompt_tokens(value: &Value) -> u64 {

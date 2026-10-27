@@ -101,9 +101,11 @@ async fn postgres_auth_config_nodes(
     let server = aether_testkit::ManagedPostgresServer::start()
         .await
         .expect("temporary PostgreSQL should start");
-    let mut pool = SqlPoolConfig::default();
-    pool.min_connections = 0;
-    pool.max_connections = 4;
+    let pool = SqlPoolConfig {
+        min_connections: 0,
+        max_connections: 4,
+        ..Default::default()
+    };
     let database = SqlDatabaseConfig::new(DatabaseDriver::Postgres, server.database_url(), pool)
         .expect("postgres config should build");
     let config = GatewayDataConfig::from_database_config(database);

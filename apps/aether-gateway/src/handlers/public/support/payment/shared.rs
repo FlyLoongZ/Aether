@@ -202,7 +202,9 @@ fn decode_payment_callback_signature(value: &str) -> Option<Vec<u8>> {
     }
     value
         .as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| {
             std::str::from_utf8(chunk)
                 .ok()

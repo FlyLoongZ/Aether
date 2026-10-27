@@ -648,15 +648,14 @@ async fn gateway_toggles_admin_management_token_locally_with_trusted_admin_princ
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(payload["message"], "Token 已禁用");
     assert_eq!(payload["data"]["is_active"], false);
-    assert_eq!(
-        repository
+    assert!(
+        !repository
             .get_management_token_with_user("mt-admin-1")
             .await
             .expect("lookup should succeed")
             .expect("token should remain")
             .token
-            .is_active,
-        false
+            .is_active
     );
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 

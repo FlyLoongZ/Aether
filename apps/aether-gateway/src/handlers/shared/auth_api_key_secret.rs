@@ -152,8 +152,7 @@ pub(crate) async fn decrypt_or_migrate_auth_api_key_secret(
                 "stored API-key secret identity changed during migration",
             ));
         }
-        let projection = open_auth_api_key_secret(state, &current)
-            .map_err(|message| api_key_secret_error(message))?;
+        let projection = open_auth_api_key_secret(state, &current).map_err(api_key_secret_error)?;
         if !projection.migration_required {
             return Ok(projection.plaintext);
         }

@@ -462,11 +462,7 @@ pub(super) fn find_sse_record_boundary(buffer: &[u8]) -> Option<(usize, usize)> 
     while cursor < buffer.len() {
         let (line_end, line_ending_len) = next_sse_line_ending(buffer, cursor)?;
         let next_line_start = line_end + line_ending_len;
-        let Some((next_line_end, next_line_ending_len)) =
-            next_sse_line_ending(buffer, next_line_start)
-        else {
-            return None;
-        };
+        let (next_line_end, next_line_ending_len) = next_sse_line_ending(buffer, next_line_start)?;
         if next_line_end == next_line_start {
             return Some((
                 line_end,

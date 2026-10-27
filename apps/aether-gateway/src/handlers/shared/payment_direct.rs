@@ -1341,14 +1341,14 @@ fn wxpay_decrypt_resource(config: &DirectGatewayConfig, resource: &Value) -> Res
         return Err("微信支付通知加密算法不支持".to_string());
     }
     let api_v3_key = wxpay_secret_string(config, "api_v3_key")?;
-    if api_v3_key.as_bytes().len() != 32 {
+    if api_v3_key.len() != 32 {
         return Err("微信支付 api_v3_key 必须为 32 字节".to_string());
     }
     let nonce = resource
         .get("nonce")
         .and_then(Value::as_str)
         .ok_or_else(|| "微信支付通知 resource.nonce 缺失".to_string())?;
-    if nonce.as_bytes().len() != 12 {
+    if nonce.len() != 12 {
         return Err("微信支付通知 resource.nonce 长度无效".to_string());
     }
     let associated_data = resource

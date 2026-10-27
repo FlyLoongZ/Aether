@@ -22,7 +22,7 @@ pub(crate) fn admin_provider_oauth_template(
 pub(crate) fn build_admin_provider_oauth_supported_types_payload() -> Vec<serde_json::Value> {
     let service = aether_oauth::provider::ProviderOAuthService::with_builtin_adapters();
     admin_provider_oauth_template_types()
-        .filter_map(|provider_type| admin_provider_oauth_template(provider_type))
+        .filter_map(admin_provider_oauth_template)
         .map(|template| {
             let capabilities = service
                 .adapter(template.provider_type)

@@ -1239,7 +1239,7 @@ fn chunk_text(value: &str, chunk_size: usize) -> Vec<String> {
 }
 
 fn estimate_text_tokens(text: &str) -> u64 {
-    ((text.len() as u64 + 3) / 4).max(1)
+    (text.len() as u64).div_ceil(4).max(1)
 }
 
 fn kiro_mcp_url_build_error() -> ExecutionRuntimeTransportError {

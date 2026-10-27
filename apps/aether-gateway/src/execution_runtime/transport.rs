@@ -4178,9 +4178,9 @@ fn resolve_execution_transport_controls(
             headers,
             EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER,
         )
-        .and_then(|value| parse_execution_transport_bool(value)),
+        .and_then(parse_execution_transport_bool),
         http1_only: execution_transport_header_value(headers, EXECUTION_REQUEST_HTTP1_ONLY_HEADER)
-            .and_then(|value| parse_execution_transport_bool(value))
+            .and_then(parse_execution_transport_bool)
             .unwrap_or(false),
     }
 }

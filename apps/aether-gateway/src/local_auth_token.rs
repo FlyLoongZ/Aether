@@ -32,7 +32,7 @@ fn validate_jwt_secret_value(value: Option<&str>) -> Result<String, String> {
         return Err("JWT_SECRET_KEY 未配置".to_string());
     };
     let value = value.trim();
-    if value.as_bytes().len() < 32 || INSECURE_JWT_SECRETS.contains(&value) {
+    if value.len() < 32 || INSECURE_JWT_SECRETS.contains(&value) {
         return Err("JWT_SECRET_KEY 必须是至少32字节的非默认随机密钥".to_string());
     }
     Ok(value.to_string())

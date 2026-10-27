@@ -193,9 +193,7 @@ fn codex_quota_exhaustion_reset_at_for_prefixes(
     now_unix_secs: u64,
     window_prefixes: &[&str],
 ) -> Option<u64> {
-    let Some(metadata) = quota_metadata.as_object() else {
-        return None;
-    };
+    let metadata = quota_metadata.as_object()?;
 
     let exhausted_windows = window_prefixes
         .iter()

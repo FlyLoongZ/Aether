@@ -54,7 +54,7 @@ pub(crate) async fn read_video_task_page(
     let pages = if total == 0 {
         0
     } else {
-        ((total as usize) + page_size - 1) / page_size
+        (total as usize).div_ceil(page_size)
     };
 
     Ok(VideoTaskPageResponse {
@@ -82,7 +82,7 @@ pub(crate) async fn read_video_task_page_summary(
     let pages = if total == 0 {
         0
     } else {
-        ((total as usize) + page_size - 1) / page_size
+        (total as usize).div_ceil(page_size)
     };
 
     Ok(VideoTaskPageResponse {
