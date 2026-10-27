@@ -45,7 +45,7 @@ const CODEX_RESET_QUOTA_RECONCILIATION_DELAYS_MS: [u64; 4] = [1_000, 2_000, 4_00
 
 enum CodexOAuthRequestPreparation {
     Ready {
-        transport: AdminGatewayProviderTransportSnapshot,
+        transport: Box<AdminGatewayProviderTransportSnapshot>,
         auth: (String, String),
         credential_fence: ProviderTransportCredentialFence,
     },
@@ -112,7 +112,7 @@ async fn prepare_codex_oauth_request(
 
         return Ok(match resolved_auth {
             Some(auth) => CodexOAuthRequestPreparation::Ready {
-                transport: current_transport,
+                transport: Box::new(current_transport),
                 auth,
                 credential_fence: after_fence,
             },
@@ -401,7 +401,7 @@ async fn enrich_codex_reset_credit_details(
         match execute_codex_reset_credit_plan(state, transport, request_spec, proxy_override)
             .await?
         {
-            ProviderQuotaExecutionOutcome::Response(result) => result,
+            ProviderQuotaExecutionOutcome::Response(result) => *result,
             ProviderQuotaExecutionOutcome::Failure(_) => {
                 mark_codex_reset_credit_detail_failed(
                     codex_metadata,
@@ -625,7 +625,7 @@ pub(crate) async fn consume_codex_reset_credit_locally(
                 transport,
                 auth,
                 credential_fence,
-            } => (transport, Some(auth), credential_fence),
+            } => (*transport, Some(auth), credential_fence),
             CodexOAuthRequestPreparation::MissingAuth => {
                 return Ok((
                     StatusCode::BAD_REQUEST,
@@ -745,7 +745,7 @@ pub(crate) async fn consume_codex_reset_credit_locally(
 
     let result =
         match execute_codex_reset_credit_plan(state, &transport, request_spec, None).await? {
-            ProviderQuotaExecutionOutcome::Response(result) => result,
+            ProviderQuotaExecutionOutcome::Response(result) => *result,
             ProviderQuotaExecutionOutcome::Failure(_) => {
                 return Ok((
                     StatusCode::BAD_GATEWAY,
@@ -963,7 +963,7 @@ async fn refresh_codex_provider_quota_locally_with_reset_fence(
                     transport,
                     auth,
                     credential_fence,
-                } => (transport, Some(auth), Some(credential_fence)),
+                } => (*transport, Some(auth), Some(credential_fence)),
                 CodexOAuthRequestPreparation::MissingAuth => {
                     failed_count += 1;
                     results.push(json!({
@@ -1047,7 +1047,7 @@ async fn refresh_codex_provider_quota_locally_with_reset_fence(
         )
         .await?
         {
-            ProviderQuotaExecutionOutcome::Response(result) => result,
+            ProviderQuotaExecutionOutcome::Response(result) => *result,
             ProviderQuotaExecutionOutcome::Failure(_) => {
                 failed_count += 1;
                 results.push(json!({

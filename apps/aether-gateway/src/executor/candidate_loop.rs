@@ -137,9 +137,9 @@ where
             AiAttemptLoopOutcome::Deferred(response) => Ok(
                 LocalExecutionRequestOutcome::responded(mark_deferred_upstream_response(response)),
             ),
-            AiAttemptLoopOutcome::Exhausted(exhaustion) => {
-                Ok(LocalExecutionRequestOutcome::Exhausted(exhaustion))
-            }
+            AiAttemptLoopOutcome::Exhausted(exhaustion) => Ok(
+                LocalExecutionRequestOutcome::Exhausted(Box::new(exhaustion)),
+            ),
             AiAttemptLoopOutcome::NoPath => Ok(LocalExecutionRequestOutcome::NoPath),
         }
     }
@@ -508,9 +508,9 @@ where
             AiAttemptLoopOutcome::Deferred(response) => Ok(
                 LocalExecutionRequestOutcome::responded(mark_deferred_upstream_response(response)),
             ),
-            AiAttemptLoopOutcome::Exhausted(exhaustion) => {
-                Ok(LocalExecutionRequestOutcome::Exhausted(exhaustion))
-            }
+            AiAttemptLoopOutcome::Exhausted(exhaustion) => Ok(
+                LocalExecutionRequestOutcome::Exhausted(Box::new(exhaustion)),
+            ),
             AiAttemptLoopOutcome::NoPath => Ok(LocalExecutionRequestOutcome::NoPath),
         }
     }
@@ -1109,10 +1109,10 @@ where
         return Ok(LocalExecutionRequestOutcome::NoPath);
     };
 
-    Ok(LocalExecutionRequestOutcome::Exhausted(
+    Ok(LocalExecutionRequestOutcome::Exhausted(Box::new(
         port.build_exhaustion(last_plan, last_report_context)
             .await?,
-    ))
+    )))
 }
 
 async fn apply_attempt_retry_scope<Source, Attempt>(

@@ -350,7 +350,7 @@ async fn find_matching_pending_plan_purchase_order(
 }
 
 enum PlanOrderNoChoice {
-    Reuse(aether_data::repository::wallet::StoredAdminPaymentOrder),
+    Reuse(Box<aether_data::repository::wallet::StoredAdminPaymentOrder>),
     Fresh(String),
 }
 
@@ -400,7 +400,7 @@ async fn choose_plan_order_no(
                 exchange_rate,
             )
         {
-            return Ok(PlanOrderNoChoice::Reuse(existing));
+            return Ok(PlanOrderNoChoice::Reuse(Box::new(existing)));
         }
 
         // A deterministic identity may already belong to a completed order.
@@ -919,7 +919,7 @@ pub(super) async fn handle_billing_plan_checkout(
         {
             Ok(PlanOrderNoChoice::Fresh(order_no)) => order_no,
             Ok(PlanOrderNoChoice::Reuse(order)) => {
-                return plan_checkout_replay_response(state, &order, &plan).await
+                return plan_checkout_replay_response(state, order.as_ref(), &plan).await
             }
             Err(detail) => {
                 return build_auth_error_response(
@@ -1156,7 +1156,7 @@ pub(super) async fn handle_billing_plan_checkout(
         {
             Ok(PlanOrderNoChoice::Fresh(order_no)) => order_no,
             Ok(PlanOrderNoChoice::Reuse(order)) => {
-                return plan_checkout_replay_response(state, &order, &plan).await
+                return plan_checkout_replay_response(state, order.as_ref(), &plan).await
             }
             Err(detail) => {
                 return build_auth_error_response(

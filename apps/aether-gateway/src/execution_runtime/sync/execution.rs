@@ -3224,7 +3224,7 @@ async fn execute_execution_runtime_sync_impl(
                     original_report_context,
                     report_mode,
                     local_task_snapshot,
-                } = outcome;
+                } = *outcome;
                 apply_sync_success_effects(
                     state,
                     &plan,
@@ -3260,7 +3260,7 @@ async fn execute_execution_runtime_sync_impl(
                     candidate_id,
                 )?));
             }
-            LocalVideoSyncSuccessBuild::NotHandled(payload) => payload,
+            LocalVideoSyncSuccessBuild::NotHandled(payload) => *payload,
         };
         if let Some(response) =
             maybe_build_local_sync_finalize_response(state, &plan, trace_id, decision, &mut payload).await?

@@ -17,8 +17,8 @@ pub(crate) use crate::video_tasks::{
 use crate::{usage::GatewaySyncReportRequest, AppState, GatewayError};
 
 pub(crate) enum LocalVideoSyncSuccessBuild {
-    Handled(LocalVideoSyncSuccessOutcome),
-    NotHandled(GatewaySyncReportRequest),
+    Handled(Box<LocalVideoSyncSuccessOutcome>),
+    NotHandled(Box<GatewaySyncReportRequest>),
 }
 
 pub(crate) struct LocalVideoSyncSuccessOutcome {
@@ -81,7 +81,7 @@ pub(crate) async fn maybe_build_local_video_success_outcome(
     plan: &ExecutionPlan,
 ) -> Result<LocalVideoSyncSuccessBuild, GatewayError> {
     if payload.status_code >= 400 {
-        return Ok(LocalVideoSyncSuccessBuild::NotHandled(payload));
+        return Ok(LocalVideoSyncSuccessBuild::NotHandled(Box::new(payload)));
     }
 
     let report_context = cloned_report_context_object(&payload);
@@ -92,7 +92,7 @@ pub(crate) async fn maybe_build_local_video_success_outcome(
             .and_then(serde_json::Value::as_object)
         {
             Some(value) => value,
-            None => return Ok(LocalVideoSyncSuccessBuild::NotHandled(payload)),
+            None => return Ok(LocalVideoSyncSuccessBuild::NotHandled(Box::new(payload))),
         };
         state.video_tasks.prepare_sync_success(
             payload.report_kind.as_str(),
@@ -102,7 +102,7 @@ pub(crate) async fn maybe_build_local_video_success_outcome(
         )
     };
     let Some(success_plan) = prepared_plan else {
-        return Ok(LocalVideoSyncSuccessBuild::NotHandled(payload));
+        return Ok(LocalVideoSyncSuccessBuild::NotHandled(Box::new(payload)));
     };
     let client_body_json = success_plan.client_body_json();
     let response = build_local_video_response(
@@ -121,7 +121,7 @@ pub(crate) async fn maybe_build_local_video_success_outcome(
     payload.report_kind = success_plan.success_report_kind().to_string();
     payload.report_context = Some(serde_json::Value::Object(report_context));
 
-    Ok(LocalVideoSyncSuccessBuild::Handled(
+    Ok(LocalVideoSyncSuccessBuild::Handled(Box::new(
         LocalVideoSyncSuccessOutcome {
             response,
             report_payload: payload,
@@ -133,7 +133,7 @@ pub(crate) async fn maybe_build_local_video_success_outcome(
             )
             .then(|| success_plan.to_snapshot()),
         },
-    ))
+    )))
 }
 
 pub(crate) async fn maybe_build_local_sync_finalize_response(

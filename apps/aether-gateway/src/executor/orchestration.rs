@@ -155,7 +155,7 @@ pub(crate) async fn maybe_execute_sync_via_local_decision(
                             );
                             record_standard_text_sync_heartbeat_exhaustion(
                                 &state,
-                                exhaustion,
+                                *exhaustion,
                                 &started_at,
                             )
                             .await;
@@ -307,7 +307,7 @@ pub(crate) async fn maybe_execute_sync_via_local_openai_responses_decision(
                         LocalExecutionRequestOutcome::Exhausted(exhaustion) => {
                             record_standard_text_sync_heartbeat_exhaustion(
                                 &state,
-                                exhaustion,
+                                *exhaustion,
                                 &started_at,
                             )
                             .await;
@@ -427,7 +427,7 @@ pub(crate) async fn maybe_execute_sync_via_standard_family_decision(
                         LocalExecutionRequestOutcome::Exhausted(exhaustion) => {
                             record_standard_text_sync_heartbeat_exhaustion(
                                 &state,
-                                exhaustion,
+                                *exhaustion,
                                 &started_at,
                             )
                             .await;
@@ -658,7 +658,7 @@ pub(crate) async fn maybe_execute_sync_via_local_same_format_provider_decision(
                         LocalExecutionRequestOutcome::Exhausted(exhaustion) => {
                             record_standard_text_sync_heartbeat_exhaustion(
                                 &state,
-                                exhaustion,
+                                *exhaustion,
                                 &started_at,
                             )
                             .await;
@@ -1194,7 +1194,7 @@ async fn execute_openai_image_sync_heartbeat_attempts(
         LocalExecutionRequestOutcome::Exhausted(exhaustion) => {
             record_failed_usage_for_exhausted_request(
                 &state,
-                exhaustion,
+                *exhaustion,
                 &started_at,
                 "OpenAI image sync heartbeat exhausted all local candidates",
                 EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS,

@@ -51,7 +51,7 @@ pub(crate) struct WebSocketIngressSpec {
 }
 
 pub(crate) enum AuthenticatedAiWebSocketUpgradePreparation {
-    Ready(AuthenticatedAiWebSocketUpgrade),
+    Ready(Box<AuthenticatedAiWebSocketUpgrade>),
     Rejected(Response<Body>),
 }
 
@@ -288,13 +288,13 @@ pub(crate) async fn prepare_authenticated_ai_websocket(
         decision,
         websocket_connection_permit,
     };
-    Ok(AuthenticatedAiWebSocketUpgradePreparation::Ready(
+    Ok(AuthenticatedAiWebSocketUpgradePreparation::Ready(Box::new(
         AuthenticatedAiWebSocketUpgrade {
             state,
             context,
             request_permit,
         },
-    ))
+    )))
 }
 
 fn websocket_credential_carrier_is_allowed(carrier: Option<GatewayCredentialCarrier>) -> bool {

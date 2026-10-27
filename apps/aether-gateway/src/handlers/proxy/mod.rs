@@ -1295,7 +1295,7 @@ async fn proxy_request_inner(
                     ));
                 }
                 LocalExecutionRequestOutcome::Exhausted(outcome) => {
-                    local_execution_exhaustion = Some(outcome);
+                    local_execution_exhaustion = Some(*outcome);
                 }
                 LocalExecutionRequestOutcome::NoPath => {}
             }
@@ -1360,7 +1360,7 @@ async fn proxy_request_inner(
                 ));
             }
             LocalExecutionRequestOutcome::Exhausted(outcome) => {
-                local_execution_exhaustion = Some(outcome);
+                local_execution_exhaustion = Some(*outcome);
             }
             LocalExecutionRequestOutcome::NoPath => {}
         }
@@ -1425,7 +1425,7 @@ async fn proxy_request_inner(
                     ));
                 }
                 LocalExecutionRequestOutcome::Exhausted(outcome) => {
-                    local_execution_exhaustion = Some(outcome);
+                    local_execution_exhaustion = Some(*outcome);
                 }
                 LocalExecutionRequestOutcome::NoPath => {}
             }
@@ -1493,7 +1493,7 @@ async fn proxy_request_inner(
                     ));
                 }
                 LocalExecutionRequestOutcome::Exhausted(outcome) => {
-                    local_execution_exhaustion = Some(outcome);
+                    local_execution_exhaustion = Some(*outcome);
                 }
                 LocalExecutionRequestOutcome::NoPath => {}
             }

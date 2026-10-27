@@ -185,7 +185,7 @@ impl RequestCandidateTerminalBarrier {
 
 #[derive(Debug)]
 enum RequestCandidateActiveQueueMessage {
-    Record(UpsertRequestCandidateRecord),
+    Record(Box<UpsertRequestCandidateRecord>),
     Barrier(Arc<RequestCandidateTerminalBarrier>),
 }
 
@@ -448,7 +448,7 @@ impl RequestCandidateQueueRuntime {
             Err(_) => return Err(RequestCandidatePriorityEnqueueError::Closed(record)),
         };
         self.begin_lifecycle_enqueue(RequestCandidateLifecycleLane::Active);
-        sender_permit.send(RequestCandidateActiveQueueMessage::Record(record));
+        sender_permit.send(RequestCandidateActiveQueueMessage::Record(Box::new(record)));
         admission.forget();
         self.finish_lifecycle_enqueue();
         Ok(())
@@ -541,7 +541,7 @@ impl RequestCandidateQueueRuntime {
                 Err(_) => return Err(record),
             };
             self.begin_lifecycle_enqueue(lane);
-            active_permit.send(RequestCandidateActiveQueueMessage::Record(record));
+            active_permit.send(RequestCandidateActiveQueueMessage::Record(Box::new(record)));
             admission.forget();
             self.finish_lifecycle_enqueue();
             return Ok(());
@@ -979,7 +979,7 @@ fn push_active_message(
             decrement_atomic_usize(&metrics.queued_current);
             decrement_atomic_usize(&metrics.priority_queued_current);
             decrement_atomic_usize(&metrics.active_queued_current);
-            batch.push(record);
+            batch.push(*record);
         }
         RequestCandidateActiveQueueMessage::Barrier(barrier) => barriers.push(barrier),
     }

@@ -75,7 +75,7 @@ pub(crate) enum CodexAccountResetCompleteResult {
 }
 
 pub(super) enum ProviderQuotaExecutionOutcome {
-    Response(ExecutionResult),
+    Response(Box<ExecutionResult>),
     Failure(String),
 }
 
@@ -1580,7 +1580,7 @@ pub(super) async fn execute_provider_quota_plan(
                     extract_execution_error_detail(&result).as_deref(),
                 )
             {
-                return Ok(ProviderQuotaExecutionOutcome::Response(result));
+                return Ok(ProviderQuotaExecutionOutcome::Response(Box::new(result)));
             }
 
             let refreshed_entry = match state.force_local_oauth_refresh_entry(transport).await {
@@ -1621,7 +1621,7 @@ pub(super) async fn execute_provider_quota_plan(
                 .execute_execution_runtime_sync_plan(None, &retry_plan)
                 .await
             {
-                Ok(result) => Ok(ProviderQuotaExecutionOutcome::Response(result)),
+                Ok(result) => Ok(ProviderQuotaExecutionOutcome::Response(Box::new(result))),
                 Err(_) => {
                     warn!(
                         key_id = %transport.key.id,

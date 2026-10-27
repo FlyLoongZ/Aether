@@ -98,10 +98,10 @@ enum LocalExecutionCandidateAttemptSourceItem<'a> {
         attempts: DispatchSequence<LocalExecutionCandidateAttempt>,
     },
     Pool {
-        cursor: PoolKeyCursor<'a>,
+        cursor: Box<PoolKeyCursor<'a>>,
         candidate_index: u32,
         pending_attempts: DispatchSequence<LocalExecutionCandidateAttempt>,
-        pool_exhaustion_persistence: Option<PoolGroupExhaustionPersistenceContext>,
+        pool_exhaustion_persistence: Option<Box<PoolGroupExhaustionPersistenceContext>>,
     },
     RequestedModelPage {
         cursor: Box<RequestedModelAttemptPageCursor<'a>>,
@@ -178,7 +178,7 @@ impl<'a> LocalExecutionCandidateAttemptSource<'a> {
                     let Some(candidate) = cursor.next_key().await else {
                         if let Some(skipped) = cursor.exhausted_group_skipped_candidate() {
                             persist_pool_group_exhaustion_skipped_candidate(
-                                pool_exhaustion_persistence.as_ref(),
+                                pool_exhaustion_persistence.as_deref(),
                                 *candidate_index,
                                 skipped,
                             )
@@ -788,10 +788,10 @@ fn build_logical_candidate_items<'a>(
                     cursor
                 };
                 items.push_back(LocalExecutionCandidateAttemptSourceItem::Pool {
-                    cursor,
+                    cursor: Box::new(cursor),
                     candidate_index,
                     pending_attempts: DispatchSequence::new(Vec::new()),
-                    pool_exhaustion_persistence: pool_exhaustion_persistence.clone(),
+                    pool_exhaustion_persistence: pool_exhaustion_persistence.clone().map(Box::new),
                 });
             }
         }
@@ -1211,7 +1211,7 @@ async fn pop_attempt_from_items(
                 let Some(candidate) = cursor.next_key().await else {
                     if let Some(skipped) = cursor.exhausted_group_skipped_candidate() {
                         persist_pool_group_exhaustion_skipped_candidate(
-                            pool_exhaustion_persistence.as_ref(),
+                            pool_exhaustion_persistence.as_deref(),
                             *candidate_index,
                             skipped,
                         )
@@ -2900,7 +2900,7 @@ mod tests {
         let mut source = LocalExecutionCandidateAttemptSource {
             items: VecDeque::from([
                 LocalExecutionCandidateAttemptSourceItem::Pool {
-                    cursor: pool_cursor,
+                    cursor: Box::new(pool_cursor),
                     candidate_index: 0,
                     pending_attempts: pool_key_attempts,
                     pool_exhaustion_persistence: None,
@@ -2949,7 +2949,7 @@ mod tests {
         let mut source = LocalExecutionCandidateAttemptSource {
             items: VecDeque::from([
                 LocalExecutionCandidateAttemptSourceItem::Pool {
-                    cursor: pool_cursor,
+                    cursor: Box::new(pool_cursor),
                     candidate_index: 0,
                     pending_attempts: DispatchSequence::new(Vec::new()),
                     pool_exhaustion_persistence: None,
@@ -3021,10 +3021,10 @@ mod tests {
         );
         let mut source = LocalExecutionCandidateAttemptSource {
             items: VecDeque::from([LocalExecutionCandidateAttemptSourceItem::Pool {
-                cursor,
+                cursor: Box::new(cursor),
                 candidate_index: 0,
                 pending_attempts: DispatchSequence::new(Vec::new()),
-                pool_exhaustion_persistence: Some(pool_exhaustion_persistence),
+                pool_exhaustion_persistence: Some(Box::new(pool_exhaustion_persistence)),
             }]),
             skipped_provider_ids: BTreeSet::new(),
             skipped_endpoint_ids: BTreeSet::new(),

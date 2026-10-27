@@ -106,7 +106,7 @@ async fn fetch_antigravity_quota_summary_best_effort(
             }
         };
         let result = match outcome {
-            ProviderQuotaExecutionOutcome::Response(result) => result,
+            ProviderQuotaExecutionOutcome::Response(result) => *result,
             ProviderQuotaExecutionOutcome::Failure(detail) => {
                 warn!(detail = %detail, "Antigravity grouped quota execution failed");
                 return None;
@@ -215,7 +215,7 @@ pub(crate) async fn refresh_antigravity_provider_quota_locally(
         )
         .await?
         {
-            ProviderQuotaExecutionOutcome::Response(result) => result,
+            ProviderQuotaExecutionOutcome::Response(result) => *result,
             ProviderQuotaExecutionOutcome::Failure(_) => {
                 failed_count += 1;
                 results.push(json!({

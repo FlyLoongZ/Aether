@@ -59,7 +59,7 @@ enum RegisterCommitState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum LiveCallLookup {
-    Found(LiveCallRecord),
+    Found(Box<LiveCallRecord>),
     Missing,
     Expired,
 }
@@ -582,7 +582,7 @@ impl LiveCallRegistry {
                 .lookup_with_status(user_id, api_key_id, call_id)
                 .await?
             {
-                LiveCallLookup::Found(record) => Some(record),
+                LiveCallLookup::Found(record) => Some(*record),
                 LiveCallLookup::Missing | LiveCallLookup::Expired => None,
             },
         )
@@ -617,10 +617,10 @@ impl LiveCallRegistry {
                         .into_context(&binding)
                 })
                 .transpose()?;
-            return Ok(LiveCallLookup::Found(LiveCallRecord {
+            return Ok(LiveCallLookup::Found(Box::new(LiveCallRecord {
                 binding,
                 provider_outbound_context,
-            }));
+            })));
         }
 
         // A companion may outlive the base record by the expiry grace period,

@@ -27,7 +27,7 @@ use crate::AppState;
 #[derive(Debug)]
 pub(crate) enum LocalExecutionRequestOutcome {
     Responded(Response<Body>),
-    Exhausted(LocalExecutionExhaustion),
+    Exhausted(Box<LocalExecutionExhaustion>),
     NoPath,
 }
 

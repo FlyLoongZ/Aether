@@ -402,7 +402,7 @@ impl<'de> Deserialize<'de> for ImageResponseCount {
 }
 
 enum UsageValue {
-    Object(UsageEnvelope),
+    Object(Box<UsageEnvelope>),
     Array(Vec<UsageEnvelope>),
     Ignored,
 }
@@ -420,7 +420,7 @@ impl<'de> Deserialize<'de> for UsageValue {
 
             fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
                 UsageEnvelope::deserialize(serde::de::value::MapAccessDeserializer::new(map))
-                    .map(UsageValue::Object)
+                    .map(|envelope| UsageValue::Object(Box::new(envelope)))
             }
 
             fn visit_seq<A: SeqAccess<'de>>(
@@ -431,7 +431,7 @@ impl<'de> Deserialize<'de> for UsageValue {
                 let mut envelopes = Vec::new();
                 while let Some(value) = sequence.next_element::<UsageValue>()? {
                     let envelope = match value {
-                        UsageValue::Object(envelope) => envelope,
+                        UsageValue::Object(envelope) => *envelope,
                         UsageValue::Array(_) | UsageValue::Ignored => UsageEnvelope::default(),
                     };
                     if first.is_none() && envelopes.is_empty() {
@@ -485,7 +485,7 @@ fn deserialize_nested_usage<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<Box<UsageEnvelope>>, D::Error> {
     match UsageValue::deserialize(deserializer)? {
-        UsageValue::Object(envelope) => Ok(Some(Box::new(envelope))),
+        UsageValue::Object(envelope) => Ok(Some(envelope)),
         UsageValue::Array(_) | UsageValue::Ignored => Ok(None),
     }
 }
