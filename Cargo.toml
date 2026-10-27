@@ -126,7 +126,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 serde_path_to_error = "0.1"
 sha2 = "0.10"
 socket2 = "0.6"
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-aws-lc-rs", "chrono"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "chrono"] }
+sqlx-core = { version = "0.8.6", default-features = false }
 sysinfo = { version = "0.32", default-features = false, features = ["system", "network"] }
 tar = "0.4"
 thiserror = "2"
