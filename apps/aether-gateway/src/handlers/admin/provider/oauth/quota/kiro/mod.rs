@@ -175,7 +175,7 @@ pub(crate) async fn refresh_kiro_provider_quota_locally(
         let result =
             match execute_kiro_quota_plan(state, &transport, &auth, proxy_override.as_ref()).await?
             {
-                ProviderQuotaExecutionOutcome::Response(result) => result,
+                ProviderQuotaExecutionOutcome::Response(result) => *result,
                 ProviderQuotaExecutionOutcome::Failure(_) => {
                     failed_count += 1;
                     results.push(json!({

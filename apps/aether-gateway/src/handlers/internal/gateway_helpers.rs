@@ -302,7 +302,7 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
                     original_report_context: _,
                     report_mode,
                     local_task_snapshot,
-                } = outcome;
+                } = *outcome;
                 if let Some(snapshot) = local_task_snapshot {
                     let _ = state.upsert_video_task_snapshot(&snapshot).await?;
                     state.video_tasks.record_snapshot(snapshot);
@@ -322,7 +322,7 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
                 );
                 return Ok(Some(response));
             }
-            LocalVideoSyncSuccessBuild::NotHandled(payload) => payload,
+            LocalVideoSyncSuccessBuild::NotHandled(payload) => *payload,
         };
 
     if let Some(mut response) =

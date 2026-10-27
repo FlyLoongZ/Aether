@@ -700,7 +700,7 @@ async fn active_micro_batch_collects_events_arriving_within_one_ms() {
     // a scheduler yield here makes the test occasionally miss a sender
     // that did not run until after the intentionally tiny 1ms deadline.
     sender
-        .send(RequestCandidateActiveQueueMessage::Record(second))
+        .send(RequestCandidateActiveQueueMessage::Record(Box::new(second)))
         .await
         .expect("micro-batch receiver open");
     let mut batch = vec![first];
@@ -753,11 +753,13 @@ async fn sustained_priority_batches_give_ready_normal_records_a_turn() {
         .expect("normal receiver open");
     for index in 0..(MAX_CONSECUTIVE_PRIORITY_FLUSHES * 2) {
         active_sender
-            .send(RequestCandidateActiveQueueMessage::Record(record(
-                &format!("priority-fairness-{index}"),
-                0,
-                0,
-                RequestCandidateStatus::Streaming,
+            .send(RequestCandidateActiveQueueMessage::Record(Box::new(
+                record(
+                    &format!("priority-fairness-{index}"),
+                    0,
+                    0,
+                    RequestCandidateStatus::Streaming,
+                ),
             )))
             .await
             .expect("priority receiver open");
@@ -836,11 +838,13 @@ async fn sustained_active_batches_give_ready_terminal_records_a_turn() {
     let active_count = MAX_CONSECUTIVE_ACTIVE_FLUSHES * 3;
     for index in 0..active_count {
         active_sender
-            .send(RequestCandidateActiveQueueMessage::Record(record(
-                &format!("active-fairness-{index}"),
-                0,
-                0,
-                RequestCandidateStatus::Streaming,
+            .send(RequestCandidateActiveQueueMessage::Record(Box::new(
+                record(
+                    &format!("active-fairness-{index}"),
+                    0,
+                    0,
+                    RequestCandidateStatus::Streaming,
+                ),
             )))
             .await
             .expect("active receiver open");

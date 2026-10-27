@@ -263,7 +263,7 @@ fn to_ai_serving_outcome(
             }
         }
         LocalExecutionRequestOutcome::Exhausted(outcome) => {
-            AiServingExecutionOutcome::Exhausted(outcome)
+            AiServingExecutionOutcome::Exhausted(*outcome)
         }
         LocalExecutionRequestOutcome::NoPath => AiServingExecutionOutcome::NoPath,
     }
@@ -280,7 +280,7 @@ fn from_ai_serving_outcome(
             LocalExecutionRequestOutcome::Responded(response)
         }
         AiServingExecutionOutcome::Exhausted(outcome) => {
-            LocalExecutionRequestOutcome::Exhausted(outcome)
+            LocalExecutionRequestOutcome::Exhausted(Box::new(outcome))
         }
         AiServingExecutionOutcome::NoPath => LocalExecutionRequestOutcome::NoPath,
     }

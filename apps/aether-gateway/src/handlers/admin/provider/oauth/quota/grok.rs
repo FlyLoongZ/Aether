@@ -412,7 +412,7 @@ pub(crate) async fn refresh_grok_provider_quota_locally(
             )
             .await?
             {
-                ProviderQuotaExecutionOutcome::Response(result) => result,
+                ProviderQuotaExecutionOutcome::Response(result) => *result,
                 ProviderQuotaExecutionOutcome::Failure(_) => {
                     last_error_message = Some("rate-limits 请求执行失败".to_string());
                     continue;

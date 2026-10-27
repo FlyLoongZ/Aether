@@ -987,7 +987,7 @@ enum GrokClientStreamEmitter {
     OpenAiResponses {
         id: String,
         model: String,
-        emitter: OpenAIResponsesClientEmitter,
+        emitter: Box<OpenAIResponsesClientEmitter>,
     },
     ClaudeMessages {
         id: String,
@@ -1006,7 +1006,7 @@ impl GrokClientStreamEmitter {
             "openai:responses" | "openai:responses:compact" => Self::OpenAiResponses {
                 id: format!("resp_{}", Uuid::new_v4()),
                 model,
-                emitter: OpenAIResponsesClientEmitter::default(),
+                emitter: Box::new(OpenAIResponsesClientEmitter::default()),
             },
             "claude:messages" => Self::ClaudeMessages {
                 id: format!("msg_{}", Uuid::new_v4()),

@@ -104,7 +104,7 @@ pub(crate) async fn refresh_claude_code_provider_quota_locally(
         )
         .await?
         {
-            ProviderQuotaExecutionOutcome::Response(result) => result,
+            ProviderQuotaExecutionOutcome::Response(result) => *result,
             ProviderQuotaExecutionOutcome::Failure(_) => {
                 failed_count += 1;
                 results.push(json!({

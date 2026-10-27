@@ -316,7 +316,7 @@ pub(super) async fn prepare_live_websocket(
     )
     .await;
     let record = match lookup {
-        Ok(Ok(LiveCallLookup::Found(record))) => record,
+        Ok(Ok(LiveCallLookup::Found(record))) => *record,
         Ok(Ok(LiveCallLookup::Missing)) => {
             info!(
                 target: LIVE_LOG_TARGET,

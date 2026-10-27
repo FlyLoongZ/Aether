@@ -358,7 +358,7 @@ impl Drop for ResponsesPlanUsageCostReservationGuard {
 
 enum ResponsesPlanUsageCostReservationStart {
     NotRequired,
-    Reserved(ResponsesPlanUsageCostReservationGuard),
+    Reserved(Box<ResponsesPlanUsageCostReservationGuard>),
     Rejected(crate::plan_usage_policy::PlanUsagePolicyRejection),
 }
 
@@ -385,14 +385,14 @@ async fn reserve_responses_plan_usage_cost_owned(
             Ok(ResponsesPlanUsageCostReservationStart::NotRequired)
         }
         crate::plan_usage_policy::PlanUsageCostReservationOutcome::Reserved => {
-            Ok(ResponsesPlanUsageCostReservationStart::Reserved(
+            Ok(ResponsesPlanUsageCostReservationStart::Reserved(Box::new(
                 ResponsesPlanUsageCostReservationGuard::new(
                     state,
                     control_decision.clone(),
                     plan.clone(),
                     reservation_token,
                 ),
-            ))
+            )))
         }
         crate::plan_usage_policy::PlanUsageCostReservationOutcome::Rejected(rejection) => {
             Ok(ResponsesPlanUsageCostReservationStart::Rejected(rejection))
@@ -648,7 +648,7 @@ pub(super) async fn begin_unowned_responses_websocket_turn(
         Ok(ResponsesPlanUsageCostReservationStart::Reserved(guard)) => {
             report_context =
                 attach_plan_usage_reservation_token(report_context, guard.reservation_token());
-            Some(guard)
+            Some(*guard)
         }
         Ok(ResponsesPlanUsageCostReservationStart::Rejected(rejection)) => {
             let error = websocket_plan_usage_rejection_error(&rejection);
