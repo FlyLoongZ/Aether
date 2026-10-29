@@ -5565,7 +5565,7 @@ impl<'a> AdminAppState<'a> {
                 ));
             } else {
                 stats.errors.push(
-                    "当前 Rust 管理后端暂不支持导入代理节点；仅引用这些节点(node_id)的自动连接代理配置会被清除，手动 URL 代理配置会保留"
+                    "当前 Rust 管理后端暂不支持导入代理节点；引用这些节点(node_id)的代理配置会被清除，手动 URL 代理配置会保留"
                         .to_string(),
                 );
             }

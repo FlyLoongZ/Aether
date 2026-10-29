@@ -104,7 +104,7 @@ separate from the opaque local task ID returned to clients; no schema change or
 historical row rewrite is needed.
 
 Task retrieval and content downloads are admitted by the production GET execution
-gate. Reconstructed tasks resolve proxy nodes, system proxy defaults, tunnel affinity,
+gate. Reconstructed tasks resolve manual proxy nodes, system proxy defaults,
 and transport profiles through the same deployment resolver used for creation;
 configured proxy routes must not silently turn into direct requests after restart.
 

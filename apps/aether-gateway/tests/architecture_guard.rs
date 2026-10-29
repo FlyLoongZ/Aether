@@ -395,6 +395,12 @@ fn tunnel_feature_is_removed() {
         "apps/aether-tunnel",
         "crates/aether-gateway/tunnel",
         "apps/aether-gateway/src/tunnel",
+        "crates/aether-contracts/src/tunnel.rs",
+        "crates/aether-contracts/src/tunnel_security.rs",
+        "crates/aether-testing/testkit/src/tunnel.rs",
+        "crates/aether-testing/integration/tests/tunnel_runtime_e2e.rs",
+        ".github/workflows/build-tunnel.yml",
+        "tests/tunnel_installer_config_security_test.sh",
     ] {
         assert!(
             !workspace_file_exists(removed_path),
@@ -404,13 +410,16 @@ fn tunnel_feature_is_removed() {
 
     let workspace = read_workspace_file("Cargo.toml");
     let gateway_manifest = read_workspace_file("apps/aether-gateway/Cargo.toml");
+    let lockfile = read_workspace_file("Cargo.lock");
     for forbidden in [
         "apps/aether-tunnel",
         "aether-tunnel",
         "aether_gateway_tunnel",
     ] {
         assert!(
-            !workspace.contains(forbidden) && !gateway_manifest.contains(forbidden),
+            !workspace.contains(forbidden)
+                && !gateway_manifest.contains(forbidden)
+                && !lockfile.contains(forbidden),
             "workspace must not reference removed tunnel component {forbidden}"
         );
     }
