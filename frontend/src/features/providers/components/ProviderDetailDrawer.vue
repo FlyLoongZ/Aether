@@ -469,275 +469,6 @@
                         </div>
                       </div>
                     </div>
-                    <!-- Gemini CLI 上游模型配额 -->
-                    <div
-                      v-if="provider.provider_type === 'gemini_cli' && hasGeminiCliQuotaDisplayData(key)"
-                      class="mt-2 p-2 rounded-md bg-muted/30"
-                    >
-                      <ProviderQuotaSectionHeader
-                        :title="legacyT('模型配额')"
-                        :loading="refreshingQuota"
-                        :updated-text="getGeminiCliQuotaUpdatedAt(key) ? formatUpdatedAt(getGeminiCliQuotaUpdatedAt(key) || 0) : null"
-                      />
-                      <div
-                        v-if="getGeminiCliAccountCreditsText(key, 'gemini_cli')"
-                        class="mb-2 text-[10px] font-medium text-foreground/90"
-                      >
-                        {{ getGeminiCliAccountCreditsText(key, 'gemini_cli') }}
-                      </div>
-                      <div
-                        v-if="getGeminiCliQuotaItems(key).length > 0"
-                        class="grid grid-cols-2 gap-3"
-                      >
-                        <ProviderQuotaProgressRow
-                          v-for="item in getGeminiCliQuotaItems(key)"
-                          :key="item.model"
-                          :label="item.label"
-                          :title="item.model"
-                          :used-percent="item.usedPercent"
-                          :remaining-percent="item.remainingPercent"
-                          :meter-class="getQuotaRemainingClass(item.usedPercent)"
-                          :bar-class="getQuotaRemainingBarColor(item.usedPercent)"
-                        >
-                          <template #footer>
-                            <div
-                              v-if="item.resetSeconds !== null && item.remainingPercent < 100"
-                              class="text-[9px] text-muted-foreground/70 mt-0.5"
-                            >
-                              <template v-if="item.resetSeconds > 0">
-                                {{ formatResetTime(item.resetSeconds) }}{{ legacyT('后重置') }}
-                              </template>
-                              <template v-else>
-                                {{ legacyT('已重置') }}
-                              </template>
-                            </div>
-                          </template>
-                        </ProviderQuotaProgressRow>
-                      </div>
-                    </div>
-                    <!-- Kiro 上游额度信息（仅当有元数据时显示） -->
-                    <div
-                      v-if="provider.provider_type === 'kiro' && (hasKiroQuotaDisplayData(key) || isKiroBannedKey(key))"
-                      class="mt-2 p-2 rounded-md"
-                      :class="isKiroBannedKey(key) ? 'bg-destructive/10 border border-destructive/30' : 'bg-muted/30'"
-                    >
-                      <!-- 封禁状态显示 -->
-                      <div
-                        v-if="isKiroBannedKey(key)"
-                        class="flex items-center gap-2 text-destructive"
-                      >
-                        <ShieldX class="w-4 h-4 shrink-0" />
-                        <div class="flex-1 min-w-0">
-                          <div class="text-[11px] font-medium">
-                            {{ legacyT('账户已封禁') }}
-                          </div>
-                          <div
-                            v-if="getKiroQuotaDisplay(key)?.ban_reason"
-                            class="text-[10px] text-destructive/80 truncate"
-                            :title="getKiroQuotaDisplay(key)?.ban_reason"
-                          >
-                            {{ getKiroQuotaDisplay(key)?.ban_reason }}
-                          </div>
-                        </div>
-                        <span
-                          v-if="getKiroQuotaDisplay(key)?.banned_at"
-                          class="text-[9px] text-destructive/60 shrink-0"
-                        >
-                          {{ formatBanTimestamp(getKiroQuotaDisplay(key)?.banned_at) }}
-                        </span>
-                      </div>
-                      <!-- 正常配额显示 -->
-                      <template v-else>
-                        <ProviderQuotaSectionHeader
-                          :title="legacyT('账号配额')"
-                          :loading="refreshingQuota"
-                          :updated-text="getKiroQuotaDisplay(key)?.updated_at ? formatKiroUpdatedAt(getKiroQuotaDisplay(key)?.updated_at || 0) : null"
-                        />
-                        <!-- Kiro 额度显示：使用进度 -->
-                        <div>
-                          <!-- 使用额度进度条 -->
-                          <ProviderQuotaProgressRow
-                            :label="legacyT('使用额度')"
-                            :used-percent="getKiroQuotaDisplay(key)?.usage_percentage || 0"
-                            :meter-class="getQuotaRemainingClass(getKiroQuotaDisplay(key)?.usage_percentage || 0)"
-                            :bar-class="getQuotaRemainingBarColor(getKiroQuotaDisplay(key)?.usage_percentage || 0)"
-                          >
-                            <template #footer>
-                              <div class="flex items-center justify-between text-[9px] text-muted-foreground/70 mt-0.5">
-                                <span>
-                                  {{ formatKiroUsage(getKiroQuotaDisplay(key)?.current_usage) }} /
-                                  {{ formatKiroUsage(getKiroQuotaDisplay(key)?.usage_limit) }}
-                                </span>
-                                <span v-if="getKiroQuotaDisplay(key)?.next_reset_at">
-                                  {{ formatKiroResetTime(getKiroQuotaDisplay(key)?.next_reset_at) }}{{ legacyT('重置') }}
-                                </span>
-                              </div>
-                            </template>
-                          </ProviderQuotaProgressRow>
-                        </div>
-                      </template>
-                    </div>
-                    <!-- xAI / Grok Build 订阅额度 -->
-                    <div
-                      v-if="provider.provider_type === 'xai' && hasXaiQuotaDisplayData(key)"
-                      class="mt-2 p-2 rounded-md bg-muted/30"
-                    >
-                      <ProviderQuotaSectionHeader
-                        :title="legacyT('账号配额')"
-                        :loading="refreshingQuota"
-                        :updated-text="getXaiQuotaDisplay(key)?.updated_at ? formatKiroUpdatedAt(getXaiQuotaDisplay(key)?.updated_at || 0) : null"
-                      />
-                      <div class="space-y-2">
-                        <ProviderQuotaProgressRow
-                          v-if="getXaiQuotaDisplay(key)?.usage_percentage !== undefined || getXaiQuotaDisplay(key)?.remaining_percentage !== undefined"
-                          :label="legacyT(getXaiUsageLabel(key))"
-                          :used-percent="getXaiUsedPercent(key)"
-                          :remaining-percent="getXaiRemainingPercent(key)"
-                          :meter-class="getQuotaRemainingClass(getXaiUsedPercent(key))"
-                          :bar-class="getQuotaRemainingBarColor(getXaiUsedPercent(key))"
-                          :reset-text="getXaiQuotaDisplay(key)?.next_reset_at
-                            ? `${formatKiroResetTime(getXaiQuotaDisplay(key)?.next_reset_at)}${legacyT('重置')}`
-                            : null"
-                        >
-                          <template
-                            v-if="getXaiQuotaDisplay(key)?.usage_limit != null"
-                            #footer
-                          >
-                            <div class="flex items-center justify-between text-[9px] text-muted-foreground/70 mt-0.5">
-                              <span>
-                                {{ formatKiroUsage(getXaiQuotaDisplay(key)?.current_usage) }} /
-                                {{ formatKiroUsage(getXaiQuotaDisplay(key)?.usage_limit) }}
-                              </span>
-                              <span v-if="getXaiQuotaDisplay(key)?.next_reset_at">
-                                {{ formatKiroResetTime(getXaiQuotaDisplay(key)?.next_reset_at) }}{{ legacyT('重置') }}
-                              </span>
-                            </div>
-                          </template>
-                        </ProviderQuotaProgressRow>
-                        <div
-                          v-if="getXaiQuotaDisplay(key)?.prepaid_balance != null"
-                          class="text-[10px] text-muted-foreground"
-                        >
-                          {{ legacyT('预付额度') }}: {{ formatKiroUsage(getXaiQuotaDisplay(key)?.prepaid_balance) }}
-                        </div>
-                        <ProviderQuotaProgressRow
-                          v-if="getXaiQuotaDisplay(key)?.on_demand_cap"
-                          :label="legacyT('按需额度')"
-                          :used-percent="getXaiOnDemandUsedPercent(key)"
-                          :meter-class="getQuotaRemainingClass(getXaiOnDemandUsedPercent(key))"
-                          :bar-class="getQuotaRemainingBarColor(getXaiOnDemandUsedPercent(key))"
-                        >
-                          <template #footer>
-                            <div class="text-[9px] text-muted-foreground/70 mt-0.5">
-                              {{ formatKiroUsage(getXaiQuotaDisplay(key)?.on_demand_used) }} /
-                              {{ formatKiroUsage(getXaiQuotaDisplay(key)?.on_demand_cap) }}
-                            </div>
-                          </template>
-                        </ProviderQuotaProgressRow>
-                      </div>
-                    </div>
-                    <!-- Windsurf 上游额度信息 -->
-                    <div
-                      v-if="provider.provider_type === 'windsurf' && (hasWindsurfQuotaDisplayData(key) || isWindsurfUnavailableKey(key) || isWindsurfExhaustedKey(key))"
-                      class="mt-2 p-2 rounded-md"
-                      :class="isWindsurfUnavailableKey(key) ? 'bg-destructive/10 border border-destructive/30' : (isWindsurfExhaustedKey(key) ? 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50' : 'bg-muted/30')"
-                    >
-                      <div
-                        v-if="isWindsurfUnavailableKey(key)"
-                        class="flex items-center gap-2 text-destructive"
-                      >
-                        <ShieldX class="w-4 h-4 shrink-0" />
-                        <div class="flex-1 min-w-0">
-                          <div class="text-[11px] font-medium">
-                            {{ legacyT('账号不可用') }}
-                          </div>
-                          <div
-                            v-if="getWindsurfQuotaDisplay(key)?.last_error"
-                            class="text-[10px] text-destructive/80 truncate"
-                            :title="getWindsurfQuotaDisplay(key)?.last_error || ''"
-                          >
-                            {{ getWindsurfQuotaDisplay(key)?.last_error }}
-                          </div>
-                        </div>
-                      </div>
-                      <template v-else>
-                        <div
-                          v-if="isWindsurfExhaustedKey(key)"
-                          class="mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-300"
-                        >
-                          <ShieldX class="w-4 h-4 shrink-0" />
-                          <div class="flex-1 min-w-0">
-                            <div class="text-[11px] font-medium">
-                              {{ getWindsurfQuotaStatusLabel(key) }}
-                            </div>
-                            <div
-                              v-if="getWindsurfQuotaDisplay(key)?.last_error"
-                              class="text-[10px] text-amber-700/80 dark:text-amber-300/80 truncate"
-                              :title="getWindsurfQuotaDisplay(key)?.last_error || ''"
-                            >
-                              {{ getWindsurfQuotaDisplay(key)?.last_error }}
-                            </div>
-                          </div>
-                        </div>
-                        <ProviderQuotaSectionHeader
-                          :title="legacyT('账号配额')"
-                          :loading="refreshingQuota"
-                          :updated-text="getWindsurfQuotaDisplay(key)?.updated_at ? formatKiroUpdatedAt(getWindsurfQuotaDisplay(key)?.updated_at || 0) : null"
-                        />
-                        <div class="grid grid-cols-2 gap-3">
-                          <ProviderQuotaProgressRow
-                            v-if="getWindsurfQuotaDisplay(key)?.daily_remaining_percent !== undefined"
-                            :label="legacyT('日额度')"
-                            :used-percent="getWindsurfQuotaDisplay(key)?.daily_used_percent || 0"
-                            :remaining-percent="getWindsurfQuotaDisplay(key)?.daily_remaining_percent || 0"
-                            :meter-class="getQuotaRemainingClass(getWindsurfQuotaDisplay(key)?.daily_used_percent || 0)"
-                            :bar-class="getQuotaRemainingBarColor(getWindsurfQuotaDisplay(key)?.daily_used_percent || 0)"
-                            :reset-text="getWindsurfQuotaDisplay(key)?.daily_reset_at
-                              ? `${formatKiroResetTime(getWindsurfQuotaDisplay(key)?.daily_reset_at || 0)}${legacyT('重置')}`
-                              : null"
-                          />
-                          <ProviderQuotaProgressRow
-                            v-if="getWindsurfQuotaDisplay(key)?.weekly_remaining_percent !== undefined"
-                            :label="legacyT('周额度')"
-                            :used-percent="getWindsurfQuotaDisplay(key)?.weekly_used_percent || 0"
-                            :remaining-percent="getWindsurfQuotaDisplay(key)?.weekly_remaining_percent || 0"
-                            :meter-class="getQuotaRemainingClass(getWindsurfQuotaDisplay(key)?.weekly_used_percent || 0)"
-                            :bar-class="getQuotaRemainingBarColor(getWindsurfQuotaDisplay(key)?.weekly_used_percent || 0)"
-                            :reset-text="getWindsurfQuotaDisplay(key)?.weekly_reset_at
-                              ? `${formatKiroResetTime(getWindsurfQuotaDisplay(key)?.weekly_reset_at || 0)}${legacyT('重置')}`
-                              : null"
-                          />
-                        </div>
-                        <div
-                          v-if="hasWindsurfPromptQuota(key) || hasWindsurfFlexQuota(key)"
-                          class="mt-2 flex items-center gap-3 text-[9px] text-muted-foreground/70"
-                        >
-                          <span v-if="hasWindsurfPromptQuota(key)">
-                            Prompt {{ formatKiroUsage(getWindsurfQuotaDisplay(key)?.prompt_used || 0) }} /
-                            {{ formatKiroUsage(getWindsurfQuotaDisplay(key)?.prompt_limit || 0) }}
-                          </span>
-                          <span v-if="hasWindsurfFlexQuota(key)">
-                            Flex {{ formatKiroUsage(getWindsurfQuotaDisplay(key)?.flex_used || 0) }} /
-                            {{ formatKiroUsage(getWindsurfQuotaDisplay(key)?.flex_limit || 0) }}
-                          </span>
-                        </div>
-                        <div
-                          v-if="hasWindsurfModelCount(key) || hasWindsurfModelPreview(key)"
-                          class="mt-2 flex items-center justify-between gap-2 text-[9px] text-muted-foreground/70"
-                        >
-                          <span>
-                            {{ legacyT('模型') }} {{ getWindsurfQuotaDisplay(key)?.allowed_models_count ?? getWindsurfQuotaDisplay(key)?.models?.length }} {{ legacyT('个') }}
-                          </span>
-                          <span
-                            v-if="getWindsurfModelPreview(key)"
-                            class="truncate"
-                            :title="getWindsurfModelPreview(key) || ''"
-                          >
-                            {{ getWindsurfModelPreview(key) }}
-                          </span>
-                        </div>
-                      </template>
-                    </div>
                     <!-- 第二行：优先级 + API 格式（展开显示） + 统计信息 -->
                     <div class="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
                       <!-- 优先级放最前面，支持点击编辑 -->
@@ -1093,7 +824,6 @@ import type {
   UpstreamMetadata,
   CodexUpstreamMetadata,
   KiroUpstreamMetadata,
-  WindsurfUpstreamMetadata,
   XaiUpstreamMetadata,
   QuotaResetCreditsSnapshot,
   QuotaStatusSnapshot,
@@ -1124,7 +854,6 @@ import {
   getOAuthStatusDisplayWithFallback,
   getOAuthStatusTitle as resolveOAuthStatusTitle,
 } from '@/utils/providerKeyStatus'
-import { getGeminiCliAccountCreditsText } from '@/utils/providerKeyQuota'
 import {
   clearPendingCodexResetCreditIdempotencyKey,
   clearPendingCodexResetCreditIdempotencyKeyForOutcome,
@@ -1938,7 +1667,7 @@ async function handleConsumeCodexResetCredit(key: EndpointAPIKey) {
   }
 }
 
-// Codex / Gemini CLI / Antigravity / Kiro / Windsurf：打开抽屉后自动后台刷新（配额缓存缺失/过期，或 Token 即将过期时触发）
+// Codex / Antigravity / Kiro：打开抽屉后自动后台刷新（配额缓存缺失/过期，或 Token 即将过期时触发）
 const AUTO_QUOTA_REFRESH_STALE_SECONDS = 5 * 60
 // 与后端 OAuth 懒刷新阈值对齐：到期前 2 分钟内视为需要刷新
 const AUTO_TOKEN_REFRESH_SKEW_SECONDS = 2 * 60
@@ -1957,7 +1686,7 @@ function quotaSnapshotHasDisplayData(quota: QuotaStatusSnapshot | null | undefin
 
 function getQuotaSnapshotForProvider(
   key: EndpointAPIKey,
-  providerType: 'codex' | 'kiro' | 'windsurf' | 'antigravity' | 'gemini_cli' | 'claude_code' | 'xai',
+  providerType: 'codex' | 'kiro' | 'antigravity' | 'claude_code' | 'xai',
 ): QuotaStatusSnapshot | null {
   const quota = key.status_snapshot?.quota
   if (!quota) return null
@@ -2362,150 +2091,6 @@ function getXaiOnDemandUsedPercent(key: EndpointAPIKey): number {
   return Math.max(Math.min(((xai.on_demand_used || 0) / xai.on_demand_cap) * 100, 100), 0)
 }
 
-function getWindsurfQuotaDisplay(key: EndpointAPIKey): WindsurfQuotaDisplay | null {
-  const quota = getQuotaSnapshotForProvider(key, 'windsurf')
-  const upstream = key.upstream_metadata?.windsurf
-  if (!quota && !upstream) return null
-
-  const display: WindsurfQuotaDisplay = {}
-  const updatedAt = getQuotaSnapshotUpdatedAt(quota) ?? upstream?.updated_at
-  if (updatedAt !== undefined) display.updated_at = updatedAt
-  if (quota?.plan_type) display.plan_name = quota.plan_type
-  else if (upstream?.plan_name) display.plan_name = upstream.plan_name
-  if (quota?.reason) display.last_error = quota.reason
-  else if (upstream?.last_error) display.last_error = upstream.last_error
-  if (typeof quota?.allowed_models_count === 'number') display.allowed_models_count = quota.allowed_models_count
-  else if (typeof upstream?.allowed_models_count === 'number') display.allowed_models_count = upstream.allowed_models_count
-  if (quota?.rate_limit) display.rate_limit = quota.rate_limit
-  else if (upstream?.rate_limit) display.rate_limit = upstream.rate_limit
-  if (Array.isArray(upstream?.models)) display.models = upstream.models
-
-  const dailyWindow = getQuotaWindow(quota, 'daily')
-  const dailyRemaining = getQuotaWindowRemainingPercent(dailyWindow)
-  const dailyUsed = getQuotaWindowUsedPercent(dailyWindow)
-  if (dailyRemaining !== undefined) display.daily_remaining_percent = dailyRemaining
-  else if (typeof upstream?.daily_remaining_percent === 'number') display.daily_remaining_percent = upstream.daily_remaining_percent
-  if (dailyUsed !== undefined) display.daily_used_percent = dailyUsed
-  else if (typeof upstream?.daily_remaining_percent === 'number') display.daily_used_percent = Math.max(100 - upstream.daily_remaining_percent, 0)
-  const dailyResetAt = getQuotaWindowResetAt(dailyWindow)
-  if (dailyResetAt !== undefined) display.daily_reset_at = dailyResetAt
-  else if (typeof upstream?.daily_reset_at === 'number') display.daily_reset_at = upstream.daily_reset_at
-
-  const weeklyWindow = getQuotaWindow(quota, 'weekly')
-  const weeklyRemaining = getQuotaWindowRemainingPercent(weeklyWindow)
-  const weeklyUsed = getQuotaWindowUsedPercent(weeklyWindow)
-  if (weeklyRemaining !== undefined) display.weekly_remaining_percent = weeklyRemaining
-  else if (typeof upstream?.weekly_remaining_percent === 'number') display.weekly_remaining_percent = upstream.weekly_remaining_percent
-  if (weeklyUsed !== undefined) display.weekly_used_percent = weeklyUsed
-  else if (typeof upstream?.weekly_remaining_percent === 'number') display.weekly_used_percent = Math.max(100 - upstream.weekly_remaining_percent, 0)
-  const weeklyResetAt = getQuotaWindowResetAt(weeklyWindow)
-  if (weeklyResetAt !== undefined) display.weekly_reset_at = weeklyResetAt
-  else if (typeof upstream?.weekly_reset_at === 'number') display.weekly_reset_at = upstream.weekly_reset_at
-
-  const promptWindow = getQuotaWindow(quota, 'prompt')
-  if (typeof promptWindow?.used_value === 'number') display.prompt_used = promptWindow.used_value
-  else if (typeof upstream?.prompt_used === 'number') display.prompt_used = upstream.prompt_used
-  if (typeof promptWindow?.limit_value === 'number') display.prompt_limit = promptWindow.limit_value
-  else if (typeof upstream?.prompt_limit === 'number') display.prompt_limit = upstream.prompt_limit
-  if (typeof promptWindow?.remaining_value === 'number') display.prompt_remaining = promptWindow.remaining_value
-  else if (typeof upstream?.prompt_remaining === 'number') display.prompt_remaining = upstream.prompt_remaining
-
-  const flexWindow = getQuotaWindow(quota, 'flex')
-  if (typeof flexWindow?.used_value === 'number') display.flex_used = flexWindow.used_value
-  else if (typeof upstream?.flex_used === 'number') display.flex_used = upstream.flex_used
-  if (typeof flexWindow?.limit_value === 'number') display.flex_limit = flexWindow.limit_value
-  else if (typeof upstream?.flex_limit === 'number') display.flex_limit = upstream.flex_limit
-  if (typeof flexWindow?.remaining_value === 'number') display.flex_remaining = flexWindow.remaining_value
-  else if (typeof upstream?.flex_remaining === 'number') display.flex_remaining = upstream.flex_remaining
-
-  return Object.keys(display).length > 0 ? display : null
-}
-
-function hasWindsurfQuotaDisplayData(key: EndpointAPIKey): boolean {
-  const windsurf = getWindsurfQuotaDisplay(key)
-  return !!windsurf && (
-    windsurf.daily_remaining_percent !== undefined
-    || windsurf.weekly_remaining_percent !== undefined
-    || windsurf.prompt_limit !== undefined
-    || windsurf.flex_limit !== undefined
-    || windsurf.allowed_models_count !== undefined
-    || windsurf.rate_limit !== undefined
-    || !!windsurf.last_error
-    || (Array.isArray(windsurf.models) && windsurf.models.length > 0)
-  )
-}
-
-function isWindsurfUnavailableKey(key: EndpointAPIKey): boolean {
-  const code = String(getQuotaSnapshotForProvider(key, 'windsurf')?.code || '').trim().toLowerCase()
-  return code === 'banned' || code === 'forbidden' || code === 'quarantined'
-}
-
-function getPositiveQuotaNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
-}
-
-function windsurfCooldownHasPositiveReset(key: EndpointAPIKey): boolean {
-  const quota = getQuotaSnapshotForProvider(key, 'windsurf')
-  const rateLimit = quota?.rate_limit
-  if (rateLimit && typeof rateLimit === 'object') {
-    const retryAfterMs =
-      getPositiveQuotaNumber(rateLimit.retry_after_ms)
-      ?? getPositiveQuotaNumber(rateLimit.retryAfterMs)
-    if (retryAfterMs !== undefined) return true
-  }
-
-  const rateLimitWindow = getQuotaWindow(quota, 'rate_limit')
-  return (
-    getPositiveQuotaNumber(rateLimitWindow?.reset_seconds) !== undefined
-    || getPositiveQuotaNumber(rateLimitWindow?.reset_at) !== undefined
-  )
-}
-
-function isWindsurfExhaustedKey(key: EndpointAPIKey): boolean {
-  const code = String(getQuotaSnapshotForProvider(key, 'windsurf')?.code || '').trim().toLowerCase()
-  if (code === 'cooldown') return windsurfCooldownHasPositiveReset(key)
-  return code === 'exhausted' || code === 'rate_limited' || code === 'rate_limit'
-}
-
-function getWindsurfQuotaStatusLabel(key: EndpointAPIKey): string {
-  const quota = getQuotaSnapshotForProvider(key, 'windsurf')
-  const label = quota?.label?.trim()
-  if (label) return label
-  const code = String(quota?.code || '').trim().toLowerCase()
-  if (code === 'cooldown') return legacyT('冷却中')
-  return code === 'rate_limited' || code === 'rate_limit' ? legacyT('速率受限') : legacyT('额度耗尽')
-}
-
-function getWindsurfModelPreview(key: EndpointAPIKey): string | null {
-  const models = getWindsurfQuotaDisplay(key)?.models
-  if (!Array.isArray(models) || models.length === 0) return null
-  return models
-    .slice(0, 3)
-    .map(model => (model.label || model.model_uid || '').trim())
-    .filter(Boolean)
-    .join(' / ') || null
-}
-
-function hasFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
-function hasWindsurfPromptQuota(key: EndpointAPIKey): boolean {
-  return hasFiniteNumber(getWindsurfQuotaDisplay(key)?.prompt_limit)
-}
-
-function hasWindsurfFlexQuota(key: EndpointAPIKey): boolean {
-  return hasFiniteNumber(getWindsurfQuotaDisplay(key)?.flex_limit)
-}
-
-function hasWindsurfModelCount(key: EndpointAPIKey): boolean {
-  return hasFiniteNumber(getWindsurfQuotaDisplay(key)?.allowed_models_count)
-}
-
-function hasWindsurfModelPreview(key: EndpointAPIKey): boolean {
-  return !!getWindsurfModelPreview(key)
-}
-
 function isKiroBannedKey(key: EndpointAPIKey): boolean {
   const quota = getQuotaSnapshotForProvider(key, 'kiro')
   return String(quota?.code || '').trim().toLowerCase() === 'banned'
@@ -2635,7 +2220,7 @@ function shouldAutoRefreshCodexQuota(): boolean {
   return false
 }
 
-// 检查 OAuth Token 是否即将过期（Codex / Gemini CLI / Antigravity / Kiro / Windsurf）
+// 检查 OAuth Token 是否即将过期（Codex / Antigravity / Kiro）
 function isTokenExpiringSoon(key: EndpointAPIKey, now: number): boolean {
   const oauthCode = String(key.status_snapshot?.oauth?.code || '').trim().toLowerCase()
   if (oauthCode && oauthCode !== 'valid' && oauthCode !== 'expiring') {
@@ -2659,28 +2244,6 @@ function shouldAutoRefreshAntigravityQuota(): boolean {
       return true
     }
     const updatedAt = getAntigravityQuotaUpdatedAt(key)
-    if (typeof updatedAt !== 'number' || (now - updatedAt) > AUTO_QUOTA_REFRESH_STALE_SECONDS) {
-      return true
-    }
-  }
-
-  return false
-}
-
-function shouldAutoRefreshGeminiCliQuota(): boolean {
-  if (provider.value?.provider_type !== 'gemini_cli') return false
-  const now = Math.floor(Date.now() / 1000)
-
-  for (const { key } of allKeys.value) {
-    if (!key.is_active) continue
-
-    if (isTokenExpiringSoon(key, now)) return true
-
-    if (!hasGeminiCliQuotaDisplayData(key)) {
-      return true
-    }
-
-    const updatedAt = getGeminiCliQuotaUpdatedAt(key)
     if (typeof updatedAt !== 'number' || (now - updatedAt) > AUTO_QUOTA_REFRESH_STALE_SECONDS) {
       return true
     }
@@ -2744,28 +2307,6 @@ function shouldAutoRefreshXaiQuota(): boolean {
     }
 
     const updatedAt = getXaiQuotaDisplay(key)?.updated_at
-    if (typeof updatedAt !== 'number' || (now - updatedAt) > AUTO_QUOTA_REFRESH_STALE_SECONDS) {
-      return true
-    }
-  }
-
-  return false
-}
-
-function shouldAutoRefreshWindsurfQuota(): boolean {
-  if (provider.value?.provider_type !== 'windsurf') return false
-  const now = Math.floor(Date.now() / 1000)
-
-  for (const { key } of allKeys.value) {
-    if (!key.is_active) continue
-
-    if (isTokenExpiringSoon(key, now)) return true
-
-    if (!hasWindsurfQuotaDisplayData(key)) {
-      return true
-    }
-
-    const updatedAt = getWindsurfQuotaDisplay(key)?.updated_at
     if (typeof updatedAt !== 'number' || (now - updatedAt) > AUTO_QUOTA_REFRESH_STALE_SECONDS) {
       return true
     }
@@ -2851,14 +2392,14 @@ function applyQuotaResults(
   return applied
 }
 
-// 通用的自动刷新配额函数（支持 Codex、Gemini CLI、Antigravity、Kiro、Windsurf）
+// 通用的自动刷新配额函数（支持 Codex、Antigravity、Kiro、xAI）
 async function autoRefreshQuotaInBackground(): Promise<boolean> {
   const providerId = props.providerId
   if (!providerId) return false
   if (refreshingQuota.value) return false
 
   const providerType = provider.value?.provider_type
-  if (providerType !== 'codex' && providerType !== 'claude_code' && providerType !== 'gemini_cli' && providerType !== 'antigravity' && providerType !== 'kiro' && providerType !== 'windsurf' && providerType !== 'xai') return false
+  if (providerType !== 'codex' && providerType !== 'claude_code' && providerType !== 'antigravity' && providerType !== 'kiro' && providerType !== 'xai') return false
 
   // 检查是否需要刷新
   let shouldRefresh = false
@@ -2866,16 +2407,12 @@ async function autoRefreshQuotaInBackground(): Promise<boolean> {
     shouldRefresh = shouldAutoRefreshCodexQuota()
   } else if (providerType === 'claude_code') {
     shouldRefresh = shouldAutoRefreshClaudeCodeQuota()
-  } else if (providerType === 'gemini_cli') {
-    shouldRefresh = shouldAutoRefreshGeminiCliQuota()
   } else if (providerType === 'antigravity') {
     shouldRefresh = shouldAutoRefreshAntigravityQuota()
   } else if (providerType === 'kiro') {
     shouldRefresh = shouldAutoRefreshKiroQuota()
   } else if (providerType === 'xai') {
     shouldRefresh = shouldAutoRefreshXaiQuota()
-  } else if (providerType === 'windsurf') {
-    shouldRefresh = shouldAutoRefreshWindsurfQuota()
   }
   if (!shouldRefresh) return false
 
@@ -2884,16 +2421,12 @@ async function autoRefreshQuotaInBackground(): Promise<boolean> {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasCodexQuotaDisplayData(key))
   } else if (providerType === 'claude_code') {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasClaudeCodeQuotaDisplayData(key))
-  } else if (providerType === 'gemini_cli') {
-    hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasGeminiCliQuotaDisplayData(key))
   } else if (providerType === 'antigravity') {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasAntigravityQuotaDisplayData(key))
   } else if (providerType === 'kiro') {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasKiroQuotaDisplayData(key))
   } else if (providerType === 'xai') {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasXaiQuotaDisplayData(key))
-  } else if (providerType === 'windsurf') {
-    hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasWindsurfQuotaDisplayData(key))
   }
 
   refreshingQuota.value = true
@@ -3512,68 +3045,8 @@ function getClaudeCodeQuotaItems(key: EndpointAPIKey): ClaudeCodeQuotaItem[] {
     .map(entry => entry.item)
 }
 
-interface GeminiCliQuotaItem {
-  model: string
-  label: string
-  usedPercent: number
-  remainingPercent: number
-  resetSeconds: number | null
-}
-
 function hasAntigravityQuotaDisplayData(key: EndpointAPIKey): boolean {
   return getAntigravityQuotaGroupItems(key).length > 0
-}
-
-function getGeminiCliQuotaUpdatedAt(key: EndpointAPIKey): number | undefined {
-  const quota = getQuotaSnapshotForProvider(key, 'gemini_cli')
-  const quotaUpdatedAt = getQuotaSnapshotUpdatedAt(quota)
-  if (typeof quotaUpdatedAt === 'number') return quotaUpdatedAt
-  const updatedAt = Number(key.upstream_metadata?.gemini_cli?.updated_at ?? NaN)
-  return Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : undefined
-}
-
-function hasGeminiCliQuotaDisplayData(key: EndpointAPIKey): boolean {
-  if (getGeminiCliAccountCreditsText(key, 'gemini_cli')) return true
-  return getGeminiCliQuotaItems(key).length > 0
-}
-
-function getGeminiCliQuotaItems(key: EndpointAPIKey): GeminiCliQuotaItem[] {
-  const quota = getQuotaSnapshotForProvider(key, 'gemini_cli')
-  const windows = getQuotaWindowByScope(quota, 'model')
-  if (!quota || windows.length === 0) return []
-
-  const items = windows
-    .map((window) => {
-      const model = String(window.model || window.label || window.code || '').trim()
-      if (!model) return null
-
-      const usedPercent = getQuotaWindowUsedPercent(window)
-      const remainingPercent = getQuotaWindowRemainingPercent(window)
-      if (usedPercent === undefined && remainingPercent === undefined) {
-        return null
-      }
-
-      const normalizedUsedPercent =
-        usedPercent !== undefined
-          ? usedPercent
-          : Math.max(100 - (remainingPercent ?? 0), 0)
-      const normalizedRemainingPercent =
-        remainingPercent !== undefined
-          ? remainingPercent
-          : Math.max(100 - normalizedUsedPercent, 0)
-
-      return {
-        model,
-        label: String(window.label || window.model || model),
-        usedPercent: normalizedUsedPercent,
-        remainingPercent: normalizedRemainingPercent,
-        resetSeconds: getQuotaWindowLiveResetSeconds(quota, window),
-      } satisfies GeminiCliQuotaItem
-    })
-    .filter((item): item is GeminiCliQuotaItem => item !== null)
-
-  items.sort((a, b) => (b.usedPercent - a.usedPercent) || a.model.localeCompare(b.model))
-  return items
 }
 
 function formatUpdatedAt(updatedAt: number): string {

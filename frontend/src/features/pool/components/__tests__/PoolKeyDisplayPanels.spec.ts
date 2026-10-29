@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createApp, defineComponent, h } from 'vue'
+import { createApp } from 'vue'
 
 import PoolKeyQuotaPanel from '@/features/pool/components/PoolKeyQuotaPanel.vue'
 import PoolKeyStatsPanel from '@/features/pool/components/PoolKeyStatsPanel.vue'
@@ -51,40 +51,42 @@ describe('pool key display panels', () => {
     root.remove()
   })
 
-  it('renders quota progress rows and fallback quota text', () => {
-    const Probe = defineComponent({
-      setup() {
-        return () => h('div', [
-          h(PoolKeyQuotaPanel, {
-            items: [{
-              label: '5H',
-              remainingPercent: 42,
-              resetText: '1h 后重置',
-              meterText: '42.0%',
-              barClass: 'bg-amber-500',
-              meterClass: 'text-amber-600',
-            }],
-          }),
-          h(PoolKeyQuotaPanel, {
-            items: [],
-            accountQuotaText: null,
-            fallbackText: '额度未知',
-            textClass: 'text-muted-foreground',
-            variant: 'mobile',
-          }),
-        ])
-      },
-    })
-
+  it('renders quota progress rows', () => {
     const root = document.createElement('div')
     document.body.appendChild(root)
-    const app = createApp(Probe)
+    const app = createApp(PoolKeyQuotaPanel, {
+      items: [{
+        label: '5H',
+        remainingPercent: 42,
+        resetText: '1h 后重置',
+        meterText: '42.0%',
+        barClass: 'bg-amber-500',
+        meterClass: 'text-amber-600',
+      }],
+    })
     app.use(createI18n())
     app.mount(root)
 
     expect(root.querySelector('[data-testid="pool-quota-reset-text"]')?.textContent).toBe('1h 后重置')
     expect(root.querySelector('[data-testid="pool-quota-meter-text"]')?.textContent).toBe('42.0%')
+
+    app.unmount()
+    root.remove()
+  })
+
+  it.each(['desktop', 'mobile'] as const)('renders fallback quota text without progress in %s mode', variant => {
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    const app = createApp(PoolKeyQuotaPanel, {
+      items: [],
+      fallbackText: '额度未知',
+      variant,
+    })
+    app.use(createI18n())
+    app.mount(root)
+
     expect(root.textContent).toContain('额度未知')
+    expect(root.querySelector('[data-testid="pool-quota-rows"]')).toBeNull()
 
     app.unmount()
     root.remove()

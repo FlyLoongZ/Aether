@@ -325,9 +325,7 @@ fn is_openai_provider_oauth_provider_type(value: Option<&serde_json::Value>) -> 
     value
         .and_then(serde_json::Value::as_str)
         .map(str::trim)
-        .is_some_and(|provider_type| {
-            provider_type.eq_ignore_ascii_case("codex")
-        })
+        .is_some_and(|provider_type| provider_type.eq_ignore_ascii_case("codex"))
 }
 
 fn is_claude_provider_oauth_provider_type(value: Option<&serde_json::Value>) -> bool {

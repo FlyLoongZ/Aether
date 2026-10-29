@@ -328,7 +328,6 @@
                 >
                   <PoolKeyQuotaPanel
                     :items="quotaProgressDisplayMap[key.key_id] || []"
-                    :account-quota-text="keyUiStateMap[key.key_id]?.accountQuotaText"
                     :fallback-text="keyUiStateMap[key.key_id]?.quotaFallbackText"
                     :text-class="keyUiStateMap[key.key_id]?.quotaTextClass || ''"
                     :reset-credit-text="getCodexResetCreditCountText(key)"
@@ -711,7 +710,6 @@
               <PoolKeyQuotaPanel
                 v-if="showAccountQuotaColumn"
                 :items="quotaProgressDisplayMap[key.key_id] || []"
-                :account-quota-text="keyUiStateMap[key.key_id]?.accountQuotaText"
                 :fallback-text="keyUiStateMap[key.key_id]?.quotaFallbackText"
                 :text-class="keyUiStateMap[key.key_id]?.quotaTextClass || ''"
                 :reset-credit-text="getCodexResetCreditCountText(key)"
@@ -1181,7 +1179,6 @@ import {
   getOAuthStatusTitle as resolveOAuthStatusTitle,
 } from '@/utils/providerKeyStatus'
 import {
-  getGeminiCliAccountCreditsText,
   getLegacyAccountQuotaText,
   getQuotaDisplayText,
 } from '@/utils/providerKeyQuota'
@@ -1698,7 +1695,6 @@ watch(showAdaptiveHotPoolMetricsButton, (enabled) => {
 const showAccountQuotaColumn = computed(() => {
   return selectedProviderType.value === 'codex'
     || selectedProviderType.value === 'claude_code'
-    || selectedProviderType.value === 'gemini_cli'
     || selectedProviderType.value === 'kiro'
     || selectedProviderType.value === 'antigravity'
     || selectedProviderType.value === 'xai'
@@ -2039,7 +2035,6 @@ type PoolKeyUiState = {
   canRefreshToken: boolean
   planLabel: string
   planClass: string
-  accountQuotaText: string | null
   quotaFallbackText: string | null
   quotaTextClass: string
   importedAtRelative: string
@@ -2087,7 +2082,6 @@ const keyUiStateMap = computed<Record<string, PoolKeyUiState>>(() => {
   for (const key of keyPage.value.keys) {
     const visibleOAuthState = getVisibleOAuthState(key)
     const oauthOrgBadge = getOAuthOrgBadge(key)
-    const accountQuotaText = getAccountQuotaText(key)
     const quotaFallbackText = getQuotaFallbackText(key)
     const planType = resolvePoolKeyPlanType(key)
     const canRefreshToken = canRefreshOAuthCredential(key)
@@ -2106,10 +2100,9 @@ const keyUiStateMap = computed<Record<string, PoolKeyUiState>>(() => {
       canRefreshToken,
       planLabel: planType ? formatOAuthPlanType(planType) : '',
       planClass: planType ? getOAuthPlanTypeClass(planType) : '',
-      accountQuotaText,
       quotaFallbackText,
-      quotaTextClass: accountQuotaText || quotaFallbackText
-        ? getQuotaTextClass(accountQuotaText || quotaFallbackText || '')
+      quotaTextClass: quotaFallbackText
+        ? getQuotaTextClass(quotaFallbackText)
         : '',
       importedAtRelative: formatPoolKeyImportedAt(key),
       lastUsedRelative: key.last_used_at ? formatRelativeTime(key.last_used_at) : '-',
@@ -3577,12 +3570,6 @@ function getQuotaFallbackText(key: PoolKeyDetail): string | null {
   return getQuotaDisplayText(key, selectedProviderType.value)
 }
 
-function getAccountQuotaText(key: PoolKeyDetail): string | null {
-  return getGeminiCliAccountCreditsText(key, selectedProviderType.value)
-}
-
-
-
 function getQuotaLabelOrder(label: string): number {
   if (label === '日') return 5
   if (label === '5H') return 6
@@ -3730,12 +3717,6 @@ function resolvePoolKeyPlanType(key: PoolKeyDetail): string | null {
   return quotaPoolTier || null
 }
 
-function getGeminiCliQuotaWindowLabel(window: QuotaWindowSnapshot): string {
-  const code = String(window.code || '').trim().replace(/^model:/i, '')
-  const label = String(window.label || window.model || code).trim()
-  return label || code || '模型'
-}
-
 function buildQuotaProgressItemsFromSnapshot(key: PoolKeyDetail): QuotaProgressItem[] {
   const quota = getQuotaSnapshot(key)
   if (!quota) return []
@@ -3829,30 +3810,6 @@ function buildQuotaProgressItemsFromSnapshot(key: PoolKeyDetail): QuotaProgressI
           remainingPercent,
           resetAtSeconds: normalizeUnixSeconds(window.reset_at ?? quotaResetAtSeconds ?? null),
           resetSeconds: normalizeRemainingSeconds(window.reset_seconds ?? quotaResetSeconds ?? null),
-          updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-          allowDynamicReset: true,
-        }
-      })
-      .filter((item): item is QuotaProgressItem => item != null)
-  }
-
-  if (providerType === 'gemini_cli') {
-    const windows = getQuotaSnapshotWindowsByScope(quota, 'model')
-    if (windows.length === 0) return []
-
-    const quotaResetAtSeconds = getQuotaSnapshotResetAtSeconds(quota)
-    const quotaResetSeconds = getQuotaSnapshotResetSeconds(quota)
-    return windows
-      .map((window): QuotaProgressItem | null => {
-        const remainingPercent = getQuotaWindowRemainingPercent(window)
-          ?? (window?.is_exhausted === true ? 0 : null)
-        if (remainingPercent == null) return null
-        return {
-          label: getGeminiCliQuotaWindowLabel(window),
-          remainingPercent,
-          detail: getQuotaWindowValueText(window),
-          resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? quotaResetAtSeconds ?? null),
-          resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? quotaResetSeconds ?? null),
           updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
           allowDynamicReset: true,
         }

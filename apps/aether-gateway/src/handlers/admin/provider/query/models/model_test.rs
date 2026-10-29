@@ -13,7 +13,7 @@ use super::provider_query_provider_payload;
 use crate::ai_serving::{
     maybe_build_sync_finalize_outcome, GatewayControlDecision,
     ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME, GEMINI_CHAT_SYNC_FINALIZE_REPORT_KIND,
-    OPENAI_CHAT_SYNC_FINALIZE_REPORT_KIND, OPENAI_IMAGE_SYNC_FINALIZE_REPORT_KIND,
+    OPENAI_IMAGE_SYNC_FINALIZE_REPORT_KIND,
 };
 use crate::clock::current_unix_ms;
 use crate::handlers::admin::provider::write::provider::reconcile_admin_fixed_provider_template_endpoints;
@@ -74,9 +74,8 @@ mod model_mapping;
 mod summary;
 
 use self::adapter::{
-    provider_query_antigravity_unsupported_reason,
-    provider_query_model_test_endpoint_priority, provider_query_normalize_api_format_alias,
-    provider_query_standard_test_client_api_format,
+    provider_query_antigravity_unsupported_reason, provider_query_model_test_endpoint_priority,
+    provider_query_normalize_api_format_alias, provider_query_standard_test_client_api_format,
     provider_query_standard_test_unsupported_reason,
     provider_query_test_adapter_for_provider_api_format,
     provider_query_transport_supports_model_test_execution,
@@ -500,6 +499,7 @@ fn provider_query_build_test_request_body_for_route(
     provider_query_build_test_request_body_with_model_policy(payload, model, override_custom_model)
 }
 
+#[cfg(test)]
 fn provider_query_build_test_request_body_for_api_format(
     payload: &Value,
     model: &str,
@@ -2236,26 +2236,24 @@ async fn provider_query_execute_openai_image_test_candidate(
     };
     let transport_profile = state.resolve_transport_profile(&transport);
 
-    let Some(mut request_headers) =
-        crate::provider_transport::build_openai_image_headers(
-            crate::provider_transport::ProviderOpenAiImageHeadersInput {
-                transport: &transport,
-                headers: &parts.headers,
-                auth_header: &auth_header,
-                auth_value: &auth_value,
-                accept: if is_codex {
-                    None
-                } else if upstream_is_stream {
-                    Some("text/event-stream")
-                } else {
-                    Some("application/json")
-                },
-                header_rules: transport.endpoint.header_rules.as_ref(),
-                provider_request_body: &provider_request_body,
-                original_request_body: &request_body,
+    let Some(mut request_headers) = crate::provider_transport::build_openai_image_headers(
+        crate::provider_transport::ProviderOpenAiImageHeadersInput {
+            transport: &transport,
+            headers: &parts.headers,
+            auth_header: &auth_header,
+            auth_value: &auth_value,
+            accept: if is_codex {
+                None
+            } else if upstream_is_stream {
+                Some("text/event-stream")
+            } else {
+                Some("application/json")
             },
-        )
-    else {
+            header_rules: transport.endpoint.header_rules.as_ref(),
+            provider_request_body: &provider_request_body,
+            original_request_body: &request_body,
+        },
+    ) else {
         return Ok(ProviderQueryExecutionOutcome {
             status: "failed",
             skip_reason: None,
@@ -2670,7 +2668,7 @@ async fn provider_query_execute_standard_test_candidate(
     route_path: &str,
     trace_id: &str,
 ) -> Result<ProviderQueryExecutionOutcome, GatewayError> {
-    let Some(mut transport) = provider_query_read_test_transport(
+    let Some(transport) = provider_query_read_test_transport(
         state,
         &provider.id,
         &candidate.endpoint.id,
@@ -2960,69 +2958,7 @@ async fn provider_query_execute_standard_test_candidate(
             "Provider request body violates the OpenAI provider contract",
         ));
     }
-    if crate::provider_transport::is_gemini_cli_provider_transport(&transport)
-        && normalized_provider_api_format == "gemini:generate_content"
-    {
-        let mut gemini_cli_auth =
-            match crate::provider_transport::resolve_local_gemini_cli_request_auth(&transport) {
-                crate::provider_transport::GeminiCliRequestAuthSupport::Supported(auth) => auth,
-                crate::provider_transport::GeminiCliRequestAuthSupport::Unsupported(_) => {
-                    crate::provider_transport::GeminiCliRequestAuth::default()
-                }
-            };
-        if gemini_cli_auth.project_id.is_none() {
-            gemini_cli_auth = state
-                .app()
-                .hydrate_gemini_cli_project_metadata_for_transport(&transport)
-                .await
-                .and_then(|hydrated| {
-                    transport = hydrated;
-                    match crate::provider_transport::resolve_local_gemini_cli_request_auth(
-                        &transport,
-                    ) {
-                        crate::provider_transport::GeminiCliRequestAuthSupport::Supported(auth) => {
-                            Some(auth)
-                        }
-                        crate::provider_transport::GeminiCliRequestAuthSupport::Unsupported(_) => {
-                            None
-                        }
-                    }
-                })
-                .unwrap_or_default();
-        }
-        if gemini_cli_auth.project_id.is_none() {
-            return Ok(provider_query_skipped_execution_outcome(
-                provider_request_body,
-                "Gemini CLI project_id is unavailable for v1internal request",
-            ));
-        }
-        provider_request_body = match crate::provider_transport::build_gemini_cli_v1internal_request(
-            &gemini_cli_auth,
-            trace_id,
-            request_model,
-            &provider_request_body,
-        ) {
-            crate::provider_transport::GeminiCliRequestEnvelopeSupport::Supported(envelope) => {
-                envelope
-            }
-            crate::provider_transport::GeminiCliRequestEnvelopeSupport::Unsupported(_) => {
-                return Ok(provider_query_skipped_execution_outcome(
-                    provider_request_body,
-                    "Gemini CLI v1internal envelope could not be built",
-                ));
-            }
-        };
-    }
-    let private_report_context =
-        (crate::provider_transport::is_gemini_cli_provider_transport(&transport)
-            && normalized_provider_api_format == "gemini:generate_content")
-            .then(|| {
-                json!({
-                    "has_envelope": true,
-                    "envelope_name": crate::provider_transport::GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
-                    "provider_api_format": provider_api_format,
-                })
-            });
+    let private_report_context = None;
 
     let uses_vertex_query_auth =
         crate::provider_transport::uses_vertex_api_key_query_auth(&transport, provider_api_format);
@@ -3152,13 +3088,6 @@ async fn provider_query_execute_standard_test_candidate(
     request_headers
         .entry("content-type".to_string())
         .or_insert_with(|| "application/json".to_string());
-    if crate::provider_transport::is_gemini_cli_provider_transport(&transport)
-        && normalized_provider_api_format == "gemini:generate_content"
-    {
-        request_headers
-            .entry("user-agent".to_string())
-            .or_insert_with(aether_provider_transport::gemini_cli::gemini_cli_client_user_agent);
-    }
     let protected_headers = if uses_vertex_query_auth {
         vec!["content-type"]
     } else {
@@ -3475,10 +3404,7 @@ async fn build_admin_provider_query_kiro_failover_response(
         ));
         if is_success {
             success_body = response_body;
-            success_stream = matches!(
-                adapter,
-                Some(ProviderQueryTestAdapter::Kiro)
-            );
+            success_stream = matches!(adapter, Some(ProviderQueryTestAdapter::Kiro));
             winning_candidate_index = Some(candidate_index);
             break;
         }

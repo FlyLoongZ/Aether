@@ -937,23 +937,16 @@ impl AppState {
     }
 
     #[cfg(test)]
-    pub(crate) fn load_provider_oauth_batch_task_for_tests(&self, _key: &str) -> Option<String> {
-        #[cfg(test)]
-        {
-            return self
-                .provider_oauth_batch_task_store
-                .as_ref()
-                .and_then(|store| {
-                    store
-                        .lock()
-                        .expect("provider oauth batch task store should lock")
-                        .get(_key)
-                        .cloned()
-                });
-        }
-
-        #[allow(unreachable_code)]
-        None
+    pub(crate) fn load_provider_oauth_batch_task_for_tests(&self, key: &str) -> Option<String> {
+        self.provider_oauth_batch_task_store
+            .as_ref()
+            .and_then(|store| {
+                store
+                    .lock()
+                    .expect("provider oauth batch task store should lock")
+                    .get(key)
+                    .cloned()
+            })
     }
 
     pub(crate) async fn read_provider_transport_snapshot_arc(

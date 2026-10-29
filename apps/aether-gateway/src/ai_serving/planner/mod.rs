@@ -13,7 +13,6 @@ mod candidate_transport_ranking_facts;
 mod common;
 mod decision;
 mod decision_input;
-mod gemini_cli;
 mod materialization_policy;
 mod passthrough;
 mod plan_builders;

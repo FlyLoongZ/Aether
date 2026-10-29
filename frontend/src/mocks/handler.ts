@@ -494,7 +494,7 @@ const MOCK_PROVIDER_HEALTH_STATUS = {
     {
       provider_id: 'provider-003',
       provider_name: 'Google AI',
-      provider_type: 'gemini_cli',
+      provider_type: 'antigravity',
       is_active: true,
       total_attempts: 932,
       success_count: 887,

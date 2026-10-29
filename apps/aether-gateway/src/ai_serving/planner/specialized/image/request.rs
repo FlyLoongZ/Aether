@@ -20,10 +20,9 @@ use crate::ai_serving::{
     apply_codex_openai_special_headers, apply_xai_upstream_payload_edits,
     build_codex_openai_image_api_provider_request_body,
     build_gemini_image_request_body_from_openai_image_request,
-    build_openai_image_api_provider_request_body,
-    default_model_for_openai_image_operation, normalize_openai_image_request,
-    request_conversion_direct_auth, CandidateFailureDiagnostic, GatewayProviderTransportSnapshot,
-    PlannerAppState, RequestConversionKind,
+    build_openai_image_api_provider_request_body, default_model_for_openai_image_operation,
+    normalize_openai_image_request, request_conversion_direct_auth, CandidateFailureDiagnostic,
+    GatewayProviderTransportSnapshot, PlannerAppState, RequestConversionKind,
 };
 use crate::image_capabilities::openai_image_normalize_options_for_provider;
 use crate::AppState;

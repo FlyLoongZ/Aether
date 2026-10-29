@@ -294,60 +294,6 @@ fn uses_vertex_service_account_hook_for_gemini_embedding_url() {
 }
 
 #[test]
-fn gemini_cli_generate_content_uses_v1internal_code_assist_url() {
-    let transport = sample_transport(
-        "gemini_cli",
-        "gemini:generate_content",
-        "https://cloudcode-pa.googleapis.com",
-        None,
-    );
-
-    assert_eq!(
-        build_transport_request_url(
-            &transport,
-            TransportRequestUrlParams {
-                provider_api_format: "gemini:generate_content",
-                mapped_model: Some("gemini-2.5-pro"),
-                upstream_is_stream: false,
-                request_query: Some("key=blocked&beta=true&foo=bar"),
-                kiro_api_region: None,
-                api_operation: None,
-            },
-        )
-        .as_deref(),
-        Some("https://cloudcode-pa.googleapis.com/v1internal:generateContent?foo=bar")
-    );
-}
-
-#[test]
-fn gemini_cli_stream_generate_content_uses_v1internal_code_assist_url() {
-    let transport = sample_transport(
-        "gemini_cli",
-        "gemini:generate_content",
-        "https://cloudcode-pa.googleapis.com",
-        None,
-    );
-
-    assert_eq!(
-        build_transport_request_url(
-            &transport,
-            TransportRequestUrlParams {
-                provider_api_format: "gemini:generate_content",
-                mapped_model: Some("gemini-2.5-pro"),
-                upstream_is_stream: true,
-                request_query: Some("foo=bar"),
-                kiro_api_region: None,
-                api_operation: None,
-            },
-        )
-        .as_deref(),
-        Some(
-            "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse&foo=bar"
-        )
-    );
-}
-
-#[test]
 fn vertex_gemini_embedding_batch_request_uses_vertex_predict_endpoint() {
     let mut transport = sample_transport(
         "vertex_ai",
@@ -448,7 +394,7 @@ fn memories_url_respects_operation_templates_and_rejects_incompatible_paths() {
         Some("/native/responses"),
     );
     assert!(build_transport_request_url(&incompatible, params).is_none());
-    for provider in ["kiro", "grok", "antigravity", "gemini_cli"] {
+    for provider in ["kiro", "antigravity"] {
         let private = sample_transport(provider, "openai:responses", "https://example.com", None);
         assert!(
             build_transport_request_url(&private, params).is_none(),
@@ -847,33 +793,32 @@ fn messages_create_normalizes_complete_custom_count_tokens_path() {
 
 #[test]
 fn private_anthropic_adapters_reject_count_tokens_even_when_config_claims_support() {
-    for provider_type in ["kiro", "grok"] {
-        let mut transport = sample_transport(
-            provider_type,
-            "claude:messages",
-            "https://private.example",
-            None,
-        );
-        transport.endpoint.config = Some(json!({
-            "anthropic": {
-                "supported_operations": ["messages", "count_tokens"],
-                "count_tokens_path": "/v1/messages/count_tokens"
-            }
-        }));
+    let provider_type = "kiro";
+    let mut transport = sample_transport(
+        provider_type,
+        "claude:messages",
+        "https://private.example",
+        None,
+    );
+    transport.endpoint.config = Some(json!({
+        "anthropic": {
+            "supported_operations": ["messages", "count_tokens"],
+            "count_tokens_path": "/v1/messages/count_tokens"
+        }
+    }));
 
-        assert!(build_transport_request_url(
-            &transport,
-            TransportRequestUrlParams {
-                provider_api_format: "claude:messages",
-                mapped_model: Some("claude-sonnet-4"),
-                upstream_is_stream: false,
-                request_query: None,
-                kiro_api_region: Some("us-east-1"),
-                api_operation: Some(ApiOperation::ClaudeCountTokens),
-            },
-        )
-        .is_none());
-    }
+    assert!(build_transport_request_url(
+        &transport,
+        TransportRequestUrlParams {
+            provider_api_format: "claude:messages",
+            mapped_model: Some("claude-sonnet-4"),
+            upstream_is_stream: false,
+            request_query: None,
+            kiro_api_region: Some("us-east-1"),
+            api_operation: Some(ApiOperation::ClaudeCountTokens),
+        },
+    )
+    .is_none());
 }
 
 #[test]

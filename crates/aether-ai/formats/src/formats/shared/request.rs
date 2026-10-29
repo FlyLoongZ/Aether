@@ -235,11 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn does_not_force_streaming_for_gemini_cli_generate_content() {
-        assert!(!force_upstream_streaming_for_provider(
-            "gemini_cli",
-            "gemini:generate_content"
-        ));
+    fn does_not_force_streaming_for_gemini_generate_content() {
         assert!(!force_upstream_streaming_for_provider(
             "google",
             "gemini:generate_content"

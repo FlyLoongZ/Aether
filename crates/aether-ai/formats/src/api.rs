@@ -250,9 +250,8 @@ pub use crate::formats::{
             normalize_openai_image_quality, normalize_openai_image_request,
             normalize_openai_image_request_with_options, openai_image_operation_from_path,
             project_codex_openai_image_api_request_body, project_openai_image_api_request_body,
-            resolve_requested_openai_image_model_for_request,
-            NormalizedOpenAiImageRequest, OpenAiImageNormalizeOptions, OpenAiImageOperation,
-            OpenAiImageResponseFormat,
+            resolve_requested_openai_image_model_for_request, NormalizedOpenAiImageRequest,
+            OpenAiImageNormalizeOptions, OpenAiImageOperation, OpenAiImageResponseFormat,
         },
         spec::{
             resolve_stream_spec as resolve_local_image_stream_spec,

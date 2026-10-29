@@ -1994,202 +1994,6 @@ async fn gateway_prefers_status_snapshot_antigravity_quota_over_stale_metadata()
 }
 
 #[tokio::test]
-async fn gateway_renders_gemini_cli_account_quota_from_status_snapshot() {
-    let mut provider = sample_provider("provider-gemini-cli", "gemini_cli", 10)
-        .with_transport_fields(
-            true,
-            false,
-            true,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(json!({
-                "pool_advanced": {
-                    "enabled": true,
-                    "skip_exhausted_accounts": true
-                }
-            })),
-        );
-    provider.provider_type = "gemini_cli".to_string();
-
-    let mut key = sample_key(
-        "key-gemini-cli-snapshot",
-        "provider-gemini-cli",
-        "gemini:generate_content",
-        "oauth-placeholder",
-    );
-    key.name = "gemini cli snapshot".to_string();
-    key.auth_type = "oauth".to_string();
-    key.upstream_metadata = Some(json!({
-        "gemini_cli": {
-            "quota_by_model": {
-                "gemini-2.5-pro": {
-                    "is_exhausted": false
-                }
-            }
-        }
-    }));
-    key.status_snapshot = Some(json!({
-        "quota": {
-            "version": 2,
-            "provider_type": "gemini_cli",
-            "code": "cooldown",
-            "label": "冷却中",
-            "reason": serde_json::Value::Null,
-            "freshness": "fresh",
-            "source": "background_refresh",
-            "observed_at": 1_775_553_285u64,
-            "exhausted": false,
-            "usage_ratio": 1.0,
-            "updated_at": 1_775_553_285u64,
-            "reset_seconds": serde_json::Value::Null,
-            "plan_type": serde_json::Value::Null,
-            "windows": [
-                {
-                    "code": "model:gemini-2.5-pro",
-                    "label": "Gemini 2.5 Pro",
-                    "scope": "model",
-                    "unit": "percent",
-                    "model": "gemini-2.5-pro",
-                    "used_ratio": 1.0,
-                    "remaining_ratio": 0.0,
-                    "reset_at": serde_json::Value::Null,
-                    "reset_seconds": serde_json::Value::Null,
-                    "is_exhausted": true
-                }
-            ]
-        }
-    }));
-
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        Vec::new(),
-        vec![key],
-    ));
-    let state = AppState::new()
-        .expect("gateway should build")
-        .with_data_state_for_tests(GatewayDataState::with_provider_catalog_reader_for_tests(
-            provider_catalog_repository,
-        ));
-
-    let response = local_admin_pool_response(
-        &state,
-        http::Method::GET,
-        "/api/admin/pool/provider-gemini-cli/keys?page=1&page_size=50&status=all",
-        None,
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = serde_json::from_slice(
-        &to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body should read"),
-    )
-    .expect("json body should parse");
-    let keys = payload["keys"].as_array().expect("keys should be array");
-
-    assert_eq!(keys[0]["scheduling_status"], json!("available"));
-    assert_eq!(keys[0]["quota_updated_at"], json!(1_775_553_285u64));
-    assert_eq!(keys[0]["account_quota"], json!("Gemini 2.5 Pro 冷却中"));
-}
-
-#[tokio::test]
-async fn gateway_prefers_gemini_cli_account_credits_over_model_quota_text() {
-    let mut provider = sample_provider("provider-gemini-cli", "gemini_cli", 10)
-        .with_transport_fields(
-            true,
-            false,
-            true,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(json!({
-                "pool_advanced": {
-                    "enabled": true,
-                    "skip_exhausted_accounts": true
-                }
-            })),
-        );
-    provider.provider_type = "gemini_cli".to_string();
-
-    let mut key = sample_key(
-        "key-gemini-cli-credits",
-        "provider-gemini-cli",
-        "gemini:generate_content",
-        "oauth-placeholder",
-    );
-    key.name = "gemini cli credits".to_string();
-    key.auth_type = "oauth".to_string();
-    key.status_snapshot = Some(json!({
-        "quota": {
-            "version": 2,
-            "provider_type": "gemini_cli",
-            "code": "ok",
-            "freshness": "fresh",
-            "source": "report_effect",
-            "observed_at": 1_775_553_285u64,
-            "exhausted": false,
-            "usage_ratio": 0.25,
-            "updated_at": 1_775_553_285u64,
-            "plan_type": "g1-pro-tier",
-            "credits": {
-                "remaining": 123.5,
-                "consumed": 7.0,
-                "has_credits": true
-            },
-            "windows": [
-                {
-                    "code": "model:gemini-2.5-pro",
-                    "label": "Gemini 2.5 Pro",
-                    "scope": "model",
-                    "unit": "percent",
-                    "model": "gemini-2.5-pro",
-                    "used_ratio": 0.25,
-                    "remaining_ratio": 0.75,
-                    "is_exhausted": false
-                }
-            ]
-        }
-    }));
-
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        Vec::new(),
-        vec![key],
-    ));
-    let state = AppState::new()
-        .expect("gateway should build")
-        .with_data_state_for_tests(GatewayDataState::with_provider_catalog_reader_for_tests(
-            provider_catalog_repository,
-        ));
-
-    let response = local_admin_pool_response(
-        &state,
-        http::Method::GET,
-        "/api/admin/pool/provider-gemini-cli/keys?page=1&page_size=50&status=all",
-        None,
-    )
-    .await;
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = serde_json::from_slice(
-        &to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("body should read"),
-    )
-    .expect("json body should parse");
-    let keys = payload["keys"].as_array().expect("keys should be array");
-
-    assert_eq!(keys[0]["scheduling_status"], json!("available"));
-    assert_eq!(keys[0]["account_quota"], json!("AI Credits 剩余 123.5"));
-}
-
-#[tokio::test]
 async fn gateway_formats_codex_quota_countdown_from_reset_after_seconds() {
     let mut provider = sample_provider("provider-codex", "codex", 10).with_transport_fields(
         true,
@@ -3941,11 +3745,11 @@ async fn gateway_batch_updates_shared_pool_key_configuration() {
 
 #[tokio::test]
 async fn gateway_preserves_inherited_fixed_oauth_mismatch_formats_on_batch_update() {
-    let mut provider = sample_provider("provider-gemini-cli", "gemini_cli", 10);
-    provider.provider_type = "gemini_cli".to_string();
+    let mut provider = sample_provider("provider-antigravity", "antigravity", 10);
+    provider.provider_type = "antigravity".to_string();
     let mut key = sample_key(
-        "key-gemini-cli-a",
-        "provider-gemini-cli",
+        "key-antigravity-a",
+        "provider-antigravity",
         "gemini:generate_content",
         "oauth-placeholder",
     );
@@ -3968,9 +3772,9 @@ async fn gateway_preserves_inherited_fixed_oauth_mismatch_formats_on_batch_updat
     let response = local_admin_pool_response(
         &state,
         http::Method::PATCH,
-        "/api/admin/pool/provider-gemini-cli/keys/batch-update",
+        "/api/admin/pool/provider-antigravity/keys/batch-update",
         Some(json!({
-            "key_ids": ["key-gemini-cli-a"],
+            "key_ids": ["key-antigravity-a"],
             "patch": {
                 "api_formats": ["openai:responses"],
                 "internal_priority": 9
@@ -3981,7 +3785,7 @@ async fn gateway_preserves_inherited_fixed_oauth_mismatch_formats_on_batch_updat
     assert_eq!(response.status(), StatusCode::OK);
 
     let stored = provider_catalog_repository
-        .list_keys_by_ids(&["key-gemini-cli-a".to_string()])
+        .list_keys_by_ids(&["key-antigravity-a".to_string()])
         .await
         .expect("key should load");
     assert_eq!(stored[0].api_formats, None);

@@ -77,12 +77,6 @@ fn select_provider_oauth_runtime_endpoint(
                 .trim()
                 .eq_ignore_ascii_case("claude:messages")
         }),
-        "gemini_cli" => matching_endpoint(endpoints, include_inactive, |endpoint| {
-            endpoint
-                .api_format
-                .trim()
-                .eq_ignore_ascii_case("gemini:generate_content")
-        }),
         "vertex_ai" => matching_endpoint(endpoints, include_inactive, |endpoint| {
             endpoint
                 .api_format

@@ -445,20 +445,13 @@ pub fn endpoint_supports_rust_models_fetch(api_format: &str) -> bool {
 pub fn provider_type_uses_preset_models(provider_type: &str) -> bool {
     matches!(
         provider_type.trim().to_ascii_lowercase().as_str(),
-        "claude_code" | "gemini_cli" | "xai"
+        "claude_code" | "xai"
     )
 }
 
 #[rustfmt::skip]
 pub fn preset_models_for_provider(provider_type: &str) -> Option<Vec<Value>> {
     let models = match provider_type.trim().to_ascii_lowercase().as_str() {
-        "gemini_cli" => vec![
-            preset_model("gemini-2.5-pro", "google", "Gemini 2.5 Pro", "gemini:generate_content"),
-            preset_model("gemini-2.5-flash", "google", "Gemini 2.5 Flash", "gemini:generate_content"),
-            preset_model("gemini-3-pro-preview", "google", "Gemini 3 Pro Preview", "gemini:generate_content"),
-            preset_model("gemini-3-flash-preview", "google", "Gemini 3 Flash Preview", "gemini:generate_content"),
-            preset_model("gemini-3.1-pro-preview", "google", "Gemini 3.1 Pro Preview", "gemini:generate_content"),
-        ],
         "kiro" => vec![
             preset_model("auto", "kiro", "Auto", "claude:messages"),
             preset_model("claude-opus-4.7", "anthropic", "Claude Opus 4.7", "claude:messages"),
@@ -942,23 +935,6 @@ fn model_id_from_openai_like_item(item: &Value) -> Option<String> {
             .filter(|value| !value.is_empty())
             .map(|value| value.trim_start_matches("models/").to_string())
     })
-}
-
-fn collect_cached_model_ids(models: &[Value]) -> Vec<String> {
-    let mut ids = Vec::new();
-    for model in models {
-        let Some(model_id) = codex_model_identity(model).or_else(|| {
-            model
-                .get("id")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-        }) else {
-            continue;
-        };
-        ids.push(model_id.to_string());
-    }
-    ids
 }
 
 fn split_url_query(base_url: &str) -> (&str, Option<&str>) {

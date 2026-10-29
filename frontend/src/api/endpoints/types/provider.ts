@@ -421,56 +421,6 @@ export interface XaiUpstreamMetadata {
   period_type?: string
 }
 
-export interface GeminiCliTierMetadata {
-  id?: string | null
-  tierType?: string | null
-  name?: string | null
-  displayName?: string | null
-  availableCredits?: number | string | null
-  remainingCredits?: number | string | null
-  consumedCredits?: number | string | null
-  totalCredits?: number | string | null
-  unlimited?: boolean | null
-  hasCredits?: boolean | null
-}
-
-export interface GeminiCliCreditsMetadata {
-  remaining?: number | string | null
-  remainingCredits?: number | string | null
-  available?: number | string | null
-  availableCredits?: number | string | null
-  balance?: number | string | null
-  consumed?: number | string | null
-  consumedCredits?: number | string | null
-  total?: number | string | null
-  totalCredits?: number | string | null
-  has_credits?: boolean | null
-  unlimited?: boolean | null
-  trace_id?: string | null
-  traceId?: string | null
-  updated_at?: number | string | null
-}
-
-export interface GeminiCliModelQuota {
-  remaining_fraction?: number | string | null
-  used_percent?: number | string | null
-  remaining?: number | string | null
-  total?: number | string | null
-  reset_at?: number | string | null
-  display_name?: string | null
-  is_exhausted?: boolean | null
-}
-
-export interface GeminiCliUpstreamMetadata {
-  updated_at?: number | string | null
-  plan_type?: string | null
-  project_id?: string | null
-  paidTier?: GeminiCliTierMetadata | string | null
-  currentTier?: GeminiCliTierMetadata | string | null
-  credits?: GeminiCliCreditsMetadata | null
-  quota_by_model?: Record<string, GeminiCliModelQuota> | null
-}
-
 export interface ClaudeCodeUpstreamMetadata {
   updated_at?: number
   five_hour_used_percent?: number
@@ -489,7 +439,6 @@ export interface UpstreamMetadata {
   claude_code?: ClaudeCodeUpstreamMetadata
   antigravity?: AntigravityUpstreamMetadata
   kiro?: KiroUpstreamMetadata
-  gemini_cli?: GeminiCliUpstreamMetadata
   xai?: XaiUpstreamMetadata
 }
 
@@ -729,7 +678,7 @@ export interface HealthRelatedMonitorResponse {
   related_providers: HealthRelatedMonitor[]
 }
 
-export type ProviderType = 'custom' | 'claude_code' | 'codex' | 'gemini_cli' | 'antigravity' | 'kiro' | 'xai' | 'vertex_ai'
+export type ProviderType = 'custom' | 'claude_code' | 'codex' | 'antigravity' | 'kiro' | 'xai' | 'vertex_ai'
 
 export interface ClaudeCodeAdvancedConfig {
   // 会话数量控制：null/undefined 表示不限制

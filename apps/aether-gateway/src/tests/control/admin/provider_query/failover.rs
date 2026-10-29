@@ -619,438 +619,6 @@ async fn gateway_handles_non_kiro_multi_model_failover_locally_impl() {
 }
 
 #[test]
-fn gateway_handles_openai_responses_test_model_failover_locally() {
-    run_provider_query_test(
-        "gateway_handles_openai_responses_test_model_failover_locally",
-        gateway_handles_openai_responses_test_model_failover_locally_impl,
-    );
-}
-
-async fn gateway_handles_openai_responses_test_model_failover_locally_impl() {
-    let execution_runtime = Router::new().route(
-        "/v1/execute/sync",
-        any(move |Json(plan): Json<ExecutionPlan>| async move {
-            assert_eq!(plan.provider_id, "provider-openai");
-            assert_eq!(plan.endpoint_id, "endpoint-openai-cli");
-            assert_eq!(plan.key_id, "key-openai-cli");
-            assert_eq!(plan.provider_api_format, "openai:responses");
-            assert_eq!(plan.model_name.as_deref(), Some("gpt-5.4-mini"));
-            Json(json!({
-                "request_id": plan.request_id,
-                "candidate_id": plan.candidate_id,
-                "status_code": 200,
-                "headers": {
-                    "content-type": "application/json"
-                },
-                "body": {
-                    "json_body": {
-                        "id": "chatcmpl-openai-cli-failover",
-                        "choices": [{
-                            "message": {
-                                "role": "assistant",
-                                "content": "OpenAI Responses failover path succeeded"
-                            }
-                        }]
-                    }
-                },
-                "telemetry": {
-                    "elapsed_ms": 15
-                }
-            }))
-        }),
-    );
-
-    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
-    let mut provider = sample_provider("provider-openai", "OpenAI", 10);
-    provider.provider_type = "openai".to_string();
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        vec![sample_endpoint(
-            "endpoint-openai-cli",
-            "provider-openai",
-            "openai:responses",
-            "https://api.openai.example/v1",
-        )],
-        vec![sample_bound_key(
-            "key-openai-cli",
-            "provider-openai",
-            "openai:responses",
-            "sk-test-cli",
-        )],
-    ));
-
-    let gateway = build_router_with_state(
-        build_state_with_execution_runtime_override(execution_runtime_url)
-            .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
-                provider_catalog_repository,
-                DEV_FERNET_KEY.to_string(),
-            )),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{gateway_url}/api/admin/provider-query/test-model-failover"
-        ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .json(&json!({
-            "provider_id": "provider-openai",
-            "failover_models": ["gpt-5.4-mini"],
-            "api_format": "openai:responses"
-        }))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["success"], json!(true));
-    assert_eq!(payload["total_attempts"], json!(1));
-    assert_eq!(
-        payload["data"]["response"]["choices"][0]["message"]["content"],
-        json!("OpenAI Responses failover path succeeded")
-    );
-
-    gateway_handle.abort();
-    execution_runtime_handle.abort();
-}
-
-#[test]
-fn gateway_handles_claude_cli_test_model_failover_locally() {
-    run_provider_query_test(
-        "gateway_handles_claude_cli_test_model_failover_locally",
-        gateway_handles_claude_cli_test_model_failover_locally_impl,
-    );
-}
-
-async fn gateway_handles_claude_cli_test_model_failover_locally_impl() {
-    let execution_runtime = Router::new().route(
-        "/v1/execute/sync",
-        any(move |Json(plan): Json<ExecutionPlan>| async move {
-            assert_eq!(plan.provider_id, "provider-claude");
-            assert_eq!(plan.endpoint_id, "endpoint-claude-cli");
-            assert_eq!(plan.key_id, "key-claude-cli");
-            assert_eq!(plan.provider_api_format, "claude:messages");
-            assert_eq!(plan.model_name.as_deref(), Some("claude-sonnet-4-5"));
-            Json(json!({
-                "request_id": plan.request_id,
-                "candidate_id": plan.candidate_id,
-                "status_code": 200,
-                "headers": {
-                    "content-type": "application/json"
-                },
-                "body": {
-                    "json_body": {
-                        "id": "chatcmpl-claude-cli-failover",
-                        "choices": [{
-                            "message": {
-                                "role": "assistant",
-                                "content": "Claude CLI failover path succeeded"
-                            }
-                        }]
-                    }
-                },
-                "telemetry": {
-                    "elapsed_ms": 16
-                }
-            }))
-        }),
-    );
-
-    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
-    let mut provider = sample_provider("provider-claude", "Claude", 10);
-    provider.provider_type = "anthropic".to_string();
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        vec![sample_endpoint(
-            "endpoint-claude-cli",
-            "provider-claude",
-            "claude:messages",
-            "https://api.anthropic.example/v1",
-        )],
-        vec![sample_bound_key(
-            "key-claude-cli",
-            "provider-claude",
-            "claude:messages",
-            "sk-test-claude-cli",
-        )],
-    ));
-
-    let gateway = build_router_with_state(
-        build_state_with_execution_runtime_override(execution_runtime_url)
-            .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
-                provider_catalog_repository,
-                DEV_FERNET_KEY.to_string(),
-            )),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{gateway_url}/api/admin/provider-query/test-model-failover"
-        ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .json(&json!({
-            "provider_id": "provider-claude",
-            "failover_models": ["claude-sonnet-4-5"],
-            "api_format": "claude:messages"
-        }))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["success"], json!(true));
-    assert_eq!(payload["total_attempts"], json!(1));
-    assert_eq!(
-        payload["data"]["response"]["choices"][0]["message"]["content"],
-        json!("Claude CLI failover path succeeded")
-    );
-
-    gateway_handle.abort();
-    execution_runtime_handle.abort();
-}
-
-#[test]
-fn gateway_handles_gemini_cli_test_model_failover_locally() {
-    run_provider_query_test(
-        "gateway_handles_gemini_cli_test_model_failover_locally",
-        gateway_handles_gemini_cli_test_model_failover_locally_impl,
-    );
-}
-
-async fn gateway_handles_gemini_cli_test_model_failover_locally_impl() {
-    let execution_runtime = Router::new().route(
-        "/v1/execute/sync",
-        any(move |Json(plan): Json<ExecutionPlan>| async move {
-            assert_eq!(plan.provider_id, "provider-gemini");
-            assert_eq!(plan.endpoint_id, "endpoint-gemini-cli");
-            assert_eq!(plan.key_id, "key-gemini-cli");
-            assert_eq!(plan.provider_api_format, "gemini:generate_content");
-            assert_eq!(plan.model_name.as_deref(), Some("gemini-2.5-pro"));
-            Json(json!({
-                "request_id": plan.request_id,
-                "candidate_id": plan.candidate_id,
-                "status_code": 200,
-                "headers": {
-                    "content-type": "application/json"
-                },
-                "body": {
-                    "json_body": {
-                        "id": "chatcmpl-gemini-cli-failover",
-                        "choices": [{
-                            "message": {
-                                "role": "assistant",
-                                "content": "Gemini CLI failover path succeeded"
-                            }
-                        }]
-                    }
-                },
-                "telemetry": {
-                    "elapsed_ms": 23
-                }
-            }))
-        }),
-    );
-
-    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
-    let mut provider = sample_provider("provider-gemini", "Gemini", 10);
-    provider.provider_type = "google".to_string();
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        vec![sample_endpoint(
-            "endpoint-gemini-cli",
-            "provider-gemini",
-            "gemini:generate_content",
-            "https://generativelanguage.googleapis.com",
-        )],
-        vec![sample_bound_key(
-            "key-gemini-cli",
-            "provider-gemini",
-            "gemini:generate_content",
-            "sk-test-gemini-cli",
-        )],
-    ));
-
-    let gateway = build_router_with_state(
-        build_state_with_execution_runtime_override(execution_runtime_url)
-            .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
-                provider_catalog_repository,
-                DEV_FERNET_KEY.to_string(),
-            )),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{gateway_url}/api/admin/provider-query/test-model-failover"
-        ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .json(&json!({
-            "provider_id": "provider-gemini",
-            "failover_models": ["gemini-2.5-pro"],
-            "api_format": "gemini:generate_content"
-        }))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["success"], json!(true));
-    assert_eq!(payload["total_attempts"], json!(1));
-    assert_eq!(
-        payload["data"]["response"]["choices"][0]["message"]["content"],
-        json!("Gemini CLI failover path succeeded")
-    );
-
-    gateway_handle.abort();
-    execution_runtime_handle.abort();
-}
-
-#[test]
-fn gateway_unwraps_gemini_cli_v1internal_response_for_failover_model_test() {
-    run_provider_query_test(
-        "gateway_unwraps_gemini_cli_v1internal_response_for_failover_model_test",
-        gateway_unwraps_gemini_cli_v1internal_response_for_failover_model_test_impl,
-    );
-}
-
-async fn gateway_unwraps_gemini_cli_v1internal_response_for_failover_model_test_impl() {
-    let execution_runtime = Router::new().route(
-        "/v1/execute/sync",
-        any(move |Json(plan): Json<ExecutionPlan>| async move {
-            assert_eq!(plan.provider_id, "provider-gemini-cli");
-            assert_eq!(plan.endpoint_id, "endpoint-gemini-cli");
-            assert_eq!(plan.key_id, "key-gemini-cli");
-            assert_eq!(plan.provider_api_format, "gemini:generate_content");
-            assert!(!plan.stream);
-            assert_eq!(
-                plan.url,
-                "https://cloudcode-pa.googleapis.com/v1internal:generateContent"
-            );
-            assert_eq!(
-                plan.body.json_body.as_ref().unwrap()["project"],
-                json!("project-1")
-            );
-            assert_eq!(
-                plan.body.json_body.as_ref().unwrap()["model"],
-                json!("gemini-3-flash-preview")
-            );
-            Json(json!({
-                "request_id": plan.request_id,
-                "candidate_id": plan.candidate_id,
-                "status_code": 200,
-                "headers": {
-                    "content-type": "application/json"
-                },
-                "body": {
-                    "json_body": {
-                        "response": {
-                            "candidates": [{
-                                "content": {
-                                    "parts": [{"text":"Gemini CLI v1internal failover response"}],
-                                    "role": "model"
-                                },
-                                "finishReason": "STOP",
-                                "index": 0
-                            }],
-                            "modelVersion": "gemini-3-flash-preview",
-                            "usageMetadata": {
-                                "promptTokenCount": 2,
-                                "candidatesTokenCount": 5,
-                                "totalTokenCount": 7
-                            }
-                        },
-                        "remainingCredits": 123,
-                        "consumedCredits": 1,
-                        "traceId": "trace-gemini-cli-1"
-                    }
-                },
-                "telemetry": {
-                    "elapsed_ms": 23
-                }
-            }))
-        }),
-    );
-
-    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
-    let mut provider = sample_provider("provider-gemini-cli", "Gemini CLI", 10);
-    provider.provider_type = "gemini_cli".to_string();
-    let mut key = sample_bound_key(
-        "key-gemini-cli",
-        "provider-gemini-cli",
-        "gemini:generate_content",
-        "cached-gemini-cli-token",
-    );
-    key.auth_type = "oauth".to_string();
-    key.encrypted_auth_config = Some(sample_bound_auth_config(
-        "provider-gemini-cli",
-        "key-gemini-cli",
-        r#"{"provider_type":"gemini_cli","project_id":"project-1"}"#,
-    ));
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        vec![sample_endpoint(
-            "endpoint-gemini-cli",
-            "provider-gemini-cli",
-            "gemini:generate_content",
-            "https://cloudcode-pa.googleapis.com",
-        )],
-        vec![key],
-    ));
-
-    let gateway = build_router_with_state(
-        build_state_with_execution_runtime_override(execution_runtime_url)
-            .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
-                provider_catalog_repository,
-                DEV_FERNET_KEY.to_string(),
-            )),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{gateway_url}/api/admin/provider-query/test-model-failover"
-        ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .json(&json!({
-            "provider_id": "provider-gemini-cli",
-            "failover_models": ["gemini-3-flash-preview"],
-            "api_format": "gemini:generate_content"
-        }))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["success"], json!(true));
-    assert_eq!(payload["total_attempts"], json!(1));
-    assert_eq!(
-        payload["data"]["response"]["candidates"][0]["content"]["parts"][0]["text"],
-        json!("Gemini CLI v1internal failover response")
-    );
-    assert!(payload["data"]["response"].get("response").is_none());
-
-    gateway_handle.abort();
-    execution_runtime_handle.abort();
-}
-
-#[test]
 fn gateway_handles_admin_provider_query_test_model_failover_with_single_model_name_alias() {
     run_provider_query_test(
         "gateway_handles_admin_provider_query_test_model_failover_with_single_model_name_alias",
@@ -1472,6 +1040,206 @@ async fn gateway_retries_non_kiro_failover_after_success_status_without_body_imp
         json!("HTTP 200: Provider returned no model-test response body")
     );
     assert_eq!(attempts[1]["status"], json!("success"));
+
+    gateway_handle.abort();
+    execution_runtime_handle.abort();
+}
+
+#[test]
+fn gateway_handles_claude_cli_test_model_failover_locally() {
+    run_provider_query_test(
+        "gateway_handles_claude_cli_test_model_failover_locally",
+        gateway_handles_claude_cli_test_model_failover_locally_impl,
+    );
+}
+
+async fn gateway_handles_claude_cli_test_model_failover_locally_impl() {
+    let execution_runtime = Router::new().route(
+        "/v1/execute/sync",
+        any(move |Json(plan): Json<ExecutionPlan>| async move {
+            assert_eq!(plan.provider_id, "provider-claude");
+            assert_eq!(plan.endpoint_id, "endpoint-claude-cli");
+            assert_eq!(plan.key_id, "key-claude-cli");
+            assert_eq!(plan.provider_api_format, "claude:messages");
+            assert_eq!(plan.model_name.as_deref(), Some("claude-sonnet-4-5"));
+            Json(json!({
+                "request_id": plan.request_id,
+                "candidate_id": plan.candidate_id,
+                "status_code": 200,
+                "headers": {
+                    "content-type": "application/json"
+                },
+                "body": {
+                    "json_body": {
+                        "id": "chatcmpl-claude-cli-failover",
+                        "choices": [{
+                            "message": {
+                                "role": "assistant",
+                                "content": "Claude CLI failover path succeeded"
+                            }
+                        }]
+                    }
+                },
+                "telemetry": {
+                    "elapsed_ms": 16
+                }
+            }))
+        }),
+    );
+
+    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
+    let mut provider = sample_provider("provider-claude", "Claude", 10);
+    provider.provider_type = "anthropic".to_string();
+    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
+        vec![provider],
+        vec![sample_endpoint(
+            "endpoint-claude-cli",
+            "provider-claude",
+            "claude:messages",
+            "https://api.anthropic.example/v1",
+        )],
+        vec![sample_bound_key(
+            "key-claude-cli",
+            "provider-claude",
+            "claude:messages",
+            "sk-test-claude-cli",
+        )],
+    ));
+
+    let gateway = build_router_with_state(
+        build_state_with_execution_runtime_override(execution_runtime_url)
+            .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
+                provider_catalog_repository,
+                DEV_FERNET_KEY.to_string(),
+            )),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let response = reqwest::Client::new()
+        .post(format!(
+            "{gateway_url}/api/admin/provider-query/test-model-failover"
+        ))
+        .header(GATEWAY_HEADER, "rust-phase3b")
+        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
+        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
+        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .json(&json!({
+            "provider_id": "provider-claude",
+            "failover_models": ["claude-sonnet-4-5"],
+            "api_format": "claude:messages"
+        }))
+        .send()
+        .await
+        .expect("request should succeed");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload: serde_json::Value = response.json().await.expect("json body should parse");
+    assert_eq!(payload["success"], json!(true));
+    assert_eq!(payload["total_attempts"], json!(1));
+    assert_eq!(
+        payload["data"]["response"]["choices"][0]["message"]["content"],
+        json!("Claude CLI failover path succeeded")
+    );
+
+    gateway_handle.abort();
+    execution_runtime_handle.abort();
+}
+
+#[test]
+fn gateway_handles_openai_responses_test_model_failover_locally() {
+    run_provider_query_test(
+        "gateway_handles_openai_responses_test_model_failover_locally",
+        gateway_handles_openai_responses_test_model_failover_locally_impl,
+    );
+}
+
+async fn gateway_handles_openai_responses_test_model_failover_locally_impl() {
+    let execution_runtime = Router::new().route(
+        "/v1/execute/sync",
+        any(move |Json(plan): Json<ExecutionPlan>| async move {
+            assert_eq!(plan.provider_id, "provider-openai");
+            assert_eq!(plan.endpoint_id, "endpoint-openai-cli");
+            assert_eq!(plan.key_id, "key-openai-cli");
+            assert_eq!(plan.provider_api_format, "openai:responses");
+            assert_eq!(plan.model_name.as_deref(), Some("gpt-5.4-mini"));
+            Json(json!({
+                "request_id": plan.request_id,
+                "candidate_id": plan.candidate_id,
+                "status_code": 200,
+                "headers": {
+                    "content-type": "application/json"
+                },
+                "body": {
+                    "json_body": {
+                        "id": "chatcmpl-openai-cli-failover",
+                        "choices": [{
+                            "message": {
+                                "role": "assistant",
+                                "content": "OpenAI Responses failover path succeeded"
+                            }
+                        }]
+                    }
+                },
+                "telemetry": {
+                    "elapsed_ms": 15
+                }
+            }))
+        }),
+    );
+
+    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
+    let mut provider = sample_provider("provider-openai", "OpenAI", 10);
+    provider.provider_type = "openai".to_string();
+    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
+        vec![provider],
+        vec![sample_endpoint(
+            "endpoint-openai-cli",
+            "provider-openai",
+            "openai:responses",
+            "https://api.openai.example/v1",
+        )],
+        vec![sample_bound_key(
+            "key-openai-cli",
+            "provider-openai",
+            "openai:responses",
+            "sk-test-cli",
+        )],
+    ));
+
+    let gateway = build_router_with_state(
+        build_state_with_execution_runtime_override(execution_runtime_url)
+            .with_data_state_for_tests(GatewayDataState::with_provider_transport_reader_for_tests(
+                provider_catalog_repository,
+                DEV_FERNET_KEY.to_string(),
+            )),
+    );
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let response = reqwest::Client::new()
+        .post(format!(
+            "{gateway_url}/api/admin/provider-query/test-model-failover"
+        ))
+        .header(GATEWAY_HEADER, "rust-phase3b")
+        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
+        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
+        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .json(&json!({
+            "provider_id": "provider-openai",
+            "failover_models": ["gpt-5.4-mini"],
+            "api_format": "openai:responses"
+        }))
+        .send()
+        .await
+        .expect("request should succeed");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let payload: serde_json::Value = response.json().await.expect("json body should parse");
+    assert_eq!(payload["success"], json!(true));
+    assert_eq!(payload["total_attempts"], json!(1));
+    assert_eq!(
+        payload["data"]["response"]["choices"][0]["message"]["content"],
+        json!("OpenAI Responses failover path succeeded")
+    );
 
     gateway_handle.abort();
     execution_runtime_handle.abort();

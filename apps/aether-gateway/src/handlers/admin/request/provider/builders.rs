@@ -328,24 +328,6 @@ impl<'a> AdminAppState<'a> {
         let (fields, payload) = patch.into_parts();
         let provider_type = provider.provider_type.trim().to_ascii_lowercase();
 
-        if provider_type == "gemini_cli"
-            && [
-                "base_url",
-                "custom_path",
-                "header_rules",
-                "body_rules",
-                "max_retries",
-                "is_active",
-                "config",
-                "proxy",
-                "format_acceptance_config",
-            ]
-            .iter()
-            .any(|field| fields.contains(field))
-        {
-            return Err("Gemini CLI Endpoint 由系统固定管理，不允许修改".to_string());
-        }
-
         let mut update_fields = admin_provider_endpoints_pure::AdminProviderEndpointUpdateFields {
             base_url: payload.base_url,
             custom_path: payload.custom_path,

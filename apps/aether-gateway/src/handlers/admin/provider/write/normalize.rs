@@ -3,10 +3,11 @@ use std::collections::BTreeSet;
 pub(crate) fn normalize_provider_type_input(value: &str) -> Result<String, String> {
     let normalized = value.trim().to_ascii_lowercase();
     match normalized.as_str() {
-        "custom" | "claude_code" | "kiro" | "codex" | "gemini_cli"
-        | "antigravity" | "vertex_ai" | "xai" => Ok(normalized),
+        "custom" | "claude_code" | "kiro" | "codex" | "antigravity" | "vertex_ai" | "xai" => {
+            Ok(normalized)
+        }
         _ => Err(
-            "provider_type 仅支持 custom / claude_code / kiro / codex / gemini_cli / antigravity / vertex_ai / xai"
+            "provider_type 仅支持 custom / claude_code / kiro / codex / antigravity / vertex_ai / xai"
                 .to_string(),
         ),
     }

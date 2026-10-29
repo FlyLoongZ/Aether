@@ -16,19 +16,15 @@ pub use presets::{
 pub use provider::{ProviderPoolAdapter, ProviderPoolMemberInput};
 pub use providers::{
     build_antigravity_pool_quota_request, build_antigravity_pool_quota_summary_request,
-    build_claude_code_pool_quota_request,
-    build_codex_pool_quota_request, build_codex_pool_reset_credit_consume_request,
-    build_codex_pool_reset_credits_request, build_gemini_cli_pool_quota_request,
-    build_kiro_pool_quota_request, build_xai_pool_billing_request,
-    build_xai_pool_user_request,
-    AntigravityProviderPoolAdapter, ClaudeCodeProviderPoolAdapter,
-    CodexProviderPoolAdapter, DefaultProviderPoolAdapter, GeminiCliProviderPoolAdapter,
-    KiroPoolQuotaAuthInput, KiroProviderPoolAdapter,
+    build_claude_code_pool_quota_request, build_codex_pool_quota_request,
+    build_codex_pool_reset_credit_consume_request, build_codex_pool_reset_credits_request,
+    build_kiro_pool_quota_request, build_xai_pool_billing_request, build_xai_pool_user_request,
+    AntigravityProviderPoolAdapter, ClaudeCodeProviderPoolAdapter, CodexProviderPoolAdapter,
+    DefaultProviderPoolAdapter, KiroPoolQuotaAuthInput, KiroProviderPoolAdapter,
     UnsupportedQuotaProviderPoolAdapter, XaiProviderPoolAdapter,
     ANTIGRAVITY_FETCH_AVAILABLE_MODELS_PATH, ANTIGRAVITY_RETRIEVE_USER_QUOTA_SUMMARY_PATH,
     CODEX_WHAM_RESET_CREDITS_CONSUME_URL, CODEX_WHAM_RESET_CREDITS_URL, CODEX_WHAM_USAGE_URL,
-    GEMINI_CLI_RETRIEVE_USER_QUOTA_PATH, GEMINI_CLI_USER_AGENT, KIRO_USAGE_LIMITS_PATH,
-    KIRO_USAGE_SDK_VERSION, XAI_BILLING_PATH, XAI_USER_PATH,
+    KIRO_USAGE_LIMITS_PATH, KIRO_USAGE_SDK_VERSION, XAI_BILLING_PATH, XAI_USER_PATH,
 };
 pub use quota::{
     provider_pool_codex_metadata_has_account_quota, provider_pool_key_account_quota_exhausted,

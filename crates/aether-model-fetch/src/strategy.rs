@@ -22,15 +22,13 @@ use serde_json::{json, Value};
 use crate::logic::{
     aggregate_models_for_cache, codex_model_identity, extract_error_message,
     merge_codex_models_preserving_cards, parse_codex_models_response_page,
-    parse_models_response_page, preset_models_for_provider,
-    project_codex_models_for_legacy_cache,
+    parse_models_response_page, preset_models_for_provider, project_codex_models_for_legacy_cache,
 };
 use crate::transport::{
     build_antigravity_fetch_available_models_plan, build_antigravity_load_code_assist_plan,
-    build_gemini_cli_load_code_assist_plan, build_kiro_list_available_models_plan,
+    build_kiro_list_available_models_plan,
     build_standard_models_fetch_execution_plan_for_client_version,
-    build_vertex_models_fetch_execution_plan,
-    ModelFetchTransportRuntime,
+    build_vertex_models_fetch_execution_plan, ModelFetchTransportRuntime,
 };
 
 const ANTIGRAVITY_SANDBOX_BASE_URL: &str = "https://daily-cloudcode-pa.sandbox.googleapis.com";
@@ -103,7 +101,6 @@ pub enum ModelFetchStrategyKind {
     StandardTransport,
     Vertex,
     Antigravity,
-    GeminiCliPreset,
     Kiro,
 }
 
@@ -196,13 +193,6 @@ fn select_model_fetch_strategy(
                 preset_models: None,
             });
         }
-        if provider_type == "gemini_cli" {
-            return Ok(SelectedModelFetchStrategy {
-                provider_type,
-                kind: ModelFetchStrategyKind::GeminiCliPreset,
-                preset_models: Some(models),
-            });
-        }
         return Ok(SelectedModelFetchStrategy {
             provider_type,
             kind: ModelFetchStrategyKind::PresetCatalog,
@@ -260,14 +250,6 @@ async fn execute_model_fetch_strategy(
         ModelFetchStrategyKind::Vertex => fetch_vertex_models(runtime, transports).await,
         ModelFetchStrategyKind::Antigravity => {
             fetch_antigravity_models(runtime, first_transport).await
-        }
-        ModelFetchStrategyKind::GeminiCliPreset => {
-            fetch_gemini_cli_models(
-                runtime,
-                first_transport,
-                strategy.preset_models.unwrap_or_default(),
-            )
-            .await
         }
         ModelFetchStrategyKind::Kiro => fetch_kiro_models(runtime, first_transport).await,
     }
@@ -587,50 +569,6 @@ fn attach_antigravity_project_metadata(mut metadata: Value, project_id: &str) ->
         .entry("updated_at".to_string())
         .or_insert_with(|| Value::from(now_unix_secs()));
     metadata
-}
-
-async fn fetch_gemini_cli_models(
-    runtime: &(impl ModelFetchTransportRuntime + ?Sized),
-    transport: &GatewayProviderTransportSnapshot,
-    models: Vec<Value>,
-) -> Result<ModelsFetchOutcome, String> {
-    let mut provider_meta = serde_json::Map::new();
-    provider_meta.insert("updated_at".to_string(), Value::from(now_unix_secs()));
-
-    if let Ok(plan) = build_gemini_cli_load_code_assist_plan(runtime, transport).await {
-        if let Ok(result) = runtime.execute_model_fetch_execution_plan(&plan).await {
-            if (200..300).contains(&result.status_code) {
-                if let Ok(body_json) = execution_result_json_body_allow_empty(&result) {
-                    if let Some(plan_type) = extract_gemini_cli_plan_type(&body_json) {
-                        provider_meta.insert("plan_type".to_string(), Value::String(plan_type));
-                    }
-                    for key in ["paidTier", "currentTier"] {
-                        if let Some(value) = extract_gemini_cli_tier_metadata(&body_json, key) {
-                            provider_meta.insert(key.to_string(), value);
-                        }
-                    }
-                    if let Some(project_id) = extract_cloud_ai_companion_project_id(&body_json)
-                        .or_else(|| {
-                            transport_auth_config(transport)
-                                .and_then(|value| value.get("project_id").cloned())
-                                .and_then(|value| value.as_str().map(ToOwned::to_owned))
-                        })
-                    {
-                        provider_meta.insert("project_id".to_string(), Value::String(project_id));
-                    }
-                }
-            }
-        }
-    }
-
-    let upstream_metadata = (!provider_meta.is_empty()).then(|| {
-        Value::Object(
-            [("gemini_cli".to_string(), Value::Object(provider_meta))]
-                .into_iter()
-                .collect(),
-        )
-    });
-    Ok(build_success_outcome(models, upstream_metadata, true))
 }
 
 async fn fetch_kiro_models(
@@ -1867,70 +1805,6 @@ fn json_string(value: Option<&Value>) -> Option<String> {
 
 fn normalize_api_format(value: &str) -> String {
     value.trim().to_ascii_lowercase()
-}
-
-fn extract_gemini_cli_plan_type(body: &Value) -> Option<String> {
-    for key in ["paidTier", "currentTier"] {
-        let Some(tier) = body.get(key) else {
-            continue;
-        };
-        let raw = if let Some(value) = tier.as_str() {
-            value.trim().to_string()
-        } else if let Some(value) = tier
-            .as_object()
-            .and_then(|object| object.get("id"))
-            .and_then(Value::as_str)
-        {
-            value.trim().to_string()
-        } else if let Some(value) = tier
-            .as_object()
-            .and_then(|object| object.get("tierType"))
-            .and_then(Value::as_str)
-        {
-            value.trim().to_string()
-        } else {
-            continue;
-        };
-        let normalized = raw.trim().to_ascii_lowercase();
-        if !normalized.is_empty() {
-            return Some(normalized);
-        }
-    }
-    None
-}
-
-fn extract_gemini_cli_tier_metadata(body: &Value, key: &str) -> Option<Value> {
-    let tier = body.get(key)?;
-    if let Some(text) = tier
-        .as_str()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        return Some(Value::String(text.to_string()));
-    }
-
-    let object = tier.as_object()?;
-    let mut out = serde_json::Map::new();
-    for field in [
-        "id",
-        "tierType",
-        "name",
-        "displayName",
-        "availableCredits",
-        "remainingCredits",
-        "consumedCredits",
-        "totalCredits",
-        "unlimited",
-        "hasCredits",
-    ] {
-        let Some(value) = object.get(field) else {
-            continue;
-        };
-        if value.is_string() || value.is_number() || value.is_boolean() || value.is_null() {
-            out.insert(field.to_string(), value.clone());
-        }
-    }
-    (!out.is_empty()).then_some(Value::Object(out))
 }
 
 fn extract_cloud_ai_companion_project_id(body: &Value) -> Option<String> {

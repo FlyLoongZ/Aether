@@ -125,19 +125,6 @@ fn classifies_streaming_and_report_kind_for_provider_private_transports() {
     assert!(behavior.is_antigravity);
     assert!(behavior.upstream_is_stream);
     assert_eq!(behavior.report_kind, "gemini_chat_sync_finalize");
-
-    let gemini_cli = sample_transport("gemini_cli");
-    let behavior = classify_same_format_provider_request_behavior(
-        &gemini_cli,
-        SameFormatProviderRequestBehaviorParams {
-            require_streaming: false,
-            provider_api_format: "gemini:generate_content",
-            report_kind: "gemini_cli_sync_success",
-        },
-    );
-
-    assert!(!behavior.upstream_is_stream);
-    assert_eq!(behavior.report_kind, "gemini_cli_sync_finalize");
 }
 
 #[test]
@@ -464,34 +451,6 @@ fn same_format_behavior_preserves_hard_streaming_constraint() {
     );
 
     assert!(behavior.upstream_is_stream);
-}
-
-#[test]
-fn same_format_behavior_preserves_gemini_cli_streaming_requests() {
-    let mut gemini_cli = sample_transport("gemini_cli");
-    gemini_cli.endpoint.config = Some(json!({
-        "upstream_stream_policy": "force_non_stream"
-    }));
-
-    let stream_behavior = classify_same_format_provider_request_behavior(
-        &gemini_cli,
-        SameFormatProviderRequestBehaviorParams {
-            require_streaming: true,
-            provider_api_format: "gemini:generate_content",
-            report_kind: "gemini_cli_stream_success",
-        },
-    );
-    assert!(stream_behavior.upstream_is_stream);
-
-    let sync_behavior = classify_same_format_provider_request_behavior(
-        &gemini_cli,
-        SameFormatProviderRequestBehaviorParams {
-            require_streaming: false,
-            provider_api_format: "gemini:generate_content",
-            report_kind: "gemini_cli_sync_success",
-        },
-    );
-    assert!(!sync_behavior.upstream_is_stream);
 }
 
 #[test]
@@ -1748,7 +1707,6 @@ fn builds_same_format_headers_with_auth_and_stream_accept() {
         header_rules: None,
         behavior: SameFormatProviderRequestBehavior {
             is_antigravity: false,
-            is_gemini_cli: false,
             is_claude_code: false,
             is_claude_code_transport: false,
             anthropic_compatibility_profile: AnthropicCompatibilityProfile::NativeTransparent,
@@ -1805,7 +1763,6 @@ fn same_format_headers_cannot_restore_credentials_or_internal_headers() {
     }
     let behavior = SameFormatProviderRequestBehavior {
         is_antigravity: false,
-        is_gemini_cli: false,
         is_claude_code: false,
         is_claude_code_transport: false,
         anthropic_compatibility_profile: AnthropicCompatibilityProfile::NativeTransparent,

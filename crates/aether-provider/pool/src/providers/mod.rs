@@ -2,7 +2,6 @@ pub mod antigravity;
 pub mod claude_code;
 pub mod codex;
 pub mod default;
-pub mod gemini_cli;
 pub mod kiro;
 pub mod unsupported;
 pub mod xai;
@@ -23,10 +22,6 @@ pub use codex::{
     CODEX_WHAM_RESET_CREDITS_URL, CODEX_WHAM_USAGE_URL,
 };
 pub use default::DefaultProviderPoolAdapter;
-pub use gemini_cli::GeminiCliProviderPoolAdapter;
-pub use gemini_cli::{
-    build_gemini_cli_pool_quota_request, GEMINI_CLI_RETRIEVE_USER_QUOTA_PATH, GEMINI_CLI_USER_AGENT,
-};
 pub use kiro::KiroProviderPoolAdapter;
 pub use kiro::{
     build_kiro_pool_quota_request, KiroPoolQuotaAuthInput, KIRO_USAGE_LIMITS_PATH,
