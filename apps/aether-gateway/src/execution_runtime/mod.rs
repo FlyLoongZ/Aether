@@ -3,7 +3,6 @@ use serde_json::{Map, Value};
 pub(crate) mod admission;
 pub(crate) mod attempt_cancellation;
 pub(crate) mod attempt_lifecycle;
-mod chatgpt_web_image;
 mod client_response_headers;
 mod constants;
 mod exhaustion_fallback;
@@ -29,7 +28,6 @@ mod windsurf;
 pub(crate) use self::admission::{
     acquire_upstream_execution_gate, UpstreamExecutionGateProvider, UPSTREAM_EXECUTION_GATE_NAME,
 };
-pub(crate) use self::chatgpt_web_image::maybe_execute_chatgpt_web_image_sync;
 pub(crate) use self::client_response_headers::{
     prepare_client_response_headers, prepare_final_client_headers, ClientResponseBodyMode,
     ResponseHeaderContext,

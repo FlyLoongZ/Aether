@@ -473,57 +473,6 @@ fn quota_window_reset_seconds(
         .map(|(observed_at, reset_at)| reset_at.saturating_sub(observed_at))
 }
 
-fn chatgpt_web_image_quota_limit(
-    metadata: &Map<String, Value>,
-    remaining: Option<f64>,
-) -> Option<f64> {
-    let explicit_limit = metadata
-        .get("image_quota_total")
-        .and_then(admin_provider_quota_pure::coerce_json_f64)
-        .filter(|value| *value > 0.0);
-    let plan_type = metadata
-        .get("plan_type")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_ascii_lowercase());
-    let limit_source = metadata
-        .get("image_quota_limit_source")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    if let Some(limit) = explicit_limit {
-        if !chatgpt_web_image_quota_limit_is_legacy_free_default(
-            limit,
-            limit_source,
-            plan_type.as_deref(),
-            remaining,
-        ) {
-            return Some(limit);
-        }
-    }
-
-    remaining.filter(|value| *value > 0.0)
-}
-
-fn chatgpt_web_image_quota_limit_is_legacy_free_default(
-    limit: f64,
-    limit_source: Option<&str>,
-    plan_type: Option<&str>,
-    remaining: Option<f64>,
-) -> bool {
-    let plan_type_is_free = plan_type
-        .map(str::trim)
-        .is_some_and(|value| value.eq_ignore_ascii_case("free"));
-    if !plan_type_is_free || limit_source.is_some() {
-        return false;
-    }
-    if (limit - 25.0).abs() > f64::EPSILON {
-        return false;
-    }
-    remaining.is_none_or(|value| value < limit)
-}
-
 fn model_quota_window_snapshot(
     model_name: &str,
     item: &Map<String, Value>,
@@ -1500,98 +1449,6 @@ fn build_xai_quota_status_snapshot(
     }))
 }
 
-fn build_chatgpt_web_quota_status_snapshot(
-    upstream_metadata: Option<&Value>,
-    source: &str,
-) -> Option<Value> {
-    let metadata = provider_quota_metadata_bucket(upstream_metadata, "chatgpt_web")?;
-    let observed_at_unix_secs = provider_quota_timestamp_unix_secs(metadata.get("updated_at"));
-    let remaining = metadata
-        .get("image_quota_remaining")
-        .and_then(admin_provider_quota_pure::coerce_json_f64);
-    let limit = chatgpt_web_image_quota_limit(metadata, remaining);
-    let used = metadata
-        .get("image_quota_used")
-        .and_then(admin_provider_quota_pure::coerce_json_f64)
-        .or_else(|| {
-            limit
-                .zip(remaining)
-                .map(|(limit, remaining)| (limit - remaining).max(0.0))
-        });
-    let reset_at = provider_quota_timestamp_unix_secs(metadata.get("image_quota_reset_at"));
-    let reset_seconds = quota_window_reset_seconds(observed_at_unix_secs, reset_at);
-    let plan_type = metadata
-        .get("plan_type")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_ascii_lowercase());
-    let image_blocked = metadata
-        .get("image_quota_blocked")
-        .and_then(admin_provider_quota_pure::coerce_json_bool)
-        == Some(true);
-    let usage_ratio = used
-        .zip(limit)
-        .and_then(|(used, limit)| (limit > 0.0).then_some((used / limit).clamp(0.0, 1.0)));
-    let remaining_ratio = remaining.zip(limit).and_then(|(remaining, limit)| {
-        (limit > 0.0).then_some((remaining / limit).clamp(0.0, 1.0))
-    });
-
-    let mut windows = Vec::new();
-    if remaining.is_some()
-        || limit.is_some()
-        || used.is_some()
-        || reset_at.is_some()
-        || image_blocked
-    {
-        windows.push(json!({
-            "code": "image_gen",
-            "label": "生图",
-            "scope": "account",
-            "unit": "count",
-            "used_ratio": usage_ratio,
-            "remaining_ratio": remaining_ratio,
-            "used_value": used,
-            "remaining_value": remaining,
-            "limit_value": limit,
-            "reset_at": reset_at,
-            "reset_seconds": reset_seconds,
-            "is_exhausted": image_blocked || remaining.is_some_and(|value| value <= 0.0),
-        }));
-    }
-
-    if windows.is_empty() && plan_type.is_none() && observed_at_unix_secs.is_none() {
-        return None;
-    }
-
-    let exhausted = image_blocked
-        || remaining.is_some_and(|value| value <= 0.0)
-        || usage_ratio.is_some_and(|value| value >= 1.0 - 1e-6);
-    let reason = if exhausted {
-        Some("生图额度已耗尽")
-    } else {
-        None
-    };
-
-    Some(json!({
-        "version": 2,
-        "provider_type": "chatgpt_web",
-        "code": if exhausted { "exhausted" } else { "ok" },
-        "label": if exhausted { Some("额度耗尽") } else { None::<&str> },
-        "reason": reason,
-        "freshness": "fresh",
-        "source": source,
-        "observed_at": observed_at_unix_secs,
-        "exhausted": exhausted,
-        "usage_ratio": usage_ratio,
-        "updated_at": observed_at_unix_secs,
-        "reset_at": reset_at,
-        "reset_seconds": reset_seconds,
-        "plan_type": plan_type,
-        "windows": windows,
-    }))
-}
-
 fn windsurf_percent_quota_window_snapshot(
     metadata: &Map<String, Value>,
     code: &str,
@@ -2473,7 +2330,6 @@ pub(crate) fn sync_provider_key_quota_status_snapshot(
         "codex" => build_codex_quota_status_snapshot(upstream_metadata, source),
         "kiro" => build_kiro_quota_status_snapshot(upstream_metadata, source),
         "xai" => build_xai_quota_status_snapshot(upstream_metadata, source),
-        "chatgpt_web" => build_chatgpt_web_quota_status_snapshot(upstream_metadata, source),
         "windsurf" => build_windsurf_quota_status_snapshot(upstream_metadata, source),
         "antigravity" => build_antigravity_quota_status_snapshot(upstream_metadata, source),
         "grok" => build_grok_quota_status_snapshot(upstream_metadata, source),
@@ -2639,7 +2495,7 @@ fn windsurf_quota_snapshot_has_stale_cooldown(quota_snapshot: &Map<String, Value
 /// 调度侧、文本侧使用同一口径，避免三处状态互相矛盾。
 ///
 /// 覆盖所有带重置时间的提供商窗口（codex/kiro/xai/grok/antigravity/
-/// gemini_cli/chatgpt_web/windsurf 等）：比例（used_ratio/remaining_ratio）、
+/// gemini_cli/windsurf 等）：比例（used_ratio/remaining_ratio）、
 /// 数值（used_value/remaining_value）与窗口级耗尽标记会一起恢复为“已重置”。
 fn normalize_expired_quota_windows(snapshot: &mut serde_json::Map<String, Value>) {
     let Some(quota) = snapshot.get_mut("quota").and_then(Value::as_object_mut) else {

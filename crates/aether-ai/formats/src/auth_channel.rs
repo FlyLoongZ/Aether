@@ -5,7 +5,7 @@
 //! encoded as a Rust enum keyed by provider (`ProviderApiFormatInheritance`),
 //! as a `match` in the in-memory candidate repository, and as five inline
 //! `OR` chains inside the candidate-selection SQL. They had already drifted:
-//! `vertex_ai`, `windsurf` and `xai` accept `api_key` credentials at the
+//! `vertex_ai` and `xai` accept `api_key` credentials at the
 //! transport layer and in the candidate gate, but the inheritance enum did not
 //! list `api_key`, so a key of that kind evaluated to "serves no formats". That
 //! answer is not only wrong on a catalog page — the key create/update handlers
@@ -41,14 +41,7 @@ const CODEX_FORMATS: &[&str] = &[
     "openai:image",
     "codex:live",
 ];
-const CHATGPT_WEB_FORMATS: &[&str] = &["openai:image"];
 const CLAUDE_MESSAGES: &[&str] = &["claude:messages"];
-const GROK_FORMATS: &[&str] = &[
-    "openai:chat",
-    "openai:responses",
-    "claude:messages",
-    "openai:image",
-];
 const XAI_FORMATS: &[&str] = &[
     "openai:responses",
     "openai:responses:compact",
@@ -56,7 +49,6 @@ const XAI_FORMATS: &[&str] = &[
     "openai:video",
 ];
 const GEMINI_GENERATE_CONTENT: &[&str] = &["gemini:generate_content"];
-const WINDSURF_FORMATS: &[&str] = &["openai:chat"];
 const VERTEX_FORMATS: &[&str] = &["gemini:generate_content", "gemini:embedding"];
 
 const fn channel(
@@ -76,20 +68,13 @@ const fn channel(
 /// The table. One row per (provider type, credential channel).
 pub const PROVIDER_AUTH_CHANNELS: &[ProviderAuthChannel] = &[
     channel("codex", "oauth", false, CODEX_FORMATS),
-    channel("chatgpt_web", "oauth", false, CHATGPT_WEB_FORMATS),
-    channel("chatgpt_web", "bearer", false, CHATGPT_WEB_FORMATS),
     channel("claude_code", "oauth", false, CLAUDE_MESSAGES),
     channel("kiro", "oauth", false, CLAUDE_MESSAGES),
     channel("kiro", "bearer", true, CLAUDE_MESSAGES),
-    channel("grok", "oauth", false, GROK_FORMATS),
     channel("xai", "oauth", false, XAI_FORMATS),
     channel("xai", "bearer", false, XAI_FORMATS),
     channel("xai", "api_key", false, XAI_FORMATS),
-    channel("gemini_cli", "oauth", false, GEMINI_GENERATE_CONTENT),
     channel("antigravity", "oauth", false, GEMINI_GENERATE_CONTENT),
-    channel("windsurf", "oauth", false, WINDSURF_FORMATS),
-    channel("windsurf", "bearer", false, WINDSURF_FORMATS),
-    channel("windsurf", "api_key", false, WINDSURF_FORMATS),
     channel("vertex_ai", "api_key", false, VERTEX_FORMATS),
     channel("vertex_ai", "service_account", false, VERTEX_FORMATS),
     channel("vertex_ai", "vertex_ai", false, VERTEX_FORMATS),
@@ -203,26 +188,17 @@ mod tests {
 
     #[test]
     fn response_permissions_do_not_expand_channel_capabilities() {
-        for (provider, format) in [
-            ("grok", "openai:responses:compact"),
-            ("grok", "openai:search"),
-            ("xai", "openai:search"),
-        ] {
-            assert!(!provider_auth_channel_allows(
-                provider, "oauth", false, format
-            ));
-        }
+        assert!(!provider_auth_channel_allows(
+            "xai",
+            "oauth",
+            false,
+            "openai:search"
+        ));
         assert!(provider_auth_channel_allows(
             "codex",
             "oauth",
             false,
             "/v1/responses/compact"
-        ));
-        assert!(provider_auth_channel_allows(
-            "grok",
-            "oauth",
-            false,
-            "/v1/responses"
         ));
     }
 
@@ -262,11 +238,10 @@ mod tests {
 
     #[test]
     fn an_api_key_channel_inherits_its_provider_formats() {
-        // The three providers that had drifted: the transport and the candidate
+        // The providers that had drifted: the transport and the candidate
         // gate accepted `api_key` while the inheritance rule did not.
         for (provider_type, api_format) in [
             ("vertex_ai", "gemini:generate_content"),
-            ("windsurf", "openai:chat"),
             ("xai", "openai:responses"),
         ] {
             assert!(
@@ -285,24 +260,6 @@ mod tests {
         assert!(!provider_accepts_auth_type("kiro", "bearer", false));
         assert!(provider_accepts_auth_type("kiro", "bearer", true));
         assert!(provider_accepts_auth_type("kiro", "oauth", false));
-    }
-
-    #[test]
-    fn a_listed_provider_rejects_channels_the_table_does_not_have() {
-        // chatgpt_web accepts bearer, not api_key; the table must not widen it.
-        assert!(!provider_accepts_auth_type("chatgpt_web", "api_key", false));
-        assert!(!provider_auth_channel_allows(
-            "chatgpt_web",
-            "api_key",
-            false,
-            "openai:image"
-        ));
-        assert!(provider_auth_channel_allows(
-            "chatgpt_web",
-            "bearer",
-            false,
-            "openai:image"
-        ));
     }
 
     #[test]

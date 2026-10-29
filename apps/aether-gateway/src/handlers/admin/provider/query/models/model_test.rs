@@ -1232,7 +1232,7 @@ fn provider_query_pool_catalog_key_quota_exhausted(
     quota_snapshot: Option<&Map<String, Value>>,
 ) -> bool {
     match provider_type.trim().to_ascii_lowercase().as_str() {
-        "codex" | "kiro" | "chatgpt_web" => {
+        "codex" | "kiro" => {
             admin_provider_pool_pure::admin_pool_key_account_quota_exhausted(key, provider_type)
         }
         _ => quota_snapshot
@@ -2122,29 +2122,12 @@ fn provider_query_build_openai_image_test_request_body_for_route(
     })
 }
 
-fn provider_query_chatgpt_web_image_internal_url(base_url: &str) -> String {
-    let base_url = base_url.trim().trim_end_matches('/');
-    let base_url = if base_url.is_empty() {
-        "https://chatgpt.com"
-    } else {
-        base_url
-    };
-    format!("{base_url}/__aether/chatgpt-web-image")
-}
-
 fn provider_query_openai_image_test_upstream_url(
     transport: &AdminGatewayProviderTransportSnapshot,
     request_path: Option<&str>,
     request_query: Option<&str>,
 ) -> String {
     if transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("chatgpt_web")
-    {
-        provider_query_chatgpt_web_image_internal_url(&transport.endpoint.base_url)
-    } else if transport
         .provider
         .provider_type
         .trim()
@@ -2303,11 +2286,6 @@ async fn provider_query_execute_openai_image_test_candidate(
         ));
     };
 
-    let is_chatgpt_web = transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("chatgpt_web");
     let is_grok = transport
         .provider
         .provider_type
@@ -2328,18 +2306,7 @@ async fn provider_query_execute_openai_image_test_candidate(
             .unwrap_or(false),
         false,
     );
-    let provider_request_body = if is_chatgpt_web {
-        Some(
-            match crate::ai_serving::build_chatgpt_web_image_request_body(
-                &parts,
-                &request_body,
-                None,
-            ) {
-                Ok(body) => body,
-                Err(err) => err.to_error_json(),
-            },
-        )
-    } else if is_codex {
+    let provider_request_body = if is_codex {
         crate::ai_serving::build_codex_openai_image_api_provider_request_body(
             &normalized_request,
             Some(candidate.effective_model.as_str()),
@@ -2419,9 +2386,7 @@ async fn provider_query_execute_openai_image_test_candidate(
             response_body: None,
         });
     };
-    if is_chatgpt_web {
-        request_headers.insert("x-aether-chatgpt-web-image".to_string(), "1".to_string());
-    } else if is_grok {
+    if is_grok {
     } else {
         crate::ai_serving::apply_codex_openai_special_headers(
             &mut request_headers,
@@ -2455,7 +2420,7 @@ async fn provider_query_execute_openai_image_test_candidate(
         .filter(|value| !value.is_empty())
         .unwrap_or(request_model.as_str())
         .to_string();
-    let image_request = if is_chatgpt_web || is_grok {
+    let image_request = if is_grok {
         provider_request_body.clone()
     } else {
         normalized_request.summary_json.clone()
@@ -2506,28 +2471,6 @@ async fn provider_query_execute_openai_image_test_candidate(
                 Some(&report_context),
             )
             .await?
-    } else if is_chatgpt_web {
-        let report_context = json!({
-            "client_api_format": "openai:image",
-            "provider_api_format": "openai:image",
-            "chatgpt_web_image": true,
-            "image_request": image_request.clone(),
-        });
-        match crate::execution_runtime::maybe_execute_chatgpt_web_image_sync(
-            state.app(),
-            &plan,
-            Some(&report_context),
-        )
-        .await
-        .map_err(|err| GatewayError::Internal(err.to_string()))?
-        {
-            Some(result) => result,
-            None => {
-                state
-                    .execute_execution_runtime_sync_plan(Some(trace_id), &plan)
-                    .await?
-            }
-        }
     } else {
         state
             .execute_execution_runtime_sync_plan(Some(trace_id), &plan)

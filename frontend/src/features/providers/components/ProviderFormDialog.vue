@@ -57,9 +57,6 @@
                   <SelectItem value="codex">
                     Codex
                   </SelectItem>
-                  <SelectItem value="chatgpt_web">
-                    ChatGPT Web
-                  </SelectItem>
                   <SelectItem value="gemini_cli">
                     Gemini CLI
                   </SelectItem>
@@ -92,9 +89,6 @@
                   </SelectItem>
                   <SelectItem value="codex">
                     Codex
-                  </SelectItem>
-                  <SelectItem value="chatgpt_web">
-                    ChatGPT Web
                   </SelectItem>
                   <SelectItem value="gemini_cli">
                     Gemini CLI

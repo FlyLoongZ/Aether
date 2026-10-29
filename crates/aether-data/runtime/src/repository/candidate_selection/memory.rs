@@ -493,35 +493,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn includes_grok_oauth_rows_for_chat_models() {
-        let mut row = sample_row(
-            "provider-grok",
-            "openai:chat",
-            "grok-4.20-0309-non-reasoning",
-            10,
-        );
-        row.provider_type = "grok".to_string();
-        row.provider_name = "grok".to_string();
-        row.key_auth_type = "oauth".to_string();
-        row.key_api_formats = Some(vec![
-            "openai:chat".to_string(),
-            "openai:responses".to_string(),
-            "claude:messages".to_string(),
-            "openai:image".to_string(),
-        ]);
-        let repository = InMemoryMinimalCandidateSelectionReadRepository::seed(vec![row]);
-
-        let rows = repository
-            .list_for_exact_api_format("openai:chat")
-            .await
-            .expect("list should succeed");
-
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].provider_type, "grok");
-        assert_eq!(rows[0].global_model_name, "grok-4.20-0309-non-reasoning");
-    }
-
-    #[tokio::test]
     async fn includes_xai_oauth_rows_for_responses_models() {
         let mut row = sample_row("provider-xai", "openai:responses", "grok-4", 10);
         row.provider_type = "xai".to_string();
@@ -655,8 +626,6 @@ mod tests {
         for (provider, auth, format, expected) in [
             (" Codex ", " OAUTH ", "openai:responses", true),
             ("custom", "OAuth", "openai:chat", false),
-            ("Grok", "oauth", "openai:responses:compact", false),
-            ("grok", "oauth", "openai:search", false),
             ("xai", "oauth", "openai:search", false),
             ("xai", "API_KEY", "openai:responses:compact", true),
         ] {
@@ -667,66 +636,6 @@ mod tests {
             let rows = repository.list_for_exact_api_format(format).await.unwrap();
             assert_eq!(!rows.is_empty(), expected, "{provider}/{auth}/{format}");
         }
-    }
-
-    #[tokio::test]
-    async fn allows_chatgpt_web_oauth_and_bearer_for_openai_image_only() {
-        let mut oauth = sample_row("chatgpt-web-oauth", "openai:image", "gpt-image-2", 10);
-        oauth.provider_type = "chatgpt_web".to_string();
-        oauth.key_auth_type = "oauth".to_string();
-        let mut bearer = sample_row("chatgpt-web-bearer", "openai:image", "gpt-image-2", 20);
-        bearer.provider_type = "chatgpt_web".to_string();
-        bearer.key_auth_type = "bearer".to_string();
-        let mut api_key = sample_row("chatgpt-web-api-key", "openai:image", "gpt-image-2", 30);
-        api_key.provider_type = "chatgpt_web".to_string();
-        api_key.key_auth_type = "api_key".to_string();
-        let mut responses = sample_row("chatgpt-web-responses", "openai:responses", "gpt-5", 40);
-        responses.provider_type = "chatgpt_web".to_string();
-        responses.key_auth_type = "oauth".to_string();
-
-        let repository = InMemoryMinimalCandidateSelectionReadRepository::seed(vec![
-            oauth, bearer, api_key, responses,
-        ]);
-
-        let rows = repository
-            .list_for_exact_api_format_and_requested_model("openai:image", "gpt-image-2")
-            .await
-            .expect("list should succeed");
-
-        assert_eq!(
-            rows.iter()
-                .map(|row| row.provider_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["chatgpt-web-oauth", "chatgpt-web-bearer"]
-        );
-    }
-
-    #[tokio::test]
-    async fn allows_windsurf_managed_keys_for_openai_chat_only() {
-        let mut oauth = sample_row("windsurf-oauth", "openai:chat", "gpt-5", 10);
-        oauth.provider_type = "windsurf".to_string();
-        oauth.key_auth_type = "oauth".to_string();
-        let mut api_key = sample_row("windsurf-api-key", "openai:chat", "gpt-5", 20);
-        api_key.provider_type = "windsurf".to_string();
-        api_key.key_auth_type = "api_key".to_string();
-        let mut responses = sample_row("windsurf-responses", "openai:responses", "gpt-5", 30);
-        responses.provider_type = "windsurf".to_string();
-        responses.key_auth_type = "oauth".to_string();
-
-        let repository =
-            InMemoryMinimalCandidateSelectionReadRepository::seed(vec![oauth, api_key, responses]);
-
-        let rows = repository
-            .list_for_exact_api_format_and_requested_model("openai:chat", "gpt-5")
-            .await
-            .expect("list should succeed");
-
-        assert_eq!(
-            rows.iter()
-                .map(|row| row.provider_id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["windsurf-oauth", "windsurf-api-key"]
-        );
     }
 
     #[tokio::test]

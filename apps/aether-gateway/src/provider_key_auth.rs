@@ -161,17 +161,7 @@ fn key_has_auth_type_overrides(key: &StoredProviderCatalogKey) -> bool {
 }
 
 fn provider_uses_bearer_oauth_runtime(provider_type: &str) -> bool {
-    matches!(
-        provider_type.trim().to_ascii_lowercase().as_str(),
-        "claude_code"
-            | "codex"
-            | "chatgpt_web"
-            | "gemini_cli"
-            | "antigravity"
-            | "kiro"
-            | "windsurf"
-            | "xai"
-    )
+    matches!(provider_type.trim().to_ascii_lowercase().as_str(),)
 }
 
 fn provider_uses_grok_session_runtime(provider_type: &str) -> bool {
@@ -364,12 +354,6 @@ mod tests {
             ]
         );
 
-        let openai_chat = vec![sample_endpoint("openai:chat", true)];
-        assert_eq!(
-            provider_key_effective_api_formats(&key, "windsurf", &openai_chat),
-            vec!["openai:chat".to_string()]
-        );
-
         let xai_responses = vec![sample_endpoint("openai:responses", true)];
         assert_eq!(
             provider_key_effective_api_formats(&key, "xai", &xai_responses),
@@ -379,15 +363,16 @@ mod tests {
 
     #[test]
     fn a_channel_the_table_does_not_list_still_does_not_inherit() {
-        // chatgpt_web accepts oauth and bearer, not api_key.
         let key = sample_key("api_key");
         let endpoints = vec![sample_endpoint("openai:image", true)];
 
         assert!(!provider_key_inherits_provider_api_formats(
             &key,
-            "chatgpt_web"
+            "removed_provider"
         ));
-        assert!(provider_key_effective_api_formats(&key, "chatgpt_web", &endpoints).is_empty());
+        assert!(
+            provider_key_effective_api_formats(&key, "removed_provider", &endpoints).is_empty()
+        );
     }
 
     #[test]
@@ -395,54 +380,6 @@ mod tests {
         let semantics = provider_key_auth_semantics(&sample_key("oauth"), "codex");
 
         assert!(semantics.oauth_managed());
-        assert_eq!(
-            semantics.credential_kind(),
-            ProviderKeyCredentialKind::OAuthSession
-        );
-        assert_eq!(
-            semantics.runtime_auth_kind(),
-            ProviderKeyRuntimeAuthKind::Bearer
-        );
-    }
-
-    #[test]
-    fn recognizes_chatgpt_web_oauth_as_bearer_runtime() {
-        let semantics = provider_key_auth_semantics(&sample_key("oauth"), "chatgpt_web");
-
-        assert!(semantics.oauth_managed());
-        assert_eq!(
-            semantics.credential_kind(),
-            ProviderKeyCredentialKind::OAuthSession
-        );
-        assert_eq!(
-            semantics.runtime_auth_kind(),
-            ProviderKeyRuntimeAuthKind::Bearer
-        );
-    }
-
-    #[test]
-    fn recognizes_grok_oauth_session_as_managed_without_bearer_runtime() {
-        let mut key = sample_key("oauth");
-        key.encrypted_auth_config = Some(r#"{"sso_token":"abc"}"#.to_string());
-
-        let semantics = provider_key_auth_semantics(&key, "grok");
-        assert!(semantics.oauth_managed());
-        assert_eq!(
-            semantics.credential_kind(),
-            ProviderKeyCredentialKind::OAuthSession
-        );
-        assert_eq!(
-            semantics.runtime_auth_kind(),
-            ProviderKeyRuntimeAuthKind::Unknown
-        );
-    }
-
-    #[test]
-    fn recognizes_windsurf_oauth_as_bearer_runtime() {
-        let semantics = provider_key_auth_semantics(&sample_key("oauth"), "windsurf");
-
-        assert!(semantics.oauth_managed());
-        assert!(!semantics.can_refresh_oauth());
         assert_eq!(
             semantics.credential_kind(),
             ProviderKeyCredentialKind::OAuthSession

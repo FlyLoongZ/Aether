@@ -97,7 +97,6 @@ define_candidate_diagnostic_categories!(
         "all_candidates_skipped",
         "cancelled",
         "candidate_list_empty",
-        "chatgpt_web_image_execution_unavailable",
         "client_delivery_failed",
         "connect_timeout",
         "control_fallback",

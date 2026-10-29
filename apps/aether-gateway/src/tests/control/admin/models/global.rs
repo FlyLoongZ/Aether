@@ -907,17 +907,16 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
     );
 
     let mut image_provider = sample_provider("provider-image", "image", 10);
-    image_provider.provider_type = "chatgpt_web".to_string();
+    image_provider.provider_type = "openai".to_string();
     let grok_provider = sample_provider("provider-grok", "grok2api", 20);
 
     let mut image_key = sample_bound_key(
         "key-image-routing",
         "provider-image",
-        "legacy:mismatch",
+        "openai:image",
         "sk-image-routing-1234",
     );
     image_key.name = "image-account".to_string();
-    image_key.auth_type = "oauth".to_string();
     image_key.allowed_models = Some(json!(["gpt-image-2"]));
 
     let mut grok_key = sample_bound_key(
@@ -936,7 +935,7 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
                 "endpoint-image",
                 "provider-image",
                 "openai:image",
-                "https://chatgpt.example",
+                "https://api.openai.example",
             ),
             sample_endpoint(
                 "endpoint-grok-chat",

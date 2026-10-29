@@ -87,7 +87,6 @@ mod tests {
         "codex",
         " Codex ",
         "claude_code",
-        "chatgpt_web",
         "gemini_cli",
         "antigravity",
         "grok",

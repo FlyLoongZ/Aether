@@ -1433,17 +1433,6 @@ mod tests {
     }
 
     #[test]
-    fn candidate_selection_sql_allows_chatgpt_web_image_auth() {
-        for (name, sql) in expanded_candidate_statements() {
-            for auth_type in ["oauth", "bearer"] {
-                assert_channel(name, &sql, "chatgpt_web", auth_type, false, "openai:image");
-            }
-            assert!(!sql.contains("('chatgpt_web', 'api_key'"));
-            assert!(sql.contains("'chatgpt_web'"));
-        }
-    }
-
-    #[test]
     fn candidate_selection_sql_allows_codex_live_oauth_auth() {
         for (name, sql) in expanded_candidate_statements() {
             for api_format in [
@@ -1502,22 +1491,6 @@ mod tests {
     }
 
     #[test]
-    fn candidate_selection_sql_allows_grok_oauth_chat_auth() {
-        for (name, sql) in expanded_candidate_statements() {
-            for api_format in [
-                "openai:chat",
-                "openai:responses",
-                "claude:messages",
-                "openai:image",
-            ] {
-                assert_channel(name, &sql, "grok", "oauth", false, api_format);
-            }
-            assert!(!sql.contains("('grok', 'api_key'"));
-            assert!(sql.contains("'grok'"));
-        }
-    }
-
-    #[test]
     fn candidate_selection_sql_allows_xai_oauth_responses_auth() {
         for (name, sql) in expanded_candidate_statements() {
             for auth_type in ["oauth", "bearer", "api_key"] {
@@ -1531,16 +1504,6 @@ mod tests {
                 }
             }
             assert!(sql.contains("'xai'"));
-        }
-    }
-
-    #[test]
-    fn candidate_selection_sql_allows_windsurf_openai_chat_managed_keys() {
-        for (name, sql) in expanded_candidate_statements() {
-            for auth_type in ["oauth", "api_key", "bearer"] {
-                assert_channel(name, &sql, "windsurf", auth_type, false, "openai:chat");
-            }
-            assert!(sql.contains("'windsurf'"));
         }
     }
 

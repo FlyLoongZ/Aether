@@ -220,7 +220,7 @@ mod tests {
             "codex:live"
         ));
 
-        for provider_type in ["openai", "custom", "chatgpt_web"] {
+        for provider_type in ["openai", "custom"] {
             assert!(!provider_model_mapping_api_format_covers(
                 provider_type,
                 "openai:responses",

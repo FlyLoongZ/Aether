@@ -513,7 +513,7 @@ fn apply_single_import_hints(
         }
         return;
     }
-    if !matches!(provider_type.as_str(), "codex" | "chatgpt_web" | "grok") {
+    if !matches!(provider_type.as_str(), "codex" | "grok") {
         return;
     }
 

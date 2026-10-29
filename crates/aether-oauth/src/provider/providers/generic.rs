@@ -99,20 +99,6 @@ pub const GENERIC_PROVIDER_OAUTH_TEMPLATES: &[GenericProviderOAuthTemplate] = &[
         include_scope_in_token_request: true,
     },
     GenericProviderOAuthTemplate {
-        provider_type: "chatgpt_web",
-        display_name: "ChatGPT Web",
-        authorize_url: "https://auth.openai.com/oauth/authorize",
-        token_url: "https://auth.openai.com/oauth/token",
-        client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
-        client_id_env: None,
-        client_secret_env: None,
-        scopes: &["openid", "email", "profile", "offline_access"],
-        redirect_uri: "http://localhost:1455/auth/callback",
-        use_pkce: true,
-        uses_json_payload: false,
-        include_scope_in_token_request: true,
-    },
-    GenericProviderOAuthTemplate {
         provider_type: "gemini_cli",
         display_name: "GeminiCli",
         authorize_url: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -806,7 +792,7 @@ fn enrich_generic_identity(
     }
     if !matches!(
         provider_type.trim().to_ascii_lowercase().as_str(),
-        "codex" | "chatgpt_web"
+        "codex"
     ) {
         return;
     }

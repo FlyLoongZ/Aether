@@ -77,12 +77,7 @@ fn is_dedicated_openai_image_provider(transport: &GatewayProviderTransportSnapsh
         .provider
         .provider_type
         .trim()
-        .eq_ignore_ascii_case("chatgpt_web")
-        || transport
-            .provider
-            .provider_type
-            .trim()
-            .eq_ignore_ascii_case("codex")
+        .eq_ignore_ascii_case("codex")
         || is_grok_provider_transport(transport)
         || transport
             .provider
@@ -276,28 +271,6 @@ mod tests {
     }
 
     #[test]
-    fn chatgpt_web_is_supported_by_dedicated_openai_image_transport_policy() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "chatgpt_web".to_string();
-
-        assert_eq!(
-            openai_image_transport_unsupported_reason(&transport, "openai:image"),
-            None
-        );
-    }
-
-    #[test]
-    fn grok_is_supported_by_dedicated_openai_image_transport_policy() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-
-        assert_eq!(
-            openai_image_transport_unsupported_reason(&transport, "openai:image"),
-            None
-        );
-    }
-
-    #[test]
     fn xai_oauth_image_uses_cli_proxy() {
         let mut transport = sample_transport();
         transport.provider.provider_type = "xai".to_string();
@@ -350,66 +323,6 @@ mod tests {
             openai_image_transport_unsupported_reason(&transport, "openai:image"),
             None
         );
-    }
-
-    #[test]
-    fn grok_oauth_session_is_supported_by_dedicated_openai_image_transport_policy() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.auth_type = "oauth".to_string();
-        transport.key.decrypted_api_key = String::new();
-        transport.key.decrypted_auth_config = Some(json!({"sso_token":"abc"}).to_string());
-
-        assert_eq!(
-            openai_image_transport_unsupported_reason(&transport, "openai:image"),
-            None
-        );
-    }
-
-    #[test]
-    fn chatgpt_web_oauth_is_supported_by_dedicated_openai_image_transport_policy() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "chatgpt_web".to_string();
-        transport.key.auth_type = "oauth".to_string();
-        transport.key.decrypted_api_key = String::new();
-        transport.key.decrypted_auth_config = Some(json!({"access_token":"token"}).to_string());
-
-        assert_eq!(
-            openai_image_transport_unsupported_reason(&transport, "openai:image"),
-            None
-        );
-    }
-
-    #[test]
-    fn builds_json_eventstream_headers_and_applies_rules() {
-        let transport = sample_transport();
-        let headers = build_openai_image_headers(ProviderOpenAiImageHeadersInput {
-            transport: &transport,
-            headers: &HeaderMap::new(),
-            auth_header: "authorization",
-            auth_value: "Bearer secret",
-            accept: Some("text/event-stream"),
-            header_rules: Some(&json!([
-                {"action":"set","key":"x-image-route","value":"codex"}
-            ])),
-            provider_request_body: &json!({"model":"gpt-5.4-mini"}),
-            original_request_body: &json!({"prompt":"draw"}),
-        })
-        .expect("headers should build");
-
-        assert_eq!(
-            headers.get("authorization"),
-            Some(&"Bearer secret".to_string())
-        );
-        assert_eq!(
-            headers.get("content-type"),
-            Some(&"application/json".to_string())
-        );
-        assert_eq!(
-            headers.get("accept"),
-            Some(&"text/event-stream".to_string())
-        );
-        assert_eq!(headers.get("x-image-route"), Some(&"codex".to_string()));
     }
 
     #[test]

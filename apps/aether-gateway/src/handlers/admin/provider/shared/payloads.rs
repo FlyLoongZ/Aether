@@ -309,7 +309,9 @@ pub(crate) type AdminProviderUpdatePatch = AdminTypedObjectPatch<AdminProviderUp
 pub(crate) const KIRO_USAGE_LIMITS_PATH: &str = "/getUsageLimits";
 pub(crate) const KIRO_USAGE_SDK_VERSION: &str = "1.0.0";
 pub(crate) const OAUTH_ACCOUNT_BLOCK_PREFIX: &str = "[ACCOUNT_BLOCK] ";
+#[cfg(test)]
 pub(crate) const OAUTH_REFRESH_FAILED_PREFIX: &str = "[REFRESH_FAILED] ";
+#[cfg(test)]
 pub(crate) const OAUTH_EXPIRED_PREFIX: &str = "[OAUTH_EXPIRED] ";
 
 #[derive(Debug, Deserialize)]

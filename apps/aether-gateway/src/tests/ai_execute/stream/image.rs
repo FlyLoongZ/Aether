@@ -683,11 +683,7 @@ fn image_bridge_candidate_row(
     provider_name: &str,
     provider_type: &str,
 ) -> StoredMinimalCandidateSelectionRow {
-    let key_auth_type = if provider_type == "chatgpt_web" {
-        "bearer"
-    } else {
-        "api_key"
-    };
+    let key_auth_type = "api_key";
     StoredMinimalCandidateSelectionRow {
         provider_id: format!("provider-{prefix}"),
         provider_name: provider_name.to_string(),
@@ -779,15 +775,8 @@ fn image_bridge_provider_catalog_endpoint(
     .expect("endpoint transport should build")
 }
 
-fn image_bridge_provider_catalog_key(
-    prefix: &str,
-    provider_type: &str,
-) -> StoredProviderCatalogKey {
-    let auth_type = if provider_type == "chatgpt_web" {
-        "bearer"
-    } else {
-        "api_key"
-    };
+fn image_bridge_provider_catalog_key(prefix: &str) -> StoredProviderCatalogKey {
+    let auth_type = "api_key";
     StoredProviderCatalogKey::new(
         format!("key-{prefix}"),
         format!("provider-{prefix}"),
@@ -841,7 +830,7 @@ async fn start_image_bridge_gateway(
             base_url,
         )],
         vec![image_bridge_provider_catalog_endpoint(prefix, base_url)],
-        vec![image_bridge_provider_catalog_key(prefix, provider_type)],
+        vec![image_bridge_provider_catalog_key(prefix)],
     ));
     let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
     let gateway_state = build_state_with_execution_runtime_override(execution_runtime_url)

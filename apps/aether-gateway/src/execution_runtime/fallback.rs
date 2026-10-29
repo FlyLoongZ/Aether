@@ -1347,53 +1347,5 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn report_context_failover_policy_does_not_override_provider_config() {
-        let result = ExecutionResult {
-            request_id: "req-1".to_string(),
-            candidate_id: None,
-            status_code: 429,
-            headers: Default::default(),
-            response_observation: None,
-            body: None,
-            telemetry: None,
-            error: None,
-        };
-        let local_report_context = serde_json::json!({
-            "chatgpt_web_image": true,
-            "candidate_index": 0,
-            "retry_index": 0,
-            "local_failover_policy": {
-                "stop_status_codes": [400, 401, 403, 429, 500, 502, 503, 504],
-                "error_stop_patterns": [
-                    {"pattern": ".*"}
-                ]
-            }
-        });
-        let state = build_state_with_provider_config(None);
-        let plan = sample_plan();
 
-        assert!(
-            should_retry_next_local_candidate_sync(
-                &state,
-                &plan,
-                "openai_image_sync",
-                Some(&local_report_context),
-                &result,
-                Some("{\"error\":{\"code\":\"chatgpt_web_image_execution_unavailable\"}}"),
-            )
-            .await
-        );
-        assert!(
-            !should_stop_local_candidate_failover_sync(
-                &state,
-                &plan,
-                "openai_image_sync",
-                Some(&local_report_context),
-                &result,
-                Some("{\"error\":{\"code\":\"chatgpt_web_image_execution_unavailable\"}}"),
-            )
-            .await
-        );
-    }
 }
