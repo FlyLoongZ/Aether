@@ -1,5 +1,5 @@
 use axum::{body::Body, http, response::Response};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde_json::{json, Value};
 use sha2::Sha256;
 
@@ -315,7 +315,7 @@ pub(super) async fn handle_stripe_webhook(
 mod tests {
     use super::{stripe_callback_projection, stripe_signature_matches_at};
     use crate::handlers::shared::stripe_amount_to_major;
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use serde_json::json;
     use sha2::Sha256;
 

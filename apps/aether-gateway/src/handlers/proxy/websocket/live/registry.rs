@@ -945,7 +945,7 @@ fn digest(domain: &[u8], components: &[&str]) -> String {
         digest.update((component.len() as u64).to_be_bytes());
         digest.update(component.as_bytes());
     }
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 fn now_unix_ms() -> u64 {

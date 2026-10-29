@@ -144,7 +144,7 @@ async fn referral_settings_validate_email_dependency_for_batch_single_and_module
 }
 
 fn sha256_hex(value: &str) -> String {
-    format!("{:x}", Sha256::digest(value.as_bytes()))
+    hex::encode(Sha256::digest(value.as_bytes()))
 }
 
 #[tokio::test]

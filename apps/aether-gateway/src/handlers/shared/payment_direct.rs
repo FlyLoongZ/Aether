@@ -1368,7 +1368,8 @@ fn wxpay_decrypt_resource(config: &DirectGatewayConfig, resource: &Value) -> Res
         .map_err(|_| "微信支付 api_v3_key 无效".to_string())?;
     let plaintext = cipher
         .decrypt(
-            Nonce::from_slice(nonce.as_bytes()),
+            <&Nonce<_>>::try_from(nonce.as_bytes())
+                .map_err(|_| "微信支付通知 resource.nonce 长度无效".to_string())?,
             Payload {
                 msg: &ciphertext,
                 aad: associated_data.as_bytes(),

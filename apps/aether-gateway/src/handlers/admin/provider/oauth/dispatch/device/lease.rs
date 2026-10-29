@@ -138,8 +138,8 @@ impl Drop for AdminProviderOAuthDevicePollLease {
 
 fn admin_provider_oauth_device_poll_lock_key(session_id: &str) -> String {
     format!(
-        "admin-provider-oauth-device-poll:sha256:{:x}",
-        Sha256::digest(session_id.as_bytes())
+        "admin-provider-oauth-device-poll:sha256:{}",
+        hex::encode(Sha256::digest(session_id.as_bytes()))
     )
 }
 

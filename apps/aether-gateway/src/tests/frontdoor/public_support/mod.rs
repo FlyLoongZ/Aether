@@ -119,7 +119,7 @@ fn canonicalize_test_json(value: &serde_json::Value) -> serde_json::Value {
 }
 
 fn build_test_payment_callback_signature(payload: &serde_json::Value, secret: &str) -> String {
-    use hmac::Mac;
+    use hmac::{KeyInit, Mac};
 
     let canonical = serde_json::to_string(&canonicalize_test_json(payload))
         .expect("payment callback payload should serialize");

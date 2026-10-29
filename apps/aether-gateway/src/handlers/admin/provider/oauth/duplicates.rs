@@ -105,8 +105,8 @@ fn codex_agent_identity_account_lock_key(
         digest.update(part.as_bytes());
     }
     format!(
-        "provider_oauth_agent_identity_account:{:x}",
-        digest.finalize()
+        "provider_oauth_agent_identity_account:{}",
+        hex::encode(digest.finalize())
     )
 }
 
@@ -276,8 +276,8 @@ fn claude_oauth_account_lock_key(
     digest.update([0]);
     digest.update(identity.as_bytes());
     Some(format!(
-        "provider_oauth_claude_account:{:x}",
-        digest.finalize()
+        "provider_oauth_claude_account:{}",
+        hex::encode(digest.finalize())
     ))
 }
 

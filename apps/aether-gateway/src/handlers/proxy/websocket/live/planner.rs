@@ -665,7 +665,7 @@ fn live_routing_fingerprint(
             hasher.update([0]);
         }
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hex::encode(hasher.finalize()))
 }
 
 fn validated_official_chatgpt_url(raw: Option<&str>) -> Result<Url, LiveProtocolError> {

@@ -141,7 +141,7 @@ fn generate_users_me_management_token_plaintext() -> String {
 fn hash_users_me_management_token(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn users_me_management_token_prefix(value: &str) -> Option<String> {

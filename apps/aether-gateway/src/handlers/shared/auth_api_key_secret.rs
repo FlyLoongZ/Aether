@@ -197,7 +197,7 @@ pub(crate) async fn decrypt_or_migrate_auth_api_key_secret(
 fn sha256_hex(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn api_key_secret_error(message: &str) -> GatewayError {

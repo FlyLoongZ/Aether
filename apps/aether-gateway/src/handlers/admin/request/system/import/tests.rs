@@ -253,7 +253,7 @@ fn imported_api_key_tombstones_fit_legacy_columns_and_cannot_authenticate() {
 
     let identity = "api-key-id:public-source-key-id";
     let tombstone = imported_credential_tombstone(identity);
-    let normal_auth_hash = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    let normal_auth_hash = hex::encode(Sha256::digest(identity.as_bytes()));
 
     assert_eq!(tombstone.len(), 64);
     assert!(tombstone.starts_with("$aether-import-revoked$"));

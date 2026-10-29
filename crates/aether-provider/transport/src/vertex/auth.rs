@@ -260,7 +260,7 @@ impl LocalOAuthRefreshAdapter for VertexServiceAccountRefreshAdapter {
                     digest.update(entry.auth_header_value.as_bytes());
                     digest.update([0]);
                     digest.update(entry.expires_at_unix_secs.unwrap_or_default().to_be_bytes());
-                    format!("{:x}", digest.finalize())
+                    hex::encode(digest.finalize())
                 })
                 .unwrap_or(source_fingerprint),
         )
@@ -361,7 +361,7 @@ fn vertex_service_account_credential_fingerprint(
             digest.update((field.len() as u64).to_be_bytes());
             digest.update(field);
         }
-        format!("{:x}", digest.finalize())
+        hex::encode(digest.finalize())
     })
 }
 

@@ -129,7 +129,7 @@ mod tests {
         let record = aether_data::repository::auth::StoredAuthApiKeyExportRecord::new(
             "owner-1".to_string(),
             "key-1".to_string(),
-            format!("{:x}", hasher.finalize()),
+            hex::encode(hasher.finalize()),
             Some(ciphertext),
             None,
             None,

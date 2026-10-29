@@ -845,7 +845,7 @@ fn validate_private_output_directory(directory: &Path, owner_uid: u32) -> io::Re
 fn sha256_hex(value: &str) -> String {
     let mut hasher = sha2::Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn pressure_api_key_id(config: &Config, index: usize) -> String {

@@ -640,7 +640,7 @@ struct SeenImageBridgeExecutionPlan {
 fn image_bridge_hash_api_key(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn image_bridge_auth_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {

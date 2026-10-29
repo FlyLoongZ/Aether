@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use aether_data_contracts::DataLayerError;
 use aether_runtime_state::RuntimeState;
 use chrono::NaiveDate;
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

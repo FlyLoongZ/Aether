@@ -13,7 +13,10 @@ pub(super) fn pool_sticky_key(provider_id: &str, session_token: &str) -> String 
         )
         .as_bytes(),
     );
-    format!("ap:{provider_id}:sticky:v1:{digest:x}")
+    format!(
+        "ap:{provider_id}:sticky:v1:{digest}",
+        digest = hex::encode(digest)
+    )
 }
 
 pub(super) fn pool_lru_key(provider_id: &str) -> String {

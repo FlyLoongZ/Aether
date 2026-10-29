@@ -289,7 +289,10 @@ fn internal_report_capability_scope(report_kind: &str) -> Option<String> {
 
 fn internal_report_capability_storage_key(capability: &str) -> String {
     let digest = Sha256::digest(capability.as_bytes());
-    format!("{INTERNAL_REPORT_CAPABILITY_KEY_PREFIX}{digest:x}")
+    format!(
+        "{INTERNAL_REPORT_CAPABILITY_KEY_PREFIX}{digest}",
+        digest = hex::encode(digest)
+    )
 }
 
 fn protected_internal_report_context_sha256(
@@ -305,7 +308,7 @@ fn protected_internal_report_context_sha256(
     let canonical = canonicalize_internal_report_json(&Value::Object(protected));
     let encoded = serde_json::to_vec(&canonical)
         .map_err(|error| crate::GatewayError::Internal(error.to_string()))?;
-    Ok(format!("{:x}", Sha256::digest(encoded)))
+    Ok(hex::encode(Sha256::digest(encoded)))
 }
 
 /// Kiro MCP web-search execution emits a synthetic response that is already in

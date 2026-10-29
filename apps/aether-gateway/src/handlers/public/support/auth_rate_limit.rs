@@ -1,6 +1,6 @@
 use super::{build_auth_json_response, http, json, AppState, Body, Response};
 use aether_runtime_state::{UsageLimitCheck, UsageLimitInput, UsageLimitRule};
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use sha2::Sha256;
 use std::net::IpAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -286,10 +286,8 @@ mod tests {
         for (action, dimension, subject) in cases {
             let digest = digest_subject_with_key(secret, action, dimension, subject)
                 .expect("fixed HMAC key should be accepted");
-            let enumerable_digest = format!(
-                "{:x}",
-                Sha256::digest(format!("{dimension}\0{subject}").as_bytes())
-            );
+            let enumerable_digest =
+                hex::encode(Sha256::digest(format!("{dimension}\0{subject}").as_bytes()));
             let key = rate_limit_key_with_key(secret, action, dimension, subject, 60)
                 .expect("fixed HMAC key should be accepted");
 

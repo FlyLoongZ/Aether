@@ -124,7 +124,7 @@ fn run(args: Args) -> Result<(), CliError> {
         )));
     }
 
-    let cipher_sha256 = format!("{:x}", Sha256::digest(&encrypted));
+    let cipher_sha256 = hex::encode(Sha256::digest(&encrypted));
     let restored = restore_backup_json(&args.object_key, &encrypted, &candidates, limits)?;
     write_atomic_private(&args.output, restored.json_bytes(), args.overwrite)?;
     let restored_scope = restored.scope().as_str();

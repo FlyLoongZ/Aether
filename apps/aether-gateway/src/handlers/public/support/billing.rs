@@ -191,7 +191,7 @@ fn billing_order_no_with_salt(
         "salt": salt,
     })
     .to_string();
-    let digest = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    let digest = hex::encode(Sha256::digest(identity.as_bytes()));
     // 3-byte prefix + 56 hex characters stays below every adapter's 64-byte
     // order number limit while retaining ample collision resistance.
     format!("pp_{}", &digest[..56])

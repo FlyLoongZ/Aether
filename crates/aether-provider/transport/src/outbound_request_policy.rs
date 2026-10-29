@@ -265,7 +265,10 @@ fn digest_context_value(field: &str, value: &str) -> String {
     digest.update([0]);
     digest.update((value.len() as u64).to_be_bytes());
     digest.update(value.as_bytes());
-    format!("{CONTEXT_HASH_PREFIX}{field}:{:x}", digest.finalize())
+    format!(
+        "{CONTEXT_HASH_PREFIX}{field}:{}",
+        hex::encode(digest.finalize())
+    )
 }
 
 #[cfg(test)]

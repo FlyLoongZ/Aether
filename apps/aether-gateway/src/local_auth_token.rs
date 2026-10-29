@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use serde_json::{Map, Value};
 
 const TEST_JWT_SECRET: &str = "aether-rust-test-jwt-secret-32-bytes-minimum";
@@ -253,7 +253,7 @@ mod tests {
         MAX_LOCAL_AUTH_TOKEN_BYTES, TEST_JWT_SECRET,
     };
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-    use hmac::Mac;
+    use hmac::{KeyInit, Mac};
     use serde_json::{json, Map, Value};
 
     fn signed_token(header: Value, payload: Value) -> String {

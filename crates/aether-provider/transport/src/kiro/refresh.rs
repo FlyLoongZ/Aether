@@ -241,7 +241,7 @@ fn kiro_credential_fingerprint(
         digest.update((field.len() as u64).to_be_bytes());
         digest.update(field);
     }
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 fn bearer_access_token(authorization: &str) -> Option<&str> {

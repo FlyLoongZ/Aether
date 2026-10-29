@@ -91,7 +91,7 @@ pub(crate) fn hash_admin_user_api_key(value: &str) -> String {
 
     let mut hasher = sha2::Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 pub(crate) fn default_admin_user_api_key_name() -> String {

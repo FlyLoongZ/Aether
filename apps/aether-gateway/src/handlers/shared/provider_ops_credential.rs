@@ -153,7 +153,7 @@ pub(crate) fn provider_ops_outbound_policy_digest(
     });
     let mut canonical = String::new();
     append_canonical_json(&policy, &mut canonical);
-    format!("{:x}", Sha256::digest(canonical.as_bytes()))
+    hex::encode(Sha256::digest(canonical.as_bytes()))
 }
 
 pub(crate) fn provider_ops_credential_binding_from_config(

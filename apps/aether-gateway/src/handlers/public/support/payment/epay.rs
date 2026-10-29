@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use axum::{body::Body, http, response::Response};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use md5::{Digest, Md5};
 use serde_json::json;
 use sha2::Sha256;
@@ -138,7 +138,7 @@ pub(crate) fn epay_sign(params: &BTreeMap<String, String>, merchant_key: &str) -
     let mut hasher = Md5::new();
     hasher.update(canonical.as_bytes());
     hasher.update(merchant_key.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 pub(crate) fn epay_signature_valid(params: &BTreeMap<String, String>, merchant_key: &str) -> bool {

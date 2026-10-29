@@ -5,7 +5,7 @@ use aether_data::repository::management_tokens::{
     StoredManagementTokenWithUser,
 };
 use base64::Engine as _;
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use sha2::{Digest, Sha256};
 
 use super::{
@@ -17,7 +17,7 @@ use crate::data::GatewayDataState;
 fn hash_token(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 async fn issue_operational_session_access_token(

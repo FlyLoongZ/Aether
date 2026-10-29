@@ -604,7 +604,7 @@ pub fn generate_kiro_machine_id(
     let mut hasher = Sha256::new();
     hasher.update(b"KotlinNativeAPI/");
     hasher.update(seed.as_bytes());
-    Some(format!("{:x}", hasher.finalize()))
+    Some(hex::encode(hasher.finalize()))
 }
 
 fn token_set_from_kiro_auth_config(

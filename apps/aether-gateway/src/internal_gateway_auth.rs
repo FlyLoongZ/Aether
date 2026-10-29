@@ -159,7 +159,10 @@ pub(crate) async fn authenticate_internal_gateway_request(
     }
 
     let nonce_digest = Sha256::digest(nonce.as_bytes());
-    let nonce_key = format!("{INTERNAL_GATEWAY_AUTH_NONCE_KEY_PREFIX}{nonce_digest:x}");
+    let nonce_key = format!(
+        "{INTERNAL_GATEWAY_AUTH_NONCE_KEY_PREFIX}{nonce_digest}",
+        nonce_digest = hex::encode(nonce_digest)
+    );
     match state
         .runtime_state
         .kv_set_if_absent(

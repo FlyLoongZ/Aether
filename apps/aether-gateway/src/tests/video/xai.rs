@@ -175,11 +175,11 @@ where
     let state_factory = || {
         let auth = Arc::new(InMemoryAuthApiKeySnapshotRepository::seed(vec![
             (
-                Some(format!("{:x}", Sha256::digest(b"owner-key"))),
+                Some(hex::encode(Sha256::digest(b"owner-key"))),
                 sample_auth_snapshot("owner-api-key", "owner"),
             ),
             (
-                Some(format!("{:x}", Sha256::digest(b"foreign-key"))),
+                Some(hex::encode(Sha256::digest(b"foreign-key"))),
                 sample_auth_snapshot("foreign-api-key", "foreign"),
             ),
         ]));

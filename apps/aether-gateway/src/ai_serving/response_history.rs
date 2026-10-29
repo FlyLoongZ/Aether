@@ -156,7 +156,7 @@ mod tests {
         json!({
             "version": 1,
             "response_id": response_id,
-            "scope_fingerprint": format!("{:x}", Sha256::digest(scope.trim().as_bytes())),
+            "scope_fingerprint": hex::encode(Sha256::digest(scope.trim().as_bytes())),
             "expires_at_unix_secs": expires_at_unix_secs,
             "transcript": [{"type": "message", "content": marker}],
         })

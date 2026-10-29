@@ -496,7 +496,7 @@ async fn build_admin_user_wallet_balance_batch_response(
     });
     let encoded = serde_json::to_vec(&fingerprint_payload)
         .map_err(|error| GatewayError::Internal(error.to_string()))?;
-    let request_fingerprint = format!("{:x}", Sha256::digest(encoded));
+    let request_fingerprint = hex::encode(Sha256::digest(encoded));
 
     let existing = state
         .get_admin_user_wallet_balance_batch(&admin_user_id, idempotency_key, &request_fingerprint)
