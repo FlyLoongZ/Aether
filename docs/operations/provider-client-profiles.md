@@ -11,7 +11,6 @@
 | Codex CLI/Core | 官方 `@openai/codex` npm latest | 每日 | `codex_cli_rs` originator、现有 OS/架构 UA 模板 |
 | Claude Code | 官方 `@anthropic-ai/claude-code` npm latest | 每日 | 已校准的 Stainless SDK、运行时字段和 beta/能力模板 |
 | Grok CLI | `https://x.ai/cli/stable`，失败回退官方 npm latest | 3 小时 | 现有 CLI 身份字段、OAuth/API-key 路由与自定义网关优先级 |
-| Gemini CLI | 官方 `@google/gemini-cli` npm latest | 每日 | 现有 `(Windows; AMD64)` UA 模板与 Code Assist 请求协议 |
 | Antigravity | 经核验的固定模板 | 不自动更新 | IDE UA、请求体版本及现有平台模板 |
 | Kiro | 已有 OAuth SDK 模板及显式配置 | 不自动更新 | SDK、Node 和系统版本；保留旧模型查询兼容回退 |
 | 原生/其他提供商 | 原有协议和配置 | 无 CLI 版本刷新 | 不注入无依据的 CLI、SDK 或浏览器指纹 |
@@ -22,7 +21,7 @@ Codex Core 身份。代理客户端传入的版本不是官方发行版本来源
 
 ## 集群刷新与本地同步
 
-- `apps/aether-gateway/src/cli_client_profile.rs` 保存四个动态 CLI 描述和共同引擎。
+- `apps/aether-gateway/src/cli_client_profile.rs` 保存三个动态 CLI 描述和共同引擎。
 - 启动预热和后台 singleton 共用发行查询互斥锁。新鲜的已验证缓存避免多个节点
   启动时重复查询官方源。原有缓存 key 和字段保持兼容。
 - 各进程独立运行缓存同步任务，每 60 秒同步一次，包括仅承接请求的 frontdoor 节点。
@@ -31,8 +30,7 @@ Codex Core 身份。代理客户端传入的版本不是官方发行版本来源
 - 自动恢复和刷新不接受比本地画像更旧的稳定版本。外部查询等待期间若共享缓存已升级，
   发布前再次恢复并检查版本，拒绝过期结果。
 - 官方请求仅允许 HTTPS，禁止重定向及系统环境代理；连接、请求和响应大小均有上限。
-  npm 元数据需要包名、稳定版本以及相应原生平台依赖一致。Gemini CLI 的官方 JS 包
-  不要求不存在的原生平台依赖。
+  npm 元数据需要包名、稳定版本以及相应原生平台依赖一致。
 - 发行源、校验或缓存读取失败不清空现有画像。缓存写入失败保留本地已验证画像并告警；
   其他节点只能继续使用最近成功持久化的画像，因此需关注缓存失败日志并恢复共享缓存。
 
@@ -43,7 +41,6 @@ Codex Core 身份。代理客户端传入的版本不是官方发行版本来源
 | Codex | `AETHER_CODEX_CLIENT_VERSION` | `AETHER_CODEX_CLIENT_PROFILE_REFRESH=false` |
 | Claude Code | `AETHER_CLAUDE_CODE_CLIENT_VERSION` | `AETHER_CLAUDE_CODE_CLIENT_PROFILE_REFRESH=false` |
 | Grok CLI | `AETHER_XAI_CLIENT_VERSION` | `AETHER_XAI_CLIENT_PROFILE_REFRESH=false` |
-| Gemini CLI | `AETHER_GEMINI_CLI_CLIENT_VERSION` | `AETHER_GEMINI_CLI_CLIENT_PROFILE_REFRESH=false` |
 
 有效固定版本优先于缓存、内置值和外部发行检查，可用于显式回退；该覆盖只改变当前
 进程，不写入集群缓存。需要集群固定版本时应为各节点配置同一个值。
@@ -56,7 +53,6 @@ Codex Core 身份。代理客户端传入的版本不是官方发行版本来源
 请求已经持有的快照不会被后台更新修改。
 
 - Grok CLI 默认版本头和 UA 从同一个快照产生；保留既有显式头覆盖规则。
-- Gemini CLI 的推理、配额和模型发现读取同一进程内画像来源，而不是各自维护版本常量。
 - Claude Code 在共同出站策略边界重新对齐固定头、beta 和 billing `cc_version`，
   使用一次取得的画像完成头/体校准。保留内容协商和流式行为；count-tokens 不执行
   消息请求体改写。
@@ -90,7 +86,7 @@ cargo test -p aether-gateway --lib client_profile --locked
 
 - Transport：550 项通过；formats：993 项通过；pool：71 项通过；model-fetch：83 项通过。
 - `cargo check -p aether-gateway --locked` 通过。
-- 网关专项：client_profile 21 项、Codex 249 项、Gemini CLI 39 项通过；
+- 网关专项：client_profile 21 项、Codex 249 项通过；
   Claude Code 13 项通过，1 项失败。共 2019 项通过。
 - 格式与 `git diff --check` 通过。
 - 已知失败：`handlers::shared::catalog::tests::provider_key_status_snapshot_payload_backfills_claude_code_usage_windows`。
