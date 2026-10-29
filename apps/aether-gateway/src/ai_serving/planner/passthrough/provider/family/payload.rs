@@ -78,7 +78,7 @@ pub(crate) async fn maybe_build_local_same_format_provider_decision_payload_for_
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned);
     let proxy = state
-        .resolve_transport_proxy_snapshot_with_tunnel_affinity(&resolved.transport)
+        .resolve_transport_proxy_snapshot(&resolved.transport)
         .await;
     let transport_profile = resolved
         .transport_profile

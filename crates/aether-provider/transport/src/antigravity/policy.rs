@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn a_resolvable_tunnel_node_proxy_keeps_the_envelope_supported() {
+    fn a_resolvable_manual_node_proxy_keeps_the_envelope_supported() {
         let mut transport = sample_transport();
         transport.provider.proxy = Some(json!({
             "enabled": true,

@@ -399,10 +399,9 @@ fn is_planner_owned_codex_bearer(
             .is_some_and(|scheme| scheme.eq_ignore_ascii_case("bearer "))
 }
 
-/// Normalize only values that are provably direct transport.  Keep node/tunnel
-/// fields even though the current WebSocket builder rejects those proxies: a
-/// re-plan must not accidentally reuse an already-bound direct socket for a
-/// decision that selected a different proxy topology.
+/// Normalize only values that are provably direct transport. Keep node identity
+/// and other proxy fields, including unresolved snapshots: a re-plan must not
+/// reuse an already-bound direct socket for a different proxy topology.
 fn effective_proxy_snapshot(proxy: Option<&ProxySnapshot>) -> Option<ProxySnapshot> {
     let proxy = proxy?;
     if proxy.enabled == Some(false) {

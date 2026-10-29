@@ -86,7 +86,7 @@ pub(super) async fn maybe_build_local_standard_decision_payload_for_candidate(
         Some(body_json)
     };
     let proxy = state
-        .resolve_transport_proxy_snapshot_with_tunnel_affinity(&resolved.transport)
+        .resolve_transport_proxy_snapshot(&resolved.transport)
         .await;
     let mut extra_fields = serde_json::Map::new();
     if let Some(proxy_value) =

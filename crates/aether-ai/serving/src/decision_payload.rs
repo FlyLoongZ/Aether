@@ -5,8 +5,8 @@ use aether_ai_formats::api::{
     EXECUTION_RUNTIME_SYNC_DECISION_ACTION,
 };
 use aether_contracts::{
-    ExecutionTimeouts, ProxySnapshot, ResolvedTransportProfile, TRANSPORT_BACKEND_HYPER_RUSTLS,
-    TRANSPORT_BACKEND_REQWEST_RUSTLS, TRANSPORT_HTTP_MODE_HTTP1_ONLY,
+    ExecutionTimeouts, ProxySnapshot, ResolvedTransportProfile, TRANSPORT_BACKEND_REQWEST_RUSTLS,
+    TRANSPORT_HTTP_MODE_HTTP1_ONLY,
 };
 use serde_json::{json, Map, Value};
 
@@ -132,18 +132,11 @@ fn outgoing_tls_fingerprint_value(
     transport_profile: Option<&ResolvedTransportProfile>,
     proxy: Option<&ProxySnapshot>,
 ) -> Value {
-    let via_local_proxy = proxy
-        .and_then(|value| value.node_id.as_deref())
-        .map(str::trim)
-        .is_some_and(|value| !value.is_empty());
+    let proxy = proxy.filter(|proxy| proxy.enabled != Some(false));
     let backend = transport_profile
         .map(|profile| profile.backend.trim())
         .filter(|value| !value.is_empty())
-        .unwrap_or(if via_local_proxy {
-            TRANSPORT_BACKEND_HYPER_RUSTLS
-        } else {
-            TRANSPORT_BACKEND_REQWEST_RUSTLS
-        });
+        .unwrap_or(TRANSPORT_BACKEND_REQWEST_RUSTLS);
     let http_mode = transport_profile
         .map(|profile| profile.http_mode.trim())
         .filter(|value| !value.is_empty())
@@ -153,9 +146,7 @@ fn outgoing_tls_fingerprint_value(
     } else {
         json!(["h2", "http/1.1"])
     };
-    let transport_path = if via_local_proxy {
-        "aether_proxy_tunnel"
-    } else if proxy.is_some() {
+    let transport_path = if proxy.is_some() {
         "direct_with_proxy"
     } else {
         "direct"
@@ -288,17 +279,57 @@ mod tests {
     }
 
     #[test]
-    fn decision_response_defaults_outgoing_tls_to_proxy_hyper_backend_for_node_proxy() {
+    fn decision_response_records_manual_node_proxy_as_direct_with_proxy() {
         let mut parts = sample_parts();
         parts.proxy = Some(ProxySnapshot {
+            enabled: Some(true),
             node_id: Some("proxy-node-1".to_string()),
+            url: Some("http://proxy.example:8080".to_string()),
             ..ProxySnapshot::default()
         });
 
         let decision = build_ai_execution_decision_response(parts);
         let outgoing = &decision.report_context.unwrap()["tls_fingerprint"]["outgoing"];
 
-        assert_eq!(outgoing["transport_path"], "aether_proxy_tunnel");
-        assert_eq!(outgoing["backend"], TRANSPORT_BACKEND_HYPER_RUSTLS);
+        assert_eq!(outgoing["transport_path"], "direct_with_proxy");
+        assert_eq!(outgoing["backend"], TRANSPORT_BACKEND_REQWEST_RUSTLS);
+    }
+
+    #[test]
+    fn disabled_node_proxy_records_direct_transport() {
+        let proxy = ProxySnapshot {
+            enabled: Some(false),
+            node_id: Some("proxy-node-1".to_string()),
+            url: Some("http://proxy.example:8080".to_string()),
+            ..ProxySnapshot::default()
+        };
+        let outgoing = outgoing_tls_fingerprint_value(None, Some(&proxy));
+
+        assert_eq!(outgoing["transport_path"], "direct");
+        assert_eq!(outgoing["backend"], TRANSPORT_BACKEND_REQWEST_RUSTLS);
+    }
+
+    #[test]
+    fn node_proxy_preserves_explicit_browser_transport_profile() {
+        let proxy = ProxySnapshot {
+            enabled: Some(true),
+            node_id: Some("proxy-node-1".to_string()),
+            url: Some("http://proxy.example:8080".to_string()),
+            ..ProxySnapshot::default()
+        };
+        let profile = ResolvedTransportProfile {
+            profile_id: "chrome136".to_string(),
+            backend: aether_contracts::TRANSPORT_BACKEND_BROWSER_WREQ.to_string(),
+            http_mode: TRANSPORT_HTTP_MODE_HTTP1_ONLY.to_string(),
+            ..ResolvedTransportProfile::default()
+        };
+        let outgoing = outgoing_tls_fingerprint_value(Some(&profile), Some(&proxy));
+
+        assert_eq!(outgoing["transport_path"], "direct_with_proxy");
+        assert_eq!(
+            outgoing["backend"],
+            aether_contracts::TRANSPORT_BACKEND_BROWSER_WREQ
+        );
+        assert_eq!(outgoing["alpn_offered"], json!(["http/1.1"]));
     }
 }

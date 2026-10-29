@@ -65,7 +65,7 @@ pub(super) async fn maybe_build_local_gemini_files_decision_payload_for_candidat
     );
     let proxy = planner_state
         .app()
-        .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
+        .resolve_transport_proxy_snapshot(&transport)
         .await;
     let transport_profile = resolve_transport_profile(&transport);
     let mut extra_fields = serde_json::Map::new();

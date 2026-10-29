@@ -245,25 +245,25 @@ impl AppState {
             .or_else(|| Some(unavailable_proxy_snapshot("system_proxy_node_unavailable")))
     }
 
-    pub(crate) async fn resolve_transport_proxy_snapshot_with_tunnel_affinity(
+    pub(crate) async fn resolve_transport_proxy_snapshot(
         &self,
         transport: &GatewayProviderTransportSnapshot,
     ) -> Option<ProxySnapshot> {
-        self.resolve_transport_proxy_with_source_with_tunnel_affinity(transport)
+        self.resolve_transport_proxy_with_source(transport)
             .await
             .map(|(snapshot, _)| snapshot)
     }
 
-    pub(crate) async fn resolve_transport_proxy_source_with_tunnel_affinity(
+    pub(crate) async fn resolve_transport_proxy_source(
         &self,
         transport: &GatewayProviderTransportSnapshot,
     ) -> Option<&'static str> {
-        self.resolve_transport_proxy_with_source_with_tunnel_affinity(transport)
+        self.resolve_transport_proxy_with_source(transport)
             .await
             .map(|(_, source)| source)
     }
 
-    pub(crate) async fn resolve_configured_proxy_snapshot_with_tunnel_affinity(
+    pub(crate) async fn resolve_configured_proxy_snapshot(
         &self,
         raw: Option<&Value>,
     ) -> Option<ProxySnapshot> {
@@ -299,28 +299,24 @@ impl AppState {
         None
     }
 
-    async fn resolve_transport_proxy_with_source_with_tunnel_affinity(
+    async fn resolve_transport_proxy_with_source(
         &self,
         transport: &GatewayProviderTransportSnapshot,
     ) -> Option<(ProxySnapshot, &'static str)> {
         if let Some(snapshot) = self
-            .resolve_configured_proxy_snapshot_with_tunnel_affinity(transport.key.proxy.as_ref())
+            .resolve_configured_proxy_snapshot(transport.key.proxy.as_ref())
             .await
         {
             return Some((snapshot, "key"));
         }
         if let Some(snapshot) = self
-            .resolve_configured_proxy_snapshot_with_tunnel_affinity(
-                transport.endpoint.proxy.as_ref(),
-            )
+            .resolve_configured_proxy_snapshot(transport.endpoint.proxy.as_ref())
             .await
         {
             return Some((snapshot, "endpoint"));
         }
         if let Some(snapshot) = self
-            .resolve_configured_proxy_snapshot_with_tunnel_affinity(
-                transport.provider.proxy.as_ref(),
-            )
+            .resolve_configured_proxy_snapshot(transport.provider.proxy.as_ref())
             .await
         {
             return Some((snapshot, "provider"));

@@ -65,7 +65,6 @@ const LIVE_UPSTREAM_ERRORS: UpstreamWebSocketErrorCodes = UpstreamWebSocketError
     headers_invalid: "codex_live_websocket_headers_invalid",
     client_build_failed: "codex_live_websocket_client_build_failed",
     proxy_invalid: "codex_live_websocket_proxy_invalid",
-    tunnel_proxy_unsupported: "codex_live_websocket_tunnel_proxy_unsupported",
     handshake_failed: "codex_live_websocket_handshake_failed",
     upgrade_rejected: "codex_live_websocket_upgrade_rejected",
     upgrade_failed: "codex_live_websocket_upgrade_failed",

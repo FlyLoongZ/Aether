@@ -1957,9 +1957,7 @@ async fn provider_query_execute_kiro_test_candidate(
         client_api_format: candidate.endpoint.api_format.clone(),
         provider_api_format: candidate.endpoint.api_format.clone(),
         model_name: Some(request_model.to_string()),
-        proxy: state
-            .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
-            .await,
+        proxy: state.resolve_transport_proxy_snapshot(&transport).await,
         transport_profile: state.resolve_transport_profile(&transport),
         timeouts: state.resolve_transport_execution_timeouts(&transport),
     };
@@ -2322,9 +2320,7 @@ async fn provider_query_execute_openai_image_test_candidate(
         client_api_format: "openai:image".to_string(),
         provider_api_format: "openai:image".to_string(),
         model_name: Some(request_model.clone()),
-        proxy: state
-            .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
-            .await,
+        proxy: state.resolve_transport_proxy_snapshot(&transport).await,
         transport_profile: transport_profile.clone(),
         timeouts: state.resolve_transport_execution_timeouts(&transport),
     };
@@ -2615,9 +2611,7 @@ async fn provider_query_execute_antigravity_test_candidate(
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "gemini:generate_content".to_string(),
         model_name: Some(request_model.clone()),
-        proxy: state
-            .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
-            .await,
+        proxy: state.resolve_transport_proxy_snapshot(&transport).await,
         transport_profile: state.resolve_transport_profile(&transport),
         timeouts: state.resolve_transport_execution_timeouts(&transport),
     };
@@ -3174,9 +3168,7 @@ async fn provider_query_execute_standard_test_candidate(
         client_api_format: client_api_format.to_string(),
         provider_api_format: candidate.endpoint.api_format.clone(),
         model_name: Some(request_model.to_string()),
-        proxy: state
-            .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
-            .await,
+        proxy: state.resolve_transport_proxy_snapshot(&transport).await,
         transport_profile: state.resolve_transport_profile(&transport),
         timeouts: state.resolve_transport_execution_timeouts(&transport),
     };

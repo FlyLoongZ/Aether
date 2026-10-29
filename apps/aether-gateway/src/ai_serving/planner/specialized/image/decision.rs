@@ -63,7 +63,7 @@ pub(super) async fn maybe_build_local_openai_image_decision_payload_for_candidat
     );
     let proxy = planner_state
         .app()
-        .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
+        .resolve_transport_proxy_snapshot(&transport)
         .await;
     let transport_profile = resolved
         .transport_profile

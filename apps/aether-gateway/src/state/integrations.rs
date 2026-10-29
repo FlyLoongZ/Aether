@@ -220,8 +220,7 @@ impl provider_transport::VideoTaskTransportSnapshotLookup for AppState {
         &self,
         transport: &GatewayProviderTransportSnapshot,
     ) -> Option<ProxySnapshot> {
-        self.resolve_transport_proxy_snapshot_with_tunnel_affinity(transport)
-            .await
+        self.resolve_transport_proxy_snapshot(transport).await
     }
 }
 
@@ -240,8 +239,7 @@ impl ModelFetchTransportRuntime for AppState {
         &self,
         transport: &GatewayProviderTransportSnapshot,
     ) -> Option<ProxySnapshot> {
-        self.resolve_transport_proxy_snapshot_with_tunnel_affinity(transport)
-            .await
+        self.resolve_transport_proxy_snapshot(transport).await
     }
 
     async fn execute_model_fetch_execution_plan(

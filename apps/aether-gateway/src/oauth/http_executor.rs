@@ -110,12 +110,12 @@ fn identity_oauth_route(
         .is_some_and(|value| !value.is_empty());
     if has_proxy_url {
         return Err(OAuthError::transport(
-            "identity OAuth HTTP/SOCKS proxies are disabled; use a controlled tunnel or direct transport",
+            "identity OAuth HTTP/SOCKS proxies are disabled; use direct transport",
         ));
     }
 
     Err(OAuthError::transport(
-        "identity OAuth cannot use a configured proxy or tunnel; use direct transport",
+        "identity OAuth cannot use a configured proxy; use direct transport",
     ))
 }
 
@@ -789,21 +789,12 @@ mod tests {
     }
 
     #[test]
-    fn identity_oauth_disables_redirects_for_direct_and_tunnel_requests() {
+    fn identity_oauth_disables_redirects_for_direct_requests() {
         assert_eq!(
             format!("{:?}", identity_oauth_redirect_policy()),
             "Policy(None)"
         );
 
-        let tunnel = ProxySnapshot {
-            enabled: Some(true),
-            mode: Some("tunnel".to_string()),
-            node_id: Some("node-1".to_string()),
-            ..ProxySnapshot::default()
-        };
-        assert!(
-            identity_oauth_route(OAuthNetworkPolicy::DirectOrSystemProxy, Some(&tunnel)).is_err()
-        );
         let plan = oauth_execution_plan(identity_request(None), true);
         assert_eq!(
             plan.headers
@@ -835,8 +826,9 @@ mod tests {
         );
     }
 
+    // Persisted pre-removal snapshots must fail closed rather than become direct requests.
     #[test]
-    fn identity_oauth_rejects_enabled_tunnel_even_when_node_id_is_present() {
+    fn identity_oauth_rejects_legacy_tunnel_snapshots() {
         let proxy = ProxySnapshot {
             enabled: Some(true),
             mode: Some("tunnel".to_string()),
