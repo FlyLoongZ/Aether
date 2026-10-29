@@ -693,54 +693,6 @@ async fn internal_report_capability_binds_final_provider_request_headers() {
 }
 
 #[tokio::test]
-async fn internal_report_capability_validates_windsurf_native_observation_shape() {
-    let repository = Arc::new(InMemoryRequestCandidateRepository::default());
-    let state = build_test_state(repository);
-    let minted = mint_internal_report_capability(
-        &state,
-        "trace-capability-windsurf-123",
-        "openai_responses_stream_success",
-        json!({"request_id": "req-capability-windsurf-123"}),
-    )
-    .await;
-
-    for (native_runtime, port) in [
-        (json!(false), json!(42_137)),
-        (json!(true), json!(0)),
-        (json!(true), json!(65_536)),
-        (json!(true), json!("42137")),
-    ] {
-        let mut invalid = minted.clone();
-        invalid["windsurf_native_runtime"] = native_runtime;
-        invalid["windsurf_language_server_port"] = port;
-        let rejected = resolve_bound_internal_gateway_report_context(
-            &state,
-            "trace-capability-windsurf-123",
-            "openai_responses_stream_success",
-            Some(&invalid),
-        )
-        .await
-        .expect("capability lookup should succeed");
-        assert!(rejected.is_none(), "invalid Windsurf metadata must fail");
-    }
-
-    let mut valid = minted;
-    valid["windsurf_native_runtime"] = json!(true);
-    valid["windsurf_language_server_port"] = json!(42_137);
-    let resolved = resolve_bound_internal_gateway_report_context(
-        &state,
-        "trace-capability-windsurf-123",
-        "openai_responses_stream_success",
-        Some(&valid),
-    )
-    .await
-    .expect("capability lookup should succeed")
-    .expect("valid Windsurf native metadata should pass");
-    assert_eq!(resolved["windsurf_native_runtime"], json!(true));
-    assert_eq!(resolved["windsurf_language_server_port"], json!(42_137));
-}
-
-#[tokio::test]
 async fn internal_report_capability_accepts_only_non_deferred_late_bound_reservations() {
     let repository = Arc::new(InMemoryRequestCandidateRepository::default());
     let state = build_test_state(repository);

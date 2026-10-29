@@ -114,8 +114,6 @@ const INTERNAL_REPORT_OBSERVATION_FIELDS: &[&str] = &[
     "db_timings_ms",
     "end_to_end_time_ms",
     "end_to_end_first_byte_time_ms",
-    "windsurf_native_runtime",
-    "windsurf_language_server_port",
 ];
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -223,9 +221,7 @@ pub(crate) async fn resolve_bound_internal_gateway_report_context(
     if Uuid::parse_str(capability).is_err() {
         return Ok(None);
     }
-    if !internal_report_late_bound_settlement_fields_are_valid(context)
-        || !internal_report_windsurf_observation_is_valid(context)
-    {
+    if !internal_report_late_bound_settlement_fields_are_valid(context) {
         return Ok(None);
     }
 
@@ -354,19 +350,6 @@ fn internal_report_late_bound_settlement_fields_are_valid(context: &Map<String, 
         (Some(Value::String(token)), Some(Value::Bool(false))) => {
             Uuid::parse_str(token.trim()).is_ok()
         }
-        _ => false,
-    }
-}
-
-fn internal_report_windsurf_observation_is_valid(context: &Map<String, Value>) -> bool {
-    match (
-        context.get("windsurf_native_runtime"),
-        context.get("windsurf_language_server_port"),
-    ) {
-        (None, None) => true,
-        (Some(Value::Bool(true)), Some(Value::Number(port))) => port
-            .as_u64()
-            .is_some_and(|port| u16::try_from(port).is_ok() && port != 0),
         _ => false,
     }
 }

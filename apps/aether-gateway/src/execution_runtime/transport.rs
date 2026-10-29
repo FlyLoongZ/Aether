@@ -52,7 +52,6 @@ use crate::ai_serving::api::extract_provider_private_stream_error_body;
 #[cfg(test)]
 use crate::execution_runtime::remote_compat::execute_sync_plan_via_remote_execution_runtime;
 use crate::execution_runtime::stream_read_timeout::resolve_stream_idle_timeout;
-use crate::execution_runtime::windsurf::maybe_execute_windsurf_sync;
 use crate::frontdoor_loop_guard::gateway_frontdoor_self_loop_guard_error;
 use crate::stage_metrics::observe_gateway_stage_ms;
 use crate::upstream_admission::UpstreamTargetAdmissionPermit;
@@ -811,6 +810,7 @@ pub(crate) enum ExecutionRuntimeTransportError {
     #[error("browser impersonation response body failed: {}", sanitize_error_detail(.0))]
     BrowserBody(String),
     #[error("{}", sanitize_error_detail(message))]
+    #[allow(dead_code)]
     UpstreamHttpStatus { status_code: u16, message: String },
     #[error("failed to execute upstream request: {}", sanitize_error_detail(.0))]
     UpstreamRequest(String),
@@ -1376,11 +1376,6 @@ pub(crate) async fn execute_sync_plan_with_report_context(
     }
 
     let _ = trace_id;
-    match maybe_execute_windsurf_sync(state, plan, None).await {
-        Ok(Some(result)) => return Ok(result),
-        Ok(None) => {}
-        Err(err) => return Err(GatewayError::Internal(safe_transport_error_message(&err))),
-    }
     let state_for_response_started = state.clone();
     match DirectSyncExecutionRuntime::new()
         .execute_sync_with_response_started(plan, move |event| {
@@ -4360,11 +4355,6 @@ pub(crate) fn response_body_is_json(headers: &BTreeMap<String, String>, body_byt
         .get("content-type")
         .map(|value| value.to_ascii_lowercase())
         .unwrap_or_default();
-    if content_type.contains("application/connect+json")
-        || content_type.contains("application/connect+proto")
-    {
-        return false;
-    }
     if content_type.contains("json") {
         return true;
     }

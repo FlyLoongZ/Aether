@@ -22,7 +22,6 @@ pub(crate) mod submission;
 pub(crate) mod sync;
 pub(crate) mod transport;
 mod transport_failure;
-mod windsurf;
 
 pub(crate) use self::admission::{
     acquire_upstream_execution_gate, UpstreamExecutionGateProvider, UPSTREAM_EXECUTION_GATE_NAME,

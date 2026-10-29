@@ -22,11 +22,6 @@ use crate::vertex::{
     local_vertex_gemini_transport_unsupported_reason_with_network,
     resolve_local_vertex_api_key_query_auth, VERTEX_API_KEY_QUERY_PARAM,
 };
-use crate::windsurf::{
-    is_windsurf_provider_transport,
-    local_windsurf_request_transport_unsupported_reason_with_network,
-    resolve_windsurf_cascade_auth,
-};
 use crate::GatewayProviderTransportSnapshot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,11 +136,6 @@ pub fn request_conversion_transport_unsupported_reason(
     if is_kiro_claude_messages_transport(transport, &transport.endpoint.api_format) {
         return local_kiro_request_transport_unsupported_reason_with_network(transport);
     }
-    if is_windsurf_provider_transport(transport)
-        && normalize_api_format_alias(&transport.endpoint.api_format) == "openai:chat"
-    {
-        return local_windsurf_request_transport_unsupported_reason_with_network(transport);
-    }
     if is_antigravity_provider_transport(transport)
         && normalize_api_format_alias(&transport.endpoint.api_format) == "gemini:generate_content"
     {
@@ -235,9 +225,6 @@ fn request_direct_auth_for_provider_format(
     provider_api_format: &str,
 ) -> Option<(String, String)> {
     match normalize_api_format_alias(provider_api_format).as_str() {
-        "openai:chat" if is_windsurf_provider_transport(transport) => {
-            resolve_windsurf_cascade_auth(transport)
-        }
         "openai:chat"
         | "openai:responses"
         | "openai:responses:compact"
@@ -836,35 +823,6 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn windsurf_openai_chat_anchor_supports_cross_format_conversion_via_cascade() {
-        let mut transport = transport_snapshot("windsurf", "openai:chat", "oauth", true, None);
-        transport.key.decrypted_api_key = "devin-session-token$abc".to_string();
-        transport.key.decrypted_auth_config = Some(r#"{"provider_type":"windsurf"}"#.to_string());
-
-        assert!(request_pair_allowed_for_transport(
-            &transport,
-            "claude:messages",
-            "openai:chat"
-        ));
-        assert!(request_pair_allowed_for_transport(
-            &transport,
-            "openai:responses",
-            "openai:chat"
-        ));
-        assert!(request_conversion_transport_supported(
-            &transport,
-            RequestConversionKind::ToOpenAIChat
-        ));
-        assert_eq!(
-            request_conversion_direct_auth(&transport, RequestConversionKind::ToOpenAIChat),
-            Some((
-                "authorization".to_string(),
-                "Bearer devin-session-token$abc".to_string()
-            ))
-        );
     }
 
     #[test]

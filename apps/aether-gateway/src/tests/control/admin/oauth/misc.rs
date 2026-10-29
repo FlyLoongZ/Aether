@@ -469,48 +469,6 @@ async fn gateway_batch_authorizes_claude_cookies_as_redacted_task_impl() {
 }
 
 #[test]
-fn gateway_rejects_generic_oauth_start_for_windsurf_provider() {
-    run_admin_oauth_test(
-        "gateway_rejects_generic_oauth_start_for_windsurf_provider",
-        gateway_rejects_generic_oauth_start_for_windsurf_provider_impl,
-    );
-}
-
-async fn gateway_rejects_generic_oauth_start_for_windsurf_provider_impl() {
-    let mut provider = sample_provider("provider-windsurf", "windsurf", 10);
-    provider.provider_type = "windsurf".to_string();
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![provider],
-        vec![],
-        vec![],
-    ));
-    let state = AppState::new()
-        .expect("gateway should build")
-        .with_data_state_for_tests(GatewayDataState::with_provider_catalog_reader_for_tests(
-            provider_catalog_repository,
-        ));
-
-    let response = local_admin_provider_oauth_response(
-        &state,
-        http::Method::POST,
-        "/api/admin/provider-oauth/providers/provider-windsurf/start",
-        None,
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("body should read");
-    let payload: serde_json::Value = serde_json::from_slice(&body).expect("json body should parse");
-    assert!(
-        payload["detail"]
-            .as_str()
-            .is_some_and(|detail| detail.contains("浏览器登录")),
-        "payload={payload}"
-    );
-}
-
-#[test]
 fn gateway_rejects_generic_oauth_start_for_xai_provider() {
     run_admin_oauth_test(
         "gateway_rejects_generic_oauth_start_for_xai_provider",

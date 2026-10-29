@@ -15,7 +15,7 @@ pub use logic::{
     build_models_fetch_url_for_client_version, deepseek_anthropic_models_fetch_uses_openai_auth,
     endpoint_supports_rust_models_fetch, extract_error_message, json_string_list,
     merge_upstream_metadata, model_catalog_upstream_metadata, parse_models_response,
-    parse_models_response_page, parse_windsurf_model_configs_response, preset_models_for_provider,
+    parse_models_response_page, preset_models_for_provider,
     project_codex_models_for_legacy_cache, provider_type_uses_preset_models,
     select_models_fetch_endpoint, selected_models_fetch_endpoints,
     upstream_metadata_namespace_updates, ModelFetchRunSummary, ModelsFetchPage, ModelsFetchSuccess,
@@ -31,6 +31,6 @@ pub use transport::{
     build_models_fetch_execution_plan, build_models_fetch_execution_plan_for_client_version,
     build_standard_models_fetch_execution_plan,
     build_standard_models_fetch_execution_plan_for_client_version,
-    build_vertex_models_fetch_execution_plan, build_windsurf_model_configs_execution_plan,
+    build_vertex_models_fetch_execution_plan,
     ModelFetchTransportRuntime,
 };

@@ -9,12 +9,6 @@ describe('providerTypeUtils', () => {
     expect(isOAuthAccountProviderType('xAI')).toBe(true)
     expect(isKeyManagedProviderType('xai')).toBe(false)
   })
-
-  it('treats Windsurf as an OAuth account provider', () => {
-    expect(isOAuthAccountProviderType('windsurf')).toBe(true)
-    expect(isOAuthAccountProviderType('Windsurf')).toBe(true)
-    expect(isKeyManagedProviderType('windsurf')).toBe(false)
-  })
 })
 
 describe('normalizeBatchImportCredentials', () => {

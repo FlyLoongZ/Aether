@@ -22,14 +22,14 @@ use serde_json::{json, Value};
 use crate::logic::{
     aggregate_models_for_cache, codex_model_identity, extract_error_message,
     merge_codex_models_preserving_cards, parse_codex_models_response_page,
-    parse_models_response_page, parse_windsurf_model_configs_response, preset_models_for_provider,
+    parse_models_response_page, preset_models_for_provider,
     project_codex_models_for_legacy_cache,
 };
 use crate::transport::{
     build_antigravity_fetch_available_models_plan, build_antigravity_load_code_assist_plan,
     build_gemini_cli_load_code_assist_plan, build_kiro_list_available_models_plan,
     build_standard_models_fetch_execution_plan_for_client_version,
-    build_vertex_models_fetch_execution_plan, build_windsurf_model_configs_execution_plan,
+    build_vertex_models_fetch_execution_plan,
     ModelFetchTransportRuntime,
 };
 
@@ -105,7 +105,6 @@ pub enum ModelFetchStrategyKind {
     Antigravity,
     GeminiCliPreset,
     Kiro,
-    Windsurf,
 }
 
 pub trait ModelFetchStrategy {
@@ -222,7 +221,6 @@ fn select_model_fetch_strategy(
     let kind = match provider_type.as_str() {
         "antigravity" => ModelFetchStrategyKind::Antigravity,
         "vertex_ai" => ModelFetchStrategyKind::Vertex,
-        "windsurf" => ModelFetchStrategyKind::Windsurf,
         _ => ModelFetchStrategyKind::StandardTransport,
     };
     Ok(SelectedModelFetchStrategy {
@@ -272,7 +270,6 @@ async fn execute_model_fetch_strategy(
             .await
         }
         ModelFetchStrategyKind::Kiro => fetch_kiro_models(runtime, first_transport).await,
-        ModelFetchStrategyKind::Windsurf => fetch_windsurf_models(runtime, first_transport).await,
     }
 }
 
@@ -654,30 +651,6 @@ async fn fetch_kiro_models(
     let body_json = execution_result_json_body_allow_empty(&result)?;
     let (models, metadata) = parse_kiro_available_models_response(&body_json)?;
     Ok(build_success_outcome(models, metadata, true))
-}
-
-async fn fetch_windsurf_models(
-    runtime: &(impl ModelFetchTransportRuntime + ?Sized),
-    transport: &GatewayProviderTransportSnapshot,
-) -> Result<ModelsFetchOutcome, String> {
-    let plan = build_windsurf_model_configs_execution_plan(runtime, transport)
-        .await
-        .map_err(|error| sanitize_model_fetch_error(&error))?;
-    let result = runtime
-        .execute_model_fetch_execution_plan(&plan)
-        .await
-        .map_err(|error| sanitize_model_fetch_error(&error))?;
-    if !(200..300).contains(&result.status_code) {
-        return Err(execution_result_error_message(&result));
-    }
-
-    let body_json = execution_result_json_body_allow_empty(&result)?;
-    let (models, metadata) = parse_windsurf_model_configs_response(&body_json, now_unix_secs())?;
-    Ok(build_success_outcome(
-        models.cached_models,
-        Some(metadata),
-        true,
-    ))
 }
 
 async fn fetch_vertex_models(

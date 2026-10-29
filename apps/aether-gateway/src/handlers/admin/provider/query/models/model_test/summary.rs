@@ -957,7 +957,7 @@ mod tests {
         let body = json!({
             "metadata": {
                 "apiKey": "devin-session-token$secret",
-                "ideName": "windsurf"
+                "ideName": "example-ide"
             },
             "messages": [{"role": "user", "content": "hello"}],
             "stream": true
@@ -971,7 +971,7 @@ mod tests {
         );
         assert_eq!(
             redacted.pointer("/metadata/ideName"),
-            Some(&json!("windsurf"))
+            Some(&json!("example-ide"))
         );
         assert_eq!(redacted.pointer("/stream"), Some(&json!(true)));
     }

@@ -19,9 +19,7 @@ use crate::ai_serving::planner::plan_builders::{
 };
 use crate::ai_serving::planner::runtime_miss::apply_local_runtime_candidate_terminal_reason;
 use crate::ai_serving::planner::standard::build_local_openai_chat_upstream_url;
-use crate::ai_serving::transport::{
-    is_windsurf_provider_transport, local_openai_chat_transport_unsupported_reason,
-};
+use crate::ai_serving::transport::local_openai_chat_transport_unsupported_reason;
 use crate::clock::request_distribution_seed;
 use crate::stage_metrics::{
     observe_gateway_stage_ms, record_openai_chat_stream_payload_build_prefetch_avoided,
@@ -299,9 +297,7 @@ impl LocalOpenAiChatStreamAttemptSource<'_> {
             return None;
         }
         let transport = &attempt.eligible.transport;
-        if is_windsurf_provider_transport(transport)
-            || local_openai_chat_transport_unsupported_reason(transport).is_some()
-        {
+        if local_openai_chat_transport_unsupported_reason(transport).is_some() {
             return None;
         }
         if transport.provider.proxy.is_some()

@@ -30,10 +30,7 @@ use crate::handlers::admin::request::{
 use crate::GatewayError;
 use aether_contracts::ProxySnapshot;
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
-use aether_oauth::provider::{
-    ProviderOAuthImportInput, ProviderOAuthService, ProviderOAuthTransportContext,
-};
-use aether_oauth::{core::OAuthError, network::OAuthNetworkContext};
+use aether_oauth::network::OAuthNetworkContext;
 use aether_runtime_state::RuntimeLockLease;
 use axum::{
     body::Body,
@@ -69,49 +66,6 @@ impl Drop for CodexAgentIdentityEnrollment {
     fn drop(&mut self) {
         self.heartbeat.abort();
     }
-}
-
-fn sanitize_windsurf_import_error(error: &OAuthError) -> String {
-    match error {
-        OAuthError::InvalidRequest(_) => "Windsurf 凭据验证失败: 请求参数无效".to_string(),
-        OAuthError::HttpStatus { status_code, .. } => {
-            format!("Windsurf 凭据验证失败: HTTP {status_code}")
-        }
-        OAuthError::InvalidResponse(detail) => sanitize_windsurf_invalid_response_detail(detail)
-            .unwrap_or_else(|| "Windsurf 凭据验证失败".to_string()),
-        _ => "Windsurf 凭据验证失败".to_string(),
-    }
-}
-
-fn sanitize_windsurf_invalid_response_detail(detail: &str) -> Option<String> {
-    let detail = detail.trim();
-    if detail.eq_ignore_ascii_case("Auth1 response is not json") {
-        return Some("Windsurf 凭据验证失败: Auth1 响应无法解析".to_string());
-    }
-    if detail.eq_ignore_ascii_case("Auth1 response missing token") {
-        return Some("Windsurf 凭据验证失败: Auth1 响应缺少 token".to_string());
-    }
-    if detail.contains("WindsurfPostAuth response missing sessionToken")
-        || detail.contains("WindsurfPostAuth response is not json")
-        || (detail.contains("WindsurfPostAuth failed") && detail.contains("missing sessionToken"))
-    {
-        return Some("Windsurf 凭据验证失败: PostAuth 未返回 sessionToken".to_string());
-    }
-    if detail.contains("WindsurfPostAuth failed") {
-        return Some("Windsurf 凭据验证失败: PostAuth 失败".to_string());
-    }
-    None
-}
-
-fn import_payload_has_windsurf_credentials(
-    payload: &serde_json::Map<String, serde_json::Value>,
-) -> bool {
-    import_payload_string(payload, "api_key", "apiKey").is_some()
-        || import_payload_string_any(payload, &["token", "auth_token", "authToken"]).is_some()
-        || import_payload_string(payload, "refresh_token", "refreshToken").is_some()
-        || import_payload_string(payload, "access_token", "accessToken").is_some()
-        || (import_payload_string_any(payload, &["email"]).is_some()
-            && import_payload_string_any(payload, &["password"]).is_some())
 }
 
 fn import_payload_string(
@@ -190,6 +144,7 @@ fn codex_access_token_identity_hints(
     }
     Ok(hints)
 }
+
 
 async fn prepare_codex_agent_identity_enrollment(
     state: &AdminAppState<'_>,
@@ -731,70 +686,6 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
     })
 }
 
-async fn resolve_admin_provider_oauth_windsurf_single_import_tokens(
-    state: &AdminAppState<'_>,
-    provider_type: &str,
-    name: Option<String>,
-    raw_payload: &serde_json::Map<String, serde_json::Value>,
-    refresh_token: Option<&str>,
-    request_proxy: Option<ProxySnapshot>,
-) -> Result<AdminProviderOAuthSingleImportTokens, crate::ApiError> {
-    let ctx = ProviderOAuthTransportContext {
-        provider_id: String::new(),
-        provider_type: provider_type.to_string(),
-        endpoint_id: None,
-        key_id: None,
-        auth_type: Some("oauth".to_string()),
-        decrypted_api_key: None,
-        decrypted_auth_config: None,
-        provider_config: None,
-        endpoint_config: None,
-        key_config: None,
-        network: aether_oauth::network::OAuthNetworkContext::provider_operation(
-            request_proxy.clone(),
-        ),
-    };
-    let executor = crate::oauth::GatewayOAuthHttpExecutor::new(*state);
-    let service = ProviderOAuthService::with_builtin_adapters();
-    let result = service
-        .import_credentials(
-            &executor,
-            &ctx,
-            ProviderOAuthImportInput {
-                provider_type: provider_type.to_string(),
-                name,
-                refresh_token: refresh_token.map(ToOwned::to_owned),
-                raw_credentials: Some(serde_json::Value::Object(raw_payload.clone())),
-                network: ctx.network.clone(),
-            },
-        )
-        .await
-        .map_err(|error| {
-            build_internal_control_error_response(
-                http::StatusCode::BAD_REQUEST,
-                sanitize_windsurf_import_error(&error),
-            )
-        })?;
-    let access_token = result.token_set.access_token.trim().to_string();
-    if access_token.is_empty() {
-        return Err(build_internal_control_error_response(
-            http::StatusCode::BAD_REQUEST,
-            "Windsurf 凭据验证返回缺少 apiKey/sessionToken",
-        )
-        .into());
-    }
-    let auth_config = result.auth_config.as_object().cloned().ok_or_else(|| {
-        build_internal_control_error_response(
-            http::StatusCode::BAD_REQUEST,
-            "Windsurf 凭据验证返回缺少 auth_config",
-        )
-    })?;
-    Ok(AdminProviderOAuthSingleImportTokens {
-        access_token,
-        auth_config,
-        expires_at: result.token_set.expires_at_unix_secs,
-    })
-}
 
 pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
     state: &AdminAppState<'_>,
@@ -985,26 +876,6 @@ pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
                 release_codex_agent_identity_enrollment(state, Some(enrollment)).await;
                 return Ok(response.into());
             }
-        }
-    } else if provider_type == "windsurf" {
-        if !import_payload_has_windsurf_credentials(&raw_payload) {
-            return Ok(build_internal_control_error_response(
-                http::StatusCode::BAD_REQUEST,
-                "Windsurf 凭据不能为空",
-            ));
-        }
-        match resolve_admin_provider_oauth_windsurf_single_import_tokens(
-            state,
-            &provider_type,
-            name.clone(),
-            &raw_payload,
-            refresh_token_input.as_deref(),
-            request_proxy.clone(),
-        )
-        .await
-        {
-            Ok(value) => value,
-            Err(response) => return Ok(response.into()),
         }
     } else {
         if refresh_token_input.is_none() && access_token_input.is_none() {
@@ -1270,10 +1141,9 @@ mod tests {
         apply_single_import_hints, codex_access_token_identity_hints,
         codex_agent_identity_access_token_input, import_payload_requests_agent_identity,
         import_payload_requests_legacy_agent_identity, import_payload_u64_any,
-        sanitize_windsurf_import_error, single_import_access_token_input,
+        single_import_access_token_input,
     };
     use crate::handlers::admin::provider::oauth::duplicates::codex_agent_identity_account_lock_keys;
-    use aether_oauth::core::OAuthError;
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     use serde_json::json;
 
@@ -1549,41 +1419,4 @@ mod tests {
         assert!(auth_config.get("access_token").is_none());
     }
 
-    #[test]
-    fn windsurf_import_error_redacts_http_body() {
-        let error = OAuthError::HttpStatus {
-            status_code: 400,
-            body_excerpt: "token=secret-token password=secret-password".to_string(),
-        };
-
-        let detail = sanitize_windsurf_import_error(&error);
-
-        assert_eq!(detail, "Windsurf 凭据验证失败: HTTP 400");
-        assert!(!detail.contains("secret-token"));
-        assert!(!detail.contains("secret-password"));
     }
-
-    #[test]
-    fn windsurf_import_error_redacts_invalid_response_detail() {
-        let error =
-            OAuthError::invalid_response("RegisterUser failed with firebase_id_token=secret-token");
-
-        let detail = sanitize_windsurf_import_error(&error);
-
-        assert_eq!(detail, "Windsurf 凭据验证失败");
-        assert!(!detail.contains("secret-token"));
-        assert!(!detail.contains("firebase_id_token"));
-    }
-
-    #[test]
-    fn windsurf_import_error_keeps_safe_post_auth_stage() {
-        let error = OAuthError::invalid_response("WindsurfPostAuth response missing sessionToken");
-
-        let detail = sanitize_windsurf_import_error(&error);
-
-        assert_eq!(
-            detail,
-            "Windsurf 凭据验证失败: PostAuth 未返回 sessionToken"
-        );
-    }
-}

@@ -66,9 +66,6 @@
                   <SelectItem value="kiro">
                     Kiro
                   </SelectItem>
-                  <SelectItem value="windsurf">
-                    Windsurf
-                  </SelectItem>
                   <SelectItem value="antigravity">
                     Antigravity
                   </SelectItem>
@@ -95,9 +92,6 @@
                   </SelectItem>
                   <SelectItem value="kiro">
                     Kiro
-                  </SelectItem>
-                  <SelectItem value="windsurf">
-                    Windsurf
                   </SelectItem>
                   <SelectItem value="antigravity">
                     Antigravity

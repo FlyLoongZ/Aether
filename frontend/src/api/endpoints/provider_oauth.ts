@@ -287,13 +287,9 @@ export async function importProviderRefreshToken(
   data: {
     api_key?: string
     apiKey?: string
-    token?: string
-    auth_token?: string
-    authToken?: string
     refresh_token?: string
     access_token?: string
     create_agent_identity?: boolean
-    password?: string
     expires_at?: number
     name?: string
     proxy_node_id?: string

@@ -5,5 +5,4 @@ pub(crate) mod dispatch;
 pub(crate) mod gemini_cli;
 pub(crate) mod kiro;
 pub(crate) mod shared;
-pub(crate) mod windsurf;
 pub(crate) mod xai;

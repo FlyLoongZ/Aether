@@ -21,7 +21,7 @@ impl ProviderOAuthService {
         use super::providers::{
             AntigravityProviderOAuthAdapter, ClaudeCodeProviderOAuthAdapter,
             CodexProviderOAuthAdapter, GenericProviderOAuthAdapter, KiroProviderOAuthAdapter,
-            WindsurfProviderOAuthAdapter, XaiProviderOAuthAdapter,
+            XaiProviderOAuthAdapter,
         };
 
         let mut service = Self::new()
@@ -29,7 +29,6 @@ impl ProviderOAuthService {
             .with_adapter(Arc::new(ClaudeCodeProviderOAuthAdapter::default()))
             .with_adapter(Arc::new(CodexProviderOAuthAdapter::default()))
             .with_adapter(Arc::new(AntigravityProviderOAuthAdapter::default()))
-            .with_adapter(Arc::new(WindsurfProviderOAuthAdapter))
             .with_adapter(Arc::new(XaiProviderOAuthAdapter::default()));
         for provider_type in ["gemini_cli"] {
             if let Some(adapter) = GenericProviderOAuthAdapter::for_provider_type(provider_type) {
@@ -143,7 +142,6 @@ mod tests {
             "gemini_cli",
             "antigravity",
             "kiro",
-            "windsurf",
             "xai",
         ] {
             assert!(

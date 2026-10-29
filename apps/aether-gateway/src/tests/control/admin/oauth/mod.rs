@@ -215,23 +215,6 @@ fn codex_quota_execution_result(request_id: &str) -> serde_json::Value {
     })
 }
 
-fn windsurf_register_user_execution_result(request_id: &str) -> serde_json::Value {
-    json!({
-        "request_id": request_id,
-        "status_code": 200,
-        "headers": {
-            "content-type": "application/json"
-        },
-        "body": {
-            "json_body": {
-                "sessionToken": "devin-session-token$registered",
-                "name": "Windsurf User",
-                "apiServerUrl": "https://server.codeium.com"
-            }
-        }
-    })
-}
-
 fn assert_single_provider_oauth_refresh_token_plan(plans: &[ExecutionPlan]) -> &ExecutionPlan {
     let token_plans = plans
         .iter()

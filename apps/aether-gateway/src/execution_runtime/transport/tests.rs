@@ -32,10 +32,10 @@ use super::{
     record_manual_proxy_request_failure, record_manual_proxy_request_outcome,
     record_manual_proxy_request_success, record_manual_proxy_stream_error,
     reqwest_urls_have_same_origin, resolve_execution_transport_controls,
-    resolve_non_stream_total_timeout, resolve_proxy_url, response_body_is_json,
-    safe_redirect_decision, validate_execution_upstream_url, with_upstream_response_body_limit,
-    DirectSyncExecutionRuntime, ExecutionRuntimeTransportError, ExecutionTransportControls,
-    SafeRedirectDecision, UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
+    resolve_non_stream_total_timeout, resolve_proxy_url, safe_redirect_decision,
+    validate_execution_upstream_url, with_upstream_response_body_limit, DirectSyncExecutionRuntime,
+    ExecutionRuntimeTransportError, ExecutionTransportControls, SafeRedirectDecision,
+    UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
     EXECUTION_RESPONSE_BODY_LIMIT_HEADER, MAX_SAFE_REDIRECTS, MAX_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
     MIN_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
 };
@@ -3202,17 +3202,6 @@ fn direct_sync_execution_runtime_rejects_unsupported_transport_backend() {
 }
 
 #[test]
-fn connect_json_response_is_not_treated_as_plain_json() {
-    let headers = BTreeMap::from([(
-        "content-type".to_string(),
-        "application/connect+json".to_string(),
-    )]);
-    let body = [2, 0, 0, 0, 2, b'{', b'}'];
-
-    assert!(!response_body_is_json(&headers, &body));
-}
-
-#[test]
 fn structured_json_response_does_not_duplicate_body_bytes() {
     let headers = BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
     let body_bytes = br#"{ "unknown": true, "ok": true }"#;
@@ -3253,36 +3242,6 @@ fn preserve_bytes_json_response_keeps_parsed_and_wire_representations() {
             .expect("wire body should decode"),
         body_bytes
     );
-}
-
-#[test]
-fn connect_json_error_response_is_decoded_for_stream_sync_body() {
-    let headers = BTreeMap::from([(
-        "content-type".to_string(),
-        "application/connect+json".to_string(),
-    )]);
-    let payload = br#"{"error":{"code":"resource_exhausted","message":"quota exhausted"}}"#;
-    let mut body_bytes = vec![2];
-    body_bytes.extend_from_slice(&(payload.len() as u32).to_be_bytes());
-    body_bytes.extend_from_slice(payload);
-
-    let body = build_execution_response_body(
-        &headers,
-        &body_bytes,
-        &body_bytes,
-        true,
-        ExecutionResponseBodyMode::StructuredJson,
-    )
-    .expect("body should build")
-    .expect("body should be present");
-
-    assert_eq!(
-        body.json_body
-            .as_ref()
-            .and_then(|value| value.pointer("/error/code")),
-        Some(&json!("resource_exhausted"))
-    );
-    assert!(body.body_bytes_b64.is_none());
 }
 
 #[tokio::test]

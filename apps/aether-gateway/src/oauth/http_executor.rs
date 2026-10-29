@@ -34,9 +34,6 @@ const TRUSTED_IDENTITY_BENCHMARKING_DNS_HOSTS: &[&str] = &[
     "connect.linuxdo.org",
     "oauth2.googleapis.com",
     "platform.claude.com",
-    "register.windsurf.com",
-    "server.self-serve.windsurf.com",
-    "windsurf.com",
 ];
 
 #[derive(Clone)]

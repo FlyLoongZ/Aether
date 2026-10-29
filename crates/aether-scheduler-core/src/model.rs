@@ -580,16 +580,10 @@ fn requested_model_name_candidates(
     let requested_model_name = requested_model_name.trim();
     let mut candidates = Vec::new();
     push_model_name_candidate(&mut candidates, Cow::Borrowed(requested_model_name));
-    for alias in requested_model_name_aliases(requested_model_name) {
-        push_model_name_candidate(&mut candidates, Cow::Owned(alias));
-    }
     if enable_model_directives {
         if let Some(base_model) =
             aether_ai_formats::model_directive_base_model(requested_model_name)
         {
-            for alias in requested_model_name_aliases(&base_model) {
-                push_model_name_candidate(&mut candidates, Cow::Owned(alias));
-            }
             push_model_name_candidate(&mut candidates, Cow::Owned(base_model));
         }
     }
@@ -607,26 +601,6 @@ fn push_model_name_candidate<'a>(candidates: &mut Vec<Cow<'a, str>>, candidate: 
         return;
     }
     candidates.push(candidate);
-}
-
-fn requested_model_name_aliases(requested_model_name: &str) -> Vec<String> {
-    let requested_model_name = requested_model_name.trim();
-    let Some(alias) = windsurf_gpt55_model_alias(requested_model_name) else {
-        return Vec::new();
-    };
-    vec![alias]
-}
-
-fn windsurf_gpt55_model_alias(model_name: &str) -> Option<String> {
-    let suffix = model_name
-        .strip_prefix("gpt-5-5")
-        .map(|suffix| format!("gpt-5.5{suffix}"))
-        .or_else(|| {
-            model_name
-                .strip_prefix("gpt-5.5")
-                .map(|suffix| format!("gpt-5-5{suffix}"))
-        })?;
-    (suffix != model_name).then_some(suffix)
 }
 
 #[cfg(test)]
@@ -891,39 +865,6 @@ mod tests {
 
         assert_eq!(resolved.0, "gpt-5.4-upstream");
         assert_eq!(resolved.1.as_deref(), Some("gpt-5.4"));
-    }
-
-    #[test]
-    fn windsurf_dashed_gpt55_alias_matches_dotted_model_name() {
-        let row = sample_row("gpt-5.5-low", "gpt-5.5-low");
-
-        assert!(row_supports_requested_model(
-            &row,
-            "gpt-5-5-low",
-            "openai:chat"
-        ));
-        assert_eq!(
-            resolve_requested_global_model_name_with_model_directives(
-                &[row],
-                "gpt-5-5-low",
-                "openai:chat",
-                false,
-            )
-            .as_deref(),
-            Some("gpt-5.5-low")
-        );
-    }
-
-    #[test]
-    fn windsurf_dashed_gpt55_alias_satisfies_key_allowed_models() {
-        let mut row = sample_row("gpt-5.5-low", "windsurf-upstream-uid");
-        row.key_allowed_models = Some(vec!["gpt-5.5-low".to_string()]);
-
-        let resolved = resolve_provider_model_name(&row, "gpt-5-5-low", "openai:chat")
-            .expect("dashed alias should satisfy dotted allowed model");
-
-        assert_eq!(resolved.0, "windsurf-upstream-uid");
-        assert_eq!(resolved.1.as_deref(), Some("gpt-5.5-low"));
     }
 
     #[test]

@@ -1695,7 +1695,6 @@ fn provider_quota_url_has_allowed_origin(provider_name: &str, value: &str) -> bo
         "claude_code" => host == "api.anthropic.com",
         "codex" => host == "chatgpt.com",
         "xai" => host == "cli-chat-proxy.grok.com",
-        "windsurf" => host == "server.codeium.com",
         "kiro" => kiro_quota_host_is_allowed(host),
         _ => false,
     }

@@ -2011,7 +2011,6 @@ const legacyExactEnglishMessages: Record<string, string> = {
   '发起设备授权失败': 'Failed to start device authorization',
   '设备码已过期': 'Device code expired',
   '邮箱密码': 'Email and password',
-  'Windsurf 密码': 'Windsurf password',
   '名称（可选）': 'Name (optional)',
   '未填写时使用邮箱': 'Uses email if left empty',
   '最近错误': 'Recent errors',

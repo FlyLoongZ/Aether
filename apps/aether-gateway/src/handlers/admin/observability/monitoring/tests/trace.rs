@@ -975,7 +975,7 @@ async fn admin_monitoring_trace_request_does_not_expose_inline_connect_json_resp
     let mut usage = sample_usage(
         "request-connect",
         "provider-1",
-        "Windsurf",
+        "Example",
         0,
         0.0,
         "failed",
