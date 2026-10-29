@@ -1352,7 +1352,7 @@ fn builds_claude_chat_request_from_gemini_chat_source() {
 }
 
 #[test]
-fn builds_gemini_cli_request_from_claude_cli_source() {
+fn builds_gemini_request_from_claude_cli_source() {
     let request = json!({
         "model": "claude-sonnet-4-5",
         "messages": [
@@ -1375,7 +1375,7 @@ fn builds_gemini_cli_request_from_claude_cli_source() {
         None,
         None,
     )
-    .expect("claude cli should convert to gemini cli");
+    .expect("claude cli should convert to gemini api");
 
     assert_eq!(converted["contents"][0]["role"], "user");
     assert_eq!(
