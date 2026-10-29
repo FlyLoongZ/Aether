@@ -790,8 +790,7 @@ fn insert_transport_error_type(source: &Map<String, Value>, target: &mut Map<Str
     };
     let normalized = value.to_ascii_lowercase();
     let value = match normalized.as_str() {
-        "chatgpt_web_image_execution_unavailable"
-        | "connect_timeout"
+        "connect_timeout"
         | "execution_runtime_unavailable"
         | "first_byte_timeout"
         | "gateway_admission_timeout"

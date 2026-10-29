@@ -7298,7 +7298,7 @@ async fn execute_execution_runtime_stream_rewrites_redirect_to_structured_failur
     let plan = ExecutionPlan {
         request_id: "req-remote-runtime-stream-redirect".into(),
         candidate_id: Some("cand-remote-runtime-stream-redirect".into()),
-        provider_name: Some("ChatGPTWeb".into()),
+        provider_name: Some("Codex".into()),
         provider_id: "prov-redirect".into(),
         endpoint_id: "ep-redirect".into(),
         key_id: "key-redirect".into(),

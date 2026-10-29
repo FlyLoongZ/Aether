@@ -430,25 +430,6 @@ export interface WindsurfUpstreamMetadata {
   last_error?: string | null
 }
 
-export interface ChatGPTWebUpstreamMetadata {
-  updated_at?: number  // Unix 时间戳（秒）
-  plan_type?: string | null
-  default_model_slug?: string | null
-  blocked_features?: string[] | null
-  image_quota_feature_name?: string | null
-  image_quota_remaining?: number | null
-  image_quota_total?: number | null
-  image_quota_used?: number | null
-  image_quota_reset_at?: number | null
-  image_quota_reset_after?: string | null
-  image_quota_blocked?: boolean | null
-  limits_progress?: Array<Record<string, unknown>> | null
-  email?: string | null
-  account_id?: string | null
-  account_user_id?: string | null
-  user_id?: string | null
-}
-
 export interface GrokUpstreamMetadata {
   updated_at?: number  // Unix 时间戳（秒）
   plan_type?: string | null
@@ -548,7 +529,6 @@ export interface UpstreamMetadata {
   antigravity?: AntigravityUpstreamMetadata
   kiro?: KiroUpstreamMetadata
   windsurf?: WindsurfUpstreamMetadata
-  chatgpt_web?: ChatGPTWebUpstreamMetadata
   grok?: GrokUpstreamMetadata
   gemini_cli?: GeminiCliUpstreamMetadata
   xai?: XaiUpstreamMetadata
@@ -790,7 +770,7 @@ export interface HealthRelatedMonitorResponse {
   related_providers: HealthRelatedMonitor[]
 }
 
-export type ProviderType = 'custom' | 'claude_code' | 'codex' | 'chatgpt_web' | 'gemini_cli' | 'antigravity' | 'kiro' | 'grok' | 'xai' | 'windsurf' | 'vertex_ai'
+export type ProviderType = 'custom' | 'claude_code' | 'codex' | 'gemini_cli' | 'antigravity' | 'kiro' | 'grok' | 'xai' | 'windsurf' | 'vertex_ai'
 
 export interface ClaudeCodeAdvancedConfig {
   // 会话数量控制：null/undefined 表示不限制

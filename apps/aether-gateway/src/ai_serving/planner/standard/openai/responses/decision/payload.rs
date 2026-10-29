@@ -131,18 +131,6 @@ pub(crate) async fn maybe_build_local_openai_responses_decision_payload_for_cand
     if let Some(image_request_summary) = resolved.image_request_summary.as_ref() {
         extra_fields.insert("image_request".to_string(), image_request_summary.clone());
     }
-    if resolved
-        .provider_api_format
-        .eq_ignore_ascii_case("openai:image")
-        && resolved
-            .transport
-            .provider
-            .provider_type
-            .trim()
-            .eq_ignore_ascii_case("chatgpt_web")
-    {
-        extra_fields.insert("chatgpt_web_image".to_string(), json!(true));
-    }
     insert_provider_stream_event_api_format(
         &mut extra_fields,
         resolved.transport.provider.provider_type.as_str(),

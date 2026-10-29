@@ -32,7 +32,7 @@ pub(crate) use crate::ai_serving::{
 };
 pub(crate) use crate::ai_serving::{AiStreamAttempt, AiSyncAttempt};
 pub(crate) use aether_ai_formats::api::{
-    build_core_error_body_for_client_format, convert_standard_chat_response,
+    build_core_error_body_for_client_format,
     core_error_background_report_kind, core_error_default_client_api_format,
     core_success_background_report_kind, encode_kiro_sse_events,
     extract_provider_private_stream_error_body, implicit_sync_finalize_report_kind,
@@ -40,9 +40,8 @@ pub(crate) use aether_ai_formats::api::{
     normalize_provider_private_response_value, provider_private_response_allows_sync_finalize,
     resolve_claude_stream_spec, resolve_claude_sync_spec, resolve_gemini_stream_spec,
     resolve_gemini_sync_spec, resolve_local_same_format_stream_spec,
-    resolve_local_same_format_sync_spec, sanitize_request_query_string, CanonicalContentPart,
-    CanonicalStreamEvent, CanonicalStreamFrame, ClaudeClientEmitter, LocalCoreSyncErrorKind,
-    LocalStandardSpec, OpenAIChatClientEmitter, OpenAIResponsesClientEmitter,
+    resolve_local_same_format_sync_spec, sanitize_request_query_string, LocalCoreSyncErrorKind,
+    LocalStandardSpec,
     StreamingStandardTerminalObserver, CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CLI_STREAM_PLAN_KIND,
     GEMINI_CHAT_STREAM_PLAN_KIND, GEMINI_CLI_STREAM_PLAN_KIND, GEMINI_FILES_DOWNLOAD_PLAN_KIND,
     GEMINI_INTERACTIONS_STREAM_PLAN_KIND, GEMINI_VIDEO_CANCEL_SYNC_PLAN_KIND,
@@ -51,7 +50,6 @@ pub(crate) use aether_ai_formats::api::{
     OPENAI_VIDEO_CANCEL_SYNC_PLAN_KIND, OPENAI_VIDEO_CONTENT_PLAN_KIND,
     OPENAI_VIDEO_DELETE_SYNC_PLAN_KIND, OPENAI_VIDEO_REMIX_SYNC_PLAN_KIND,
 };
-pub(crate) use aether_ai_formats::protocol::stream::CanonicalUsage as StreamingCanonicalUsage;
 /// Codex client identity accessors re-exported for out-of-crate probe binaries,
 /// which must reach the runtime profile through this seam.
 pub use aether_ai_formats::{codex_client_originator, codex_client_user_agent};

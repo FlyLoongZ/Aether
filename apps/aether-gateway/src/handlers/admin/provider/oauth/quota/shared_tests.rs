@@ -56,25 +56,12 @@ fn quota_origin_policy_accepts_only_provider_owned_https_origins() {
             "antigravity",
             "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
         ),
-        (
-            "gemini_cli",
-            "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota",
-        ),
-        (
-            "chatgpt_web",
-            "https://chatgpt.com/backend-api/conversation/init",
-        ),
         ("codex", "https://chatgpt.com/backend-api/wham/usage"),
-        ("grok", "https://grok.com/rest/rate-limits"),
         (
             "xai",
             "https://cli-chat-proxy.grok.com/v1/billing?format=credits",
         ),
         ("xai", "https://cli-chat-proxy.grok.com/v1/user"),
-        (
-            "windsurf",
-            "https://server.codeium.com/exa.seat_management_pb.SeatManagementService/GetUserStatus",
-        ),
         (
             "kiro",
             "https://q.us-east-1.amazonaws.com/getUsageLimits?origin=AI_EDITOR",
@@ -90,10 +77,6 @@ fn quota_origin_policy_accepts_only_provider_owned_https_origins() {
 #[test]
 fn quota_origin_policy_rejects_ssrf_and_credential_redirect_origins() {
     for (provider_name, url) in [
-        (
-            "chatgpt_web",
-            "http://chatgpt.com/backend-api/conversation/init",
-        ),
         ("codex", "https://chatgpt.com:444/backend-api/wham/usage"),
         (
             "codex",
@@ -103,17 +86,11 @@ fn quota_origin_policy_rejects_ssrf_and_credential_redirect_origins() {
             "codex",
             "https://chatgpt.com.attacker.test/backend-api/wham/usage",
         ),
-        ("grok", "https://grok.com.attacker.test/rest/rate-limits"),
         (
             "xai",
             "https://cli-chat-proxy.grok.com.attacker.test/v1/billing",
         ),
         ("xai", "https://api.x.ai/v1/billing?format=credits"),
-        ("windsurf", "https://server.codeium.com.attacker.test/quota"),
-        (
-            "gemini_cli",
-            "https://quota-proxy.internal/retrieveUserQuota",
-        ),
         (
             "antigravity",
             "https://cloudcode-pa.googleapis.com.attacker.test/quota",

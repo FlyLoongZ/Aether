@@ -571,91 +571,6 @@ fn admin_pool_build_kiro_account_quota_from_snapshot(
     }
 }
 
-fn admin_pool_build_chatgpt_web_account_quota_from_snapshot(
-    quota_snapshot: &serde_json::Map<String, serde_json::Value>,
-) -> Option<String> {
-    let now_unix_secs = chrono::Utc::now().timestamp().max(0) as u64;
-    let window = admin_pool_quota_window(quota_snapshot, "image_gen")
-        .or_else(|| admin_pool_quota_windows(quota_snapshot).into_iter().next())?;
-    let remaining_value = admin_pool_json_to_f64(window.get("remaining_value"));
-    let limit_value = admin_pool_json_to_f64(window.get("limit_value"));
-    let remaining_percent = admin_pool_json_to_f64(window.get("remaining_ratio"))
-        .map(|value| (value * 100.0).clamp(0.0, 100.0))
-        .or_else(|| {
-            admin_pool_json_to_f64(window.get("used_ratio"))
-                .map(|value| ((1.0 - value) * 100.0).clamp(0.0, 100.0))
-        });
-    let reset_seconds =
-        admin_pool_quota_window_reset_seconds(quota_snapshot, window, now_unix_secs);
-
-    let mut text = match (remaining_value, limit_value, remaining_percent) {
-        (Some(remaining), Some(limit), _) if limit > 0.0 => Some(format!(
-            "生图剩余 {}/{}",
-            admin_pool_format_quota_value(remaining),
-            admin_pool_format_quota_value(limit),
-        )),
-        (Some(remaining), _, _) => Some(format!(
-            "生图剩余 {}",
-            admin_pool_format_quota_value(remaining),
-        )),
-        (_, _, Some(percent)) => Some(format!("生图剩余 {}", admin_pool_format_percent(percent))),
-        _ => None,
-    }?;
-
-    if let Some(reset_text) = reset_seconds.and_then(admin_pool_format_reset_after) {
-        text.push_str(&format!(" ({reset_text})"));
-    }
-    Some(text)
-}
-
-fn admin_pool_build_antigravity_account_quota_from_snapshot(
-    quota_snapshot: &serde_json::Map<String, serde_json::Value>,
-) -> Option<String> {
-    if quota_snapshot
-        .get("code")
-        .and_then(serde_json::Value::as_str)
-        .is_some_and(|code| code.eq_ignore_ascii_case("forbidden"))
-    {
-        return quota_snapshot
-            .get("label")
-            .and_then(serde_json::Value::as_str)
-            .map(ToOwned::to_owned)
-            .or_else(|| Some("访问受限".to_string()));
-    }
-
-    let remaining_list = admin_pool_quota_windows(quota_snapshot)
-        .into_iter()
-        .filter(|window| {
-            window
-                .get("scope")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|scope| scope.eq_ignore_ascii_case("model"))
-        })
-        .filter_map(|window| {
-            admin_pool_json_to_f64(window.get("remaining_ratio"))
-                .map(|value| (value * 100.0).clamp(0.0, 100.0))
-                .or_else(|| {
-                    admin_pool_json_to_f64(window.get("used_ratio"))
-                        .map(|value| ((1.0 - value) * 100.0).clamp(0.0, 100.0))
-                })
-        })
-        .collect::<Vec<_>>();
-
-    if remaining_list.is_empty() {
-        return None;
-    }
-
-    let min_remaining = remaining_list.iter().copied().fold(100.0_f64, f64::min);
-    if remaining_list.len() == 1 {
-        return Some(format!("剩余 {}", admin_pool_format_percent(min_remaining)));
-    }
-    Some(format!(
-        "最低剩余 {} ({} 模型)",
-        admin_pool_format_percent(min_remaining),
-        remaining_list.len()
-    ))
-}
-
 fn admin_pool_grok_quota_window_label(
     window: &serde_json::Map<String, serde_json::Value>,
 ) -> String {
@@ -938,13 +853,6 @@ fn admin_pool_build_account_quota(
         "xai" => {
             if let Some(account_quota) =
                 admin_pool_build_kiro_account_quota_from_snapshot(quota_snapshot)
-            {
-                return Some(account_quota);
-            }
-        }
-        "chatgpt_web" => {
-            if let Some(account_quota) =
-                admin_pool_build_chatgpt_web_account_quota_from_snapshot(quota_snapshot)
             {
                 return Some(account_quota);
             }

@@ -1,5 +1,4 @@
 pub mod antigravity;
-pub mod chatgpt_web;
 pub mod claude_code;
 pub mod codex;
 pub mod default;
@@ -14,12 +13,6 @@ pub use antigravity::AntigravityProviderPoolAdapter;
 pub use antigravity::{
     build_antigravity_pool_quota_request, build_antigravity_pool_quota_summary_request,
     ANTIGRAVITY_FETCH_AVAILABLE_MODELS_PATH, ANTIGRAVITY_RETRIEVE_USER_QUOTA_SUMMARY_PATH,
-};
-pub use chatgpt_web::ChatGptWebProviderPoolAdapter;
-pub use chatgpt_web::{
-    build_chatgpt_web_pool_quota_request, enrich_chatgpt_web_quota_metadata,
-    normalize_chatgpt_web_image_quota_limit, CHATGPT_WEB_CONVERSATION_INIT_PATH,
-    CHATGPT_WEB_DEFAULT_BASE_URL,
 };
 pub use claude_code::ClaudeCodeProviderPoolAdapter;
 pub use claude_code::{

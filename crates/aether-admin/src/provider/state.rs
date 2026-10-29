@@ -157,10 +157,7 @@ fn first_json_non_empty_string(values: impl IntoIterator<Item = Option<Value>>) 
 }
 
 fn provider_type_uses_openai_chatgpt_identity(provider_type: &str) -> bool {
-    matches!(
-        provider_type.trim().to_ascii_lowercase().as_str(),
-        "codex" | "chatgpt_web"
-    )
+    matches!(provider_type.trim().to_ascii_lowercase().as_str(), "codex")
 }
 
 fn extract_openai_chatgpt_auth_fields_from_object(
@@ -537,38 +534,6 @@ mod tests {
 
         assert_eq!(params.get("token").map(String::as_str), Some("raw-token"));
         assert_eq!(params.get("state").map(String::as_str), Some("session-raw"));
-    }
-
-    #[test]
-    fn chatgpt_web_enrichment_extracts_identity_from_openai_claims() {
-        let access_token = sample_unsigned_jwt(json!({
-            "https://api.openai.com/profile": {
-                "email": "image@example.com",
-            },
-            "https://api.openai.com/auth": {
-                "chatgpt_account_id": "acc-image",
-                "chatgpt_account_user_id": "user-image__acc-image",
-                "chatgpt_plan_type": "plus",
-                "chatgpt_user_id": "user-image",
-                "chatgpt_account_is_fedramp": true,
-            },
-        }));
-        let token_payload = json!({
-            "access_token": access_token,
-        });
-        let mut auth_config = serde_json::Map::new();
-
-        enrich_admin_provider_oauth_auth_config("chatgpt_web", &mut auth_config, &token_payload);
-
-        assert_eq!(auth_config.get("email"), Some(&json!("image@example.com")));
-        assert_eq!(auth_config.get("account_id"), Some(&json!("acc-image")));
-        assert_eq!(
-            auth_config.get("account_user_id"),
-            Some(&json!("user-image__acc-image"))
-        );
-        assert_eq!(auth_config.get("plan_type"), Some(&json!("plus")));
-        assert_eq!(auth_config.get("user_id"), Some(&json!("user-image")));
-        assert_eq!(auth_config.get("is_fedramp"), Some(&json!(true)));
     }
 
     #[test]

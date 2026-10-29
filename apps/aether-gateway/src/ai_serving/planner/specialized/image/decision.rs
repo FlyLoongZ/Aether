@@ -74,17 +74,6 @@ pub(super) async fn maybe_build_local_openai_image_decision_payload_for_candidat
         extra_fields.insert("proxy".to_string(), proxy_value);
     }
     extra_fields.insert("image_request".to_string(), resolved.input_summary.clone());
-    if transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("chatgpt_web")
-    {
-        extra_fields.insert(
-            "chatgpt_web_image".to_string(),
-            serde_json::Value::Bool(true),
-        );
-    }
     let upstream_is_stream = resolved.upstream_is_stream;
     let effective_headers = input.effective_headers(&parts.headers);
     let report_context = append_execution_contract_fields_to_value(

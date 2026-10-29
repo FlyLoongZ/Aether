@@ -1703,7 +1703,6 @@ const showAccountQuotaColumn = computed(() => {
     || selectedProviderType.value === 'windsurf'
     || selectedProviderType.value === 'antigravity'
     || selectedProviderType.value === 'grok'
-    || selectedProviderType.value === 'chatgpt_web'
     || selectedProviderType.value === 'xai'
 })
 
@@ -2160,7 +2159,6 @@ const quotaRefreshSupported = computed(() => {
     || selectedProviderType.value === 'windsurf'
     || selectedProviderType.value === 'antigravity'
     || selectedProviderType.value === 'grok'
-    || selectedProviderType.value === 'chatgpt_web'
     || selectedProviderType.value === 'xai'
 })
 
@@ -3532,7 +3530,7 @@ function getQuotaProgressLabel(label: string): string {
 }
 
 function getQuotaProgressCountdown(item: QuotaProgressItem) {
-  const staticResetLabels = ['日', '5H', '周', '月', '周额度', '月额度', '额度', 'Spark5H', 'Spark周', 'Spark月', 'Auto', 'Fast', 'Expert', 'Heavy', 'Grok 4.3', '生图']
+  const staticResetLabels = ['日', '5H', '周', '月', '周额度', '月额度', '额度', 'Spark5H', 'Spark周', 'Spark月', 'Auto', 'Fast', 'Expert', 'Heavy', 'Grok 4.3']
   if (!item.allowDynamicReset && !staticResetLabels.includes(item.label)) return null
   if (item.resetAtSeconds == null && item.resetSeconds == null) return null
   return getCodexResetCountdown(
@@ -3608,7 +3606,6 @@ function getQuotaLabelOrder(label: string): number {
   if (label === '剩余') return 14
   if (label === '额度') return 14
   if (label === '最低') return 15
-  if (label === '生图') return 16
   if (label === '速率') return 17
   if (label === '模型') return 18
   return 20
@@ -3981,34 +3978,6 @@ function buildQuotaProgressItemsFromSnapshot(key: PoolKeyDetail): QuotaProgressI
         }
       })
       .filter((item): item is QuotaProgressItem => item != null)
-  }
-
-  if (providerType === 'chatgpt_web') {
-    const window = getQuotaSnapshotWindow(quota, 'image_gen')
-      ?? getQuotaSnapshotWindowsByScope(quota, 'account')[0]
-      ?? null
-    const remainingPercent = getQuotaWindowRemainingPercent(window)
-    if (remainingPercent == null) return []
-
-    const remainingValue = typeof window?.remaining_value === 'number' ? window.remaining_value : null
-    const limitValue = typeof window?.limit_value === 'number' ? window.limit_value : null
-    const usedValue = typeof window?.used_value === 'number' ? window.used_value : null
-    const detail = remainingValue != null && limitValue != null
-      ? `${formatQuotaValue(remainingValue)}/${formatQuotaValue(limitValue)}`
-      : usedValue != null && limitValue != null
-        ? `${formatQuotaValue(Math.max(limitValue - usedValue, 0))}/${formatQuotaValue(limitValue)}`
-        : remainingValue != null
-          ? `剩余 ${formatQuotaValue(remainingValue)}`
-          : undefined
-
-    return [{
-      label: '生图',
-      remainingPercent,
-      detail,
-      resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? null),
-      resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? null),
-      updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-    }]
   }
 
   return []

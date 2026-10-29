@@ -34,7 +34,6 @@ const MODEL_TEST_UNSUPPORTED_API_FORMATS = new Set([
 const MODEL_TEST_OAUTH_INHERITS_PROVIDER_FORMATS = new Set([
   'claude_code',
   'codex',
-  'chatgpt_web',
   'gemini_cli',
   'vertex_ai',
   'antigravity',
@@ -43,7 +42,6 @@ const MODEL_TEST_OAUTH_INHERITS_PROVIDER_FORMATS = new Set([
 ])
 
 const MODEL_TEST_BEARER_INHERITS_PROVIDER_FORMATS = new Set([
-  'chatgpt_web',
   'xai',
 ])
 

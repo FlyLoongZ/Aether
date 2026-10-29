@@ -1052,7 +1052,7 @@ fn stream_terminal_usage_marks_redirect_status_as_failed() {
     let plan = ExecutionPlan {
         request_id: "req-stream-redirect-usage".to_string(),
         candidate_id: Some("cand-stream-redirect-usage".to_string()),
-        provider_name: Some("ChatGPTWeb".to_string()),
+        provider_name: Some("Gemini".to_string()),
         provider_id: "provider-redirect".to_string(),
         endpoint_id: "endpoint-redirect".to_string(),
         key_id: "key-redirect".to_string(),

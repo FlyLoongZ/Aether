@@ -3,10 +3,10 @@ use std::collections::BTreeSet;
 pub(crate) fn normalize_provider_type_input(value: &str) -> Result<String, String> {
     let normalized = value.trim().to_ascii_lowercase();
     match normalized.as_str() {
-        "custom" | "claude_code" | "kiro" | "codex" | "chatgpt_web" | "gemini_cli"
+        "custom" | "claude_code" | "kiro" | "codex" | "gemini_cli"
         | "antigravity" | "vertex_ai" | "grok" | "windsurf" | "xai" => Ok(normalized),
         _ => Err(
-            "provider_type 仅支持 custom / claude_code / kiro / codex / chatgpt_web / gemini_cli / antigravity / vertex_ai / grok / windsurf / xai"
+            "provider_type 仅支持 custom / claude_code / kiro / codex / gemini_cli / antigravity / vertex_ai / grok / windsurf / xai"
                 .to_string(),
         ),
     }
@@ -387,22 +387,6 @@ mod tests {
         assert_eq!(
             normalize_auth_type(Some("bearer")).expect("bearer should normalize"),
             "bearer"
-        );
-    }
-
-    #[test]
-    fn normalize_provider_type_supports_chatgpt_web() {
-        assert_eq!(
-            normalize_provider_type_input(" ChatGPT_Web ").expect("type should normalize"),
-            "chatgpt_web"
-        );
-    }
-
-    #[test]
-    fn normalize_provider_type_supports_grok() {
-        assert_eq!(
-            normalize_provider_type_input(" Grok ").expect("type should normalize"),
-            "grok"
         );
     }
 

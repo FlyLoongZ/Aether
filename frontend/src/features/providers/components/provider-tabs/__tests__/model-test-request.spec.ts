@@ -473,7 +473,7 @@ describe('isModelTestableEndpoint', () => {
     expect(isModelTestableEndpoint({
       api_format: 'openai:image',
       is_active: true,
-    }, keys, 'chatgpt_web')).toBe(true)
+    }, keys, 'xai')).toBe(true)
     expect(isModelTestableEndpoint({
       api_format: 'openai:image',
       is_active: true,

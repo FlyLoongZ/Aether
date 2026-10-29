@@ -240,7 +240,7 @@ pub(super) fn provider_oauth_import_authorization_bearer_token_from_object(
 pub(super) fn provider_type_supports_access_token_import(provider_type: &str) -> bool {
     matches!(
         provider_type.trim().to_ascii_lowercase().as_str(),
-        "claude_code" | "codex" | "chatgpt_web" | "grok" | "xai"
+        "claude_code" | "codex" | "grok" | "xai"
     )
 }
 
@@ -480,67 +480,6 @@ mod tests {
         assert_eq!(
             provider_oauth_import_authorization_bearer_token(Some(&headers)).as_deref(),
             Some("at-session-token")
-        );
-    }
-
-    #[test]
-    fn builds_chatgpt_web_temporary_auth_config_from_access_token() {
-        let token = unsigned_jwt(json!({
-            "exp": 2_000_000_000u64,
-            "https://api.openai.com/profile": {
-                "email": "image@example.com"
-            },
-            "https://api.openai.com/auth": {
-                "chatgpt_account_id": "acct-image-123"
-            },
-        }));
-
-        let (auth_config, expires_at) =
-            build_provider_access_token_import_auth_config("chatgpt_web", &token, None, None, None);
-
-        assert_eq!(expires_at, Some(2_000_000_000));
-        assert_eq!(
-            auth_config.get("provider_type"),
-            Some(&json!("chatgpt_web"))
-        );
-        assert_eq!(auth_config.get("email"), Some(&json!("image@example.com")));
-        assert_eq!(
-            auth_config.get("account_id"),
-            Some(&json!("acct-image-123"))
-        );
-        assert_eq!(
-            auth_config.get("access_token_import_temporary"),
-            Some(&json!(true))
-        );
-    }
-
-    #[test]
-    fn normalize_grok_import_treats_opaque_session_as_access_token() {
-        let (refresh_token, access_token) =
-            normalize_provider_import_tokens("grok", Some("sso_session_token"), None);
-        assert!(refresh_token.is_none());
-        assert_eq!(access_token.as_deref(), Some("sso_session_token"));
-    }
-
-    #[test]
-    fn builds_grok_auth_config_from_session_token() {
-        let (auth_config, expires_at) = build_provider_access_token_import_auth_config(
-            "grok",
-            "sso_session_token",
-            None,
-            Some(2_200_000_000),
-            None,
-        );
-
-        assert_eq!(expires_at, Some(2_200_000_000));
-        assert_eq!(
-            auth_config.get("sso_token"),
-            Some(&json!("sso_session_token"))
-        );
-        assert_eq!(auth_config.get("auth_method"), Some(&json!("sso_token")));
-        assert_eq!(
-            auth_config.get("expires_at"),
-            Some(&json!(2_200_000_000u64))
         );
     }
 

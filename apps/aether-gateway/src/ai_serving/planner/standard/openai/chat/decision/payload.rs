@@ -123,18 +123,6 @@ pub(crate) async fn maybe_build_local_openai_chat_decision_payload_for_candidate
     if let Some(image_request_summary) = resolved.image_request_summary.as_ref() {
         extra_fields.insert("image_request".to_string(), image_request_summary.clone());
     }
-    if resolved
-        .provider_api_format
-        .eq_ignore_ascii_case("openai:image")
-        && resolved
-            .transport
-            .provider
-            .provider_type
-            .trim()
-            .eq_ignore_ascii_case("chatgpt_web")
-    {
-        extra_fields.insert("chatgpt_web_image".to_string(), serde_json::json!(true));
-    }
     let super::request::LocalOpenAiChatCandidatePayloadParts {
         client_api_format,
         auth_header,

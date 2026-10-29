@@ -1420,11 +1420,6 @@ async fn resolve_openai_responses_to_openai_image_payload_parts(
         }
     };
 
-    let is_chatgpt_web = transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("chatgpt_web");
     let is_codex = transport
         .provider
         .provider_type
@@ -1437,18 +1432,13 @@ async fn resolve_openai_responses_to_openai_image_payload_parts(
         spec_metadata.require_streaming && candidate.supports_streaming,
         false,
     );
-    let Some((mut provider_request_body, image_request_summary)) = (if is_chatgpt_web {
-        build_chatgpt_web_image_provider_body_from_openai_responses_body(
-            body_json,
-            &input.requested_model,
-        )
-    } else {
+    let Some((mut provider_request_body, image_request_summary)) =
         build_openai_image_provider_body_from_openai_responses_body(
             body_json,
             &prepared_candidate.mapped_model,
             upstream_is_stream,
         )
-    }) else {
+    else {
         mark_skipped_local_openai_responses_candidate_with_extra_data(
             state,
             input,
@@ -1470,7 +1460,7 @@ async fn resolve_openai_responses_to_openai_image_payload_parts(
     if is_codex {
         provider_request_body =
             project_codex_openai_image_api_request_body(&provider_request_body, operation)?;
-    } else if !is_chatgpt_web {
+    } else {
         provider_request_body = project_openai_image_api_request_body(
             &provider_request_body,
             &prepared_candidate.mapped_model,
@@ -1482,15 +1472,11 @@ async fn resolve_openai_responses_to_openai_image_payload_parts(
         )?;
     }
 
-    let upstream_url = if is_chatgpt_web {
-        chatgpt_web_image_internal_url(&transport.endpoint.base_url)
-    } else {
-        let request_path = match operation {
-            OpenAiImageOperation::Generate => "/v1/images/generations",
-            OpenAiImageOperation::Edit => "/v1/images/edits",
-        };
-        build_openai_image_upstream_url(transport, Some(request_path), parts.uri.query())
+    let request_path = match operation {
+        OpenAiImageOperation::Generate => "/v1/images/generations",
+        OpenAiImageOperation::Edit => "/v1/images/edits",
     };
+    let upstream_url = build_openai_image_upstream_url(transport, Some(request_path), parts.uri.query());
     let Some(mut provider_request_headers) =
         build_openai_image_headers(ProviderOpenAiImageHeadersInput {
             transport,
@@ -1526,23 +1512,19 @@ async fn resolve_openai_responses_to_openai_image_payload_parts(
         .await;
         return None;
     };
-    if is_chatgpt_web {
-        provider_request_headers.insert("x-aether-chatgpt-web-image".to_string(), "1".to_string());
-    } else {
-        apply_local_auth_config_header_overrides(
-            &mut provider_request_headers,
-            transport.key.decrypted_auth_config.as_deref(),
-        );
-        apply_codex_openai_special_headers(
-            &mut provider_request_headers,
-            &provider_request_body,
-            &parts.headers,
-            transport.provider.provider_type.as_str(),
-            provider_api_format,
-            Some(trace_id),
-            transport.key.decrypted_auth_config.as_deref(),
-        );
-    }
+    apply_local_auth_config_header_overrides(
+        &mut provider_request_headers,
+        transport.key.decrypted_auth_config.as_deref(),
+    );
+    apply_codex_openai_special_headers(
+        &mut provider_request_headers,
+        &provider_request_body,
+        &parts.headers,
+        transport.provider.provider_type.as_str(),
+        provider_api_format,
+        Some(trace_id),
+        transport.key.decrypted_auth_config.as_deref(),
+    );
 
     let (execution_strategy, conversion_mode) =
         ai_local_execution_contract_for_formats(spec_metadata.api_format, provider_api_format);
@@ -1669,184 +1651,6 @@ fn openai_responses_image_generation_tool(
         .cloned()
 }
 
-fn build_chatgpt_web_image_provider_body_from_openai_responses_body(
-    body_json: &Value,
-    requested_model: &str,
-) -> Option<(Value, Value)> {
-    let object = body_json.as_object()?;
-    let (prompt, images) = collect_openai_responses_image_prompt_and_images(object.get("input"))?;
-    let operation = if images.is_empty() {
-        "generate"
-    } else {
-        "edit"
-    };
-    let tool = openai_responses_image_generation_tool(object);
-    let size = image_option_string(tool.as_ref(), object, "size").unwrap_or("1024x1024");
-    let output_format =
-        image_option_string(tool.as_ref(), object, "output_format").unwrap_or("png");
-    let quality = image_option_string(tool.as_ref(), object, "quality").unwrap_or("medium");
-    let model = object
-        .get("model")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| requested_model.trim());
-    let web_model = image_option_string(tool.as_ref(), object, "web_model")
-        .or_else(|| image_option_string(tool.as_ref(), object, "model"))
-        .unwrap_or("gpt-5-5-thinking");
-    let image_urls = openai_image_inputs_as_urls(&images);
-
-    let mut body = json!({
-        "operation": operation,
-        "model": if model.is_empty() { "gpt-image-2" } else { model },
-        "web_model": web_model,
-        "prompt": prompt,
-        "size": size,
-        "ratio": chatgpt_web_ratio_for_size(size),
-        "quality": quality,
-        "output_format": output_format,
-        "images": image_urls,
-    });
-    if let Some(partial_images) = tool
-        .as_ref()
-        .and_then(|tool| tool.get("partial_images"))
-        .or_else(|| object.get("partial_images"))
-        .cloned()
-    {
-        body.as_object_mut()?
-            .insert("partial_images".to_string(), partial_images);
-    }
-    let mut summary = json!({
-        "operation": operation,
-        "output_format": output_format,
-        "size": size,
-        "quality": quality,
-    });
-    if let Some(partial_images) = tool
-        .as_ref()
-        .and_then(|tool| tool.get("partial_images"))
-        .or_else(|| object.get("partial_images"))
-        .cloned()
-    {
-        summary
-            .as_object_mut()?
-            .insert("partial_images".to_string(), partial_images);
-    }
-    Some((body, summary))
-}
-
-fn image_option_string<'a>(
-    tool: Option<&'a serde_json::Map<String, Value>>,
-    object: &'a serde_json::Map<String, Value>,
-    key: &str,
-) -> Option<&'a str> {
-    tool.and_then(|tool| tool.get(key))
-        .or_else(|| object.get(key))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-}
-
-fn collect_openai_responses_image_prompt_and_images(
-    input: Option<&Value>,
-) -> Option<(String, Vec<Value>)> {
-    let input = input?;
-    let mut prompt_parts = Vec::new();
-    let mut images = Vec::new();
-    collect_openai_responses_image_input(input, &mut prompt_parts, &mut images);
-    let prompt = prompt_parts.join("\n").trim().to_string();
-    (!prompt.is_empty()).then_some((prompt, images))
-}
-
-fn collect_openai_responses_image_input(
-    value: &Value,
-    prompt_parts: &mut Vec<String>,
-    images: &mut Vec<Value>,
-) {
-    match value {
-        Value::String(text) => {
-            let text = text.trim();
-            if !text.is_empty() {
-                prompt_parts.push(text.to_string());
-            }
-        }
-        Value::Array(items) => {
-            for item in items {
-                collect_openai_responses_image_input(item, prompt_parts, images);
-            }
-        }
-        Value::Object(object) => {
-            let item_type = object
-                .get("type")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .unwrap_or_default();
-            if matches!(item_type, "input_text" | "text") {
-                if let Some(text) = object
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                {
-                    prompt_parts.push(text.to_string());
-                }
-            } else if matches!(item_type, "input_image" | "image_url") {
-                collect_openai_image_input_object(object, images);
-            }
-            if let Some(content) = object.get("content") {
-                collect_openai_responses_image_input(content, prompt_parts, images);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn collect_openai_image_input_object(
-    object: &serde_json::Map<String, Value>,
-    images: &mut Vec<Value>,
-) {
-    if let Some(url) = object
-        .get("image_url")
-        .and_then(|value| {
-            value
-                .as_str()
-                .or_else(|| value.get("url").and_then(Value::as_str))
-        })
-        .or_else(|| object.get("url").and_then(Value::as_str))
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        images.push(json!({
-            "type": "input_image",
-            "image_url": url,
-        }));
-    } else if let Some(file_id) = object
-        .get("file_id")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        images.push(json!({
-            "type": "input_image",
-            "file_id": file_id,
-        }));
-    }
-}
-
-fn openai_image_inputs_as_urls(images: &[Value]) -> Vec<Value> {
-    images
-        .iter()
-        .filter_map(|image| {
-            image
-                .get("image_url")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(|value| Value::String(value.to_string()))
-        })
-        .collect()
-}
-
 fn openai_image_inputs_as_api_urls(images: &[Value]) -> Vec<Value> {
     images
         .iter()
@@ -1859,42 +1663,6 @@ fn openai_image_inputs_as_api_urls(images: &[Value]) -> Vec<Value> {
                 .map(|value| json!({ "image_url": value }))
         })
         .collect()
-}
-
-fn chatgpt_web_ratio_for_size(size: &str) -> String {
-    let Some((width, height)) = size.split_once('x') else {
-        return "1:1".to_string();
-    };
-    let Ok(width) = width.trim().parse::<u64>() else {
-        return "1:1".to_string();
-    };
-    let Ok(height) = height.trim().parse::<u64>() else {
-        return "1:1".to_string();
-    };
-    if width == 0 || height == 0 {
-        return "1:1".to_string();
-    }
-    let divisor = gcd(width, height);
-    format!("{}:{}", width / divisor, height / divisor)
-}
-
-fn gcd(mut left: u64, mut right: u64) -> u64 {
-    while right != 0 {
-        let next = left % right;
-        left = right;
-        right = next;
-    }
-    left.max(1)
-}
-
-fn chatgpt_web_image_internal_url(base_url: &str) -> String {
-    let base_url = base_url.trim().trim_end_matches('/');
-    let base_url = if base_url.is_empty() {
-        "https://chatgpt.com"
-    } else {
-        base_url
-    };
-    format!("{base_url}/__aether/chatgpt-web-image")
 }
 
 #[allow(clippy::too_many_arguments)]

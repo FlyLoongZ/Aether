@@ -876,7 +876,7 @@ pub(super) fn apply_admin_provider_oauth_batch_import_hints(
         }
         return;
     }
-    if !matches!(provider_type.as_str(), "codex" | "chatgpt_web" | "grok") {
+    if !matches!(provider_type.as_str(), "codex" | "grok") {
         return;
     }
     if let Some(account_id) = entry.account_id.as_ref() {

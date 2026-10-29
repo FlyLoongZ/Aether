@@ -170,15 +170,6 @@ const CODEX_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     supports_local_openai_chat_transport: false,
     ..STANDARD_RUNTIME_POLICY
 };
-const CHATGPT_WEB_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
-    fixed_provider: true,
-    enable_format_conversion_by_default: true,
-    oauth_is_bearer_like: true,
-    supports_model_fetch: false,
-    supports_local_openai_chat_transport: false,
-    supports_local_same_format_transport: false,
-    ..STANDARD_RUNTIME_POLICY
-};
 const GEMINI_CLI_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
     oauth_is_bearer_like: true,
@@ -282,19 +273,6 @@ const CODEX_FIXED_PROVIDER_TEMPLATE: FixedProviderTemplate = FixedProviderTempla
         },
     ],
     runtime_policy: CODEX_RUNTIME_POLICY,
-};
-
-const CHATGPT_WEB_FIXED_PROVIDER_TEMPLATE: FixedProviderTemplate = FixedProviderTemplate {
-    provider_type: "chatgpt_web",
-    version: 1,
-    base_url: "https://chatgpt.com",
-    endpoints: &[FixedProviderEndpointTemplate {
-        item_key: "openai:image",
-        api_format: "openai:image",
-        custom_path: None,
-        config_defaults: FORCE_STREAM_ENDPOINT_CONFIG_DEFAULTS,
-    }],
-    runtime_policy: CHATGPT_WEB_RUNTIME_POLICY,
 };
 
 const KIRO_FIXED_PROVIDER_TEMPLATE: FixedProviderTemplate = FixedProviderTemplate {
@@ -494,7 +472,6 @@ pub fn fixed_provider_template(provider_type: &str) -> Option<&'static FixedProv
     match provider_type.trim().to_ascii_lowercase().as_str() {
         "claude_code" => Some(&CLAUDE_CODE_FIXED_PROVIDER_TEMPLATE),
         "codex" => Some(&CODEX_FIXED_PROVIDER_TEMPLATE),
-        "chatgpt_web" => Some(&CHATGPT_WEB_FIXED_PROVIDER_TEMPLATE),
         "kiro" => Some(&KIRO_FIXED_PROVIDER_TEMPLATE),
         "grok" => Some(&GROK_FIXED_PROVIDER_TEMPLATE),
         "gemini_cli" => Some(&GEMINI_CLI_FIXED_PROVIDER_TEMPLATE),
@@ -567,16 +544,6 @@ pub fn provider_type_admin_oauth_template(provider_type: &str) -> Option<Provide
             redirect_uri: "http://localhost:1455/auth/callback",
             use_pkce: true,
         }),
-        "chatgpt_web" => Some(ProviderOAuthTemplate {
-            provider_type: "chatgpt_web",
-            display_name: "ChatGPT Web",
-            authorize_url: "https://auth.openai.com/oauth/authorize",
-            token_url: "https://auth.openai.com/oauth/token",
-            client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
-            scopes: &["openid", "email", "profile", "offline_access"],
-            redirect_uri: "http://localhost:1455/auth/callback",
-            use_pkce: true,
-        }),
         "gemini_cli" => Some(ProviderOAuthTemplate {
             provider_type: "gemini_cli",
             display_name: "GeminiCli",
@@ -634,7 +601,6 @@ pub fn provider_type_admin_oauth_template(provider_type: &str) -> Option<Provide
 pub const ADMIN_PROVIDER_OAUTH_TEMPLATE_TYPES: &[&str] = &[
     "claude_code",
     "codex",
-    "chatgpt_web",
     "gemini_cli",
     "antigravity",
     "windsurf",
@@ -889,8 +855,7 @@ mod tests {
             "codex", "oauth", None
         ));
         assert!(fixed_provider_key_inherits_api_formats(
-            "chatgpt_web",
-            "oauth",
+                    "oauth",
             None
         ));
         assert!(fixed_provider_key_inherits_api_formats(

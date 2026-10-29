@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_ai_formats::openai_responses_message_item_id;
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
 use axum::body::to_bytes;
 use base64::Engine as _;
@@ -16,7 +17,7 @@ use super::{
 };
 use crate::ai_serving::{
     convert_openai_chat_response_to_openai_responses,
-    convert_openai_responses_response_to_openai_chat, openai_responses_message_item_id,
+    convert_openai_responses_response_to_openai_chat,
     GatewayControlDecision,
 };
 use crate::execution_runtime::ResponseHeaderContext;

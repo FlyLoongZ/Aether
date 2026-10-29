@@ -41,7 +41,6 @@ use crate::api::response::{
 };
 use crate::clock::current_unix_ms as current_request_candidate_unix_ms;
 use crate::control::GatewayControlDecision;
-use crate::execution_runtime::chatgpt_web_image::maybe_execute_chatgpt_web_image_sync;
 use crate::execution_runtime::grok::maybe_execute_grok_sync;
 use crate::execution_runtime::kiro_cache::{
     build_kiro_prompt_cache_profile, compute_kiro_prompt_cache_usage,
@@ -2167,11 +2166,7 @@ async fn execute_execution_runtime_sync_impl(
         match maybe_execute_grok_sync(&plan, report_context.as_ref()).await {
             Ok(Some(result)) => result,
             Ok(None) => {
-                match maybe_execute_chatgpt_web_image_sync(state, &plan, report_context.as_ref())
-                    .await
-                {
-                    Ok(Some(result)) => result,
-                    Ok(None) => match execute_direct_sync_runtime_candidate(
+                match execute_direct_sync_runtime_candidate(
                         state,
                         &plan,
                         report_context.as_ref(),
@@ -2251,58 +2246,7 @@ async fn execute_execution_runtime_sync_impl(
                             }
                             return Ok(None);
                         }
-                    },
-                    Err(err) => {
-                        let transport_error_message = safe_transport_error_message(&err);
-                        warn!(
-                            event_name = "chatgpt_web_image_execution_unavailable",
-                            log_type = "ops",
-                            trace_id = %trace_id,
-                            request_id = %plan_request_id_for_log,
-                            candidate_id = ?plan_candidate_id,
-                            provider_name,
-                            endpoint_id,
-                            key_id,
-                            model_name,
-                            candidate_index = candidate_index.as_str(),
-                            error = %transport_error_message,
-                            "gateway ChatGPT-Web image execution unavailable"
-                        );
-                        let terminal_unix_secs = current_request_candidate_unix_ms();
-                        record_local_request_candidate_status(
-                            state,
-                            &plan,
-                            report_context.as_ref(),
-                            SchedulerRequestCandidateStatusUpdate {
-                                status: RequestCandidateStatus::Failed,
-                                status_code: None,
-                                error_type: Some(
-                                    "chatgpt_web_image_execution_unavailable".to_string(),
-                                ),
-                                error_message: Some(transport_error_message.clone()),
-                                latency_ms: Some(elapsed_ms_since(candidate_started_at)),
-                                started_at_unix_ms: Some(candidate_started_unix_secs),
-                                finished_at_unix_ms: Some(terminal_unix_secs),
-                            },
-                        )
-                        .await;
-                        if let Some(response) = maybe_build_sync_transport_error_stop_response(
-                            state,
-                            &plan,
-                            report_context.as_ref(),
-                            trace_id,
-                            decision,
-                            "chatgpt_web_image_execution_unavailable",
-                            transport_error_message.as_str(),
-                            elapsed_ms_since(candidate_started_at),
-                        )
-                        .await?
-                        {
-                            return Ok(Some(response));
-                        }
-                        return Ok(None);
                     }
-                }
             }
             Err(err) => {
                 let transport_error_message = safe_transport_error_message(&err);
@@ -2416,15 +2360,7 @@ async fn execute_execution_runtime_sync_impl(
         {
             match maybe_execute_grok_sync(&plan, report_context.as_ref()).await {
                 Ok(Some(result)) => result,
-                Ok(None) => match maybe_execute_chatgpt_web_image_sync(
-                    state,
-                    &plan,
-                    report_context.as_ref(),
-                )
-                .await
-                {
-                    Ok(Some(result)) => result,
-                    Ok(None) => match execute_direct_sync_runtime_candidate(
+                Ok(None) => match execute_direct_sync_runtime_candidate(
                         state,
                         &plan,
                         report_context.as_ref(),
@@ -2505,57 +2441,6 @@ async fn execute_execution_runtime_sync_impl(
                             return Ok(None);
                         }
                     },
-                    Err(err) => {
-                        let transport_error_message = safe_transport_error_message(&err);
-                        warn!(
-                            event_name = "chatgpt_web_image_execution_unavailable",
-                            log_type = "ops",
-                            trace_id = %trace_id,
-                            request_id = %plan_request_id_for_log,
-                            candidate_id = ?plan_candidate_id,
-                            provider_name,
-                            endpoint_id,
-                            key_id,
-                            model_name,
-                            candidate_index = candidate_index.as_str(),
-                            error = %transport_error_message,
-                            "gateway ChatGPT-Web image execution unavailable"
-                        );
-                        let terminal_unix_secs = current_request_candidate_unix_ms();
-                        record_local_request_candidate_status(
-                            state,
-                            &plan,
-                            report_context.as_ref(),
-                            SchedulerRequestCandidateStatusUpdate {
-                                status: RequestCandidateStatus::Failed,
-                                status_code: None,
-                                error_type: Some(
-                                    "chatgpt_web_image_execution_unavailable".to_string(),
-                                ),
-                                error_message: Some(transport_error_message.clone()),
-                                latency_ms: Some(elapsed_ms_since(candidate_started_at)),
-                                started_at_unix_ms: Some(candidate_started_unix_secs),
-                                finished_at_unix_ms: Some(terminal_unix_secs),
-                            },
-                        )
-                        .await;
-                        if let Some(response) = maybe_build_sync_transport_error_stop_response(
-                            state,
-                            &plan,
-                            report_context.as_ref(),
-                            trace_id,
-                            decision,
-                            "chatgpt_web_image_execution_unavailable",
-                            transport_error_message.as_str(),
-                            elapsed_ms_since(candidate_started_at),
-                        )
-                        .await?
-                        {
-                            return Ok(Some(response));
-                        }
-                        return Ok(None);
-                    }
-                },
                 Err(err) => {
                     let transport_error_message = safe_transport_error_message(&err);
                     warn!(
@@ -2671,25 +2556,8 @@ async fn execute_execution_runtime_sync_impl(
             .and_then(|telemetry| telemetry.elapsed_ms);
         let mut headers = std::mem::take(&mut result.headers);
         let result_body = result.body.take();
-        let chatgpt_web_image_result = plan
-            .provider_api_format
-            .eq_ignore_ascii_case("openai:image")
-            && (plan.headers.iter().any(|(name, value)| {
-                name.eq_ignore_ascii_case("x-aether-chatgpt-web-image") && value == "1"
-            }) || report_context
-                .as_ref()
-                .and_then(|value| value.get("chatgpt_web_image"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false));
-        let (body_bytes, mut body_json, body_base64) = if chatgpt_web_image_result {
-            decode_execution_result_body_with_limit(
-                result_body,
-                &mut headers,
-                crate::execution_runtime::chatgpt_web_image::chatgpt_web_image_sse_envelope_limit_bytes(),
-            )?
-        } else {
-            decode_execution_result_body(result_body, &mut headers)?
-        };
+        let (body_bytes, mut body_json, body_base64) =
+            decode_execution_result_body(result_body, &mut headers)?;
         if let Some(message) = invalid_gemini_provider_success_message(
             &plan,
             report_context.as_ref(),

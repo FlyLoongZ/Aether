@@ -379,7 +379,6 @@ fn sanitize_background_task_metadata_value(key: &str, value: Value) -> Option<Va
             value,
             &[
                 "antigravity",
-                "chatgpt_web",
                 "claude_code",
                 "codex",
                 "gemini_cli",

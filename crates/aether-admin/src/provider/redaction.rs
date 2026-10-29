@@ -114,13 +114,10 @@ pub fn admin_provider_oauth_invalid_reason_safe_text(reason: Option<&str>) -> Op
 
 pub fn admin_provider_upstream_metadata_safe_json(value: Option<&Value>) -> Value {
     let mut projected = admin_secret_safe_json(value);
-    let Some(root) = projected.as_object_mut() else {
+    if !projected.is_object() {
         return projected;
-    };
-
-    if let Some(chatgpt_web) = root.get_mut("chatgpt_web") {
-        *chatgpt_web = project_chatgpt_web_metadata(chatgpt_web);
     }
+
     redact_upstream_diagnostic_fields(&mut projected);
     projected
 }
@@ -620,75 +617,6 @@ fn canonical_account_block_reason(lowered: &str) -> &'static str {
     } else {
         "Account access is restricted"
     }
-}
-
-fn project_chatgpt_web_metadata(value: &Value) -> Value {
-    let Some(source) = value.as_object() else {
-        return Value::Null;
-    };
-    let mut projected = Map::new();
-
-    for field in [
-        "updated_at",
-        "image_quota_remaining",
-        "image_quota_total",
-        "image_quota_used",
-        "image_quota_reset_at",
-        "image_quota_last_local_request_at",
-        "image_quota_local_request_count",
-    ] {
-        copy_json_number_or_null(source, &mut projected, field);
-    }
-    // This is an opaque idempotency key, not a diagnostic or credential. Keep it
-    // bounded and token-safe so quota request de-duplication survives persistence.
-    copy_safe_token_string_or_null(source, &mut projected, "image_quota_last_local_request_key");
-    copy_json_bool_or_null(source, &mut projected, "image_quota_blocked");
-    for field in [
-        "default_model_slug",
-        "plan_type",
-        "email",
-        "account_id",
-        "account_user_id",
-        "user_id",
-        "image_quota_limit_source",
-    ] {
-        copy_safe_display_string_or_null(source, &mut projected, field);
-    }
-
-    let image_blocked = source
-        .get("image_quota_blocked")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-        || source
-            .get("blocked_features")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .any(chatgpt_web_is_image_feature);
-    if image_blocked {
-        projected.insert("image_quota_blocked".to_string(), Value::Bool(true));
-        projected.insert("blocked_features".to_string(), json!(["image_generation"]));
-    }
-    if source
-        .get("image_quota_feature_name")
-        .and_then(Value::as_str)
-        .is_some_and(chatgpt_web_is_image_feature)
-    {
-        projected.insert(
-            "image_quota_feature_name".to_string(),
-            Value::String("image_generation".to_string()),
-        );
-    }
-
-    Value::Object(projected)
-}
-
-fn chatgpt_web_is_image_feature(value: &str) -> bool {
-    matches!(
-        value.trim().to_ascii_lowercase().as_str(),
-        "image_gen" | "image_generation" | "image_edit" | "img_gen"
-    )
 }
 
 fn redact_upstream_diagnostic_fields(value: &mut Value) {
@@ -2429,85 +2357,16 @@ mod tests {
                 "is_banned": true,
                 "ban_reason": "Authorization: Bearer upstream-secret"
             },
-            "windsurf": {
-                "daily_remaining_percent": 70.0,
-                "last_error": "https://user:password@internal.test?q=secret",
-                "rate_limit": {
-                    "limited": true,
-                    "message": "Authorization: Bearer upstream-secret"
-                },
-                "probe_warnings": [{
-                    "probe": "models",
-                    "message": "Authorization: Bearer upstream-secret"
-                }]
-            },
-            "chatgpt_web": {
-                "updated_at": 1_777_000_000,
-                "image_quota_remaining": 8,
-                "blocked_features": [
-                    "image_generation",
-                    "Authorization: Bearer upstream-secret"
-                ],
-                "limits_progress": [{
-                    "message": "Authorization: Bearer upstream-secret",
-                    "url": "https://user:password@internal.test?q=secret"
-                }]
-            }
         })));
 
         assert_eq!(
             projected.pointer("/codex/primary_used_percent"),
             Some(&json!(25.0))
         );
-        assert_eq!(
-            projected.pointer("/windsurf/daily_remaining_percent"),
-            Some(&json!(70.0))
-        );
-        assert_eq!(
-            projected.pointer("/chatgpt_web/image_quota_remaining"),
-            Some(&json!(8))
-        );
-        assert_eq!(
-            projected.pointer("/chatgpt_web/blocked_features"),
-            Some(&json!(["image_generation"]))
-        );
-        assert!(projected.pointer("/chatgpt_web/limits_progress").is_none());
         let serialized = projected.to_string();
         assert!(!serialized.contains("upstream-secret"));
         assert!(!serialized.contains("user:password"));
         assert!(!serialized.contains("q=secret"));
-    }
-
-    #[test]
-    fn chatgpt_metadata_projection_keeps_bounded_quota_dedup_key() {
-        let projected = admin_provider_metadata_bucket_safe_json(
-            "chatgpt_web",
-            Some(&json!({
-                "image_quota_last_local_request_key": "request-1:candidate-1"
-            })),
-        );
-        assert_eq!(
-            projected["image_quota_last_local_request_key"],
-            "request-1:candidate-1"
-        );
-
-        let oversized = "x".repeat(161);
-        for rejected in [
-            "Authorization: Bearer secret",
-            "request\nforged",
-            oversized.as_str(),
-        ] {
-            let projected = admin_provider_metadata_bucket_safe_json(
-                "chatgpt_web",
-                Some(&json!({"image_quota_last_local_request_key": rejected})),
-            );
-            assert!(
-                projected
-                    .get("image_quota_last_local_request_key")
-                    .is_none(),
-                "unsafe quota dedup key must be dropped: {rejected:?}"
-            );
-        }
     }
 
     #[test]
@@ -2585,13 +2444,13 @@ mod tests {
         assert!(!projected.contains("user:password"));
 
         let bucket = admin_provider_metadata_bucket_safe_json(
-            "windsurf",
+            "example_provider",
             Some(&json!({
-                "daily_remaining_percent": 50,
+                "remaining_percent": 50,
                 "last_error": "Authorization: Bearer upstream-secret"
             })),
         );
-        assert_eq!(bucket["daily_remaining_percent"], json!(50));
+        assert_eq!(bucket["remaining_percent"], json!(50));
         assert!(!bucket.to_string().contains("upstream-secret"));
     }
 
