@@ -8,7 +8,7 @@ pub(crate) trait RedisResultExt<T> {
     fn map_redis_err(self) -> Result<T, DataLayerError>;
 }
 
-impl<T> RedisResultExt<T> for Result<T, redis::RedisError> {
+impl<T, E: std::fmt::Display> RedisResultExt<T> for Result<T, E> {
     fn map_redis_err(self) -> Result<T, DataLayerError> {
         self.map_err(redis_error)
     }

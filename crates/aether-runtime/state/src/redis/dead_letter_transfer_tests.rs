@@ -122,7 +122,7 @@ async fn transfer_entries(
                 .into_iter()
                 .map(|(field, value)| {
                     let value =
-                        ::redis::from_redis_value::<String>(&value).expect("string field value");
+                        ::redis::from_redis_value_ref::<String>(&value).expect("string field value");
                     (field, value)
                 })
                 .collect(),

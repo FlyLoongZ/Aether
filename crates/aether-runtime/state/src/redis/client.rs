@@ -1,8 +1,6 @@
 use crate::error::RedisResultExt;
 use crate::redis::RedisKeyspace;
 use crate::DataLayerError;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -228,7 +226,7 @@ impl RedisConnectionRouter {
     }
 
     // WATCH/MULTI state must never share a multiplexed connection with other callers.
-    // These lazy leases own their drivers, so cancellation closes an unfinished transaction.
+    // These lazy leases own the final connection handle, so cancellation aborts its driver.
     pub(crate) async fn usage_cleanup_connection(
         &self,
     ) -> Result<RedisBlockingStreamLease, DataLayerError> {
@@ -278,20 +276,17 @@ impl RedisConnectionRouter {
 }
 
 struct RedisBlockingConnection {
+    // Never clone this handle: redis-rs owns the driver's abort-on-drop handle,
+    // so dropping an unfinished lease must drop the last connection owner.
     connection: redis::aio::MultiplexedConnection,
-    driver: Pin<Box<dyn Future<Output = ()> + Send>>,
 }
 
 impl RedisBlockingConnection {
     async fn query(&mut self, command: &redis::Cmd) -> Result<redis::Value, DataLayerError> {
-        // Drive the connection inside its owning query, so cancellation drops the
-        // socket immediately instead of leaving a spawned driver with an old BLOCK.
-        tokio::select! {
-            result = command.query_async(&mut self.connection) => result.map_redis_err(),
-            () = self.driver.as_mut() => Err(DataLayerError::Redis(
-                "runtime redis blocking stream connection driver terminated".to_string(),
-            )),
-        }
+        command
+            .query_async(&mut self.connection)
+            .await
+            .map_redis_err()
     }
 }
 
@@ -381,7 +376,7 @@ impl Drop for RedisBlockingStreamLease {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .push(connection);
         // The permit is released after the slot is restored. An uncompleted
-        // query has already dropped both its connection and its owned driver.
+        // query has dropped its final connection handle, which aborts the driver.
     }
 }
 
@@ -494,11 +489,11 @@ fn update_atomic_max(target: &AtomicU64, value: u64) {
 fn connection_manager_config(
     command_timeout_ms: Option<u64>,
 ) -> redis::aio::ConnectionManagerConfig {
-    let mut config = redis::aio::ConnectionManagerConfig::new();
-    if let Some(timeout_ms) = command_timeout_ms {
-        config = config.set_connection_timeout(Duration::from_millis(timeout_ms));
-    }
-    config
+    // Keep deadlines controlled by run_lane_with_timeout, not redis-rs's new
+    // 500 ms response / 1 s connection defaults.
+    redis::aio::ConnectionManagerConfig::new()
+        .set_response_timeout(None)
+        .set_connection_timeout(command_timeout_ms.map(Duration::from_millis))
 }
 
 async fn connect_stream_lanes(
@@ -553,7 +548,12 @@ async fn connect_blocking_stream_lane(
     client: &RedisClient,
     command_timeout_ms: Option<u64>,
 ) -> Result<RedisBlockingConnection, DataLayerError> {
-    let connect = client.create_multiplexed_tokio_connection();
+    // The canonical API registers an abort-on-drop driver handle. Disabling the
+    // default response deadline is essential for XREADGROUP BLOCK and WATCH/EXEC.
+    let config = redis::AsyncConnectionConfig::default()
+        .set_response_timeout(None)
+        .set_connection_timeout(None);
+    let connect = client.get_multiplexed_async_connection_with_config(&config);
     let result = if let Some(timeout_ms) = command_timeout_ms {
         tokio::time::timeout(Duration::from_millis(timeout_ms), connect)
             .await
@@ -565,15 +565,12 @@ async fn connect_blocking_stream_lane(
     } else {
         connect.await
     };
-    let (connection, driver) = result.map_err(|err| {
+    let connection = result.map_err(|err| {
         DataLayerError::Redis(format!(
             "failed to initialize runtime redis blocking_stream lane: {err}"
         ))
     })?;
-    Ok(RedisBlockingConnection {
-        connection,
-        driver: Box::pin(driver),
-    })
+    Ok(RedisBlockingConnection { connection })
 }
 
 fn blocking_stream_lane_count(requested_lanes: Option<usize>) -> Result<usize, DataLayerError> {

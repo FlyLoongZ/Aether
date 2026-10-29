@@ -660,7 +660,10 @@ impl RedisRuntimeRunner {
                             .arg(SCORE_WINDOW_AGGREGATION_MEMBER_LIMIT);
                     }
                     match pipeline.query_async(&mut connection).await {
-                        Err(err) if err.kind() == redis::ErrorKind::NoScriptError => {
+                        Err(err)
+                            if err.kind()
+                                == redis::ErrorKind::Server(redis::ServerErrorKind::NoScript) =>
+                        {
                             script
                                 .prepare_invoke()
                                 .load_async(&mut connection)
