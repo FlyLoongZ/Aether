@@ -811,12 +811,6 @@ fn plaintext_credential_reads_require_admin_permission() {
             None,
             "admin:api_keys:admin",
         ),
-        (
-            "admin:proxy_nodes",
-            "create_proxy_node_install_session",
-            None,
-            "admin:proxy_nodes:admin",
-        ),
     ];
 
     for (signature, route_kind, query, expected) in cases {

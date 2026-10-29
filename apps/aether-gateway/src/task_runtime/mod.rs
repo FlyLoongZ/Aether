@@ -41,10 +41,6 @@ pub(crate) const TASK_KEY_GEMINI_FILES_CLEANUP: &str = "maintenance.gemini.files
 pub(crate) const TASK_KEY_FIXED_PROVIDER_RECONCILIATION: &str =
     "maintenance.provider.fixed_template.reconcile";
 pub(crate) const TASK_KEY_OAUTH_TOKEN_REFRESH: &str = "maintenance.oauth.token.refresh";
-pub(crate) const TASK_KEY_PROXY_NODE_STALE_CLEANUP: &str = "maintenance.proxy.node.stale.cleanup";
-pub(crate) const TASK_KEY_PROXY_NODE_METRICS_CLEANUP: &str =
-    "maintenance.proxy.node.metrics.cleanup";
-pub(crate) const TASK_KEY_PROXY_UPGRADE_ROLLOUT: &str = "maintenance.proxy.upgrade.rollout";
 pub(crate) const TASK_KEY_PROVIDER_CHECKIN: &str = "maintenance.provider.checkin";
 pub(crate) const TASK_KEY_PROVIDER_QUOTA_ALERT: &str = "maintenance.provider.quota_alert";
 pub(crate) const TASK_KEY_USAGE_CLEANUP: &str = "maintenance.usage.cleanup";
@@ -320,30 +316,6 @@ const TASK_DEFINITIONS: &[TaskDefinition] = &[
     ),
     TaskDefinition::new(
         TASK_KEY_OAUTH_TOKEN_REFRESH,
-        TaskKind::Scheduled,
-        "interval",
-        true,
-        true,
-        RETRY_ONCE,
-    ),
-    TaskDefinition::new(
-        TASK_KEY_PROXY_NODE_STALE_CLEANUP,
-        TaskKind::Scheduled,
-        "interval",
-        true,
-        true,
-        RETRY_ONCE,
-    ),
-    TaskDefinition::new(
-        TASK_KEY_PROXY_NODE_METRICS_CLEANUP,
-        TaskKind::Scheduled,
-        "interval",
-        true,
-        true,
-        RETRY_ONCE,
-    ),
-    TaskDefinition::new(
-        TASK_KEY_PROXY_UPGRADE_ROLLOUT,
         TaskKind::Scheduled,
         "interval",
         true,
@@ -958,6 +930,20 @@ mod worker_boot_run_id_tests {
 #[cfg(test)]
 mod client_profile_task_tests {
     use super::*;
+
+    #[test]
+    fn removed_proxy_workers_are_not_registered() {
+        for key in [
+            "maintenance.proxy.node.stale.cleanup",
+            "maintenance.proxy.node.metrics.cleanup",
+            "maintenance.proxy.upgrade.rollout",
+        ] {
+            assert!(
+                task_definition(key).is_none(),
+                "removed worker {key} must stay unregistered"
+            );
+        }
+    }
 
     #[test]
     fn all_cli_client_profile_tasks_are_registered_once() {
