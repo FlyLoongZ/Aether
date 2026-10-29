@@ -32,11 +32,7 @@ async fn execute_antigravity_quota_plan(
 ) -> Result<ProviderQuotaExecutionOutcome, GatewayError> {
     let proxy = match proxy_override {
         Some(proxy) => Some(proxy.clone()),
-        None => {
-            state
-                .resolve_transport_proxy_snapshot_with_tunnel_affinity(transport)
-                .await
-        }
+        None => state.resolve_transport_proxy_snapshot(transport).await,
     };
     let timeouts = Some(resolve_provider_quota_execution_timeouts(
         state.resolve_transport_execution_timeouts(transport),
@@ -73,11 +69,7 @@ async fn fetch_antigravity_quota_summary_best_effort(
     loop {
         let proxy = match proxy_override {
             Some(proxy) => Some(proxy.clone()),
-            None => {
-                state
-                    .resolve_transport_proxy_snapshot_with_tunnel_affinity(transport)
-                    .await
-            }
+            None => state.resolve_transport_proxy_snapshot(transport).await,
         };
         let timeouts = Some(resolve_provider_quota_execution_timeouts(
             state.resolve_transport_execution_timeouts(transport),

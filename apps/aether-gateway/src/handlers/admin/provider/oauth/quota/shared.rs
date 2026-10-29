@@ -1609,9 +1609,7 @@ pub(super) async fn execute_provider_quota_plan(
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .map(ToOwned::to_owned);
-            let proxy_source = state
-                .resolve_transport_proxy_source_with_tunnel_affinity(transport)
-                .await;
+            let proxy_source = state.resolve_transport_proxy_source(transport).await;
             let proxy_url_present = plan
                 .proxy
                 .as_ref()

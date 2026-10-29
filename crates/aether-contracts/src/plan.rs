@@ -132,7 +132,6 @@ impl fmt::Debug for ProxySnapshot {
 pub const PROXY_NODE_GENERATION_EXTRA_KEY: &str = "proxy_node_generation";
 
 pub const TRANSPORT_BACKEND_REQWEST_RUSTLS: &str = "reqwest_rustls";
-pub const TRANSPORT_BACKEND_HYPER_RUSTLS: &str = "hyper_rustls";
 pub const TRANSPORT_BACKEND_BROWSER_WREQ: &str = "browser_wreq";
 pub const TRANSPORT_HTTP_MODE_AUTO: &str = "auto";
 pub const TRANSPORT_HTTP_MODE_HTTP1_ONLY: &str = "http1_only";

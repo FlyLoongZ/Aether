@@ -39,11 +39,7 @@ pub(crate) async fn resolve_provider_oauth_operation_proxy_snapshot(
     }
 
     for proxy in configured_proxies {
-        if let Some(snapshot) = state
-            .app()
-            .resolve_configured_proxy_snapshot_with_tunnel_affinity(*proxy)
-            .await
-        {
+        if let Some(snapshot) = state.app().resolve_configured_proxy_snapshot(*proxy).await {
             return Some(snapshot);
         }
     }

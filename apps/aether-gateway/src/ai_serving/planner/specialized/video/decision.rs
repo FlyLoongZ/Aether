@@ -49,7 +49,7 @@ pub(super) async fn maybe_build_local_video_create_decision_payload_for_candidat
         ai_local_execution_contract_for_formats(spec_metadata.api_format, spec_metadata.api_format);
     let proxy = planner_state
         .app()
-        .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
+        .resolve_transport_proxy_snapshot(&transport)
         .await;
     let transport_profile = resolve_transport_profile(&transport);
     let mut extra_fields = serde_json::Map::new();

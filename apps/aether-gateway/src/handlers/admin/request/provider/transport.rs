@@ -84,22 +84,18 @@ impl<'a> AdminAppState<'a> {
         }
     }
 
-    pub(crate) async fn resolve_transport_proxy_snapshot_with_tunnel_affinity(
+    pub(crate) async fn resolve_transport_proxy_snapshot(
         &self,
         transport: &AdminGatewayProviderTransportSnapshot,
     ) -> Option<aether_contracts::ProxySnapshot> {
-        self.app
-            .resolve_transport_proxy_snapshot_with_tunnel_affinity(transport)
-            .await
+        self.app.resolve_transport_proxy_snapshot(transport).await
     }
 
-    pub(crate) async fn resolve_transport_proxy_source_with_tunnel_affinity(
+    pub(crate) async fn resolve_transport_proxy_source(
         &self,
         transport: &AdminGatewayProviderTransportSnapshot,
     ) -> Option<&'static str> {
-        self.app
-            .resolve_transport_proxy_source_with_tunnel_affinity(transport)
-            .await
+        self.app.resolve_transport_proxy_source(transport).await
     }
 
     pub(crate) fn fixed_provider_template(

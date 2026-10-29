@@ -45,7 +45,6 @@ const REALTIME_UPSTREAM_ERRORS: UpstreamWebSocketErrorCodes = UpstreamWebSocketE
     headers_invalid: "openai_realtime_websocket_headers_invalid",
     client_build_failed: "openai_realtime_websocket_client_build_failed",
     proxy_invalid: "openai_realtime_websocket_proxy_invalid",
-    tunnel_proxy_unsupported: "openai_realtime_websocket_tunnel_proxy_unsupported",
     handshake_failed: "openai_realtime_websocket_handshake_failed",
     upgrade_rejected: "openai_realtime_websocket_upgrade_rejected",
     upgrade_failed: "openai_realtime_websocket_upgrade_failed",

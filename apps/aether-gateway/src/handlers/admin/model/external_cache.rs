@@ -227,8 +227,6 @@ fn classify_admin_external_models_transport_error(message: &str) -> &'static str
         "invalid_url"
     } else if message.contains("timed out") || message.contains("timeout") {
         "timeout"
-    } else if message.contains("relay") || message.contains("tunnel") {
-        "relay"
     } else if message.contains("proxy") {
         "proxy_config"
     } else if message.contains("too large") || message.contains("exceeds") {
@@ -503,7 +501,7 @@ async fn fetch_admin_external_models_from_source(
     proxy_node_id: Option<&str>,
 ) -> Result<serde_json::Value, GatewayError> {
     let source_url = admin_external_models_source_url();
-    // A proxy/tunnel resolves the target in its own network namespace. Do not
+    // A proxy resolves the target in its own network namespace. Do not
     // resolve it locally first: local DNS may be unavailable, may intentionally
     // return synthetic addresses, or may not be able to see an internal target
     // that the configured proxy can reach. URL shape is still validated below,
@@ -523,9 +521,7 @@ async fn fetch_admin_external_models_from_source(
                 "external models proxy request failed".to_string(),
             ));
         };
-        let proxy_mode = if proxy.mode.as_deref() == Some("tunnel") {
-            "tunnel"
-        } else if proxy.url.is_some() {
+        let proxy_mode = if proxy.url.is_some() {
             "manual"
         } else {
             "unknown"
@@ -801,7 +797,6 @@ mod tests {
                 "ssrf_blocked",
             ),
             ("external models source URL is invalid", "invalid_url"),
-            ("hub relay request failed", "relay"),
             ("invalid proxy configuration", "proxy_config"),
             ("upstream response body exceeds limit", "response_too_large"),
             ("upstream response is not valid JSON", "invalid_json"),

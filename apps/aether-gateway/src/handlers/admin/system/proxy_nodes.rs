@@ -924,8 +924,8 @@ fn sanitize_proxy_error(detail: &str) -> String {
         return "代理连接失败".to_string();
     }
 
-    // Error strings can originate in reqwest, a remote gateway, or a tunnel
-    // peer. Keep arbitrary URLs, credentials, paths, and control characters
+    // Error strings can originate in reqwest or a remote proxy.
+    // Keep arbitrary URLs, credentials, paths, and control characters
     // out of the admin response by projecting unknown details to one category.
     "代理探测失败".to_string()
 }

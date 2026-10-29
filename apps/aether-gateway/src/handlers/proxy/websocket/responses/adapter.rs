@@ -139,7 +139,6 @@ const STANDARD_UPSTREAM_WEBSOCKET_ERRORS: UpstreamWebSocketErrorCodes =
         headers_invalid: "responses_websocket_headers_invalid",
         client_build_failed: "responses_websocket_client_build_failed",
         proxy_invalid: "responses_websocket_proxy_invalid",
-        tunnel_proxy_unsupported: "responses_websocket_tunnel_proxy_unsupported",
         handshake_failed: "responses_websocket_handshake_failed",
         upgrade_rejected: "responses_websocket_upgrade_rejected",
         upgrade_failed: "responses_websocket_upgrade_failed",

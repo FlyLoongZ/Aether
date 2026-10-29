@@ -100,7 +100,7 @@ fn invalid_execution_upstream_url_error_does_not_echo_credentials() {
 }
 
 #[test]
-fn execution_dns_answers_allow_all_provider_hosts_without_address_filtering() {
+fn execution_dns_answers_allow_private_and_fake_ip_provider_addresses() {
     let addresses = vec![
         "198.18.78.41:443".parse().unwrap(),
         "10.0.0.8:443".parse().unwrap(),
@@ -109,37 +109,24 @@ fn execution_dns_answers_allow_all_provider_hosts_without_address_filtering() {
         "[fd00::1]:443".parse().unwrap(),
         "93.184.216.34:443".parse().unwrap(),
     ];
-    for host in [
-        "chatgpt.com",
-        "api.openai.com",
-        "oauth2.googleapis.com",
-        "www.googleapis.com",
-        "custom.example.test",
-    ] {
-        assert_eq!(
-            super::validate_resolved_execution_addresses(host, addresses.clone(), true)
-                .expect("provider DNS answers should pass through"),
-            addresses
-        );
-    }
+    assert_eq!(
+        super::validate_resolved_execution_addresses(addresses.clone())
+            .expect("provider DNS answers should pass through"),
+        addresses
+    );
 }
 
 #[tokio::test]
-async fn execution_dns_handles_url_ipv6_without_weakening_relay_filtering() {
-    for provider_execution in [false, true] {
-        let addresses = super::resolve_execution_target_addresses_with_policy(
-            "[::1]",
-            8443,
-            provider_execution,
-        )
-        .await
-        .expect("literal IPv6 loopback should resolve without DNS");
-        assert_eq!(addresses, vec!["[::1]:8443".parse().unwrap()]);
+async fn execution_dns_resolves_literal_ipv6_provider_targets() {
+    for (host, expected) in [("[::1]", "[::1]:8443"), ("[fd00::1]", "[fd00::1]:8443")] {
+        let addresses = super::resolve_execution_target_addresses(host, 8443)
+            .await
+            .expect("literal IPv6 provider addresses should resolve without DNS");
+        assert_eq!(
+            addresses,
+            vec![expected.parse::<std::net::SocketAddr>().unwrap()]
+        );
     }
-    let error = super::resolve_execution_target_addresses_with_policy("[fd00::1]", 443, false)
-        .await
-        .expect_err("private IPv6 must remain blocked for relay traffic");
-    assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
 }
 
 #[tokio::test]
@@ -163,49 +150,13 @@ async fn execution_dns_resolvers_preserve_provider_fake_ip_answers() {
 }
 
 #[test]
-fn execution_dns_answers_keep_relay_address_filtering() {
-    let public = "93.184.216.34:443".parse().unwrap();
-    for host in ["oauth2.googleapis.com", "custom.example.test"] {
-        assert!(super::validate_resolved_execution_addresses(host, vec![public], false).is_ok());
-        for blocked in [
-            "198.18.78.41:443",
-            "10.0.0.8:443",
-            "127.0.0.1:443",
-            "169.254.169.254:443",
-            "[fd00::1]:443",
-        ] {
-            let blocked = blocked.parse().unwrap();
-            assert!(
-                super::validate_resolved_execution_addresses(host, vec![blocked], false).is_err()
-            );
-            assert!(super::validate_resolved_execution_addresses(
-                host,
-                vec![public, blocked],
-                false
-            )
-            .is_err());
-        }
-    }
-    let loopback = vec![
-        "127.0.0.1:443".parse().unwrap(),
-        "[::1]:443".parse().unwrap(),
-    ];
-    assert!(super::validate_resolved_execution_addresses("localhost", loopback, false).is_ok());
-    assert!(
-        super::validate_resolved_execution_addresses("localhost", vec![public], false).is_err()
-    );
-    for provider_execution in [false, true] {
-        assert_eq!(
-            super::validate_resolved_execution_addresses(
-                "custom.example.test",
-                Vec::new(),
-                provider_execution
-            )
+fn execution_dns_rejects_empty_answers() {
+    assert_eq!(
+        super::validate_resolved_execution_addresses(Vec::new())
             .expect_err("empty DNS answers must fail")
             .kind(),
-            std::io::ErrorKind::NotFound
-        );
-    }
+        std::io::ErrorKind::NotFound
+    );
 }
 
 #[test]

@@ -39,7 +39,6 @@ pub(crate) struct UpstreamWebSocketErrorCodes {
     pub(crate) headers_invalid: &'static str,
     pub(crate) client_build_failed: &'static str,
     pub(crate) proxy_invalid: &'static str,
-    pub(crate) tunnel_proxy_unsupported: &'static str,
     pub(crate) handshake_failed: &'static str,
     pub(crate) upgrade_rejected: &'static str,
     pub(crate) upgrade_failed: &'static str,
@@ -281,9 +280,6 @@ fn resolve_websocket_proxy_url(
         let normalized =
             normalize_execution_proxy_url(proxy_url).map_err(|_| errors.proxy_invalid)?;
         return Ok(Some(normalized));
-    }
-    if proxy.node_id.is_some() || proxy.mode.as_deref() == Some("tunnel") {
-        return Err(errors.tunnel_proxy_unsupported);
     }
     Err(errors.proxy_invalid)
 }
@@ -872,7 +868,6 @@ mod tests {
             headers_invalid: "headers_invalid",
             client_build_failed: "client_build_failed",
             proxy_invalid: "proxy_invalid",
-            tunnel_proxy_unsupported: "tunnel_unsupported",
             handshake_failed: "handshake_failed",
             upgrade_rejected: "upgrade_rejected",
             upgrade_failed: "upgrade_failed",
@@ -926,7 +921,6 @@ mod tests {
             headers_invalid: "headers_invalid",
             client_build_failed: "client_build_failed",
             proxy_invalid: "proxy_invalid",
-            tunnel_proxy_unsupported: "tunnel_unsupported",
             handshake_failed: "handshake_failed",
             upgrade_rejected: "upgrade_rejected",
             upgrade_failed: "upgrade_failed",
@@ -940,14 +934,24 @@ mod tests {
             Err("proxy_invalid")
         );
 
-        let tunnel = ProxySnapshot {
+        // Legacy snapshots without a usable URL must never fall back to direct transport.
+        let legacy_tunnel = ProxySnapshot {
             enabled: Some(true),
             mode: Some("tunnel".to_string()),
             ..ProxySnapshot::default()
         };
         assert_eq!(
-            resolve_websocket_proxy_url(Some(&tunnel), errors),
-            Err("tunnel_unsupported")
+            resolve_websocket_proxy_url(Some(&legacy_tunnel), errors),
+            Err("proxy_invalid")
+        );
+        let unresolved_node = ProxySnapshot {
+            enabled: Some(true),
+            node_id: Some("node-1".to_string()),
+            ..ProxySnapshot::default()
+        };
+        assert_eq!(
+            resolve_websocket_proxy_url(Some(&unresolved_node), errors),
+            Err("proxy_invalid")
         );
     }
 
@@ -962,7 +966,6 @@ mod tests {
             headers_invalid: "headers_invalid",
             client_build_failed: "client_build_failed",
             proxy_invalid: "proxy_invalid",
-            tunnel_proxy_unsupported: "tunnel_unsupported",
             handshake_failed: "handshake_failed",
             upgrade_rejected: "upgrade_rejected",
             upgrade_failed: "upgrade_failed",
@@ -1063,7 +1066,6 @@ mod tests {
             headers_invalid: "headers_invalid",
             client_build_failed: "client_build_failed",
             proxy_invalid: "proxy_invalid",
-            tunnel_proxy_unsupported: "tunnel_unsupported",
             handshake_failed: "handshake_failed",
             upgrade_rejected: "upgrade_rejected",
             upgrade_failed: "upgrade_failed",
@@ -1103,6 +1105,7 @@ mod tests {
 
         let socks = ProxySnapshot {
             enabled: Some(true),
+            node_id: Some("manual-node-1".to_string()),
             url: Some("socks5://proxy.example:1080".to_string()),
             ..ProxySnapshot::default()
         };

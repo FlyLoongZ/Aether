@@ -217,9 +217,7 @@ async fn admin_gemini_files_upload_single_key(
         client_api_format: "gemini:files".to_string(),
         provider_api_format: "gemini:files".to_string(),
         model_name: Some("gemini-files".to_string()),
-        proxy: state
-            .resolve_transport_proxy_snapshot_with_tunnel_affinity(&transport)
-            .await,
+        proxy: state.resolve_transport_proxy_snapshot(&transport).await,
         transport_profile: state.resolve_transport_profile(&transport),
         timeouts: state.resolve_transport_execution_timeouts(&transport),
     };

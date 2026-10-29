@@ -330,7 +330,7 @@ pub async fn reconstruct_local_video_task_snapshot(
         return Ok(None);
     };
 
-    // Resolve deployment-managed nodes, system defaults and tunnel affinity just as
+    // Resolve manual proxy nodes and system defaults just as
     // creation does; serialized task metadata intentionally contains no credentials.
     local_transport.proxy = lookup.resolve_video_task_proxy(&transport).await;
 

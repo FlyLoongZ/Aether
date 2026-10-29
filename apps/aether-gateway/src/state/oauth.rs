@@ -6,8 +6,7 @@ use super::super::provider_transport;
 use crate::provider_key_auth::provider_key_is_oauth_managed;
 use aether_admin::provider::quota as admin_provider_quota_pure;
 use aether_contracts::{
-    ExecutionPlan, ExecutionTimeouts, ProxySnapshot, RequestBody,
-    EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER, EXECUTION_REQUEST_HTTP1_ONLY_HEADER,
+    ExecutionPlan, ExecutionTimeouts, RequestBody, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER,
 };
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogKeyOAuthCredentialCasDelete, ProviderCatalogKeyOAuthCredentialFence,
@@ -189,33 +188,6 @@ fn local_oauth_log_excerpt(body: &str) -> String {
     } else {
         "[redacted]".to_string()
     }
-}
-
-fn local_oauth_proxy_is_tunnel(proxy: Option<&ProxySnapshot>) -> bool {
-    let Some(proxy) = proxy else {
-        return false;
-    };
-    if proxy.enabled == Some(false) {
-        return false;
-    }
-    proxy
-        .mode
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|mode| mode.eq_ignore_ascii_case("tunnel"))
-}
-
-fn local_oauth_proxy_extra_string<'a>(
-    proxy: Option<&'a ProxySnapshot>,
-    key: &str,
-) -> Option<&'a str> {
-    proxy?
-        .extra
-        .as_ref()
-        .and_then(|extra| extra.get(key))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
 }
 
 fn secret_fingerprint(value: &str) -> String {
@@ -2672,21 +2644,12 @@ impl AppState {
                 body_ref: None,
             }
         };
-        let proxy_snapshot = self
-            .resolve_transport_proxy_snapshot_with_tunnel_affinity(transport)
-            .await;
-        let proxy_is_tunnel = local_oauth_proxy_is_tunnel(proxy_snapshot.as_ref());
+        let proxy_snapshot = self.resolve_transport_proxy_snapshot(transport).await;
         let mut headers = request.headers.clone();
         headers.insert(
             EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER.to_string(),
             "true".to_string(),
         );
-        if proxy_is_tunnel {
-            headers.insert(
-                EXECUTION_REQUEST_HTTP1_ONLY_HEADER.to_string(),
-                "true".to_string(),
-            );
-        }
         let plan = ExecutionPlan {
             request_id: request.request_id.to_string(),
             candidate_id: None,
@@ -2747,25 +2710,9 @@ impl AppState {
                 .and_then(|proxy| proxy.url.as_deref())
                 .map(str::trim)
                 .is_some_and(|value| !value.is_empty()),
-            proxy_is_tunnel,
-            tunnel_base_url_present = local_oauth_proxy_extra_string(
-                plan.proxy.as_ref(),
-                "tunnel_base_url"
-            )
-            .is_some(),
-            tunnel_owner_instance_id = local_oauth_proxy_extra_string(
-                plan.proxy.as_ref(),
-                "tunnel_owner_instance_id"
-            )
-            .unwrap_or("-"),
             follow_redirects = plan
                 .headers
                 .get(EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER)
-                .map(String::as_str)
-                .unwrap_or("-"),
-            http1_only = plan
-                .headers
-                .get(EXECUTION_REQUEST_HTTP1_ONLY_HEADER)
                 .map(String::as_str)
                 .unwrap_or("-"),
             "gateway local oauth execution request prepared"

@@ -443,16 +443,8 @@ pub(crate) struct ExecutionSafeDnsResolver;
 #[derive(Debug, Clone, Copy, Default)]
 struct ExecutionSafeHyperDnsResolver;
 
-fn dns_host_explicitly_allows_loopback(host: &str) -> bool {
-    let host = host.trim_end_matches('.');
-    host.eq_ignore_ascii_case("localhost")
-        || aether_http::parse_ip_literal_host(host).is_some_and(|ip| ip.is_loopback())
-}
-
 fn validate_resolved_execution_addresses(
-    host: &str,
     addresses: Vec<SocketAddr>,
-    provider_execution: bool,
 ) -> Result<Vec<SocketAddr>, std::io::Error> {
     if addresses.is_empty() {
         return Err(std::io::Error::new(
@@ -460,38 +452,21 @@ fn validate_resolved_execution_addresses(
             "upstream DNS resolution returned no addresses",
         ));
     }
-    if provider_execution {
-        return Ok(addresses);
-    }
-    let allows_loopback = dns_host_explicitly_allows_loopback(host);
-    if addresses.iter().any(|address| {
-        if allows_loopback {
-            !address.ip().is_loopback()
-        } else {
-            is_private_or_reserved_ip(address.ip())
-        }
-    }) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "tunnel relay DNS resolution returned a private or reserved address",
-        ));
-    }
     Ok(addresses)
 }
 
 async fn resolve_execution_dns_addresses(host: &str) -> Result<Vec<SocketAddr>, std::io::Error> {
-    resolve_execution_target_addresses_with_policy(host, 0, true).await
+    resolve_execution_target_addresses(host, 0).await
 }
 
-async fn resolve_execution_target_addresses_with_policy(
+async fn resolve_execution_target_addresses(
     host: &str,
     port: u16,
-    provider_execution: bool,
 ) -> Result<Vec<SocketAddr>, std::io::Error> {
     let addresses =
         aether_http::lookup_host_with_limits(host, port, aether_http::DEFAULT_DNS_LOOKUP_TIMEOUT)
             .await?;
-    validate_resolved_execution_addresses(host, addresses, provider_execution)
+    validate_resolved_execution_addresses(addresses)
 }
 
 impl reqwest::dns::Resolve for ExecutionSafeDnsResolver {
@@ -2151,15 +2126,12 @@ async fn connect_direct_h2c_sender_on_current_runtime(
     let port = upstream.port_or_known_default().ok_or_else(|| {
         ExecutionRuntimeTransportError::UpstreamRequest("missing h2c upstream port".to_string())
     })?;
-    let addresses = resolve_execution_target_addresses_with_policy(host, port, true)
+    let addresses = resolve_execution_target_addresses(host, port)
         .await
-        .map_err(|error| {
-            let message = if error.kind() == std::io::ErrorKind::PermissionDenied {
-                "h2c upstream DNS resolution returned a private or reserved address"
-            } else {
-                "h2c upstream DNS resolution failed"
-            };
-            ExecutionRuntimeTransportError::UpstreamRequest(message.to_string())
+        .map_err(|_| {
+            ExecutionRuntimeTransportError::UpstreamRequest(
+                "h2c upstream DNS resolution failed".to_string(),
+            )
         })?;
     // Passing concrete socket addresses prevents TcpStream from performing a
     // second hostname lookup after the validated DNS answer.
