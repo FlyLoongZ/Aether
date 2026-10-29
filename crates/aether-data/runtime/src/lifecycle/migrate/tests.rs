@@ -38,6 +38,7 @@ mod overview_fact_metadata;
 mod overview_migration_safety;
 mod policy_nulls;
 mod provider_expenses;
+mod proxy_tunnel_removal;
 mod scoped_provider_creation;
 mod user_preferences;
 

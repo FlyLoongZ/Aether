@@ -6,6 +6,7 @@ import { legacyTemplateI18nPlugin } from './src/i18n/legacy-template-transform'
 
 function normalizeVersion(version: string): string {
   const trimmed = version.trim()
+  // Historical standalone-client tags are not gateway application versions.
   if (!trimmed || trimmed.startsWith('tunnel-v')) {
     return ''
   }

@@ -177,7 +177,7 @@
 
 | # | 改动 | 收益 | 风险 |
 | --- | --- | --- | --- |
-| C1【已完成】 | **移除 Tunnel 组件**（`apps/aether-tunnel`、`crates/aether-gateway/tunnel`、`src/tunnel` 均已删除，端到端场景迁入 integration package） | Rest/Clippy 不再重复编 Gateway → 流水线累计约 **-8～10 分钟 runner**；共享缓存不再被污染 | 已由 `architecture_guard::tunnel_feature_is_removed` 守卫，禁止回流 |
+| C1【已完成】 | **移除 Tunnel 组件**（`apps/aether-tunnel`、`crates/aether-gateway/tunnel`、`src/tunnel` 均已删除，Tunnel 专属端到端场景同步删除） | Rest/Clippy 不再重复编 Gateway → 流水线累计约 **-8～10 分钟 runner**；共享缓存不再被污染 | 已由 `architecture_guard::tunnel_feature_is_removed` 守卫，禁止回流 |
 | C2 | **路径过滤分层**（`rust-ci.yml` push/PR paths）：README、安装脚本、Compose、部分 `tests/*.sh` 不再触发全量 Rust 编译 | 非 Rust 变更 **整段跳过 Test (Gateway)**；须保留稳定 gate 防止 required check 永久 pending；补 `Cargo.toml`/`Cargo.lock`/`.cargo/**` 等触发项 | 中 |
 | C3【已完成】 | Nightly 空 doctest、重复 adapter/feature job 治理 | 全仓无 doctest，删除 Nightly `cargo test --doc` 步骤；`check_data_features` 的 `postgres`/`all-drivers` 与 `test_data_adapters` 的单元素矩阵均收敛为单次构建 | 低 |
 

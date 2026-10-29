@@ -1195,7 +1195,7 @@ const MOCK_MODULE_DEFINITIONS: Array<Omit<ModuleStatus, 'active' | 'health'> & {
   {
     name: 'proxy_nodes',
     display_name: '代理节点',
-    description: '添加Http/Socket代理节点, 或使用Aether-Proxy自动连接代理节点.',
+    description: '手动管理 HTTP/SOCKS 代理节点，由网关直接转发请求',
     category: 'integration',
     available: true,
     enabled: true,

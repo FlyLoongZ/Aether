@@ -395,7 +395,7 @@ function copyStep(stepId: string, code: string) {
       <div class="space-y-6 mt-6">
         <div>
           <h3>1. 代理节点</h3>
-          <p>在模块管理中，开启代理模块后可以添加和使用代理功能，包括手动添加和 Aether-Proxy 自动连接。</p>
+          <p>在模块管理中开启代理节点模块后，可以手动添加 HTTP/SOCKS 代理出口，由网关直接转发请求。</p>
         </div>
 
         <div>

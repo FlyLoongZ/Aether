@@ -1303,6 +1303,8 @@ fn sanitize_candidate_proxy_timing(value: &serde_json::Value) -> Option<serde_js
     (!summary.is_empty()).then_some(serde_json::Value::Object(summary))
 }
 
+// Legacy tunnel values are retained below only for persisted audit snapshots.
+// The current planner no longer emits them; historical traces must remain readable.
 fn sanitize_candidate_proxy_mode(value: &str) -> Option<&'static str> {
     match value.trim().to_ascii_lowercase().as_str() {
         "direct" => Some("direct"),

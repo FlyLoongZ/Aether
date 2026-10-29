@@ -29,6 +29,8 @@ describe('translation coverage', () => {
 
   it.each([
     ['暂无登录设备记录', 'No sign-in devices recorded'],
+    ['手动管理 HTTP/SOCKS 代理节点，由网关直接转发请求', 'Manage manual HTTP/SOCKS proxy nodes. The gateway forwards requests directly through them.'],
+    ['在模块管理中开启代理节点模块后，可以手动添加 HTTP/SOCKS 代理出口，由网关直接转发请求。', 'Enable the proxy nodes module to manually add HTTP/SOCKS proxy endpoints. The gateway forwards requests directly through them.'],
     ['请妥善保管，此令牌只会显示一次', 'Store this token securely. It is shown only once.'],
     ['给密钥起一个有意义的名称方便识别', 'Use a descriptive name to identify this key'],
     ['套餐不足时继续扣钱包余额', 'Charge the wallet when plan credit runs out'],
