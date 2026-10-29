@@ -23,19 +23,21 @@ pub struct BenchmarkRuntimeSnapshot {
 
 pub struct BenchmarkRuntimeSampler {
     started_at: Instant,
-    system: System,
+    system: Option<System>,
     current_pid: Option<Pid>,
 }
 
 impl BenchmarkRuntimeSampler {
     pub fn new() -> Self {
-        let mut system = System::new_all();
+        let mut system = System::new_all().ok();
         let current_pid = get_current_pid().ok();
-        if let Some(pid) = current_pid {
-            system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+        if let Some(system) = system.as_mut() {
+            if let Some(pid) = current_pid {
+                system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+            }
+            system.refresh_cpu_usage();
+            system.refresh_memory();
         }
-        system.refresh_cpu_usage();
-        system.refresh_memory();
         Self {
             started_at: Instant::now(),
             system,
@@ -44,19 +46,20 @@ impl BenchmarkRuntimeSampler {
     }
 
     pub fn snapshot(&mut self) -> BenchmarkRuntimeSnapshot {
-        self.system.refresh_cpu_usage();
-        self.system.refresh_memory();
-        if let Some(pid) = self.current_pid {
-            self.system
-                .refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+        if let Some(system) = self.system.as_mut() {
+            system.refresh_cpu_usage();
+            system.refresh_memory();
+            if let Some(pid) = self.current_pid {
+                system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+            }
         }
 
-        let memory_total_bytes = self.system.total_memory();
-        let memory_used_bytes = self.system.used_memory();
-        let memory_available_bytes = self.system.available_memory();
+        let memory_total_bytes = self.system.as_ref().map_or(0, System::total_memory);
+        let memory_used_bytes = self.system.as_ref().map_or(0, System::used_memory);
+        let memory_available_bytes = self.system.as_ref().map_or(0, System::available_memory);
         let (process_cpu_usage_basis_points, process_memory_bytes, process_virtual_memory_bytes) =
             self.current_pid
-                .and_then(|pid| self.system.process(pid))
+                .and_then(|pid| self.system.as_ref()?.process(pid))
                 .map(|process| {
                     (
                         percent_to_basis_points(process.cpu_usage() as f64),
@@ -69,9 +72,9 @@ impl BenchmarkRuntimeSampler {
         BenchmarkRuntimeSnapshot {
             sampled_at_unix_secs: current_unix_secs(),
             elapsed_ms: self.started_at.elapsed().as_millis() as u64,
-            system_cpu_usage_basis_points: percent_to_basis_points(
-                self.system.global_cpu_usage() as f64
-            ),
+            system_cpu_usage_basis_points: self.system.as_ref().map_or(0, |system| {
+                percent_to_basis_points(system.global_cpu_usage() as f64)
+            }),
             process_cpu_usage_basis_points,
             memory_total_bytes,
             memory_used_bytes,
@@ -139,4 +142,24 @@ fn file_descriptor_limit() -> u64 {
         }
     }
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unavailable_sysinfo_preserves_runtime_sampling() {
+        let mut sampler = BenchmarkRuntimeSampler {
+            started_at: Instant::now(),
+            system: None,
+            current_pid: None,
+        };
+        let snapshot = sampler.snapshot();
+        assert!(snapshot.sampled_at_unix_secs > 0);
+        assert_eq!(snapshot.system_cpu_usage_basis_points, 0);
+        assert_eq!(snapshot.process_cpu_usage_basis_points, 0);
+        assert_eq!(snapshot.memory_total_bytes, 0);
+        assert_eq!(snapshot.process_memory_basis_points, 0);
+    }
 }

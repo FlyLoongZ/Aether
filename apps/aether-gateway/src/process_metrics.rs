@@ -309,22 +309,30 @@ impl GatewayProcessResourceSnapshot {
 }
 
 pub(crate) struct GatewayProcessResourceMonitor {
-    system: Mutex<System>,
-    networks: Mutex<Networks>,
+    system: Mutex<Option<System>>,
+    networks: Mutex<Option<Networks>>,
     current_pid: Option<Pid>,
 }
 
 impl GatewayProcessResourceMonitor {
     pub(crate) fn new() -> Self {
-        let mut system = System::new_all();
-        let mut networks = Networks::new_with_refreshed_list();
+        let mut system = System::new_all()
+            .map_err(|error| tracing::warn!(%error, "system resource monitoring unavailable"))
+            .ok();
+        let mut networks = Networks::new_with_refreshed_list()
+            .map_err(|error| tracing::warn!(%error, "network resource monitoring unavailable"))
+            .ok();
         let current_pid = get_current_pid().ok();
-        if let Some(pid) = current_pid {
-            system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+        if let Some(system) = system.as_mut() {
+            if let Some(pid) = current_pid {
+                system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+            }
+            system.refresh_cpu_usage();
+            system.refresh_memory();
         }
-        system.refresh_cpu_usage();
-        system.refresh_memory();
-        networks.refresh();
+        if let Some(networks) = networks.as_mut() {
+            networks.refresh(true);
+        }
         Self {
             system: Mutex::new(system),
             networks: Mutex::new(networks),
@@ -338,15 +346,17 @@ impl GatewayProcessResourceMonitor {
             Err(poisoned) => poisoned.into_inner(),
         };
 
-        system.refresh_cpu_usage();
-        system.refresh_memory();
-        if let Some(pid) = self.current_pid {
-            system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+        if let Some(system) = system.as_mut() {
+            system.refresh_cpu_usage();
+            system.refresh_memory();
+            if let Some(pid) = self.current_pid {
+                system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
+            }
         }
 
-        let memory_total_bytes = system.total_memory();
-        let memory_used_bytes = system.used_memory();
-        let memory_available_bytes = system.available_memory();
+        let memory_total_bytes = system.as_ref().map_or(0, System::total_memory);
+        let memory_used_bytes = system.as_ref().map_or(0, System::used_memory);
+        let memory_available_bytes = system.as_ref().map_or(0, System::available_memory);
         let (
             process_cpu_usage_basis_points,
             process_memory_bytes,
@@ -354,7 +364,7 @@ impl GatewayProcessResourceMonitor {
             process_uptime_secs,
         ) = self
             .current_pid
-            .and_then(|pid| system.process(pid))
+            .and_then(|pid| system.as_ref()?.process(pid))
             .map(|process| {
                 (
                     percent_to_basis_points(process.cpu_usage() as f64),
@@ -371,7 +381,9 @@ impl GatewayProcessResourceMonitor {
 
         GatewayProcessResourceSnapshot {
             sampled_at_unix_secs: current_unix_secs(),
-            system_cpu_usage_basis_points: percent_to_basis_points(system.global_cpu_usage() as f64),
+            system_cpu_usage_basis_points: system.as_ref().map_or(0, |system| {
+                percent_to_basis_points(system.global_cpu_usage() as f64)
+            }),
             process_cpu_usage_basis_points,
             memory_total_bytes,
             memory_used_bytes,
@@ -426,14 +438,17 @@ impl GatewayProcessResourceMonitor {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
         };
-        networks.refresh();
+        let Some(networks) = networks.as_mut() else {
+            return GatewayNetworkSnapshot::default();
+        };
+        networks.refresh(true);
 
         let mut snapshot = GatewayNetworkSnapshot {
-            observability_available: u64::from(!networks.list().is_empty()),
-            interface_count: networks.list().len() as u64,
+            observability_available: u64::from(!networks.is_empty()),
+            interface_count: networks.len() as u64,
             ..GatewayNetworkSnapshot::default()
         };
-        for network in networks.list().values() {
+        for network in networks.values() {
             snapshot.received_bytes_total = snapshot
                 .received_bytes_total
                 .saturating_add(network.total_received());
@@ -747,6 +762,23 @@ Inter-|   Receive                                                |  Transmit
 
         assert_eq!(totals.receive_dropped_total, 7);
         assert_eq!(totals.transmit_dropped_total, 10);
+    }
+
+    #[test]
+    fn unavailable_sysinfo_does_not_disable_gateway_metrics() {
+        let monitor = GatewayProcessResourceMonitor {
+            system: Mutex::new(None),
+            networks: Mutex::new(None),
+            current_pid: None,
+        };
+        let snapshot = monitor.snapshot();
+        assert_eq!(snapshot.memory_total_bytes, 0);
+        assert_eq!(snapshot.system_cpu_usage_basis_points, 0);
+        assert_eq!(snapshot.process_uptime_secs, None);
+        assert_eq!(snapshot.network_observability_available, 0);
+        assert_eq!(snapshot.network_interface_count, 0);
+        assert!(snapshot.sampled_at_unix_secs > 0);
+        assert!(!monitor.metric_samples().is_empty());
     }
 
     #[test]

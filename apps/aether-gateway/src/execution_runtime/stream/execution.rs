@@ -1681,10 +1681,15 @@ async fn next_direct_upstream_response_chunk(
                 return Ok(Some(chunk));
             }
         },
-        DirectUpstreamResponse::BrowserWreq(response) => response
-            .chunk()
-            .await
-            .map_err(|err| format_wreq_upstream_request_error(&err)),
+        DirectUpstreamResponse::BrowserWreq(response) => loop {
+            let Some(frame) = response.frame().await else {
+                return Ok(None);
+            };
+            let frame = frame.map_err(|err| format_wreq_upstream_request_error(&err))?;
+            if let Ok(chunk) = frame.into_data() {
+                return Ok(Some(chunk));
+            }
+        },
     }
 }
 
