@@ -247,278 +247,10 @@ pub(super) fn classify_admin_operations_family_route(
             "admin:provider_ops",
             false,
         ))
-    } else if method == http::Method::GET
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes" | "/api/admin/proxy-nodes/"
-        )
+    } else if let Some(route) =
+        classify_admin_proxy_nodes_route(method, normalized_path_no_trailing)
     {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "list_nodes",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::GET
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/metrics/fleet" | "/api/admin/proxy-nodes/metrics/fleet/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "list_fleet_metrics",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::GET
-        && normalized_path_no_trailing.starts_with("/api/admin/proxy-nodes/")
-        && normalized_path_no_trailing.ends_with("/metrics")
-        && normalized_path_no_trailing["/api/admin/proxy-nodes/".len()..]
-            .split('/')
-            .count()
-            == 2
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "list_node_metrics",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::GET
-        && normalized_path_no_trailing.starts_with("/api/admin/proxy-nodes/")
-        && normalized_path_no_trailing["/api/admin/proxy-nodes/".len()..]
-            .split('/')
-            .count()
-            == 1
-        && !matches!(
-            &normalized_path_no_trailing["/api/admin/proxy-nodes/".len()..],
-            "register" | "heartbeat" | "unregister" | "manual" | "upgrade" | "test-url"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "get_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/register" | "/api/admin/proxy-nodes/register/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "register_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/heartbeat" | "/api/admin/proxy-nodes/heartbeat/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "heartbeat_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/unregister" | "/api/admin/proxy-nodes/unregister/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "unregister_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/manual" | "/api/admin/proxy-nodes/manual/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "create_manual_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/install-sessions" | "/api/admin/proxy-nodes/install-sessions/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "create_proxy_node_install_session",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/upgrade" | "/api/admin/proxy-nodes/upgrade/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "batch_upgrade_nodes",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/upgrade/cancel" | "/api/admin/proxy-nodes/upgrade/cancel/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "cancel_upgrade_rollout",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/upgrade/clear-conflicts"
-                | "/api/admin/proxy-nodes/upgrade/clear-conflicts/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "clear_upgrade_rollout_conflicts",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/upgrade/restore-skipped"
-                | "/api/admin/proxy-nodes/upgrade/restore-skipped/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "restore_skipped_upgrade_rollout_nodes",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && normalized_path.starts_with("/api/admin/proxy-nodes/")
-        && normalized_path.ends_with("/upgrade/skip")
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "skip_upgrade_rollout_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && normalized_path.starts_with("/api/admin/proxy-nodes/")
-        && normalized_path.ends_with("/upgrade/retry")
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "retry_upgrade_rollout_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && matches!(
-            normalized_path,
-            "/api/admin/proxy-nodes/test-url" | "/api/admin/proxy-nodes/test-url/"
-        )
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "test_proxy_url",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::PATCH
-        && normalized_path.starts_with("/api/admin/proxy-nodes/")
-        && !normalized_path.ends_with("/test")
-        && !normalized_path.ends_with("/config")
-        && !normalized_path.ends_with("/events")
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "update_manual_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::DELETE
-        && normalized_path.starts_with("/api/admin/proxy-nodes/")
-        && !normalized_path.ends_with("/test")
-        && !normalized_path.ends_with("/config")
-        && !normalized_path.ends_with("/events")
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "delete_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::POST
-        && normalized_path.starts_with("/api/admin/proxy-nodes/")
-        && normalized_path.ends_with("/test")
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "test_node",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::PUT
-        && normalized_path.starts_with("/api/admin/proxy-nodes/")
-        && normalized_path.ends_with("/config")
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "update_node_config",
-            "admin:proxy_nodes",
-            false,
-        ))
-    } else if method == http::Method::GET
-        && normalized_path.starts_with("/api/admin/proxy-nodes/")
-        && normalized_path.ends_with("/events")
-    {
-        Some(classified(
-            "admin_proxy",
-            "proxy_nodes_manage",
-            "list_node_events",
-            "admin:proxy_nodes",
-            false,
-        ))
+        Some(route)
     } else if method == http::Method::GET
         && matches!(
             normalized_path,
@@ -1021,4 +753,42 @@ pub(super) fn classify_admin_operations_family_route(
     } else {
         None
     }
+}
+
+fn classify_admin_proxy_nodes_route(method: &http::Method, path: &str) -> Option<ClassifiedRoute> {
+    let route_kind = if path == "/api/admin/proxy-nodes" {
+        (method == http::Method::GET).then_some("list_nodes")?
+    } else {
+        let suffix = path.strip_prefix("/api/admin/proxy-nodes/")?;
+        let segments = suffix.split('/').collect::<Vec<_>>();
+        match (method, segments.as_slice()) {
+            (&http::Method::POST, ["manual"]) => "create_manual_node",
+            (&http::Method::POST, ["test-url"]) => "test_proxy_url",
+            (_, [node_id] | [node_id, "test"])
+                if !node_id.is_empty()
+                    // Retired operation names must not be reinterpreted as node IDs.
+                    && !matches!(
+                        *node_id,
+                        "register" | "heartbeat" | "unregister" | "install-sessions"
+                            | "upgrade" | "metrics" | "manual" | "test-url"
+                    ) =>
+            {
+                match (method, segments.len()) {
+                    (&http::Method::GET, 1) => "get_node",
+                    (&http::Method::PATCH, 1) => "update_manual_node",
+                    (&http::Method::DELETE, 1) => "delete_node",
+                    (&http::Method::POST, 2) => "test_node",
+                    _ => return None,
+                }
+            }
+            _ => return None,
+        }
+    };
+    Some(classified(
+        "admin_proxy",
+        "proxy_nodes_manage",
+        route_kind,
+        "admin:proxy_nodes",
+        false,
+    ))
 }
