@@ -164,10 +164,6 @@ fn provider_uses_bearer_oauth_runtime(provider_type: &str) -> bool {
     matches!(provider_type.trim().to_ascii_lowercase().as_str(),)
 }
 
-fn provider_uses_grok_session_runtime(provider_type: &str) -> bool {
-    provider_type.trim().eq_ignore_ascii_case("grok")
-}
-
 fn provider_key_is_legacy_kiro_oauth_session(
     key: &StoredProviderCatalogKey,
     provider_type: &str,
@@ -184,8 +180,7 @@ pub(crate) fn provider_key_auth_semantics(
 ) -> ProviderKeyAuthSemantics {
     let auth_type = normalized_auth_type(key);
     let oauth_managed = auth_type == "oauth"
-        || provider_key_is_legacy_kiro_oauth_session(key, provider_type, &auth_type)
-        || (provider_uses_grok_session_runtime(provider_type) && key_has_auth_config(key));
+        || provider_key_is_legacy_kiro_oauth_session(key, provider_type, &auth_type);
     let credential_kind = if oauth_managed {
         ProviderKeyCredentialKind::OAuthSession
     } else if matches!(auth_type.as_str(), "service_account" | "vertex_ai") {

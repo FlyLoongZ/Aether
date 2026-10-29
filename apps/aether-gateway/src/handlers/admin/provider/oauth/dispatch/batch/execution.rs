@@ -74,7 +74,7 @@ fn validate_batch_access_token_import(
 ) -> Result<(), String> {
     if !provider_type_supports_access_token_import(provider_type) {
         return Err(
-            "Access Token 导入仅支持 Claude Code / Codex / ChatGPT Web / Grok / xAI Provider"
+            "Access Token 导入仅支持 Claude Code / Codex / xAI Provider"
                 .to_string(),
         );
     }
@@ -362,7 +362,7 @@ async fn resolve_admin_provider_oauth_batch_import_tokens(
                 }
             }
             return Err(
-                "该 Provider 不支持 Refresh Token 导入，请提供 sso_token 或 access_token"
+                "该 Provider 不支持 Refresh Token 导入，请提供 access_token"
                     .to_string(),
             );
         };

@@ -599,7 +599,6 @@ pub fn transport_supports_api_operation(
         return aether_ai_formats::normalize_api_format_alias(provider_api_format)
             == "openai:responses"
             && !crate::kiro::is_kiro_provider_transport(transport)
-            && !crate::grok::is_grok_provider_transport(transport)
             && !is_antigravity_provider_transport(transport)
             && !is_gemini_cli_provider_transport(transport);
     }
@@ -616,9 +615,7 @@ pub fn transport_supports_api_operation(
 fn anthropic_count_tokens_supported(transport: &GatewayProviderTransportSnapshot) -> bool {
     // Private message adapters do not implement Anthropic's token-counting
     // operation. A config flag cannot make their request envelopes compatible.
-    if crate::kiro::is_kiro_provider_transport(transport)
-        || crate::grok::is_grok_provider_transport(transport)
-    {
+    if crate::kiro::is_kiro_provider_transport(transport) {
         return false;
     }
 

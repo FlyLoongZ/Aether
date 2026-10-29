@@ -118,9 +118,6 @@ pub(super) fn normalize_provider_import_tokens(
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned);
 
-    if provider_type == "grok" {
-        return (None, access_token.or(refresh_token));
-    }
     if provider_type == "xai" {
         return (refresh_token, access_token);
     }
@@ -240,7 +237,7 @@ pub(super) fn provider_oauth_import_authorization_bearer_token_from_object(
 pub(super) fn provider_type_supports_access_token_import(provider_type: &str) -> bool {
     matches!(
         provider_type.trim().to_ascii_lowercase().as_str(),
-        "claude_code" | "codex" | "grok" | "xai"
+        "claude_code" | "codex" | "xai"
     )
 }
 
@@ -330,10 +327,6 @@ pub(super) fn build_provider_access_token_import_auth_config(
         auth_config.insert("refresh_token".to_string(), json!(refresh_token));
     }
 
-    if provider_type.trim().eq_ignore_ascii_case("grok") {
-        auth_config.insert("sso_token".to_string(), json!(access_token));
-        auth_config.insert("auth_method".to_string(), json!("sso_token"));
-    }
     if provider_type.trim().eq_ignore_ascii_case("xai") {
         if refresh_token.is_some() {
             auth_config.insert("auth_method".to_string(), json!("oauth"));

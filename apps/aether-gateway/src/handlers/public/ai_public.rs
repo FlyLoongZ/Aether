@@ -2093,17 +2093,6 @@ mod tests {
 
         assert!(validate_openai_image_n(&openai_validation).is_none());
 
-        let grok_body =
-            Bytes::from_static(br#"{"model":"grok-imagine-image-lite","prompt":"draw","n":4}"#);
-        let grok_validation = parse_openai_image_validation_input(
-            OpenAiImageOperation::Generate,
-            Some("application/json"),
-            &grok_body,
-        )
-        .expect("valid grok image payload should parse");
-
-        assert!(validate_openai_image_n(&grok_validation).is_none());
-
         let alias_body =
             Bytes::from_static(br#"{"model":"production-image-alias","prompt":"draw","n":10}"#);
         let alias_validation = parse_openai_image_validation_input(

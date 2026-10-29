@@ -1,16 +1,13 @@
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use aether_admin::provider::quota as admin_provider_quota_pure;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogKeyRuntimeMetadataUpdate;
-use aether_provider_pool::grok_quota_window_key_for_model;
 use aether_usage_runtime::{
     decode_internal_report_body_base64, extract_gemini_file_mapping_entries,
     gemini_file_mapping_cache_key, normalize_gemini_file_name, report_request_id,
     GatewayStreamReportRequest, GatewaySyncReportRequest, GEMINI_FILE_MAPPING_TTL_SECONDS,
 };
-use regex::Regex;
 use serde_json::{json, Value};
 use tracing::warn;
 use uuid::Uuid;
@@ -25,8 +22,6 @@ use crate::{AppState, GatewayError};
 
 const RUNTIME_METADATA_CAS_MAX_ATTEMPTS: usize = 16;
 const CODEX_WEBSOCKET_RATE_LIMITS_REPORT_CONTEXT_FIELD: &str = "codex_websocket_rate_limits";
-static GROK_CHINESE_WAIT_DURATION_RE: OnceLock<Regex> = OnceLock::new();
-static GROK_ENGLISH_WAIT_DURATION_RE: OnceLock<Regex> = OnceLock::new();
 
 fn upstream_metadata_namespace_value(
     upstream_metadata: Option<&Value>,
@@ -127,98 +122,6 @@ fn quota_status_snapshot_patch(status_snapshot: Option<&Value>) -> Value {
         patch.insert("quota".to_string(), quota);
     }
     Value::Object(patch)
-}
-
-fn grok_report_context_model(report_context: Option<&Value>) -> Option<String> {
-    report_context
-        .and_then(|context| context.get("mapped_model"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
-fn grok_chinese_wait_duration_regex() -> &'static Regex {
-    GROK_CHINESE_WAIT_DURATION_RE.get_or_init(|| {
-        Regex::new(r"(?i)(?:(\d+)\s*天)?\s*(?:(\d+)\s*(?:小时|小時))?\s*(?:(\d+)\s*分钟)?\s*(?:(\d+)\s*秒)?")
-            .expect("grok Chinese wait duration regex should compile")
-    })
-}
-
-fn grok_english_wait_duration_regex() -> &'static Regex {
-    GROK_ENGLISH_WAIT_DURATION_RE.get_or_init(|| {
-        Regex::new(
-            r"(?i)(?:(\d+)\s*(?:d|day|days))?\s*(?:(\d+)\s*(?:h|hour|hours))?\s*(?:(\d+)\s*(?:m|min|mins|minute|minutes))?\s*(?:(\d+)\s*(?:s|sec|secs|second|seconds))?",
-        )
-        .expect("grok English wait duration regex should compile")
-    })
-}
-
-fn grok_duration_capture_seconds(captures: regex::Captures<'_>) -> Option<u64> {
-    let values = [1usize, 2, 3, 4]
-        .into_iter()
-        .map(|index| {
-            captures
-                .get(index)
-                .and_then(|item| item.as_str().parse::<u64>().ok())
-                .unwrap_or(0)
-        })
-        .collect::<Vec<_>>();
-    let seconds = values[0]
-        .saturating_mul(86_400)
-        .saturating_add(values[1].saturating_mul(3_600))
-        .saturating_add(values[2].saturating_mul(60))
-        .saturating_add(values[3]);
-    (seconds > 0).then_some(seconds)
-}
-
-fn grok_wait_duration_seconds_from_text(text: &str) -> Option<u64> {
-    let text = text.trim();
-    if text.is_empty() {
-        return None;
-    }
-    for captures in grok_chinese_wait_duration_regex().captures_iter(text) {
-        if let Some(seconds) = grok_duration_capture_seconds(captures) {
-            return Some(seconds);
-        }
-    }
-    for captures in grok_english_wait_duration_regex().captures_iter(text) {
-        if let Some(seconds) = grok_duration_capture_seconds(captures) {
-            return Some(seconds);
-        }
-    }
-    None
-}
-
-fn grok_response_error_text(value: &Value) -> Option<String> {
-    match value {
-        Value::String(text) => Some(text.trim().to_string()).filter(|text| !text.is_empty()),
-        Value::Object(object) => {
-            if let Some(error) = object.get("error") {
-                if let Some(text) = grok_response_error_text(error) {
-                    return Some(text);
-                }
-            }
-            for key in ["message", "detail", "reason", "error"] {
-                if let Some(text) = object
-                    .get(key)
-                    .and_then(Value::as_str)
-                    .map(str::trim)
-                    .filter(|text| !text.is_empty())
-                {
-                    return Some(text.to_string());
-                }
-            }
-            None
-        }
-        _ => None,
-    }
-}
-
-fn grok_upstream_response_body(report_context: Option<&Value>) -> Option<&Value> {
-    report_context
-        .and_then(|context| context.get("upstream_response"))
-        .and_then(|response| response.get("body"))
 }
 
 fn gemini_cli_credits_from_report_context(
@@ -368,187 +271,6 @@ async fn sync_gemini_cli_credits_from_report(
     Ok(false)
 }
 
-fn grok_quota_reset_after_seconds(
-    body_json: Option<&Value>,
-    report_context: Option<&Value>,
-) -> Option<u64> {
-    body_json
-        .and_then(grok_response_error_text)
-        .and_then(|text| grok_wait_duration_seconds_from_text(text.as_str()))
-        .or_else(|| {
-            grok_upstream_response_body(report_context)
-                .and_then(grok_response_error_text)
-                .and_then(|text| grok_wait_duration_seconds_from_text(text.as_str()))
-        })
-}
-
-fn grok_apply_quota_feedback(
-    bucket: &mut serde_json::Map<String, Value>,
-    model: &str,
-    status_code: u16,
-    reset_after_seconds: Option<u64>,
-    now_unix_secs: u64,
-) -> bool {
-    let Some(quota_key) = grok_quota_window_key_for_model(Some(model)) else {
-        return false;
-    };
-    let quota_by_model = if bucket.contains_key("quota_by_model") {
-        bucket.get_mut("quota_by_model")
-    } else {
-        bucket.get_mut("models")
-    };
-    let Some(window) = quota_by_model
-        .and_then(Value::as_object_mut)
-        .and_then(|models| models.get_mut(quota_key))
-        .and_then(Value::as_object_mut)
-    else {
-        return false;
-    };
-
-    let total = window
-        .get("total")
-        .and_then(admin_provider_quota_pure::coerce_json_f64)
-        .filter(|value| *value > 0.0);
-    let current_remaining = window
-        .get("remaining")
-        .and_then(admin_provider_quota_pure::coerce_json_f64)
-        .or(total)
-        .unwrap_or(0.0);
-    let next_remaining = match status_code {
-        429 => 0.0,
-        code if code >= 400 && reset_after_seconds.is_some() => 0.0,
-        code if code < 300 => (current_remaining - 1.0).max(0.0),
-        _ => return false,
-    };
-
-    window.insert("remaining".to_string(), json!(next_remaining));
-    if let Some(total) = total {
-        window.insert("total".to_string(), json!(total));
-        window.insert(
-            "remaining_fraction".to_string(),
-            json!((next_remaining / total).clamp(0.0, 1.0)),
-        );
-        window.insert(
-            "used_percent".to_string(),
-            json!(((total - next_remaining).max(0.0) / total * 100.0).clamp(0.0, 100.0)),
-        );
-    } else if status_code == 429 {
-        window.insert("remaining_fraction".to_string(), json!(0.0));
-        window.insert("used_percent".to_string(), json!(100.0));
-    }
-    if let Some(reset_after_seconds) = reset_after_seconds.filter(|seconds| *seconds > 0) {
-        let reset_at = now_unix_secs.saturating_add(reset_after_seconds);
-        window.insert("reset_at".to_string(), json!(reset_at));
-        window.insert("next_reset_at".to_string(), json!(reset_at));
-        window.insert(
-            "reset_after_seconds".to_string(),
-            json!(reset_after_seconds),
-        );
-        window.insert("reset_at_source".to_string(), json!("grok_upstream_error"));
-    }
-    window.insert("is_exhausted".to_string(), json!(next_remaining <= 0.0));
-    true
-}
-
-fn grok_mark_quota_bucket_updated(bucket: &mut serde_json::Map<String, Value>, now_unix_secs: u64) {
-    bucket.insert("updated_at".to_string(), json!(now_unix_secs));
-}
-
-async fn sync_grok_quota_from_report_context(
-    state: &AppState,
-    report_context: Option<&Value>,
-    status_code: u16,
-    body_json: Option<&Value>,
-) -> Result<bool, GatewayError> {
-    let key_id = match report_context_key_id(report_context) {
-        Some(value) => value,
-        None => return Ok(false),
-    };
-    let Some(model) = grok_report_context_model(report_context) else {
-        return Ok(false);
-    };
-
-    let now_unix_secs = current_unix_secs();
-    for attempt in 0..RUNTIME_METADATA_CAS_MAX_ATTEMPTS {
-        let Some(key) = state
-            .read_provider_catalog_keys_by_ids(std::slice::from_ref(&key_id))
-            .await?
-            .into_iter()
-            .next()
-        else {
-            return Ok(false);
-        };
-        let Some(provider) = state
-            .read_provider_catalog_providers_by_ids(std::slice::from_ref(&key.provider_id))
-            .await?
-            .into_iter()
-            .next()
-        else {
-            return Ok(false);
-        };
-        if !provider.provider_type.trim().eq_ignore_ascii_case("grok") {
-            return Ok(false);
-        }
-
-        let expected_namespace_value =
-            upstream_metadata_namespace_value(key.upstream_metadata.as_ref(), "grok");
-        let Some(grok_bucket) = expected_namespace_value
-            .as_ref()
-            .and_then(Value::as_object)
-            .cloned()
-        else {
-            return Ok(false);
-        };
-
-        let mut updated_grok_bucket = grok_bucket;
-        if !grok_apply_quota_feedback(
-            &mut updated_grok_bucket,
-            model.as_str(),
-            status_code,
-            grok_quota_reset_after_seconds(body_json, report_context),
-            now_unix_secs,
-        ) {
-            return Ok(false);
-        }
-        grok_mark_quota_bucket_updated(&mut updated_grok_bucket, now_unix_secs);
-
-        let namespace_value = Value::Object(updated_grok_bucket);
-        let updated_upstream_metadata = merge_metadata_object(
-            key.upstream_metadata.as_ref(),
-            "grok",
-            namespace_value.clone(),
-        );
-        let updated_status_snapshot = sync_provider_key_quota_status_snapshot(
-            key.status_snapshot.as_ref(),
-            provider.provider_type.as_str(),
-            updated_upstream_metadata.as_ref(),
-            "report_effect",
-        );
-        let persisted = state
-            .update_provider_catalog_key_runtime_metadata(
-                &ProviderCatalogKeyRuntimeMetadataUpdate {
-                    key_id: key_id.clone(),
-                    namespace: "grok".to_string(),
-                    expected_upstream_metadata_value: expected_namespace_value,
-                    upstream_metadata_value: namespace_value,
-                    status_snapshot_patch: quota_status_snapshot_patch(
-                        updated_status_snapshot.as_ref(),
-                    ),
-                    updated_at_unix_secs: Some(now_unix_secs),
-                },
-            )
-            .await?;
-        if persisted {
-            return Ok(true);
-        }
-        if attempt + 1 < RUNTIME_METADATA_CAS_MAX_ATTEMPTS {
-            let backoff_us = 50_u64.saturating_mul((attempt + 1) as u64).min(1_000);
-            tokio::time::sleep(Duration::from_micros(backoff_us)).await;
-        }
-    }
-    Ok(false)
-}
-
 async fn apply_local_sync_report_effect(state: &AppState, payload: &GatewaySyncReportRequest) {
     apply_local_gemini_file_mapping_report_effect(state, payload).await;
     if claude_code_quota_headers_reportable(payload.status_code) {
@@ -586,23 +308,6 @@ async fn apply_local_sync_report_effect(state: &AppState, payload: &GatewaySyncR
                 "gateway failed to persist codex realtime quota from sync response headers"
             );
         }
-    }
-    if let Err(err) = sync_grok_quota_from_report_context(
-        state,
-        payload.report_context.as_ref(),
-        payload.status_code,
-        payload.body_json.as_ref(),
-    )
-    .await
-    {
-        warn!(
-            event_name = "grok_realtime_quota_sync_failed",
-            log_type = "ops",
-            report_kind = %payload.report_kind,
-            report_request_id = %short_request_id(report_request_id(payload.report_context.as_ref())),
-            error = ?err,
-            "gateway failed to persist grok realtime quota from sync response"
-        );
     }
     let now_unix_secs = current_unix_secs();
     if let Err(err) = sync_gemini_cli_credits_from_report(
@@ -676,23 +381,6 @@ async fn apply_local_stream_report_effect(state: &AppState, payload: &GatewayStr
                 "gateway failed to persist claude_code realtime quota from stream response headers"
             );
         }
-    }
-    if let Err(err) = sync_grok_quota_from_report_context(
-        state,
-        payload.report_context.as_ref(),
-        payload.status_code,
-        grok_upstream_response_body(payload.report_context.as_ref()),
-    )
-    .await
-    {
-        warn!(
-            event_name = "grok_realtime_quota_sync_failed",
-            log_type = "ops",
-            report_kind = %payload.report_kind,
-            report_request_id = %short_request_id(report_request_id(payload.report_context.as_ref())),
-            error = ?err,
-            "gateway failed to persist grok realtime quota from stream response"
-        );
     }
     let now_unix_secs = current_unix_secs();
     let credits =

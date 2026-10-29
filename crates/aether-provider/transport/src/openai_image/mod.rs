@@ -4,7 +4,6 @@ use std::fmt;
 use serde_json::Value;
 
 use crate::auth::{build_passthrough_headers_with_auth, resolve_local_openai_bearer_auth};
-use crate::grok::{is_grok_provider_transport, resolve_grok_session_auth};
 use crate::policy::local_standard_transport_unsupported_reason_with_network;
 use crate::rules::apply_local_header_rules_with_request_headers;
 use crate::snapshot::GatewayProviderTransportSnapshot;
@@ -78,7 +77,6 @@ fn is_dedicated_openai_image_provider(transport: &GatewayProviderTransportSnapsh
         .provider_type
         .trim()
         .eq_ignore_ascii_case("codex")
-        || is_grok_provider_transport(transport)
         || transport
             .provider
             .provider_type
@@ -89,9 +87,6 @@ fn is_dedicated_openai_image_provider(transport: &GatewayProviderTransportSnapsh
 pub fn resolve_openai_image_auth(
     transport: &GatewayProviderTransportSnapshot,
 ) -> Option<(String, String)> {
-    if is_grok_provider_transport(transport) {
-        return resolve_grok_session_auth(transport);
-    }
     resolve_local_openai_bearer_auth(transport).or_else(|| {
         crate::generic_oauth::resolve_local_generic_oauth_transport_authorization(transport)
             .map(|value| ("authorization".to_string(), value))

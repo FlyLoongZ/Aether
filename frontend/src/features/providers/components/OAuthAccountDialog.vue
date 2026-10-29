@@ -61,7 +61,6 @@
     <div class="space-y-4">
       <!-- Tab 切换 -->
       <div
-        v-if="showAuthorizationMode"
         class="grid rounded-lg border border-border p-0.5 bg-muted/30"
         :class="isCodexProvider || isClaudeCodeProvider ? 'grid-cols-3' : 'grid-cols-2'"
       >
@@ -844,7 +843,6 @@
               :drop-title="importDropTitle"
               :drop-hint="importDropHint"
               :manual-placeholder="importManualPlaceholder"
-              :manual-description="importManualDescription"
               :paste-toggle-text="importPasteToggleText"
               :file-toggle-text="importFileToggleText"
               textarea-class="min-h-[200px] text-xs font-mono break-all !rounded-xl"
@@ -926,7 +924,7 @@
         {{ legacyT('取消') }}
       </Button>
       <Button
-        v-if="mode === 'oauth' && showAuthorizationMode && !isDeviceBrowserProvider"
+        v-if="mode === 'oauth' && !isDeviceBrowserProvider"
         :disabled="!canCompleteOAuth"
         @click="handleCompleteOAuth"
       >
@@ -1086,7 +1084,8 @@ function localizedApiError(error: unknown, fallback: string): string {
 
 // 模式
 type DialogMode = 'oauth' | 'cookie' | 'import' | 'agent_identity'
-const mode = ref<DialogMode>((props.providerType || '').toLowerCase() === 'grok' ? 'import' : 'oauth')
+const DEFAULT_DIALOG_MODE: DialogMode = 'oauth'
+const mode = ref<DialogMode>(DEFAULT_DIALOG_MODE)
 type WindsurfImportMethod = 'email_password' | 'token_json'
 
 // OAuth 状态
@@ -1196,14 +1195,11 @@ const CLAUDE_COOKIE_BATCH_LIMIT = 20
 const isOpen = computed(() => props.open)
 
 const isKiroProvider = computed(() => (props.providerType || '').toLowerCase() === 'kiro')
-const isGrokProvider = computed(() => (props.providerType || '').toLowerCase() === 'grok')
 const isWindsurfProvider = computed(() => (props.providerType || '').toLowerCase() === 'windsurf')
 const isXaiProvider = computed(() => (props.providerType || '').toLowerCase() === 'xai')
 const isCodexProvider = computed(() => (props.providerType || '').toLowerCase() === 'codex')
 const isClaudeCodeProvider = computed(() => (props.providerType || '').toLowerCase() === 'claude_code')
 const isDeviceBrowserProvider = computed(() => isKiroProvider.value || isWindsurfProvider.value || isXaiProvider.value)
-const showAuthorizationMode = computed(() => !isGrokProvider.value)
-const defaultMode = computed<DialogMode>(() => (isGrokProvider.value ? 'import' : 'oauth'))
 
 const isSocialDeviceAuth = computed(() =>
   device.value.auth_type === 'google' || device.value.auth_type === 'github'
@@ -1324,18 +1320,11 @@ const canCreateAgentIdentity = computed(() =>
   && !creatingAgentIdentity.value
 )
 
-const importModeLabel = computed(() => legacyT(isGrokProvider.value ? '导入账号' : '导入授权'))
-const importButtonLabel = computed(() => legacyT(isGrokProvider.value ? '导入账号' : '导入'))
-const importDropTitle = computed(() => (
-  legacyT(isGrokProvider.value ? '拖入 Grok 账号文件或点击选择' : '拖入授权文件或点击选择')
-))
-const importDropHint = computed(() => (
-  legacyT(isGrokProvider.value ? '支持 .json / .txt，可多选、批量导入' : '支持 .json / .txt，可多选')
-))
+const importModeLabel = computed(() => legacyT('导入授权'))
+const importButtonLabel = computed(() => legacyT('导入'))
+const importDropTitle = computed(() => legacyT('拖入授权文件或点击选择'))
+const importDropHint = computed(() => legacyT('支持 .json / .txt，可多选'))
 const importManualPlaceholder = computed(() => {
-  if (isGrokProvider.value) {
-    return legacyT('粘贴 Grok sso/session token，支持每行一个；或粘贴包含 token、sso_token、access_token、plan_type、pool_tier 的 JSON')
-  }
   if (isClaudeCodeProvider.value) {
     return legacyT('粘贴 Claude Refresh Token 或 Claude Code .credentials.json 内容')
   }
@@ -1347,26 +1336,13 @@ const importManualPlaceholder = computed(() => {
   }
   return legacyT('粘贴 Refresh Token / Access Token / Agent Identity JSON 内容')
 })
-const importManualDescription = computed(() => (
-  isGrokProvider.value
-    ? legacyT('plan_type / pool_tier 会作为账号套餐与能力特征保存，不是路由池选择。')
-    : ''
-))
-const importPasteToggleText = computed(() => (
-  legacyT(isGrokProvider.value ? '或手动粘贴 Grok Token' : '或手动粘贴 Token')
-))
-const importFileToggleText = computed(() => (
-  legacyT(isGrokProvider.value ? '或选择 Grok Token 文件导入' : '或选择 JSON 文件导入')
-))
+const importPasteToggleText = computed(() => legacyT('或手动粘贴 Token'))
+const importFileToggleText = computed(() => legacyT('或选择 JSON 文件导入'))
 const proxyUsageDescription = computed(() => {
   if (isEnglishLocale()) {
-    return isGrokProvider.value
-      ? 'Import, refresh, and quota queries use this proxy'
-      : 'Authorization, refresh, and quota queries use this proxy'
+    return 'Authorization, refresh, and quota queries use this proxy'
   }
-  return isGrokProvider.value
-    ? '导入、刷新、额度查询均走此代理'
-    : '授权、刷新、额度查询均走此代理'
+  return '授权、刷新、额度查询均走此代理'
 })
 const isWindsurfEmailPasswordImport = computed(() =>
   isWindsurfProvider.value && windsurfImportMethod.value === 'email_password'
@@ -1652,12 +1628,11 @@ function resetForm() {
   cookieAuthorizeSubmittedEntries.value = []
   proxyPopoverOpen.value = false
   selectedProxyNodeId.value = ''
-  mode.value = defaultMode.value
+  mode.value = DEFAULT_DIALOG_MODE
 }
 
 function switchMode(newMode: DialogMode) {
   if (mode.value === newMode) return
-  if (newMode === 'oauth' && !showAuthorizationMode.value) return
   if (newMode === 'cookie' && !isClaudeCodeProvider.value) return
   if (newMode === 'agent_identity' && !isCodexProvider.value) return
   if (importing.value || creatingAgentIdentity.value || cookieAuthorizing.value) return
@@ -1698,7 +1673,6 @@ function openAuthorizationUrl() {
 
 async function initOAuth() {
   if (!props.providerId) return
-  if (!showAuthorizationMode.value) return
   if (isDeviceBrowserProvider.value) return
   if (oauth.value.starting) return
 
@@ -1952,12 +1926,6 @@ function parseImportText(text: string): {
   account_id?: string
   account_user_id?: string
   plan_type?: string
-  pool_tier?: string
-  sso_rw_token?: string
-  cf_cookies?: string
-  cf_clearance?: string
-  user_agent?: string
-  browser_profile?: string
   user_id?: string
   account_name?: string
   headers?: Record<string, string>
@@ -1991,13 +1959,6 @@ function parseImportText(text: string): {
       // Raw xAI API keys / access tokens are imported as access_token.
     }
     return { access_token: trimmed }
-  }
-
-  if (isGrokProvider.value) {
-    const cookieImport = parseGrokCookieImport(trimmed)
-    if (cookieImport) {
-      return cookieImport
-    }
   }
 
   if (isWindsurfProvider.value) {
@@ -2057,27 +2018,16 @@ function parseImportText(text: string): {
     const parsed: unknown = JSON.parse(trimmed)
     if (typeof parsed === 'object' && parsed !== null) {
       const obj = parsed as Record<string, unknown>
-      const grokCookieImport = isGrokProvider.value
-        ? parseGrokCookieImport(normalizeStringField(obj.cookie) ?? normalizeStringField(obj.cookieHeader) ?? '')
-        : null
       const refreshToken = obj.refresh_token
       const refreshTokenCamel = obj.refreshToken
       const accessToken = obj.access_token
       const accessTokenCamel = obj.accessToken
-      const sessionToken = obj.session_token
-      const sessionTokenCamel = obj.sessionToken
-      const grokSsoToken = isGrokProvider.value
-        ? normalizeStringField(obj.sso_token) ?? normalizeStringField(obj.ssoToken) ?? normalizeStringField(obj.token) ?? grokCookieImport?.access_token
-        : undefined
       const normalizedRefreshToken = typeof refreshToken === 'string' && refreshToken.trim()
         ? refreshToken.trim()
         : (typeof refreshTokenCamel === 'string' && refreshTokenCamel.trim() ? refreshTokenCamel.trim() : undefined)
       const normalizedAccessToken = typeof accessToken === 'string' && accessToken.trim()
         ? accessToken.trim()
         : (typeof accessTokenCamel === 'string' && accessTokenCamel.trim() ? accessTokenCamel.trim() : undefined)
-      const normalizedSessionToken = typeof sessionToken === 'string' && sessionToken.trim()
-        ? sessionToken.trim()
-        : (typeof sessionTokenCamel === 'string' && sessionTokenCamel.trim() ? sessionTokenCamel.trim() : undefined)
       const normalizedHeaders = normalizeHeadersField(obj.headers)
         ?? normalizeHeadersField(obj.request_headers)
         ?? normalizeHeadersField(obj.requestHeaders)
@@ -2085,7 +2035,7 @@ function parseImportText(text: string): {
         ?? normalizeHeadersField(obj.headerOverrides)
         ?? normalizeHeadersField(obj.extra_headers)
         ?? normalizeHeadersField(obj.extraHeaders)
-      const importedAccessToken = normalizedAccessToken ?? grokSsoToken ?? normalizedSessionToken ?? bearerTokenFromHeaders(normalizedHeaders)
+      const importedAccessToken = normalizedAccessToken ?? bearerTokenFromHeaders(normalizedHeaders)
       if (normalizedRefreshToken || importedAccessToken) {
         return {
           refresh_token: normalizedRefreshToken,
@@ -2096,12 +2046,6 @@ function parseImportText(text: string): {
           account_id: normalizeStringField(obj.account_id) ?? normalizeStringField(obj.accountId) ?? normalizeStringField(obj.chatgpt_account_id) ?? normalizeStringField(obj.chatgptAccountId),
           account_user_id: normalizeStringField(obj.account_user_id) ?? normalizeStringField(obj.accountUserId) ?? normalizeStringField(obj.chatgpt_account_user_id) ?? normalizeStringField(obj.chatgptAccountUserId),
           plan_type: normalizeStringField(obj.plan_type) ?? normalizeStringField(obj.planType) ?? normalizeStringField(obj.chatgpt_plan_type) ?? normalizeStringField(obj.chatgptPlanType),
-          pool_tier: isGrokProvider.value ? normalizeStringField(obj.pool_tier) ?? normalizeStringField(obj.poolTier) ?? normalizeStringField(obj.tier) : undefined,
-          sso_rw_token: isGrokProvider.value ? normalizeStringField(obj.sso_rw_token) ?? normalizeStringField(obj.ssoRwToken) ?? grokCookieImport?.sso_rw_token : undefined,
-          cf_cookies: isGrokProvider.value ? normalizeStringField(obj.cf_cookies) ?? normalizeStringField(obj.cfCookies) ?? grokCookieImport?.cf_cookies : undefined,
-          cf_clearance: isGrokProvider.value ? normalizeStringField(obj.cf_clearance) ?? normalizeStringField(obj.cfClearance) ?? grokCookieImport?.cf_clearance : undefined,
-          user_agent: isGrokProvider.value ? normalizeStringField(obj.user_agent) ?? normalizeStringField(obj.userAgent) ?? grokCookieImport?.user_agent : undefined,
-          browser_profile: isGrokProvider.value ? normalizeStringField(obj.browser_profile) ?? normalizeStringField(obj.browserProfile) ?? normalizeStringField(obj.browser) ?? normalizeStringField(obj.impersonate) ?? grokCookieImport?.browser_profile : undefined,
           user_id: normalizeStringField(obj.user_id) ?? normalizeStringField(obj.userId) ?? normalizeStringField(obj.chatgpt_user_id) ?? normalizeStringField(obj.chatgptUserId),
           account_name: normalizeStringField(obj.account_name) ?? normalizeStringField(obj.accountName),
           headers: normalizedHeaders,
@@ -2118,72 +2062,6 @@ function parseImportText(text: string): {
   }
 
   return { refresh_token: trimmed }
-}
-
-function parseGrokCookieImport(text: string): {
-  access_token: string
-  sso_rw_token?: string
-  cf_cookies?: string
-  cf_clearance?: string
-  user_agent?: string
-  browser_profile?: string
-  user_id?: string
-} | null {
-  const cookies = parseCookieHeader(text)
-  const sso = cookies.get('sso')
-  if (!sso) return null
-  const userAgent = currentBrowserUserAgent()
-
-  return {
-    access_token: sso,
-    sso_rw_token: cookies.get('sso-rw'),
-    cf_cookies: buildGrokCookieProfile(cookies),
-    cf_clearance: cookies.get('cf_clearance'),
-    user_agent: userAgent,
-    browser_profile: inferGrokBrowserProfile(userAgent),
-    user_id: cookies.get('x-userid'),
-  }
-}
-
-function currentBrowserUserAgent(): string | undefined {
-  const value = typeof navigator !== 'undefined' ? navigator.userAgent?.trim() : ''
-  return value || undefined
-}
-
-function inferGrokBrowserProfile(userAgent: string | undefined): string | undefined {
-  const value = (userAgent || '').toLowerCase()
-  if (!value) return 'chrome136'
-  if (value.includes('firefox/')) return 'firefox'
-  if (value.includes('safari/') && !value.includes('chrome/') && !value.includes('chromium/')) {
-    return value.includes('iphone') || value.includes('ipad') ? 'safari_ios' : 'safari'
-  }
-  return 'chrome136'
-}
-
-function buildGrokCookieProfile(cookies: Map<string, string>): string | undefined {
-  const parts: string[] = []
-  for (const [name, value] of cookies) {
-    if (name === 'sso' || name === 'sso-rw') continue
-    parts.push(`${name}=${value}`)
-  }
-  return parts.length > 0 ? parts.join('; ') : undefined
-}
-
-function parseCookieHeader(text: string): Map<string, string> {
-  const normalized = text.trim().replace(/^cookie:\s*/i, '')
-  const cookies = new Map<string, string>()
-  for (const segment of normalized.split(';')) {
-    const part = segment.trim()
-    if (!part) continue
-    const separator = part.indexOf('=')
-    if (separator <= 0) continue
-    const name = part.slice(0, separator).trim().toLowerCase()
-    const value = part.slice(separator + 1).trim()
-    if (name && value) {
-      cookies.set(name, value)
-    }
-  }
-  return cookies
 }
 
 function normalizeStringField(value: unknown): string | undefined {
@@ -2689,10 +2567,7 @@ watch(
   (newOpen) => {
     if (newOpen) {
       proxyNodesStore.ensureLoaded()
-      mode.value = defaultMode.value
-      if (!showAuthorizationMode.value) {
-        return
-      }
+      mode.value = DEFAULT_DIALOG_MODE
       if (isWindsurfProvider.value) {
         device.value.auth_type = 'default'
       } else if (isXaiProvider.value) {
@@ -2713,15 +2588,11 @@ watch(
 watch(
   () => [props.open, props.providerId, props.providerType] as const,
   () => {
-    if (props.open && !showAuthorizationMode.value) {
-      mode.value = 'import'
-      return
-    }
     if (props.open && mode.value === 'agent_identity' && !isCodexProvider.value) {
-      mode.value = defaultMode.value
+      mode.value = DEFAULT_DIALOG_MODE
     }
     if (props.open && mode.value === 'cookie' && !isClaudeCodeProvider.value) {
-      mode.value = defaultMode.value
+      mode.value = DEFAULT_DIALOG_MODE
     }
     if (props.open && isWindsurfProvider.value && mode.value === 'oauth') {
       device.value.auth_type = ['default', 'google', 'github'].includes(device.value.auth_type)

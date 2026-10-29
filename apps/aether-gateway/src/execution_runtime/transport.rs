@@ -1375,18 +1375,6 @@ pub(crate) async fn execute_sync_plan_with_report_context(
         }
     }
 
-    match super::grok::maybe_execute_grok_sync(plan, report_context).await {
-        Ok(Some(result)) => {
-            record_manual_proxy_request_outcome(state, plan, result.status_code).await;
-            return Ok(result);
-        }
-        Ok(None) => {}
-        Err(err) => {
-            record_manual_proxy_request_failure(state, plan).await;
-            return Err(GatewayError::Internal(safe_transport_error_message(&err)));
-        }
-    }
-
     let _ = trace_id;
     match maybe_execute_windsurf_sync(state, plan, None).await {
         Ok(Some(result)) => return Ok(result),

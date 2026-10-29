@@ -11,16 +11,16 @@ use crate::ai_serving::planner::spec_metadata::local_openai_image_spec_metadata;
 use crate::ai_serving::pure::normalize_openai_image_request_with_options;
 use crate::ai_serving::transport::antigravity::is_antigravity_provider_transport;
 use crate::ai_serving::transport::{
-    build_grok_browser_headers, build_grok_upstream_url, build_openai_image_headers,
-    build_openai_image_upstream_url, build_standard_provider_request_headers,
-    openai_image_transport_unsupported_reason, resolve_openai_image_auth, GrokHeaderInput,
-    ProviderOpenAiImageHeadersInput, StandardProviderRequestHeadersInput, GROK_CHAT_PATH,
+    build_openai_image_headers, build_openai_image_upstream_url,
+    build_standard_provider_request_headers, openai_image_transport_unsupported_reason,
+    resolve_openai_image_auth, ProviderOpenAiImageHeadersInput,
+    StandardProviderRequestHeadersInput,
 };
 use crate::ai_serving::{
     apply_codex_openai_special_headers, apply_xai_upstream_payload_edits,
     build_codex_openai_image_api_provider_request_body,
     build_gemini_image_request_body_from_openai_image_request,
-    build_openai_image_api_provider_request_body, build_openai_image_provider_request_body,
+    build_openai_image_api_provider_request_body,
     default_model_for_openai_image_operation, normalize_openai_image_request,
     request_conversion_direct_auth, CandidateFailureDiagnostic, GatewayProviderTransportSnapshot,
     PlannerAppState, RequestConversionKind,
@@ -156,22 +156,14 @@ pub(super) async fn resolve_local_openai_image_candidate_payload_parts(
         return None;
     };
 
-    let is_grok = transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("grok");
     let is_codex = transport
         .provider
         .provider_type
         .trim()
         .eq_ignore_ascii_case("codex");
     let transport_profile = crate::ai_serving::transport::resolve_transport_profile(transport);
-    let upstream_url = if is_grok {
-        build_grok_upstream_url(transport, GROK_CHAT_PATH)
-    } else {
-        build_openai_image_upstream_url(transport, Some(parts.uri.path()), parts.uri.query())
-    };
+    let upstream_url =
+        build_openai_image_upstream_url(transport, Some(parts.uri.path()), parts.uri.query());
     let upstream_is_stream =
         crate::ai_serving::planner::common::resolve_upstream_is_stream_for_provider(
             transport.endpoint.config.as_ref(),
@@ -186,10 +178,6 @@ pub(super) async fn resolve_local_openai_image_candidate_payload_parts(
             Some(prepared_candidate.mapped_model.as_str()),
             upstream_is_stream,
         )
-    } else if is_grok {
-        Some(build_openai_image_provider_request_body(
-            &normalized_request,
-        ))
     } else {
         build_openai_image_api_provider_request_body(
             &normalized_request,
@@ -220,18 +208,7 @@ pub(super) async fn resolve_local_openai_image_candidate_payload_parts(
         transport.provider.provider_type.as_str(),
         provider_api_format,
     );
-    let Some(mut provider_request_headers) = (if is_grok {
-        build_grok_browser_headers(GrokHeaderInput {
-            transport,
-            transport_profile: transport_profile.as_ref(),
-            request_headers: Some(effective_headers),
-            content_type: "application/json",
-            accept: "*/*",
-            header_rules: transport.endpoint.header_rules.as_ref(),
-            provider_request_body: &provider_request_body,
-            original_request_body: body_json,
-        })
-    } else {
+    let Some(mut provider_request_headers) =
         build_openai_image_headers(ProviderOpenAiImageHeadersInput {
             transport,
             headers: effective_headers,
@@ -248,7 +225,7 @@ pub(super) async fn resolve_local_openai_image_candidate_payload_parts(
             provider_request_body: &provider_request_body,
             original_request_body: body_json,
         })
-    }) else {
+    else {
         mark_skipped_local_openai_image_candidate_with_failure_diagnostic(
             state,
             input,
@@ -266,18 +243,15 @@ pub(super) async fn resolve_local_openai_image_candidate_payload_parts(
         .await;
         return None;
     };
-    if is_grok {
-    } else {
-        apply_codex_openai_special_headers(
-            &mut provider_request_headers,
-            &provider_request_body,
-            effective_headers,
-            transport.provider.provider_type.as_str(),
-            spec_metadata.api_format,
-            Some(trace_id),
-            transport.key.decrypted_auth_config.as_deref(),
-        );
-    }
+    apply_codex_openai_special_headers(
+        &mut provider_request_headers,
+        &provider_request_body,
+        effective_headers,
+        transport.provider.provider_type.as_str(),
+        spec_metadata.api_format,
+        Some(trace_id),
+        transport.key.decrypted_auth_config.as_deref(),
+    );
     let requested_model = normalized_request
         .requested_model
         .clone()
@@ -292,11 +266,7 @@ pub(super) async fn resolve_local_openai_image_candidate_payload_parts(
         .unwrap_or_default()
         .to_string();
 
-    let input_summary = if is_grok {
-        provider_request_body.clone()
-    } else {
-        normalized_request.summary_json
-    };
+    let input_summary = normalized_request.summary_json;
 
     Some(LocalOpenAiImageCandidatePayloadParts {
         transport: Arc::clone(transport),

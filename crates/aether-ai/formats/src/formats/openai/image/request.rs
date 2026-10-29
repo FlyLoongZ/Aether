@@ -70,6 +70,42 @@ impl OpenAiImageNormalizeOptions {
     }
 }
 
+pub const OPENAI_IMAGE_MAX_GENERATION_COUNT: u64 = 10;
+const MAX_MULTIPART_BODY_BYTES: usize = 256 * 1024 * 1024;
+
+pub fn is_openai_image_stream_request(
+    parts: &http::request::Parts,
+    body_json: &Value,
+    body_base64: Option<&str>,
+) -> bool {
+    if !matches!(
+        openai_image_operation_from_path(parts.uri.path()),
+        Some(OpenAiImageOperation::Generate | OpenAiImageOperation::Edit)
+    ) {
+        return false;
+    }
+
+    if let Some(body_base64) = body_base64 {
+        return parse_multipart_fields_from_base64(parts, body_base64)
+            .and_then(|fields| find_multipart_text_field(&fields, "stream"))
+            .and_then(|value| parse_bool_string(&value))
+            .unwrap_or(false);
+    }
+
+    body_json
+        .get("stream")
+        .and_then(value_as_bool)
+        .unwrap_or(false)
+}
+
+pub fn openai_image_operation_from_path(path: &str) -> Option<OpenAiImageOperation> {
+    match path {
+        "/v1/images/generations" => Some(OpenAiImageOperation::Generate),
+        "/v1/images/edits" => Some(OpenAiImageOperation::Edit),
+        _ => None,
+    }
+}
+
 pub fn resolve_requested_openai_image_model_for_request(
     parts: &http::request::Parts,
     body_json: &Value,
@@ -1300,7 +1336,7 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        build_chatgpt_web_image_request_body, build_codex_openai_image_api_provider_request_body,
+        build_codex_openai_image_api_provider_request_body,
         build_openai_image_api_provider_request_body, build_openai_image_provider_request_body,
         decode_multipart_body_base64_with_limit, is_openai_image_stream_request,
         normalize_openai_image_quality, normalize_openai_image_request,
@@ -1512,14 +1548,14 @@ mod tests {
         let request = normalize_openai_image_request_with_options(
             &parts,
             &json!({
-                "model": "grok-imagine-image",
+                "model": "gpt-image-1",
                 "prompt": "generate image",
                 "n": 4
             }),
             None,
             OpenAiImageNormalizeOptions::with_max_generation_count(4),
         )
-        .expect("grok generation request should allow n up to four");
+        .expect("generation request should allow n up to four");
 
         let provider_request_body = build_openai_image_provider_request_body(&request);
         assert_eq!(provider_request_body["n"], json!(4));
@@ -2059,5 +2095,4 @@ mod tests {
         );
         assert!(provider_request_body.get("image").is_none());
     }
-
 }

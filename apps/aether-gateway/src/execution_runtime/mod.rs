@@ -7,7 +7,6 @@ mod client_response_headers;
 mod constants;
 mod exhaustion_fallback;
 mod fallback;
-mod grok;
 mod kiro_cache;
 mod kiro_web_search;
 pub(crate) mod ndjson;

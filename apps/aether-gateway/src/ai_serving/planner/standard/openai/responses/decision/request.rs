@@ -47,16 +47,16 @@ use crate::ai_serving::transport::kiro::{
     KiroRequestAuth, KIRO_ENVELOPE_NAME,
 };
 use crate::ai_serving::transport::{
-    apply_local_auth_config_header_overrides, build_grok_browser_headers, build_grok_upstream_url,
+    apply_local_auth_config_header_overrides,
     build_kiro_cross_format_upstream_url, build_openai_image_headers,
     build_openai_image_upstream_url, build_standard_provider_request_headers,
     build_windsurf_cascade_headers, build_windsurf_cascade_request_body,
     build_windsurf_cascade_upstream_url, is_gemini_cli_provider_transport,
     is_windsurf_provider_transport, local_standard_transport_unsupported_reason_with_network,
     local_windsurf_request_transport_unsupported_reason_with_network,
-    openai_image_transport_unsupported_reason, resolve_openai_image_auth, GrokHeaderInput,
+    openai_image_transport_unsupported_reason, resolve_openai_image_auth,
     ProviderOpenAiImageHeadersInput, StandardProviderRequestHeadersInput,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, GROK_CHAT_PATH, WINDSURF_ENVELOPE_NAME,
+    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, WINDSURF_ENVELOPE_NAME,
 };
 use crate::ai_serving::{
     ai_local_execution_contract_for_formats, request_conversion_direct_auth,
@@ -76,13 +76,6 @@ use super::support::{
     LocalOpenAiResponsesDecisionInput,
 };
 use super::LocalOpenAiResponsesSpec;
-
-fn is_grok_text_provider_api_format(provider_api_format: &str) -> bool {
-    matches!(
-        crate::ai_serving::normalize_api_format_alias(provider_api_format).as_str(),
-        "openai:chat" | "openai:responses" | "openai:responses:compact" | "claude:messages"
-    )
-}
 
 fn response_function_tool_names(body: &Value) -> Vec<String> {
     body.get("tools")
@@ -244,13 +237,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
     let is_antigravity = is_antigravity_provider_transport(&transport);
     let is_gemini_cli = is_gemini_cli_provider_transport(&transport);
     let is_kiro_claude_cli = is_kiro_claude_messages_transport(&transport, provider_api_format);
-    let is_grok = transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("grok");
-
-    if !is_grok && provider_api_format.eq_ignore_ascii_case("openai:image") {
+    if provider_api_format.eq_ignore_ascii_case("openai:image") {
         return Ok(resolve_openai_responses_to_openai_image_payload_parts(
             state,
             parts,
@@ -269,11 +256,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
 
     let same_format = api_format_alias_matches(provider_api_format, &client_api_format);
     let conversion_kind = request_conversion_kind(spec_metadata.api_format, provider_api_format);
-    let transport_unsupported_reason = if is_grok
-        && is_grok_text_provider_api_format(provider_api_format)
-    {
-        None
-    } else if same_format && is_kiro_claude_cli {
+    let transport_unsupported_reason = if same_format && is_kiro_claude_cli {
         local_kiro_request_transport_unsupported_reason_with_network(&transport)
     } else if same_format {
         local_standard_transport_unsupported_reason_with_network(&transport, provider_api_format)
@@ -339,9 +322,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
         None
     };
 
-    let direct_auth = if is_grok && is_grok_text_provider_api_format(provider_api_format) {
-        crate::ai_serving::transport::resolve_grok_session_auth(&transport)
-    } else if kiro_auth.is_some() {
+    let direct_auth = if kiro_auth.is_some() {
         None
     } else if same_format {
         match crate::ai_serving::normalize_api_format_alias(provider_api_format).as_str() {
@@ -471,22 +452,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
         mapped_model.as_str(),
         source_model,
     );
-    let Some(mut base_provider_request_body) = (if is_grok
-        && is_grok_text_provider_api_format(provider_api_format)
-    {
-        build_local_openai_responses_request_body_with_codex_model_capabilities(
-            body_json,
-            &mapped_model,
-            upstream_is_stream,
-            force_body_stream_field,
-            transport.provider.provider_type.as_str(),
-            spec_metadata.api_format,
-            transport.endpoint.body_rules.as_ref(),
-            effective_headers,
-            codex_model_capabilities.as_ref(),
-            false,
-        )
-    } else if needs_bidirectional_conversion {
+    let Some(mut base_provider_request_body) = (if needs_bidirectional_conversion {
         build_cross_format_openai_responses_request_body_with_codex_model_capabilities(
             crate::ai_serving::planner::standard::CrossFormatResponsesBodyInput {
                 body_json,
@@ -738,9 +704,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
         .await);
     }
 
-    let Some(upstream_url) = (if is_grok && is_grok_text_provider_api_format(provider_api_format) {
-        Some(build_grok_upstream_url(&transport, GROK_CHAT_PATH))
-    } else if needs_bidirectional_conversion {
+    let Some(upstream_url) = (if needs_bidirectional_conversion {
         build_cross_format_openai_responses_upstream_url(
             parts,
             &transport,
@@ -774,99 +738,61 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
         return Ok(None);
     };
     let extra_headers = BTreeMap::new();
-    let resolved_headers = if is_grok && is_grok_text_provider_api_format(provider_api_format) {
-        let Some(headers) = build_grok_browser_headers(GrokHeaderInput {
+    let Some(resolved_headers) =
+        build_standard_provider_request_headers(StandardProviderRequestHeadersInput {
             transport: &transport,
-            transport_profile: transport_profile.as_ref(),
-            request_headers: Some(effective_headers),
-            content_type: "application/json",
-            accept: "text/event-stream",
+            provider_api_format,
+            same_format,
+            headers: effective_headers,
+            auth_header: &auth_header,
+            auth_value: &auth_value,
+            extra_headers: &extra_headers,
             header_rules: transport.endpoint.header_rules.as_ref(),
             provider_request_body: &provider_request_body,
             original_request_body: body_json,
-        }) else {
-            mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "transport_header_rules_apply_failed",
-                CandidateFailureDiagnostic::header_rules_apply_failed(
-                    spec_metadata.api_format,
-                    provider_api_format,
-                    "grok_openai_responses_headers",
-                ),
-            )
-            .await;
-            return Ok(None);
-        };
-        crate::ai_serving::transport::StandardProviderRequestHeaders {
-            headers,
-            auth_header: auth_header.clone(),
-            auth_value: auth_value.clone(),
-        }
-    } else {
-        let Some(resolved_headers) =
-            build_standard_provider_request_headers(StandardProviderRequestHeadersInput {
-                transport: &transport,
+            upstream_is_stream,
+        })
+    else {
+        mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
+            state,
+            input,
+            trace_id,
+            candidate,
+            candidate_index,
+            candidate_id,
+            "transport_header_rules_apply_failed",
+            CandidateFailureDiagnostic::header_rules_apply_failed(
+                spec_metadata.api_format,
                 provider_api_format,
-                same_format,
-                headers: effective_headers,
-                auth_header: &auth_header,
-                auth_value: &auth_value,
-                extra_headers: &extra_headers,
-                header_rules: transport.endpoint.header_rules.as_ref(),
-                provider_request_body: &provider_request_body,
-                original_request_body: body_json,
-                upstream_is_stream,
-            })
-        else {
-            mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "transport_header_rules_apply_failed",
-                CandidateFailureDiagnostic::header_rules_apply_failed(
-                    spec_metadata.api_format,
-                    provider_api_format,
-                    "openai_responses_headers",
-                ),
-            )
-            .await;
-            return Ok(None);
-        };
-        resolved_headers
+                "openai_responses_headers",
+            ),
+        )
+        .await;
+        return Ok(None);
     };
     let mut provider_request_headers = resolved_headers.headers;
-    if !is_grok {
-        apply_local_auth_config_header_overrides(
-            &mut provider_request_headers,
-            transport.key.decrypted_auth_config.as_deref(),
-        );
-        apply_codex_openai_special_headers(
-            &mut provider_request_headers,
-            &provider_request_body,
-            effective_headers,
-            transport.provider.provider_type.as_str(),
-            provider_api_format,
-            Some(trace_id),
-            transport.key.decrypted_auth_config.as_deref(),
-        );
-        crate::ai_serving::apply_codex_openai_responses_lite_header_for_request_body_with_capabilities(
-            &mut provider_request_headers,
-            Some(&provider_request_body),
-            transport.provider.provider_type.as_str(),
-            provider_api_format,
-            mapped_model.as_str(),
-            source_model,
-            codex_model_capabilities.as_ref(),
-        );
-    }
+    apply_local_auth_config_header_overrides(
+        &mut provider_request_headers,
+        transport.key.decrypted_auth_config.as_deref(),
+    );
+    apply_codex_openai_special_headers(
+        &mut provider_request_headers,
+        &provider_request_body,
+        effective_headers,
+        transport.provider.provider_type.as_str(),
+        provider_api_format,
+        Some(trace_id),
+        transport.key.decrypted_auth_config.as_deref(),
+    );
+    crate::ai_serving::apply_codex_openai_responses_lite_header_for_request_body_with_capabilities(
+        &mut provider_request_headers,
+        Some(&provider_request_body),
+        transport.provider.provider_type.as_str(),
+        provider_api_format,
+        mapped_model.as_str(),
+        source_model,
+        codex_model_capabilities.as_ref(),
+    );
     request_identity_response_encoding_when_redacted(
         &mut provider_request_headers,
         redaction.redacted,
@@ -1546,6 +1472,92 @@ async fn resolve_openai_responses_to_openai_image_payload_parts(
         image_request_summary: Some(image_request_summary),
         request_redacted: false,
     })
+}
+
+fn collect_openai_responses_image_prompt_and_images(
+    input: Option<&Value>,
+) -> Option<(String, Vec<Value>)> {
+    let input = input?;
+    let mut prompt_parts = Vec::new();
+    let mut images = Vec::new();
+    collect_openai_responses_image_input(input, &mut prompt_parts, &mut images);
+    let prompt = prompt_parts.join("\n").trim().to_string();
+    (!prompt.is_empty()).then_some((prompt, images))
+}
+
+fn collect_openai_responses_image_input(
+    value: &Value,
+    prompt_parts: &mut Vec<String>,
+    images: &mut Vec<Value>,
+) {
+    match value {
+        Value::String(text) => {
+            let text = text.trim();
+            if !text.is_empty() {
+                prompt_parts.push(text.to_string());
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_openai_responses_image_input(item, prompt_parts, images);
+            }
+        }
+        Value::Object(object) => {
+            let item_type = object
+                .get("type")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .unwrap_or_default();
+            if matches!(item_type, "input_text" | "text") {
+                if let Some(text) = object
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    prompt_parts.push(text.to_string());
+                }
+            } else if matches!(item_type, "input_image" | "image_url") {
+                collect_openai_image_input_object(object, images);
+            }
+            if let Some(content) = object.get("content") {
+                collect_openai_responses_image_input(content, prompt_parts, images);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_openai_image_input_object(
+    object: &serde_json::Map<String, Value>,
+    images: &mut Vec<Value>,
+) {
+    if let Some(url) = object
+        .get("image_url")
+        .and_then(|value| {
+            value
+                .as_str()
+                .or_else(|| value.get("url").and_then(Value::as_str))
+        })
+        .or_else(|| object.get("url").and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        images.push(json!({
+            "type": "input_image",
+            "image_url": url,
+        }));
+    } else if let Some(file_id) = object
+        .get("file_id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        images.push(json!({
+            "type": "input_image",
+            "file_id": file_id,
+        }));
+    }
 }
 
 fn build_openai_image_provider_body_from_openai_responses_body(

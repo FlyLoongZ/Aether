@@ -17,11 +17,11 @@ use crate::ai_serving::transport::antigravity::{
     AntigravityRequestSideSupport, AntigravityRequestSideUnsupportedReason,
 };
 use crate::ai_serving::transport::{
-    build_gemini_cli_v1internal_request, build_grok_browser_headers, build_grok_upstream_url,
-    build_same_format_provider_headers, resolve_local_gemini_cli_request_auth,
+    build_gemini_cli_v1internal_request, build_same_format_provider_headers,
+    resolve_local_gemini_cli_request_auth,
     GeminiCliRequestAuth, GeminiCliRequestAuthSupport, GeminiCliRequestEnvelopeSupport,
-    GrokHeaderInput, SameFormatProviderCompatibilityEdit,
-    SameFormatProviderCompatibilityEditAction, SameFormatProviderHeadersInput, GROK_CHAT_PATH,
+    SameFormatProviderCompatibilityEdit, SameFormatProviderCompatibilityEditAction,
+    SameFormatProviderHeadersInput,
 };
 use crate::ai_serving::{
     CandidateFailureDiagnostic, GatewayProviderTransportSnapshot, CODEX_RESPONSES_LITE_HEADER,
@@ -435,27 +435,17 @@ pub(crate) async fn resolve_local_same_format_provider_candidate_payload_parts(
         });
     }
 
-    let is_grok = prepared
-        .transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("grok");
     let transport_profile = crate::ai_serving::transport::resolve_transport_profile(&transport);
-    let upstream_url = if is_grok {
-        Some(build_grok_upstream_url(&transport, GROK_CHAT_PATH))
-    } else {
-        super::super::request::build_same_format_upstream_url(
-            parts,
-            &transport,
-            &prepared.mapped_model,
-            prepared.provider_api_format.as_str(),
-            spec,
-            prepared.upstream_is_stream,
-            prepared.kiro_auth.as_ref(),
-            Some(&provider_request_body),
-        )
-    };
+    let upstream_url = super::super::request::build_same_format_upstream_url(
+        parts,
+        &transport,
+        &prepared.mapped_model,
+        prepared.provider_api_format.as_str(),
+        spec,
+        prepared.upstream_is_stream,
+        prepared.kiro_auth.as_ref(),
+        Some(&provider_request_body),
+    );
     let Some(upstream_url) = upstream_url else {
         mark_skipped_local_same_format_provider_candidate_with_failure_diagnostic(
             state,
@@ -485,18 +475,7 @@ pub(crate) async fn resolve_local_same_format_provider_candidate_payload_parts(
             crate::ai_serving::transport::gemini_cli::gemini_cli_client_user_agent(),
         );
     }
-    let Some(mut provider_request_headers) = (if is_grok {
-        build_grok_browser_headers(GrokHeaderInput {
-            transport: &transport,
-            transport_profile: transport_profile.as_ref(),
-            request_headers: Some(effective_headers),
-            content_type: "application/json",
-            accept: "text/event-stream",
-            header_rules: transport.endpoint.header_rules.as_ref(),
-            provider_request_body: &provider_request_body,
-            original_request_body: body_json,
-        })
-    } else {
+    let Some(mut provider_request_headers) =
         build_same_format_provider_headers(SameFormatProviderHeadersInput {
             headers: effective_headers,
             provider_request_body: &provider_request_body,
@@ -513,7 +492,7 @@ pub(crate) async fn resolve_local_same_format_provider_candidate_payload_parts(
                 .as_ref()
                 .map(|auth| auth.machine_id.as_str()),
         })
-    }) else {
+    else {
         mark_skipped_local_same_format_provider_candidate_with_failure_diagnostic(
             state,
             input,

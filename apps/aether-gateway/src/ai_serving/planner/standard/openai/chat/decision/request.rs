@@ -47,12 +47,11 @@ use crate::ai_serving::transport::windsurf::{
     resolve_windsurf_cascade_auth, WINDSURF_ENVELOPE_NAME,
 };
 use crate::ai_serving::transport::{
-    build_grok_browser_headers, build_grok_upstream_url, build_kiro_cross_format_upstream_url,
-    build_openai_image_headers, build_openai_image_upstream_url,
-    build_standard_provider_request_headers, is_gemini_cli_provider_transport,
-    openai_image_transport_unsupported_reason, resolve_openai_image_auth, GrokHeaderInput,
-    ProviderOpenAiImageHeadersInput, StandardProviderRequestHeadersInput,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, GROK_CHAT_PATH,
+    build_kiro_cross_format_upstream_url, build_openai_image_headers,
+    build_openai_image_upstream_url, build_standard_provider_request_headers,
+    is_gemini_cli_provider_transport, openai_image_transport_unsupported_reason,
+    resolve_openai_image_auth, ProviderOpenAiImageHeadersInput,
+    StandardProviderRequestHeadersInput, GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
 };
 use crate::ai_serving::{
     ai_local_execution_contract_for_formats, request_conversion_direct_auth,
@@ -93,13 +92,6 @@ pub(crate) struct LocalOpenAiChatCandidatePayloadParts {
 
 #[derive(Default)]
 pub(crate) struct LocalOpenAiChatRequestPreparation;
-
-fn is_grok_text_provider_api_format(provider_api_format: &str) -> bool {
-    matches!(
-        crate::ai_serving::normalize_api_format_alias(provider_api_format).as_str(),
-        "openai:chat" | "openai:responses" | "openai:responses:compact" | "claude:messages"
-    )
-}
 
 fn finalize_openai_chat_provider_request_body(
     provider_request_body: &mut Value,
@@ -231,179 +223,8 @@ pub(crate) async fn resolve_local_openai_chat_candidate_payload_parts(
     );
     let body_json = redaction.body_json.as_ref();
     let effective_headers = input.effective_headers(&parts.headers);
-    let is_grok = transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("grok");
     let is_antigravity = is_antigravity_provider_transport(transport);
     let is_gemini_cli = is_gemini_cli_provider_transport(transport);
-
-    if is_grok && is_grok_text_provider_api_format(provider_api_format) {
-        let prepared_candidate = match prepare_header_authenticated_candidate(
-            planner_state,
-            transport,
-            candidate,
-            crate::ai_serving::transport::resolve_grok_session_auth(transport),
-            OauthPreparationContext {
-                trace_id,
-                api_format: provider_api_format,
-                operation: "openai_chat_same_format",
-            },
-        )
-        .await
-        {
-            Ok(prepared) => prepared,
-            Err(skip_reason) => {
-                mark_skipped_local_openai_chat_candidate(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    candidate_index,
-                    candidate_id,
-                    skip_reason,
-                )
-                .await;
-                return Ok(None);
-            }
-        };
-        let model_directive_mapping = match model_directive_resolution
-            .mapping_patch_for_mapped_model(&prepared_candidate.mapped_model)
-        {
-            Ok(mapping) => mapping,
-            Err(skip_reason) => {
-                mark_skipped_local_openai_chat_candidate(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    candidate_index,
-                    candidate_id,
-                    skip_reason,
-                )
-                .await;
-                return Ok(None);
-            }
-        };
-
-        let Some(mut provider_request_body) = build_local_openai_chat_request_body(
-            body_json,
-            &prepared_candidate.mapped_model,
-            upstream_is_stream,
-            force_body_stream_field,
-            transport.endpoint.body_rules.as_ref(),
-            effective_headers,
-            false,
-        ) else {
-            mark_skipped_local_openai_chat_candidate_with_extra_data(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "provider_request_body_build_failed",
-                request_body_build_failure_extra_data(
-                    body_json,
-                    "openai:chat",
-                    provider_api_format,
-                ),
-            )
-            .await;
-            return Ok(None);
-        };
-        if let Some(extra_data) = finalize_openai_chat_provider_request_body(
-            &mut provider_request_body,
-            model_directive_mapping.as_ref(),
-            provider_api_format,
-            upstream_is_stream,
-            force_body_stream_field,
-            body_json,
-            transport,
-            &prepared_candidate.mapped_model,
-        ) {
-            mark_skipped_local_openai_chat_candidate_with_extra_data(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "provider_request_body_build_failed",
-                Some(extra_data),
-            )
-            .await;
-            return Ok(None);
-        }
-
-        let upstream_url = build_grok_upstream_url(transport, GROK_CHAT_PATH);
-        let Some(mut provider_request_headers) = build_grok_browser_headers(GrokHeaderInput {
-            transport,
-            transport_profile: transport_profile.as_ref(),
-            request_headers: Some(effective_headers),
-            content_type: "application/json",
-            accept: "text/event-stream",
-            header_rules: transport.endpoint.header_rules.as_ref(),
-            provider_request_body: &provider_request_body,
-            original_request_body: body_json,
-        }) else {
-            mark_skipped_local_openai_chat_candidate_with_failure_diagnostic(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "transport_header_rules_apply_failed",
-                CandidateFailureDiagnostic::header_rules_apply_failed(
-                    "openai:chat",
-                    provider_api_format,
-                    "grok_openai_chat_headers",
-                ),
-            )
-            .await;
-            return Ok(None);
-        };
-
-        let (execution_strategy, conversion_mode) =
-            ai_local_execution_contract_for_formats("openai:chat", provider_api_format);
-        let resolved_report_kind =
-            if decision_kind == OPENAI_CHAT_STREAM_PLAN_KIND || !upstream_is_stream {
-                report_kind.to_string()
-            } else {
-                "openai_chat_sync_finalize".to_string()
-            };
-
-        request_identity_response_encoding_when_redacted(
-            &mut provider_request_headers,
-            redaction.redacted,
-        );
-
-        let result = Ok(Some(LocalOpenAiChatCandidatePayloadParts {
-            client_api_format: "openai:chat".to_string(),
-            auth_header: prepared_candidate.auth_header,
-            auth_value: prepared_candidate.auth_value,
-            mapped_model: prepared_candidate.mapped_model,
-            provider_api_format: provider_api_format.to_string(),
-            provider_request_body,
-            provider_request_headers,
-            upstream_url,
-            execution_strategy,
-            conversion_mode,
-            report_kind: resolved_report_kind,
-            envelope_name: None,
-            transport: Arc::clone(transport),
-            request_redacted: redaction.redacted,
-            transport_profile,
-            image_request_summary: None,
-        }));
-        observe_gateway_stage_ms(
-            "openai_chat_payload_parts_prepare",
-            prepare_started_at.elapsed().as_millis() as u64,
-        );
-        return result;
-    }
 
     if provider_api_format == "openai:chat" && is_windsurf_provider_transport(transport) {
         return build_windsurf_openai_chat_payload_parts(
@@ -2198,24 +2019,13 @@ mod tests {
         transport.endpoint.api_format = "openai:chat".to_string();
         transport.endpoint.api_family = Some("openai".to_string());
         transport.endpoint.endpoint_kind = Some("chat_completions".to_string());
-        transport.endpoint.base_url = if provider_type == "grok" {
-            "https://grok.com".to_string()
-        } else {
-            "https://api.openai.test".to_string()
-        };
+        transport.endpoint.base_url = "https://api.openai.test".to_string();
         transport.endpoint.custom_path = None;
         transport.key.api_formats = Some(vec!["openai:chat".to_string()]);
         transport.key.upstream_metadata = None;
-        if provider_type == "grok" {
-            transport.key.auth_type = "oauth".to_string();
-            transport.key.decrypted_api_key.clear();
-            transport.key.decrypted_auth_config =
-                Some(json!({ "sso_token": "test-session" }).to_string());
-        } else {
-            transport.key.auth_type = "bearer".to_string();
-            transport.key.decrypted_api_key = "test-api-key".to_string();
-            transport.key.decrypted_auth_config = None;
-        }
+        transport.key.auth_type = "bearer".to_string();
+        transport.key.decrypted_api_key = "test-api-key".to_string();
+        transport.key.decrypted_auth_config = None;
 
         let mut eligible = sample_gemini_cli_eligible();
         eligible.candidate.provider_name = provider_type.to_string();
@@ -2447,7 +2257,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn same_format_and_grok_chat_apply_the_same_custom_directive_finalization() {
+    async fn same_format_chat_applies_custom_directive_finalization() {
         let state = AppState::new().expect("state should build");
         let request = http::Request::builder()
             .method("POST")
@@ -2462,34 +2272,33 @@ mod tests {
             "stream": true
         });
 
-        for provider_type in ["custom", "grok"] {
-            let payload = resolve_local_openai_chat_candidate_payload_parts(
-                &state,
-                &parts,
-                &format!("trace-directive-{provider_type}"),
-                &body_json,
-                &sample_custom_directive_input(),
-                None,
-                &sample_openai_chat_eligible(provider_type),
-                0,
-                "candidate-0",
-                OPENAI_CHAT_STREAM_PLAN_KIND,
-                "openai_chat_stream_success",
-                true,
-            )
-            .await
-            .expect("candidate resolution should not fail")
-            .expect("same-format candidate should build a payload");
+        let provider_type = "custom";
+        let payload = resolve_local_openai_chat_candidate_payload_parts(
+            &state,
+            &parts,
+            &format!("trace-directive-{provider_type}"),
+            &body_json,
+            &sample_custom_directive_input(),
+            None,
+            &sample_openai_chat_eligible(provider_type),
+            0,
+            "candidate-0",
+            OPENAI_CHAT_STREAM_PLAN_KIND,
+            "openai_chat_stream_success",
+            true,
+        )
+        .await
+        .expect("candidate resolution should not fail")
+        .expect("same-format candidate should build a payload");
 
-            assert_eq!(
-                payload.provider_request_body["reasoning_effort"], "low",
-                "custom mapping must be authoritative for {provider_type}"
-            );
-            assert_eq!(
-                payload.provider_request_body["stream"], true,
-                "stream policy must be re-applied after mapping for {provider_type}"
-            );
-        }
+        assert_eq!(
+            payload.provider_request_body["reasoning_effort"], "low",
+            "custom mapping must be authoritative for {provider_type}"
+        );
+        assert_eq!(
+            payload.provider_request_body["stream"], true,
+            "stream policy must be re-applied after mapping for {provider_type}"
+        );
     }
 
     #[tokio::test]

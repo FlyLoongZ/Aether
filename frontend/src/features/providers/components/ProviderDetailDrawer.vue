@@ -1092,7 +1092,6 @@ import {
 import type {
   UpstreamMetadata,
   CodexUpstreamMetadata,
-  GrokUpstreamMetadata,
   KiroUpstreamMetadata,
   WindsurfUpstreamMetadata,
   XaiUpstreamMetadata,
@@ -1958,7 +1957,7 @@ function quotaSnapshotHasDisplayData(quota: QuotaStatusSnapshot | null | undefin
 
 function getQuotaSnapshotForProvider(
   key: EndpointAPIKey,
-  providerType: 'codex' | 'kiro' | 'windsurf' | 'antigravity' | 'gemini_cli' | 'claude_code' | 'grok' | 'xai',
+  providerType: 'codex' | 'kiro' | 'windsurf' | 'antigravity' | 'gemini_cli' | 'claude_code' | 'xai',
 ): QuotaStatusSnapshot | null {
   const quota = key.status_snapshot?.quota
   if (!quota) return null
@@ -2363,66 +2362,6 @@ function getXaiOnDemandUsedPercent(key: EndpointAPIKey): number {
   return Math.max(Math.min(((xai.on_demand_used || 0) / xai.on_demand_cap) * 100, 100), 0)
 }
 
-type GrokQuotaDisplay = GrokUpstreamMetadata & {
-  usage_percentage?: number
-  usage_limit?: number
-  current_usage?: number
-  remaining?: number
-  next_reset_at?: number
-}
-
-function getGrokQuotaDisplay(key: EndpointAPIKey): GrokQuotaDisplay | null {
-  const quota = getQuotaSnapshotForProvider(key, 'grok')
-  if (!quota) return null
-
-  const display: GrokQuotaDisplay = {}
-  const updatedAt = getQuotaSnapshotUpdatedAt(quota)
-  if (updatedAt !== undefined) display.updated_at = updatedAt
-  if (quota.plan_type) display.plan_type = quota.plan_type
-  if (quota.pool_tier) display.pool_tier = quota.pool_tier
-
-  const code = String(quota.code || '').trim().toLowerCase()
-  if (code === 'banned' || code === 'forbidden') {
-    display.is_banned = true
-    if (quota.reason) display.ban_reason = quota.reason
-  }
-
-  const usageWindow =
-    getQuotaWindow(quota, 'usage')
-    ?? getQuotaWindowByScope(quota, 'account')[0]
-    ?? getQuotaWindowByScope(quota, 'model')
-      .map(window => ({
-        window,
-        remainingPercent: getQuotaWindowRemainingPercent(window),
-      }))
-      .filter((item): item is { window: QuotaWindowSnapshot, remainingPercent: number } => item.remainingPercent !== undefined)
-      .sort((a, b) => a.remainingPercent - b.remainingPercent)[0]?.window
-    ?? null
-  if (usageWindow) {
-    const usedPercent = getQuotaWindowUsedPercent(usageWindow)
-    if (usedPercent !== undefined) display.usage_percentage = usedPercent
-    if (typeof usageWindow.used_value === 'number') display.current_usage = usageWindow.used_value
-    if (typeof usageWindow.limit_value === 'number') display.usage_limit = usageWindow.limit_value
-    if (typeof usageWindow.remaining_value === 'number') display.remaining = usageWindow.remaining_value
-
-    const nextResetAt =
-      getQuotaWindowResetAt(usageWindow)
-      ?? (() => {
-        const resetSeconds = getQuotaWindowResetSeconds(usageWindow)
-        if (updatedAt === undefined || resetSeconds === undefined) return undefined
-        return updatedAt + resetSeconds
-      })()
-    if (nextResetAt !== undefined) display.next_reset_at = nextResetAt
-  }
-
-  return Object.keys(display).length > 0 ? display : null
-}
-
-type WindsurfQuotaDisplay = WindsurfUpstreamMetadata & {
-  daily_used_percent?: number
-  weekly_used_percent?: number
-}
-
 function getWindsurfQuotaDisplay(key: EndpointAPIKey): WindsurfQuotaDisplay | null {
   const quota = getQuotaSnapshotForProvider(key, 'windsurf')
   const upstream = key.upstream_metadata?.windsurf
@@ -2480,11 +2419,6 @@ function getWindsurfQuotaDisplay(key: EndpointAPIKey): WindsurfQuotaDisplay | nu
   else if (typeof upstream?.flex_remaining === 'number') display.flex_remaining = upstream.flex_remaining
 
   return Object.keys(display).length > 0 ? display : null
-}
-
-function hasGrokQuotaDisplayData(key: EndpointAPIKey): boolean {
-  const grok = getGrokQuotaDisplay(key)
-  return !!grok && (grok.usage_percentage !== undefined || grok.usage_limit !== undefined)
 }
 
 function hasWindsurfQuotaDisplayData(key: EndpointAPIKey): boolean {
@@ -2796,28 +2730,6 @@ function shouldAutoRefreshKiroQuota(): boolean {
   return false
 }
 
-function shouldAutoRefreshGrokQuota(): boolean {
-  if (provider.value?.provider_type !== 'grok') return false
-  const now = Math.floor(Date.now() / 1000)
-
-  for (const { key } of allKeys.value) {
-    if (!key.is_active) continue
-
-    if (isTokenExpiringSoon(key, now)) return true
-
-    if (!hasGrokQuotaDisplayData(key)) {
-      return true
-    }
-
-    const updatedAt = getGrokQuotaDisplay(key)?.updated_at
-    if (typeof updatedAt !== 'number' || (now - updatedAt) > AUTO_QUOTA_REFRESH_STALE_SECONDS) {
-      return true
-    }
-  }
-
-  return false
-}
-
 function shouldAutoRefreshXaiQuota(): boolean {
   if (provider.value?.provider_type !== 'xai') return false
   const now = Math.floor(Date.now() / 1000)
@@ -2946,7 +2858,7 @@ async function autoRefreshQuotaInBackground(): Promise<boolean> {
   if (refreshingQuota.value) return false
 
   const providerType = provider.value?.provider_type
-  if (providerType !== 'codex' && providerType !== 'claude_code' && providerType !== 'gemini_cli' && providerType !== 'antigravity' && providerType !== 'kiro' && providerType !== 'windsurf' && providerType !== 'grok' && providerType !== 'xai') return false
+  if (providerType !== 'codex' && providerType !== 'claude_code' && providerType !== 'gemini_cli' && providerType !== 'antigravity' && providerType !== 'kiro' && providerType !== 'windsurf' && providerType !== 'xai') return false
 
   // 检查是否需要刷新
   let shouldRefresh = false
@@ -2960,8 +2872,6 @@ async function autoRefreshQuotaInBackground(): Promise<boolean> {
     shouldRefresh = shouldAutoRefreshAntigravityQuota()
   } else if (providerType === 'kiro') {
     shouldRefresh = shouldAutoRefreshKiroQuota()
-  } else if (providerType === 'grok') {
-    shouldRefresh = shouldAutoRefreshGrokQuota()
   } else if (providerType === 'xai') {
     shouldRefresh = shouldAutoRefreshXaiQuota()
   } else if (providerType === 'windsurf') {
@@ -2980,8 +2890,6 @@ async function autoRefreshQuotaInBackground(): Promise<boolean> {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasAntigravityQuotaDisplayData(key))
   } else if (providerType === 'kiro') {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasKiroQuotaDisplayData(key))
-  } else if (providerType === 'grok') {
-    hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasGrokQuotaDisplayData(key))
   } else if (providerType === 'xai') {
     hadCachedQuota = allKeys.value.some(({ key }) => key.is_active && hasXaiQuotaDisplayData(key))
   } else if (providerType === 'windsurf') {

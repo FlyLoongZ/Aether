@@ -299,12 +299,7 @@ impl LocalOpenAiChatStreamAttemptSource<'_> {
             return None;
         }
         let transport = &attempt.eligible.transport;
-        if transport
-            .provider
-            .provider_type
-            .trim()
-            .eq_ignore_ascii_case("grok")
-            || is_windsurf_provider_transport(transport)
+        if is_windsurf_provider_transport(transport)
             || local_openai_chat_transport_unsupported_reason(transport).is_some()
         {
             return None;
