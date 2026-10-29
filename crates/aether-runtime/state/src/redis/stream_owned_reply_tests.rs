@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use redis::streams::StreamReadReply;
-use redis::{from_redis_value, Value as RedisValue, VerbatimFormat};
+use redis::{from_redis_value_ref, Value as RedisValue, VerbatimFormat};
 
 use super::{parse_reclaim_result, parse_stream_read_entries, RedisStreamEntry};
 use crate::DataLayerError;
@@ -41,7 +41,8 @@ fn reclaim_reply(id: RedisValue, fields: RedisValue) -> RedisValue {
 }
 
 fn original_read_parser(value: &RedisValue) -> Result<Vec<RedisStreamEntry>, DataLayerError> {
-    let reply = from_redis_value::<StreamReadReply>(value).map_err(crate::error::redis_error)?;
+    let reply =
+        from_redis_value_ref::<StreamReadReply>(value).map_err(crate::error::redis_error)?;
     Ok(reply
         .keys
         .into_iter()
@@ -52,7 +53,7 @@ fn original_read_parser(value: &RedisValue) -> Result<Vec<RedisStreamEntry>, Dat
                 .map
                 .into_iter()
                 .filter_map(|(field, value)| {
-                    from_redis_value::<String>(&value)
+                    from_redis_value_ref::<String>(&value)
                         .ok()
                         .map(|value| (field, value))
                 })

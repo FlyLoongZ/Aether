@@ -4,9 +4,11 @@ use std::process::{Child, Command, Stdio};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 async fn redis_test_connection(url: &str) -> ::redis::aio::MultiplexedConnection {
+    // Fixtures have explicit outer deadlines and may inspect large sorted sets.
+    let config = ::redis::AsyncConnectionConfig::default().set_response_timeout(None);
     ::redis::Client::open(url)
         .expect("test Redis client")
-        .get_multiplexed_async_connection()
+        .get_multiplexed_async_connection_with_config(&config)
         .await
         .expect("test Redis connection")
 }

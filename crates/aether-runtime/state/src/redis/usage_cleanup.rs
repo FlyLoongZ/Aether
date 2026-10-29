@@ -95,8 +95,7 @@ async fn copy_and_commit(
         .arg(keys.len())
         .arg(keys);
     usage_args(&mut check, input);
-    let plan: Vec<i64> =
-        redis::from_owned_redis_value(lease.query(&check).await?).map_redis_err()?;
+    let plan: Vec<i64> = redis::from_redis_value(lease.query(&check).await?).map_redis_err()?;
     if plan.first() != Some(&2) {
         return Ok(Some((plan, false)));
     }
@@ -132,7 +131,7 @@ async fn copy_and_commit(
                         .arg(offset),
                 )
                 .await?;
-            let copied: i64 = redis::from_owned_redis_value(value).map_redis_err()?;
+            let copied: i64 = redis::from_redis_value(value).map_redis_err()?;
             if offset == 0 && copied > 0 {
                 temporary_keys.push(temporary.clone());
             }
@@ -160,14 +159,14 @@ async fn copy_and_commit(
     lease.query(&cmd("MULTI")).await?;
     lease.query(&commit).await?;
     let replies: Option<Vec<redis::Value>> =
-        redis::from_owned_redis_value(lease.query(&cmd("EXEC")).await?).map_redis_err()?;
+        redis::from_redis_value(lease.query(&cmd("EXEC")).await?).map_redis_err()?;
     let Some(mut replies) = replies else {
         return Ok(None);
     };
     let reply = replies.pop().ok_or_else(|| {
         DataLayerError::UnexpectedValue("empty usage window commit response".to_string())
     })?;
-    let result: Vec<i64> = redis::from_owned_redis_value(reply).map_redis_err()?;
+    let result: Vec<i64> = redis::from_redis_value(reply).map_redis_err()?;
     if result.first() == Some(&2) {
         return Ok(None);
     }

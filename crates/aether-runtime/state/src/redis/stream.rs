@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 
 use redis::Value as RedisValue;
-use redis::{from_owned_redis_value, from_redis_value};
+use redis::{from_redis_value, from_redis_value_ref};
 
 use crate::error::{redis_error, RedisResultExt};
 use crate::redis::{
@@ -587,7 +587,7 @@ fn parse_stream_read_entries(value: RedisValue) -> Result<Vec<RedisStreamEntry>,
     // StreamReadReply in redis 0.28 falls back to borrowed conversion even for an
     // owned input. Its underlying containers support moving every payload buffer.
     type StreamReadRows = Vec<HashMap<String, Vec<HashMap<String, HashMap<String, RedisValue>>>>>;
-    let rows = from_owned_redis_value::<StreamReadRows>(value).map_err(redis_error)?;
+    let rows = from_redis_value::<StreamReadRows>(value).map_err(redis_error)?;
     Ok(rows
         .into_iter()
         .flat_map(HashMap::into_values)
@@ -598,7 +598,7 @@ fn parse_stream_read_entries(value: RedisValue) -> Result<Vec<RedisStreamEntry>,
             fields: fields
                 .into_iter()
                 .filter_map(|(field, value)| {
-                    from_owned_redis_value::<String>(value)
+                    from_redis_value::<String>(value)
                         .ok()
                         .map(|text| (field, text))
                 })
@@ -614,7 +614,7 @@ fn parse_transfer_result(value: RedisValue) -> Result<RuntimeQueueTransferOutcom
         ));
     }
     let (transferred, destination_id, acked, deleted) =
-        from_owned_redis_value::<(i64, String, usize, usize)>(value).map_err(redis_error)?;
+        from_redis_value::<(i64, String, usize, usize)>(value).map_err(redis_error)?;
     match transferred {
         0 if destination_id.is_empty() && acked == 0 && deleted == 0 => {
             Ok(RuntimeQueueTransferOutcome::NotPending)
@@ -753,7 +753,7 @@ fn parse_string_array(value: RedisValue, context: &str) -> Result<Vec<String>, D
 }
 
 fn parse_string_value(value: &RedisValue, context: &str) -> Result<String, DataLayerError> {
-    from_redis_value::<String>(value).map_err(|err| {
+    from_redis_value_ref::<String>(value).map_err(|err| {
         DataLayerError::UnexpectedValue(format!(
             "{context} was not a string-compatible redis value: {err}"
         ))
@@ -761,7 +761,7 @@ fn parse_string_value(value: &RedisValue, context: &str) -> Result<String, DataL
 }
 
 fn parse_owned_string_value(value: RedisValue, context: &str) -> Result<String, DataLayerError> {
-    from_owned_redis_value::<String>(value).map_err(|err| {
+    from_redis_value::<String>(value).map_err(|err| {
         DataLayerError::UnexpectedValue(format!(
             "{context} was not a string-compatible redis value: {err}"
         ))
@@ -880,7 +880,7 @@ fn parse_info_fields(
 }
 
 fn parse_u64_value(value: &RedisValue, context: &str) -> Result<u64, DataLayerError> {
-    from_redis_value::<u64>(value).map_err(|err| {
+    from_redis_value_ref::<u64>(value).map_err(|err| {
         DataLayerError::UnexpectedValue(format!(
             "{context} was not an unsigned integer-compatible redis value: {err}"
         ))
@@ -1150,17 +1150,17 @@ mod tests {
     #[test]
     fn classifies_missing_stream_stats_errors() {
         let missing_stream = redis::RedisError::from((
-            redis::ErrorKind::ResponseError,
+            redis::ErrorKind::Server(redis::ServerErrorKind::ResponseError),
             "ERR",
             "no such key".to_string(),
         ));
         let missing_group = redis::RedisError::from((
-            redis::ErrorKind::ResponseError,
+            redis::ErrorKind::Server(redis::ServerErrorKind::ResponseError),
             "ERR",
             "NOGROUP No such key 'usage:events' or consumer group 'usage_consumers'".to_string(),
         ));
         let other_error = redis::RedisError::from((
-            redis::ErrorKind::ResponseError,
+            redis::ErrorKind::Server(redis::ServerErrorKind::ResponseError),
             "ERR",
             "wrong type".to_string(),
         ));
