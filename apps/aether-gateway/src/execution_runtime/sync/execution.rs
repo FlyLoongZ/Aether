@@ -3779,39 +3779,6 @@ mod tests {
     }
 
     #[test]
-    fn invalid_gemini_provider_success_unwraps_gemini_cli_v1internal_envelope() {
-        let plan = test_gemini_chat_plan();
-        let report_context = json!({
-            "has_envelope": true,
-            "envelope_name": "gemini_cli:v1internal",
-            "provider_api_format": "gemini:generate_content",
-        });
-        let body = json!({
-            "response": {
-                "candidates": [{
-                    "content": {
-                        "role": "model",
-                        "parts": [{"text": "Hello from Gemini CLI"}]
-                    },
-                    "finishReason": "STOP"
-                }]
-            },
-            "remainingCredits": 41,
-            "consumedCredits": 1,
-            "traceId": "trace-upstream-sync-1"
-        });
-
-        let message = invalid_gemini_provider_success_message(
-            &plan,
-            Some(&report_context),
-            StatusCode::OK.as_u16(),
-            Some(&body),
-        );
-
-        assert!(message.is_none());
-    }
-
-    #[test]
     fn forced_sync_abort_message_does_not_copy_internal_error_details() {
         let secret = "https://user:password@example.test/v1?api_key=should-not-persist";
         let error = GatewayError::Internal(secret.to_string());

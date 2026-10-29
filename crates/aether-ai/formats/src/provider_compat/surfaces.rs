@@ -2,7 +2,6 @@ pub const ANTIGRAVITY_PROVIDER_TYPE: &str = "antigravity";
 pub const KIRO_PROVIDER_TYPE: &str = "kiro";
 pub const KIRO_ENVELOPE_NAME: &str = "kiro:generateAssistantResponse";
 pub const ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME: &str = "antigravity:v1internal";
-pub const GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME: &str = "gemini_cli:v1internal";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderAdaptationSurface {
@@ -127,9 +126,8 @@ pub fn provider_adaptation_should_unwrap_stream_envelope(
 mod tests {
     use super::{
         provider_adaptation_allows_sync_finalize_envelope, provider_adaptation_anchor_api_format,
-        provider_adaptation_requires_eventstream_accept,
-        provider_adaptation_should_unwrap_stream_envelope, ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
-        GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, KIRO_ENVELOPE_NAME,
+        provider_adaptation_requires_eventstream_accept, ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
+        KIRO_ENVELOPE_NAME,
     };
 
     #[test]
@@ -137,13 +135,6 @@ mod tests {
         assert_eq!(
             provider_adaptation_anchor_api_format(
                 ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
-                "gemini:generate_content"
-            ),
-            Some("gemini:generate_content")
-        );
-        assert_eq!(
-            provider_adaptation_anchor_api_format(
-                GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
                 "gemini:generate_content"
             ),
             Some("gemini:generate_content")
@@ -158,10 +149,6 @@ mod tests {
     fn exposes_private_surface_capabilities() {
         assert!(provider_adaptation_allows_sync_finalize_envelope(
             ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
-            "gemini:generate_content"
-        ));
-        assert!(provider_adaptation_should_unwrap_stream_envelope(
-            GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
             "gemini:generate_content"
         ));
         assert!(provider_adaptation_requires_eventstream_accept(

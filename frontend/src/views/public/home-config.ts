@@ -6,8 +6,7 @@ export const SECTIONS = {
   HOME: 0,
   CLAUDE: 1,
   CODEX: 2,
-  GEMINI: 3,
-  FEATURES: 4
+  FEATURES: 3
 } as const
 
 export type SectionIndex = (typeof SECTIONS)[keyof typeof SECTIONS]
@@ -17,7 +16,6 @@ export const sections = [
   { nameKey: 'site.home.section.home' },
   { nameKey: 'site.home.section.claude' },
   { nameKey: 'site.home.section.codex' },
-  { nameKey: 'site.home.section.gemini' },
   { nameKey: 'site.home.section.more' }
 ] as const
 
@@ -68,27 +66,10 @@ requires_openai_auth = true`)
   "OPENAI_API_KEY": "your-api-key"
 }`)
 
-  const geminiEnvConfig = computed(() => `GOOGLE_GEMINI_BASE_URL=${baseUrl.value}
-GEMINI_API_KEY=your-api-key
-GEMINI_MODEL=latest-model-name`)
-
-  const geminiSettingsConfig = computed(() => `{
-  "ide": {
-    "enabled": true
-  },
-  "security": {
-    "auth": {
-      "selectedType": "gemini-api-key"
-    }
-  }
-}`)
-
   return {
     claudeConfig,
     codexConfig,
-    codexAuthConfig,
-    geminiEnvConfig,
-    geminiSettingsConfig
+    codexAuthConfig
   }
 }
 
@@ -108,11 +89,10 @@ export const panelClasses = {
 } as const
 
 // Logo type mapping
-export function getLogoType(section: number): 'claude' | 'openai' | 'gemini' | 'aether' {
+export function getLogoType(section: number): 'claude' | 'openai' | 'aether' {
   switch (section) {
     case SECTIONS.CLAUDE: return 'claude'
     case SECTIONS.CODEX: return 'openai'
-    case SECTIONS.GEMINI: return 'gemini'
     default: return 'aether'
   }
 }
@@ -122,7 +102,6 @@ export function getLogoClass(section: number): string {
   switch (section) {
     case SECTIONS.CLAUDE: return 'text-[#D97757]'
     case SECTIONS.CODEX: return 'text-[#191919] dark:text-white'
-    case SECTIONS.GEMINI: return '' // Gemini uses gradient
     default: return 'text-[#191919] dark:text-white'
   }
 }

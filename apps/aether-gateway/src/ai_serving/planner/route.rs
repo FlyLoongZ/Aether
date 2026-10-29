@@ -171,7 +171,7 @@ mod tests {
         );
         assert_eq!(
             resolve_execution_runtime_sync_plan_kind(&gemini_parts, &gemini_bearer),
-            Some("gemini_cli_sync")
+            Some("gemini_chat_sync")
         );
     }
 

@@ -1,6 +1,6 @@
 use super::{
     classified, classified_with_request_auth_channel, detect_claude_client_surface,
-    is_gemini_cli_request, is_gemini_models_route, is_gemini_operation_route, ClassifiedRoute,
+    is_gemini_models_route, is_gemini_operation_route, ClassifiedRoute,
 };
 use crate::ai_serving::ApiOperation;
 
@@ -183,15 +183,6 @@ pub(super) fn classify_ai_public_route(
                 "embedding",
                 "api_key",
                 "gemini:embedding",
-                true,
-            ))
-        } else if is_gemini_cli_request(headers) {
-            Some(classified_with_request_auth_channel(
-                "ai_public",
-                "gemini",
-                "generate_content",
-                "bearer_like",
-                "gemini:generate_content",
                 true,
             ))
         } else {

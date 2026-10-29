@@ -1,4 +1,4 @@
-export type CcSwitchTargetApp = 'claude' | 'codex' | 'gemini' | 'opencode' | 'openclaw' | 'hermes'
+export type CcSwitchTargetApp = 'claude' | 'codex' | 'opencode' | 'openclaw' | 'hermes'
 
 export interface CcSwitchTargetOption {
   value: CcSwitchTargetApp
@@ -35,7 +35,6 @@ interface NormalizedCcSwitchModelIds {
 export const CC_SWITCH_TARGET_OPTIONS: CcSwitchTargetOption[] = [
   { value: 'claude', label: 'Claude Code', icon: 'claude' },
   { value: 'codex', label: 'Codex CLI', icon: 'openai' },
-  { value: 'gemini', label: 'Gemini CLI', icon: 'gemini' },
   { value: 'opencode', label: 'OpenCode', icon: 'opencode' },
   { value: 'openclaw', label: 'OpenClaw', icon: 'openclaw' },
   { value: 'hermes', label: 'Hermes', icon: 'hermes' },
@@ -95,7 +94,7 @@ function aetherV1BaseUrl(baseUrl: string): string {
 }
 
 function ccSwitchEndpointForTarget(targetApp: CcSwitchTargetApp, baseUrl: string): string {
-  if (targetApp === 'claude' || targetApp === 'gemini') {
+  if (targetApp === 'claude') {
     return normalizedBaseUrl(baseUrl)
   }
   return aetherV1BaseUrl(baseUrl)
@@ -168,12 +167,6 @@ function buildCcSwitchConfig(input: BuildCcSwitchProviderImportUrlInput): Record
           OPENAI_API_KEY: input.apiKey,
         },
         config: buildCodexToml(baseUrl, modelIds.default),
-      }
-    case 'gemini':
-      return {
-        GEMINI_API_KEY: input.apiKey,
-        GOOGLE_GEMINI_BASE_URL: baseUrl,
-        GEMINI_MODEL: modelIds.default,
       }
     case 'opencode':
       return {

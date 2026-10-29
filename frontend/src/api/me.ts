@@ -214,7 +214,7 @@ export interface ApiKey {
   routing_group_name?: string | null
 }
 
-export type InstallTargetCli = 'claude_code' | 'codex_cli' | 'gemini_cli'
+export type InstallTargetCli = 'claude_code' | 'codex_cli'
 export type InstallTargetSystem = 'macos' | 'linux' | 'windows' | 'auto'
 export type InstallSessionTargetSystem = Exclude<InstallTargetSystem, 'auto'>
 

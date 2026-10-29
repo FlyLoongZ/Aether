@@ -9,7 +9,6 @@ pub mod client_identity;
 mod codex_fingerprint;
 pub mod conversion;
 mod diagnostics;
-pub mod gemini_cli;
 mod gemini_files;
 mod generic_oauth;
 mod headers;
@@ -72,10 +71,6 @@ pub use conversion::{
 pub use diagnostics::{
     append_transport_diagnostics_to_value, build_request_trace_proxy_value,
     build_transport_diagnostics,
-};
-pub use gemini_cli::{
-    gemini_cli_client_user_agent, gemini_cli_client_version, set_gemini_cli_client_version,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
 };
 pub use gemini_files::{
     build_gemini_files_headers, build_gemini_files_request_body, build_gemini_files_upstream_url,

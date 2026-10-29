@@ -1034,29 +1034,6 @@ mod tests {
     }
 
     #[test]
-    fn envelope_unwrap_rewriter_restores_model_directive_display_model() {
-        let report_context = json!({
-            "provider_api_format": "gemini:generate_content",
-            "client_api_format": "gemini:generate_content",
-            "envelope_name": "gemini_cli:v1internal",
-            "model": "gemini-2.5-pro-high",
-            "mapped_model": "gemini-2.5-pro",
-            "needs_conversion": false,
-        });
-        let mut rewriter = maybe_build_ai_surface_stream_rewriter(Some(&report_context))
-            .expect("rewriter should exist");
-        let output = rewriter
-            .push_chunk(
-                b"data: {\"response\":{\"modelVersion\":\"gemini-2.5-pro\",\"candidates\":[]}}\n\n",
-            )
-            .expect("rewrite should succeed");
-        let output = String::from_utf8(output).expect("output should be utf8");
-
-        assert!(output.contains("\"modelVersion\":\"gemini-2.5-pro-high\""));
-        assert!(!output.contains("\"modelVersion\":\"gemini-2.5-pro\""));
-    }
-
-    #[test]
     fn model_directive_display_rewriter_restores_response_model() {
         let report_context = json!({
             "provider_api_format": "openai:responses",

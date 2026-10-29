@@ -834,7 +834,7 @@ fn gemini_thinking_config_without_level_or_budget_yields_no_reasoning_effort() {
 }
 
 /// The v1internal envelope nests the real `generateContent` payload under `request`. This is
-/// the shape the Antigravity/Gemini CLI transports actually send upstream, so the extraction
+/// the shape the Antigravity/Gemini transports actually send upstream, so the extraction
 /// has to descend into it or every converted `openai:chat -> gemini` request loses its badge.
 #[test]
 fn gemini_thinking_config_is_read_from_the_v1internal_envelope() {

@@ -266,7 +266,6 @@ pub(crate) fn internal_finalize_report_kind_is_supported(report_kind: &str) -> b
             | "claude_cli_sync_finalize"
             | "gemini_chat_sync_finalize"
             | "gemini_interactions_sync_finalize"
-            | "gemini_cli_sync_finalize"
             | "openai_video_create_sync_finalize"
             | "openai_video_remix_sync_finalize"
             | "openai_video_delete_sync_finalize"

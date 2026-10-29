@@ -15,11 +15,10 @@ fn headers(items: &[(&str, &str)]) -> http::HeaderMap {
 
 #[test]
 fn builds_public_request_context_from_request_parts() {
-    let mut headers = headers(&[
+    let headers = headers(&[
         (http::header::HOST.as_str(), "api.example.test"),
         (http::header::CONTENT_TYPE.as_str(), "application/json"),
     ]);
-    headers.insert("x-app", http::HeaderValue::from_static("gemini-cli"));
     let uri: Uri = "/v1beta/models/gemini-2.5-pro:generateContent?alt=sse"
         .parse()
         .expect("uri should parse");
@@ -68,7 +67,7 @@ fn builds_public_request_context_from_request_parts() {
             .control_decision
             .as_ref()
             .and_then(|value| value.request_auth_channel.as_deref()),
-        Some("bearer_like")
+        Some("api_key")
     );
 }
 

@@ -22,7 +22,6 @@ pub const OPENAI_REALTIME_STREAM_PLAN_KIND: &str = "openai_realtime_stream";
 pub const CODEX_LIVE_STREAM_PLAN_KIND: &str = "codex_live_stream";
 pub const OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND: &str = "openai_responses_compact_stream";
 pub const CLAUDE_CLI_STREAM_PLAN_KIND: &str = "claude_cli_stream";
-pub const GEMINI_CLI_STREAM_PLAN_KIND: &str = "gemini_cli_stream";
 pub const OPENAI_VIDEO_CREATE_SYNC_PLAN_KIND: &str = "openai_video_create_sync";
 pub const OPENAI_CHAT_SYNC_PLAN_KIND: &str = "openai_chat_sync";
 pub const OPENAI_EMBEDDING_SYNC_PLAN_KIND: &str = "openai_embedding_sync";
@@ -35,7 +34,6 @@ pub const CLAUDE_CHAT_SYNC_PLAN_KIND: &str = "claude_chat_sync";
 pub const GEMINI_CHAT_SYNC_PLAN_KIND: &str = "gemini_chat_sync";
 pub const GEMINI_INTERACTIONS_SYNC_PLAN_KIND: &str = "gemini_interactions_sync";
 pub const CLAUDE_CLI_SYNC_PLAN_KIND: &str = "claude_cli_sync";
-pub const GEMINI_CLI_SYNC_PLAN_KIND: &str = "gemini_cli_sync";
 
 pub fn is_openai_responses_stream_plan_kind(plan_kind: &str) -> bool {
     matches!(

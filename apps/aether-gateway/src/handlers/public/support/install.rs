@@ -24,7 +24,6 @@ const INSTALL_SESSION_ENVELOPE_PREFIX: &str = "aether-install-session-v1:";
 pub(crate) enum InstallTargetCli {
     ClaudeCode,
     CodexCli,
-    GeminiCli,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -301,7 +300,6 @@ fn cli_label(target_cli: InstallTargetCli) -> &'static str {
     match target_cli {
         InstallTargetCli::ClaudeCode => "Claude Code",
         InstallTargetCli::CodexCli => "Codex CLI",
-        InstallTargetCli::GeminiCli => "Gemini CLI",
     }
 }
 
@@ -318,7 +316,6 @@ fn npm_package(target_cli: InstallTargetCli) -> &'static str {
     match target_cli {
         InstallTargetCli::ClaudeCode => "@anthropic-ai/claude-code",
         InstallTargetCli::CodexCli => "@openai/codex",
-        InstallTargetCli::GeminiCli => "@google/gemini-cli",
     }
 }
 
@@ -326,7 +323,6 @@ fn cli_binary(target_cli: InstallTargetCli) -> &'static str {
     match target_cli {
         InstallTargetCli::ClaudeCode => "claude",
         InstallTargetCli::CodexCli => "codex",
-        InstallTargetCli::GeminiCli => "gemini",
     }
 }
 
@@ -334,7 +330,6 @@ fn build_unix_script(session: &StoredInstallSession, api_key: &str) -> String {
     let target_cli = match session.target_cli {
         InstallTargetCli::ClaudeCode => "claude_code",
         InstallTargetCli::CodexCli => "codex_cli",
-        InstallTargetCli::GeminiCli => "gemini_cli",
     };
     let target_system = match session.target_system {
         InstallTargetSystem::Macos => "macos",
@@ -458,23 +453,6 @@ path.write_text('\n'.join(result) + '\n')
 PY
     chmod 600 "$HOME/.codex/config.toml" 2>/dev/null || true
     ;;
-  gemini_cli)
-    mkdir -p "$HOME/.gemini"
-    cat > "$HOME/.gemini/.env" <<EOF
-GEMINI_API_KEY=$AETHER_API_KEY
-GOOGLE_API_KEY=$AETHER_API_KEY
-GOOGLE_GEMINI_BASE_URL=$AETHER_BASE_URL
-AETHER_BASE_URL=$AETHER_BASE_URL
-EOF
-    python3 - "$HOME/.gemini/settings.json" "$AETHER_BASE_URL" <<'PY'
-import json, pathlib, sys
-path = pathlib.Path(sys.argv[1])
-data = json.loads(path.read_text() or '{{}}') if path.exists() else {{}}
-data.setdefault('aether', {{}})['baseUrl'] = sys.argv[2]
-path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
-PY
-    chmod 600 "$HOME/.gemini/.env" "$HOME/.gemini/settings.json" 2>/dev/null || true
-    ;;
 esac
 
 say "$CLI_LABEL 已配置到 Aether。执行 $CLI_BIN --version 验证安装。"
@@ -493,7 +471,6 @@ fn build_powershell_script(session: &StoredInstallSession, api_key: &str) -> Str
     let target_cli = match session.target_cli {
         InstallTargetCli::ClaudeCode => "claude_code",
         InstallTargetCli::CodexCli => "codex_cli",
-        InstallTargetCli::GeminiCli => "gemini_cli",
     };
     format!(
         r###"$ErrorActionPreference = 'Stop'
@@ -577,13 +554,7 @@ if ($TargetCli -eq 'claude_code') {{
   $Result.Add('requires_openai_auth = false')
   $Result.Add("experimental_bearer_token = `"$EscapedApiKey`"")
   Set-Content -Path $Path -Value (($Result -join "`n") + "`n") -Encoding UTF8
-}} elseif ($TargetCli -eq 'gemini_cli') {{
-  $Dir = Join-Path $HomeDir '.gemini'; New-Item -ItemType Directory -Force -Path $Dir | Out-Null
-  Set-Content (Join-Path $Dir '.env') -Value "GEMINI_API_KEY=$AetherApiKey`nGOOGLE_API_KEY=$AetherApiKey`nGOOGLE_GEMINI_BASE_URL=$AetherBaseUrl`nAETHER_BASE_URL=$AetherBaseUrl`n" -Encoding UTF8
-  $Path = Join-Path $Dir 'settings.json'
-  $Data = if (Test-Path $Path) {{ Get-Content $Path -Raw | ConvertFrom-Json -AsHashtable }} else {{ @{{}} }}
-  $Data.aether = @{{ baseUrl = $AetherBaseUrl }}
-  $Data | ConvertTo-Json -Depth 8 | Set-Content $Path -Encoding UTF8
+
 }}
 
 Say "$CliLabel 已配置到 Aether。执行 $CliBin --version 验证安装。"

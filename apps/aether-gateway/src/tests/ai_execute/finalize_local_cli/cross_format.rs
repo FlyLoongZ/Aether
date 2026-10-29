@@ -242,7 +242,7 @@ async fn gateway_executes_openai_responses_cross_format_upstream_stream_via_loca
                         "body_bytes_b64": base64::engine::general_purpose::STANDARD.encode(
                             concat!(
                                 "data: {\"responseId\":\"upstream-cli-stream-123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello \"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\"}\n\n",
-                                "data: {\"responseId\":\"upstream-cli-stream-123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini CLI\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n"
+                                "data: {\"responseId\":\"upstream-cli-stream-123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n"
                             )
                         )
                     },
@@ -320,7 +320,7 @@ async fn gateway_executes_openai_responses_cross_format_upstream_stream_via_loca
             "model": "gemini-2.5-pro-upstream",
             "created_at": created_at,
             "completed_at": created_at,
-            "output_text": "Hello Gemini CLI",
+            "output_text": "Hello Gemini",
             "output": [{
                 "type": "message",
                 "id": openai_responses_message_item_id("upstream-cli-stream-123", 0),
@@ -328,7 +328,7 @@ async fn gateway_executes_openai_responses_cross_format_upstream_stream_via_loca
                 "status": "completed",
                 "content": [{
                     "type": "output_text",
-                    "text": "Hello Gemini CLI",
+                    "text": "Hello Gemini",
                     "annotations": []
                 }]
             }],

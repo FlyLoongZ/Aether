@@ -302,20 +302,6 @@ pub(super) fn detect_claude_client_surface(headers: &http::HeaderMap) -> ClientS
     }
 }
 
-pub(super) fn is_gemini_cli_request(headers: &http::HeaderMap) -> bool {
-    let x_app = header_value_str(headers, "x-app")
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if x_app.contains("cli") {
-        return true;
-    }
-
-    let user_agent = header_value_str(headers, http::header::USER_AGENT.as_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    user_agent.contains("geminicli") || user_agent.contains("gemini-cli")
-}
-
 pub(super) fn is_gemini_models_route(path: &str) -> bool {
     (path.starts_with("/v1/models/") || path.starts_with("/v1beta/models/"))
         && (path.contains(":generateContent")

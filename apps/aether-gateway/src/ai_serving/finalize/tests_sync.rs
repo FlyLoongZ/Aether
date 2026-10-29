@@ -995,19 +995,19 @@ async fn converts_claude_cli_tool_use_to_openai_responses_function_call() {
 }
 
 #[tokio::test]
-async fn converts_gemini_cli_response_to_openai_responses_response() {
+async fn converts_gemini_response_to_openai_responses_response() {
     let result = convert_gemini_response_to_openai_responses(
         &json!({
             "responseId": "resp_cli_123",
             "candidates": [{
                 "content": {
-                    "parts": [{"text": "Hello Gemini CLI"}],
+                    "parts": [{"text": "Hello Gemini"}],
                     "role": "model"
                 },
                 "finishReason": "STOP",
                 "index": 0
             }],
-            "modelVersion": "gemini-cli-upstream",
+            "modelVersion": "gemini-2.5-pro-upstream",
             "usageMetadata": {
                 "promptTokenCount": 3,
                 "candidatesTokenCount": 5,
@@ -1032,10 +1032,10 @@ async fn converts_gemini_cli_response_to_openai_responses_response() {
             "id": "resp_cli_123",
             "object": "response",
             "status": "completed",
-            "model": "gemini-cli-upstream",
+            "model": "gemini-2.5-pro-upstream",
             "created_at": created_at,
             "completed_at": created_at,
-            "output_text": "Hello Gemini CLI",
+            "output_text": "Hello Gemini",
             "output": [{
                 "type": "message",
                 "id": openai_responses_message_item_id("resp_cli_123", 0),
@@ -1043,7 +1043,7 @@ async fn converts_gemini_cli_response_to_openai_responses_response() {
                 "status": "completed",
                 "content": [{
                     "type": "output_text",
-                    "text": "Hello Gemini CLI",
+                    "text": "Hello Gemini",
                     "annotations": []
                 }]
             }],
@@ -1060,7 +1060,7 @@ async fn converts_gemini_cli_response_to_openai_responses_response() {
 }
 
 #[tokio::test]
-async fn converts_gemini_cli_function_call_to_openai_responses_function_call() {
+async fn converts_gemini_function_call_to_openai_responses_function_call() {
     let result = convert_gemini_response_to_openai_responses(
         &json!({
             "responseId": "resp_cli_tool_123",
@@ -1075,7 +1075,7 @@ async fn converts_gemini_cli_function_call_to_openai_responses_function_call() {
                 "finishReason": "STOP",
                 "index": 0
             }],
-            "modelVersion": "gemini-cli-upstream",
+            "modelVersion": "gemini-2.5-pro-upstream",
             "usageMetadata": {
                 "promptTokenCount": 3,
                 "candidatesTokenCount": 5,
@@ -1100,7 +1100,7 @@ async fn converts_gemini_cli_function_call_to_openai_responses_function_call() {
             "id": "resp_cli_tool_123",
             "object": "response",
             "status": "completed",
-            "model": "gemini-cli-upstream",
+            "model": "gemini-2.5-pro-upstream",
             "created_at": created_at,
             "completed_at": created_at,
             "output_text": "Need a tool.",
@@ -1137,7 +1137,7 @@ async fn converts_gemini_cli_function_call_to_openai_responses_function_call() {
 }
 
 #[tokio::test]
-async fn converts_gemini_cli_inline_data_to_openai_responses_output_image() {
+async fn converts_gemini_inline_data_to_openai_responses_output_image() {
     let result = convert_gemini_response_to_openai_responses(
         &json!({
             "responseId": "resp_cli_img_123",
@@ -1154,7 +1154,7 @@ async fn converts_gemini_cli_inline_data_to_openai_responses_output_image() {
                 "finishReason": "STOP",
                 "index": 0
             }],
-            "modelVersion": "gemini-cli-upstream",
+            "modelVersion": "gemini-2.5-pro-upstream",
             "usageMetadata": {
                 "promptTokenCount": 3,
                 "candidatesTokenCount": 5,
@@ -1201,13 +1201,13 @@ async fn local_finalize_handles_openai_responses_compact_cross_format_sync_respo
             "responseId": "resp_cli_123",
             "candidates": [{
                 "content": {
-                    "parts": [{"text": "Hello Gemini CLI"}],
+                    "parts": [{"text": "Hello Gemini"}],
                     "role": "model"
                 },
                 "finishReason": "STOP",
                 "index": 0
             }],
-            "modelVersion": "gemini-cli-upstream",
+            "modelVersion": "gemini-2.5-pro-upstream",
             "usageMetadata": {
                 "promptTokenCount": 3,
                 "candidatesTokenCount": 5,
@@ -1272,7 +1272,7 @@ async fn local_finalize_handles_openai_responses_compact_cross_format_function_c
                 "finishReason": "STOP",
                 "index": 0
             }],
-            "modelVersion": "gemini-cli-upstream",
+            "modelVersion": "gemini-2.5-pro-upstream",
             "usageMetadata": {
                 "promptTokenCount": 3,
                 "candidatesTokenCount": 5,
@@ -1493,7 +1493,7 @@ async fn local_finalize_handles_openai_chat_stream_response_from_openai_chat() {
 async fn local_finalize_handles_openai_responses_cross_format_stream_response_from_gemini() {
     let body = concat!(
         "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello \"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\"}\n\n",
-        "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini CLI\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
+        "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
     );
     let payload = GatewaySyncReportRequest {
         trace_id: "trace-openai-responses-xfmt-stream-123".to_string(),
@@ -1536,7 +1536,7 @@ async fn local_finalize_handles_openai_responses_cross_format_stream_response_fr
     assert_eq!(client_body["object"], "response");
     assert_eq!(
         client_body["output"][0]["content"][0]["text"],
-        "Hello Gemini CLI"
+        "Hello Gemini"
     );
 }
 
@@ -2100,14 +2100,14 @@ async fn local_finalize_handles_claude_chat_cross_format_sync_response_from_open
 }
 
 #[tokio::test]
-async fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claude_cli() {
+async fn local_finalize_handles_gemini_cross_format_sync_response_from_claude_cli() {
     let payload = GatewaySyncReportRequest {
-        trace_id: "trace-gemini-cli-xfmt-claude-sync-123".to_string(),
-        report_kind: "gemini_cli_sync_finalize".to_string(),
+        trace_id: "trace-gemini-xfmt-claude-sync-123".to_string(),
+        report_kind: "gemini_chat_sync_finalize".to_string(),
         report_context: Some(json!({
             "client_api_format": "gemini:generate_content",
             "provider_api_format": "claude:messages",
-            "model": "gemini-cli",
+            "model": "gemini-2.5-pro",
             "mapped_model": "claude-code",
             "needs_conversion": true,
             "has_envelope": false,
@@ -2140,9 +2140,9 @@ async fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claud
 
     let outcome = maybe_build_local_core_sync_finalize_response(
         ResponseHeaderContext::none(),
-        "trace-gemini-cli-xfmt-claude-sync-123",
+        "trace-gemini-xfmt-claude-sync-123",
         &GatewayControlDecision {
-            public_path: "/v1beta/models/gemini-cli:generateContent".to_string(),
+            public_path: "/v1beta/models/gemini-2.5-pro:generateContent".to_string(),
             public_query_string: None,
             route_class: Some("ai_public".to_string()),
             route_family: Some("gemini".to_string()),
@@ -2167,7 +2167,7 @@ async fn local_finalize_handles_gemini_cli_cross_format_sync_response_from_claud
     let report = outcome
         .background_report
         .expect("cross-format finalize should downgrade to success report");
-    assert_eq!(report.report_kind, "gemini_cli_sync_success");
+    assert_eq!(report.report_kind, "gemini_chat_sync_success");
     let client_body = report.client_body_json.expect("client body should exist");
     assert_eq!(
         client_body["candidates"][0]["content"]["parts"][0]["text"],

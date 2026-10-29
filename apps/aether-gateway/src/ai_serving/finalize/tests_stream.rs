@@ -414,29 +414,6 @@ fn openai_image_stream_rewriter_emits_partial_and_completed_events_for_edit() {
 }
 
 #[test]
-fn gemini_cli_v1internal_stream_rewriter_unwraps_response_object() {
-    let report_context = json!({
-        "has_envelope": true,
-        "provider_api_format": "gemini:generate_content",
-        "client_api_format": "gemini:generate_content",
-        "envelope_name": "gemini_cli:v1internal",
-        "needs_conversion": false,
-    });
-    let mut rewriter =
-        maybe_build_local_stream_rewriter(Some(&report_context)).expect("rewriter should exist");
-    let output = rewriter
-        .push_chunk(
-            b"data: {\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini CLI\"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-cli-2.5\"}}\n\n",
-        )
-        .expect("rewrite should succeed");
-    let output_text = String::from_utf8(output).expect("text should be utf8");
-    assert_eq!(
-        output_text,
-        "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini CLI\"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-cli-2.5\"}\n\n"
-    );
-}
-
-#[test]
 fn openai_chat_error_to_openai_responses_stream_rewriter_converts_to_response_failed() {
     let report_context = json!({
         "provider_api_format": "openai:chat",
@@ -898,7 +875,7 @@ fn gemini_to_openai_responses_stream_rewriter_buffers_and_converts_to_completed_
     assert!(first_text.contains("\"delta\":\"Hello \""));
     let second = rewriter
         .push_chunk(
-            b"data: {\"responseId\":\"resp_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Gemini CLI\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
+            b"data: {\"responseId\":\"resp_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Gemini\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
         )
         .expect("rewrite should succeed");
     let output_text = utf8(second);
@@ -906,8 +883,8 @@ fn gemini_to_openai_responses_stream_rewriter_buffers_and_converts_to_completed_
     assert!(output_text.contains("event: response.completed"));
     assert!(output_text.contains("\"type\":\"response.completed\""));
     assert!(output_text.contains("\"object\":\"response\""));
-    assert!(output_text.contains("\"delta\":\"Gemini CLI\""));
-    assert!(output_text.contains("\"text\":\"Hello Gemini CLI\""));
+    assert!(output_text.contains("\"delta\":\"Gemini\""));
+    assert!(output_text.contains("\"text\":\"Hello Gemini\""));
     assert!(output_text.contains("\"total_tokens\":5"));
     assert!(rewriter.finish().expect("finish should succeed").is_empty());
 }
@@ -1128,7 +1105,7 @@ fn openai_chat_to_claude_chat_stream_rewriter_injects_default_usage_when_finish_
 }
 
 #[test]
-fn openai_chat_to_gemini_cli_stream_rewriter_converts_via_standard_matrix() {
+fn openai_chat_to_gemini_chat_stream_rewriter_converts_via_standard_matrix() {
     let report_context = json!({
         "provider_api_format": "openai:chat",
         "client_api_format": "gemini:generate_content",
@@ -1139,19 +1116,19 @@ fn openai_chat_to_gemini_cli_stream_rewriter_converts_via_standard_matrix() {
         maybe_build_local_stream_rewriter(Some(&report_context)).expect("rewriter should exist");
     let first = rewriter
         .push_chunk(
-            "data: {\"id\":\"chatcmpl_std_gemini_cli_123\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello Gemini CLI\"},\"finish_reason\":null}]}\n\n"
+            "data: {\"id\":\"chatcmpl_std_gemini_123\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello Gemini\"},\"finish_reason\":null}]}\n\n"
             .as_bytes(),
         )
         .expect("rewrite should succeed");
     let first_text = utf8(first);
-    assert!(first_text.contains("\"responseId\":\"chatcmpl_std_gemini_cli_123\""));
+    assert!(first_text.contains("\"responseId\":\"chatcmpl_std_gemini_123\""));
     assert!(first_text.contains("\"candidates\""));
-    assert!(first_text.contains("\"text\":\"Hello Gemini CLI\""));
+    assert!(first_text.contains("\"text\":\"Hello Gemini\""));
 
     let second = rewriter
         .push_chunk(
             concat!(
-                "data: {\"id\":\"chatcmpl_std_gemini_cli_123\",\"object\":\"chat.completion.chunk\",\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":3,\"total_tokens\":5}}\n\n",
+                "data: {\"id\":\"chatcmpl_std_gemini_123\",\"object\":\"chat.completion.chunk\",\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":3,\"total_tokens\":5}}\n\n",
                 "data: [DONE]\n\n"
             )
             .as_bytes(),

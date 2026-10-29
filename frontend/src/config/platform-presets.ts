@@ -35,13 +35,6 @@ export const platformPresets = {
       { value: 'homebrew', labelKey: 'platform.mac', hintKey: 'platform.homebrew', icon: Apple, command: 'brew install --cask codex' }
     ] as PlatformOption[],
     defaultValue: 'nodejs'
-  },
-  gemini: {
-    options: [
-      { value: 'nodejs', labelKey: 'platform.nodejs', hintKey: 'platform.npm', icon: Box, command: 'npm install -g @google/gemini-cli' },
-      { value: 'homebrew', labelKey: 'platform.mac', hintKey: 'platform.homebrew', icon: Apple, command: 'brew install gemini-cli' }
-    ] as PlatformOption[],
-    defaultValue: 'nodejs'
   }
 } as const
 

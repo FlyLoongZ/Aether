@@ -123,10 +123,6 @@ pub(crate) static CLAUDE_CODE_CLI_PROFILE: CliClientProfileSpec = CliClientProfi
 fn publish_xai_version(version: &str) -> Result<(), &'static str> {
     aether_provider_transport::xai::set_xai_client_version(version).map(|_| ())
 }
-fn publish_gemini_version(version: &str) -> Result<(), &'static str> {
-    aether_provider_transport::gemini_cli::set_gemini_cli_client_version(version).map(|_| ())
-}
-
 pub(crate) static XAI_CLI_PROFILE: CliClientProfileSpec = CliClientProfileSpec {
     client: "xai",
     release_endpoint: "https://registry.npmjs.org/@xai-official%2Fgrok/latest",
@@ -149,27 +145,10 @@ pub(crate) static XAI_CLI_PROFILE: CliClientProfileSpec = CliClientProfileSpec {
     active_version: aether_provider_transport::xai::xai_client_version,
     publish_version: publish_xai_version,
 };
-pub(crate) static GEMINI_CLI_PROFILE: CliClientProfileSpec = CliClientProfileSpec {
-    client: "gemini_cli",
-    release_endpoint: "https://registry.npmjs.org/@google%2Fgemini-cli/latest",
-    stable_channel: None,
-    refresh_interval: PROFILE_REFRESH_INTERVAL,
-    package_name: "@google/gemini-cli",
-    // Official JS bundle has no same-version platform packages.
-    platform_targets: &[],
-    platform_dependency: claude_code_platform_dependency,
-    cache_key: "aether:gemini_cli:client-profile:v1",
-    refresh_env: "AETHER_GEMINI_CLI_CLIENT_PROFILE_REFRESH",
-    fixed_version_env: "AETHER_GEMINI_CLI_CLIENT_VERSION",
-    task_key: crate::task_runtime::TASK_KEY_GEMINI_CLI_CLIENT_PROFILE,
-    active_version: aether_provider_transport::gemini_cli::gemini_cli_client_version,
-    publish_version: publish_gemini_version,
-};
 pub(crate) static CLI_PROFILES: &[&CliClientProfileSpec] = &[
     &CODEX_CLI_PROFILE,
     &CLAUDE_CODE_CLI_PROFILE,
     &XAI_CLI_PROFILE,
-    &GEMINI_CLI_PROFILE,
 ];
 impl CliClientProfileSpec {
     pub(crate) fn task_key(&self) -> &'static str {
@@ -673,37 +652,11 @@ mod tests {
                 .release_endpoint
                 .starts_with("https://registry.npmjs.org/"));
         }
-        assert_eq!(keys.len(), 4);
+        assert_eq!(keys.len(), 3);
         assert_eq!(
             super::XAI_CLI_PROFILE.refresh_interval,
             Duration::from_secs(3 * 60 * 60)
         );
-    }
-
-    #[test]
-    fn gemini_bundle_accepts_only_the_official_stable_package() {
-        let mut body = serde_json::json!({"name":"@google/gemini-cli", "version":"0.62.0"});
-        assert_eq!(
-            parse_cli_release(
-                &super::GEMINI_CLI_PROFILE,
-                &serde_json::to_vec(&body).unwrap()
-            )
-            .unwrap(),
-            "0.62.0"
-        );
-        body["name"] = serde_json::json!("gemini-cli");
-        assert!(parse_cli_release(
-            &super::GEMINI_CLI_PROFILE,
-            &serde_json::to_vec(&body).unwrap()
-        )
-        .is_err());
-        body["name"] = serde_json::json!("@google/gemini-cli");
-        body["version"] = serde_json::json!("0.63.0-preview.1");
-        assert!(parse_cli_release(
-            &super::GEMINI_CLI_PROFILE,
-            &serde_json::to_vec(&body).unwrap()
-        )
-        .is_err());
     }
 
     #[test]

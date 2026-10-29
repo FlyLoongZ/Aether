@@ -5,14 +5,13 @@ use crate::contracts::{
     ClientSurface, CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CHAT_SYNC_PLAN_KIND,
     CLAUDE_CLI_STREAM_PLAN_KIND, CLAUDE_CLI_SYNC_PLAN_KIND, CLAUDE_COUNT_TOKENS_SYNC_PLAN_KIND,
     CODEX_LIVE_STREAM_PLAN_KIND, GEMINI_CHAT_STREAM_PLAN_KIND, GEMINI_CHAT_SYNC_PLAN_KIND,
-    GEMINI_CLI_STREAM_PLAN_KIND, GEMINI_CLI_SYNC_PLAN_KIND, GEMINI_EMBEDDING_SYNC_PLAN_KIND,
-    GEMINI_FILES_DELETE_PLAN_KIND, GEMINI_FILES_DOWNLOAD_PLAN_KIND, GEMINI_FILES_GET_PLAN_KIND,
-    GEMINI_FILES_LIST_PLAN_KIND, GEMINI_FILES_UPLOAD_PLAN_KIND,
-    GEMINI_INTERACTIONS_STREAM_PLAN_KIND, GEMINI_INTERACTIONS_SYNC_PLAN_KIND,
-    GEMINI_VIDEO_CANCEL_SYNC_PLAN_KIND, GEMINI_VIDEO_CREATE_SYNC_PLAN_KIND,
-    OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_CHAT_SYNC_PLAN_KIND, OPENAI_EMBEDDING_SYNC_PLAN_KIND,
-    OPENAI_IMAGE_STREAM_PLAN_KIND, OPENAI_IMAGE_SYNC_PLAN_KIND, OPENAI_MEMORIES_SYNC_PLAN_KIND,
-    OPENAI_REALTIME_STREAM_PLAN_KIND, OPENAI_RERANK_SYNC_PLAN_KIND,
+    GEMINI_EMBEDDING_SYNC_PLAN_KIND, GEMINI_FILES_DELETE_PLAN_KIND,
+    GEMINI_FILES_DOWNLOAD_PLAN_KIND, GEMINI_FILES_GET_PLAN_KIND, GEMINI_FILES_LIST_PLAN_KIND,
+    GEMINI_FILES_UPLOAD_PLAN_KIND, GEMINI_INTERACTIONS_STREAM_PLAN_KIND,
+    GEMINI_INTERACTIONS_SYNC_PLAN_KIND, GEMINI_VIDEO_CANCEL_SYNC_PLAN_KIND,
+    GEMINI_VIDEO_CREATE_SYNC_PLAN_KIND, OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_CHAT_SYNC_PLAN_KIND,
+    OPENAI_EMBEDDING_SYNC_PLAN_KIND, OPENAI_IMAGE_STREAM_PLAN_KIND, OPENAI_IMAGE_SYNC_PLAN_KIND,
+    OPENAI_MEMORIES_SYNC_PLAN_KIND, OPENAI_REALTIME_STREAM_PLAN_KIND, OPENAI_RERANK_SYNC_PLAN_KIND,
     OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND, OPENAI_RESPONSES_COMPACT_SYNC_PLAN_KIND,
     OPENAI_RESPONSES_STREAM_PLAN_KIND, OPENAI_RESPONSES_SYNC_PLAN_KIND,
     OPENAI_SEARCH_SYNC_PLAN_KIND, OPENAI_VIDEO_CANCEL_SYNC_PLAN_KIND,
@@ -45,7 +44,7 @@ pub fn resolve_execution_runtime_stream_plan_kind_with_client_surface(
     route_family: Option<&str>,
     route_kind: Option<&str>,
     client_surface: Option<ClientSurface>,
-    request_auth_channel: Option<&str>,
+    _request_auth_channel: Option<&str>,
     method: &Method,
     path: &str,
 ) -> Option<&'static str> {
@@ -90,11 +89,7 @@ pub fn resolve_execution_runtime_stream_plan_kind_with_client_surface(
         && *method == Method::POST
         && path.ends_with(":streamGenerateContent")
     {
-        return Some(resolve_gemini_generate_content_plan_kind(
-            request_auth_channel,
-            GEMINI_CHAT_STREAM_PLAN_KIND,
-            GEMINI_CLI_STREAM_PLAN_KIND,
-        ));
+        return Some(GEMINI_CHAT_STREAM_PLAN_KIND);
     }
 
     if route_family == Some("gemini")
@@ -110,7 +105,7 @@ pub fn resolve_execution_runtime_stream_plan_kind_with_client_surface(
         && *method == Method::POST
         && path == "/v1internal:streamGenerateContent"
     {
-        return Some(GEMINI_CLI_STREAM_PLAN_KIND);
+        return Some(GEMINI_CHAT_STREAM_PLAN_KIND);
     }
 
     if route_family == Some("openai")
@@ -181,7 +176,7 @@ pub fn resolve_execution_runtime_sync_plan_kind_with_client_surface(
     route_family: Option<&str>,
     route_kind: Option<&str>,
     client_surface: Option<ClientSurface>,
-    request_auth_channel: Option<&str>,
+    _request_auth_channel: Option<&str>,
     method: &Method,
     path: &str,
 ) -> Option<&'static str> {
@@ -351,11 +346,7 @@ pub fn resolve_execution_runtime_sync_plan_kind_with_client_surface(
         && *method == Method::POST
         && path.ends_with(":generateContent")
     {
-        return Some(resolve_gemini_generate_content_plan_kind(
-            request_auth_channel,
-            GEMINI_CHAT_SYNC_PLAN_KIND,
-            GEMINI_CLI_SYNC_PLAN_KIND,
-        ));
+        return Some(GEMINI_CHAT_SYNC_PLAN_KIND);
     }
 
     if route_family == Some("gemini") && route_kind == Some("files") {
@@ -418,18 +409,6 @@ fn legacy_client_surface_from_auth_channel(
     } else {
         ClientSurface::GenericCompatible
     })
-}
-
-fn resolve_gemini_generate_content_plan_kind(
-    request_auth_channel: Option<&str>,
-    chat_plan_kind: &'static str,
-    cli_plan_kind: &'static str,
-) -> &'static str {
-    if request_auth_channel == Some("bearer_like") {
-        cli_plan_kind
-    } else {
-        chat_plan_kind
-    }
 }
 
 pub fn request_path_implies_stream_request(path: &str) -> bool {
@@ -564,9 +543,7 @@ pub fn is_matching_stream_request(
             .get("stream")
             .and_then(|value| value.as_bool())
             .unwrap_or(false),
-        GEMINI_CHAT_STREAM_PLAN_KIND | GEMINI_CLI_STREAM_PLAN_KIND => {
-            request_path_implies_stream_request(path)
-        }
+        GEMINI_CHAT_STREAM_PLAN_KIND => request_path_implies_stream_request(path),
         _ => true,
     }
 }
@@ -599,7 +576,6 @@ pub fn supports_sync_execution_decision_kind(plan_kind: &str) -> bool {
             | CLAUDE_CLI_SYNC_PLAN_KIND
             | CLAUDE_COUNT_TOKENS_SYNC_PLAN_KIND
             | GEMINI_CHAT_SYNC_PLAN_KIND
-            | GEMINI_CLI_SYNC_PLAN_KIND
             | GEMINI_EMBEDDING_SYNC_PLAN_KIND
             | GEMINI_INTERACTIONS_SYNC_PLAN_KIND
             | GEMINI_FILES_UPLOAD_PLAN_KIND
@@ -626,7 +602,6 @@ pub fn supports_stream_execution_decision_kind(plan_kind: &str) -> bool {
             | OPENAI_RESPONSES_STREAM_PLAN_KIND
             | OPENAI_IMAGE_STREAM_PLAN_KIND
             | CLAUDE_CLI_STREAM_PLAN_KIND
-            | GEMINI_CLI_STREAM_PLAN_KIND
             | GEMINI_INTERACTIONS_STREAM_PLAN_KIND
             | GEMINI_FILES_DOWNLOAD_PLAN_KIND
             | OPENAI_VIDEO_CONTENT_PLAN_KIND
@@ -648,14 +623,14 @@ mod tests {
     use crate::contracts::{
         CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CHAT_SYNC_PLAN_KIND, CLAUDE_CLI_STREAM_PLAN_KIND,
         CLAUDE_CLI_SYNC_PLAN_KIND, CODEX_LIVE_STREAM_PLAN_KIND, GEMINI_CHAT_STREAM_PLAN_KIND,
-        GEMINI_CHAT_SYNC_PLAN_KIND, GEMINI_CLI_STREAM_PLAN_KIND, GEMINI_CLI_SYNC_PLAN_KIND,
-        GEMINI_EMBEDDING_SYNC_PLAN_KIND, GEMINI_INTERACTIONS_STREAM_PLAN_KIND,
-        GEMINI_INTERACTIONS_SYNC_PLAN_KIND, OPENAI_CHAT_STREAM_PLAN_KIND,
-        OPENAI_CHAT_SYNC_PLAN_KIND, OPENAI_EMBEDDING_SYNC_PLAN_KIND, OPENAI_IMAGE_STREAM_PLAN_KIND,
-        OPENAI_IMAGE_SYNC_PLAN_KIND, OPENAI_REALTIME_STREAM_PLAN_KIND,
-        OPENAI_RERANK_SYNC_PLAN_KIND, OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND,
-        OPENAI_RESPONSES_COMPACT_SYNC_PLAN_KIND, OPENAI_RESPONSES_STREAM_PLAN_KIND,
-        OPENAI_RESPONSES_SYNC_PLAN_KIND, OPENAI_SEARCH_SYNC_PLAN_KIND,
+        GEMINI_CHAT_SYNC_PLAN_KIND, GEMINI_EMBEDDING_SYNC_PLAN_KIND,
+        GEMINI_INTERACTIONS_STREAM_PLAN_KIND, GEMINI_INTERACTIONS_SYNC_PLAN_KIND,
+        OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_CHAT_SYNC_PLAN_KIND, OPENAI_EMBEDDING_SYNC_PLAN_KIND,
+        OPENAI_IMAGE_STREAM_PLAN_KIND, OPENAI_IMAGE_SYNC_PLAN_KIND,
+        OPENAI_REALTIME_STREAM_PLAN_KIND, OPENAI_RERANK_SYNC_PLAN_KIND,
+        OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND, OPENAI_RESPONSES_COMPACT_SYNC_PLAN_KIND,
+        OPENAI_RESPONSES_STREAM_PLAN_KIND, OPENAI_RESPONSES_SYNC_PLAN_KIND,
+        OPENAI_SEARCH_SYNC_PLAN_KIND,
     };
 
     #[test]
@@ -946,7 +921,7 @@ mod tests {
                 &Method::POST,
                 "/v1beta/models/gemini-2.5-pro:generateContent",
             ),
-            Some(GEMINI_CLI_SYNC_PLAN_KIND)
+            Some(GEMINI_CHAT_SYNC_PLAN_KIND)
         );
         assert_eq!(
             resolve_execution_runtime_stream_plan_kind(
@@ -957,12 +932,12 @@ mod tests {
                 &Method::POST,
                 "/v1beta/models/gemini-2.5-pro:streamGenerateContent",
             ),
-            Some(GEMINI_CLI_STREAM_PLAN_KIND)
+            Some(GEMINI_CHAT_STREAM_PLAN_KIND)
         );
     }
 
     #[test]
-    fn resolves_antigravity_v1internal_stream_plan_kind_as_gemini_cli_stream() {
+    fn resolves_antigravity_v1internal_stream_plan_kind_as_gemini_chat_stream() {
         assert_eq!(
             resolve_execution_runtime_stream_plan_kind(
                 Some("ai_public"),
@@ -972,7 +947,7 @@ mod tests {
                 &Method::POST,
                 "/v1internal:streamGenerateContent",
             ),
-            Some(GEMINI_CLI_STREAM_PLAN_KIND)
+            Some(GEMINI_CHAT_STREAM_PLAN_KIND)
         );
         assert_eq!(
             resolve_execution_runtime_sync_plan_kind(

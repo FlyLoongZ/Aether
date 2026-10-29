@@ -5,7 +5,6 @@ export function formatClientFamily(value: string | null | undefined): string {
   if (normalized === 'codex_vscode') return 'Codex VS Code'
   if (normalized === 'claude_code') return 'Claude Code'
   if (normalized === 'opencode') return 'OpenCode'
-  if (normalized === 'gemini_cli') return 'Gemini CLI'
   if (normalized === 'openai_js_sdk') return 'OpenAI JS SDK'
   if (normalized === 'openai_python_sdk') return 'OpenAI Python SDK'
   if (normalized === 'anthropic_js_sdk') return 'Anthropic JS SDK'

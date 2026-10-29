@@ -24,10 +24,6 @@ pub struct PinnedClientIdentity {
     pub user_agent: &'static str,
 }
 
-pub const GEMINI_CLI: PinnedClientIdentity = PinnedClientIdentity {
-    version: "0.1.5",
-    user_agent: "GeminiCLI/0.1.5 (Windows; AMD64)",
-};
 // Legacy standard-models fallback; dedicated Kiro requests use OAuth SDK identity.
 pub const KIRO_MODELS_LEGACY_USER_AGENT: &str = "claude-code/1.0.1";
 

@@ -836,7 +836,7 @@ fn falls_back_to_body_json_for_standard_same_format_sync_payload() {
     });
 
     let body_json = maybe_build_standard_same_format_sync_body_from_normalized_payload(
-        "gemini_cli_sync_finalize",
+        "gemini_chat_sync_finalize",
         200,
         Some(&report_context),
         Some(&provider_body_json),
@@ -2361,7 +2361,7 @@ fn builds_openai_chat_cross_format_sync_product_from_openai_responses_body_json(
 fn builds_openai_responses_cross_format_sync_product_from_gemini_stream_payload() {
     let body = concat!(
         "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello \"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\"}\n\n",
-        "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini CLI\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
+        "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
     );
     let report_context = json!({
         "provider_api_format": "gemini:generate_content",
@@ -2387,7 +2387,7 @@ fn builds_openai_responses_cross_format_sync_product_from_gemini_stream_payload(
     assert_eq!(product.client_body_json["object"], "response");
     assert_eq!(
         product.client_body_json["output"][0]["content"][0]["text"],
-        "Hello Gemini CLI"
+        "Hello Gemini"
     );
 }
 
@@ -3093,7 +3093,6 @@ fn standard_sync_finalize_projects_forced_responses_stream_to_gemini_and_claude_
 
     for (report_kind, client_api_format) in [
         ("gemini_chat_sync_finalize", "gemini:generate_content"),
-        ("gemini_cli_sync_finalize", "gemini:generate_content"),
         ("claude_chat_sync_finalize", "claude:messages"),
         ("claude_cli_sync_finalize", "claude:messages"),
     ] {
@@ -3681,7 +3680,7 @@ fn standard_sync_finalize_product_handles_openai_chat_cross_format() {
 fn standard_sync_finalize_product_handles_openai_responses_cross_format() {
     let body = concat!(
         "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello \"}],\"role\":\"model\"},\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\"}\n\n",
-        "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini CLI\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
+        "data: {\"responseId\":\"resp_cli_stream_123\",\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello Gemini\"}],\"role\":\"model\"},\"finishReason\":\"STOP\",\"index\":0}],\"modelVersion\":\"gemini-2.5-pro-upstream\",\"usageMetadata\":{\"promptTokenCount\":2,\"candidatesTokenCount\":3,\"totalTokenCount\":5}}\n\n",
     );
     let report_context = json!({
         "provider_api_format": "gemini:generate_content",
