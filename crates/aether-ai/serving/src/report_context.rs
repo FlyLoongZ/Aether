@@ -243,19 +243,6 @@ pub fn build_ai_execution_report_context(parts: AiExecutionReportContextParts<'_
 }
 
 fn uses_estimated_token_adapter(context: &Map<String, Value>) -> bool {
-    let grok = context
-        .get("provider_type")
-        .and_then(Value::as_str)
-        .is_some_and(|value| value.eq_ignore_ascii_case("grok"))
-        || context
-            .get("provider_request_headers")
-            .and_then(Value::as_object)
-            .is_some_and(|headers| {
-                headers.iter().any(|(name, value)| {
-                    name.eq_ignore_ascii_case("x-aether-grok-runtime")
-                        && value.as_str() == Some("1")
-                })
-            });
     let matches = |key: &str, expected: &str| {
         context
             .get(key)
@@ -266,7 +253,7 @@ fn uses_estimated_token_adapter(context: &Map<String, Value>) -> bool {
         && matches("envelope_name", "kiro:generateAssistantResponse")
         && matches("provider_api_format", "claude:messages")
         && !matches("client_envelope_name", "kiro:generateAssistantResponse");
-    grok || kiro
+    kiro
 }
 
 pub fn provider_stream_event_api_format_for_provider_type(
@@ -412,18 +399,6 @@ mod tests {
         assert!(report.get("analytics_failure").is_none());
         assert!(report.get("analytics_measurement").is_none());
         assert!(report.get("usage_token_source").is_none());
-
-        let grok_headers = BTreeMap::from([("X-Aether-Grok-Runtime".into(), "1".into())]);
-        assert_eq!(
-            build_report(&grok_headers, extra_fields.clone())["usage_token_source"],
-            "estimated"
-        );
-        let mut native = extra_fields.clone();
-        native.insert("provider_type".into(), json!("Grok"));
-        assert_eq!(
-            build_report(&provider_headers, native)["usage_token_source"],
-            "estimated"
-        );
 
         let mut kiro = extra_fields;
         kiro.insert("has_envelope".into(), json!(true));

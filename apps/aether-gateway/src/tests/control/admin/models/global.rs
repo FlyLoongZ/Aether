@@ -908,7 +908,7 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
 
     let mut image_provider = sample_provider("provider-image", "image", 10);
     image_provider.provider_type = "openai".to_string();
-    let grok_provider = sample_provider("provider-grok", "grok2api", 20);
+    let xai_provider = sample_provider("provider-xai", "xai", 20);
 
     let mut image_key = sample_bound_key(
         "key-image-routing",
@@ -919,17 +919,17 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
     image_key.name = "image-account".to_string();
     image_key.allowed_models = Some(json!(["gpt-image-2"]));
 
-    let mut grok_key = sample_bound_key(
-        "key-grok-routing",
-        "provider-grok",
+    let mut xai_key = sample_bound_key(
+        "key-xai-routing",
+        "provider-xai",
         "openai:chat",
-        "sk-grok-routing-5678",
+        "sk-xai-routing-5678",
     );
-    grok_key.name = "all".to_string();
-    grok_key.allowed_models = Some(json!(["gpt-image-2"]));
+    xai_key.name = "all".to_string();
+    xai_key.allowed_models = Some(json!(["gpt-image-2"]));
 
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        vec![image_provider, grok_provider],
+        vec![image_provider, xai_provider],
         vec![
             sample_endpoint(
                 "endpoint-image",
@@ -938,13 +938,13 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
                 "https://api.openai.example",
             ),
             sample_endpoint(
-                "endpoint-grok-chat",
-                "provider-grok",
+                "endpoint-xai-chat",
+                "provider-xai",
                 "openai:chat",
-                "https://grok.example",
+                "https://api.x.ai",
             ),
         ],
-        vec![image_key, grok_key],
+        vec![image_key, xai_key],
     ));
     let global_model_repository = Arc::new(
         InMemoryGlobalModelReadRepository::seed(Vec::new())
@@ -961,8 +961,8 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
                     "gpt-image-2",
                 ),
                 sample_admin_provider_model(
-                    "model-grok-gpt-image",
-                    "provider-grok",
+                    "model-xai-gpt-image",
+                    "provider-xai",
                     "global-gpt-image",
                     "gpt-image-2",
                 ),
@@ -1012,14 +1012,14 @@ async fn gateway_global_model_routing_counts_image_provider_keys_by_provider_mod
     assert_eq!(image_endpoints[0]["active_keys"], 1);
     assert_eq!(image_endpoints[0]["keys"][0]["name"], "image-account");
 
-    let grok_endpoints = providers[1]["endpoints"]
+    let xai_endpoints = providers[1]["endpoints"]
         .as_array()
-        .expect("grok endpoints array");
-    assert_eq!(providers[1]["id"], "provider-grok");
-    assert_eq!(grok_endpoints[0]["api_format"], "openai:chat");
-    assert_eq!(grok_endpoints[0]["total_keys"], 1);
-    assert_eq!(grok_endpoints[0]["active_keys"], 1);
-    assert_eq!(grok_endpoints[0]["keys"][0]["name"], "all");
+        .expect("xai endpoints array");
+    assert_eq!(providers[1]["id"], "provider-xai");
+    assert_eq!(xai_endpoints[0]["api_format"], "openai:chat");
+    assert_eq!(xai_endpoints[0]["total_keys"], 1);
+    assert_eq!(xai_endpoints[0]["active_keys"], 1);
+    assert_eq!(xai_endpoints[0]["keys"][0]["name"], "all");
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();

@@ -17,10 +17,7 @@ use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
 use aether_crypto::{decrypt_python_fernet_ciphertext, encrypt_python_fernet_plaintext};
 
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
-use aether_provider_pool::{
-    grok_pool_tier_from_quota_bucket, grok_supported_quota_windows_for_tier,
-    provider_pool_codex_metadata_has_account_quota,
-};
+use aether_provider_pool::provider_pool_codex_metadata_has_account_quota;
 use aether_scheduler_core::provider_key_circuit_payload_is_active_open_at;
 use serde_json::{json, Map, Value};
 use std::borrow::Cow;
@@ -1808,72 +1805,6 @@ fn build_antigravity_quota_status_snapshot(
     }))
 }
 
-fn build_grok_quota_status_snapshot(
-    upstream_metadata: Option<&Value>,
-    source: &str,
-) -> Option<Value> {
-    let metadata = provider_quota_metadata_bucket(upstream_metadata, "grok")?;
-    let observed_at_unix_secs = provider_quota_timestamp_unix_secs(metadata.get("updated_at"));
-    let inferred_pool_tier = grok_pool_tier_from_quota_bucket(metadata);
-    let pool_tier = provider_quota_metadata_string(metadata, &["pool_tier", "tier"])
-        .or_else(|| inferred_pool_tier.map(ToOwned::to_owned));
-    let plan_type = provider_quota_metadata_string(metadata, &["plan_type", "plan"])
-        .or_else(|| pool_tier.clone());
-    let supported_windows = grok_supported_quota_windows_for_tier(pool_tier.as_deref());
-    let windows = provider_quota_model_bucket(metadata)
-        .map(|models| {
-            models
-                .iter()
-                .filter_map(|(model_name, item)| {
-                    if !supported_windows
-                        .iter()
-                        .any(|(quota_key, _)| *quota_key == model_name.as_str())
-                    {
-                        return None;
-                    }
-                    model_quota_window_snapshot(
-                        model_name,
-                        item.as_object()?,
-                        observed_at_unix_secs,
-                    )
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    if windows.is_empty() && observed_at_unix_secs.is_none() {
-        return None;
-    }
-
-    let usage_ratio = quota_windows_usage_ratio(&windows);
-    let reset_seconds = quota_windows_min_reset_seconds(&windows);
-    let reset_at = quota_windows_min_reset_at(&windows);
-    let exhausted = quota_windows_all_exhausted(&windows);
-
-    Some(json!({
-        "version": 2,
-        "provider_type": "grok",
-        "code": if exhausted { "exhausted" } else { "ok" },
-        "label": if exhausted { Some("额度耗尽") } else { None::<&str> },
-        "reason": if exhausted {
-            Some("所有 Grok 模式额度已耗尽")
-        } else {
-            None::<&str>
-        },
-        "freshness": "fresh",
-        "source": source,
-        "observed_at": observed_at_unix_secs,
-        "exhausted": exhausted,
-        "usage_ratio": usage_ratio,
-        "updated_at": observed_at_unix_secs,
-        "reset_at": reset_at,
-        "reset_seconds": reset_seconds,
-        "plan_type": plan_type,
-        "pool_tier": pool_tier,
-        "windows": windows,
-    }))
-}
-
 fn gemini_cli_plan_type(metadata: &Map<String, Value>) -> Option<String> {
     provider_quota_metadata_string(metadata, &["plan_type", "tier", "plan"]).or_else(|| {
         provider_quota_metadata_string_by_paths(
@@ -2332,7 +2263,6 @@ pub(crate) fn sync_provider_key_quota_status_snapshot(
         "xai" => build_xai_quota_status_snapshot(upstream_metadata, source),
         "windsurf" => build_windsurf_quota_status_snapshot(upstream_metadata, source),
         "antigravity" => build_antigravity_quota_status_snapshot(upstream_metadata, source),
-        "grok" => build_grok_quota_status_snapshot(upstream_metadata, source),
         "gemini_cli" => build_gemini_cli_quota_status_snapshot(upstream_metadata, source),
         "claude_code" => build_claude_code_quota_status_snapshot(upstream_metadata, source),
         _ => None,
@@ -2494,7 +2424,7 @@ fn windsurf_quota_snapshot_has_stale_cooldown(quota_snapshot: &Map<String, Value
 /// 导致管理端倒计时归零后进度条仍停留在旧的剩余百分比。这里让读取层与
 /// 调度侧、文本侧使用同一口径，避免三处状态互相矛盾。
 ///
-/// 覆盖所有带重置时间的提供商窗口（codex/kiro/xai/grok/antigravity/
+/// 覆盖所有带重置时间的提供商窗口（codex/kiro/xai/antigravity/
 /// gemini_cli/windsurf 等）：比例（used_ratio/remaining_ratio）、
 /// 数值（used_value/remaining_value）与窗口级耗尽标记会一起恢复为“已重置”。
 fn normalize_expired_quota_windows(snapshot: &mut serde_json::Map<String, Value>) {

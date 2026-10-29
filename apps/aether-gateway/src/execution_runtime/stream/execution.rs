@@ -88,7 +88,6 @@ use crate::constants::{CONTROL_CANDIDATE_ID_HEADER, CONTROL_REQUEST_ID_HEADER};
 use crate::control::GatewayControlDecision;
 use crate::execution_runtime::attempt_cancellation::AttemptCancellationGuard;
 use crate::execution_runtime::build_direct_execution_frame_stream;
-use crate::execution_runtime::grok::maybe_execute_grok_stream;
 use crate::execution_runtime::kiro_cache::{
     billed_input_tokens as kiro_billed_input_tokens, build_kiro_prompt_cache_profile,
     compute_kiro_prompt_cache_usage, estimate_kiro_prompt_input_tokens,
@@ -4109,79 +4108,7 @@ async fn execute_execution_runtime_stream_inner(
         .and_then(|context| context.candidate_index)
         .map(|value| value.to_string())
         .unwrap_or_else(|| "-".to_string());
-    match maybe_execute_grok_stream(&plan, report_context.as_ref()).await {
-        Ok(Some(grok_stream)) => {
-            return execute_stream_from_frame_stream_with_retry_scope(
-                state,
-                plan,
-                trace_id,
-                decision,
-                plan_kind,
-                report_kind,
-                grok_stream.report_context.or(report_context),
-                candidate_started_unix_secs,
-                stream_started_at,
-                stage_trace,
-                lifecycle_pending_recorded,
-                grok_stream.frame_stream,
-                false,
-                provider_pool_in_flight_guard.take(),
-                retry_scope_out.as_deref_mut(),
-                retry_fallback_out.as_deref_mut(),
-                None,
-            )
-            .await;
-        }
-        Ok(None) => {}
-        Err(_err) => {
-            let transport_error_message = "Grok stream execution unavailable".to_string();
-            info!(
-                event_name = "grok_execution_unavailable",
-                log_type = "ops",
-                trace_id = %trace_id,
-                request_id = %plan_request_id_for_log,
-                candidate_id = ?plan.candidate_id,
-                provider_name = provider_name.as_str(),
-                endpoint_id = %endpoint_id,
-                key_id = %key_id,
-                model_name = model_name.as_str(),
-                candidate_index = candidate_index.as_str(),
-                error_category = "grok_execution_unavailable",
-                "gateway Grok stream execution unavailable"
-            );
-            let terminal_unix_secs = current_request_candidate_unix_ms();
-            record_local_request_candidate_status(
-                state,
-                &plan,
-                report_context.as_ref(),
-                SchedulerRequestCandidateStatusUpdate {
-                    status: RequestCandidateStatus::Failed,
-                    status_code: None,
-                    error_type: Some("grok_execution_unavailable".to_string()),
-                    error_message: Some(transport_error_message.clone()),
-                    latency_ms: Some(stream_elapsed_ms_since(stream_started_at)),
-                    started_at_unix_ms: Some(candidate_started_unix_secs),
-                    finished_at_unix_ms: Some(terminal_unix_secs),
-                },
-            )
-            .await;
-            if let Some(response) = maybe_build_stream_transport_error_stop_response(
-                state,
-                &plan,
-                report_context.as_ref(),
-                trace_id,
-                decision,
-                "grok_execution_unavailable",
-                transport_error_message.as_str(),
-                stream_elapsed_ms_since(stream_started_at),
-            )
-            .await?
-            {
-                return Ok(Some(response));
-            }
-            return Ok(None);
-        }
-    }
+
     match maybe_execute_windsurf_stream(state, &plan, report_context.as_ref()).await {
         Ok(Some(windsurf_stream)) => {
             return execute_stream_from_frame_stream_with_retry_scope(

@@ -430,19 +430,6 @@ export interface WindsurfUpstreamMetadata {
   last_error?: string | null
 }
 
-export interface GrokUpstreamMetadata {
-  updated_at?: number  // Unix 时间戳（秒）
-  plan_type?: string | null
-  pool_tier?: string | null
-  is_banned?: boolean | null
-  ban_reason?: string | null
-  last_rate_limit_probe_at?: number | null
-  clearance_state?: string | null
-  email?: string | null
-  account_id?: string | null
-  account_user_id?: string | null
-}
-
 export interface XaiUpstreamMetadata {
   updated_at?: number
   subscription_title?: string
@@ -529,7 +516,6 @@ export interface UpstreamMetadata {
   antigravity?: AntigravityUpstreamMetadata
   kiro?: KiroUpstreamMetadata
   windsurf?: WindsurfUpstreamMetadata
-  grok?: GrokUpstreamMetadata
   gemini_cli?: GeminiCliUpstreamMetadata
   xai?: XaiUpstreamMetadata
 }
@@ -770,7 +756,7 @@ export interface HealthRelatedMonitorResponse {
   related_providers: HealthRelatedMonitor[]
 }
 
-export type ProviderType = 'custom' | 'claude_code' | 'codex' | 'gemini_cli' | 'antigravity' | 'kiro' | 'grok' | 'xai' | 'windsurf' | 'vertex_ai'
+export type ProviderType = 'custom' | 'claude_code' | 'codex' | 'gemini_cli' | 'antigravity' | 'kiro' | 'xai' | 'windsurf' | 'vertex_ai'
 
 export interface ClaudeCodeAdvancedConfig {
   // 会话数量控制：null/undefined 表示不限制

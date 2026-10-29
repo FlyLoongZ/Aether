@@ -292,7 +292,6 @@ export async function importProviderRefreshToken(
     authToken?: string
     refresh_token?: string
     access_token?: string
-    session_token?: string
     create_agent_identity?: boolean
     password?: string
     expires_at?: number
@@ -302,12 +301,7 @@ export async function importProviderRefreshToken(
     account_id?: string
     account_user_id?: string
     plan_type?: string
-    pool_tier?: string
-    sso_rw_token?: string
-    cf_cookies?: string
-    cf_clearance?: string
     user_agent?: string
-    browser_profile?: string
     user_id?: string
     account_name?: string
     headers?: Record<string, string>

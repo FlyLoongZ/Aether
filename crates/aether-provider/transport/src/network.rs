@@ -5,7 +5,6 @@ use aether_contracts::{
 use serde_json::{Map, Value};
 
 use crate::claude_code::current_claude_code_transport_identity_profile;
-use crate::grok::grok_browser_resolved_transport_profile_from_auth_config;
 
 use super::snapshot::GatewayProviderTransportSnapshot;
 
@@ -88,7 +87,6 @@ pub fn resolve_transport_profile(
     }
 
     resolve_claude_code_transport_profile(transport)
-        .or_else(|| resolve_grok_browser_transport_profile(transport))
 }
 
 fn resolve_claude_code_transport_profile(
@@ -112,35 +110,6 @@ fn resolve_claude_code_transport_profile(
         header_fingerprint: None,
         extra: None,
     })
-}
-
-fn resolve_grok_browser_transport_profile(
-    transport: &GatewayProviderTransportSnapshot,
-) -> Option<ResolvedTransportProfile> {
-    if !transport
-        .provider
-        .provider_type
-        .trim()
-        .eq_ignore_ascii_case("grok")
-    {
-        return None;
-    }
-    let auth_config = transport
-        .key
-        .decrypted_auth_config
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .and_then(|value| serde_json::from_str::<Value>(value).ok())?;
-    let object = auth_config.as_object()?;
-    let has_session = json_string_field(object, "sso_token")
-        .or_else(|| json_string_field(object, "access_token"))
-        .or_else(|| json_string_field(object, "token"))
-        .is_some();
-    if !has_session {
-        return None;
-    }
-    grok_browser_resolved_transport_profile_from_auth_config(object, "grok_auth_config")
 }
 
 fn resolve_transport_profile_from_provider_config(
@@ -329,7 +298,7 @@ fn proxy_url_with_auth(
 #[cfg(test)]
 mod tests {
 
-    use serde_json::{json, Value};
+    use serde_json::json;
 
     use super::super::snapshot::{
         GatewayProviderTransportEndpoint, GatewayProviderTransportKey,
@@ -633,219 +602,5 @@ mod tests {
 
         assert!(resolve_transport_profile(&transport).is_none());
         assert!(!transport_profile_is_configured(&transport));
-    }
-
-    #[test]
-    fn resolves_grok_browser_transport_profile_from_session_auth_config() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.fingerprint = None;
-        transport.provider.config = None;
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token",
-                "browser_profile": "chrome136",
-                "cf_clearance": "clearance"
-            })
-            .to_string(),
-        );
-
-        let profile = resolve_transport_profile(&transport).expect("profile");
-
-        assert_eq!(profile.profile_id, "chrome136");
-        assert_eq!(profile.backend, "browser_wreq");
-        assert_eq!(profile.http_mode, "auto");
-        assert_eq!(profile.pool_scope, "key");
-        assert_eq!(
-            profile
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("browser_profile"))
-                .and_then(Value::as_str),
-            Some("chrome136")
-        );
-    }
-
-    #[test]
-    fn resolves_grok_browser_transport_profile_default_from_session_auth_config() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.fingerprint = None;
-        transport.provider.config = None;
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token"
-            })
-            .to_string(),
-        );
-
-        let profile = resolve_transport_profile(&transport).expect("profile");
-
-        assert_eq!(profile.profile_id, "chrome136");
-        assert_eq!(profile.backend, "browser_wreq");
-        assert_eq!(
-            profile
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("source"))
-                .and_then(Value::as_str),
-            Some("grok_auth_config")
-        );
-    }
-
-    #[test]
-    fn resolves_grok_browser_transport_profile_normalizes_auth_config_alias() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.fingerprint = None;
-        transport.provider.config = None;
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token",
-                "browser_profile": "Chrome-137"
-            })
-            .to_string(),
-        );
-
-        let profile = resolve_transport_profile(&transport).expect("profile");
-
-        assert_eq!(profile.profile_id, "chrome137");
-        assert_eq!(
-            profile
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("browser_profile"))
-                .and_then(Value::as_str),
-            Some("chrome137")
-        );
-    }
-
-    #[test]
-    fn resolves_grok_browser_transport_profile_from_legacy_user_agent() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.fingerprint = None;
-        transport.provider.config = None;
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token",
-                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"
-            })
-            .to_string(),
-        );
-
-        let profile = resolve_transport_profile(&transport).expect("profile");
-
-        assert_eq!(profile.profile_id, "chrome137");
-        assert_eq!(
-            profile
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("browser_profile"))
-                .and_then(Value::as_str),
-            Some("chrome137")
-        );
-    }
-
-    #[test]
-    fn key_fingerprint_wins_over_grok_auth_config_fallback() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.provider.config = None;
-        transport.key.fingerprint = Some(json!({
-            "transport_profile": {
-                "profile_id": "chrome136",
-                "backend": "browser_wreq",
-                "extra": {"browser_profile": "chrome136", "source": "key"}
-            }
-        }));
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token",
-                "browser_profile": "chrome137"
-            })
-            .to_string(),
-        );
-
-        let profile = resolve_transport_profile(&transport).expect("profile");
-
-        assert_eq!(profile.profile_id, "chrome136");
-        assert_eq!(
-            profile
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("source"))
-                .and_then(Value::as_str),
-            Some("key")
-        );
-    }
-
-    #[test]
-    fn provider_fingerprint_wins_over_grok_auth_config_fallback() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.fingerprint = None;
-        transport.provider.config = Some(json!({
-            "fingerprint": {
-                "transport_profile": {
-                    "profile_id": "chrome136",
-                    "backend": "browser_wreq",
-                    "extra": {"browser_profile": "chrome136", "source": "provider"}
-                }
-            }
-        }));
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token",
-                "browser_profile": "chrome137"
-            })
-            .to_string(),
-        );
-
-        let profile = resolve_transport_profile(&transport).expect("profile");
-
-        assert_eq!(profile.profile_id, "chrome136");
-        assert_eq!(
-            profile
-                .extra
-                .as_ref()
-                .and_then(|value| value.get("source"))
-                .and_then(Value::as_str),
-            Some("provider")
-        );
-    }
-
-    #[test]
-    fn rejects_unsupported_grok_auth_config_browser_profile() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.fingerprint = None;
-        transport.provider.config = None;
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token",
-                "browser_profile": "safari999"
-            })
-            .to_string(),
-        );
-
-        assert!(resolve_transport_profile(&transport).is_none());
-    }
-
-    #[test]
-    fn rejects_unsupported_grok_auth_config_user_agent_profile() {
-        let mut transport = sample_transport();
-        transport.provider.provider_type = "grok".to_string();
-        transport.key.fingerprint = None;
-        transport.provider.config = None;
-        transport.key.decrypted_auth_config = Some(
-            json!({
-                "sso_token": "sso-token",
-                "user_agent": "Mozilla/5.0 Version/18.0 Safari/605.1.15"
-            })
-            .to_string(),
-        );
-
-        assert!(resolve_transport_profile(&transport).is_none());
     }
 }

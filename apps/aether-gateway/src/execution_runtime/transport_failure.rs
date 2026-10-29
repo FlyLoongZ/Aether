@@ -287,7 +287,6 @@ mod tests {
             "execution_runtime_stream_read_error",
             "tls_error",
             "proxy_error",
-            "grok_execution_unavailable",
             "execution_runtime_unavailable",
         ] {
             let projection = project_transport_failure(error_type);
@@ -312,7 +311,7 @@ mod tests {
         // Known-bad but unclassified failures fall back to the generic text
         // rather than leaking the internal transport message.
         assert_eq!(
-            project_transport_failure("grok_execution_unavailable").message,
+            project_transport_failure("unclassified_transport_failure").message,
             "Upstream transport failed before an HTTP response was received"
         );
     }

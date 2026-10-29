@@ -201,26 +201,6 @@ export function getGeminiCliAccountCreditsText(
   return unlimited ? 'AI Credits 不限量' : null
 }
 
-const GROK_QUOTA_MODE_LABELS: Record<string, string> = {
-  quota_auto: 'Auto',
-  auto: 'Auto',
-  quota_fast: 'Fast',
-  fast: 'Fast',
-  quota_expert: 'Expert',
-  expert: 'Expert',
-  quota_heavy: 'Heavy',
-  heavy: 'Heavy',
-  quota_grok_4_3: 'Grok 4.3',
-  'grok-420-computer-use-sa': 'Grok 4.3',
-}
-
-function getGrokQuotaWindowLabel(window: QuotaWindowSnapshot): string {
-  const rawCode = normalizeText(window.code)?.replace(/^model:/i, '') || ''
-  const rawLabel = normalizeText(window.label) || normalizeText(window.model) || rawCode
-  const normalized = (rawLabel || rawCode).trim().toLowerCase()
-  return GROK_QUOTA_MODE_LABELS[normalized] || GROK_QUOTA_MODE_LABELS[rawCode.toLowerCase()] || rawLabel || rawCode || '模式'
-}
-
 function getCodexQuotaText(quota: QuotaStatusSnapshot): string | null {
   const parts: string[] = []
   for (const window of getQuotaWindows(quota)) {
@@ -285,47 +265,6 @@ function getXaiQuotaText(quota: QuotaStatusSnapshot): string | null {
   }
 
   if (parts.length > 0) return parts.join(' | ')
-  return normalizeText(quota.label)
-}
-
-function getGrokQuotaText(quota: QuotaStatusSnapshot): string | null {
-  const code = normalizeText(quota.code)?.toLowerCase()
-  if (code === 'banned') {
-    return normalizeText(quota.label) || '账号已封禁'
-  }
-  if (code === 'forbidden') {
-    return normalizeText(quota.label) || '访问受限'
-  }
-
-  const modelWindows = getQuotaWindowsByScope(quota, 'model')
-  const modelParts = modelWindows
-    .map((window) => {
-      const remainingPercent = getQuotaWindowRemainingPercent(window)
-      if (remainingPercent == null) return null
-      const valueText = getQuotaWindowValueText(window)
-      return `${getGrokQuotaWindowLabel(window)}剩余 ${formatPercent(remainingPercent)}${valueText ? ` (${valueText})` : ''}`
-    })
-    .filter((value): value is string => value != null)
-
-  if (modelParts.length > 0) return modelParts.join(' | ')
-
-  const window = getQuotaWindow(quota, 'usage') ?? getQuotaWindowsByScope(quota, 'account')[0] ?? null
-  const remainingPercent = getQuotaWindowRemainingPercent(window)
-  if (typeof window?.remaining_value === 'number' && typeof window.limit_value === 'number' && window.limit_value > 0 && window.remaining_value <= 0) {
-    return `剩余 ${formatQuotaValue(window.remaining_value)}/${formatQuotaValue(window.limit_value)}`
-  }
-  if (remainingPercent != null) {
-    const valueText = getQuotaWindowValueText(window)
-    if (valueText) {
-      return `剩余 ${formatPercent(remainingPercent)} (${valueText})`
-    }
-    return `剩余 ${formatPercent(remainingPercent)}`
-  }
-
-  if (typeof window?.remaining_value === 'number' && typeof window.limit_value === 'number' && window.limit_value > 0) {
-    return `剩余 ${formatQuotaValue(window.remaining_value)}/${formatQuotaValue(window.limit_value)}`
-  }
-
   return normalizeText(quota.label)
 }
 
@@ -458,8 +397,6 @@ export function getQuotaSnapshotFallbackText(
       return getKiroQuotaText(quota)
     case 'xai':
       return getXaiQuotaText(quota)
-    case 'grok':
-      return getGrokQuotaText(quota)
     case 'windsurf':
       return getWindsurfQuotaText(quota)
     case 'antigravity':

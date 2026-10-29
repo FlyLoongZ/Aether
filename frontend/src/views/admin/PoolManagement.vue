@@ -1702,7 +1702,6 @@ const showAccountQuotaColumn = computed(() => {
     || selectedProviderType.value === 'kiro'
     || selectedProviderType.value === 'windsurf'
     || selectedProviderType.value === 'antigravity'
-    || selectedProviderType.value === 'grok'
     || selectedProviderType.value === 'xai'
 })
 
@@ -2158,7 +2157,6 @@ const quotaRefreshSupported = computed(() => {
     || selectedProviderType.value === 'gemini_cli'
     || selectedProviderType.value === 'windsurf'
     || selectedProviderType.value === 'antigravity'
-    || selectedProviderType.value === 'grok'
     || selectedProviderType.value === 'xai'
 })
 
@@ -3530,7 +3528,7 @@ function getQuotaProgressLabel(label: string): string {
 }
 
 function getQuotaProgressCountdown(item: QuotaProgressItem) {
-  const staticResetLabels = ['日', '5H', '周', '月', '周额度', '月额度', '额度', 'Spark5H', 'Spark周', 'Spark月', 'Auto', 'Fast', 'Expert', 'Heavy', 'Grok 4.3']
+  const staticResetLabels = ['日', '5H', '周', '月', '周额度', '月额度', '额度', 'Spark5H', 'Spark周', 'Spark月']
   if (!item.allowDynamicReset && !staticResetLabels.includes(item.label)) return null
   if (item.resetAtSeconds == null && item.resetSeconds == null) return null
   return getCodexResetCountdown(
@@ -3589,11 +3587,6 @@ function getAccountQuotaText(key: PoolKeyDetail): string | null {
 
 
 function getQuotaLabelOrder(label: string): number {
-  if (label === 'Auto') return 0
-  if (label === 'Fast') return 1
-  if (label === 'Expert') return 2
-  if (label === 'Heavy') return 3
-  if (label === 'Grok 4.3') return 4
   if (label === '日') return 5
   if (label === '5H') return 6
   if (label === '周') return 7
@@ -3742,26 +3735,6 @@ function resolvePoolKeyPlanType(key: PoolKeyDetail): string | null {
   return quotaPoolTier || null
 }
 
-const GROK_QUOTA_MODE_LABELS: Record<string, string> = {
-  quota_auto: 'Auto',
-  auto: 'Auto',
-  quota_fast: 'Fast',
-  fast: 'Fast',
-  quota_expert: 'Expert',
-  expert: 'Expert',
-  quota_heavy: 'Heavy',
-  heavy: 'Heavy',
-  quota_grok_4_3: 'Grok 4.3',
-  'grok-420-computer-use-sa': 'Grok 4.3',
-}
-
-function getGrokQuotaWindowLabel(window: QuotaWindowSnapshot): string {
-  const code = String(window.code || '').trim().replace(/^model:/i, '')
-  const label = String(window.label || window.model || code).trim()
-  const normalized = (label || code).toLowerCase()
-  return GROK_QUOTA_MODE_LABELS[normalized] || GROK_QUOTA_MODE_LABELS[code.toLowerCase()] || label || code || '模式'
-}
-
 function getGeminiCliQuotaWindowLabel(window: QuotaWindowSnapshot): string {
   const code = String(window.code || '').trim().replace(/^model:/i, '')
   const label = String(window.label || window.model || code).trim()
@@ -3816,43 +3789,6 @@ function buildQuotaProgressItemsFromSnapshot(key: PoolKeyDetail): QuotaProgressI
       resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? quotaResetSeconds ?? null),
       updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
       allowDynamicReset: true,
-    }]
-  }
-
-  if (providerType === 'grok') {
-    const quotaResetAtSeconds = getQuotaSnapshotResetAtSeconds(quota)
-    const quotaResetSeconds = getQuotaSnapshotResetSeconds(quota)
-    const modelWindows = getQuotaSnapshotWindowsByScope(quota, 'model')
-    if (modelWindows.length > 0) {
-      return modelWindows
-        .map((window): QuotaProgressItem | null => {
-          const remainingPercent = getQuotaWindowRemainingPercent(window)
-          if (remainingPercent == null) return null
-          return {
-            label: getGrokQuotaWindowLabel(window),
-            remainingPercent,
-            detail: getQuotaWindowValueText(window),
-            resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? quotaResetAtSeconds ?? null),
-            resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? quotaResetSeconds ?? null),
-            updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-          }
-        })
-        .filter((item): item is QuotaProgressItem => item != null)
-    }
-
-    const window = getQuotaSnapshotWindow(quota, 'usage')
-      ?? getQuotaSnapshotWindowsByScope(quota, 'account')[0]
-      ?? null
-    const remainingPercent = getQuotaWindowRemainingPercent(window)
-    if (remainingPercent == null) return []
-
-    return [{
-      label: '剩余',
-      remainingPercent,
-      detail: getQuotaWindowValueText(window),
-      resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? quotaResetAtSeconds ?? null),
-      resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? quotaResetSeconds ?? null),
-      updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
     }]
   }
 

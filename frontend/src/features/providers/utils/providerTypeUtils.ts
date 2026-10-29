@@ -10,7 +10,6 @@ const oauthAccountProviderTypes = new Set([
   'gemini_cli',
   'antigravity',
   'kiro',
-  'grok',
   'xai',
   'windsurf',
 ])

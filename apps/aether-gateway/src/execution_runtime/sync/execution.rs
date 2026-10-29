@@ -41,7 +41,6 @@ use crate::api::response::{
 };
 use crate::clock::current_unix_ms as current_request_candidate_unix_ms;
 use crate::control::GatewayControlDecision;
-use crate::execution_runtime::grok::maybe_execute_grok_sync;
 use crate::execution_runtime::kiro_cache::{
     build_kiro_prompt_cache_profile, compute_kiro_prompt_cache_usage,
     estimate_kiro_prompt_input_tokens, kiro_simulated_cache_enabled_from_provider_config,
@@ -2163,10 +2162,7 @@ async fn execute_execution_runtime_sync_impl(
     );
     #[cfg(not(test))]
     let mut result = {
-        match maybe_execute_grok_sync(&plan, report_context.as_ref()).await {
-            Ok(Some(result)) => result,
-            Ok(None) => {
-                match execute_direct_sync_runtime_candidate(
+        match execute_direct_sync_runtime_candidate(
                         state,
                         &plan,
                         report_context.as_ref(),
@@ -2247,56 +2243,6 @@ async fn execute_execution_runtime_sync_impl(
                             return Ok(None);
                         }
                     }
-            }
-            Err(err) => {
-                let transport_error_message = safe_transport_error_message(&err);
-                warn!(
-                    event_name = "grok_execution_unavailable",
-                    log_type = "ops",
-                    trace_id = %trace_id,
-                    request_id = %plan_request_id_for_log,
-                    candidate_id = ?plan_candidate_id,
-                    provider_name,
-                    endpoint_id,
-                    key_id,
-                    model_name,
-                    candidate_index = candidate_index.as_str(),
-                    error = %transport_error_message,
-                    "gateway Grok execution unavailable"
-                );
-                let terminal_unix_secs = current_request_candidate_unix_ms();
-                record_local_request_candidate_status(
-                    state,
-                    &plan,
-                    report_context.as_ref(),
-                    SchedulerRequestCandidateStatusUpdate {
-                        status: RequestCandidateStatus::Failed,
-                        status_code: None,
-                        error_type: Some("grok_execution_unavailable".to_string()),
-                        error_message: Some(transport_error_message.clone()),
-                        latency_ms: Some(elapsed_ms_since(candidate_started_at)),
-                        started_at_unix_ms: Some(candidate_started_unix_secs),
-                        finished_at_unix_ms: Some(terminal_unix_secs),
-                    },
-                )
-                .await;
-                if let Some(response) = maybe_build_sync_transport_error_stop_response(
-                    state,
-                    &plan,
-                    report_context.as_ref(),
-                    trace_id,
-                    decision,
-                    "grok_execution_unavailable",
-                    transport_error_message.as_str(),
-                    elapsed_ms_since(candidate_started_at),
-                )
-                .await?
-                {
-                    return Ok(Some(response));
-                }
-                return Ok(None);
-            }
-        }
     };
     #[cfg(test)]
     let mut result = {
@@ -2358,9 +2304,7 @@ async fn execute_execution_runtime_sync_impl(
             .trim()
             .is_empty()
         {
-            match maybe_execute_grok_sync(&plan, report_context.as_ref()).await {
-                Ok(Some(result)) => result,
-                Ok(None) => match execute_direct_sync_runtime_candidate(
+            match execute_direct_sync_runtime_candidate(
                         state,
                         &plan,
                         report_context.as_ref(),
@@ -2440,56 +2384,7 @@ async fn execute_execution_runtime_sync_impl(
                             }
                             return Ok(None);
                         }
-                    },
-                Err(err) => {
-                    let transport_error_message = safe_transport_error_message(&err);
-                    warn!(
-                        event_name = "grok_execution_unavailable",
-                        log_type = "ops",
-                        trace_id = %trace_id,
-                        request_id = %plan_request_id_for_log,
-                        candidate_id = ?plan_candidate_id,
-                        provider_name,
-                        endpoint_id,
-                        key_id,
-                        model_name,
-                        candidate_index = candidate_index.as_str(),
-                        error = %transport_error_message,
-                        "gateway Grok execution unavailable"
-                    );
-                    let terminal_unix_secs = current_request_candidate_unix_ms();
-                    record_local_request_candidate_status(
-                        state,
-                        &plan,
-                        report_context.as_ref(),
-                        SchedulerRequestCandidateStatusUpdate {
-                            status: RequestCandidateStatus::Failed,
-                            status_code: None,
-                            error_type: Some("grok_execution_unavailable".to_string()),
-                            error_message: Some(transport_error_message.clone()),
-                            latency_ms: Some(elapsed_ms_since(candidate_started_at)),
-                            started_at_unix_ms: Some(candidate_started_unix_secs),
-                            finished_at_unix_ms: Some(terminal_unix_secs),
-                        },
-                    )
-                    .await;
-                    if let Some(response) = maybe_build_sync_transport_error_stop_response(
-                        state,
-                        &plan,
-                        report_context.as_ref(),
-                        trace_id,
-                        decision,
-                        "grok_execution_unavailable",
-                        transport_error_message.as_str(),
-                        elapsed_ms_since(candidate_started_at),
-                    )
-                    .await?
-                    {
-                        return Ok(Some(response));
                     }
-                    return Ok(None);
-                }
-            }
         } else {
             let remote_execution_runtime_base_url = state
                 .execution_runtime_override_base_url()

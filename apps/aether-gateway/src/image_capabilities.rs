@@ -2,16 +2,13 @@ use crate::ai_serving::OpenAiImageNormalizeOptions;
 
 const DEFAULT_IMAGE_MAX_GENERATION_COUNT: u64 = 1;
 const OPENAI_IMAGE_MAX_GENERATION_COUNT: u64 = 10;
-const GROK_OPENAI_IMAGE_MAX_GENERATION_COUNT: u64 = 4;
 
 pub(crate) fn openai_image_gateway_max_generation_count() -> u64 {
     OPENAI_IMAGE_MAX_GENERATION_COUNT
 }
 
 pub(crate) fn openai_image_provider_max_generation_count(provider_type: &str) -> u64 {
-    if provider_type.trim().eq_ignore_ascii_case("grok") {
-        GROK_OPENAI_IMAGE_MAX_GENERATION_COUNT
-    } else if matches!(
+    if matches!(
         provider_type.trim().to_ascii_lowercase().as_str(),
         "openai" | "codex" | "xai"
     ) {
@@ -55,7 +52,6 @@ mod tests {
     #[test]
     fn image_count_capabilities_follow_provider_and_model_contracts() {
         assert_eq!(openai_image_gateway_max_generation_count(), 10);
-        assert_eq!(openai_image_provider_max_generation_count("grok"), 4);
         assert_eq!(openai_image_provider_max_generation_count("openai"), 10);
         assert_eq!(openai_image_provider_max_generation_count("codex"), 10);
         assert_eq!(openai_image_provider_max_generation_count("xai"), 10);

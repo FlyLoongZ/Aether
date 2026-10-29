@@ -113,8 +113,6 @@ define_candidate_diagnostic_categories!(
         "first_byte_timeout",
         "gateway_admission_failed",
         "gateway_admission_timeout",
-        "grok_execution_unavailable",
-        "grok_upstream_error",
         "image_sync_total_timeout",
         "internal",
         "invalid_provider_success_response",
@@ -151,7 +149,6 @@ define_candidate_diagnostic_categories!(
         "upstream_response_too_large",
         "upstream_url_missing",
         "websocket_cancelled",
-        "windsurf_native_execution_unavailable",
     ]
 );
 

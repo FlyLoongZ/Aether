@@ -4,9 +4,9 @@ pub(crate) fn normalize_provider_type_input(value: &str) -> Result<String, Strin
     let normalized = value.trim().to_ascii_lowercase();
     match normalized.as_str() {
         "custom" | "claude_code" | "kiro" | "codex" | "gemini_cli"
-        | "antigravity" | "vertex_ai" | "grok" | "windsurf" | "xai" => Ok(normalized),
+        | "antigravity" | "vertex_ai" | "windsurf" | "xai" => Ok(normalized),
         _ => Err(
-            "provider_type 仅支持 custom / claude_code / kiro / codex / gemini_cli / antigravity / vertex_ai / grok / windsurf / xai"
+            "provider_type 仅支持 custom / claude_code / kiro / codex / gemini_cli / antigravity / vertex_ai / windsurf / xai"
                 .to_string(),
         ),
     }

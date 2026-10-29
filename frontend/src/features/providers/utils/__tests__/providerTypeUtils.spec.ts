@@ -4,18 +4,6 @@ import { normalizeBatchImportCredentials } from '@/api/endpoints/provider_oauth'
 import { isKeyManagedProviderType, isOAuthAccountProviderType } from '../providerTypeUtils'
 
 describe('providerTypeUtils', () => {
-  it('treats ChatGPT-Web as an OAuth account provider', () => {
-    expect(isOAuthAccountProviderType('chatgpt_web')).toBe(true)
-    expect(isOAuthAccountProviderType('ChatGPT_Web')).toBe(true)
-    expect(isKeyManagedProviderType('chatgpt_web')).toBe(false)
-  })
-
-  it('treats Grok as an OAuth account provider', () => {
-    expect(isOAuthAccountProviderType('grok')).toBe(true)
-    expect(isOAuthAccountProviderType('GROK')).toBe(true)
-    expect(isKeyManagedProviderType('grok')).toBe(false)
-  })
-
   it('treats xAI as an OAuth account provider', () => {
     expect(isOAuthAccountProviderType('xai')).toBe(true)
     expect(isOAuthAccountProviderType('xAI')).toBe(true)

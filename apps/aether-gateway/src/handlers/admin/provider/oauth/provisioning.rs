@@ -23,16 +23,14 @@ use aether_data_contracts::repository::pool_scores::{
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
-use aether_provider_transport::{
-    grok_browser_transport_fingerprint_from_auth_config, provider_types::provider_type_is_fixed,
-};
+use aether_provider_transport::provider_types::provider_type_is_fixed;
 use axum::{
     body::Body,
     http,
     response::{IntoResponse, Response},
     Json,
 };
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -277,16 +275,6 @@ pub(crate) async fn provision_provider_oauth_token_payload_for_provider(
     .into_response())
 }
 
-fn grok_oauth_catalog_key_fingerprint(
-    provider_type: &str,
-    auth_config: &Map<String, Value>,
-) -> Option<Value> {
-    if !provider_type.trim().eq_ignore_ascii_case("grok") {
-        return None;
-    }
-    grok_browser_transport_fingerprint_from_auth_config(auth_config)
-}
-
 pub(crate) fn rotate_codex_credential_generation(
     key: &mut StoredProviderCatalogKey,
     provider_type: &str,
@@ -393,7 +381,7 @@ pub(crate) async fn create_provider_oauth_catalog_key(
         None,
         expires_at_unix_secs,
         proxy,
-        grok_oauth_catalog_key_fingerprint(provider_type, auth_config),
+        None,
     )
     .map_err(|err| GatewayError::Internal(err.to_string()))?;
     record.internal_priority = 50;
@@ -458,9 +446,6 @@ pub(crate) async fn update_existing_provider_oauth_catalog_key(
     updated.expires_at_unix_secs = expires_at_unix_secs;
     updated.oauth_invalid_at_unix_secs = None;
     updated.oauth_invalid_reason = None;
-    if updated.fingerprint.is_none() {
-        updated.fingerprint = grok_oauth_catalog_key_fingerprint(provider_type, auth_config);
-    }
     if let Some(proxy) = proxy {
         updated.proxy = Some(proxy);
     }
@@ -581,7 +566,7 @@ fn provider_oauth_catalog_key_api_formats(
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_codex_credential_generation_rotated, grok_oauth_catalog_key_fingerprint,
+        ensure_codex_credential_generation_rotated,
         provider_oauth_token_payload_expires_at_unix_secs, rotate_codex_credential_generation,
     };
     use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
@@ -633,62 +618,6 @@ mod tests {
             provider_oauth_token_payload_expires_at_unix_secs(&payload, 1_000),
             Some(2_000_000_000)
         );
-    }
-
-    #[test]
-    fn grok_oauth_catalog_key_fingerprint_uses_browser_wreq_profile() {
-        let auth_config = json!({
-            "sso_token": "abc",
-            "browser_profile": "chrome-137",
-        });
-        let auth_config = auth_config.as_object().expect("object");
-
-        let fingerprint = grok_oauth_catalog_key_fingerprint("grok", auth_config)
-            .expect("fingerprint should resolve");
-
-        assert_eq!(
-            fingerprint["transport_profile"]["profile_id"],
-            json!("chrome137")
-        );
-        assert_eq!(
-            fingerprint["transport_profile"]["backend"],
-            json!("browser_wreq")
-        );
-        assert_eq!(
-            fingerprint["transport_profile"]["extra"]["browser_profile"],
-            json!("chrome137")
-        );
-    }
-
-    #[test]
-    fn grok_oauth_catalog_key_fingerprint_infers_profile_from_user_agent() {
-        let auth_config = json!({
-            "sso_token": "abc",
-            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-        });
-        let auth_config = auth_config.as_object().expect("object");
-
-        let fingerprint = grok_oauth_catalog_key_fingerprint("grok", auth_config)
-            .expect("fingerprint should resolve");
-
-        assert_eq!(
-            fingerprint["transport_profile"]["profile_id"],
-            json!("chrome137")
-        );
-        assert_eq!(
-            fingerprint["transport_profile"]["extra"]["browser_profile"],
-            json!("chrome137")
-        );
-    }
-
-    #[test]
-    fn grok_oauth_catalog_key_fingerprint_ignores_non_grok_providers() {
-        let auth_config = json!({
-            "browser_profile": "chrome136",
-        });
-        let auth_config = auth_config.as_object().expect("object");
-
-        assert!(grok_oauth_catalog_key_fingerprint("openai", auth_config).is_none());
     }
 
     #[test]

@@ -14,8 +14,6 @@ pub(crate) mod kiro {
     pub(crate) use aether_provider_transport::kiro::*;
 }
 
-pub(crate) mod grok {}
-
 pub(crate) mod gemini_cli {
     pub(crate) use aether_provider_transport::gemini_cli::*;
 }
@@ -59,7 +57,6 @@ pub(crate) use aether_provider_transport::{
     apply_transport_request_body_semantics, build_cross_format_openai_chat_upstream_url,
     build_cross_format_openai_responses_upstream_url, build_gemini_cli_v1internal_request,
     build_gemini_files_headers, build_gemini_files_request_body, build_gemini_files_upstream_url,
-    build_grok_app_chat_body, build_grok_browser_headers, build_grok_upstream_url,
     build_kiro_cross_format_upstream_url, build_local_openai_chat_upstream_url,
     build_local_openai_responses_upstream_url, build_openai_image_headers,
     build_openai_image_upstream_url, build_request_trace_proxy_value,
@@ -81,7 +78,7 @@ pub(crate) use aether_provider_transport::{
     openai_image_transport_unsupported_reason, request_conversion_direct_auth,
     request_conversion_transport_unsupported_reason, request_pair_allowed_for_transport,
     request_pair_direct_auth, request_pair_transport_unsupported_reason,
-    resolve_anthropic_compatibility_profile, resolve_gemini_files_auth, resolve_grok_session_auth,
+    resolve_anthropic_compatibility_profile, resolve_gemini_files_auth,
     resolve_local_gemini_cli_request_auth, resolve_openai_image_auth,
     resolve_same_format_provider_direct_auth, resolve_transport_execution_timeouts,
     resolve_transport_profile, resolve_video_create_auth, same_format_provider_transport_supported,
@@ -89,7 +86,7 @@ pub(crate) use aether_provider_transport::{
     transport_supports_api_operation, video_create_transport_unsupported_reason,
     CandidateTransportPolicyFacts, GatewayProviderTransportSnapshot, GeminiCliRequestAuth,
     GeminiCliRequestAuthSupport, GeminiCliRequestEnvelopeSupport, GeminiFilesHeadersInput,
-    GeminiFilesRequestBodyError, GrokHeaderInput, LocalResolvedOAuthRequestAuth,
+    GeminiFilesRequestBodyError, LocalResolvedOAuthRequestAuth,
     ProviderOpenAiImageHeadersInput, ProviderOutboundRequestContext, ProviderVideoCreateFamily,
     ProviderVideoCreateHeadersInput, SameFormatProviderCompatibilityEdit,
     SameFormatProviderCompatibilityEditAction, SameFormatProviderFamily,
@@ -99,6 +96,6 @@ pub(crate) use aether_provider_transport::{
     StandardPlanFallbackAcceptPolicy, StandardPlanFallbackHeadersInput,
     StandardProviderRequestHeaders, StandardProviderRequestHeadersInput,
     TransportRequestBodySemanticsError, TransportRequestUrlParams,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, GROK_CHAT_PATH, PROVIDER_OUTBOUND_CONTEXT_MAX_VALUE_BYTES,
+    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, PROVIDER_OUTBOUND_CONTEXT_MAX_VALUE_BYTES,
     WINDSURF_ENVELOPE_NAME,
 };

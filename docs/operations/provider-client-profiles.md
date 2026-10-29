@@ -14,7 +14,6 @@
 | Gemini CLI | 官方 `@google/gemini-cli` npm latest | 每日 | 现有 `(Windows; AMD64)` UA 模板与 Code Assist 请求协议 |
 | Antigravity、Windsurf | 经核验的固定模板 | 不自动更新 | IDE UA、请求体版本及现有平台模板 |
 | Kiro | 已有 OAuth SDK 模板及显式配置 | 不自动更新 | SDK、Node 和系统版本；保留旧模型查询兼容回退 |
-| Grok Web | 固定浏览器构建或已有可配置浏览器画像 | 不自动更新 | 浏览器 UA、Client Hints、TLS/HTTP 指纹及 Web 构建信息 |
 | 原生/其他提供商 | 原有协议和配置 | 无 CLI 版本刷新 | 不注入无依据的 CLI、SDK 或浏览器指纹 |
 
 Codex Desktop 不仅凭客户端名称切换 originator 或 SDK 字段；沿用已确认的
@@ -68,7 +67,7 @@ Codex Core 身份。代理客户端传入的版本不是官方发行版本来源
 - 不把用户 Bearer、Cookie、账号 ID、安装/窗口 ID 或 SDK 字段保存为发行画像。
 
 静态模板集中在 `crates/aether-provider/transport/src/client_identity.rs`；
-Kiro 复用 OAuth 的 SDK 模板，Grok Web 继续复用既有浏览器画像。
+Kiro 复用 OAuth 的 SDK 模板。
 静态版本只能按核验后的整套模板更新，不能直接套用 npm 的 CLI 版本。
 
 ## 回归验证

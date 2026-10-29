@@ -134,6 +134,13 @@ fn import_payload_string_any(
         .map(ToOwned::to_owned)
 }
 
+fn single_import_access_token_input(
+    payload: &serde_json::Map<String, serde_json::Value>,
+) -> Option<String> {
+    import_payload_string_any(payload, &["access_token", "accessToken"])
+        .or_else(|| provider_oauth_import_authorization_bearer_token_from_object(payload))
+}
+
 fn import_payload_bool(payload: &serde_json::Map<String, serde_json::Value>, key: &str) -> bool {
     payload
         .get(key)
@@ -513,7 +520,7 @@ fn apply_single_import_hints(
         }
         return;
     }
-    if !matches!(provider_type.as_str(), "codex" | "grok") {
+    if provider_type != "codex" {
         return;
     }
 
@@ -551,29 +558,13 @@ fn apply_single_import_hints(
             &["user_id", "userId", "chatgpt_user_id", "chatgptUserId"][..],
         ),
         ("account_name", &["account_name", "accountName"][..]),
-        ("sso_rw_token", &["sso_rw_token", "ssoRwToken"][..]),
-        (
-            "cf_cookies",
-            &["cf_cookies", "cfCookies", "cookie", "cookieHeader"][..],
-        ),
-        ("cf_clearance", &["cf_clearance", "cfClearance"][..]),
         ("user_agent", &["user_agent", "userAgent"][..]),
-        (
-            "browser_profile",
-            &[
-                "browser_profile",
-                "browserProfile",
-                "browser",
-                "impersonate",
-            ][..],
-        ),
-        ("pool_tier", &["pool_tier", "poolTier", "tier"][..]),
     ] {
         let Some(value) = import_payload_string_any(payload, keys) else {
             continue;
         };
         auth_config.entry(target.to_string()).or_insert_with(|| {
-            if target == "plan_type" || target == "pool_tier" {
+            if target == "plan_type" {
                 json!(value.to_ascii_lowercase())
             } else {
                 json!(value)
@@ -629,7 +620,7 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
             }
             return Err(build_internal_control_error_response(
                 http::StatusCode::BAD_REQUEST,
-                "该 Provider 不支持 Refresh Token 导入，请提供 sso_token 或 access_token",
+                "该 Provider 不支持 Refresh Token 导入，请提供 access_token",
             )
             .into());
         };
@@ -721,7 +712,7 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
     if !provider_type_supports_access_token_import(provider_type) {
         return Err(build_internal_control_error_response(
             http::StatusCode::BAD_REQUEST,
-            "Access Token 导入仅支持 Claude Code / Codex / ChatGPT Web / Grok / xAI Provider",
+            "Access Token 导入仅支持 Claude Code / Codex / xAI Provider",
         )
         .into());
     }
@@ -875,18 +866,7 @@ pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
         flatten_claude_code_credentials_payload(&mut raw_payload);
     }
     let refresh_token_input = import_payload_string(&raw_payload, "refresh_token", "refreshToken");
-    let mut access_token_input = import_payload_string_any(
-        &raw_payload,
-        &[
-            "access_token",
-            "accessToken",
-            "sso_token",
-            "ssoToken",
-            "session_token",
-            "sessionToken",
-        ],
-    )
-    .or_else(|| provider_oauth_import_authorization_bearer_token_from_object(&raw_payload));
+    let mut access_token_input = single_import_access_token_input(&raw_payload);
     if provider_type == "xai" && access_token_input.is_none() {
         access_token_input = import_payload_string(&raw_payload, "api_key", "apiKey");
     }
@@ -915,7 +895,7 @@ pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
             if provider_type == "xai" {
                 "Refresh Token、Access Token 或 api_key 不能为空"
             } else {
-                "Refresh Token、Access Token 或 sso_token 不能为空"
+                "Refresh Token 或 Access Token 不能为空"
             },
         ));
     }
@@ -1289,8 +1269,8 @@ mod tests {
     use super::{
         apply_single_import_hints, codex_access_token_identity_hints,
         codex_agent_identity_access_token_input, import_payload_requests_agent_identity,
-        import_payload_requests_legacy_agent_identity, import_payload_string_any,
-        import_payload_u64_any, sanitize_windsurf_import_error,
+        import_payload_requests_legacy_agent_identity, import_payload_u64_any,
+        sanitize_windsurf_import_error, single_import_access_token_input,
     };
     use crate::handlers::admin::provider::oauth::duplicates::codex_agent_identity_account_lock_keys;
     use aether_oauth::core::OAuthError;
@@ -1304,18 +1284,27 @@ mod tests {
     }
 
     #[test]
-    fn single_import_accepts_session_token_alias() {
-        let payload = json!({
-            "session_token": "session-1",
-        })
-        .as_object()
-        .cloned()
-        .expect("payload should be an object");
+    fn single_import_ignores_removed_web_token_aliases() {
+        for field in ["session_token", "sessionToken", "sso_token", "ssoToken"] {
+            let mut payload = serde_json::Map::new();
+            payload.insert(field.to_string(), json!("removed-web-token"));
+            assert_eq!(single_import_access_token_input(&payload), None, "{field}");
+        }
+    }
 
-        assert_eq!(
-            import_payload_string_any(&payload, &["access_token", "session_token"]).as_deref(),
-            Some("session-1")
-        );
+    #[test]
+    fn single_import_accepts_access_tokens_and_authorization_headers() {
+        for payload in [
+            json!({"access_token": "access-token"}),
+            json!({"accessToken": "access-token"}),
+            json!({"headers": {"Authorization": "Bearer access-token"}}),
+            json!({"access_token": "access-token", "session_token": "must-not-win"}),
+        ] {
+            assert_eq!(
+                single_import_access_token_input(payload.as_object().unwrap()).as_deref(),
+                Some("access-token")
+            );
+        }
     }
 
     #[test]

@@ -18,14 +18,6 @@ function normalizeText(value: unknown): string | null {
   return text || null
 }
 
-function resolveProviderType(input: ProviderKeyAuthCarrier, providerType?: string | null): string | null {
-  return normalizeText(providerType) ?? normalizeText(input.provider_type)
-}
-
-function isGrokSessionCredential(input: ProviderKeyAuthCarrier, providerType?: string | null): boolean {
-  return resolveProviderType(input, providerType) === 'grok' && isOAuthManagedCredential(input)
-}
-
 export function getProviderCredentialKind(
   input: ProviderKeyAuthCarrier,
 ): 'raw_secret' | 'oauth_session' | 'service_account' {
@@ -93,7 +85,6 @@ export function shouldShowOAuthRefreshControl(
   input: ProviderKeyAuthCarrier,
   providerType?: string | null,
 ): boolean {
-  if (isGrokSessionCredential(input, providerType)) return false
   return canRefreshOAuthCredential(input)
 }
 
@@ -124,7 +115,6 @@ export function getProviderMaskedSecretLabel(
   providerType?: string | null,
 ): string {
   if (input.agent_identity === true) return '[Agent Identity]'
-  if (isGrokSessionCredential(input, providerType)) return '[Session Cookie]'
   if (isOAuthManagedCredential(input) && input.oauth_header_auth === true) return '[OAuth Header]'
   if (isOAuthManagedCredential(input)) return '[OAuth Token]'
   if (isServiceAccountCredential(input)) return '[Service Account]'

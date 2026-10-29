@@ -52,11 +52,6 @@ pub(super) fn admin_provider_oauth_key_name_from_auth_config(
     if let Some(email) = trimmed_auth_config_string(auth_config, "email") {
         return email;
     }
-    if provider_type.trim().eq_ignore_ascii_case("grok") {
-        if let Some(user_id) = trimmed_auth_config_string(auth_config, "user_id") {
-            return user_id;
-        }
-    }
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -89,8 +84,6 @@ mod tests {
         "claude_code",
         "gemini_cli",
         "antigravity",
-        "grok",
-        " Grok ",
         "kiro",
         "windsurf",
     ];
@@ -183,45 +176,11 @@ mod tests {
     }
 
     #[test]
-    fn grok_default_key_name_uses_full_user_id() {
-        let mut auth_config = Map::new();
-        auth_config.insert(
-            "user_id".to_string(),
-            json!("1619039a-0191-4e0a-a490-8f4ad21262c9"),
-        );
-
-        for provider_type in ["grok", " Grok "] {
-            for batch_index in [None, Some(3)] {
-                assert_eq!(
-                    admin_provider_oauth_key_name_from_auth_config(
-                        provider_type,
-                        &auth_config,
-                        batch_index,
-                    ),
-                    "1619039a-0191-4e0a-a490-8f4ad21262c9"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn default_key_name_prefers_email_over_grok_user_id() {
-        let mut auth_config = Map::new();
-        auth_config.insert("email".to_string(), json!("grok@example.com"));
-        auth_config.insert("user_id".to_string(), json!("user-1"));
-
-        assert_eq!(
-            admin_provider_oauth_key_name_from_auth_config("grok", &auth_config, None),
-            "grok@example.com"
-        );
-    }
-
-    #[test]
     fn batch_default_key_name_keeps_distinct_indexes_without_provider_prefix() {
         let auth_config = Map::new();
-        let name = admin_provider_oauth_key_name_from_auth_config("grok", &auth_config, Some(3));
+        let name = admin_provider_oauth_key_name_from_auth_config("custom", &auth_config, Some(3));
         let other_name =
-            admin_provider_oauth_key_name_from_auth_config("grok", &auth_config, Some(4));
+            admin_provider_oauth_key_name_from_auth_config("custom", &auth_config, Some(4));
 
         assert!(name.starts_with("账号_"));
         assert!(name.ends_with("_3"));
