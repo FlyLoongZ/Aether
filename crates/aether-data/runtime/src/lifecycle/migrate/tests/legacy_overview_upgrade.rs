@@ -4,9 +4,9 @@ const ACCOUNT_ATTRIBUTION: i64 = 20260917000000;
 const DIRTY_EVENTS: i64 = 20260917000100;
 
 async fn rows_snapshot(pool: &PgPool, table: &str) -> String {
-    query_scalar(&format!(
+    query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text), '[]')::text FROM {table} t"
-    ))
+    )))
     .fetch_one(pool)
     .await
     .unwrap()
@@ -18,11 +18,17 @@ async fn legacy_overview_upgrade_preserves_applied_history_and_existing_statisti
         return;
     };
     let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR.iter().filter(|migration| {
         migration.version <= 20260920120000 && migration.version != DIRTY_EVENTS
     }) {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
     connection.close().await.unwrap();
     let pool = PgPool::connect(server.database_url()).await.unwrap();

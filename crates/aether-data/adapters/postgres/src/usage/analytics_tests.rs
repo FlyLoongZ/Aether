@@ -18,7 +18,7 @@ async fn live_overview_user_finance_uses_credited_period_and_full_roster() {
         .await
         .unwrap();
     let database = format!("overview_finance_{}", uuid::Uuid::new_v4().simple());
-    sqlx::query(&format!("CREATE DATABASE {database}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {database}")))
         .execute(&admin)
         .await
         .unwrap();
@@ -122,10 +122,12 @@ async fn live_overview_user_finance_uses_credited_period_and_full_roster() {
         assert!(mixed.users[0].finance.as_ref().unwrap().wallet_balance.is_none());
     }).catch_unwind().await;
     pool.close().await;
-    sqlx::query(&format!("DROP DATABASE {database} WITH (FORCE)"))
-        .execute(&admin)
-        .await
-        .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE {database} WITH (FORCE)"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
     admin.close().await;
     if let Err(error) = outcome {
         std::panic::resume_unwind(error);
@@ -147,7 +149,7 @@ async fn live_overview_dashboard_all_history_and_charts_share_canonical_metrics(
         .await
         .unwrap();
     let database = format!("overview_dashboard_{}", uuid::Uuid::new_v4().simple());
-    sqlx::query(&format!("CREATE DATABASE {database}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {database}")))
         .execute(&admin)
         .await
         .unwrap();
@@ -302,7 +304,7 @@ async fn live_overview_dashboard_all_history_and_charts_share_canonical_metrics(
         assert_eq!(lost.history_complete,Some(false));
     }).catch_unwind().await;
     pool.close().await;
-    sqlx::query(&format!("DROP DATABASE {database}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("DROP DATABASE {database}")))
         .execute(&admin)
         .await
         .unwrap();

@@ -81,7 +81,7 @@ impl PostgresTransactionRunner {
 
         let mut tx = self.pool.begin().await.map_postgres_err()?;
         for statement in build_transaction_setup_statements(options) {
-            sqlx::query(statement.as_str())
+            sqlx::query(sqlx::AssertSqlSafe(statement.as_str()))
                 .execute(&mut *tx)
                 .await
                 .map_postgres_err()?;

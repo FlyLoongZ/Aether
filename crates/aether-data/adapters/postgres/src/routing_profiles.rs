@@ -72,7 +72,7 @@ impl RoutingGroupReadRepository for PostgresRoutingGroupRepository {
         let sql = format!(
             "{ROUTING_GROUP_SELECT} ORDER BY enabled DESC, sort_order ASC, name ASC, id ASC"
         );
-        let mut rows = sqlx::query(&sql).fetch(&self.pool);
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str())).fetch(&self.pool);
         let mut groups = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
             groups.push(map_group_row(&row)?);
@@ -85,23 +85,23 @@ impl RoutingGroupReadRepository for PostgresRoutingGroupRepository {
         lookup: RoutingGroupLookupKey<'_>,
     ) -> Result<Option<StoredRoutingGroup>, DataLayerError> {
         let row = match lookup {
-            RoutingGroupLookupKey::Id(id) => sqlx::query(&format!(
+            RoutingGroupLookupKey::Id(id) => sqlx::query(sqlx::AssertSqlSafe(format!(
                 "{ROUTING_GROUP_SELECT} WHERE id = $1 LIMIT 1"
-            ))
+            )))
             .bind(id)
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?,
-            RoutingGroupLookupKey::Name(name) => sqlx::query(&format!(
+            RoutingGroupLookupKey::Name(name) => sqlx::query(sqlx::AssertSqlSafe(format!(
                 "{ROUTING_GROUP_SELECT} WHERE name = $1 LIMIT 1"
-            ))
+            )))
             .bind(name)
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?,
-            RoutingGroupLookupKey::SystemDefault => sqlx::query(&format!(
+            RoutingGroupLookupKey::SystemDefault => sqlx::query(sqlx::AssertSqlSafe(format!(
                 "{ROUTING_GROUP_SELECT} WHERE is_system_default = TRUE AND enabled = TRUE ORDER BY updated_at DESC, id ASC LIMIT 1"
-            ))
+            )))
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?,
@@ -122,7 +122,7 @@ WHERE ($1::text IS NULL OR group_id = $1)
 ORDER BY created_at ASC, id ASC
 "#
         );
-        let mut rows = sqlx::query(&sql)
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(query.group_id.as_deref())
             .bind(query.subject_type.map(binding_subject_to_database))
             .bind(query.subject_id.as_deref())
@@ -149,7 +149,9 @@ ORDER BY created_at ASC, id ASC
         let sql = format!(
             "{ROUTING_GROUP_VERSION_SELECT} WHERE group_id = $1 ORDER BY version DESC, created_at DESC, id ASC"
         );
-        let mut rows = sqlx::query(&sql).bind(group_id).fetch(&self.pool);
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+            .bind(group_id)
+            .fetch(&self.pool);
         let mut versions = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
             versions.push(map_version_row(&row)?);
@@ -215,9 +217,9 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             .execute(&mut *tx)
             .await
             .map_postgres_err()?;
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{ROUTING_GROUP_SELECT} WHERE id = $1 LIMIT 1 FOR UPDATE"
-        ))
+        )))
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
@@ -359,9 +361,9 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             .execute(&mut *tx)
             .await
             .map_postgres_err()?;
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{ROUTING_GROUP_BINDING_SELECT} WHERE id = $1 LIMIT 1 FOR UPDATE"
-        ))
+        )))
         .bind(id)
         .fetch_optional(&mut *tx)
         .await

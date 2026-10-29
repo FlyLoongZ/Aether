@@ -129,7 +129,9 @@ async fn run_backfills_locked(conn: &mut PgConnection) -> Result<(), MigrateErro
 
         let mut tx = conn.begin().await?;
         let started_at = std::time::Instant::now();
-        sqlx::raw_sql(&backfill.sql).execute(&mut *tx).await?;
+        sqlx::raw_sql(backfill.sql.clone())
+            .execute(&mut *tx)
+            .await?;
         let elapsed_ms = i64::try_from(started_at.elapsed().as_millis()).unwrap_or(i64::MAX);
         query(INSERT_APPLIED_BACKFILL_SQL)
             .bind(backfill.version)

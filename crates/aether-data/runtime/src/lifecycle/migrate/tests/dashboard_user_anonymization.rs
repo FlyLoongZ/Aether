@@ -22,12 +22,18 @@ async fn dashboard_user_anonymization_preserves_totals_without_migration_backfil
         return;
     };
     let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version < ANONYMIZATION_VERSION)
     {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
     let pool = PgPool::connect(server.database_url()).await.unwrap();
     query(INSERT_USER)
@@ -68,7 +74,10 @@ async fn dashboard_user_anonymization_preserves_totals_without_migration_backfil
         .iter()
         .find(|migration| migration.version == ANONYMIZATION_VERSION)
         .unwrap();
-    connection.apply(migration).await.unwrap();
+    connection
+        .apply(&POSTGRES_MIGRATOR.table_name, migration)
+        .await
+        .unwrap();
     blocked_history.rollback().await.unwrap();
     let actor_after: String =
         query_scalar("SELECT jsonb_agg(to_jsonb(a))::text FROM dashboard_actor_minute a")

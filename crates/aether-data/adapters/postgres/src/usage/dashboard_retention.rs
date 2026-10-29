@@ -84,7 +84,7 @@ impl SqlxUsageReadRepository {
             let statement = format!(
                 "DELETE FROM {table} WHERE ctid IN (SELECT ctid FROM {table} WHERE bucket_start < $1 ORDER BY bucket_start LIMIT $2)"
             );
-            let deleted = sqlx::query(&statement)
+            let deleted = sqlx::query(sqlx::AssertSqlSafe(statement.as_str()))
                 .bind(cutoff)
                 .bind(batch_size)
                 .execute(&mut *tx)

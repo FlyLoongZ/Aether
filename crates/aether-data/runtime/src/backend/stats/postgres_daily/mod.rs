@@ -227,7 +227,7 @@ async fn perform_stats_aggregation_for_day(
 
 async fn fetch_stats_daily_percentiles(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    sql: &str,
+    sql: &'static str,
     day_start_utc: DateTime<Utc>,
     day_end_utc: DateTime<Utc>,
 ) -> Result<PercentileSummary, sqlx::Error> {

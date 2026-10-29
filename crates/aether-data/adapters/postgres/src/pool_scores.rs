@@ -419,9 +419,9 @@ impl PoolScoreReadRepository for PostgresPoolMemberScoreRepository {
         if query.ids.is_empty() {
             return Ok(Vec::new());
         }
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{SCORE_COLUMNS} WHERE id = ANY($1) ORDER BY id ASC"
-        ))
+        )))
         .bind(&query.ids)
         .fetch_all(&self.pool)
         .await

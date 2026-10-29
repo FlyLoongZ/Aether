@@ -108,14 +108,14 @@ fn decode<T: DeserializeOwned>(value: Value) -> Result<T, DataLayerError> {
 }
 
 pub(super) fn push_analytics_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     query: &UsageAnalyticsQuery,
 ) {
     push_analytics_source_filter(builder, query, "public.usage_analytics_facts_v1");
 }
 
 pub(super) fn push_analytics_source_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     query: &UsageAnalyticsQuery,
     source: &str,
 ) {
@@ -167,7 +167,7 @@ pub(super) fn push_analytics_source_filter(
     }
 }
 
-fn push_user_filter(builder: &mut QueryBuilder<'_, Postgres>, query: &UsageAnalyticsQuery) {
+fn push_user_filter(builder: &mut QueryBuilder<Postgres>, query: &UsageAnalyticsQuery) {
     builder.push(" WHERE NOT u.is_deleted");
     if let Some(user_id) = query
         .actor_user_id
@@ -203,7 +203,7 @@ fn push_user_filter(builder: &mut QueryBuilder<'_, Postgres>, query: &UsageAnaly
     }
 }
 
-fn push_user_finance_ctes(builder: &mut QueryBuilder<'_, Postgres>, query: &UsageAnalyticsQuery) {
+fn push_user_finance_ctes(builder: &mut QueryBuilder<Postgres>, query: &UsageAnalyticsQuery) {
     // Aggregate each financial source before joining the roster. Joining orders
     // directly to request facts would multiply both usage and payment amounts.
     builder.push(r#", wallet_finance AS (

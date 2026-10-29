@@ -40,7 +40,7 @@ WHERE NOT EXISTS (SELECT 1 FROM public.usage_attribution_snapshots a
 );
 
 pub(super) fn push_dashboard_total_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     query: &UsageAnalyticsQuery,
 ) {
     super::analytics::push_analytics_source_filter(builder, query, DASHBOARD_TOTAL_FACTS_SQL);

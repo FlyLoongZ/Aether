@@ -94,9 +94,9 @@ mod postgres_tests {
             "refund_requests",
             "user_group_members",
         ] {
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "CREATE TEMP TABLE {table} (LIKE public.{table} INCLUDING ALL)"
-            ))
+            )))
             .execute(&pool)
             .await
             .unwrap();
@@ -510,10 +510,11 @@ mod postgres_tests {
             "referral_rewards",
             "user_referrals",
         ] {
-            let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
-                .fetch_one(&pool)
-                .await
-                .unwrap();
+            let count: i64 =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COUNT(*) FROM {table}")))
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
             assert_eq!(count, 0, "{table}");
         }
         pool.close().await;

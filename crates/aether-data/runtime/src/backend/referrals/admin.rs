@@ -100,8 +100,9 @@ pub(super) async fn list_rewards(
         .map(referral_like_pattern);
         let pool = backend.pool_clone();
         let count_sql = format!("SELECT COUNT(*) AS total {REWARD_FROM} {REWARD_FILTER}");
-        let bind_filters = |sql| {
-            sqlx::query(sql)
+        // Both callers assemble only the static reward SELECT/FROM/FILTER fragments.
+        let bind_filters = |sql: &str| {
+            sqlx::query(sqlx::AssertSqlSafe(sql))
                 .bind(patterns[0].clone())
                 .bind(patterns[1].clone())
                 .bind(patterns[2].clone())
@@ -189,7 +190,7 @@ FROM referral_rewards rw
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let pool = backend.pool_clone();
             let sql = format!("{REWARD_SELECT} {REWARD_FROM} WHERE rw.id=$1");
-            let Some(row) = sqlx::query(&sql)
+            let Some(row) = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                 .bind(reward_id)
                 .fetch_optional(&pool)
                 .await

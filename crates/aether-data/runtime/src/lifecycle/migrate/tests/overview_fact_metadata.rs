@@ -27,9 +27,9 @@ async fn stored_rows(pool: &PgPool) -> Vec<Value> {
         "dashboard_activity_minute",
     ] {
         rows.push(
-            query_scalar(&format!(
+            query_scalar(sqlx::AssertSqlSafe(format!(
                 "SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)), '[]') FROM {table} t"
-            ))
+            )))
             .fetch_one(pool)
             .await
             .unwrap(),
@@ -44,12 +44,18 @@ async fn overview_fact_metadata_optimization_preserves_facts_without_backfill() 
         return;
     };
     let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version < OPTIMIZATION_VERSION)
     {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
     let pool = PgPool::connect(server.database_url()).await.unwrap();
     sqlx::raw_sql(
@@ -158,7 +164,10 @@ VALUES('employee-key','owner',repeat('e',64),false),
         .iter()
         .find(|migration| migration.version == OPTIMIZATION_VERSION)
         .unwrap();
-    connection.apply(migration).await.unwrap();
+    connection
+        .apply(&POSTGRES_MIGRATOR.table_name, migration)
+        .await
+        .unwrap();
     blocked_history.rollback().await.unwrap();
 
     assert_eq!(read_facts(&pool).await, before_facts);

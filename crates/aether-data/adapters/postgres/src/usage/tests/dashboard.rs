@@ -753,7 +753,7 @@ fn usage_health_timeline_sql_buckets_full_window_without_sample_limit() {
         exclude_status_codes: vec![499],
     };
     let mut builder = build_usage_health_timeline_query(&query).expect("query should build");
-    let sql = builder.build().sql().to_string();
+    let sql = builder.build().sql().as_str().to_string();
 
     // 与卡片头部统计同源：同一张 billing 事实视图。
     assert!(sql.contains("FROM usage_billing_facts AS \"usage\""));
@@ -794,7 +794,7 @@ fn usage_health_timeline_sql_excludes_null_api_format_for_api_format_dimension()
         exclude_status_codes: vec![499],
     };
     let mut builder = build_usage_health_timeline_query(&query).expect("query should build");
-    let sql = builder.build().sql().to_string();
+    let sql = builder.build().sql().as_str().to_string();
 
     assert!(sql.contains("AND \"usage\".api_format IS NOT NULL"));
     assert!(sql.contains("\"usage\".provider_name = "));

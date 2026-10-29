@@ -416,7 +416,7 @@ async fn cleanup_usage_body_fields(
 
 async fn fetch_usage_body_cleanup_rows(
     pool: &PostgresPool,
-    sql: &str,
+    sql: &'static str,
     cutoff_time: DateTime<Utc>,
     batch_size: usize,
 ) -> Result<Vec<UsageBodyCleanupRow>, DataLayerError> {

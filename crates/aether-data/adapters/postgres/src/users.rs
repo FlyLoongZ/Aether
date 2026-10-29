@@ -1526,9 +1526,9 @@ WHERE user_group_members.user_id IN (
             tx.rollback().await.map_postgres_err()?;
             return Ok(ResolveOAuthLinkedUserOutcome::ProviderUnavailable);
         }
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{FIND_OAUTH_LINKED_USER_SQL} FOR UPDATE OF users, user_oauth_links"
-        ))
+        )))
         .bind(provider_type)
         .bind(provider_user_id)
         .fetch_optional(&mut *tx)
@@ -2081,16 +2081,20 @@ WHERE id = $1
             .fetch_all(&mut *tx)
             .await
             .map_postgres_err()?;
-        let auth_row = sqlx::query(&format!("{FIND_USER_AUTH_BY_ID_SQL} FOR UPDATE"))
-            .bind(&expected_auth.id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_postgres_err()?;
-        let export_row = sqlx::query(&format!("{FIND_EXPORT_USER_BY_ID_SQL} FOR UPDATE"))
-            .bind(&expected_auth.id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_postgres_err()?;
+        let auth_row = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "{FIND_USER_AUTH_BY_ID_SQL} FOR UPDATE"
+        )))
+        .bind(&expected_auth.id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_postgres_err()?;
+        let export_row = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "{FIND_EXPORT_USER_BY_ID_SQL} FOR UPDATE"
+        )))
+        .bind(&expected_auth.id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_postgres_err()?;
         let (Some(auth_row), Some(export_row)) = (auth_row, export_row) else {
             tx.rollback().await.map_postgres_err()?;
             return Ok(false);
@@ -2837,14 +2841,14 @@ LIMIT 1
             }
         }
         for sql in POSTGRES_PREPARE_USER_FACTS_FOR_DELETION_SQL {
-            sqlx::query(sql)
+            sqlx::query(*sql)
                 .bind(user_id)
                 .execute(&mut *tx)
                 .await
                 .map_postgres_err()?;
         }
         for sql in POSTGRES_ANONYMIZE_USER_HISTORY_SQL {
-            sqlx::query(sql)
+            sqlx::query(*sql)
                 .bind(user_id)
                 .execute(&mut *tx)
                 .await
@@ -2859,7 +2863,7 @@ LIMIT 1
             if require_wallet_absent && *sql == POSTGRES_DELETE_USER_API_KEYS_SQL {
                 continue;
             }
-            sqlx::query(sql)
+            sqlx::query(*sql)
                 .bind(user_id)
                 .execute(&mut *tx)
                 .await
@@ -3288,9 +3292,9 @@ SELECT
 FROM users
 "#;
     if let Some(ldap_dn) = ldap_dn.filter(|value| !value.trim().is_empty()) {
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{select_columns} WHERE auth_source = 'ldap'::authsource AND ldap_dn = $1 LIMIT 1 FOR UPDATE"
-        ))
+        )))
         .bind(ldap_dn)
         .fetch_optional(&mut **tx)
         .await
@@ -3300,9 +3304,9 @@ FROM users
         }
     }
     if let Some(ldap_username) = ldap_username.filter(|value| !value.trim().is_empty()) {
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{select_columns} WHERE auth_source = 'ldap'::authsource AND ldap_username = $1 LIMIT 1 FOR UPDATE"
-        ))
+        )))
         .bind(ldap_username)
         .fetch_optional(&mut **tx)
         .await
@@ -3311,9 +3315,9 @@ FROM users
             return map_user_auth_row(row).map(Some);
         }
     }
-    let row = sqlx::query(&format!(
+    let row = sqlx::query(sqlx::AssertSqlSafe(format!(
         "{select_columns} WHERE email = $1 LIMIT 1 FOR UPDATE"
-    ))
+    )))
     .bind(email)
     .fetch_optional(&mut **tx)
     .await

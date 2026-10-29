@@ -39,7 +39,7 @@ INSERT INTO user_preferences (id, user_id, theme) VALUES ('legacy-pref', 'legacy
         .find(|migration| migration.version == 20261009000000)
         .expect("wallet overage migration should be embedded");
     for _ in 0..2 {
-        sqlx::raw_sql(&migration.sql)
+        sqlx::raw_sql(migration.sql.clone())
             .execute(&pool)
             .await
             .expect("migration should apply idempotently");

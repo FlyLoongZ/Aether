@@ -7,12 +7,18 @@ const BILLING_INDEX: i64 = 20260918000000;
 const INSERT_USAGE: &str = "INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at) VALUES($1,$1,'overview-migration-test','test','completed','settled',$2)";
 
 async fn apply_through_overview(connection: &mut PgConnection) {
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version <= OVERVIEW_START)
     {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
 }
 

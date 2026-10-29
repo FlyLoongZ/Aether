@@ -2008,11 +2008,13 @@ WHERE id = $1
             // A processing refund is reconciled normally once it succeeds later.
             let refund_context =
                 if let Some(source_order_id) = row_optional_string!(claimed, "source_order_id") {
-                    let row = sqlx::query(&format!("{REFERRAL_REFUND_CONTEXT_SQL} FOR UPDATE"))
-                        .bind(source_order_id)
-                        .fetch_optional(&mut *tx)
-                        .await
-                        .map_err(DataLayerError::postgres)?;
+                    let row = sqlx::query(sqlx::AssertSqlSafe(format!(
+                        "{REFERRAL_REFUND_CONTEXT_SQL} FOR UPDATE"
+                    )))
+                    .bind(source_order_id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(DataLayerError::postgres)?;
                     Some(
                         row.map(payment_order_refund_context_from_row)
                             .transpose()?
@@ -2191,11 +2193,13 @@ FOR UPDATE
             .fetch_optional(&mut *tx)
             .await
             .map_err(DataLayerError::postgres)?;
-            let order_row = sqlx::query(&format!("{REFERRAL_REFUND_CONTEXT_SQL} FOR UPDATE"))
-                .bind(&source_order_id)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(DataLayerError::postgres)?;
+            let order_row = sqlx::query(sqlx::AssertSqlSafe(format!(
+                "{REFERRAL_REFUND_CONTEXT_SQL} FOR UPDATE"
+            )))
+            .bind(&source_order_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(DataLayerError::postgres)?;
             let Some(order_row) = order_row else {
                 tx.commit().await.map_err(DataLayerError::postgres)?;
                 return Ok(());

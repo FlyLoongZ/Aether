@@ -17,7 +17,7 @@ async fn live_dashboard_restores_legacy_history_without_replaying_or_double_coun
         .await
         .unwrap();
     let database = format!("dashboard_history_{}", uuid::Uuid::new_v4().simple());
-    sqlx::query(&format!("CREATE DATABASE {database}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {database}")))
         .execute(&admin)
         .await
         .unwrap();
@@ -171,10 +171,12 @@ async fn live_dashboard_restores_legacy_history_without_replaying_or_double_coun
     .await;
 
     pool.close().await;
-    sqlx::query(&format!("DROP DATABASE {database} WITH (FORCE)"))
-        .execute(&admin)
-        .await
-        .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE {database} WITH (FORCE)"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
     admin.close().await;
     if let Err(error) = outcome {
         std::panic::resume_unwind(error);

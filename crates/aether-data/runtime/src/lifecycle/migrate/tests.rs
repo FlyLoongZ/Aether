@@ -145,10 +145,12 @@ fn baseline_migration_restores_search_path_for_sqlx_bookkeeping() {
         .expect("baseline migration should be embedded");
     let first_empty_search_path = baseline
         .sql
+        .as_str()
         .find("SELECT pg_catalog.set_config('search_path', '', true);")
         .expect("baseline migration should clear search_path transaction-local");
     let restore_public_search_path = baseline
         .sql
+        .as_str()
         .rfind("SELECT pg_catalog.set_config('search_path', 'public', true);")
         .expect("baseline migration should restore search_path before sqlx bookkeeping");
 
@@ -159,12 +161,14 @@ fn baseline_migration_restores_search_path_for_sqlx_bookkeeping() {
     assert!(
         !baseline
             .sql
+            .as_str()
             .contains("SELECT pg_catalog.set_config('search_path', '', false);"),
         "baseline migration must not persist an empty search_path at session scope",
     );
     assert!(
         !baseline
             .sql
+            .as_str()
             .contains("SELECT pg_catalog.set_config('search_path', 'public', false);"),
         "baseline migration must not persist a restored search_path at session scope",
     );
@@ -269,12 +273,15 @@ fn routing_profiles_repair_migration_creates_missing_tables() {
 
     assert!(migration
         .sql
+        .as_str()
         .contains("CREATE TABLE IF NOT EXISTS public.routing_groups"));
     assert!(migration
         .sql
+        .as_str()
         .contains("CREATE TABLE IF NOT EXISTS public.routing_group_bindings"));
     assert!(migration
         .sql
+        .as_str()
         .contains("CREATE TABLE IF NOT EXISTS public.routing_group_versions"));
 }
 
@@ -429,6 +436,7 @@ fn usage_identity_foreign_keys_are_decoupled_for_historical_ingestion() {
         assert!(
             migration
                 .sql
+                .as_str()
                 .contains(format!("DROP CONSTRAINT IF EXISTS {constraint}").as_str()),
             "migration should drop {constraint}"
         );
@@ -449,6 +457,7 @@ fn request_candidate_api_key_identity_is_decoupled_for_historical_ingestion() {
     assert!(
         migration
             .sql
+            .as_str()
             .contains("DROP CONSTRAINT IF EXISTS request_candidates_api_key_id_fkey"),
         "migration should drop request_candidates_api_key_id_fkey"
     );
@@ -468,6 +477,7 @@ fn stats_daily_api_key_identity_is_decoupled_for_historical_reaggregation() {
     assert!(
         migration
             .sql
+            .as_str()
             .contains("DROP CONSTRAINT IF EXISTS stats_daily_api_key_api_key_id_fkey"),
         "migration should drop stats_daily_api_key_api_key_id_fkey"
     );
@@ -496,9 +506,13 @@ fn provider_api_keys_api_formats_remains_nullable_in_baselines() {
         .find(|migration| migration.version == 20260403000000)
         .expect("baseline migration should be embedded");
 
-    assert!(baseline_migration.sql.contains("api_formats jsonb,"));
+    assert!(baseline_migration
+        .sql
+        .as_str()
+        .contains("api_formats jsonb,"));
     assert!(!baseline_migration
         .sql
+        .as_str()
         .contains("api_formats jsonb DEFAULT '[]'::jsonb NOT NULL"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("api_formats jsonb,"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("concurrent_limit integer,"));
@@ -511,9 +525,11 @@ fn provider_api_keys_api_formats_remains_nullable_in_baselines() {
         .expect("auth mismatch migration should be embedded");
     assert!(auth_mismatch_migration
         .sql
+        .as_str()
         .contains("allow_auth_channel_mismatch_formats = rebuilt.api_formats"));
     assert!(auth_mismatch_migration
         .sql
+        .as_str()
         .contains("pak.allow_auth_channel_mismatch_formats IS NULL"));
 }
 
@@ -545,7 +561,7 @@ fn every_json_column_is_declared_jsonb_and_normalized_by_migration() {
         "config jsonb NOT NULL,",
     ] {
         assert!(
-            baseline_migration.sql.contains(declaration),
+            baseline_migration.sql.as_str().contains(declaration),
             "postgres baseline should declare `{declaration}`"
         );
         assert!(
@@ -563,7 +579,7 @@ fn every_json_column_is_declared_jsonb_and_normalized_by_migration() {
         "value",
     ] {
         assert!(
-            normalization_migration.sql.contains(&format!(
+            normalization_migration.sql.as_str().contains(&format!(
                 "ALTER COLUMN {column} TYPE jsonb USING {column}::jsonb"
             )),
             "normalization migration should convert `{column}`"
@@ -579,12 +595,15 @@ fn management_tokens_json_columns_are_normalized_to_jsonb_in_postgres_schema_pat
         .expect("management token jsonb normalization migration should be embedded");
     assert!(normalization_migration
         .sql
+        .as_str()
         .contains("ALTER COLUMN allowed_ips TYPE jsonb USING allowed_ips::jsonb"));
     assert!(normalization_migration
         .sql
+        .as_str()
         .contains("ALTER COLUMN permissions TYPE jsonb USING permissions::jsonb"));
     assert!(normalization_migration
         .sql
+        .as_str()
         .contains("jsonb_array_length(allowed_ips) > 0"));
 
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("allowed_ips jsonb,"));
@@ -617,9 +636,11 @@ fn api_key_ip_rules_is_jsonb_in_postgres_schema_paths() {
         .expect("api key IP rules migration should be embedded");
     assert!(api_key_ip_rules_migration
         .sql
+        .as_str()
         .contains("ADD COLUMN IF NOT EXISTS ip_rules jsonb NULL"));
     assert!(api_key_ip_rules_migration
         .sql
+        .as_str()
         .contains("ALTER COLUMN ip_rules TYPE jsonb USING ip_rules::jsonb"));
 
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("ip_rules jsonb,"));
@@ -644,12 +665,16 @@ fn provider_api_keys_api_key_is_nullable() {
         .find(|migration| migration.version == 20260428000000)
         .expect("api format normalization migration should be embedded");
 
-    assert!(baseline_migration.sql.contains("api_key text,"));
-    assert!(!baseline_migration.sql.contains("api_key text NOT NULL"));
+    assert!(baseline_migration.sql.as_str().contains("api_key text,"));
+    assert!(!baseline_migration
+        .sql
+        .as_str()
+        .contains("api_key text NOT NULL"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("api_key text,"));
     assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("api_key text NOT NULL"));
     assert!(normalization_migration
         .sql
+        .as_str()
         .contains("ALTER COLUMN api_key DROP NOT NULL"));
 }
 
@@ -662,9 +687,11 @@ fn normalized_endpoint_formats_do_not_require_unique_provider_format_pairs() {
 
     assert!(normalization_migration
         .sql
+        .as_str()
         .contains("DROP CONSTRAINT IF EXISTS uq_provider_api_format"));
     assert!(normalization_migration
         .sql
+        .as_str()
         .contains("idx_provider_endpoints_provider_api_format"));
     assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("uq_provider_api_format"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_provider_endpoints_provider_api_format"));
@@ -778,6 +805,7 @@ fn deleted_user_history_schema_decoupling_does_not_rewrite_history() {
         .unwrap_or_else(|| panic!("{driver} user-history schema migration should be embedded"));
     let sql = migration
         .sql
+        .as_str()
         .lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with("--"))
@@ -832,6 +860,7 @@ fn deleted_user_history_schema_decoupling_does_not_rewrite_history() {
         assert!(
             postgres_migration
                 .sql
+                .as_str()
                 .contains(&format!("DROP CONSTRAINT IF EXISTS {constraint}")),
             "postgres migration must decouple {constraint}"
         );
@@ -930,7 +959,7 @@ INSERT INTO provider_endpoints (id, provider_id, api_format, base_url, custom_pa
         .iter()
         .find(|migration| migration.version == 20260528000000)
         .expect("endpoint API root migration should be embedded");
-    sqlx::raw_sql(migration.sql.as_ref())
+    sqlx::raw_sql(migration.sql.clone())
         .execute(&pool)
         .await
         .expect("endpoint API root migration should apply");
@@ -1390,7 +1419,7 @@ VALUES (
     .await
     .expect("fixture schema should be created");
 
-    sqlx::raw_sql(&normalization_migration.sql)
+    sqlx::raw_sql(normalization_migration.sql.clone())
         .execute(&pool)
         .await
         .expect("api format normalization migration should preserve duplicate endpoints");
@@ -1538,24 +1567,31 @@ fn deprecation_migration_and_baseline_mark_legacy_usage_columns() {
 
     assert!(settlement_migration
         .sql
+        .as_str()
         .contains("COMMENT ON COLUMN public.usage.output_price_per_1m"));
     assert!(settlement_migration
         .sql
+        .as_str()
         .contains("COMMENT ON COLUMN public.usage.wallet_id"));
     assert!(settlement_migration
         .sql
+        .as_str()
         .contains("COMMENT ON COLUMN public.usage.username"));
     assert!(settlement_migration
         .sql
+        .as_str()
         .contains("COMMENT ON COLUMN public.usage.api_key_name"));
     assert!(http_migration
         .sql
+        .as_str()
         .contains("COMMENT ON COLUMN public.usage.request_headers"));
     assert!(http_migration
         .sql
+        .as_str()
         .contains("COMMENT ON COLUMN public.usage.billing_status"));
     assert!(http_migration
         .sql
+        .as_str()
         .contains("COMMENT ON COLUMN public.usage.finalized_at"));
     assert!(
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.output_price_per_1m")
@@ -1993,12 +2029,18 @@ async fn overview_migrations_support_fresh_and_legacy_install() {
         };
         if legacy {
             let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-            connection.ensure_migrations_table().await.unwrap();
+            connection
+                .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+                .await
+                .unwrap();
             for migration in POSTGRES_MIGRATOR
                 .iter()
                 .filter(|migration| migration.version < 20260911000000)
             {
-                connection.apply(migration).await.unwrap();
+                connection
+                    .apply(&POSTGRES_MIGRATOR.table_name, migration)
+                    .await
+                    .unwrap();
             }
             sqlx::raw_sql(
                 r#"
@@ -2703,14 +2745,14 @@ async fn postgres_request_candidate_migration_decouples_legacy_api_key_foreign_k
     let mut conn = PgConnection::connect(server.database_url())
         .await
         .expect("postgres migration connection should open");
-    conn.ensure_migrations_table()
+    conn.ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
         .await
         .expect("migration table should be created");
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version <= PREVIOUS_SNAPSHOT_CUTOFF_VERSION)
     {
-        conn.apply(migration)
+        conn.apply(&POSTGRES_MIGRATOR.table_name, migration)
             .await
             .expect("legacy postgres migration should apply");
     }
@@ -2785,14 +2827,14 @@ async fn postgres_stats_daily_api_key_migration_decouples_legacy_foreign_key() {
     let mut conn = PgConnection::connect(server.database_url())
         .await
         .expect("postgres migration connection should open");
-    conn.ensure_migrations_table()
+    conn.ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
         .await
         .expect("migration table should be created");
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version <= PREVIOUS_SNAPSHOT_CUTOFF_VERSION)
     {
-        conn.apply(migration)
+        conn.apply(&POSTGRES_MIGRATOR.table_name, migration)
             .await
             .expect("previous postgres migration should apply");
     }
@@ -3013,7 +3055,7 @@ INSERT INTO public.usage_settlement_snapshots (
     .await
     .expect("settlement fixtures should be inserted");
 
-    sqlx::raw_sql(legacy_view_migration.sql.as_ref())
+    sqlx::raw_sql(legacy_view_migration.sql.clone())
         .execute(&pool)
         .await
         .expect("legacy billing-facts view should be restored for the upgrade fixture");
@@ -3118,11 +3160,13 @@ async fn postgres_migrations_repair_invalid_concurrent_indexes() {
             "public.usage",
         ),
     ] {
-        query(&format!("DROP INDEX CONCURRENTLY public.{index_name}"))
-            .execute(&pool)
-            .await
-            .expect("migrated index should exist");
-        query(&format!("CREATE UNIQUE INDEX CONCURRENTLY {index_name} ON public.concurrent_index_failure_fixture (value)"))
+        query(sqlx::AssertSqlSafe(format!(
+            "DROP INDEX CONCURRENTLY public.{index_name}"
+        )))
+        .execute(&pool)
+        .await
+        .expect("migrated index should exist");
+        query(sqlx::AssertSqlSafe(format!("CREATE UNIQUE INDEX CONCURRENTLY {index_name} ON public.concurrent_index_failure_fixture (value)")))
             .execute(&pool)
             .await
             .expect_err("duplicate values should leave a failed concurrent index build");

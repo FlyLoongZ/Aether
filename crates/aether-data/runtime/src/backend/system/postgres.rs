@@ -644,9 +644,9 @@ async fn purge_postgres_non_admin_users(
         tx,
         "api_key_provider_mappings",
         "api_key_provider_mappings",
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             "DELETE FROM public.api_key_provider_mappings WHERE api_key_id IN ({non_admin_keys})"
-        ),
+        )),
         summary,
     )
     .await?;
@@ -654,7 +654,7 @@ async fn purge_postgres_non_admin_users(
         tx,
         "usage",
         "usage_user_refs_cleared",
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             r#"
 UPDATE public.usage
 SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
@@ -662,7 +662,7 @@ SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id EN
 WHERE user_id IN ({non_admin_users})
    OR api_key_id IN ({non_admin_keys})
 "#
-        ),
+        )),
         summary,
     )
     .await?;
@@ -670,7 +670,7 @@ WHERE user_id IN ({non_admin_users})
         tx,
         "request_candidates",
         "request_candidate_user_refs_cleared",
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             r#"
 UPDATE public.request_candidates
 SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
@@ -678,7 +678,7 @@ SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id EN
 WHERE user_id IN ({non_admin_users})
    OR api_key_id IN ({non_admin_keys})
 "#
-        ),
+        )),
         summary,
     )
     .await?;
@@ -686,7 +686,7 @@ WHERE user_id IN ({non_admin_users})
         tx,
         "audit_logs",
         "audit_log_user_refs_cleared",
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             r#"
 UPDATE public.audit_logs
 SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
@@ -694,7 +694,7 @@ SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id EN
 WHERE user_id IN ({non_admin_users})
    OR api_key_id IN ({non_admin_keys})
 "#
-        ),
+        )),
         summary,
     )
     .await?;
@@ -702,7 +702,7 @@ WHERE user_id IN ({non_admin_users})
         tx,
         "video_tasks",
         "video_task_user_refs_cleared",
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             r#"
 UPDATE public.video_tasks
 SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
@@ -710,7 +710,7 @@ SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id EN
 WHERE user_id IN ({non_admin_users})
    OR api_key_id IN ({non_admin_keys})
 "#
-        ),
+        )),
         summary,
     )
     .await?;
@@ -718,7 +718,7 @@ WHERE user_id IN ({non_admin_users})
         tx,
         "wallets",
         "wallet_user_refs_cleared",
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             r#"
 UPDATE public.wallets
 SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
@@ -726,7 +726,7 @@ SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id EN
 WHERE user_id IN ({non_admin_users})
    OR api_key_id IN ({non_admin_keys})
 "#
-        ),
+        )),
         summary,
     )
     .await?;
@@ -756,9 +756,9 @@ WHERE user_id IN ({non_admin_users})
             tx,
             table,
             key,
-            &format!(
+            sqlx::AssertSqlSafe(format!(
                 "UPDATE public.\"{table}\" SET {column} = NULL WHERE {column} IN ({non_admin_users})"
-            ),
+            )),
             summary,
         )
         .await?;
@@ -767,7 +767,7 @@ WHERE user_id IN ({non_admin_users})
         tx,
         "refund_requests",
         "refund_request_user_refs_cleared",
-        &format!(
+        sqlx::AssertSqlSafe(format!(
             r#"
 UPDATE public.refund_requests
 SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
@@ -779,7 +779,7 @@ WHERE user_id IN ({non_admin_users})
    OR approved_by IN ({non_admin_users})
    OR processed_by IN ({non_admin_users})
 "#
-        ),
+        )),
         summary,
     )
     .await?;
@@ -791,7 +791,9 @@ WHERE user_id IN ({non_admin_users})
         tx,
         "api_keys",
         "api_keys",
-        &format!("DELETE FROM public.api_keys WHERE user_id IN ({non_admin_users})"),
+        sqlx::AssertSqlSafe(format!(
+            "DELETE FROM public.api_keys WHERE user_id IN ({non_admin_users})"
+        )),
         summary,
     )
     .await?;
@@ -874,7 +876,7 @@ async fn pg_delete_table(
         return Ok(());
     }
     let sql = format!("DELETE FROM public.\"{table}\"");
-    let rows = sqlx::query(&sql)
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
         .execute(&mut **tx)
         .await
         .map_postgres_err()?
@@ -895,7 +897,7 @@ async fn pg_delete_non_admin_user_rows(
     let sql = format!(
         "DELETE FROM public.\"{table}\" WHERE user_id IN (SELECT id FROM public.users WHERE COALESCE(role::text, '') <> 'admin')"
     );
-    let rows = sqlx::query(&sql)
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
         .execute(&mut **tx)
         .await
         .map_postgres_err()?
@@ -916,7 +918,7 @@ async fn pg_delete_non_admin_api_key_rows(
     let sql = format!(
         "DELETE FROM public.\"{table}\" WHERE api_key_id IN (SELECT id FROM public.api_keys WHERE user_id IN (SELECT id FROM public.users WHERE COALESCE(role::text, '') <> 'admin'))"
     );
-    let rows = sqlx::query(&sql)
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
         .execute(&mut **tx)
         .await
         .map_postgres_err()?
@@ -929,7 +931,7 @@ async fn pg_execute_if_table(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     table: &str,
     key: &str,
-    sql: &str,
+    sql: impl sqlx::SqlSafeStr,
     summary: &mut AdminSystemPurgeSummary,
 ) -> Result<(), DataLayerError> {
     if !pg_table_exists(tx, checked_sql_identifier(table)?).await? {
@@ -948,7 +950,7 @@ async fn pg_execute_batch_if_table(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     table: &str,
     key: &str,
-    sql: &str,
+    sql: impl sqlx::SqlSafeStr,
     summary: &mut AdminSystemPurgeSummary,
     limit: i64,
 ) -> Result<(), DataLayerError> {

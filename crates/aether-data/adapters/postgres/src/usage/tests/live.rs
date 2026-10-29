@@ -1925,10 +1925,11 @@ async fn live_usage_list_metadata_preserves_boolean_chat_pii_redaction() {
                     .execute(&mut *conn)
                     .await
                     .expect("metadata probe should insert");
-                let projected: Option<serde_json::Value> = sqlx::query_scalar(&sql)
-                    .fetch_one(&mut *conn)
-                    .await
-                    .expect("production list metadata projection should execute");
+                let projected: Option<serde_json::Value> =
+                    sqlx::query_scalar(sqlx::AssertSqlSafe(sql.as_str()))
+                        .fetch_one(&mut *conn)
+                        .await
+                        .expect("production list metadata projection should execute");
                 let expected = (!expected.is_empty()).then(|| json!(expected));
                 assert_eq!(
                     projected, expected,

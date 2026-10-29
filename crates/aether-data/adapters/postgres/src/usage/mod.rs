@@ -110,7 +110,7 @@ struct UsageAnalyticsDrilldown<'a> {
 }
 
 fn push_usage_analytics_drilldown(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     has_where: &mut bool,
     filters: UsageAnalyticsDrilldown<'_>,
 ) {
@@ -197,7 +197,7 @@ fn dashboard_utc_to_unix_secs(value: DateTime<Utc>) -> u64 {
 }
 
 fn push_postgres_usage_excluded_status_codes(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     has_where: &mut bool,
     status_codes: &[u16],
 ) {
@@ -228,7 +228,7 @@ fn push_postgres_usage_excluded_status_codes(
 /// - 分桶（`FLOOR(偏移秒 / 分段宽度)`）在数据库侧完成，因此不受事件样本条数影响。
 fn build_usage_health_timeline_query(
     query: &UsageHealthTimelineQuery,
-) -> Option<QueryBuilder<'static, Postgres>> {
+) -> Option<QueryBuilder<Postgres>> {
     if query.segments == 0 || query.created_from_unix_secs >= query.created_until_unix_secs {
         return None;
     }
@@ -1414,7 +1414,7 @@ fn decode_usage_provider_performance_timeline_row(
 }
 
 fn push_usage_provider_performance_text_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     column: &'static str,
     value: &Option<String>,
 ) {
@@ -1433,7 +1433,7 @@ fn push_usage_provider_performance_text_filter(
 }
 
 fn push_usage_provider_performance_filters(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     query: &UsageProviderPerformanceQuery,
 ) {
     push_usage_provider_performance_text_filter(
@@ -1855,13 +1855,13 @@ const REBUILD_PROVIDER_API_KEY_CODEX_WINDOW_USAGE_STATS_SQL: &str =
     include_str!("queries/rebuild_provider_api_key_codex_window_usage_stats_sql.sql");
 
 const LIST_USAGE_AUDITS_PREFIX: &str = include_str!("queries/list_usage_audits_prefix.sql");
-fn push_postgres_usage_where(builder: &mut QueryBuilder<'_, Postgres>, has_where: &mut bool) {
+fn push_postgres_usage_where(builder: &mut QueryBuilder<Postgres>, has_where: &mut bool) {
     builder.push(if *has_where { " AND " } else { " WHERE " });
     *has_where = true;
 }
 
 fn push_postgres_usage_client_family_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     has_where: &mut bool,
     client_family: Option<&str>,
 ) {
@@ -1879,7 +1879,7 @@ fn push_postgres_usage_client_family_filter(
 }
 
 fn push_postgres_usage_websocket_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     has_where: &mut bool,
     is_websocket: Option<bool>,
 ) {
@@ -1894,7 +1894,7 @@ fn push_postgres_usage_websocket_filter(
 }
 
 fn push_postgres_usage_exclude_unknown_filter(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     has_where: &mut bool,
     exclude_unknown_model_or_provider: bool,
 ) {
@@ -2071,7 +2071,7 @@ fn usage_leaderboard_sql_fragments(
 }
 
 fn push_usage_user_scope(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     column: &str,
     user_id: Option<&str>,
     user_ids: Option<&[String]>,
@@ -3112,7 +3112,9 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             "WHERE \"usage\".id = ANY($1::TEXT[])\nORDER BY \"usage\".created_at DESC, \"usage\".id ASC",
             1,
         );
-        let mut rows = sqlx::query(&sql).bind(ids.to_vec()).fetch(&self.pool);
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+            .bind(ids.to_vec())
+            .fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
             items.push(map_usage_row(&row)?);
@@ -5581,7 +5583,7 @@ ORDER BY request_count DESC, group_key ASC
 "#,
         );
 
-        let mut rows = sqlx::query(&sql)
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(user_id)
             .bind(start_day_utc)
             .bind(end_day_utc)
@@ -7504,7 +7506,7 @@ ORDER BY group_key ASC
             legacy_name_expr = fragments.legacy_name_expr,
             filtered_extra_where = fragments.filtered_extra_where,
         );
-        let mut rows = sqlx::query(&sql)
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(query.created_from_unix_secs as f64)
             .bind(query.created_until_unix_secs as f64)
             .bind(query.user_id.as_deref())
@@ -7986,7 +7988,7 @@ ORDER BY request_count DESC, group_key ASC
             provider_extra_where = provider_extra_where,
         );
 
-        let mut rows = sqlx::query(&sql)
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(start_day_utc)
             .bind(end_day_utc)
             .fetch(&self.pool);
@@ -8125,7 +8127,7 @@ LIMIT $3
             success_count_expr = fragments.success_count_expr,
         );
 
-        let mut rows = sqlx::query(&sql)
+        let mut rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(query.created_from_unix_secs as f64)
             .bind(query.created_until_unix_secs as f64)
             .bind(i64::try_from(query.limit).map_err(|_| {
@@ -8238,7 +8240,9 @@ WHERE "usage".created_at >= $1
         }
         sql.push_str(" GROUP BY day ORDER BY day ASC");
 
-        let mut q = sqlx::query(&sql).bind(start_utc).bind(end_utc);
+        let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+            .bind(start_utc)
+            .bind(end_utc);
         if let Some(user_id) = user_id {
             q = q.bind(user_id.to_string());
         }

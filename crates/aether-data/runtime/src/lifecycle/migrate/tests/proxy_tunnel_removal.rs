@@ -57,12 +57,18 @@ async fn legacy_proxy_tunnel_removal_preserves_manual_nodes_and_is_idempotent() 
         return;
     };
     let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version < REMOVAL_VERSION)
     {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
     let removal = POSTGRES_MIGRATOR
         .iter()
@@ -93,10 +99,13 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
     .await
     .unwrap();
 
-    connection.apply(removal).await.unwrap();
+    connection
+        .apply(&POSTGRES_MIGRATOR.table_name, removal)
+        .await
+        .unwrap();
     // A regenerated snapshot may already have the trimmed shape. Replaying the
     // cleanup against that shape must not delete manual nodes or fail on old columns.
-    sqlx::raw_sql(removal.sql.as_ref())
+    sqlx::raw_sql(removal.sql.clone())
         .execute(&mut connection)
         .await
         .unwrap();

@@ -58,7 +58,7 @@ pub(crate) async fn apply_snapshot_if_empty(
     conn: &mut PgConnection,
     migrator: &'static Migrator,
 ) -> Result<(), MigrateError> {
-    if !should_apply_snapshot(conn).await? {
+    if !should_apply_snapshot(conn, &migrator.table_name).await? {
         return Ok(());
     }
 
@@ -86,8 +86,11 @@ pub(crate) async fn apply_snapshot_if_empty(
     Ok(())
 }
 
-pub(crate) async fn should_apply_snapshot(conn: &mut PgConnection) -> Result<bool, MigrateError> {
-    let applied_migrations = conn.list_applied_migrations().await?;
+pub(crate) async fn should_apply_snapshot(
+    conn: &mut PgConnection,
+    migrations_table: &str,
+) -> Result<bool, MigrateError> {
+    let applied_migrations = conn.list_applied_migrations(migrations_table).await?;
     if !applied_migrations.is_empty() {
         return Ok(false);
     }
