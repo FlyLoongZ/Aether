@@ -54,7 +54,7 @@ pub(super) use super::usage::UsageRuntimeConfig;
 pub(crate) fn hash_api_key(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 pub(super) async fn start_server(app: Router) -> (String, tokio::task::JoinHandle<()>) {

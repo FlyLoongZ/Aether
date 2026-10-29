@@ -706,7 +706,7 @@ impl OpenAiVideoTaskSeed {
             // Derive it deterministically so repeated capture and legacy snapshot reloads agree.
             short_id: Some(self.local_short_id.clone().unwrap_or_else(|| {
                 use sha2::{Digest, Sha256};
-                format!("{:x}", Sha256::digest(self.local_task_id.as_bytes()))[..16].to_string()
+                hex::encode(Sha256::digest(self.local_task_id.as_bytes()))[..16].to_string()
             })),
             request_id: self.persistence.request_id.clone(),
             user_id: self.user_id.clone(),

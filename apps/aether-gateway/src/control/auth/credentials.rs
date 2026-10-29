@@ -207,7 +207,10 @@ pub(super) fn build_auth_context_cache_key_with_trusted_auth(
     );
     let mut hasher = Sha256::new();
     hasher.update(raw_cache_identity.as_bytes());
-    Some(format!("auth-context:sha256:{:x}", hasher.finalize()))
+    Some(format!(
+        "auth-context:sha256:{}",
+        hex::encode(hasher.finalize())
+    ))
 }
 
 fn extract_trusted_auth_headers(
@@ -469,7 +472,7 @@ fn extract_bearer_token(value: &str) -> Option<&str> {
 pub(super) fn hash_api_key(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 pub(super) fn contains_string(items: &[String], target: &str) -> bool {

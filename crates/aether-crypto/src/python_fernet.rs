@@ -2,12 +2,12 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, LazyLock, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use aes::cipher::{block_padding::Pkcs7, BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use aes::cipher::{block_padding::Pkcs7, BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use base64::decoded_len_estimate;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use cbc::{Decryptor, Encryptor};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use pbkdf2::pbkdf2_hmac;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -192,8 +192,9 @@ impl PythonFernetCompat {
             let (_, payload) = token.split_at_mut(iv_offset);
             let (iv, ciphertext_and_signature) = payload.split_at_mut(IV_SIZE);
             let ciphertext = &mut ciphertext_and_signature[..signed_len - ciphertext_offset];
-            Aes128CbcDec::new((&self.encryption_key).into(), (&iv[..]).into())
-                .decrypt_padded_mut::<Pkcs7>(ciphertext)
+            Aes128CbcDec::new_from_slices(&self.encryption_key, iv)
+                .map_err(|_| PythonFernetError::InvalidTokenStructure)?
+                .decrypt_padded::<Pkcs7>(ciphertext)
                 .map_err(|_| PythonFernetError::InvalidPadding)?
                 .len()
         };
@@ -223,7 +224,7 @@ impl PythonFernetCompat {
         let mut padded = vec![0u8; plaintext.len() + IV_SIZE];
         padded[..plaintext.len()].copy_from_slice(plaintext);
         let ciphertext = Aes128CbcEnc::new((&self.encryption_key).into(), (&iv).into())
-            .encrypt_padded_mut::<Pkcs7>(&mut padded, plaintext.len())
+            .encrypt_padded::<Pkcs7>(&mut padded, plaintext.len())
             .map_err(|_| PythonFernetError::InvalidPadding)?;
 
         let mut signed = Vec::with_capacity(1 + 8 + IV_SIZE + ciphertext.len() + HMAC_SIZE);

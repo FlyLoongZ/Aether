@@ -1,5 +1,5 @@
-use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng, Payload};
-use aes_gcm::Aes256Gcm;
+use aes_gcm::aead::{Aead, Generate, KeyInit, Payload};
+use aes_gcm::{Aes256Gcm, Nonce};
 use aether_crypto::derive_python_fernet_key;
 use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -264,7 +264,7 @@ where
     let (upload_bytes, key_id) =
         encrypt_backup_bytes(encryption_secret, &preferred_object_key, &compressed_bytes)?;
     let bytes = upload_bytes.len();
-    let sha256 = format!("{:x}", Sha256::digest(&upload_bytes));
+    let sha256 = hex::encode(Sha256::digest(&upload_bytes));
 
     let object_key = put_encrypted_object_without_overwrite(
         store,
@@ -324,7 +324,7 @@ pub(crate) fn encrypt_backup_bytes(
     let key = derive_backup_encryption_key(encryption_secret, BACKUP_ENCRYPTION_CONTEXT_V2)?;
     let key_id = derive_backup_key_id(&key)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| BackupExecutionError::Encryption)?;
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let nonce = Nonce::try_generate().map_err(|_| BackupExecutionError::Encryption)?;
     let aad = backup_envelope_aad(BACKUP_ENVELOPE_VERSION_V2, Some(&key_id), object_key)?;
     let ciphertext = cipher
         .encrypt(
@@ -353,7 +353,7 @@ fn derive_backup_encryption_key(
         return Err(BackupExecutionError::Encryption);
     }
     let root_key = derive_python_fernet_key(encryption_secret);
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(root_key.as_bytes())
+    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(root_key.as_bytes())
         .map_err(|_| BackupExecutionError::Encryption)?;
     mac.update(context);
     Ok(mac.finalize().into_bytes().into())
@@ -362,7 +362,7 @@ fn derive_backup_encryption_key(
 fn derive_backup_key_id(
     encryption_key: &[u8; 32],
 ) -> Result<[u8; BACKUP_ENVELOPE_KEY_ID_LEN], BackupExecutionError> {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(encryption_key)
+    let mut mac = <HmacSha256 as KeyInit>::new_from_slice(encryption_key)
         .map_err(|_| BackupExecutionError::Encryption)?;
     mac.update(BACKUP_KEY_ID_CONTEXT);
     let digest = mac.finalize().into_bytes();
@@ -438,7 +438,7 @@ fn collision_safe_encrypted_key(
     let Some(stem) = preferred_key.strip_suffix(SUFFIX) else {
         return Err(BackupExecutionError::Encryption);
     };
-    let digest = format!("{:x}", Sha256::digest(encrypted_bytes));
+    let digest = hex::encode(Sha256::digest(encrypted_bytes));
     Ok(format!("{stem}-{digest}{SUFFIX}"))
 }
 
@@ -498,7 +498,8 @@ fn decrypt_backup_bytes(
         return Err(BackupExecutionError::Encryption);
     }
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| BackupExecutionError::Encryption)?;
-    let nonce = aes_gcm::Nonce::from_slice(&envelope[envelope_header_len..header_len]);
+    let nonce = <&Nonce<_>>::try_from(&envelope[envelope_header_len..header_len])
+        .map_err(|_| BackupExecutionError::Encryption)?;
     cipher
         .decrypt(
             nonce,
@@ -796,8 +797,8 @@ mod tests {
         BackupRestoreLimits, BACKUP_ENCRYPTION_CONTEXT_V1, BACKUP_ENVELOPE_MAGIC,
         BACKUP_ENVELOPE_NONCE_LEN, BACKUP_ENVELOPE_VERSION_V1, BACKUP_ENVELOPE_VERSION_V2,
     };
-    use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng, Payload};
-    use aes_gcm::Aes256Gcm;
+    use aes_gcm::aead::{Aead, Generate, KeyInit, Payload};
+    use aes_gcm::{Aes256Gcm, Nonce};
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
     use base64::Engine as _;
     use bytes::Bytes;
@@ -813,7 +814,7 @@ mod tests {
     fn encrypt_v1_for_test(secret: &str, object_key: &str, plaintext: &[u8]) -> Vec<u8> {
         let key = derive_backup_encryption_key(secret, BACKUP_ENCRYPTION_CONTEXT_V1).unwrap();
         let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
-        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let nonce = Nonce::try_generate().unwrap();
         let aad = backup_envelope_aad(BACKUP_ENVELOPE_VERSION_V1, None, object_key).unwrap();
         let ciphertext = cipher
             .encrypt(

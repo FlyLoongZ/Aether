@@ -84,8 +84,8 @@ aether-gateway = { path = "apps/aether-gateway" }
 aether-http = { path = "crates/aether-http" }
 aether-runtime = { path = "crates/aether-runtime/base" }
 aether-testkit = { path = "crates/aether-testing/testkit" }
-aes = "0.8"
-aes-gcm = "0.10"
+aes = "0.9"
+aes-gcm = "0.11"
 aws-lc-rs = { version = "1.19.0", default-features = false, features = ["alloc", "aws-lc-sys"] }
 async-stream = "0.3"
 async-trait = "0.1"
@@ -94,16 +94,17 @@ base64 = "0.23"
 bcrypt = "0.19"
 brotli = "9"
 bytes = "1"
-cbc = "0.1"
+cbc = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.10"
 clap = { version = "4", features = ["derive"] }
 crypto_box = { version = "0.9", features = ["seal"] }
 dashmap = "6"
-ed25519-dalek = { version = "2.2", features = ["pkcs8"] }
+ed25519-dalek = { version = "3.0", features = ["alloc", "pkcs8"] }
 flate2 = "1"
 futures-util = "0.3"
-hmac = "0.12"
+hex = "0.4"
+hmac = "0.13"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
@@ -111,10 +112,10 @@ hyper = { version = "1", features = ["client", "server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 ldap3 = { version = "0.12.1", default-features = false, features = ["sync", "tls-rustls-aws-lc-rs"] }
 libc = "0.2"
-md-5 = "0.10"
+md-5 = "0.11"
 object_store = { version = "0.14.2", default-features = false, features = ["aws"] }
 os_info = { version = "=3.12.0", default-features = false }
-pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 percent-encoding = "2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "rustls", "http2", "socks", "query", "form"] }
 redis = { version = "0.28", default-features = false, features = ["tokio-comp", "script", "streams", "connection-manager"] }
@@ -124,7 +125,7 @@ semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 serde_path_to_error = "0.1"
-sha2 = "0.10"
+sha2 = "0.11"
 socket2 = "0.6"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "chrono"] }
 sqlx-core = { version = "0.8.6", default-features = false }

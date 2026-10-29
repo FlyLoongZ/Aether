@@ -1384,7 +1384,7 @@ fn legacy_custom_oauth_provider_type(provider_type: &str) -> String {
     if !suffix.is_empty() && candidate.len() <= 64 {
         candidate
     } else {
-        let digest = format!("{:x}", Sha256::digest(normalized.as_bytes()));
+        let digest = hex::encode(Sha256::digest(normalized.as_bytes()));
         format!("custom_legacy_{}", &digest[..16])
     }
 }
@@ -1856,7 +1856,7 @@ fn validate_rollback_user_source_id(
 const IMPORTED_CREDENTIAL_TOMBSTONE_PREFIX: &str = "$aether-import-revoked$";
 
 fn imported_credential_tombstone(identity: &str) -> String {
-    let digest = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    let digest = hex::encode(Sha256::digest(identity.as_bytes()));
     let digest_length = 64usize.saturating_sub(IMPORTED_CREDENTIAL_TOMBSTONE_PREFIX.len());
     format!(
         "{IMPORTED_CREDENTIAL_TOMBSTONE_PREFIX}{}",

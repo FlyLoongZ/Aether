@@ -3136,7 +3136,7 @@ fn direct_reqwest_client_cache_key(
 }
 
 fn direct_reqwest_proxy_digest(proxy_url: &str) -> String {
-    format!("{:x}", sha2::Sha256::digest(proxy_url.as_bytes()))
+    hex::encode(sha2::Sha256::digest(proxy_url.as_bytes()))
 }
 
 fn validate_direct_reqwest_proxy_material(
@@ -3158,7 +3158,7 @@ fn direct_reqwest_pool_partition(
     transport_profile
         .filter(|profile| profile.pool_scope.trim().eq_ignore_ascii_case("key"))
         .filter(|_| !key_id.is_empty())
-        .map(|_| format!("{:x}", sha2::Sha256::digest(key_id.as_bytes())))
+        .map(|_| hex::encode(sha2::Sha256::digest(key_id.as_bytes())))
 }
 
 fn direct_reqwest_cache_per_origin() -> bool {

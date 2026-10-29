@@ -105,7 +105,7 @@ pub fn build_openai_chat_pressure_state(
 fn hash_api_key(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn openai_chat_pressure_auth_snapshot(

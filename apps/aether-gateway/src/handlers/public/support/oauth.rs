@@ -12,7 +12,7 @@ use aether_oauth::identity::{
 };
 use axum::http::header::{LOCATION, SET_COOKIE};
 use axum::http::HeaderValue;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest, Sha256};
 use url::form_urlencoded;
 
@@ -24,7 +24,7 @@ const OAUTH_LOGIN_BINDING_COMPARE_KEY: &[u8] = b"aether-oauth-login-binding-v1";
 type HmacSha256 = Hmac<Sha256>;
 
 fn browser_binding_hash(binding: &str) -> String {
-    format!("{:x}", Sha256::digest(binding.as_bytes()))
+    hex::encode(Sha256::digest(binding.as_bytes()))
 }
 
 fn oauth_login_cookie_name(state_nonce: &str) -> String {
@@ -37,7 +37,10 @@ fn oauth_login_cookie_name_for_security(state_nonce: &str, secure: bool) -> Stri
     } else {
         OAUTH_LOGIN_COOKIE_NAME_PREFIX
     };
-    format!("{prefix}{:x}", Sha256::digest(state_nonce.as_bytes()),)
+    format!(
+        "{prefix}{}",
+        hex::encode(Sha256::digest(state_nonce.as_bytes()))
+    )
 }
 
 fn browser_binding_matches(expected_hash: Option<&str>, binding: Option<&str>) -> bool {

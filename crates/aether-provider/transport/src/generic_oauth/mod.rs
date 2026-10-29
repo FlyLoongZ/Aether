@@ -443,7 +443,7 @@ fn generic_oauth_credential_fingerprint(
         digest.update((field.len() as u64).to_be_bytes());
         digest.update(field);
     }
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 fn generic_oauth_cached_entry_matches_transport(

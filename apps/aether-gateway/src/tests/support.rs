@@ -69,7 +69,7 @@ pub(crate) fn build_test_auth_token(
     mut payload: serde_json::Map<String, serde_json::Value>,
     expires_at: chrono::DateTime<chrono::Utc>,
 ) -> String {
-    use hmac::Mac;
+    use hmac::{KeyInit, Mac};
 
     let header = json!({ "alg": "HS256", "typ": "JWT" });
     payload.insert("exp".to_string(), json!(expires_at.timestamp()));

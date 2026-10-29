@@ -192,7 +192,7 @@ fn model_directive_policy_cache_key(
     let serialized = serde_json::to_vec(&canonicalize_policy_json(policy_value))
         .expect("canonical model directive policy should always serialize");
     hasher.update(serialized);
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn canonicalize_policy_json(value: serde_json::Value) -> serde_json::Value {

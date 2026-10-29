@@ -10,7 +10,7 @@ use aether_data::repository::users::{
 };
 use aether_runtime_state::{MemoryRuntimeStateConfig, RuntimeState};
 use base64::Engine as _;
-use hmac::Mac as _;
+use hmac::{KeyInit as _, Mac as _};
 use sha2::{Digest, Sha256};
 
 fn sample_identity_oauth_provider(provider_type: &str) -> StoredOAuthProviderConfig {
@@ -37,8 +37,8 @@ fn sample_identity_oauth_provider(provider_type: &str) -> StoredOAuthProviderCon
 
 fn oauth_login_cookie_name(state_nonce: &str) -> String {
     format!(
-        "__Host-aether_oauth_login_{:x}",
-        Sha256::digest(state_nonce.as_bytes())
+        "__Host-aether_oauth_login_{}",
+        hex::encode(Sha256::digest(state_nonce.as_bytes()))
     )
 }
 
@@ -337,7 +337,7 @@ async fn gateway_rejects_oauth_callback_without_browser_binding_without_consumin
         .with_data_state_for_tests(data_state)
         .with_runtime_state(runtime_state);
 
-    let binding_hash = format!("{:x}", Sha256::digest(b"correct-cookie"));
+    let binding_hash = hex::encode(Sha256::digest(b"correct-cookie"));
     let missing_cookie_state = crate::oauth::StoredIdentityOAuthState::login(
         "linuxdo",
         "device-csrf-test",
@@ -870,7 +870,7 @@ async fn gateway_oauth_bind_token_returns_authorize_url_and_stores_bound_browser
     assert_eq!(stored.client_device_id, device_id);
     assert_eq!(stored.bind_user_id.as_deref(), Some(user.id.as_str()));
     assert_eq!(stored.bind_session_id.as_deref(), Some(session_id));
-    let expected_binding_hash = format!("{:x}", Sha256::digest(browser_binding.as_bytes()));
+    let expected_binding_hash = hex::encode(Sha256::digest(browser_binding.as_bytes()));
     assert_eq!(
         stored.browser_binding_hash.as_deref(),
         Some(expected_binding_hash.as_str())

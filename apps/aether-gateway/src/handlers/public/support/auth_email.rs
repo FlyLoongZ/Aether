@@ -10,7 +10,7 @@ use aether_admin::system::{
     admin_email_template_subject_is_valid, ADMIN_EMAIL_TEMPLATE_MAX_PREVIEW_VALUE_BYTES,
     ADMIN_EMAIL_TEMPLATE_MAX_SUBJECT_BYTES,
 };
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use sha2::{Digest, Sha256};
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -80,21 +80,18 @@ pub(super) fn generate_auth_verification_token() -> String {
 }
 
 pub(super) fn auth_verification_token_hash(token: &str) -> String {
-    format!("{:x}", Sha256::digest(token.trim().as_bytes()))
+    hex::encode(Sha256::digest(token.trim().as_bytes()))
 }
 
 pub(super) fn auth_verification_code_hash(verification_token: &str, code: &str) -> String {
-    format!(
-        "{:x}",
-        Sha256::digest(
-            format!(
-                "aether-email-verification\0{}\0{}",
-                verification_token.trim(),
-                code.trim()
-            )
-            .as_bytes()
+    hex::encode(Sha256::digest(
+        format!(
+            "aether-email-verification\0{}\0{}",
+            verification_token.trim(),
+            code.trim()
         )
-    )
+        .as_bytes(),
+    ))
 }
 
 fn constant_time_eq(left: &str, right: &str) -> bool {
@@ -399,7 +396,7 @@ mod tests {
             assert!(!key.contains("example.com"));
             assert!(!key.contains(token));
         }
-        let plain_email_hash = format!("{:x}", Sha256::digest(email.to_ascii_lowercase()));
+        let plain_email_hash = hex::encode(Sha256::digest(email.to_ascii_lowercase()));
         assert!(!pending.contains(&plain_email_hash));
         assert_ne!(pending, proof);
     }

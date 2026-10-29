@@ -62,7 +62,7 @@ fn build_worker_boot_run_id(task_key: &str) -> String {
         return full_run_id;
     }
 
-    let digest_hex = format!("{:x}", Sha256::digest(full_run_id.as_bytes()));
+    let digest_hex = hex::encode(Sha256::digest(full_run_id.as_bytes()));
     let suffix = &digest_hex[..WORKER_BOOT_RUN_ID_HASH_HEX_BYTES];
     let mut prefix_bytes = BACKGROUND_TASK_RUN_ID_MAX_BYTES - 1 - WORKER_BOOT_RUN_ID_HASH_HEX_BYTES;
     while !full_run_id.is_char_boundary(prefix_bytes) {

@@ -1,5 +1,5 @@
 use base64::Engine as _;
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest as _, Sha256};
 
 pub const INTERNAL_GATEWAY_AUTH_TIMESTAMP_HEADER: &str = "x-aether-internal-gateway-timestamp";
@@ -95,6 +95,8 @@ mod tests {
         let path = "/api/internal/gateway/resolve?mode=full";
         let signature = sign_internal_gateway_request(secret, "POST", path, timestamp, nonce, body);
 
+        // Fixed SHA-256/HMAC vector, independently encoded with Python hashlib/hmac.
+        assert_eq!(signature, "M9j4UjYKWEGEZOsoP3G2Hzev59fv_00ZFpTIj0OLcVI");
         assert!(verify_internal_gateway_request_signature(
             secret, "POST", path, timestamp, nonce, body, &signature,
         ));

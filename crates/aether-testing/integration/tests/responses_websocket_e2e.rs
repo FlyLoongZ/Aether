@@ -1965,5 +1965,5 @@ async fn seed_chat_pii_redaction(backends: &DataBackends) -> Result<(), BoxError
 fn sha256_hex(value: &str) -> String {
     let mut hasher = sha2::Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }

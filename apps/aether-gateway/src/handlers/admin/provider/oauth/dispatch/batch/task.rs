@@ -79,7 +79,10 @@ fn codex_agent_identity_import_auth_configs(
 
 fn provider_agent_identity_import_lock_key(provider_id: &str, agent_runtime_id: &str) -> String {
     let digest = Sha256::digest(format!("{provider_id}\0{agent_runtime_id}").as_bytes());
-    format!("provider_oauth_agent_identity_import:{digest:x}")
+    format!(
+        "provider_oauth_agent_identity_import:{digest}",
+        digest = hex::encode(digest)
+    )
 }
 
 fn provider_agent_identity_import_lock_keys(

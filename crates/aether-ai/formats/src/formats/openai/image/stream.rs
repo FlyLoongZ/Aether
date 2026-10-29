@@ -835,7 +835,7 @@ fn image_chat_output_key(item: &Map<String, Value>, result: &str) -> String {
     digest.update(source.as_bytes());
     digest.update([0]);
     digest.update(value.as_bytes());
-    format!("{source}:{:x}", digest.finalize())
+    format!("{source}:{}", hex::encode(digest.finalize()))
 }
 
 fn insert_bounded_image_key(keys: &mut BTreeSet<String>, key: String) -> bool {

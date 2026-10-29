@@ -64,15 +64,15 @@ pub fn provider_oauth_device_session_storage_key(session_id: &str) -> String {
 pub fn provider_oauth_device_session_secret_purpose(session_id: &str) -> String {
     let storage_key = provider_oauth_device_session_storage_key(session_id);
     format!(
-        "provider-oauth-device-session:sha256:{:x}",
-        Sha256::digest(storage_key.as_bytes())
+        "provider-oauth-device-session:sha256:{}",
+        hex::encode(Sha256::digest(storage_key.as_bytes()))
     )
 }
 
 pub fn provider_oauth_state_storage_key(nonce: &str) -> String {
     format!(
-        "{PROVIDER_OAUTH_STATE_PREFIX}sha256:{:x}",
-        Sha256::digest(nonce.as_bytes())
+        "{PROVIDER_OAUTH_STATE_PREFIX}sha256:{}",
+        hex::encode(Sha256::digest(nonce.as_bytes()))
     )
 }
 
@@ -83,8 +83,8 @@ pub fn provider_oauth_batch_task_storage_key(task_id: &str) -> String {
 pub fn provider_oauth_batch_task_secret_purpose(task_id: &str) -> String {
     let storage_key = provider_oauth_batch_task_storage_key(task_id);
     format!(
-        "provider-oauth-batch-task:sha256:{:x}",
-        Sha256::digest(storage_key.as_bytes())
+        "provider-oauth-batch-task:sha256:{}",
+        hex::encode(Sha256::digest(storage_key.as_bytes()))
     )
 }
 

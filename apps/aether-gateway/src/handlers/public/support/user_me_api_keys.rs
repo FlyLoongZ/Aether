@@ -256,7 +256,7 @@ fn hash_users_me_api_key(value: &str) -> String {
 
     let mut hasher = sha2::Sha256::new();
     hasher.update(value.as_bytes());
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 fn normalize_users_me_api_key_providers(

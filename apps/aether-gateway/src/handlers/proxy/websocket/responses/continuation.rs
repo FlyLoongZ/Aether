@@ -449,7 +449,7 @@ fn digest_key_components<const N: usize>(domain: &[u8], components: [&[u8]; N]) 
         digest.update((component.len() as u64).to_be_bytes());
         digest.update(component);
     }
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 #[cfg(test)]

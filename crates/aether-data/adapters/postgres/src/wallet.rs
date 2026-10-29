@@ -7872,7 +7872,7 @@ fn format_redeem_code(normalized: &str) -> String {
 fn hash_redeem_code(normalized: &str) -> String {
     use sha2::Digest;
 
-    format!("{:x}", sha2::Sha256::digest(normalized.as_bytes()))
+    hex::encode(sha2::Sha256::digest(normalized.as_bytes()))
 }
 
 fn redeem_code_prefix(normalized: &str) -> String {

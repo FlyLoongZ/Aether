@@ -7,7 +7,7 @@ use aether_data_contracts::repository::candidates::RequestCandidateReadRepositor
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
 use aether_data_contracts::repository::usage::{UsageReadRepository, UsageRepository};
 use aether_data_contracts::repository::video_tasks::VideoTaskRepository;
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -642,19 +642,16 @@ impl AppState {
         verification_token: &str,
         created_at: chrono::DateTime<chrono::Utc>,
     ) -> Self {
-        let code_hash = format!(
-            "{:x}",
-            Sha256::digest(
-                format!(
-                    "aether-email-verification\0{}\0{}",
-                    verification_token.trim(),
-                    code.trim()
-                )
-                .as_bytes()
+        let code_hash = hex::encode(Sha256::digest(
+            format!(
+                "aether-email-verification\0{}\0{}",
+                verification_token.trim(),
+                code.trim()
             )
-        );
+            .as_bytes(),
+        ));
         let verification_token_hash =
-            format!("{:x}", Sha256::digest(verification_token.trim().as_bytes()));
+            hex::encode(Sha256::digest(verification_token.trim().as_bytes()));
         let normalized_email = email.trim().to_ascii_lowercase();
         let key = format!(
             "email:verification:{}",

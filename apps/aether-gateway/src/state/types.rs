@@ -149,7 +149,7 @@ impl GatewayUserSessionView {
 
         let mut hasher = sha2::Sha256::new();
         hasher.update(token.as_bytes());
-        format!("{:x}", hasher.finalize())
+        hex::encode(hasher.finalize())
     }
 
     pub(crate) fn verify_refresh_token(

@@ -92,15 +92,15 @@ impl StoredIdentityOAuthState {
 
 pub(crate) fn identity_oauth_state_storage_key(nonce: &str) -> String {
     format!(
-        "identity_oauth_state:sha256:{:x}",
-        Sha256::digest(nonce.trim().as_bytes())
+        "identity_oauth_state:sha256:{}",
+        hex::encode(Sha256::digest(nonce.trim().as_bytes()))
     )
 }
 
 fn identity_oauth_state_secret_purpose(nonce: &str) -> String {
     format!(
-        "{IDENTITY_OAUTH_STATE_SECRET_PURPOSE}:sha256:{:x}",
-        Sha256::digest(nonce.trim().as_bytes())
+        "{IDENTITY_OAUTH_STATE_SECRET_PURPOSE}:sha256:{}",
+        hex::encode(Sha256::digest(nonce.trim().as_bytes()))
     )
 }
 

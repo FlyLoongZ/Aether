@@ -428,7 +428,7 @@ fn log_gateway_internal_error(message: &str, detail_logging: bool) {
 
 fn gateway_error_fingerprint(message: &str) -> String {
     let digest = Sha256::digest(message.as_bytes());
-    format!("{:x}", digest)[..16].to_string()
+    hex::encode(digest)[..16].to_string()
 }
 
 impl From<AiSurfaceFinalizeError> for GatewayError {
