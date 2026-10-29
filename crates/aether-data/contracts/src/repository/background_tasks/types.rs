@@ -377,14 +377,7 @@ fn sanitize_background_task_metadata_value(key: &str, value: Value) -> Option<Va
         ),
         "provider_type" => sanitize_background_task_metadata_enum(
             value,
-            &[
-                "antigravity",
-                "claude_code",
-                "codex",
-                "gemini_cli",
-                "kiro",
-                "windsurf",
-            ],
+            &["antigravity", "claude_code", "codex", "kiro"],
         ),
         "status" => sanitize_background_task_metadata_enum(
             value,

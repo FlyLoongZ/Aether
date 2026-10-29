@@ -50,13 +50,11 @@ use crate::ai_serving::transport::{
     apply_local_auth_config_header_overrides,
     build_kiro_cross_format_upstream_url, build_openai_image_headers,
     build_openai_image_upstream_url, build_standard_provider_request_headers,
-    build_windsurf_cascade_headers, build_windsurf_cascade_request_body,
-    build_windsurf_cascade_upstream_url, is_gemini_cli_provider_transport,
-    is_windsurf_provider_transport, local_standard_transport_unsupported_reason_with_network,
-    local_windsurf_request_transport_unsupported_reason_with_network,
+    is_gemini_cli_provider_transport,
+    local_standard_transport_unsupported_reason_with_network,
     openai_image_transport_unsupported_reason, resolve_openai_image_auth,
     ProviderOpenAiImageHeadersInput, StandardProviderRequestHeadersInput,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, WINDSURF_ENVELOPE_NAME,
+    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
 };
 use crate::ai_serving::{
     ai_local_execution_contract_for_formats, request_conversion_direct_auth,
@@ -251,17 +249,12 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
         )
         .await);
     }
-    let is_windsurf_cascade =
-        provider_api_format == "openai:chat" && is_windsurf_provider_transport(&transport);
-
     let same_format = api_format_alias_matches(provider_api_format, &client_api_format);
     let conversion_kind = request_conversion_kind(spec_metadata.api_format, provider_api_format);
     let transport_unsupported_reason = if same_format && is_kiro_claude_cli {
         local_kiro_request_transport_unsupported_reason_with_network(&transport)
     } else if same_format {
         local_standard_transport_unsupported_reason_with_network(&transport, provider_api_format)
-    } else if is_windsurf_cascade {
-        local_windsurf_request_transport_unsupported_reason_with_network(&transport)
     } else {
         match conversion_kind {
             Some(_)
@@ -462,7 +455,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
                 upstream_is_stream,
                 force_body_stream_field,
                 provider_type: transport.provider.provider_type.as_str(),
-                body_rules: if is_kiro_claude_cli || is_windsurf_cascade {
+                body_rules: if is_kiro_claude_cli {
                     None
                 } else {
                     transport.endpoint.body_rules.as_ref()
@@ -481,7 +474,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
                 force_body_stream_field,
                 transport.provider.provider_type.as_str(),
                 provider_api_format,
-                if is_kiro_claude_cli || is_windsurf_cascade {
+                if is_kiro_claude_cli {
                     None
                 } else {
                     transport.endpoint.body_rules.as_ref()
@@ -498,7 +491,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
             force_body_stream_field,
             transport.provider.provider_type.as_str(),
             provider_api_format,
-            if is_kiro_claude_cli || is_windsurf_cascade {
+            if is_kiro_claude_cli {
                 None
             } else {
                 transport.endpoint.body_rules.as_ref()
@@ -634,28 +627,6 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
             redaction.redacted,
         )
         .await;
-    }
-    if is_windsurf_cascade {
-        return Ok(build_windsurf_openai_responses_payload_parts(
-            state,
-            parts,
-            trace_id,
-            body_json,
-            input,
-            eligible,
-            candidate_index,
-            candidate_id,
-            spec_metadata.api_format,
-            &transport,
-            provider_api_format,
-            mapped_model,
-            auth_header,
-            auth_value,
-            provider_request_body,
-            upstream_is_stream,
-            redaction.redacted,
-        )
-        .await);
     }
     if provider_api_format == "gemini:generate_content"
         && is_gemini_cli_provider_transport(&transport)
@@ -1153,134 +1124,6 @@ async fn build_gemini_cli_openai_responses_payload_parts(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn build_windsurf_openai_responses_payload_parts(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    original_body_json: &serde_json::Value,
-    input: &LocalOpenAiResponsesDecisionInput,
-    eligible: &EligibleLocalExecutionCandidate,
-    candidate_index: u32,
-    candidate_id: &str,
-    client_api_format: &str,
-    transport: &Arc<GatewayProviderTransportSnapshot>,
-    provider_api_format: &str,
-    mapped_model: String,
-    auth_header: String,
-    auth_value: String,
-    openai_chat_request_body: Value,
-    upstream_is_stream: bool,
-    request_redacted: bool,
-) -> Option<LocalOpenAiResponsesCandidatePayloadParts> {
-    let candidate = &eligible.candidate;
-    let effective_headers = input.effective_headers(&parts.headers);
-    let provider_request_body = match build_windsurf_cascade_request_body(
-        &openai_chat_request_body,
-        &mapped_model,
-        &auth_value,
-        transport.endpoint.body_rules.as_ref(),
-        Some(effective_headers),
-        upstream_is_stream,
-    ) {
-        Some(body) => body,
-        None => {
-            mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "provider_request_body_build_failed",
-                CandidateFailureDiagnostic::envelope_build_failed(
-                    client_api_format,
-                    provider_api_format,
-                    "openai_responses_windsurf_cascade",
-                ),
-            )
-            .await;
-            return None;
-        }
-    };
-    let upstream_url = match build_windsurf_cascade_upstream_url(
-        transport.endpoint.base_url.as_str(),
-        parts.uri.query(),
-    ) {
-        Some(url) => url,
-        None => {
-            mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "upstream_url_missing",
-                CandidateFailureDiagnostic::upstream_url_missing(
-                    client_api_format,
-                    provider_api_format,
-                    "openai_responses_windsurf_url",
-                ),
-            )
-            .await;
-            return None;
-        }
-    };
-    let mut provider_request_headers = match build_windsurf_cascade_headers(
-        effective_headers,
-        &provider_request_body,
-        original_body_json,
-        transport.endpoint.header_rules.as_ref(),
-        &auth_header,
-        &auth_value,
-        upstream_is_stream,
-    ) {
-        Some(headers) => headers,
-        None => {
-            mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
-                state,
-                input,
-                trace_id,
-                candidate,
-                candidate_index,
-                candidate_id,
-                "transport_header_rules_apply_failed",
-                CandidateFailureDiagnostic::header_rules_apply_failed(
-                    client_api_format,
-                    provider_api_format,
-                    "openai_responses_windsurf_headers",
-                ),
-            )
-            .await;
-            return None;
-        }
-    };
-    request_identity_response_encoding_when_redacted(
-        &mut provider_request_headers,
-        request_redacted,
-    );
-    let (execution_strategy, conversion_mode) =
-        ai_local_execution_contract_for_formats(client_api_format, provider_api_format);
-
-    Some(LocalOpenAiResponsesCandidatePayloadParts {
-        auth_header,
-        auth_value,
-        mapped_model,
-        provider_api_format: provider_api_format.to_string(),
-        provider_request_body,
-        provider_request_headers,
-        upstream_url,
-        execution_strategy,
-        conversion_mode,
-        envelope_name: Some(WINDSURF_ENVELOPE_NAME),
-        upstream_is_stream,
-        transport: Arc::clone(transport),
-        transport_profile: None,
-        image_request_summary: None,
-        request_redacted,
-    })
-}
-
 fn api_format_alias_matches(left: &str, right: &str) -> bool {
     crate::ai_serving::api_format_alias_matches(left, right)
 }

@@ -3,7 +3,6 @@ mod claude_code;
 mod codex;
 mod generic;
 mod kiro;
-mod windsurf;
 mod xai;
 
 pub use antigravity::{AntigravityProviderOAuthAdapter, ANTIGRAVITY_USER_INFO_URL};
@@ -23,10 +22,6 @@ pub use kiro::{
     generate_kiro_machine_id, is_valid_kiro_region, normalize_kiro_machine_id,
     normalize_kiro_region, KiroAuthConfig, KiroProviderOAuthAdapter, DEFAULT_KIRO_VERSION,
     DEFAULT_NODE_VERSION, DEFAULT_REGION, DEFAULT_SYSTEM_VERSION, KIRO_PROVIDER_TYPE,
-};
-pub use windsurf::{
-    WindsurfProviderOAuthAdapter, WINDSURF_CLIENT_ID, WINDSURF_PROVIDER_TYPE,
-    WINDSURF_SHOW_AUTH_TOKEN_REDIRECT, WINDSURF_SIGNIN_URL,
 };
 pub use xai::{
     XaiDevicePollOutcome, XaiProviderOAuthAdapter, XAI_CLIENT_ID, XAI_DEVICE_CODE_GRANT_TYPE,

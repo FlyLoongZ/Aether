@@ -161,7 +161,10 @@ fn key_has_auth_type_overrides(key: &StoredProviderCatalogKey) -> bool {
 }
 
 fn provider_uses_bearer_oauth_runtime(provider_type: &str) -> bool {
-    matches!(provider_type.trim().to_ascii_lowercase().as_str(),)
+    matches!(
+        provider_type.trim().to_ascii_lowercase().as_str(),
+        "claude_code" | "codex" | "gemini_cli" | "antigravity" | "kiro" | "xai"
+    )
 }
 
 fn provider_key_is_legacy_kiro_oauth_session(
@@ -211,12 +214,11 @@ pub(crate) fn provider_key_auth_semantics(
         }
     };
 
-    let provider_type_normalized = provider_type.trim().to_ascii_lowercase();
     ProviderKeyAuthSemantics {
         credential_kind,
         runtime_auth_kind,
         oauth_managed,
-        can_refresh_oauth: oauth_managed && provider_type_normalized != "windsurf",
+        can_refresh_oauth: oauth_managed,
     }
 }
 

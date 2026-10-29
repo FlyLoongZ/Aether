@@ -119,132 +119,8 @@
           :inert="mode !== 'oauth' ? true : undefined"
           :aria-hidden="mode !== 'oauth'"
         >
-          <!-- Windsurf: 浏览器 session/poll 授权 -->
-          <template v-if="isWindsurfProvider">
-            <div class="space-y-4">
-              <div class="grid grid-cols-3 gap-1.5">
-                <button
-                  v-for="opt in ([
-                    { key: 'default', label: '默认' },
-                    { key: 'google', label: 'Google' },
-                    { key: 'github', label: 'GitHub' },
-                  ] as const)"
-                  :key="opt.key"
-                  class="h-8 text-xs font-medium rounded-md border transition-colors"
-                  :class="device.auth_type === opt.key
-                    ? 'border-primary bg-primary/5 text-foreground'
-                    : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/20'"
-                  @click="selectWindsurfLoginOption(opt.key)"
-                >
-                  {{ legacyT(opt.label) }}
-                </button>
-              </div>
-
-              <div
-                v-if="device.status === 'error' || device.status === 'expired'"
-                class="rounded-xl border border-destructive/20 bg-destructive/5 p-5"
-              >
-                <div class="flex flex-col items-center text-center space-y-3">
-                  <div class="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
-                    <AlertCircle class="w-5 h-5 text-destructive" />
-                  </div>
-                  <div class="space-y-1">
-                    <p class="text-sm font-medium text-destructive">
-                      {{ legacyT(device.status === 'expired' ? '授权已过期' : '授权失败') }}
-                    </p>
-                    <p class="text-xs text-muted-foreground">
-                      {{ legacyT(device.error || '请重试') }}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    @click="resetDevice"
-                  >
-                    {{ legacyT('重新开始') }}
-                  </Button>
-                </div>
-              </div>
-
-              <div
-                v-else-if="device.starting && !device.session_id"
-                class="flex items-center justify-center py-12"
-              >
-                <div class="text-center">
-                  <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-3" />
-                  <p class="text-xs text-muted-foreground">
-                    {{ legacyT('正在准备登录...') }}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                v-else
-                class="space-y-4"
-              >
-                <div class="space-y-2">
-                  <div class="flex items-center gap-2">
-                    <span class="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold shrink-0">1</span>
-                    <span class="text-xs font-medium">{{ legacyT('前往登录') }}</span>
-                  </div>
-                  <div class="flex gap-2 pl-6">
-                    <Button
-                      size="sm"
-                      :disabled="device.starting || device.completing || !device.verification_uri_complete"
-                      @click="openDeviceVerificationUrl"
-                    >
-                      <ExternalLink class="w-3 h-3 mr-1" />
-                      {{ legacyT('打开') }}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      :disabled="device.starting || device.completing || !device.verification_uri_complete"
-                      @click="copyToClipboard(device.verification_uri_complete)"
-                    >
-                      <Copy class="w-3 h-3 mr-1" />
-                      {{ legacyT('复制') }}
-                    </Button>
-                    <Button
-                      v-if="!device.session_id"
-                      size="sm"
-                      variant="outline"
-                      :disabled="device.starting"
-                      @click="startDeviceAuth"
-                    >
-                      {{ legacyT('开始') }}
-                    </Button>
-                  </div>
-                </div>
-
-                <div class="space-y-2">
-                  <div class="flex items-center gap-2">
-                    <span class="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold shrink-0">2</span>
-                    <span class="text-xs font-medium">{{ legacyT('粘贴回调 URL 或 token') }}</span>
-                  </div>
-                  <div class="pl-6">
-                    <Textarea
-                      v-model="device.callback_url"
-                      :disabled="device.completing"
-                      :placeholder="deviceCallbackPlaceholder"
-                      class="min-h-[150px] text-xs font-mono break-all !rounded-xl"
-                      spellcheck="false"
-                    />
-                  </div>
-                  <div
-                    v-if="device.session_id && device.status === 'pending'"
-                    class="pl-6 flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                  >
-                    <div class="animate-spin rounded-full h-3 w-3 border-[1.5px] border-primary/30 border-t-primary" />
-                    <span>{{ sessionRemainingText }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-
           <!-- xAI: 设备授权 -->
-          <template v-else-if="isXaiProvider">
+          <template v-if="isXaiProvider">
             <div class="space-y-3">
               <div class="h-[265px]">
                 <div
@@ -773,70 +649,7 @@
           :inert="mode !== 'import' ? true : undefined"
           :aria-hidden="mode !== 'import'"
         >
-          <div
-            v-if="isWindsurfProvider"
-            class="grid grid-cols-2 gap-1.5 rounded-lg border border-border p-0.5 bg-muted/30"
-          >
-            <button
-              v-for="method in ([
-                { key: 'email_password', label: '邮箱密码' },
-                { key: 'token_json', label: 'Token / JSON' },
-              ] as const)"
-              :key="method.key"
-              class="h-8 text-xs font-medium rounded-md transition-colors"
-              :class="windsurfImportMethod === method.key
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'"
-              :disabled="importing"
-              @click="setWindsurfImportMethod(method.key)"
-            >
-              {{ legacyT(method.label) }}
-            </button>
-          </div>
-
-          <div
-            v-if="isWindsurfEmailPasswordImport"
-            class="space-y-3"
-          >
-            <div class="space-y-1.5">
-              <label class="text-xs font-medium">{{ legacyT('邮箱') }}</label>
-              <input
-                v-model="windsurfEmail"
-                type="email"
-                autocomplete="username"
-                :disabled="importing"
-                placeholder="you@example.com"
-                class="w-full h-9 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring focus:relative focus:z-10"
-                spellcheck="false"
-              >
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-xs font-medium">{{ legacyT('密码') }}</label>
-              <input
-                v-model="windsurfPassword"
-                type="password"
-                autocomplete="current-password"
-                :disabled="importing"
-                :placeholder="legacyT('Windsurf 密码')"
-                class="w-full h-9 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring focus:relative focus:z-10"
-              >
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-xs font-medium text-muted-foreground">{{ legacyT('名称（可选）') }}</label>
-              <input
-                v-model="windsurfAccountName"
-                type="text"
-                autocomplete="off"
-                :disabled="importing"
-                :placeholder="legacyT('未填写时使用邮箱')"
-                class="w-full h-9 px-2.5 text-xs rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-ring focus:relative focus:z-10"
-                spellcheck="false"
-              >
-            </div>
-          </div>
-
-          <template v-else>
-            <JsonImportInput
+          <JsonImportInput
               v-model="importText"
               :disabled="importing"
               :reset-key="importInputResetKey"
@@ -848,10 +661,8 @@
               textarea-class="min-h-[200px] text-xs font-mono break-all !rounded-xl"
               @error="handleImportInputError"
             />
-          </template>
-
           <div
-            v-if="importTask && !isWindsurfEmailPasswordImport"
+            v-if="importTask"
             class="rounded-xl border border-border bg-muted/20 p-3 space-y-2"
           >
             <div class="flex items-center justify-between text-xs">
@@ -1086,7 +897,6 @@ function localizedApiError(error: unknown, fallback: string): string {
 type DialogMode = 'oauth' | 'cookie' | 'import' | 'agent_identity'
 const DEFAULT_DIALOG_MODE: DialogMode = 'oauth'
 const mode = ref<DialogMode>(DEFAULT_DIALOG_MODE)
-type WindsurfImportMethod = 'email_password' | 'token_json'
 
 // OAuth 状态
 interface OAuthState {
@@ -1117,7 +927,6 @@ let oauthCompleteRequestId = 0
 
 // 设备授权状态
 type DeviceAuthType = 'default' | 'google' | 'github' | 'builder_id' | 'identity_center' | 'device'
-type WindsurfLoginOption = 'default' | 'google' | 'github'
 
 interface DeviceAuthState {
   auth_type: DeviceAuthType
@@ -1176,10 +985,6 @@ const importTask = ref<OAuthBatchImportTaskStatusResponse | null>(null)
 let importPollTimer: ReturnType<typeof setTimeout> | null = null
 const importPolling = ref(false)
 const redundantImportTaskMessagePattern = /^处理中(?:\s+\d+\s*\/\s*\d+)?$/
-const windsurfImportMethod = ref<WindsurfImportMethod>('email_password')
-const windsurfEmail = ref('')
-const windsurfPassword = ref('')
-const windsurfAccountName = ref('')
 const agentIdentityInput = ref('')
 const creatingAgentIdentity = ref(false)
 let agentIdentityRequestId = 0
@@ -1195,11 +1000,10 @@ const CLAUDE_COOKIE_BATCH_LIMIT = 20
 const isOpen = computed(() => props.open)
 
 const isKiroProvider = computed(() => (props.providerType || '').toLowerCase() === 'kiro')
-const isWindsurfProvider = computed(() => (props.providerType || '').toLowerCase() === 'windsurf')
 const isXaiProvider = computed(() => (props.providerType || '').toLowerCase() === 'xai')
 const isCodexProvider = computed(() => (props.providerType || '').toLowerCase() === 'codex')
 const isClaudeCodeProvider = computed(() => (props.providerType || '').toLowerCase() === 'claude_code')
-const isDeviceBrowserProvider = computed(() => isKiroProvider.value || isWindsurfProvider.value || isXaiProvider.value)
+const isDeviceBrowserProvider = computed(() => isKiroProvider.value || isXaiProvider.value)
 
 const isSocialDeviceAuth = computed(() =>
   device.value.auth_type === 'google' || device.value.auth_type === 'github'
@@ -1209,9 +1013,7 @@ const isKiroSocialManualCallbackMode = computed(() =>
   isKiroProvider.value && isSocialDeviceAuth.value
 )
 
-const isManualDeviceCallbackMode = computed(() =>
-  isKiroSocialManualCallbackMode.value || isWindsurfProvider.value
-)
+const isManualDeviceCallbackMode = computed(() => isKiroSocialManualCallbackMode.value)
 
 const isManualDeviceCallbackPending = computed(() =>
   isManualDeviceCallbackMode.value
@@ -1220,7 +1022,6 @@ const isManualDeviceCallbackPending = computed(() =>
 )
 
 const authorizationModeLabel = computed(() => {
-  if (isWindsurfProvider.value) return legacyT('浏览器登录')
   if (isXaiProvider.value || isDeviceBrowserProvider.value) return legacyT('设备授权')
   return legacyT('获取授权')
 })
@@ -1236,9 +1037,7 @@ const oauthCallbackPlaceholder = computed(() =>
 )
 
 const deviceCallbackPlaceholder = computed(() =>
-  isWindsurfProvider.value
-    ? legacyT('粘贴包含 token=...&state=... 的回调 URL；session token/apiKey 也可直接粘贴，普通 token 请用导入授权')
-    : `http://localhost:49153/oauth/callback?login_option=${device.value.auth_type}&code=...&state=...`
+  `http://localhost:49153/oauth/callback?login_option=${device.value.auth_type}&code=...&state=...`
 )
 
 const deviceCountdownFormatted = computed(() => {
@@ -1276,14 +1075,7 @@ const canCompleteDeviceAuth = computed(() => {
   return !device.value.starting && !device.value.completing
 })
 
-const canImport = computed(() => {
-  if (isWindsurfEmailPasswordImport.value) {
-    return windsurfEmail.value.trim().length > 0
-      && windsurfPassword.value.trim().length > 0
-      && !importing.value
-  }
-  return importText.value.trim().length > 0 && !importing.value
-})
+const canImport = computed(() => importText.value.trim().length > 0 && !importing.value)
 
 const cookieEntries = computed(() => cookieInput.value
   .split(/\r?\n/)
@@ -1331,9 +1123,6 @@ const importManualPlaceholder = computed(() => {
   if (isXaiProvider.value) {
     return legacyT('粘贴 xAI API Key、Access Token，或包含 refresh_token / api_key 的 JSON')
   }
-  if (isWindsurfProvider.value) {
-    return legacyT('粘贴 show-auth-token Token、API key 或 JSON 内容')
-  }
   return legacyT('粘贴 Refresh Token / Access Token / Agent Identity JSON 内容')
 })
 const importPasteToggleText = computed(() => legacyT('或手动粘贴 Token'))
@@ -1344,16 +1133,13 @@ const proxyUsageDescription = computed(() => {
   }
   return '授权、刷新、额度查询均走此代理'
 })
-const isWindsurfEmailPasswordImport = computed(() =>
-  isWindsurfProvider.value && windsurfImportMethod.value === 'email_password'
-)
 const importButtonText = computed(() => {
   if (importing.value) {
-    return importTask.value && !isWindsurfEmailPasswordImport.value
+    return importTask.value
       ? (isEnglishLocale() ? `Importing ${importTask.value.progress_percent}%` : `导入中 ${importTask.value.progress_percent}%`)
       : legacyT('导入中...')
   }
-  return isWindsurfEmailPasswordImport.value ? legacyT('登录并导入') : importButtonLabel.value
+  return importButtonLabel.value
 })
 
 const importTaskMessageText = computed(() => {
@@ -1554,14 +1340,6 @@ function isKiroDeviceAuthOptionDisabled(_authType: DeviceAuthType): boolean {
   return true
 }
 
-function selectWindsurfLoginOption(loginOption: WindsurfLoginOption) {
-  if (!isWindsurfProvider.value) return
-  if (device.value.auth_type === loginOption && device.value.session_id && device.value.status === 'pending') return
-  deviceAuthRequestId += 1
-  resetDeviceRuntimeState()
-  device.value.auth_type = loginOption
-}
-
 function selectDeviceAuthType(authType: DeviceAuthType) {
   if (device.value.auth_type === authType) return
   if (isKiroDeviceAuthOptionDisabled(authType)) return
@@ -1580,17 +1358,13 @@ function resetDevice() {
   totp.stop()
   const { auth_type, start_url, region, totp_secret } = device.value
   device.value = createInitialDeviceState()
-  device.value.auth_type = isXaiProvider.value
-    ? 'device'
-    : isWindsurfProvider.value
-      ? (auth_type === 'google' || auth_type === 'github' ? auth_type : 'default')
-      : auth_type
+  device.value.auth_type = isXaiProvider.value ? 'device' : auth_type
   device.value.start_url = start_url
   device.value.region = region
   device.value.totp_secret = totp_secret
   if (isXaiProvider.value) {
     void ensureXaiDeviceAuth()
-  } else if (!isWindsurfProvider.value && (device.value.auth_type === 'google' || device.value.auth_type === 'github')) {
+  } else if (device.value.auth_type === 'google' || device.value.auth_type === 'github') {
     void ensureKiroSocialDeviceAuth()
   }
 }
@@ -1607,19 +1381,13 @@ function resetForm() {
   stopDevicePolling()
   totp.stop()
   device.value = createInitialDeviceState()
-  if (isWindsurfProvider.value) {
-    device.value.auth_type = 'default'
-  } else if (isXaiProvider.value) {
+  if (isXaiProvider.value) {
     device.value.auth_type = 'device'
   }
   importText.value = ''
   importing.value = false
   importTask.value = null
   importInputResetKey.value += 1
-  windsurfImportMethod.value = 'email_password'
-  windsurfEmail.value = ''
-  windsurfPassword.value = ''
-  windsurfAccountName.value = ''
   agentIdentityInput.value = ''
   creatingAgentIdentity.value = false
   cookieInput.value = ''
@@ -1916,10 +1684,8 @@ async function pollCookieAuthorizeTaskStatus(taskId: string, requestId: number) 
 
 function parseImportText(text: string): {
   api_key?: string
-  token?: string
   refresh_token?: string
   access_token?: string
-  password?: string
   expires_at?: number
   name?: string
   email?: string
@@ -1959,35 +1725,6 @@ function parseImportText(text: string): {
       // Raw xAI API keys / access tokens are imported as access_token.
     }
     return { access_token: trimmed }
-  }
-
-  if (isWindsurfProvider.value) {
-    try {
-      const parsed: unknown = JSON.parse(trimmed)
-      if (typeof parsed === 'object' && parsed !== null) {
-        const obj = parsed as Record<string, unknown>
-        const apiKey = normalizeStringField(obj.api_key) ?? normalizeStringField(obj.apiKey)
-        const token = normalizeStringField(obj.token) ?? normalizeStringField(obj.auth_token) ?? normalizeStringField(obj.authToken)
-        const refreshToken = normalizeStringField(obj.refresh_token) ?? normalizeStringField(obj.refreshToken)
-        const accessToken = normalizeStringField(obj.access_token) ?? normalizeStringField(obj.accessToken)
-        const email = normalizeStringField(obj.email)
-        const password = normalizeStringField(obj.password)
-        if (apiKey || token || refreshToken || accessToken || (email && password)) {
-          return {
-            api_key: apiKey,
-            token,
-            refresh_token: refreshToken,
-            access_token: accessToken,
-            email,
-            password,
-            name: normalizeStringField(obj.name) ?? email,
-          }
-        }
-      }
-    } catch {
-      // Not JSON: treat as token copied from show-auth-token.
-    }
-    return { token: trimmed }
   }
 
   if (isClaudeCodeProvider.value) {
@@ -2216,47 +1953,8 @@ function requiresCodexBatchImport(credentials: string): boolean {
   }
 }
 
-function setWindsurfImportMethod(method: WindsurfImportMethod) {
-  if (!isWindsurfProvider.value || importing.value) return
-  windsurfImportMethod.value = method
-  importTask.value = null
-}
-
-async function handleWindsurfEmailPasswordImport() {
-  if (!props.providerId) return
-
-  const email = windsurfEmail.value.trim()
-  const password = windsurfPassword.value.trim()
-  if (!email || !password) {
-    showError(legacyT('请输入邮箱和密码'), legacyT('格式错误'))
-    return
-  }
-
-  importing.value = true
-  try {
-    const result = await importProviderRefreshToken(props.providerId, {
-      email,
-      password,
-      name: windsurfAccountName.value.trim() || email,
-      proxy_node_id: selectedProxyNodeId.value || undefined,
-    })
-    success(getOAuthSuccessMessage('导入', result))
-    emit('saved')
-    handleClose()
-  } catch (err: unknown) {
-    const errorMessage = localizedApiError(err, '导入失败')
-    showError(errorMessage, legacyT('错误'))
-  } finally {
-    importing.value = false
-  }
-}
-
 async function handleImport() {
   if (!canImport.value || !props.providerId) return
-  if (isWindsurfEmailPasswordImport.value) {
-    await handleWindsurfEmailPasswordImport()
-    return
-  }
 
   const inputText = importText.value.trim()
   if (!inputText) {
@@ -2404,21 +2102,16 @@ async function startDeviceAuth() {
   device.value.starting = true
   device.value.error = ''
   try {
-    const isWindsurf = isWindsurfProvider.value
     const isXai = isXaiProvider.value
     const isBuilderID = requestedAuthType === 'builder_id'
     const isSocial = !isXai && (requestedAuthType === 'google' || requestedAuthType === 'github')
-    const windsurfLoginOption: WindsurfLoginOption = isSocial ? requestedAuthType : 'default'
-    const authTypeForRequest = isWindsurf
-      ? 'browser'
-      : isXai
-        ? 'device'
-        : (requestedAuthType === 'default' ? 'google' : requestedAuthType)
+    const authTypeForRequest = isXai
+      ? 'device'
+      : (requestedAuthType === 'default' ? 'google' : requestedAuthType)
     const resp = await startDeviceAuthorize(props.providerId, {
       auth_type: authTypeForRequest,
-      login_option: isWindsurf ? windsurfLoginOption : undefined,
-      start_url: (isWindsurf || isXai) ? undefined : (isBuilderID ? BUILDER_ID_START_URL : (isSocial ? undefined : (device.value.start_url.trim() || undefined))),
-      region: (isWindsurf || isXai) ? undefined : (isBuilderID || isSocial ? BUILDER_ID_REGION : (device.value.region.trim() || undefined)),
+      start_url: isXai ? undefined : (isBuilderID ? BUILDER_ID_START_URL : (isSocial ? undefined : (device.value.start_url.trim() || undefined))),
+      region: isXai ? undefined : (isBuilderID || isSocial ? BUILDER_ID_REGION : (device.value.region.trim() || undefined)),
       proxy_node_id: selectedProxyNodeId.value || undefined,
     })
     if (requestId !== deviceAuthRequestId || device.value.auth_type !== requestedAuthType) return
@@ -2428,7 +2121,7 @@ async function startDeviceAuth() {
     device.value.verification_uri_complete = resp.verification_uri_complete
     device.value.expires_at = Date.now() + resp.expires_in * 1000
     device.value.interval = resp.interval || 5
-    device.value.callback_required = resp.callback_required === true || isSocial || isWindsurf
+    device.value.callback_required = resp.callback_required === true || isSocial
     device.value.status = 'pending'
     startCountdown()
     if (!device.value.callback_required) {
@@ -2480,39 +2173,14 @@ async function completeDeviceAuth() {
   }
 }
 
-function normalizeWindsurfSubmittedCredential(value: string): { callback_url?: string, token?: string } {
-  const trimmed = value.trim()
-  if (!trimmed) return {}
-  if (/^https?:\/\//i.test(trimmed)) {
-    return { callback_url: trimmed }
-  }
-
-  const query = trimmed.replace(/^[?#&]+/, '')
-  const params = new URLSearchParams(query)
-  const hasTokenParam = ['token', 'auth_token', 'access_token'].some(key => params.has(key))
-  const hasStateParam = params.has('state')
-  if (hasTokenParam && hasStateParam) {
-    return { callback_url: `https://windsurf.com/show-auth-token?${query}` }
-  }
-  if (hasTokenParam) {
-    return { token: params.get('token') || params.get('auth_token') || params.get('access_token') || trimmed }
-  }
-
-  return { token: trimmed }
-}
-
 async function pollDevice(withCallback = false) {
   if (!props.providerId || !device.value.session_id || device.value.status !== 'pending') return
 
   try {
     const submittedCredential = withCallback ? device.value.callback_url.trim() : ''
-    const windsurfSubmitted = isWindsurfProvider.value
-      ? normalizeWindsurfSubmittedCredential(submittedCredential)
-      : {}
     const result = await pollDeviceAuthorize(props.providerId, {
       session_id: device.value.session_id,
-      callback_url: withCallback ? (windsurfSubmitted.callback_url || (!isWindsurfProvider.value ? submittedCredential : undefined)) : undefined,
-      token: withCallback ? windsurfSubmitted.token : undefined,
+      callback_url: withCallback ? submittedCredential : undefined,
     })
 
     switch (result.status) {
@@ -2568,9 +2236,7 @@ watch(
     if (newOpen) {
       proxyNodesStore.ensureLoaded()
       mode.value = DEFAULT_DIALOG_MODE
-      if (isWindsurfProvider.value) {
-        device.value.auth_type = 'default'
-      } else if (isXaiProvider.value) {
+      if (isXaiProvider.value) {
         device.value.auth_type = 'device'
         void ensureXaiDeviceAuth()
       } else if (isKiroProvider.value) {
@@ -2594,11 +2260,7 @@ watch(
     if (props.open && mode.value === 'cookie' && !isClaudeCodeProvider.value) {
       mode.value = DEFAULT_DIALOG_MODE
     }
-    if (props.open && isWindsurfProvider.value && mode.value === 'oauth') {
-      device.value.auth_type = ['default', 'google', 'github'].includes(device.value.auth_type)
-        ? device.value.auth_type
-        : 'default'
-    } else if (props.open && isXaiProvider.value && mode.value === 'oauth') {
+    if (props.open && isXaiProvider.value && mode.value === 'oauth') {
       device.value.auth_type = 'device'
       void ensureXaiDeviceAuth()
     } else if (props.open && isKiroProvider.value && mode.value === 'oauth') {

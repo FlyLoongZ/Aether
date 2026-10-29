@@ -1434,7 +1434,7 @@ const selectedProviderClaudeConfig = computed(() => {
 })
 
 function defaultEnabledPresetCount(providerType: string): number {
-  return ['codex', 'windsurf'].includes(providerType) ? 2 : 1
+  return providerType === 'codex' ? 2 : 1
 }
 
 const DEFAULT_PRESET_LABELS: Record<string, string> = {
@@ -1700,7 +1700,6 @@ const showAccountQuotaColumn = computed(() => {
     || selectedProviderType.value === 'claude_code'
     || selectedProviderType.value === 'gemini_cli'
     || selectedProviderType.value === 'kiro'
-    || selectedProviderType.value === 'windsurf'
     || selectedProviderType.value === 'antigravity'
     || selectedProviderType.value === 'xai'
 })
@@ -2154,8 +2153,6 @@ const quotaRefreshSupported = computed(() => {
   return selectedProviderType.value === 'codex'
     || selectedProviderType.value === 'claude_code'
     || selectedProviderType.value === 'kiro'
-    || selectedProviderType.value === 'gemini_cli'
-    || selectedProviderType.value === 'windsurf'
     || selectedProviderType.value === 'antigravity'
     || selectedProviderType.value === 'xai'
 })
@@ -3594,8 +3591,6 @@ function getQuotaLabelOrder(label: string): number {
   if (label === 'Spark5H') return 9
   if (label === 'Spark周') return 10
   if (label === 'Spark月') return 11
-  if (label === 'Prompt') return 12
-  if (label === 'Flex') return 13
   if (label === '剩余') return 14
   if (label === '额度') return 14
   if (label === '最低') return 15
@@ -3790,57 +3785,6 @@ function buildQuotaProgressItemsFromSnapshot(key: PoolKeyDetail): QuotaProgressI
       updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
       allowDynamicReset: true,
     }]
-  }
-
-  if (providerType === 'windsurf') {
-    const items: QuotaProgressItem[] = []
-    for (const [label, code] of [
-      ['日', 'daily'],
-      ['周', 'weekly'],
-      ['Prompt', 'prompt'],
-      ['Flex', 'flex'],
-    ] as const) {
-      const window = getQuotaSnapshotWindow(quota, code)
-      const remainingPercent = getQuotaWindowRemainingPercent(window)
-      if (remainingPercent == null) continue
-      const detail = typeof window?.used_value === 'number' && typeof window?.limit_value === 'number'
-        ? `${formatQuotaValue(window.used_value)}/${formatQuotaValue(window.limit_value)}`
-        : typeof window?.remaining_value === 'number' && typeof window?.limit_value === 'number'
-          ? `剩余 ${formatQuotaValue(window.remaining_value)}/${formatQuotaValue(window.limit_value)}`
-          : undefined
-      items.push({
-        label,
-        remainingPercent,
-        detail,
-        resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? null),
-        resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? null),
-        updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-      })
-    }
-
-    const rateLimitWindow = getQuotaSnapshotWindow(quota, 'rate_limit')
-    if (rateLimitWindow) {
-      items.push({
-        label: '速率',
-        remainingPercent: rateLimitWindow.is_exhausted ? 0 : 100,
-        resetAtSeconds: normalizeUnixSeconds(rateLimitWindow.reset_at ?? null),
-        resetSeconds: normalizeRemainingSeconds(rateLimitWindow.reset_seconds ?? null),
-        updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-      })
-    }
-
-    if (typeof quota.allowed_models_count === 'number' && Number.isFinite(quota.allowed_models_count)) {
-      items.push({
-        label: '模型',
-        remainingPercent: 100,
-        detail: `${quota.allowed_models_count} 个`,
-        resetAtSeconds: null,
-        resetSeconds: null,
-        updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-      })
-    }
-
-    return items
   }
 
   if (providerType === 'antigravity') {

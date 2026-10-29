@@ -708,35 +708,6 @@ mod tests {
     }
 
     #[test]
-    fn resolves_windsurf_banned_and_quarantined_metadata_aliases() {
-        let banned = resolve_pool_account_state(
-            Some("windsurf"),
-            Some(&json!({
-                "windsurf": {
-                    "banned": true,
-                    "reason": "forbidden"
-                }
-            })),
-            None,
-        );
-        assert!(banned.blocked);
-        assert_eq!(banned.code.as_deref(), Some("account_banned"));
-
-        let quarantined = resolve_pool_account_state(
-            Some("windsurf"),
-            Some(&json!({
-                "windsurf": {
-                    "quarantined": true
-                }
-            })),
-            None,
-        );
-        assert!(quarantined.blocked);
-        assert_eq!(quarantined.code.as_deref(), Some("account_quarantined"));
-        assert!(should_auto_remove_account_state(&quarantined));
-    }
-
-    #[test]
     fn account_snapshot_ignores_refresh_failed_as_account_block() {
         let snapshot = resolve_account_status_snapshot(
             Some("codex"),

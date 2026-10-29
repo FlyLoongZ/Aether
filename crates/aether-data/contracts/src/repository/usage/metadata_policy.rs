@@ -794,15 +794,13 @@ fn insert_transport_error_type(source: &Map<String, Value>, target: &mut Map<Str
         | "execution_runtime_unavailable"
         | "first_byte_timeout"
         | "gateway_admission_timeout"
-        | "grok_execution_unavailable"
         | "kiro_web_search_mcp_unavailable"
         | "local_stream_candidate_watchdog_timeout"
         | "protocol_error"
         | "proxy_error"
         | "read_timeout"
         | "tls_error"
-        | "upstream_transport_error"
-        | "windsurf_native_execution_unavailable" => normalized,
+        | "upstream_transport_error" => normalized,
         _ => "other_transport_error".to_string(),
     };
     target.insert("transport_error_type".to_string(), Value::String(value));
@@ -930,7 +928,6 @@ fn project_dimensions(value: &Value) -> Option<Value> {
         "cache_creation_ephemeral_5m_ttl_minutes",
         "cache_creation_ephemeral_1h_ttl_minutes",
         "image_pixels",
-        "windsurf_generator_entry_count",
     ] {
         insert_u64(source, &mut target, key);
     }

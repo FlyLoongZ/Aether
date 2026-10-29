@@ -12,7 +12,7 @@
 | Claude Code | 官方 `@anthropic-ai/claude-code` npm latest | 每日 | 已校准的 Stainless SDK、运行时字段和 beta/能力模板 |
 | Grok CLI | `https://x.ai/cli/stable`，失败回退官方 npm latest | 3 小时 | 现有 CLI 身份字段、OAuth/API-key 路由与自定义网关优先级 |
 | Gemini CLI | 官方 `@google/gemini-cli` npm latest | 每日 | 现有 `(Windows; AMD64)` UA 模板与 Code Assist 请求协议 |
-| Antigravity、Windsurf | 经核验的固定模板 | 不自动更新 | IDE UA、请求体版本及现有平台模板 |
+| Antigravity | 经核验的固定模板 | 不自动更新 | IDE UA、请求体版本及现有平台模板 |
 | Kiro | 已有 OAuth SDK 模板及显式配置 | 不自动更新 | SDK、Node 和系统版本；保留旧模型查询兼容回退 |
 | 原生/其他提供商 | 原有协议和配置 | 无 CLI 版本刷新 | 不注入无依据的 CLI、SDK 或浏览器指纹 |
 

@@ -1,11 +1,9 @@
 pub const ANTIGRAVITY_PROVIDER_TYPE: &str = "antigravity";
 pub const GEMINI_CLI_PROVIDER_TYPE: &str = "gemini_cli";
 pub const KIRO_PROVIDER_TYPE: &str = "kiro";
-pub const WINDSURF_PROVIDER_TYPE: &str = "windsurf";
 pub const KIRO_ENVELOPE_NAME: &str = "kiro:generateAssistantResponse";
 pub const ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME: &str = "antigravity:v1internal";
 pub const GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME: &str = "gemini_cli:v1internal";
-pub const WINDSURF_ENVELOPE_NAME: &str = "windsurf:GetChatMessage";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderAdaptationSurface {
@@ -13,7 +11,6 @@ pub enum ProviderAdaptationSurface {
     AntigravityGeminiCli,
     GeminiCliV1Internal,
     KiroClaudeCli,
-    WindsurfCascade,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -73,17 +70,6 @@ const PROVIDER_ADAPTATION_SURFACES: &[ProviderAdaptationDescriptor] = &[
         supports_stream_bridge: true,
         requires_eventstream_accept: true,
         unwraps_response_envelope: false,
-    },
-    ProviderAdaptationDescriptor {
-        surface: ProviderAdaptationSurface::WindsurfCascade,
-        provider_type: Some(WINDSURF_PROVIDER_TYPE),
-        envelope_name: WINDSURF_ENVELOPE_NAME,
-        anchor_api_format: "openai:chat",
-        supports_request_bridge: true,
-        supports_sync_finalize_bridge: true,
-        supports_stream_bridge: true,
-        requires_eventstream_accept: false,
-        unwraps_response_envelope: true,
     },
 ];
 
@@ -158,7 +144,6 @@ mod tests {
         provider_adaptation_requires_eventstream_accept,
         provider_adaptation_should_unwrap_stream_envelope, ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
         GEMINI_CLI_PROVIDER_TYPE, GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, KIRO_ENVELOPE_NAME,
-        WINDSURF_ENVELOPE_NAME,
     };
 
     #[test]
@@ -180,10 +165,6 @@ mod tests {
         assert_eq!(
             provider_adaptation_anchor_api_format(KIRO_ENVELOPE_NAME, "claude:messages"),
             Some("claude:messages")
-        );
-        assert_eq!(
-            provider_adaptation_anchor_api_format(WINDSURF_ENVELOPE_NAME, "openai:chat"),
-            Some("openai:chat")
         );
     }
 
@@ -210,10 +191,6 @@ mod tests {
         assert!(!provider_adaptation_requires_eventstream_accept(
             Some(ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME),
             "gemini:generate_content"
-        ));
-        assert!(provider_adaptation_should_unwrap_stream_envelope(
-            WINDSURF_ENVELOPE_NAME,
-            "openai:chat"
         ));
     }
 }

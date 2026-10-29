@@ -78,15 +78,7 @@ mod tests {
     use super::*;
     use serde_json::{json, Map};
 
-    const PROVIDER_TYPES: &[&str] = &[
-        "codex",
-        " Codex ",
-        "claude_code",
-        "gemini_cli",
-        "antigravity",
-        "kiro",
-        "windsurf",
-    ];
+    const PROVIDER_TYPES: &[&str] = &["codex", " Codex ", "claude_code", "antigravity", "kiro"];
 
     #[test]
     fn default_key_name_uses_email_without_provider_prefix() {

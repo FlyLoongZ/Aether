@@ -35,26 +35,12 @@ use crate::handlers::admin::request::{AdminAppState, AdminProviderOAuthTemplate}
 use crate::GatewayError;
 use aether_admin::provider::oauth::parse_admin_provider_oauth_kiro_batch_import_entries;
 use aether_contracts::ProxySnapshot;
-use aether_oauth::core::OAuthError;
-use aether_oauth::provider::{
-    ProviderOAuthImportInput, ProviderOAuthService, ProviderOAuthTransportContext,
-};
 use serde_json::{json, Map, Value};
 
 struct AdminProviderOAuthResolvedBatchImport {
     access_token: String,
     auth_config: Map<String, Value>,
     expires_at: Option<u64>,
-}
-
-fn sanitize_windsurf_batch_import_error(error: &OAuthError) -> String {
-    match error {
-        OAuthError::InvalidRequest(_) => "Windsurf 凭据验证失败: 请求参数无效".to_string(),
-        OAuthError::HttpStatus { status_code, .. } => {
-            format!("Windsurf 凭据验证失败: HTTP {status_code}")
-        }
-        _ => "Windsurf 凭据验证失败".to_string(),
-    }
 }
 
 fn can_fallback_batch_refresh_to_access_token(
@@ -73,10 +59,7 @@ fn validate_batch_access_token_import(
     now_unix_secs: u64,
 ) -> Result<(), String> {
     if !provider_type_supports_access_token_import(provider_type) {
-        return Err(
-            "Access Token 导入仅支持 Claude Code / Codex / xAI Provider"
-                .to_string(),
-        );
+        return Err("Access Token 导入仅支持 Claude Code / Codex / xAI Provider".to_string());
     }
     if provider_type.eq_ignore_ascii_case("claude_code") {
         validate_claude_access_token_import(access_token, imported_expires_at, now_unix_secs)
@@ -288,61 +271,6 @@ async fn resolve_admin_provider_oauth_batch_import_tokens(
         return Err("Claude sessionKey 请使用 Cookie 授权，不能作为导入凭据".to_string());
     }
 
-    if provider_type.eq_ignore_ascii_case("windsurf") {
-        let token_for_import = refresh_token.or(access_token);
-        let ctx = ProviderOAuthTransportContext {
-            provider_id: String::new(),
-            provider_type: provider_type.to_string(),
-            endpoint_id: None,
-            key_id: None,
-            auth_type: Some("oauth".to_string()),
-            decrypted_api_key: None,
-            decrypted_auth_config: None,
-            provider_config: None,
-            endpoint_config: None,
-            key_config: None,
-            network: aether_oauth::network::OAuthNetworkContext::provider_operation(
-                request_proxy.clone(),
-            ),
-        };
-        let executor = crate::oauth::GatewayOAuthHttpExecutor::new(*state);
-        let result = ProviderOAuthService::with_builtin_adapters()
-            .import_credentials(
-                &executor,
-                &ctx,
-                ProviderOAuthImportInput {
-                    provider_type: provider_type.to_string(),
-                    name: entry
-                        .raw_credentials
-                        .as_ref()
-                        .and_then(|raw| raw.get("name"))
-                        .and_then(Value::as_str)
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .map(ToOwned::to_owned),
-                    refresh_token: token_for_import.map(ToOwned::to_owned),
-                    raw_credentials: entry.raw_credentials.clone(),
-                    network: ctx.network.clone(),
-                },
-            )
-            .await
-            .map_err(|error| sanitize_windsurf_batch_import_error(&error))?;
-        let access_token = result.token_set.access_token.trim().to_string();
-        if access_token.is_empty() {
-            return Err("Windsurf 凭据验证返回缺少 apiKey/sessionToken".to_string());
-        }
-        let auth_config = result
-            .auth_config
-            .as_object()
-            .cloned()
-            .ok_or_else(|| "Windsurf 凭据验证返回缺少 auth_config".to_string())?;
-        return Ok(AdminProviderOAuthResolvedBatchImport {
-            access_token,
-            auth_config,
-            expires_at: result.token_set.expires_at_unix_secs,
-        });
-    }
-
     if let Some(refresh_token) = refresh_token {
         let Some(template) = template else {
             if can_fallback_batch_refresh_to_access_token(provider_type, access_token) {
@@ -361,10 +289,7 @@ async fn resolve_admin_provider_oauth_batch_import_tokens(
                     });
                 }
             }
-            return Err(
-                "该 Provider 不支持 Refresh Token 导入，请提供 access_token"
-                    .to_string(),
-            );
+            return Err("该 Provider 不支持 Refresh Token 导入，请提供 access_token".to_string());
         };
 
         let token_payload = match exchange_admin_provider_oauth_refresh_token(
@@ -481,10 +406,7 @@ pub(super) async fn execute_admin_provider_oauth_batch_import(
     };
 
     let template = admin_provider_oauth_template(provider_type);
-    if template.is_none()
-        && !provider_type.eq_ignore_ascii_case("windsurf")
-        && !provider_type_supports_access_token_import(provider_type)
-    {
+    if template.is_none() && !provider_type_supports_access_token_import(provider_type) {
         return Ok(AdminProviderOAuthBatchImportOutcome {
             total: entries.len(),
             success: 0,
@@ -781,34 +703,9 @@ mod tests {
     use super::super::parse::parse_admin_provider_oauth_batch_import_entries;
     use super::{
         can_fallback_batch_refresh_to_access_token, codex_agent_identity_auth_config_from_import,
-        sanitize_windsurf_batch_import_error, validate_batch_access_token_import,
+        validate_batch_access_token_import,
     };
-    use aether_oauth::core::OAuthError;
     use serde_json::json;
-
-    #[test]
-    fn windsurf_batch_import_error_redacts_http_body() {
-        let error = OAuthError::HttpStatus {
-            status_code: 401,
-            body_excerpt: "sessionToken=devin-session-token$secret".to_string(),
-        };
-
-        let detail = sanitize_windsurf_batch_import_error(&error);
-
-        assert_eq!(detail, "Windsurf 凭据验证失败: HTTP 401");
-        assert!(!detail.contains("devin-session-token$secret"));
-    }
-
-    #[test]
-    fn windsurf_batch_import_error_redacts_provider_detail() {
-        let error = OAuthError::invalid_response("apiKey=sk-secret token=secret-token");
-
-        let detail = sanitize_windsurf_batch_import_error(&error);
-
-        assert_eq!(detail, "Windsurf 凭据验证失败");
-        assert!(!detail.contains("sk-secret"));
-        assert!(!detail.contains("secret-token"));
-    }
 
     #[test]
     fn claude_batch_refresh_failure_never_falls_back_to_imported_access_token() {

@@ -61,7 +61,6 @@ use crate::execution_runtime::transport::{
     safe_transport_error_message, send_request, DirectHttpResponse, DirectSyncExecutionRuntime,
     ExecutionRuntimeTransportError,
 };
-use crate::execution_runtime::windsurf::maybe_execute_windsurf_sync;
 use crate::execution_runtime::{
     ai_attempt_retry_scope_from_failure_disposition, analyze_local_candidate_failover_sync,
     attach_provider_response_headers_to_report_context, build_exhaustion_fallback,
@@ -102,7 +101,7 @@ mod response;
 
 #[cfg(test)]
 pub(crate) use crate::api::response::build_client_response;
-use policy::{decode_execution_result_body, decode_execution_result_body_with_limit};
+use policy::decode_execution_result_body;
 pub(crate) use response::{
     maybe_build_local_sync_finalize_response, maybe_build_local_video_error_response,
     maybe_build_local_video_success_outcome, resolve_local_sync_error_background_report_kind,
@@ -1455,12 +1454,6 @@ async fn execute_direct_sync_runtime_candidate(
     candidate_index: &str,
     progress_snapshot: Option<Arc<Mutex<OpenAiImageSyncProgressSnapshot>>>,
 ) -> Result<ExecutionResult, SyncExecutionFailure> {
-    if let Some(result) = maybe_execute_windsurf_sync(state, plan, report_context)
-        .await
-        .map_err(SyncExecutionFailure::from_transport)?
-    {
-        return Ok(result);
-    }
     if !should_track_openai_image_sync_upstream_sse(plan_kind, plan, report_context) {
         let state_for_response_started = state.clone();
         let response_started_lifecycle_seed = build_lifecycle_usage_seed(plan, report_context);

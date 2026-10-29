@@ -5,12 +5,11 @@ use super::{
     build_sync_terminal_usage_event, build_sync_terminal_usage_payload_seed,
     build_sync_terminal_usage_seed, build_terminal_usage_context_seed,
     build_terminal_usage_event_from_seed, build_usage_event_data_seed,
-    build_usage_event_data_seed_describing_request_bodies, decode_body_for_storage,
-    extract_token_counts_from_json, extract_token_counts_from_value, headers_to_json,
-    mask_sensitive_body_fields, parse_sse_body_for_storage, resolve_error_message,
-    validate_usage_headers_in_json_value, LifecycleUsageSeed, TerminalUsageSeed, UsageBodyRefsSeed,
-    UsageBodyStatesSeed, UsageRoutingSeed, UsageTerminalState, MAX_USAGE_CAPTURE_BYTES,
-    MAX_USAGE_CAPTURE_DEPTH,
+    build_usage_event_data_seed_describing_request_bodies, extract_token_counts_from_json,
+    extract_token_counts_from_value, headers_to_json, mask_sensitive_body_fields,
+    parse_sse_body_for_storage, resolve_error_message, validate_usage_headers_in_json_value,
+    LifecycleUsageSeed, TerminalUsageSeed, UsageBodyRefsSeed, UsageBodyStatesSeed,
+    UsageRoutingSeed, UsageTerminalState, MAX_USAGE_CAPTURE_BYTES, MAX_USAGE_CAPTURE_DEPTH,
 };
 
 fn default_test_plan() -> ExecutionPlan {
@@ -713,16 +712,15 @@ fn sync_terminal_usage_redacts_provider_request_body_secrets_from_context() {
     let plan = ExecutionPlan {
         request_id: "req-sync-redact-provider-request-1".to_string(),
         candidate_id: Some("cand-sync-redact-provider-request-1".to_string()),
-        provider_name: Some("Windsurf".to_string()),
-        provider_id: "provider-windsurf".to_string(),
-        endpoint_id: "endpoint-windsurf".to_string(),
-        key_id: "key-windsurf".to_string(),
-        url: "https://server.codeium.com/exa.api_server_pb.ApiServerService/GetChatMessage"
-            .to_string(),
-        body: RequestBody::from_json(json!({"model": "windsurf-model"})),
+        provider_name: Some("Example".to_string()),
+        provider_id: "provider-example".to_string(),
+        endpoint_id: "endpoint-example".to_string(),
+        key_id: "key-example".to_string(),
+        url: "https://api.example.test/v1/chat/completions".to_string(),
+        body: RequestBody::from_json(json!({"model": "example-model"})),
         client_api_format: "openai:chat".to_string(),
         provider_api_format: "openai:chat".to_string(),
-        model_name: Some("windsurf-model".to_string()),
+        model_name: Some("example-model".to_string()),
         ..default_test_plan()
     };
     let payload = GatewaySyncReportRequest {
@@ -3144,27 +3142,6 @@ fn resolve_error_message_extracts_generic_message_from_base64_body() {
     assert_eq!(
         resolve_error_message(500, None, Some(body_base64.as_str())),
         Some("upstream exploded".to_string()),
-    );
-}
-
-#[test]
-fn decode_body_for_storage_extracts_connect_json_error_frames() {
-    let payload = br#"{"error":{"code":"resource_exhausted","message":"quota exhausted"}}"#;
-    let mut framed = Vec::new();
-    framed.push(2);
-    framed.extend_from_slice(&(payload.len() as u32).to_be_bytes());
-    framed.extend_from_slice(payload);
-    let body_base64 = base64::engine::general_purpose::STANDARD.encode(framed);
-
-    assert_eq!(
-        decode_body_for_storage(Some(body_base64.as_str())),
-        Some(json!({
-            "error": {
-                "code": "resource_exhausted",
-                "message": "quota exhausted",
-                "type": "resource_exhausted"
-            }
-        }))
     );
 }
 

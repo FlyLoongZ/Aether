@@ -114,7 +114,6 @@ use crate::execution_runtime::transport::{
     DirectSyncExecutionRuntime, DirectUpstreamResponse, DirectUpstreamStreamExecution,
     ExecutionRuntimeTransportError,
 };
-use crate::execution_runtime::windsurf::maybe_execute_windsurf_stream;
 use crate::execution_runtime::{
     ai_attempt_retry_scope_from_failure_disposition,
     attach_provider_response_headers_to_report_context, build_exhaustion_fallback,
@@ -4109,79 +4108,6 @@ async fn execute_execution_runtime_stream_inner(
         .map(|value| value.to_string())
         .unwrap_or_else(|| "-".to_string());
 
-    match maybe_execute_windsurf_stream(state, &plan, report_context.as_ref()).await {
-        Ok(Some(windsurf_stream)) => {
-            return execute_stream_from_frame_stream_with_retry_scope(
-                state,
-                plan,
-                trace_id,
-                decision,
-                plan_kind,
-                report_kind,
-                windsurf_stream.report_context.or(report_context),
-                candidate_started_unix_secs,
-                stream_started_at,
-                stage_trace,
-                lifecycle_pending_recorded,
-                windsurf_stream.frame_stream,
-                false,
-                provider_pool_in_flight_guard.take(),
-                retry_scope_out.as_deref_mut(),
-                retry_fallback_out.as_deref_mut(),
-                None,
-            )
-            .await;
-        }
-        Ok(None) => {}
-        Err(_err) => {
-            let transport_error_message = "Windsurf stream execution unavailable".to_string();
-            info!(
-                event_name = "windsurf_native_execution_unavailable",
-                log_type = "ops",
-                trace_id = %trace_id,
-                request_id = %plan_request_id_for_log,
-                candidate_id = ?plan.candidate_id,
-                provider_name = provider_name.as_str(),
-                endpoint_id = %endpoint_id,
-                key_id = %key_id,
-                model_name = model_name.as_str(),
-                candidate_index = candidate_index.as_str(),
-                error_category = "windsurf_execution_unavailable",
-                "gateway native Windsurf stream execution unavailable"
-            );
-            let terminal_unix_secs = current_request_candidate_unix_ms();
-            record_local_request_candidate_status(
-                state,
-                &plan,
-                report_context.as_ref(),
-                SchedulerRequestCandidateStatusUpdate {
-                    status: RequestCandidateStatus::Failed,
-                    status_code: None,
-                    error_type: Some("windsurf_native_execution_unavailable".to_string()),
-                    error_message: Some(transport_error_message.clone()),
-                    latency_ms: Some(stream_elapsed_ms_since(stream_started_at)),
-                    started_at_unix_ms: Some(candidate_started_unix_secs),
-                    finished_at_unix_ms: Some(terminal_unix_secs),
-                },
-            )
-            .await;
-            if let Some(response) = maybe_build_stream_transport_error_stop_response(
-                state,
-                &plan,
-                report_context.as_ref(),
-                trace_id,
-                decision,
-                "windsurf_native_execution_unavailable",
-                transport_error_message.as_str(),
-                stream_elapsed_ms_since(stream_started_at),
-            )
-            .await?
-            {
-                return Ok(Some(response));
-            }
-            return Ok(None);
-        }
-    }
     match maybe_execute_kiro_web_search_stream(state, &plan, report_context.as_ref()).await {
         Ok(Some(kiro_web_search)) => {
             return execute_stream_from_frame_stream_with_retry_scope(

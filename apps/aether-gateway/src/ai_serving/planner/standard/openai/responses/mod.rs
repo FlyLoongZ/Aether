@@ -474,7 +474,7 @@ impl ResponsesWebSocketBodyNormalization {
     ///
     /// Mirrors the same-format branch of
     /// `resolve_local_openai_responses_candidate_payload_parts`. The
-    /// cross-format, Kiro, Windsurf and Antigravity branches are unreachable
+    /// cross-format, Kiro and Antigravity branches are unreachable
     /// here: the WebSocket planner only returns candidates whose provider API
     /// format is `openai:responses`.
     ///

@@ -49,17 +49,7 @@ fn builtin_service_owns_quota_refresh_support_and_endpoint_selection() {
 
     assert_eq!(
         service.provider_types_for_capability(ProviderPoolCapability::QuotaRefresh),
-        [
-            "antigravity",
-            "chatgpt_web",
-            "claude_code",
-            "codex",
-            "gemini_cli",
-            "grok",
-            "kiro",
-            "windsurf",
-            "xai"
-        ]
+        ["antigravity", "claude_code", "codex", "kiro", "xai"]
     );
     assert!(service.supports_quota_refresh("claude_code"));
     assert!(service.supports_quota_refresh("codex"));
@@ -363,235 +353,6 @@ fn kiro_quota_request_rejects_region_url_injection() {
 }
 
 #[test]
-fn chatgpt_web_quota_request_uses_default_base_url_when_empty() {
-    let spec = build_chatgpt_web_pool_quota_request(
-        "key-1",
-        "",
-        ("authorization".to_string(), "Bearer access".to_string()),
-    );
-
-    assert_eq!(
-        spec.url,
-        "https://chatgpt.com/backend-api/conversation/init"
-    );
-    assert_eq!(
-        spec.headers.get("origin").map(String::as_str),
-        Some("https://chatgpt.com")
-    );
-}
-
-#[test]
-fn chatgpt_web_quota_metadata_enriches_auth_and_uses_first_remaining_as_limit() {
-    let mut metadata = json!({
-        "image_quota_remaining": 12,
-    });
-    enrich_chatgpt_web_quota_metadata(
-        &mut metadata,
-        Some(&json!({
-            "plan": "free",
-            "email": "user@example.com",
-            "accountId": "acct-1"
-        })),
-    );
-    normalize_chatgpt_web_image_quota_limit(&mut metadata, None);
-
-    assert_eq!(metadata["plan_type"], json!("free"));
-    assert_eq!(metadata["email"], json!("user@example.com"));
-    assert_eq!(metadata["account_id"], json!("acct-1"));
-    assert_eq!(metadata["image_quota_total"], json!(12.0));
-    assert_eq!(metadata["image_quota_used"], json!(0.0));
-}
-
-#[test]
-fn chatgpt_web_quota_metadata_preserves_existing_paid_limit() {
-    let mut metadata = json!({
-        "plan_type": "plus",
-        "image_quota_remaining": 7,
-    });
-    normalize_chatgpt_web_image_quota_limit(
-        &mut metadata,
-        Some(&json!({
-            "chatgpt_web": {
-                "image_quota_total": 40
-            }
-        })),
-    );
-
-    assert_eq!(metadata["image_quota_total"], json!(40.0));
-    assert_eq!(metadata["image_quota_used"], json!(33.0));
-}
-
-#[test]
-fn chatgpt_web_quota_metadata_does_not_preserve_legacy_free_25_limit() {
-    let mut metadata = json!({
-        "plan_type": "free",
-        "image_quota_remaining": 19,
-    });
-    normalize_chatgpt_web_image_quota_limit(
-        &mut metadata,
-        Some(&json!({
-            "chatgpt_web": {
-                "plan_type": "free",
-                "image_quota_total": 25
-            }
-        })),
-    );
-
-    assert_eq!(metadata["image_quota_total"], json!(19.0));
-    assert_eq!(metadata["image_quota_used"], json!(0.0));
-    assert_eq!(
-        metadata["image_quota_limit_source"],
-        json!("first_remaining")
-    );
-}
-
-#[test]
-fn chatgpt_web_quota_metadata_ignores_upstream_free_25_default() {
-    let mut metadata = json!({
-        "plan_type": "free",
-        "image_quota_remaining": 19,
-        "image_quota_total": 25,
-    });
-    normalize_chatgpt_web_image_quota_limit(&mut metadata, None);
-
-    assert_eq!(metadata["image_quota_total"], json!(19.0));
-    assert_eq!(metadata["image_quota_used"], json!(0.0));
-    assert_eq!(
-        metadata["image_quota_limit_source"],
-        json!("first_remaining")
-    );
-}
-
-#[test]
-fn chatgpt_web_quota_metadata_preserves_marked_free_first_limit() {
-    let mut metadata = json!({
-        "plan_type": "free",
-        "image_quota_remaining": 18,
-    });
-    normalize_chatgpt_web_image_quota_limit(
-        &mut metadata,
-        Some(&json!({
-            "chatgpt_web": {
-                "plan_type": "free",
-                "image_quota_total": 19,
-                "image_quota_limit_source": "first_remaining"
-            }
-        })),
-    );
-
-    assert_eq!(metadata["image_quota_total"], json!(19.0));
-    assert_eq!(metadata["image_quota_used"], json!(1.0));
-    assert_eq!(
-        metadata["image_quota_limit_source"],
-        json!("first_remaining")
-    );
-}
-
-#[test]
-fn windsurf_quota_request_uses_user_status_connect_rpc() {
-    let spec = build_windsurf_pool_quota_request("key-ws", "session-token-123");
-
-    assert_eq!(spec.request_id, "windsurf-quota:key-ws");
-    assert_eq!(spec.method, "POST");
-    assert_eq!(
-        spec.url,
-        format!("https://server.codeium.com{WINDSURF_USER_STATUS_PATH}")
-    );
-    assert_eq!(spec.content_type.as_deref(), Some("application/json"));
-    assert_eq!(
-        spec.headers
-            .get("connect-protocol-version")
-            .map(String::as_str),
-        Some("1")
-    );
-    assert_eq!(
-        spec.json_body
-            .as_ref()
-            .and_then(|body| body.pointer("/metadata/apiKey"))
-            .and_then(Value::as_str),
-        Some("session-token-123")
-    );
-    assert_eq!(spec.provider_api_format, "windsurf:user_status");
-}
-
-#[test]
-fn windsurf_model_and_rate_limit_requests_use_connect_rpc_metadata() {
-    let models = build_windsurf_pool_model_configs_request("key-ws", "api-key-123");
-    let rate_limit = build_windsurf_pool_rate_limit_request("key-ws", "api-key-123");
-
-    assert_eq!(
-        models.url,
-        format!("https://server.codeium.com{WINDSURF_MODEL_CONFIGS_PATH}")
-    );
-    assert_eq!(
-        rate_limit.url,
-        format!("https://server.codeium.com{WINDSURF_RATE_LIMIT_PATH}")
-    );
-    for spec in [models, rate_limit] {
-        assert_eq!(spec.method, "POST");
-        assert_eq!(
-            spec.headers
-                .get("connect-protocol-version")
-                .map(String::as_str),
-            Some("1")
-        );
-        assert_eq!(
-            spec.json_body
-                .as_ref()
-                .and_then(|body| body.pointer("/metadata/apiKey"))
-                .and_then(Value::as_str),
-            Some("api-key-123")
-        );
-        assert_eq!(spec.client_api_format, "openai:chat");
-    }
-}
-
-#[test]
-fn windsurf_rate_limit_metadata_keeps_member_schedulable() {
-    let service = ProviderPoolService::with_builtin_adapters();
-    let key = sample_key(Some(json!({
-        "windsurf": {
-            "updated_at": 1_700_000_000u64,
-            "rate_limit": {
-                "limited": true,
-                "retry_after_ms": 60_000
-            }
-        }
-    })));
-
-    let signals = service.member_signals("windsurf", &key, None, None);
-
-    assert!(!signals.quota_exhausted);
-}
-
-#[test]
-fn windsurf_status_snapshot_ban_marks_member_exhausted() {
-    let service = ProviderPoolService::with_builtin_adapters();
-    let mut key = sample_key(Some(json!({
-        "windsurf": {
-            "updated_at": 1_700_000_000u64,
-            "daily_remaining_percent": 100.0
-        }
-    })));
-    key.status_snapshot = Some(json!({
-        "quota": {
-            "provider_type": "windsurf",
-            "code": "banned",
-            "exhausted": false,
-            "windows": [{
-                "code": "daily",
-                "used_ratio": 0.0,
-                "remaining_ratio": 1.0
-            }]
-        }
-    }));
-
-    let signals = service.member_signals("windsurf", &key, None, None);
-
-    assert!(signals.quota_exhausted);
-}
-
-#[test]
 fn preset_payload_derives_provider_support_from_capabilities() {
     let payload = build_admin_pool_scheduling_presets_payload();
     let items = payload.as_array().expect("payload should be array");
@@ -608,19 +369,13 @@ fn preset_payload_derives_provider_support_from_capabilities() {
         .find(|item| item["name"] == "free_team_first")
         .expect("legacy free_team_first should remain configurable");
 
-    assert_eq!(
-        free_first["providers"],
-        json!(["codex", "grok", "kiro", "windsurf", "xai"])
-    );
-    assert_eq!(
-        recent_refresh["providers"],
-        json!(["codex", "grok", "kiro", "windsurf", "xai"])
-    );
+    assert_eq!(free_first["providers"], json!(["codex", "kiro", "xai"]));
+    assert_eq!(recent_refresh["providers"], json!(["codex", "kiro", "xai"]));
     assert_eq!(free_first["default_enabled"], json!(false));
     assert_eq!(recent_refresh["default_enabled"], json!(false));
     assert_eq!(
         recent_refresh["default_enabled_providers"],
-        json!(["codex", "windsurf"])
+        json!(["codex"])
     );
     assert_eq!(legacy_free_team["default_mode"], json!("both"));
     assert_eq!(legacy_free_team["modes"].as_array().map(Vec::len), Some(3));
@@ -630,12 +385,12 @@ fn preset_payload_derives_provider_support_from_capabilities() {
 fn quota_metadata_provider_type_comes_from_pool_registry() {
     assert_eq!(
         provider_pool_quota_metadata_provider_type(&json!({
-            "gemini_cli": {
+            "antigravity": {
                 "updated_at": 1_700_000_000u64
             }
         }))
         .as_deref(),
-        Some("gemini_cli")
+        Some("antigravity")
     );
     assert_eq!(
         provider_pool_quota_metadata_provider_type(&json!({
@@ -680,7 +435,7 @@ fn codex_adapter_injects_recent_refresh_and_filters_by_capability() {
     assert_eq!(legacy_free_team[0].mode.as_deref(), Some("team_only"));
 
     let unsupported = service.normalize_scheduling_presets(
-        "chatgpt_web",
+        "custom",
         &[PoolSchedulingPreset {
             preset: "plus_first".to_string(),
             enabled: true,
@@ -986,45 +741,6 @@ fn provider_quota_exhaustion_is_adapter_owned() {
             }
         }))),
         "kiro",
-    ));
-    assert!(provider_pool_key_account_quota_exhausted(
-        &sample_key(Some(json!({
-            "chatgpt_web": {
-                "image_quota_blocked": true
-            }
-        }))),
-        "chatgpt_web",
-    ));
-    assert!(provider_pool_key_account_quota_exhausted(
-        &sample_key(Some(json!({
-            "grok": {
-                "quota_by_model": {
-                    "quota_fast": {
-                        "is_exhausted": true,
-                        "remaining": 0.0
-                    }
-                }
-            }
-        }))),
-        "grok",
-    ));
-    assert!(!provider_pool_key_account_quota_exhausted(
-        &sample_key(Some(json!({
-            "grok": {
-                "pool_tier": "basic",
-                "quota_by_model": {
-                    "quota_fast": {
-                        "is_exhausted": false,
-                        "remaining": 1.0
-                    },
-                    "quota_heavy": {
-                        "is_exhausted": true,
-                        "remaining": 0.0
-                    }
-                }
-            }
-        }))),
-        "grok",
     ));
     assert!(!provider_pool_key_account_quota_exhausted(
         &sample_key(Some(json!({
@@ -1446,7 +1162,7 @@ fn model_map_quota_is_resolved_without_materialized_windows() {
     key.status_snapshot = Some(json!({
         "quota": {
             "version": 2,
-            "provider_type": "grok",
+            "provider_type": "custom",
             "exhausted": false,
             "quota_by_model": {
                 "vendor-alpha": {
@@ -1461,8 +1177,8 @@ fn model_map_quota_is_resolved_without_materialized_windows() {
         }
     }));
 
-    let alpha = service.member_signals("grok", &key, None, Some("vendor-alpha"));
-    let beta = service.member_signals("grok", &key, None, Some("vendor-beta"));
+    let alpha = service.member_signals("custom", &key, None, Some("vendor-alpha"));
+    let beta = service.member_signals("custom", &key, None, Some("vendor-beta"));
     assert!(alpha.quota_exhausted);
     assert!(!beta.quota_exhausted);
 }
