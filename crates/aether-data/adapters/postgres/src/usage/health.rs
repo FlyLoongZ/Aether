@@ -76,7 +76,7 @@ WITH observations AS (
             .await
             .map_postgres_err()?;
         let width = (query.to_unix_ms - query.from_unix_ms).div_ceil(u64::from(query.segments));
-        let rows = sqlx::query(&sql)
+        let rows = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(
                 DateTime::<Utc>::from_timestamp_millis(query.from_unix_ms as i64)
                     .expect("validated timestamp"),

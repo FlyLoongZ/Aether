@@ -105,7 +105,7 @@ impl PostgresLeaseRunner {
         self.transaction_runner
             .run(tx_options, |tx| {
                 async move {
-                    let mut rows = query_scalar::<_, String>(&sql)
+                    let mut rows = query_scalar::<_, String>(sqlx::AssertSqlSafe(sql.as_str()))
                         .bind(owner)
                         .bind(lease_ms)
                         .fetch(&mut **tx);
@@ -142,7 +142,7 @@ impl PostgresLeaseRunner {
         self.transaction_runner
             .run(tx_options, |tx| {
                 async move {
-                    let mut rows = query_scalar::<_, String>(&sql)
+                    let mut rows = query_scalar::<_, String>(sqlx::AssertSqlSafe(sql.as_str()))
                         .bind(ids)
                         .bind(owner)
                         .fetch(&mut **tx);
@@ -188,7 +188,7 @@ impl PostgresLeaseRunner {
         self.transaction_runner
             .run(tx_options, |tx| {
                 async move {
-                    let mut rows = query_scalar::<_, String>(&sql)
+                    let mut rows = query_scalar::<_, String>(sqlx::AssertSqlSafe(sql.as_str()))
                         .bind(ids)
                         .bind(owner)
                         .bind(lease_ms)

@@ -17,7 +17,7 @@ async fn live_future_dashboard_is_incremental_idempotent_and_survives_retention(
         .await
         .unwrap();
     let database = format!("future_dashboard_{}", uuid::Uuid::new_v4().simple());
-    sqlx::query(&format!("CREATE DATABASE {database}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE {database}")))
         .execute(&admin)
         .await
         .unwrap();
@@ -224,10 +224,12 @@ async fn live_future_dashboard_is_incremental_idempotent_and_survives_retention(
             .bind(edge_at).bind(edge_shard).fetch_one(&pool).await.unwrap(),0);
     }).catch_unwind().await;
     pool.close().await;
-    sqlx::query(&format!("DROP DATABASE {database} WITH (FORCE)"))
-        .execute(&admin)
-        .await
-        .unwrap();
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        "DROP DATABASE {database} WITH (FORCE)"
+    )))
+    .execute(&admin)
+    .await
+    .unwrap();
     admin.close().await;
     if let Err(error) = outcome {
         std::panic::resume_unwind(error);

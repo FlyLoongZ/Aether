@@ -148,12 +148,14 @@ async fn run_migrations_locked(
     // Snapshot SQL and legacy migrations may change session settings. Restore
     // the limits before inspecting or applying the next migration.
     timeouts.apply(conn, false).await?;
-    if let Some(version) = conn.dirty_version().await? {
+    if let Some(version) = conn.dirty_version(&POSTGRES_MIGRATOR.table_name).await? {
         error!(version, "database migration state is dirty");
         return Err(MigrateError::Dirty(version));
     }
 
-    let applied_migrations = conn.list_applied_migrations().await?;
+    let applied_migrations = conn
+        .list_applied_migrations(&POSTGRES_MIGRATOR.table_name)
+        .await?;
     validate_applied_migrations(&applied_migrations)?;
     let applied_migrations_by_version = applied_migrations
         .into_iter()
@@ -203,7 +205,7 @@ async fn run_migrations_locked(
             async {
                 timeouts.apply(conn, migration.no_tx).await?;
                 repair_invalid_concurrent_index(conn, migration.version).await?;
-                conn.apply(migration).await
+                conn.apply(&POSTGRES_MIGRATOR.table_name, migration).await
             },
         )
         .await?;
@@ -253,9 +255,9 @@ async fn repair_invalid_concurrent_index(
         index = index_name,
         "dropping invalid index left by an interrupted concurrent migration"
     );
-    query(&format!(
+    query(sqlx::AssertSqlSafe(format!(
         "DROP INDEX CONCURRENTLY IF EXISTS public.{index_name}"
-    ))
+    )))
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -265,7 +267,8 @@ async fn prepare_database_for_startup_locked(
     conn: &mut PgConnection,
     bootstrap: &dyn PostgresMigrationBootstrap,
 ) -> Result<Vec<PendingMigrationInfo>, MigrateError> {
-    conn.ensure_migrations_table().await?;
+    conn.ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await?;
     bootstrap.apply_snapshot(conn, &POSTGRES_MIGRATOR).await?;
     pending_migrations_locked(conn).await
 }
@@ -276,11 +279,13 @@ async fn pending_migrations_locked(
     if !migrations_table_exists(conn).await? {
         return Ok(all_up_migrations());
     }
-    if let Some(version) = conn.dirty_version().await? {
+    if let Some(version) = conn.dirty_version(&POSTGRES_MIGRATOR.table_name).await? {
         error!(version, "database migration state is dirty");
         return Err(MigrateError::Dirty(version));
     }
-    let applied_migrations = conn.list_applied_migrations().await?;
+    let applied_migrations = conn
+        .list_applied_migrations(&POSTGRES_MIGRATOR.table_name)
+        .await?;
     validate_applied_migrations(&applied_migrations)?;
     Ok(pending_migrations_from_applied(&applied_migrations))
 }

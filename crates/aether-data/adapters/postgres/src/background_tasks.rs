@@ -55,7 +55,7 @@ impl SqlxBackgroundTaskRepository {
     }
 
     fn apply_run_filter(
-        builder: &mut QueryBuilder<'_, Postgres>,
+        builder: &mut QueryBuilder<Postgres>,
         query: &BackgroundTaskListQuery,
         include_where: bool,
     ) {
@@ -363,11 +363,13 @@ ON CONFLICT(id) DO UPDATE SET
         .await
         .map_postgres_err()?;
 
-        let row = sqlx::query(&format!("{EVENT_COLUMNS} WHERE id = $1 LIMIT 1"))
-            .bind(&event.id)
-            .fetch_one(&self.pool)
-            .await
-            .map_postgres_err()?;
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
+            "{EVENT_COLUMNS} WHERE id = $1 LIMIT 1"
+        )))
+        .bind(&event.id)
+        .fetch_one(&self.pool)
+        .await
+        .map_postgres_err()?;
         map_event_row(&row)
     }
 }

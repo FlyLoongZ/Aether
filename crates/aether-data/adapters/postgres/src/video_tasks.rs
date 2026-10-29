@@ -452,7 +452,7 @@ impl SqlxVideoTaskRepository {
 
     pub async fn find_by_id(&self, id: &str) -> Result<Option<StoredVideoTask>, DataLayerError> {
         let sql = find_by_id_sql();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(id)
             .fetch_optional(&self.pool)
             .await
@@ -466,7 +466,7 @@ impl SqlxVideoTaskRepository {
         user_id: &str,
     ) -> Result<Option<StoredVideoTask>, DataLayerError> {
         let sql = find_by_id_for_user_sql();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(id)
             .bind(user_id)
             .fetch_optional(&self.pool)
@@ -480,7 +480,7 @@ impl SqlxVideoTaskRepository {
         short_id: &str,
     ) -> Result<Option<StoredVideoTask>, DataLayerError> {
         let sql = find_by_short_id_sql();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(short_id)
             .fetch_optional(&self.pool)
             .await
@@ -494,7 +494,7 @@ impl SqlxVideoTaskRepository {
         user_id: &str,
     ) -> Result<Option<StoredVideoTask>, DataLayerError> {
         let sql = find_by_short_id_for_user_sql();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(short_id)
             .bind(user_id)
             .fetch_optional(&self.pool)
@@ -509,7 +509,7 @@ impl SqlxVideoTaskRepository {
         external_task_id: &str,
     ) -> Result<Option<StoredVideoTask>, DataLayerError> {
         let sql = find_by_user_external_sql();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(user_id)
             .bind(external_task_id)
             .fetch_optional(&self.pool)
@@ -526,7 +526,7 @@ impl SqlxVideoTaskRepository {
         let active_statuses = vec!["pending", "submitted", "queued", "processing"];
         let sql = list_active_sql();
         collect_query_rows(
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                 .bind(active_statuses)
                 .bind(i64::try_from(limit).map_err(|_| {
                     DataLayerError::UnexpectedValue(format!("invalid active task limit: {limit}"))
@@ -549,7 +549,7 @@ impl SqlxVideoTaskRepository {
         let active_statuses = vec!["submitted", "queued", "processing"];
         let sql = list_due_sql();
         collect_query_rows(
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                 .bind(active_statuses)
                 .bind(now_unix_secs as f64)
                 .bind(i64::try_from(limit).map_err(|_| {
@@ -758,7 +758,7 @@ impl SqlxVideoTaskRepository {
         task.sanitize_for_persistence();
         let task_id = task.id.clone();
         let sql = upsert_sql();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(task.id)
             .bind(task.short_id)
             .bind(task.request_id)
@@ -833,7 +833,7 @@ impl SqlxVideoTaskRepository {
     ) -> Result<Option<StoredVideoTask>, DataLayerError> {
         task.sanitize_for_persistence();
         let sql = update_if_active_sql();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(task.id)
             .bind(task.short_id)
             .bind(task.request_id)
@@ -912,7 +912,7 @@ impl SqlxVideoTaskRepository {
             .map_err(|_| DataLayerError::UnexpectedValue(format!("invalid limit: {limit}")))?;
         let sql = claim_due_sql();
         let mut tasks = collect_query_rows(
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                 .bind(vec!["submitted", "queued", "processing"])
                 .bind(now_unix_secs as f64)
                 .bind(limit)
@@ -1047,11 +1047,7 @@ fn has_video_task_filter(
         || created_since_unix_secs.is_some()
 }
 
-fn push_sql_clause<'args>(
-    builder: &mut QueryBuilder<'args, Postgres>,
-    has_where: &mut bool,
-    clause: &str,
-) {
+fn push_sql_clause(builder: &mut QueryBuilder<Postgres>, has_where: &mut bool, clause: &str) {
     if *has_where {
         builder.push("\n  AND ");
     } else {
@@ -1061,9 +1057,9 @@ fn push_sql_clause<'args>(
     builder.push(clause);
 }
 
-fn push_video_task_filter<'args>(
-    builder: &mut QueryBuilder<'args, Postgres>,
-    filter: &'args VideoTaskQueryFilter,
+fn push_video_task_filter(
+    builder: &mut QueryBuilder<Postgres>,
+    filter: &VideoTaskQueryFilter,
     created_since_unix_secs: Option<u64>,
 ) {
     let mut has_where = false;

@@ -35,7 +35,7 @@ impl PostgresBackend {
             let table_name = maintenance_identifier(table_name)?;
             summary.attempted += 1;
             let statement = format!("VACUUM ANALYZE \"{table_name}\"");
-            match sqlx::query(&statement)
+            match sqlx::query(sqlx::AssertSqlSafe(statement.as_str()))
                 .execute(&mut *conn)
                 .await
                 .map_postgres_err()

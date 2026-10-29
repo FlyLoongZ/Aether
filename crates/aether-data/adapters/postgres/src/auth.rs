@@ -1961,14 +1961,14 @@ impl SqlxAuthApiKeySnapshotReadRepository {
         .await
         .map_postgres_err()?;
         for sql in POSTGRES_ANONYMIZE_API_KEY_HISTORY_SQL {
-            sqlx::query(sql)
+            sqlx::query(*sql)
                 .bind(api_key_id)
                 .execute(&mut *tx)
                 .await
                 .map_postgres_err()?;
         }
         for sql in POSTGRES_DELETE_API_KEY_DEPENDENTS_SQL {
-            sqlx::query(sql)
+            sqlx::query(*sql)
                 .bind(api_key_id)
                 .execute(&mut *tx)
                 .await

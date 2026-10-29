@@ -217,7 +217,7 @@ impl SqlxAnnouncementReadRepository {
     }
 
     fn apply_active_filter(
-        builder: &mut QueryBuilder<'_, Postgres>,
+        builder: &mut QueryBuilder<Postgres>,
         where_clause: &mut WhereClause,
         active_only: bool,
         now_unix_secs: u64,

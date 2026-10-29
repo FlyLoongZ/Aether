@@ -453,7 +453,7 @@ WHERE expires_at <= TO_TIMESTAMP($1::double precision)
     }
 }
 
-fn build_list_count_query(query: &GeminiFileMappingListQuery) -> QueryBuilder<'_, Postgres> {
+fn build_list_count_query(query: &GeminiFileMappingListQuery) -> QueryBuilder<Postgres> {
     let mut builder =
         QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint AS total FROM gemini_file_mappings");
     let mut where_clause = WhereClause::new();
@@ -461,7 +461,7 @@ fn build_list_count_query(query: &GeminiFileMappingListQuery) -> QueryBuilder<'_
     builder
 }
 
-fn build_list_rows_query(query: &GeminiFileMappingListQuery) -> QueryBuilder<'_, Postgres> {
+fn build_list_rows_query(query: &GeminiFileMappingListQuery) -> QueryBuilder<Postgres> {
     let mut builder = QueryBuilder::<Postgres>::new(
         r#"
 SELECT
@@ -489,7 +489,7 @@ FROM gemini_file_mappings
 }
 
 fn apply_list_filters(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     where_clause: &mut WhereClause,
     query: &GeminiFileMappingListQuery,
 ) {

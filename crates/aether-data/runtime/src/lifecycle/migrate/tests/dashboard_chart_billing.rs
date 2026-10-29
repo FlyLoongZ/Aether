@@ -242,12 +242,18 @@ async fn customer_billing_parallel_fix_preserves_history_without_backfill() {
         return;
     };
     let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|m| m.version < 20261008000000)
     {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
     let pool = PgPool::connect(server.database_url()).await.unwrap();
     query("INSERT INTO stats_daily(id,date,total_requests,total_cost,actual_total_cost,is_complete) VALUES('untouched','2020-01-01',1,10,3,true)")
@@ -257,6 +263,7 @@ async fn customer_billing_parallel_fix_preserves_history_without_backfill() {
     let before: (serde_json::Value,serde_json::Value) = sqlx::query_as("SELECT (SELECT to_jsonb(d) FROM stats_daily d WHERE id='untouched'), (SELECT to_jsonb(u) FROM usage u WHERE id='untouched')").fetch_one(&pool).await.unwrap();
     connection
         .apply(
+            &POSTGRES_MIGRATOR.table_name,
             POSTGRES_MIGRATOR
                 .iter()
                 .find(|m| m.version == 20261008000000)

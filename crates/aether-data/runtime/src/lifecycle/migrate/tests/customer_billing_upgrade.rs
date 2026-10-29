@@ -8,12 +8,18 @@ async fn customer_billing_upgrade_preserves_history_and_aggregates_new_days() {
         return;
     };
     let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version < BILLING_VERSION)
     {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
     let pool = PgPool::connect(server.database_url()).await.unwrap();
     sqlx::raw_sql(
@@ -43,7 +49,10 @@ VALUES ('history','history','m','p','completed','settled',2,0.5,
         .iter()
         .find(|migration| migration.version == BILLING_VERSION)
         .unwrap();
-    connection.apply(migration).await.unwrap();
+    connection
+        .apply(&POSTGRES_MIGRATOR.table_name, migration)
+        .await
+        .unwrap();
 
     // Even retained requests with captured factors must not rewrite old daily totals.
     let history_after: serde_json::Value =

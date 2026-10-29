@@ -494,7 +494,7 @@ impl SqlxMinimalCandidateSelectionReadRepository {
         for api_format in storage_aliases {
             rows.extend(
                 Self::collect_query_rows(
-                    sqlx::query(sql.as_str())
+                    sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                         .bind(api_format)
                         .bind(requested_model_name)
                         .bind(sql_match_aliases.clone())
@@ -521,7 +521,7 @@ impl SqlxMinimalCandidateSelectionReadRepository {
         let offset = i64::from(query.offset);
         let sql = pool_key_candidate_selection_sql(&query.order);
         for api_format in storage_aliases {
-            let mut query_builder = sqlx::query(sql.as_str())
+            let mut query_builder = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                 .bind(api_format)
                 .bind(query.provider_id.as_str())
                 .bind(query.endpoint_id.as_str())
@@ -560,7 +560,7 @@ impl SqlxMinimalCandidateSelectionReadRepository {
         for api_format in storage_aliases {
             rows.extend(
                 Self::collect_query_rows(
-                    sqlx::query(sql.as_str())
+                    sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
                         .bind(api_format)
                         .bind(query.provider_id.as_str())
                         .bind(query.endpoint_id.as_str())

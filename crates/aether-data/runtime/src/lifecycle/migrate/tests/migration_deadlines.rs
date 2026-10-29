@@ -6,12 +6,18 @@ const OVERVIEW_MIGRATION: i64 = 20260911000000;
 
 async fn legacy_connection(server: &ManagedPostgresServer) -> PgConnection {
     let mut connection = PgConnection::connect(server.database_url()).await.unwrap();
-    connection.ensure_migrations_table().await.unwrap();
+    connection
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
+        .await
+        .unwrap();
     for migration in POSTGRES_MIGRATOR
         .iter()
         .filter(|migration| migration.version < OVERVIEW_MIGRATION)
     {
-        connection.apply(migration).await.unwrap();
+        connection
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
+            .await
+            .unwrap();
     }
     connection
 }

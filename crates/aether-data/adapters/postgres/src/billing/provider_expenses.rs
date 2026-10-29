@@ -101,13 +101,13 @@ impl SqlxBillingReadRepository {
             })
         })
         .collect::<Result<Vec<_>, DataLayerError>>()?;
-        let items = sqlx::query(&format!(
+        let items = sqlx::query(sqlx::AssertSqlSafe(format!(
             r#"
             SELECT {SELECT_FIELDS} FROM provider_expenses
             WHERE voided_at IS NULL AND paid_at >= $1 AND paid_at < $2
             ORDER BY paid_at DESC,id DESC LIMIT $3 OFFSET $4
         "#
-        ))
+        )))
         .bind(from)
         .bind(to)
         .bind(i64::from(query.limit))
@@ -133,7 +133,7 @@ impl SqlxBillingReadRepository {
         if let Err(detail) = input.validate() {
             return Ok(AdminBillingMutationOutcome::Invalid(detail));
         }
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             r#"
             INSERT INTO provider_expenses (
                 id,client_request_id,provider_id,provider_name,kind,amount,currency,
@@ -141,7 +141,7 @@ impl SqlxBillingReadRepository {
             ) VALUES ($1,$2,$3,$4,$5,$6::text::numeric,$7,$8,$9,$10,$11,$12,$13)
             ON CONFLICT(client_request_id) DO NOTHING RETURNING {SELECT_FIELDS}
         "#
-        ))
+        )))
         .bind(uuid::Uuid::new_v4().to_string())
         .bind(&input.client_request_id)
         .bind(&input.provider_id)
@@ -161,9 +161,9 @@ impl SqlxBillingReadRepository {
         if let Some(row) = row {
             return Ok(AdminBillingMutationOutcome::Applied(row_record(&row)?));
         }
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT {SELECT_FIELDS} FROM provider_expenses WHERE client_request_id=$1"
-        ))
+        )))
         .bind(&input.client_request_id)
         .fetch_one(&self.pool)
         .await
@@ -182,14 +182,14 @@ impl SqlxBillingReadRepository {
         id: &str,
         operator: Option<&str>,
     ) -> Result<AdminBillingMutationOutcome<ProviderExpenseRecord>, DataLayerError> {
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             r#"
             UPDATE provider_expenses
             SET voided_by = CASE WHEN voided_at IS NULL THEN $2 ELSE voided_by END,
                 voided_at = COALESCE(voided_at,NOW())
             WHERE id=$1 RETURNING {SELECT_FIELDS}
         "#
-        ))
+        )))
         .bind(id)
         .bind(operator)
         .fetch_optional(&self.pool)

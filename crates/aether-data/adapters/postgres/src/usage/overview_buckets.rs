@@ -187,9 +187,9 @@ impl SqlxUsageReadRepository {
             tx.rollback().await.map_postgres_err()?;
             return Ok(false);
         }
-        sqlx::query(&format!(
+        sqlx::query(sqlx::AssertSqlSafe(format!(
             "DELETE FROM {table} WHERE projection_version='overview-v2' AND bucket_start=$1"
-        ))
+        )))
         .bind(bucket)
         .execute(&mut *tx)
         .await
@@ -205,7 +205,7 @@ impl SqlxUsageReadRepository {
           ) facts GROUP BY dimensions) m"#,
             analytics_additive_metrics_sql(5000)
         );
-        sqlx::query(&sql)
+        sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(bucket)
             .bind(bucket + duration)
             .execute(&mut *tx)

@@ -71,9 +71,9 @@ async fn live_jsonb_migration_preserves_values_and_leaves_no_json_columns() {
             .map(|column| format!("{column} json"))
             .collect::<Vec<_>>()
             .join(", ");
-        sqlx::query(&format!(
+        sqlx::query(sqlx::AssertSqlSafe(format!(
             "CREATE TEMP TABLE legacy_{table} ({declarations})"
-        ))
+        )))
         .execute(&mut *tx)
         .await
         .unwrap();
@@ -88,21 +88,26 @@ async fn live_jsonb_migration_preserves_values_and_leaves_no_json_columns() {
                 .map(|_| "$1::json")
                 .collect::<Vec<_>>()
                 .join(", ");
-            sqlx::query(&format!("INSERT INTO legacy_{table} VALUES ({values})"))
-                .bind(value)
-                .execute(&mut *tx)
-                .await
-                .unwrap();
-        }
-        sqlx::query(&format!("INSERT INTO legacy_{table} DEFAULT VALUES"))
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "INSERT INTO legacy_{table} VALUES ({values})"
+            )))
+            .bind(value)
             .execute(&mut *tx)
             .await
             .unwrap();
-        let rows: Vec<Value> =
-            sqlx::query_scalar(&format!("SELECT to_jsonb(t) FROM legacy_{table} t"))
-                .fetch_all(&mut *tx)
-                .await
-                .unwrap();
+        }
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "INSERT INTO legacy_{table} DEFAULT VALUES"
+        )))
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+        let rows: Vec<Value> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT to_jsonb(t) FROM legacy_{table} t"
+        )))
+        .fetch_all(&mut *tx)
+        .await
+        .unwrap();
         expected.push(rows);
     }
     let migration = include_str!("../../migrations/20260923120000_normalize_usage_jsonb.sql")
@@ -119,18 +124,22 @@ async fn live_jsonb_migration_preserves_values_and_leaves_no_json_columns() {
             "ALTER TABLE pg_temp.legacy_request_candidates",
         );
     for _ in 0..2 {
-        sqlx::raw_sql(&migration).execute(&mut *tx).await.unwrap();
+        sqlx::raw_sql(sqlx::AssertSqlSafe(migration.as_str()))
+            .execute(&mut *tx)
+            .await
+            .unwrap();
         for ((table, columns), expected) in tables.iter().zip(&expected) {
-            let rows: Vec<Value> =
-                sqlx::query_scalar(&format!("SELECT to_jsonb(t) FROM legacy_{table} t"))
-                    .fetch_all(&mut *tx)
-                    .await
-                    .unwrap();
+            let rows: Vec<Value> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT to_jsonb(t) FROM legacy_{table} t"
+            )))
+            .fetch_all(&mut *tx)
+            .await
+            .unwrap();
             assert_eq!(&rows, expected);
             for column in columns {
-                let data_type: String = sqlx::query_scalar(&format!(
+                let data_type: String = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
                     "SELECT pg_typeof({column})::text FROM legacy_{table} LIMIT 1"
-                ))
+                )))
                 .fetch_one(&mut *tx)
                 .await
                 .unwrap();

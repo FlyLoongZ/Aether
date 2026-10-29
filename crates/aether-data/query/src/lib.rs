@@ -147,7 +147,7 @@ impl<'a> SelectQuery<'a> {
         sql
     }
 
-    pub fn statement<'args, DB>(&self, dialect: SqlDialect) -> SelectStatement<'args, DB>
+    pub fn statement<DB>(&self, dialect: SqlDialect) -> SelectStatement<DB>
     where
         DB: Database,
     {
@@ -159,20 +159,20 @@ impl<'a> SelectQuery<'a> {
     }
 }
 
-pub struct SelectStatement<'args, DB>
+pub struct SelectStatement<DB>
 where
     DB: Database,
 {
     dialect: SqlDialect,
-    builder: QueryBuilder<'args, DB>,
+    builder: QueryBuilder<DB>,
     where_clause: WhereClause,
 }
 
-impl<'args, DB> SelectStatement<'args, DB>
+impl<DB> SelectStatement<DB>
 where
     DB: Database,
 {
-    pub fn where_eq<T>(&mut self, column_sql: &str, value: T) -> &mut Self
+    pub fn where_eq<'args, T>(&mut self, column_sql: &str, value: T) -> &mut Self
     where
         T: 'args + Encode<'args, DB> + Type<DB>,
     {
@@ -180,7 +180,7 @@ where
         self
     }
 
-    pub fn where_optional_eq<T>(&mut self, column_sql: &str, value: Option<T>) -> &mut Self
+    pub fn where_optional_eq<'args, T>(&mut self, column_sql: &str, value: Option<T>) -> &mut Self
     where
         T: 'args + Encode<'args, DB> + Type<DB>,
     {
@@ -188,7 +188,7 @@ where
         self
     }
 
-    pub fn where_in<T>(&mut self, column_sql: &str, values: &[T]) -> &mut Self
+    pub fn where_in<'args, T>(&mut self, column_sql: &str, values: &[T]) -> &mut Self
     where
         T: Clone + 'args + Encode<'args, DB> + Type<DB>,
     {
@@ -201,7 +201,7 @@ where
         self
     }
 
-    pub fn where_ci_contains(&mut self, column_sql: &str, value: &str) -> &mut Self
+    pub fn where_ci_contains<'args>(&mut self, column_sql: &str, value: &str) -> &mut Self
     where
         String: 'args + Encode<'args, DB> + Type<DB>,
     {
@@ -215,7 +215,7 @@ where
         self
     }
 
-    pub fn where_ci_contains_any(&mut self, column_sqls: &[&str], value: &str) -> &mut Self
+    pub fn where_ci_contains_any<'args>(&mut self, column_sqls: &[&str], value: &str) -> &mut Self
     where
         String: 'args + Encode<'args, DB> + Type<DB>,
     {
@@ -261,7 +261,7 @@ where
         self
     }
 
-    pub fn limit(&mut self, limit: i64) -> &mut Self
+    pub fn limit<'args>(&mut self, limit: i64) -> &mut Self
     where
         i64: 'args + Encode<'args, DB> + Type<DB>,
     {
@@ -269,7 +269,7 @@ where
         self
     }
 
-    pub fn limit_offset(&mut self, limit: i64, offset: i64) -> &mut Self
+    pub fn limit_offset<'args>(&mut self, limit: i64, offset: i64) -> &mut Self
     where
         i64: 'args + Encode<'args, DB> + Type<DB>,
     {
@@ -277,7 +277,7 @@ where
         self
     }
 
-    pub fn finish(self) -> QueryBuilder<'args, DB> {
+    pub fn finish(self) -> QueryBuilder<DB> {
         self.builder
     }
 }
@@ -300,7 +300,7 @@ impl WhereClause {
         !self.has_clause
     }
 
-    pub fn push_next<DB>(&mut self, builder: &mut QueryBuilder<'_, DB>)
+    pub fn push_next<DB>(&mut self, builder: &mut QueryBuilder<DB>)
     where
         DB: Database,
     {
@@ -335,7 +335,7 @@ pub struct OrderByColumn<'a> {
 }
 
 pub fn push_eq<'args, DB, T>(
-    builder: &mut QueryBuilder<'args, DB>,
+    builder: &mut QueryBuilder<DB>,
     where_clause: &mut WhereClause,
     column_sql: &str,
     value: T,
@@ -348,7 +348,7 @@ pub fn push_eq<'args, DB, T>(
 }
 
 pub fn push_optional_eq<'args, DB, T>(
-    builder: &mut QueryBuilder<'args, DB>,
+    builder: &mut QueryBuilder<DB>,
     where_clause: &mut WhereClause,
     column_sql: &str,
     value: Option<T>,
@@ -362,7 +362,7 @@ pub fn push_optional_eq<'args, DB, T>(
 }
 
 pub fn push_in<'args, DB, T>(
-    builder: &mut QueryBuilder<'args, DB>,
+    builder: &mut QueryBuilder<DB>,
     where_clause: &mut WhereClause,
     column_sql: &str,
     values: &[T],
@@ -382,7 +382,7 @@ pub fn push_in<'args, DB, T>(
 }
 
 pub fn push_ci_contains<'args, DB>(
-    builder: &mut QueryBuilder<'args, DB>,
+    builder: &mut QueryBuilder<DB>,
     where_clause: &mut WhereClause,
     dialect: SqlDialect,
     column_sql: &str,
@@ -401,7 +401,7 @@ pub fn push_ci_contains<'args, DB>(
 }
 
 pub fn push_ci_contains_any<'args, DB>(
-    builder: &mut QueryBuilder<'args, DB>,
+    builder: &mut QueryBuilder<DB>,
     where_clause: &mut WhereClause,
     dialect: SqlDialect,
     column_sqls: &[&str],
@@ -427,7 +427,7 @@ pub fn push_ci_contains_any<'args, DB>(
 }
 
 fn push_ci_contains_predicate<'args, DB>(
-    builder: &mut QueryBuilder<'args, DB>,
+    builder: &mut QueryBuilder<DB>,
     dialect: SqlDialect,
     column_sql: &str,
     trimmed: &str,
@@ -445,7 +445,7 @@ fn push_ci_contains_predicate<'args, DB>(
     }
 }
 
-pub fn push_limit<'args, DB>(builder: &mut QueryBuilder<'args, DB>, limit: i64)
+pub fn push_limit<'args, DB>(builder: &mut QueryBuilder<DB>, limit: i64)
 where
     DB: Database,
     i64: 'args + Encode<'args, DB> + Type<DB>,
@@ -453,7 +453,7 @@ where
     builder.push(" LIMIT ").push_bind(limit);
 }
 
-pub fn push_limit_offset<'args, DB>(builder: &mut QueryBuilder<'args, DB>, limit: i64, offset: i64)
+pub fn push_limit_offset<'args, DB>(builder: &mut QueryBuilder<DB>, limit: i64, offset: i64)
 where
     DB: Database,
     i64: 'args + Encode<'args, DB> + Type<DB>,
@@ -463,7 +463,7 @@ where
 }
 
 pub fn push_order_by<DB>(
-    builder: &mut QueryBuilder<'_, DB>,
+    builder: &mut QueryBuilder<DB>,
     requested_key: Option<&str>,
     direction: SortDirection,
     allowed: &[OrderByColumn<'_>],
@@ -519,7 +519,10 @@ mod tests {
             "running".to_string(),
         );
         let query = builder.build();
-        assert!(query.sql().contains(" WHERE kind = $1 AND status = $2"));
+        assert!(query
+            .sql()
+            .as_str()
+            .contains(" WHERE kind = $1 AND status = $2"));
     }
 
     #[test]
@@ -534,7 +537,7 @@ mod tests {
             " Fetch ",
         );
         let query = builder.build();
-        assert!(query.sql().contains(" WHERE task_key ILIKE $1"));
+        assert!(query.sql().as_str().contains(" WHERE task_key ILIKE $1"));
     }
 
     #[test]
@@ -551,6 +554,7 @@ mod tests {
         let query = builder.build();
         assert!(query
             .sql()
+            .as_str()
             .contains(" WHERE (file_name ILIKE $1 OR COALESCE(display_name, '') ILIKE $2)"));
     }
 
@@ -575,10 +579,10 @@ mod tests {
             "created",
         );
         push_limit_offset(&mut builder, 10, 5);
-        let query = builder.build();
-        assert!(query.sql().contains(" WHERE id IN ($1, $2)"));
-        assert!(query.sql().contains(" ORDER BY created_at DESC"));
-        assert!(query.sql().contains(" LIMIT $3 OFFSET $4"));
+        let sql = builder.build().sql();
+        assert!(sql.as_str().contains(" WHERE id IN ($1, $2)"));
+        assert!(sql.as_str().contains(" ORDER BY created_at DESC"));
+        assert!(sql.as_str().contains(" LIMIT $3 OFFSET $4"));
     }
 
     #[test]
@@ -594,6 +598,21 @@ mod tests {
         assert_eq!(
             query.render(SqlDialect::Postgres),
             "SELECT id AS \"provider_id\", CAST(monthly_quota_usd AS DOUBLE PRECISION) AS \"monthly_quota_usd\" FROM providers"
+        );
+    }
+
+    #[test]
+    fn select_statement_owns_encoded_binds_without_interpolating_input() {
+        let query = SelectQuery::new("items").select(SelectColumn::expr("id"));
+        let mut statement = query.statement::<Postgres>(SqlDialect::Postgres);
+        {
+            let untrusted_name = String::from("name\'; DROP TABLE items; --");
+            statement.where_eq("name", untrusted_name.as_str());
+        }
+        let mut builder = statement.finish();
+        assert_eq!(
+            builder.build().sql().as_str(),
+            "SELECT id FROM items WHERE name = $1"
         );
     }
 

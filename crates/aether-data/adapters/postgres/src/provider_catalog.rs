@@ -567,9 +567,9 @@ fn key_update_query(key: &StoredProviderCatalogKey) -> Query<'_, Postgres, PgArg
         .bind(&key.allow_auth_channel_mismatch_formats)
 }
 
-fn push_admin_key_assignments<'args>(
-    builder: &mut QueryBuilder<'args, Postgres>,
-    key: &'args StoredProviderCatalogKey,
+fn push_admin_key_assignments(
+    builder: &mut QueryBuilder<Postgres>,
+    key: &StoredProviderCatalogKey,
 ) {
     builder
         .push_bind(&key.provider_id)
@@ -3342,11 +3342,11 @@ impl ProviderCatalogWriteRepository for SqlxProviderCatalogReadRepository {
     }
 }
 
-fn build_list_query<'a>(
+fn build_list_query(
     prefix: &'static str,
-    ids: &'a [String],
+    ids: &[String],
     suffix: &'static str,
-) -> QueryBuilder<'a, Postgres> {
+) -> QueryBuilder<Postgres> {
     let mut builder = QueryBuilder::<Postgres>::new(select_prefix_for_in(prefix));
     let mut where_clause = WhereClause::new();
     push_in(
@@ -3374,10 +3374,10 @@ fn in_column_for_prefix(prefix: &'static str) -> &'static str {
         .expect("provider catalog IN query prefix must end with IN (")
 }
 
-fn apply_key_page_filters<'a>(
-    builder: &mut QueryBuilder<'a, Postgres>,
+fn apply_key_page_filters(
+    builder: &mut QueryBuilder<Postgres>,
     where_clause: &mut WhereClause,
-    query: &'a ProviderCatalogKeyListQuery,
+    query: &ProviderCatalogKeyListQuery,
 ) {
     push_eq(
         builder,

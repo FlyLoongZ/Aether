@@ -301,7 +301,7 @@ fn usage_policy_subject_missing() -> DataLayerError {
 fn usage_policy_window_aggregate_query(
     windows: impl Iterator<Item = (u64, u64)>,
     aggregate: &str,
-) -> Result<(QueryBuilder<'static, Postgres>, i64, i64), DataLayerError> {
+) -> Result<(QueryBuilder<Postgres>, i64, i64), DataLayerError> {
     let mut builder = QueryBuilder::new("SELECT ");
     let mut earliest = i64::MAX;
     let mut latest = i64::MIN;
@@ -1480,7 +1480,7 @@ mod tests {
             .connect_with(options)
             .await
             .expect("test database should connect");
-        sqlx::query(&format!("CREATE SCHEMA {schema}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE SCHEMA {schema}")))
             .execute(&pool)
             .await
             .expect("isolated settlement schema should be created");
@@ -1494,9 +1494,9 @@ mod tests {
             "usage_request_admissions",
             "usage_cost_reservations",
         ] {
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "CREATE TABLE {table} (LIKE public.{table} INCLUDING ALL)"
-            ))
+            )))
             .execute(&pool)
             .await
             .expect("isolated settlement table should be created");
@@ -1512,7 +1512,7 @@ mod tests {
         let (pool, schema) = isolated_settlement_test_pool().await;
         let result = AssertUnwindSafe(async {
             for table in ["wallets", "usage", "usage_settlement_snapshots", "usage_counter_deltas"] {
-                sqlx::query(&format!("CREATE TABLE {table} (LIKE public.{table} INCLUDING ALL)"))
+                sqlx::query(sqlx::AssertSqlSafe(format!("CREATE TABLE {table} (LIKE public.{table} INCLUDING ALL)")))
                     .execute(&pool).await.expect("settlement fixture table should be created");
             }
             let repository = SqlxSettlementRepository::new(pool.clone());
@@ -1576,7 +1576,7 @@ mod tests {
                 assert_eq!(provider_cost, (1, 5.0), "upstream cost must be recorded once even for a zero-charge request");
             }
         }).catch_unwind().await;
-        sqlx::query(&format!("DROP SCHEMA {schema} CASCADE"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP SCHEMA {schema} CASCADE")))
             .execute(&pool)
             .await
             .expect("isolated settlement schema should be removed");
@@ -1670,7 +1670,7 @@ mod tests {
             assert_eq!(outcomes.iter().filter(|outcome| matches!(outcome, ReserveUsagePolicyRequestOutcome::Allowed)).count(), 1);
             assert_eq!(outcomes.iter().filter(|outcome| matches!(outcome, ReserveUsagePolicyRequestOutcome::Rejected { used_requests: 1, .. })).count(), 1);
         }).catch_unwind().await;
-        sqlx::query(&format!("DROP SCHEMA {schema} CASCADE"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP SCHEMA {schema} CASCADE")))
             .execute(&pool)
             .await
             .unwrap();
@@ -1835,7 +1835,7 @@ mod tests {
         })
         .catch_unwind()
         .await;
-        sqlx::query(&format!("DROP SCHEMA {schema} CASCADE"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP SCHEMA {schema} CASCADE")))
             .execute(&pool)
             .await
             .expect("isolated settlement schema should be removed");

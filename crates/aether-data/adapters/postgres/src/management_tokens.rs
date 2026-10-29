@@ -338,7 +338,7 @@ impl SqlxManagementTokenRepository {
         let sql = update_management_token_sql(json_column_types);
         let allowed_ips = json_to_string(record.allowed_ips.as_ref())?;
         let permissions = json_to_string(record.permissions.as_ref())?;
-        let row = sqlx::query(sql.as_str())
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(&record.token_id)
             .bind(record.name.as_deref())
             .bind(record.clear_description)
@@ -513,10 +513,10 @@ impl ManagementTokenReadRepository for SqlxManagementTokenRepository {
     }
 }
 
-fn apply_management_token_filters<'a>(
-    builder: &mut QueryBuilder<'a, Postgres>,
+fn apply_management_token_filters(
+    builder: &mut QueryBuilder<Postgres>,
     where_clause: &mut WhereClause,
-    query: &'a ManagementTokenListQuery,
+    query: &ManagementTokenListQuery,
 ) {
     push_optional_eq(builder, where_clause, "mt.user_id", query.user_id.clone());
     push_optional_eq(builder, where_clause, "mt.is_active", query.is_active);
@@ -533,7 +533,7 @@ impl ManagementTokenWriteRepository for SqlxManagementTokenRepository {
         let sql = create_management_token_sql(json_column_types);
         let allowed_ips = json_to_string(record.allowed_ips.as_ref())?;
         let permissions = json_to_string(record.permissions.as_ref())?;
-        let row = sqlx::query(sql.as_str())
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(&record.id)
             .bind(&record.user_id)
             .bind(&record.token_hash)

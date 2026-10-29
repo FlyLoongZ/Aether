@@ -965,7 +965,7 @@ impl GlobalModelWriteRepository for SqlxGlobalModelReadRepository {
 }
 
 fn apply_public_model_filters(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     query: &PublicGlobalModelQuery,
 ) {
     builder.push(" WHERE ");
@@ -995,7 +995,7 @@ fn apply_public_model_filters(
 }
 
 fn apply_admin_global_model_filters(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     query: &AdminGlobalModelListQuery,
 ) {
     builder.push(" WHERE 1=1");
@@ -1050,7 +1050,7 @@ where
 }
 
 fn apply_public_catalog_model_filters(
-    builder: &mut QueryBuilder<'_, Postgres>,
+    builder: &mut QueryBuilder<Postgres>,
     provider_id: Option<&str>,
     search: Option<&str>,
 ) {
@@ -1181,11 +1181,11 @@ fn map_admin_global_model_row(row: &PgRow) -> Result<StoredAdminGlobalModel, Dat
     )
 }
 
-fn build_provider_id_list_query<'a>(
+fn build_provider_id_list_query(
     prefix: &'static str,
-    provider_ids: &'a [String],
+    provider_ids: &[String],
     suffix: &'static str,
-) -> QueryBuilder<'a, Postgres> {
+) -> QueryBuilder<Postgres> {
     let mut builder = QueryBuilder::<Postgres>::new(prefix);
     let mut separated = builder.separated(", ");
     for provider_id in provider_ids {

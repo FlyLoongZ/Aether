@@ -1168,7 +1168,7 @@ impl WalletReadRepository for SqlxWalletRepository {
             "ORDER BY tx.created_at DESC\nOFFSET $2\nLIMIT $3",
             "AND tx.id = $2",
         );
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(wallet_id)
             .bind(transaction_id)
             .fetch_optional(&self.pool)
@@ -1689,12 +1689,13 @@ LIMIT 1
 FOR UPDATE
                         "#
                     );
-                    let found = sqlx::query_scalar::<_, String>(&select_sql)
-                        .bind(&wallet_id)
-                        .bind(&owner_id)
-                        .fetch_optional(&mut **tx)
-                        .await
-                        .map_postgres_err()?;
+                    let found =
+                        sqlx::query_scalar::<_, String>(sqlx::AssertSqlSafe(select_sql.as_str()))
+                            .bind(&wallet_id)
+                            .bind(&owner_id)
+                            .fetch_optional(&mut **tx)
+                            .await
+                            .map_postgres_err()?;
                     let Some(found_id) = found else {
                         return Ok(false);
                     };
@@ -1776,7 +1777,7 @@ LIMIT 1
 FOR UPDATE
                         "#
                     );
-                    let row = sqlx::query(&select_sql)
+                    let row = sqlx::query(sqlx::AssertSqlSafe(select_sql.as_str()))
                         .bind(&expected.id)
                         .bind(&owner_id)
                         .fetch_optional(&mut **tx)
@@ -1886,7 +1887,7 @@ LIMIT 1
 FOR UPDATE
                         "#
                     );
-                    let row = sqlx::query(&select_sql)
+                    let row = sqlx::query(sqlx::AssertSqlSafe(select_sql.as_str()))
                         .bind(&after.id)
                         .bind(&owner_id)
                         .fetch_optional(&mut **tx)
@@ -8699,7 +8700,7 @@ SET balance = $2,
 WHERE {owner_predicate}
 "#
     );
-    sqlx::query(&sql)
+    sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
         .bind(owner_id)
         .bind(balance)
         .bind(gift_balance)
@@ -8801,7 +8802,7 @@ async fn initialize_postgres_auth_wallet(
     let existing_sql = format!(
         "SELECT id, user_id, api_key_id, CAST(balance AS DOUBLE PRECISION) AS balance, CAST(gift_balance AS DOUBLE PRECISION) AS gift_balance, limit_mode, currency, status, CAST(total_recharged AS DOUBLE PRECISION) AS total_recharged, CAST(total_consumed AS DOUBLE PRECISION) AS total_consumed, CAST(total_refunded AS DOUBLE PRECISION) AS total_refunded, CAST(total_adjusted AS DOUBLE PRECISION) AS total_adjusted, CAST(EXTRACT(EPOCH FROM updated_at) AS BIGINT) AS updated_at_unix_secs FROM wallets WHERE {owner_column} = $1 LIMIT 1 FOR UPDATE"
     );
-    if let Some(row) = sqlx::query(&existing_sql)
+    if let Some(row) = sqlx::query(sqlx::AssertSqlSafe(existing_sql.as_str()))
         .bind(owner_value)
         .fetch_optional(&mut *tx)
         .await
@@ -8850,7 +8851,7 @@ RETURNING
         // Another initializer may have committed the owner row while this
         // transaction waited on the unique index. Read it under lock and
         // return it without creating a duplicate gift transaction.
-        let Some(row) = sqlx::query(&existing_sql)
+        let Some(row) = sqlx::query(sqlx::AssertSqlSafe(existing_sql.as_str()))
             .bind(owner_value)
             .fetch_optional(&mut *tx)
             .await
@@ -8998,9 +8999,9 @@ mod tests {
             "redeem_code_batches",
             "redeem_codes",
         ] {
-            sqlx::query(&format!(
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "CREATE TEMP TABLE {table} (LIKE public.{table} INCLUDING ALL)"
-            ))
+            )))
             .execute(&pool)
             .await
             .expect("isolated wallet table should be created");
@@ -9362,10 +9363,11 @@ mod tests {
             input.description
         );
         for table in ["wallets", "payment_orders", "wallet_transactions"] {
-            let count: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table}"))
-                .fetch_one(&pool)
-                .await
-                .expect("wallet record count should be readable");
+            let count: i64 =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COUNT(*) FROM {table}")))
+                    .fetch_one(&pool)
+                    .await
+                    .expect("wallet record count should be readable");
             assert_eq!(count, 1, "rejected recharges must not add {table} rows");
         }
         pool.close().await;
@@ -9881,9 +9883,9 @@ mod tests {
                 order.id
             );
             for table in ["payment_orders", "wallet_transactions"] {
-                let count: i64 = sqlx::query_scalar(&format!(
+                let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
                     "SELECT COUNT(*) FROM {table} WHERE wallet_id = $1"
-                ))
+                )))
                 .bind(&wallet_id)
                 .fetch_one(&pool)
                 .await

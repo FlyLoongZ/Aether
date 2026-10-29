@@ -187,21 +187,25 @@ mod tests {
         };
         let pool = factory.connect_lazy().unwrap();
         let table = format!("deadline_test_{}", uuid::Uuid::new_v4().simple());
-        sqlx::query(&format!(
+        sqlx::query(sqlx::AssertSqlSafe(format!(
             "CREATE TABLE {table} (id INTEGER PRIMARY KEY, value INTEGER NOT NULL)"
-        ))
+        )))
         .execute(&pool)
         .await
         .unwrap();
-        sqlx::query(&format!("INSERT INTO {table} VALUES (1, 0)"))
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "INSERT INTO {table} VALUES (1, 0)"
+        )))
+        .execute(&pool)
+        .await
+        .unwrap();
         let mut blocker = pool.begin().await.unwrap();
-        sqlx::query(&format!("UPDATE {table} SET value = 7 WHERE id = 1"))
-            .execute(&mut *blocker)
-            .await
-            .unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "UPDATE {table} SET value = 7 WHERE id = 1"
+        )))
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
         let runner = PostgresTransactionRunner::new(pool.clone());
         let insert = format!("INSERT INTO {table} VALUES (2, 2)");
         let update = format!("UPDATE {table} SET value = 9 WHERE id = 1");
@@ -209,11 +213,11 @@ mod tests {
         let error = runner
             .run_read_write(|tx| {
                 Box::pin(async move {
-                    sqlx::query(&insert)
+                    sqlx::query(sqlx::AssertSqlSafe(insert.as_str()))
                         .execute(&mut **tx)
                         .await
                         .map_postgres_err()?;
-                    sqlx::query(&update)
+                    sqlx::query(sqlx::AssertSqlSafe(update.as_str()))
                         .execute(&mut **tx)
                         .await
                         .map_postgres_err()?;
@@ -226,17 +230,21 @@ mod tests {
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
         blocker.rollback().await.unwrap();
         assert_eq!(
-            sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM {table}"))
-                .fetch_one(&pool)
-                .await
-                .unwrap(),
+            sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
+                "SELECT COUNT(*) FROM {table}"
+            )))
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
             1
         );
         assert_eq!(
-            sqlx::query_scalar::<_, i32>(&format!("SELECT value FROM {table} WHERE id = 1"))
-                .fetch_one(&pool)
-                .await
-                .unwrap(),
+            sqlx::query_scalar::<_, i32>(sqlx::AssertSqlSafe(format!(
+                "SELECT value FROM {table} WHERE id = 1"
+            )))
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
             0
         );
 
@@ -285,7 +293,7 @@ mod tests {
                 "relaxed/local overrides must not leak into pooled requests"
             );
         }
-        sqlx::query(&format!("DROP TABLE {table}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DROP TABLE {table}")))
             .execute(&pool)
             .await
             .unwrap();

@@ -104,10 +104,10 @@ async fn postgres_policy_null_migration_preserves_non_null_policies_and_is_idemp
             } else {
                 ""
             };
-            query(&format!(
+            query(sqlx::AssertSqlSafe(format!(
                 "CREATE TABLE public.{table_name} \
                  (id integer PRIMARY KEY, {definitions}, metadata {storage_type}{modes})"
-            ))
+            )))
             .execute(&pool)
             .await
             .expect("policy fixture table should be created");
@@ -118,7 +118,7 @@ async fn postgres_policy_null_migration_preserves_non_null_policies_and_is_idemp
                 columns.join(", ")
             );
             for (case_index, (input, _)) in cases.iter().enumerate() {
-                query(&insert_sql)
+                query(sqlx::AssertSqlSafe(insert_sql.as_str()))
                     .bind(i32::try_from(case_index).expect("fixture index should fit i32"))
                     .bind(input.clone())
                     .execute(&pool)
@@ -128,7 +128,7 @@ async fn postgres_policy_null_migration_preserves_non_null_policies_and_is_idemp
         }
 
         for attempt in 0..2 {
-            sqlx::raw_sql(&migration.sql)
+            sqlx::raw_sql(migration.sql.clone())
                 .execute(&pool)
                 .await
                 .expect("legacy policy null migration should execute");
@@ -148,8 +148,8 @@ async fn postgres_policy_null_migration_preserves_non_null_policies_and_is_idemp
                     .map(|(index, _)| i32::try_from(index).expect("fixture index should fit i32"))
                     .collect::<Vec<_>>();
                 for column in columns {
-                    let actual_values = query_scalar::<_, Option<Value>>(&format!(
-                        "SELECT {column} FROM public.{table_name} ORDER BY id"
+                    let actual_values = query_scalar::<_, Option<Value>>(sqlx::AssertSqlSafe(
+                        format!("SELECT {column} FROM public.{table_name} ORDER BY id"),
                     ))
                     .fetch_all(&pool)
                     .await
@@ -158,9 +158,9 @@ async fn postgres_policy_null_migration_preserves_non_null_policies_and_is_idemp
                         actual_values, expected_values,
                         "{storage_type}: {table_name}.{column}, attempt {attempt}"
                     );
-                    let sql_null_ids = query_scalar::<_, i32>(&format!(
+                    let sql_null_ids = query_scalar::<_, i32>(sqlx::AssertSqlSafe(format!(
                         "SELECT id FROM public.{table_name} WHERE {column} IS NULL ORDER BY id"
-                    ))
+                    )))
                     .fetch_all(&pool)
                     .await
                     .expect("actual SQL NULL rows should be readable");
@@ -169,10 +169,10 @@ async fn postgres_policy_null_migration_preserves_non_null_policies_and_is_idemp
                         "{storage_type}: {table_name}.{column} must contain actual SQL NULL"
                     );
                 }
-                let metadata_preserved: bool = query_scalar(&format!(
+                let metadata_preserved: bool = query_scalar(sqlx::AssertSqlSafe(format!(
                     "SELECT bool_and(metadata IS NOT NULL AND json_typeof(metadata::json) = 'null') \
                      FROM public.{table_name}"
-                ))
+                )))
                 .fetch_one(&pool)
                 .await
                 .expect("unrelated JSON null metadata should remain readable");
@@ -181,13 +181,14 @@ async fn postgres_policy_null_migration_preserves_non_null_policies_and_is_idemp
                     "{table_name}.metadata must not be cleared"
                 );
                 if matches!(table_name, "users" | "user_groups") {
-                    let modes: Vec<(String, String, String)> = sqlx::query_as(&format!(
-                        "SELECT DISTINCT allowed_providers_mode, allowed_api_formats_mode, \
+                    let modes: Vec<(String, String, String)> =
+                        sqlx::query_as(sqlx::AssertSqlSafe(format!(
+                            "SELECT DISTINCT allowed_providers_mode, allowed_api_formats_mode, \
                          allowed_models_mode FROM public.{table_name}"
-                    ))
-                    .fetch_all(&pool)
-                    .await
-                    .expect("policy modes should be readable");
+                        )))
+                        .fetch_all(&pool)
+                        .await
+                        .expect("policy modes should be readable");
                     assert_eq!(
                         modes,
                         vec![(
@@ -216,7 +217,7 @@ async fn postgres_policy_null_migration_repairs_legacy_upgrade_before_auth_reads
         .await
         .expect("legacy database connection should open");
     connection
-        .ensure_migrations_table()
+        .ensure_migrations_table(&POSTGRES_MIGRATOR.table_name)
         .await
         .expect("legacy migration bookkeeping should be created");
     for migration in POSTGRES_MIGRATOR
@@ -224,7 +225,7 @@ async fn postgres_policy_null_migration_repairs_legacy_upgrade_before_auth_reads
         .filter(|migration| migration.version < POLICY_NULL_MIGRATION_VERSION)
     {
         connection
-            .apply(migration)
+            .apply(&POSTGRES_MIGRATOR.table_name, migration)
             .await
             .expect("previous PostgreSQL migrations should apply");
     }

@@ -176,8 +176,9 @@ fn usage_sql_websocket_filter_compares_json_metadata_without_boolean_casts() {
     assert!(has_where);
     assert!(builder
         .sql()
+        .as_str()
         .contains("LOWER(COALESCE(\"usage\".request_metadata->>'websocket_mode', 'false'))"));
-    assert!(!builder.sql().contains("::boolean"));
+    assert!(!builder.sql().as_str().contains("::boolean"));
 }
 
 #[test]
