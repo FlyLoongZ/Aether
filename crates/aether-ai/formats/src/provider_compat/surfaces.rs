@@ -5,8 +5,8 @@ pub const ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME: &str = "antigravity:v1internal";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderAdaptationSurface {
-    AntigravityGeminiChat,
-    AntigravityGeminiCli,
+    /// Antigravity uses a Gemini-style transport for Gemini, Claude and GPT-OSS models.
+    Antigravity,
     KiroClaudeCli,
 }
 
@@ -25,18 +25,7 @@ pub struct ProviderAdaptationDescriptor {
 
 const PROVIDER_ADAPTATION_SURFACES: &[ProviderAdaptationDescriptor] = &[
     ProviderAdaptationDescriptor {
-        surface: ProviderAdaptationSurface::AntigravityGeminiChat,
-        provider_type: Some(ANTIGRAVITY_PROVIDER_TYPE),
-        envelope_name: ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
-        anchor_api_format: "gemini:generate_content",
-        supports_request_bridge: true,
-        supports_sync_finalize_bridge: true,
-        supports_stream_bridge: true,
-        requires_eventstream_accept: false,
-        unwraps_response_envelope: true,
-    },
-    ProviderAdaptationDescriptor {
-        surface: ProviderAdaptationSurface::AntigravityGeminiCli,
+        surface: ProviderAdaptationSurface::Antigravity,
         provider_type: Some(ANTIGRAVITY_PROVIDER_TYPE),
         envelope_name: ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
         anchor_api_format: "gemini:generate_content",
