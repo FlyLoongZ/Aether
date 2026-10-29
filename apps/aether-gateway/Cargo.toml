@@ -95,8 +95,8 @@ wreq-util.workspace = true
 zstd.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = { version = "0.6", optional = true }
-tikv-jemalloc-sys = { version = "0.6", optional = true }
+tikv-jemallocator = { version = "0.7", optional = true }
+tikv-jemalloc-sys = { version = "0.7", optional = true }
 
 [dev-dependencies]
 aether-data = { workspace = true, features = ["all-drivers", "test-support"] }
