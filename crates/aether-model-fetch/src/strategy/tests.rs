@@ -329,16 +329,6 @@ fn sample_kiro_transport() -> GatewayProviderTransportSnapshot {
     transport
 }
 
-fn sample_gemini_cli_transport() -> GatewayProviderTransportSnapshot {
-    let mut transport = sample_custom_aiplatform_transport();
-    transport.provider.provider_type = "gemini_cli".to_string();
-    transport.provider.name = "Gemini CLI".to_string();
-    transport.endpoint.base_url = "https://cloudcode-pa.googleapis.com".to_string();
-    transport.key.auth_type = "bearer".to_string();
-    transport.key.decrypted_api_key = "gemini-cli-access-token".to_string();
-    transport
-}
-
 fn sample_antigravity_transport_without_project() -> GatewayProviderTransportSnapshot {
     let mut transport = sample_custom_aiplatform_transport();
     transport.provider.provider_type = "antigravity".to_string();
@@ -1160,68 +1150,6 @@ async fn codex_transport_reports_non_success_upstream_status() {
     assert_eq!(outcome.etag, None);
     assert_eq!(outcome.errors.len(), 1);
     assert!(outcome.errors[0].contains("HTTP 503: temporarily unavailable"));
-}
-
-#[tokio::test]
-async fn gemini_cli_load_code_assist_preserves_paid_tier_credits() {
-    let executed_urls = Arc::new(Mutex::new(Vec::new()));
-    let runtime = TestRuntime {
-        executed_urls: Arc::clone(&executed_urls),
-        response_body: json!({
-            "cloudaicompanionProject": {
-                "id": "project-from-load-code-assist"
-            },
-            "currentTier": {
-                "id": "free-tier"
-            },
-            "paidTier": {
-                "id": "g1-pro-tier",
-                "availableCredits": 123.5,
-                "consumedCredits": 7,
-                "totalCredits": 200,
-                "privateField": {
-                    "ignored": true
-                }
-            }
-        }),
-        status_code: 200,
-        response_headers: BTreeMap::new(),
-    };
-    let outcome = fetch_models_from_transports(&runtime, &[sample_gemini_cli_transport()])
-        .await
-        .expect("models fetch should succeed");
-
-    let urls = executed_urls.lock().expect("executed_urls lock");
-    assert_eq!(
-        urls.as_slice(),
-        &["https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"]
-    );
-    assert_eq!(
-        outcome
-            .upstream_metadata
-            .as_ref()
-            .and_then(|value| value.pointer("/gemini_cli/project_id")),
-        Some(&json!("project-from-load-code-assist"))
-    );
-    assert_eq!(
-        outcome
-            .upstream_metadata
-            .as_ref()
-            .and_then(|value| value.pointer("/gemini_cli/plan_type")),
-        Some(&json!("g1-pro-tier"))
-    );
-    assert_eq!(
-        outcome
-            .upstream_metadata
-            .as_ref()
-            .and_then(|value| value.pointer("/gemini_cli/paidTier/availableCredits")),
-        Some(&json!(123.5))
-    );
-    assert!(outcome
-        .upstream_metadata
-        .as_ref()
-        .and_then(|value| value.pointer("/gemini_cli/paidTier/privateField"))
-        .is_none());
 }
 
 #[tokio::test]

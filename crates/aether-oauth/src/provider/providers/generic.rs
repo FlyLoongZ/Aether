@@ -20,8 +20,6 @@ use super::claude_code::{
     CLAUDE_CODE_PROVIDER_TYPE, CLAUDE_CODE_REDIRECT_URI, CLAUDE_CODE_TOKEN_URL,
 };
 
-pub const GEMINI_CLI_OAUTH_CLIENT_ID_ENV: &str = "AETHER_GEMINI_CLI_OAUTH_CLIENT_ID";
-pub const GEMINI_CLI_OAUTH_CLIENT_SECRET_ENV: &str = "AETHER_GEMINI_CLI_OAUTH_CLIENT_SECRET";
 pub const ANTIGRAVITY_OAUTH_CLIENT_ID_ENV: &str = "AETHER_ANTIGRAVITY_OAUTH_CLIENT_ID";
 pub const ANTIGRAVITY_OAUTH_CLIENT_SECRET_ENV: &str = "AETHER_ANTIGRAVITY_OAUTH_CLIENT_SECRET";
 const CODEX_IDENTITY_FINGERPRINT_FIELD: &str = "codex_identity_fingerprint";
@@ -95,24 +93,6 @@ pub const GENERIC_PROVIDER_OAUTH_TEMPLATES: &[GenericProviderOAuthTemplate] = &[
         scopes: super::codex::CODEX_OAUTH_SCOPES,
         redirect_uri: "http://localhost:1455/auth/callback",
         use_pkce: true,
-        uses_json_payload: false,
-        include_scope_in_token_request: true,
-    },
-    GenericProviderOAuthTemplate {
-        provider_type: "gemini_cli",
-        display_name: "GeminiCli",
-        authorize_url: "https://accounts.google.com/o/oauth2/v2/auth",
-        token_url: "https://oauth2.googleapis.com/token",
-        client_id: "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
-        client_id_env: Some(GEMINI_CLI_OAUTH_CLIENT_ID_ENV),
-        client_secret_env: Some(GEMINI_CLI_OAUTH_CLIENT_SECRET_ENV),
-        scopes: &[
-            "https://www.googleapis.com/auth/cloud-platform",
-            "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/userinfo.profile",
-        ],
-        redirect_uri: "http://localhost:8085/oauth2callback",
-        use_pkce: false,
         uses_json_payload: false,
         include_scope_in_token_request: true,
     },
@@ -260,7 +240,6 @@ impl GenericProviderOAuthAdapter {
                 return None;
             }
             match self.template.provider_type {
-                "gemini_cli" => Some("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".to_string()),
                 "antigravity" => Some("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".to_string()),
                 _ => None,
             }
@@ -790,10 +769,7 @@ fn enrich_generic_identity(
         }
         return;
     }
-    if !matches!(
-        provider_type.trim().to_ascii_lowercase().as_str(),
-        "codex"
-    ) {
+    if !matches!(provider_type.trim().to_ascii_lowercase().as_str(), "codex") {
         return;
     }
     if let Some(access_token) = token_payload
@@ -943,7 +919,6 @@ mod tests {
         decode_jwt_claims, derive_codex_identity_fingerprint, enrich_generic_identity,
         template_for_provider_type, GenericProviderOAuthAdapter,
         ANTIGRAVITY_OAUTH_CLIENT_SECRET_ENV, CODEX_IDENTITY_FINGERPRINT_FIELD,
-        GEMINI_CLI_OAUTH_CLIENT_SECRET_ENV,
     };
     use crate::core::OAuthError;
     use crate::network::{OAuthHttpExecutor, OAuthHttpRequest, OAuthHttpResponse};
@@ -980,13 +955,8 @@ mod tests {
 
     #[test]
     fn google_oauth_templates_reference_external_client_secrets() {
-        let gemini = template_for_provider_type("gemini_cli").expect("gemini template");
         let antigravity = template_for_provider_type("antigravity").expect("antigravity template");
 
-        assert_eq!(
-            gemini.client_secret_env,
-            Some(GEMINI_CLI_OAUTH_CLIENT_SECRET_ENV)
-        );
         assert_eq!(
             antigravity.client_secret_env,
             Some(ANTIGRAVITY_OAUTH_CLIENT_SECRET_ENV)
@@ -995,83 +965,80 @@ mod tests {
 
     #[tokio::test]
     async fn google_default_credentials_support_authorization_and_refresh() {
-        for provider_type in ["gemini_cli", "antigravity"] {
-            let mut template = template_for_provider_type(provider_type).expect("template");
-            template.client_id_env = None;
-            template.client_secret_env = Some("AETHER_TEST_UNUSED_ANTIGRAVITY_SECRET");
-            let adapter = GenericProviderOAuthAdapter::new(template);
-            let ctx = transport_context(provider_type);
-            adapter
-                .build_authorize_url(&ctx, "state", None)
-                .expect("authorize");
-            let seen_request = Arc::new(Mutex::new(None));
-            let executor = StaticExecutor {
-                seen_request: Arc::clone(&seen_request),
-                response_payload: json!({"access_token": "new-token", "expires_in": 3600}),
-            };
-            adapter
-                .refresh(&executor, &ctx, &oauth_account(provider_type))
-                .await
-                .expect("refresh");
-            let seen = seen_request.lock().expect("lock").clone().expect("request");
-            let body = seen.body_bytes.expect("body");
-            let fields = url::form_urlencoded::parse(&body)
-                .into_owned()
-                .collect::<BTreeMap<_, _>>();
-            assert_eq!(fields["client_id"], template.client_id);
-            assert_eq!(
-                fields["client_secret"],
-                adapter.resolve_client_secret(None).expect("default")
-            );
-            assert_eq!(fields["refresh_token"], "old-refresh-token");
-            assert!(!format!("{adapter:?}").contains(&fields["client_secret"]));
-        }
+        let provider_type = "antigravity";
+        let mut template = template_for_provider_type(provider_type).expect("template");
+        template.client_id_env = None;
+        template.client_secret_env = Some("AETHER_TEST_UNUSED_ANTIGRAVITY_SECRET");
+        let adapter = GenericProviderOAuthAdapter::new(template);
+        let ctx = transport_context(provider_type);
+        adapter
+            .build_authorize_url(&ctx, "state", None)
+            .expect("authorize");
+        let seen_request = Arc::new(Mutex::new(None));
+        let executor = StaticExecutor {
+            seen_request: Arc::clone(&seen_request),
+            response_payload: json!({"access_token": "new-token", "expires_in": 3600}),
+        };
+        adapter
+            .refresh(&executor, &ctx, &oauth_account(provider_type))
+            .await
+            .expect("refresh");
+        let seen = seen_request.lock().expect("lock").clone().expect("request");
+        let body = seen.body_bytes.expect("body");
+        let fields = url::form_urlencoded::parse(&body)
+            .into_owned()
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(fields["client_id"], template.client_id);
+        assert_eq!(
+            fields["client_secret"],
+            adapter.resolve_client_secret(None).expect("default")
+        );
+        assert_eq!(fields["refresh_token"], "old-refresh-token");
+        assert!(!format!("{adapter:?}").contains(&fields["client_secret"]));
     }
 
     #[test]
     fn google_custom_client_requires_its_own_secret() {
-        for provider_type in ["gemini_cli", "antigravity"] {
-            let adapter = GenericProviderOAuthAdapter::for_provider_type(provider_type)
-                .expect("adapter")
-                .with_oauth_credentials_for_tests("custom-client", "custom-secret");
-            assert!(adapter.resolve_client_secret(None).is_err());
-            assert_eq!(
-                adapter
-                    .resolve_client_secret(Some("custom-secret".to_string()))
-                    .expect("configured secret"),
-                "custom-secret"
-            );
-            assert_eq!(
-                adapter.client_secret().expect("override"),
-                Some("custom-secret".to_string())
-            );
-        }
+        let provider_type = "antigravity";
+        let adapter = GenericProviderOAuthAdapter::for_provider_type(provider_type)
+            .expect("adapter")
+            .with_oauth_credentials_for_tests("custom-client", "custom-secret");
+        assert!(adapter.resolve_client_secret(None).is_err());
+        assert_eq!(
+            adapter
+                .resolve_client_secret(Some("custom-secret".to_string()))
+                .expect("configured secret"),
+            "custom-secret"
+        );
+        assert_eq!(
+            adapter.client_secret().expect("override"),
+            Some("custom-secret".to_string())
+        );
     }
 
     #[test]
     fn google_configured_secret_overrides_the_native_app_default() {
-        for provider_type in ["gemini_cli", "antigravity"] {
-            let adapter =
-                GenericProviderOAuthAdapter::for_provider_type(provider_type).expect("adapter");
-            assert_eq!(
-                adapter
-                    .resolve_client_secret(Some("configured-secret".to_string()))
-                    .unwrap(),
-                "configured-secret"
-            );
-            let mut template = template_for_provider_type(provider_type).expect("template");
-            template.client_id = "custom-template-client";
-            template.client_id_env = None;
-            assert!(GenericProviderOAuthAdapter::new(template)
-                .resolve_client_secret(None)
-                .is_err());
-        }
+        let provider_type = "antigravity";
+        let adapter =
+            GenericProviderOAuthAdapter::for_provider_type(provider_type).expect("adapter");
+        assert_eq!(
+            adapter
+                .resolve_client_secret(Some("configured-secret".to_string()))
+                .unwrap(),
+            "configured-secret"
+        );
+        let mut template = template_for_provider_type(provider_type).expect("template");
+        template.client_id = "custom-template-client";
+        template.client_id_env = None;
+        assert!(GenericProviderOAuthAdapter::new(template)
+            .resolve_client_secret(None)
+            .is_err());
     }
 
     #[test]
     fn generic_adapter_debug_redacts_oauth_credentials() {
-        let adapter = GenericProviderOAuthAdapter::for_provider_type("gemini_cli")
-            .expect("gemini adapter")
+        let adapter = GenericProviderOAuthAdapter::for_provider_type("antigravity")
+            .expect("antigravity adapter")
             .with_token_url_override("https://token.example.test/private-path")
             .with_oauth_credentials_for_tests("private-client-id", "private-client-secret");
 
@@ -1080,7 +1047,7 @@ mod tests {
         assert!(!debug.contains("private-client-id"));
         assert!(!debug.contains("private-client-secret"));
         assert!(!debug.contains("private-path"));
-        assert!(debug.contains(GEMINI_CLI_OAUTH_CLIENT_SECRET_ENV));
+        assert!(debug.contains(ANTIGRAVITY_OAUTH_CLIENT_SECRET_ENV));
     }
 
     #[test]
@@ -1235,10 +1202,10 @@ mod tests {
             seen_request: Arc::clone(&seen_request),
             response_payload: json!({}),
         };
-        let adapter = GenericProviderOAuthAdapter::for_provider_type("gemini_cli")
-            .expect("gemini adapter")
+        let adapter = GenericProviderOAuthAdapter::for_provider_type("antigravity")
+            .expect("antigravity adapter")
             .without_oauth_client_secret_for_tests();
-        let ctx = transport_context("gemini_cli");
+        let ctx = transport_context("antigravity");
 
         let authorize_error = adapter
             .build_authorize_url(&ctx, "state", None)
@@ -1246,7 +1213,7 @@ mod tests {
         assert!(matches!(authorize_error, OAuthError::InvalidRequest(_)));
 
         let refresh_error = adapter
-            .refresh(&executor, &ctx, &oauth_account("gemini_cli"))
+            .refresh(&executor, &ctx, &oauth_account("antigravity"))
             .await
             .expect_err("refresh must fail without the configured secret");
         assert!(matches!(refresh_error, OAuthError::InvalidRequest(_)));
@@ -1266,13 +1233,13 @@ mod tests {
                 "expires_in": 3600,
             }),
         };
-        let adapter = GenericProviderOAuthAdapter::for_provider_type("gemini_cli")
-            .expect("gemini adapter")
+        let adapter = GenericProviderOAuthAdapter::for_provider_type("antigravity")
+            .expect("antigravity adapter")
             .with_oauth_credentials_for_tests("test-client-id", "test-client-secret");
-        let ctx = transport_context("gemini_cli");
+        let ctx = transport_context("antigravity");
 
         adapter
-            .refresh(&executor, &ctx, &oauth_account("gemini_cli"))
+            .refresh(&executor, &ctx, &oauth_account("antigravity"))
             .await
             .expect("refresh should succeed");
 

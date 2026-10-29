@@ -364,7 +364,7 @@ export async function consumeCodexResetCredit(
 
 /**
  * 批量导入 OAuth 凭据（通用）
- * 支持的 Provider 类型：Codex、Antigravity、GeminiCli、ClaudeCode、Kiro
+ * 支持的 Provider 类型：Codex、Antigravity、ClaudeCode、Kiro
  */
 export interface BatchImportResultItem {
   index: number

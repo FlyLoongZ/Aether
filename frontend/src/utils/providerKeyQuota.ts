@@ -135,58 +135,6 @@ function getQuotaWindowValueText(window: QuotaWindowSnapshot | null | undefined)
   return null
 }
 
-function getGeminiCliCreditsTextFromQuota(quota: QuotaStatusSnapshot | null | undefined): string | null {
-  const credits = quota?.credits
-  if (!credits) return null
-  const remaining = firstFiniteNumber(credits.remaining, credits.balance)
-  if (remaining != null) return `AI Credits 剩余 ${formatQuotaValue(remaining)}`
-  if (credits.unlimited === true) return 'AI Credits 不限量'
-  if (credits.has_credits === true) return 'AI Credits 可用'
-  if (credits.has_credits === false) return 'AI Credits 已用尽'
-  return null
-}
-
-export function getGeminiCliAccountCreditsText(
-  input: ProviderKeyQuotaCarrier,
-  fallbackProviderType?: string | null,
-): string | null {
-  const quota = getQuotaSnapshot(input)
-  if (getQuotaProviderType(quota, fallbackProviderType) !== 'gemini_cli') return null
-
-  const quotaText = getGeminiCliCreditsTextFromQuota(quota)
-  if (quotaText) return quotaText
-
-  const metadata = input.upstream_metadata?.gemini_cli
-  const credits = objectValue(metadata?.credits)
-  const paidTier = objectValue(metadata?.paidTier)
-  const currentTier = objectValue(metadata?.currentTier)
-  const remaining = firstFiniteNumber(
-    credits?.remaining,
-    credits?.remainingCredits,
-    credits?.available,
-    credits?.availableCredits,
-    credits?.balance,
-    paidTier?.availableCredits,
-    paidTier?.remainingCredits,
-    currentTier?.availableCredits,
-    currentTier?.remainingCredits,
-  )
-  if (remaining != null) return `AI Credits 剩余 ${formatQuotaValue(remaining)}`
-
-  const hasCredits = typeof credits?.has_credits === 'boolean'
-    ? credits.has_credits
-    : typeof paidTier?.hasCredits === 'boolean'
-      ? paidTier.hasCredits
-      : typeof currentTier?.hasCredits === 'boolean'
-        ? currentTier.hasCredits
-        : null
-  if (hasCredits === true) return 'AI Credits 可用'
-  if (hasCredits === false) return 'AI Credits 已用尽'
-
-  const unlimited = credits?.unlimited === true || paidTier?.unlimited === true || currentTier?.unlimited === true
-  return unlimited ? 'AI Credits 不限量' : null
-}
-
 function getCodexQuotaText(quota: QuotaStatusSnapshot): string | null {
   const parts: string[] = []
   for (const window of getQuotaWindows(quota)) {
@@ -273,41 +221,6 @@ function getAntigravityQuotaText(quota: QuotaStatusSnapshot): string | null {
   return `最低剩余 ${formatPercent(minimumRemaining)} (${remainingList.length} 模型)`
 }
 
-function getGeminiCliQuotaText(quota: QuotaStatusSnapshot): string | null {
-  const creditsText = getGeminiCliCreditsTextFromQuota(quota)
-  const modelWindows = getQuotaWindowsByScope(quota, 'model')
-  const activeCoolingModels = modelWindows
-    .filter((window) => {
-      if (window.is_exhausted === true) return true
-      if (typeof window.used_ratio === 'number') return window.used_ratio >= 1.0 - 1e-6
-      return false
-    })
-    .filter((window) => {
-      if (typeof window.reset_at !== 'number') return true
-      return window.reset_at > Math.floor(Date.now() / 1000)
-    })
-    .map((window) => normalizeText(window.label) || normalizeText(window.model) || '模型')
-
-  if (activeCoolingModels.length === 1) {
-    return `${activeCoolingModels[0]} 冷却中`
-  }
-  if (activeCoolingModels.length > 1) {
-    return `${activeCoolingModels.length} 个模型冷却中`
-  }
-
-  const remainingList = modelWindows
-    .map(getQuotaWindowRemainingPercent)
-    .filter((value): value is number => value != null)
-  if (remainingList.length === 0) return creditsText || normalizeText(quota.label)
-
-  const minimumRemaining = Math.min(...remainingList)
-  if (creditsText) return creditsText
-  if (remainingList.length === 1) {
-    return `剩余 ${formatPercent(minimumRemaining)}`
-  }
-  return `最低剩余 ${formatPercent(minimumRemaining)} (${remainingList.length} 模型)`
-}
-
 export function getLegacyAccountQuotaText(
   input: ProviderKeyQuotaCarrier,
 ): string | null {
@@ -331,8 +244,6 @@ export function getQuotaSnapshotFallbackText(
       return getXaiQuotaText(quota)
     case 'antigravity':
       return getAntigravityQuotaText(quota)
-    case 'gemini_cli':
-      return getGeminiCliQuotaText(quota)
     default:
       return normalizeText(quota.label)
   }

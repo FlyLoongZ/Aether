@@ -25,7 +25,7 @@
 
 同一现场的 WebSocket 验收对两模型分别完成两轮 `generate=false` 预热和 `previous_response_id` 续接，接收到了公开完成事件与 Codex metadata；这项检查覆盖连接、元数据和续接，不等同于完整生成、工具调用或所有重连场景。验证使用正式提供商开关，完成后恢复原配置。
 
-记忆接口是 CLI 可选功能对应的协议。是否启动记忆任务仍由 CLI 自己的 feature/config 决定。它要求提供商支持该原生端点；Kiro、xAI（Grok CLI）、Antigravity 和 Gemini CLI 等私有适配器不能通过格式标签冒充支持。配置自定义路径时须使用 `/memories/{operation}` 等模板；仅描述 Responses 的固定路径会被拒绝。
+记忆接口是 CLI 可选功能对应的协议。是否启动记忆任务仍由 CLI 自己的 feature/config 决定。它要求提供商支持该原生端点；Kiro、xAI（Grok CLI）、Antigravity 等私有适配器不能通过格式标签冒充支持。配置自定义路径时须使用 `/memories/{operation}` 等模板；仅描述 Responses 的固定路径会被拒绝。
 
 Apps 文件上传属于 CLI 的 ChatGPT Apps 专用路径，普通自定义 API 提供商不会启动该流程；本次不将其伪装成通用 Responses 路由。
 

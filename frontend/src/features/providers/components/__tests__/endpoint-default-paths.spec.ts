@@ -62,13 +62,6 @@ describe('endpoint default paths', () => {
     })).toBe('/v1/projects/{project_id}/locations/{region}/publishers/google/models/{model}:predict')
   })
 
-  it('uses Gemini CLI v1internal paths for fixed Gemini CLI endpoints', () => {
-    expect(getDefaultEndpointPath({
-      apiFormat: 'gemini:generate_content',
-      providerType: 'gemini_cli',
-      apiFormats,
-    })).toBe('/v1internal:{action}')
-  })
   it('uses Anti Gravity v1internal paths for fixed Anti Gravity endpoints', () => {
     expect(getDefaultEndpointPath({
       apiFormat: 'gemini:generate_content',

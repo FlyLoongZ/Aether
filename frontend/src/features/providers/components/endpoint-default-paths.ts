@@ -177,11 +177,6 @@ export function getDefaultEndpointPath(params: {
 }): string {
   const providerType = (params.providerType || '').toLowerCase()
   const normalizedApiFormat = normalizeEndpointApiFormat(params.apiFormat)
-  if (providerType === 'gemini_cli') {
-    if (normalizedApiFormat === 'gemini:generate_content') {
-      return '/v1internal:{action}'
-    }
-  }
   if (providerType === 'antigravity') {
     if (normalizedApiFormat === 'gemini:generate_content') {
       return '/v1internal:{action}'

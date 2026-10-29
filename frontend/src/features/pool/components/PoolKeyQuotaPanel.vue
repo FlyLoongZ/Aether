@@ -14,19 +14,13 @@
         :items="items"
         mobile
       />
-      <div
-        v-if="accountQuotaText"
-        class="text-[10px] leading-none text-muted-foreground tabular-nums"
-      >
-        {{ accountQuotaText }}
-      </div>
       <ResetCredits />
     </div>
     <div
-      v-else-if="accountQuotaText || fallbackText"
+      v-else-if="fallbackText"
       :class="textClass"
     >
-      {{ accountQuotaText || fallbackText }}
+      {{ fallbackText }}
     </div>
     <div
       v-else
@@ -43,19 +37,13 @@
       :class="hasNumericOnlyItems ? '' : 'space-y-2'"
     >
       <QuotaProgressRows :items="items" />
-      <div
-        v-if="accountQuotaText"
-        class="text-[10px] leading-none text-muted-foreground tabular-nums"
-      >
-        {{ accountQuotaText }}
-      </div>
       <ResetCredits />
     </div>
     <span
-      v-else-if="accountQuotaText || fallbackText"
+      v-else-if="fallbackText"
       :class="textClass"
     >
-      {{ accountQuotaText || fallbackText }}
+      {{ fallbackText }}
     </span>
     <span
       v-else
@@ -80,7 +68,6 @@ export interface PoolQuotaProgressDisplayItem {
 
 const props = withDefaults(defineProps<{
   items: PoolQuotaProgressDisplayItem[]
-  accountQuotaText?: string | null
   fallbackText?: string | null
   textClass?: string
   variant?: 'desktop' | 'mobile'
@@ -89,7 +76,6 @@ const props = withDefaults(defineProps<{
   canConsumeResetCredit?: boolean
   consumingResetCredit?: boolean
 }>(), {
-  accountQuotaText: null,
   fallbackText: null,
   textClass: '',
   variant: 'desktop',

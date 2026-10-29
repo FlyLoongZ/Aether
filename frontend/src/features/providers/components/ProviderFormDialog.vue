@@ -57,9 +57,6 @@
                   <SelectItem value="codex">
                     Codex
                   </SelectItem>
-                  <SelectItem value="gemini_cli">
-                    Gemini CLI
-                  </SelectItem>
                   <SelectItem value="xai">
                     xAI
                   </SelectItem>
@@ -83,9 +80,6 @@
                   </SelectItem>
                   <SelectItem value="codex">
                     Codex
-                  </SelectItem>
-                  <SelectItem value="gemini_cli">
-                    Gemini CLI
                   </SelectItem>
                   <SelectItem value="xai">
                     xAI

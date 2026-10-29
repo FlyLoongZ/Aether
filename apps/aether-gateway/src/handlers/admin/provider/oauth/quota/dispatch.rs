@@ -4,7 +4,6 @@ use std::pin::Pin;
 use super::antigravity::refresh_antigravity_provider_quota_locally;
 use super::claude_code::refresh_claude_code_provider_quota_locally;
 use super::codex::refresh_codex_provider_quota_locally;
-use super::gemini_cli::refresh_gemini_cli_provider_quota_locally;
 use super::kiro::refresh_kiro_provider_quota_locally;
 use super::xai::refresh_xai_provider_quota_locally;
 use crate::handlers::admin::request::AdminAppState;
@@ -35,10 +34,6 @@ const PROVIDER_QUOTA_REFRESH_HANDLERS: &[(&str, ProviderQuotaRefreshHandler)] = 
         refresh_claude_code_provider_quota_locally_boxed,
     ),
     ("codex", refresh_codex_provider_quota_locally_boxed),
-    (
-        "gemini_cli",
-        refresh_gemini_cli_provider_quota_locally_boxed,
-    ),
     ("kiro", refresh_kiro_provider_quota_locally_boxed),
     ("xai", refresh_xai_provider_quota_locally_boxed),
 ];
@@ -101,22 +96,6 @@ fn refresh_claude_code_provider_quota_locally_boxed<'a>(
     proxy_override: Option<ProxySnapshot>,
 ) -> ProviderQuotaRefreshFuture<'a> {
     Box::pin(refresh_claude_code_provider_quota_locally(
-        state,
-        provider,
-        endpoint,
-        keys,
-        proxy_override,
-    ))
-}
-
-fn refresh_gemini_cli_provider_quota_locally_boxed<'a>(
-    state: &'a AdminAppState<'a>,
-    provider: &'a StoredProviderCatalogProvider,
-    endpoint: &'a StoredProviderCatalogEndpoint,
-    keys: Vec<StoredProviderCatalogKey>,
-    proxy_override: Option<ProxySnapshot>,
-) -> ProviderQuotaRefreshFuture<'a> {
-    Box::pin(refresh_gemini_cli_provider_quota_locally(
         state,
         provider,
         endpoint,

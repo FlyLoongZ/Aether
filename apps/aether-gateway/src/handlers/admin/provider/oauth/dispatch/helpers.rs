@@ -45,7 +45,7 @@ pub(super) fn attach_admin_provider_oauth_audit_response(
 }
 
 pub(super) fn admin_provider_oauth_key_name_from_auth_config(
-    provider_type: &str,
+    _provider_type: &str,
     auth_config: &Map<String, Value>,
     batch_index: Option<usize>,
 ) -> String {

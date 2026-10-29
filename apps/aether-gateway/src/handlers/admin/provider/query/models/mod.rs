@@ -67,7 +67,6 @@ fn provider_query_select_model_keys(
     })
 }
 
-
 fn provider_query_attach_model_test_capabilities(
     provider: &StoredProviderCatalogProvider,
     models: Vec<Value>,

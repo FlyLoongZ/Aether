@@ -17,7 +17,6 @@ use crate::claude_code::{
     build_claude_code_passthrough_headers, current_claude_code_transport_identity_profile,
     local_claude_code_transport_unsupported_reason_with_network,
 };
-use crate::gemini_cli::is_gemini_cli_provider_transport;
 use crate::headers::{force_identity_accept_encoding, upstream_credential_header_names};
 use crate::kiro::{
     build_kiro_provider_headers, build_kiro_provider_request_body, is_kiro_provider_transport,
@@ -55,7 +54,6 @@ pub struct SameFormatProviderRequestBehaviorParams<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SameFormatProviderRequestBehavior {
     pub is_antigravity: bool,
-    pub is_gemini_cli: bool,
     pub is_claude_code: bool,
     pub is_claude_code_transport: bool,
     pub anthropic_compatibility_profile: AnthropicCompatibilityProfile,
@@ -256,7 +254,6 @@ pub fn classify_same_format_provider_request_behavior_for_operation(
     api_operation: Option<aether_ai_formats::ApiOperation>,
 ) -> SameFormatProviderRequestBehavior {
     let is_antigravity = is_antigravity_provider_transport(transport);
-    let is_gemini_cli = is_gemini_cli_provider_transport(transport);
     let is_claude_code_transport = transport
         .provider
         .provider_type
@@ -267,11 +264,6 @@ pub fn classify_same_format_provider_request_behavior_for_operation(
     let is_claude_code = anthropic_compatibility_profile.uses_claude_code_compatibility();
     let is_vertex = is_vertex_transport_context(transport);
     let is_kiro = is_kiro_provider_transport(transport);
-    let gemini_cli_requires_upstream_streaming = is_gemini_cli
-        && crate::gemini_cli::gemini_cli_v1internal_requires_upstream_streaming(
-            params.provider_api_format,
-            params.require_streaming,
-        );
     let operation_requires_sync = matches!(
         api_operation,
         Some(
@@ -285,7 +277,7 @@ pub fn classify_same_format_provider_request_behavior_for_operation(
             transport.provider.provider_type.as_str(),
             params.provider_api_format,
             params.require_streaming,
-            is_kiro || is_antigravity || gemini_cli_requires_upstream_streaming,
+            is_kiro || is_antigravity,
         );
     let force_body_stream_field = !operation_requires_sync
         && aether_ai_formats::api_format_uses_body_stream_field(params.provider_api_format)
@@ -294,7 +286,7 @@ pub fn classify_same_format_provider_request_behavior_for_operation(
         );
     let report_kind = if is_kiro && !params.require_streaming {
         "claude_cli_sync_finalize"
-    } else if (is_gemini_cli || is_antigravity) && !params.require_streaming {
+    } else if is_antigravity && !params.require_streaming {
         match params.report_kind {
             "gemini_chat_sync_success" => "gemini_chat_sync_finalize",
             "gemini_cli_sync_success" => "gemini_cli_sync_finalize",
@@ -306,7 +298,6 @@ pub fn classify_same_format_provider_request_behavior_for_operation(
 
     SameFormatProviderRequestBehavior {
         is_antigravity,
-        is_gemini_cli,
         is_claude_code,
         is_claude_code_transport,
         anthropic_compatibility_profile,
@@ -939,7 +930,6 @@ pub fn same_format_provider_transport_unsupported_reason_for_trace(
     );
     if !behavior.is_antigravity
         && !behavior.is_claude_code_transport
-        && !behavior.is_gemini_cli
         && !behavior.is_vertex
         && !behavior.is_kiro
     {

@@ -20,22 +20,15 @@ impl ProviderOAuthService {
     pub fn with_builtin_adapters() -> Self {
         use super::providers::{
             AntigravityProviderOAuthAdapter, ClaudeCodeProviderOAuthAdapter,
-            CodexProviderOAuthAdapter, GenericProviderOAuthAdapter, KiroProviderOAuthAdapter,
-            XaiProviderOAuthAdapter,
+            CodexProviderOAuthAdapter, KiroProviderOAuthAdapter, XaiProviderOAuthAdapter,
         };
 
-        let mut service = Self::new()
+        Self::new()
             .with_adapter(Arc::new(KiroProviderOAuthAdapter::default()))
             .with_adapter(Arc::new(ClaudeCodeProviderOAuthAdapter::default()))
             .with_adapter(Arc::new(CodexProviderOAuthAdapter::default()))
             .with_adapter(Arc::new(AntigravityProviderOAuthAdapter::default()))
-            .with_adapter(Arc::new(XaiProviderOAuthAdapter::default()));
-        for provider_type in ["gemini_cli"] {
-            if let Some(adapter) = GenericProviderOAuthAdapter::for_provider_type(provider_type) {
-                service = service.with_adapter(Arc::new(adapter));
-            }
-        }
-        service
+            .with_adapter(Arc::new(XaiProviderOAuthAdapter::default()))
     }
 
     pub fn with_adapter(mut self, adapter: Arc<dyn ProviderOAuthAdapter>) -> Self {
@@ -136,14 +129,7 @@ mod tests {
     fn builtin_provider_service_registers_supported_provider_types() {
         let service = ProviderOAuthService::with_builtin_adapters();
 
-        for provider_type in [
-            "claude_code",
-            "codex",
-            "gemini_cli",
-            "antigravity",
-            "kiro",
-            "xai",
-        ] {
+        for provider_type in ["claude_code", "codex", "antigravity", "kiro", "xai"] {
             assert!(
                 service.adapter(provider_type).is_ok(),
                 "{provider_type} adapter should be registered"

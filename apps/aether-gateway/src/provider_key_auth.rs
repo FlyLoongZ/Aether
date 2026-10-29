@@ -163,7 +163,7 @@ fn key_has_auth_type_overrides(key: &StoredProviderCatalogKey) -> bool {
 fn provider_uses_bearer_oauth_runtime(provider_type: &str) -> bool {
     matches!(
         provider_type.trim().to_ascii_lowercase().as_str(),
-        "claude_code" | "codex" | "gemini_cli" | "antigravity" | "kiro" | "xai"
+        "claude_code" | "codex" | "antigravity" | "kiro" | "xai"
     )
 }
 

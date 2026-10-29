@@ -633,19 +633,6 @@ pub(super) fn apply_admin_provider_oauth_batch_import_hints(
     auth_config: &mut serde_json::Map<String, serde_json::Value>,
 ) {
     let provider_type = provider_type.trim().to_ascii_lowercase();
-    if provider_type == "gemini_cli" {
-        if let Some(project_id) = entry.project_id.as_ref() {
-            auth_config
-                .entry("project_id".to_string())
-                .or_insert_with(|| json!(project_id));
-        }
-        if let Some(plan_type) = entry.plan_type.as_ref() {
-            auth_config
-                .entry("plan_type".to_string())
-                .or_insert_with(|| json!(plan_type));
-        }
-        return;
-    }
     if provider_type == "antigravity" {
         // The Google refresh-token response does not include the account email.
         // Preserve the identity supplied by the imported Antigravity credentials so

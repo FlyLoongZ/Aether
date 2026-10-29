@@ -29,7 +29,6 @@ use crate::{
 const CLAUDE_VERSION_HEADER: &str = "2023-06-01";
 const ANTIGRAVITY_FETCH_PROVIDER_API_FORMAT: &str = "antigravity:fetch_available_models";
 const ANTIGRAVITY_LOAD_CODE_ASSIST_PROVIDER_API_FORMAT: &str = "antigravity:load_code_assist";
-const GEMINI_CLI_LOAD_CODE_ASSIST_PROVIDER_API_FORMAT: &str = "gemini_cli:load_code_assist";
 const KIRO_LIST_AVAILABLE_MODELS_PROVIDER_API_FORMAT: &str = "kiro:list_available_models";
 
 const BROWSER_FINGERPRINT_HEADERS: &[(&str, &str)] = &[
@@ -302,55 +301,6 @@ pub async fn build_antigravity_load_code_assist_plan(
     .await
 }
 
-pub async fn build_gemini_cli_load_code_assist_plan(
-    runtime: &(impl ModelFetchTransportRuntime + ?Sized),
-    transport: &GatewayProviderTransportSnapshot,
-) -> Result<ExecutionPlan, String> {
-    let authorization = resolve_bearer_or_oauth_header_auth(runtime, transport)
-        .await?
-        .filter(|(_, value)| !value.trim().is_empty())
-        .ok_or_else(|| "GeminiCLI loadCodeAssist requires bearer or OAuth auth".to_string())?;
-
-    let mut headers = BTreeMap::from([
-        (
-            "user-agent".to_string(),
-            aether_provider_transport::gemini_cli::gemini_cli_client_user_agent(),
-        ),
-        ("accept-encoding".to_string(), "identity".to_string()),
-        ("content-type".to_string(), "application/json".to_string()),
-    ]);
-    let mut protected_headers = Vec::new();
-    insert_non_empty_auth_header(
-        &mut headers,
-        &mut protected_headers,
-        &authorization.0,
-        &authorization.1,
-    );
-    headers = apply_fetch_header_rules(transport, headers, &protected_headers)?;
-
-    build_execution_plan(
-        runtime,
-        transport,
-        ModelFetchExecutionPlanRequest {
-            method: "POST".to_string(),
-            url: "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist".to_string(),
-            headers,
-            content_type: Some("application/json".to_string()),
-            body: RequestBody::from_json(json!({
-                "metadata": {
-                    "ideType": "ANTIGRAVITY",
-                    "platform": "PLATFORM_UNSPECIFIED",
-                    "pluginType": "GEMINI",
-                }
-            })),
-            client_api_format: "gemini:generate_content".to_string(),
-            provider_api_format: GEMINI_CLI_LOAD_CODE_ASSIST_PROVIDER_API_FORMAT.to_string(),
-            model_name: Some("loadCodeAssist".to_string()),
-        },
-    )
-    .await
-}
-
 pub async fn build_kiro_list_available_models_plan(
     runtime: &(impl ModelFetchTransportRuntime + ?Sized),
     transport: &GatewayProviderTransportSnapshot,
@@ -516,36 +466,6 @@ async fn resolve_oauth_header_auth(
     }
 }
 
-async fn resolve_bearer_or_oauth_header_auth(
-    runtime: &(impl ModelFetchTransportRuntime + ?Sized),
-    transport: &GatewayProviderTransportSnapshot,
-) -> Result<Option<(String, String)>, String> {
-    if let Some(auth) = resolve_oauth_header_auth(runtime, transport).await? {
-        return Ok(Some(auth));
-    }
-
-    if let Some((name, value)) = resolve_local_openai_bearer_auth(transport) {
-        return Ok(Some((name, value)));
-    }
-
-    if transport
-        .key
-        .auth_type
-        .trim()
-        .eq_ignore_ascii_case("bearer")
-    {
-        let secret = transport.key.decrypted_api_key.trim();
-        if !secret.is_empty() {
-            return Ok(Some((
-                "authorization".to_string(),
-                format!("Bearer {secret}"),
-            )));
-        }
-    }
-
-    Ok(None)
-}
-
 fn apply_fetch_header_rules(
     transport: &GatewayProviderTransportSnapshot,
     mut headers: BTreeMap<String, String>,
@@ -621,16 +541,10 @@ fn standard_models_fetch_headers(
             headers
         }
         "gemini:generate_content" => {
-            let mut headers = BROWSER_FINGERPRINT_HEADERS
+            let headers = BROWSER_FINGERPRINT_HEADERS
                 .iter()
                 .map(|(key, value)| (key.to_string(), value.to_string()))
                 .collect::<BTreeMap<_, _>>();
-            if provider_type == "gemini_cli" {
-                headers.insert(
-                    "user-agent".to_string(),
-                    aether_provider_transport::gemini_cli::gemini_cli_client_user_agent(),
-                );
-            }
             headers
         }
         _ => BTreeMap::new(),
@@ -719,16 +633,6 @@ fn insert_non_empty_auth_header(
     headers.insert(name.to_string(), value.to_string());
 }
 
-fn auth_secret_from_header_value(auth_value: &str) -> String {
-    auth_value
-        .trim()
-        .strip_prefix("Bearer ")
-        .or_else(|| auth_value.trim().strip_prefix("bearer "))
-        .unwrap_or_else(|| auth_value.trim())
-        .trim()
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use aether_contracts::{ExecutionPlan, ExecutionResult, ProxySnapshot};
@@ -741,9 +645,8 @@ mod tests {
 
     use super::{
         append_query_param, build_antigravity_fetch_available_models_plan,
-        build_antigravity_load_code_assist_plan, build_gemini_cli_load_code_assist_plan,
-        build_kiro_list_available_models_plan, build_models_fetch_execution_plan,
-        build_models_fetch_execution_plan_for_client_version,
+        build_antigravity_load_code_assist_plan, build_kiro_list_available_models_plan,
+        build_models_fetch_execution_plan, build_models_fetch_execution_plan_for_client_version,
         build_standard_models_fetch_execution_plan, build_vertex_models_fetch_execution_plan,
         ModelFetchTransportRuntime, ANTIGRAVITY_REQUEST_USER_AGENT,
     };
@@ -1205,33 +1108,6 @@ mod tests {
         assert_eq!(
             plan.headers.get("x-goog-api-client").map(String::as_str),
             Some("gl-node/18.18.2 fire/0.8.6 grpc/1.10.x")
-        );
-    }
-
-    #[tokio::test]
-    async fn builds_gemini_cli_load_code_assist_plan() {
-        let runtime = TestRuntime {
-            oauth_auth: Some(
-                aether_provider_transport::LocalResolvedOAuthRequestAuth::Header {
-                    name: "authorization".to_string(),
-                    value: "Bearer oauth-token".to_string(),
-                },
-            ),
-            proxy: None,
-        };
-        let transport = sample_transport("gemini_cli", "gemini:generate_content", "oauth");
-        let plan = build_gemini_cli_load_code_assist_plan(&runtime, &transport)
-            .await
-            .expect("plan");
-
-        assert_eq!(plan.method, "POST");
-        assert_eq!(
-            plan.url,
-            "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
-        );
-        assert_eq!(
-            plan.headers.get("user-agent").map(String::as_str),
-            Some("GeminiCLI/0.1.5 (Windows; AMD64)")
         );
     }
 

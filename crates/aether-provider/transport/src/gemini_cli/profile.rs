@@ -33,9 +33,5 @@ mod tests {
         let profile = identity("0.62.0").unwrap();
         assert_eq!(profile.user_agent, "GeminiCLI/0.62.0 (Windows; AMD64)");
         assert!(identity("0.62.0\nx: y").is_err());
-        assert_eq!(
-            identity(GEMINI_CLI_BUILTIN_VERSION).unwrap().user_agent,
-            super::super::GEMINI_CLI_USER_AGENT
-        );
     }
 }

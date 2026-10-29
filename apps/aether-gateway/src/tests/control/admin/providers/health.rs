@@ -198,12 +198,8 @@ async fn admin_provider_summary_health_counts_inherited_reverse_proxy_accounts()
         ("codex", "oauth", "openai:responses"),
         ("kiro", "oauth", "claude:messages"),
         ("kiro", "bearer", "claude:messages"),
-        ("gemini_cli", "oauth", "gemini:generate_content"),
         ("antigravity", "oauth", "gemini:generate_content"),
         ("vertex_ai", "service_account", "gemini:generate_content"),
-        ("chatgpt_web", "oauth", "openai:chat"),
-        ("chatgpt_web", "bearer", "openai:chat"),
-        ("windsurf", "oauth", "openai:chat"),
     ] {
         for configured_formats in [None, Some(json!([]))] {
             for score in [None, Some(0.0), Some(0.75)] {

@@ -16,10 +16,6 @@ use crate::ai_serving::planner::common::{
     endpoint_config_forces_body_stream_field, enforce_provider_body_stream_policy,
     request_requires_body_stream_field, resolve_upstream_is_stream_for_provider,
 };
-use crate::ai_serving::planner::gemini_cli::{
-    build_gemini_cli_v1internal_provider_request, GeminiCliV1InternalRequestError,
-    GeminiCliV1InternalRequestInput,
-};
 use crate::ai_serving::planner::redaction::{
     request_identity_response_encoding_when_redacted, resolve_provider_chat_pii_redaction,
 };
@@ -37,12 +33,10 @@ use crate::ai_serving::transport::kiro::{
     KIRO_ENVELOPE_NAME,
 };
 use crate::ai_serving::transport::{
-    build_kiro_cross_format_upstream_url,
-    build_openai_image_headers, build_openai_image_upstream_url,
-    build_standard_provider_request_headers, is_gemini_cli_provider_transport,
+    build_kiro_cross_format_upstream_url, build_openai_image_headers,
+    build_openai_image_upstream_url, build_standard_provider_request_headers,
     openai_image_transport_unsupported_reason, resolve_openai_image_auth,
     ProviderOpenAiImageHeadersInput, StandardProviderRequestHeadersInput,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
 };
 use crate::ai_serving::{
     build_openai_image_request_body_from_gemini_image_request, gemini_request_is_image_generation,
@@ -296,7 +290,6 @@ pub(crate) async fn resolve_local_standard_candidate_payload_parts(
     let planner_state = crate::ai_serving::PlannerAppState::new(state);
     let candidate = &attempt.eligible.candidate;
     let transport = &attempt.eligible.transport;
-    let transport_profile = crate::ai_serving::transport::resolve_transport_profile(transport);
     let provider_api_format = attempt.eligible.provider_api_format.as_str();
     let effective_headers = input.effective_headers(&parts.headers);
     if spec_metadata.api_format == "gemini:generate_content"
@@ -708,29 +701,6 @@ pub(crate) async fn resolve_local_standard_candidate_payload_parts(
         .await);
     }
 
-    if normalized_provider_api_format == "gemini:generate_content"
-        && is_gemini_cli_provider_transport(transport)
-    {
-        return Ok(build_gemini_cli_cross_format_payload_parts(
-            state,
-            parts,
-            trace_id,
-            body_json,
-            input,
-            attempt,
-            transport,
-            spec_metadata.api_format,
-            provider_api_format,
-            prepared_candidate.mapped_model,
-            prepared_candidate.auth_header,
-            prepared_candidate.auth_value,
-            provider_request_body,
-            upstream_is_stream,
-            redaction.redacted,
-        )
-        .await);
-    }
-
     let upstream_url = match crate::ai_serving::planner::standard::build_standard_upstream_url(
         parts,
         transport,
@@ -967,144 +937,6 @@ async fn build_antigravity_cross_format_payload_parts(
         upstream_url: resolved.upstream_url,
         upstream_is_stream,
         envelope_name: Some(ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME),
-        transport: resolved.transport,
-        transport_profile: None,
-        request_redacted,
-    })
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn build_gemini_cli_cross_format_payload_parts(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    original_body_json: &serde_json::Value,
-    input: &LocalStandardDecisionInput,
-    attempt: &LocalStandardCandidateAttempt,
-    transport: &Arc<GatewayProviderTransportSnapshot>,
-    client_api_format: &str,
-    provider_api_format: &str,
-    mapped_model: String,
-    auth_header: String,
-    auth_value: String,
-    gemini_request_body: Value,
-    upstream_is_stream: bool,
-    request_redacted: bool,
-) -> Option<LocalStandardCandidatePayloadParts> {
-    let candidate = &attempt.eligible.candidate;
-    let effective_headers = input.effective_headers(&parts.headers);
-    let resolved =
-        match build_gemini_cli_v1internal_provider_request(GeminiCliV1InternalRequestInput {
-            state,
-            parts,
-            transport,
-            trace_id,
-            mapped_model: &mapped_model,
-            provider_api_format,
-            auth_header: &auth_header,
-            auth_value: &auth_value,
-            request_headers: effective_headers,
-            original_request_body: original_body_json,
-            gemini_request_body: &gemini_request_body,
-            upstream_is_stream,
-        })
-        .await
-        {
-            Ok(resolved) => resolved,
-            Err(GeminiCliV1InternalRequestError::ProjectUnavailable) => {
-                mark_skipped_local_standard_candidate(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    attempt.candidate_index,
-                    &attempt.candidate_id,
-                    "transport_auth_unavailable",
-                )
-                .await;
-                return None;
-            }
-            Err(GeminiCliV1InternalRequestError::EnvelopeUnsupported) => {
-                mark_skipped_local_standard_candidate_with_extra_data(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    attempt.candidate_index,
-                    &attempt.candidate_id,
-                    "provider_request_body_build_failed",
-                    request_body_build_failure_extra_data(
-                        original_body_json,
-                        client_api_format,
-                        provider_api_format,
-                    ),
-                )
-                .await;
-                return None;
-            }
-            Err(GeminiCliV1InternalRequestError::UpstreamUrlUnavailable) => {
-                mark_skipped_local_standard_candidate_with_failure_diagnostic(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    attempt.candidate_index,
-                    &attempt.candidate_id,
-                    "upstream_url_missing",
-                    CandidateFailureDiagnostic::upstream_url_missing(
-                        client_api_format,
-                        provider_api_format,
-                        "standard_family_gemini_cli_url",
-                    ),
-                )
-                .await;
-                return None;
-            }
-            Err(GeminiCliV1InternalRequestError::HeaderRulesApplyFailed) => {
-                mark_skipped_local_standard_candidate_with_failure_diagnostic(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    attempt.candidate_index,
-                    &attempt.candidate_id,
-                    "transport_header_rules_apply_failed",
-                    CandidateFailureDiagnostic::header_rules_apply_failed(
-                        client_api_format,
-                        provider_api_format,
-                        "standard_family_gemini_cli_headers",
-                    ),
-                )
-                .await;
-                return None;
-            }
-        };
-
-    let mut provider_request_headers = resolved.headers.headers;
-    apply_codex_openai_special_headers(
-        &mut provider_request_headers,
-        &resolved.body,
-        effective_headers,
-        resolved.transport.provider.provider_type.as_str(),
-        provider_api_format,
-        Some(trace_id),
-        resolved.transport.key.decrypted_auth_config.as_deref(),
-    );
-    request_identity_response_encoding_when_redacted(
-        &mut provider_request_headers,
-        request_redacted,
-    );
-
-    Some(LocalStandardCandidatePayloadParts {
-        auth_header: resolved.headers.auth_header,
-        auth_value: resolved.headers.auth_value,
-        mapped_model,
-        provider_api_format: provider_api_format.to_string(),
-        provider_request_body: resolved.body,
-        provider_request_headers,
-        upstream_url: resolved.upstream_url,
-        upstream_is_stream,
-        envelope_name: Some(GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME),
         transport: resolved.transport,
         transport_profile: None,
         request_redacted,

@@ -15,9 +15,8 @@ use aether_data_contracts::repository::provider_catalog::{
 use aether_data_contracts::repository::quota::StoredProviderQuotaSnapshot;
 use aether_data_contracts::DataLayerError;
 use aether_model_fetch::{
-    aggregate_models_for_cache, build_antigravity_load_code_assist_plan,
-    fetch_models_from_transports, merge_upstream_metadata, model_fetch_interval_minutes,
-    ModelFetchAssociationStore, ModelFetchTransportRuntime,
+    aggregate_models_for_cache, build_antigravity_load_code_assist_plan, merge_upstream_metadata,
+    model_fetch_interval_minutes, ModelFetchAssociationStore, ModelFetchTransportRuntime,
 };
 use aether_scheduler_core::SchedulerAffinityTarget;
 use async_trait::async_trait;
@@ -26,7 +25,7 @@ use tracing::{debug, warn};
 
 use super::{AppState, GatewayError};
 use crate::clock::current_unix_secs;
-use crate::model_fetch::{safe_model_fetch_error, CodexCatalogRuntime, ModelFetchRuntimeState};
+use crate::model_fetch::{CodexCatalogRuntime, ModelFetchRuntimeState};
 use crate::provider_transport::{GatewayProviderTransportSnapshot, LocalResolvedOAuthRequestAuth};
 use crate::request_candidate_runtime::{
     RequestCandidateRuntimeCapabilityReader, RequestCandidateRuntimeReader,
@@ -173,59 +172,6 @@ impl AppState {
                 key_id = %transport.key.id,
                 error = ?err,
                 "antigravity project metadata hydration could not persist metadata"
-            );
-        }
-
-        Some(hydrated)
-    }
-
-    pub(crate) async fn hydrate_gemini_cli_project_metadata_for_transport(
-        &self,
-        transport: &GatewayProviderTransportSnapshot,
-    ) -> Option<GatewayProviderTransportSnapshot> {
-        if !provider_transport::is_gemini_cli_provider_transport(transport) {
-            return None;
-        }
-        if provider_transport::resolve_gemini_cli_project_id(transport).is_some() {
-            return Some(transport.clone());
-        }
-
-        let outcome =
-            match fetch_models_from_transports(self, std::slice::from_ref(transport)).await {
-                Ok(outcome) => outcome,
-                Err(err) => {
-                    warn!(
-                        provider_id = %transport.provider.id,
-                        endpoint_id = %transport.endpoint.id,
-                        key_id = %transport.key.id,
-                        error = %safe_model_fetch_error(&err),
-                        "gemini_cli project metadata hydration failed"
-                    );
-                    return None;
-                }
-            };
-        let upstream_metadata = outcome.upstream_metadata.as_ref()?;
-        let merged_metadata =
-            merge_upstream_metadata(transport.key.upstream_metadata.as_ref(), upstream_metadata);
-
-        let mut hydrated = transport.clone();
-        hydrated.key.upstream_metadata = Some(merged_metadata.clone());
-        provider_transport::resolve_gemini_cli_project_id(&hydrated)?;
-
-        if let Err(err) = self
-            .update_provider_catalog_key_upstream_metadata(
-                &transport.key.id,
-                Some(&merged_metadata),
-                Some(current_unix_secs()),
-            )
-            .await
-        {
-            warn!(
-                provider_id = %transport.provider.id,
-                endpoint_id = %transport.endpoint.id,
-                key_id = %transport.key.id,
-                error = ?err,
-                "gemini_cli project metadata hydration could not persist metadata"
             );
         }
 

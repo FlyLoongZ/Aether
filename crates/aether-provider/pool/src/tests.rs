@@ -25,14 +25,10 @@ fn builtin_service_registers_provider_pool_adapters() {
         service.provider_types().collect::<Vec<_>>(),
         [
             "antigravity",
-            "chatgpt_web",
             "claude_code",
             "codex",
-            "gemini_cli",
-            "grok",
             "kiro",
             "vertex_ai",
-            "windsurf",
             "xai"
         ]
     );
@@ -54,9 +50,6 @@ fn builtin_service_owns_quota_refresh_support_and_endpoint_selection() {
     assert!(service.supports_quota_refresh("claude_code"));
     assert!(service.supports_quota_refresh("codex"));
     assert!(service.supports_quota_refresh("antigravity"));
-    assert!(service.supports_quota_refresh("grok"));
-    assert!(service.supports_quota_refresh("gemini_cli"));
-    assert!(service.supports_quota_refresh("windsurf"));
     assert!(service.supports_quota_refresh("xai"));
     let claude_spec = build_claude_code_pool_quota_request(
         "key-1",
@@ -171,40 +164,6 @@ fn codex_nested_agent_identity_quota_request_prefers_dynamic_assertion() {
         spec.headers.get("authorization").map(String::as_str),
         Some("AgentAssertion signed-at-request-time")
     );
-}
-
-#[test]
-fn gemini_cli_quota_request_uses_v1internal_retrieve_user_quota() {
-    let spec = build_gemini_cli_pool_quota_request(
-        "key-1",
-        "https://cloudcode-pa.googleapis.com/",
-        ("authorization".to_string(), "Bearer access".to_string()),
-        "project-1",
-    );
-
-    assert_eq!(spec.method, "POST");
-    assert_eq!(
-        spec.url,
-        "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
-    );
-    assert_eq!(
-        spec.headers.get("authorization").map(String::as_str),
-        Some("Bearer access")
-    );
-    assert_eq!(
-        spec.json_body.as_ref().and_then(|body| body.get("project")),
-        Some(&json!("project-1"))
-    );
-    assert_eq!(
-        spec.headers.get("user-agent").map(String::as_str),
-        Some(GEMINI_CLI_USER_AGENT)
-    );
-    assert!(spec
-        .json_body
-        .as_ref()
-        .is_some_and(|body| body.get("userAgent").is_none()));
-    assert_eq!(spec.client_api_format, "gemini:generate_content");
-    assert_eq!(spec.provider_api_format, "gemini_cli:retrieve_user_quota");
 }
 
 #[test]
@@ -1586,68 +1545,6 @@ fn codex_explicit_quota_block_is_hard_until_reset() {
         &snapshot_blocked,
         "codex",
     ));
-}
-
-#[test]
-fn grok_quota_tier_boundaries_match_pool_modes() {
-    assert_eq!(
-        grok_supported_quota_windows_for_tier(Some("basic")),
-        [("quota_fast", "fast")]
-    );
-    assert_eq!(
-        grok_supported_quota_windows_for_tier(Some("super")),
-        [
-            ("quota_auto", "auto"),
-            ("quota_fast", "fast"),
-            ("quota_expert", "expert"),
-            ("quota_grok_4_3", "grok-420-computer-use-sa")
-        ]
-    );
-    assert_eq!(
-        grok_supported_quota_windows_for_tier(Some("heavy")),
-        [
-            ("quota_auto", "auto"),
-            ("quota_fast", "fast"),
-            ("quota_expert", "expert"),
-            ("quota_heavy", "heavy"),
-            ("quota_grok_4_3", "grok-420-computer-use-sa")
-        ]
-    );
-}
-
-#[test]
-fn grok_pool_tier_infers_from_live_quota_totals() {
-    let bucket = json!({
-        "quota_by_model": {
-            "quota_fast": {
-                "remaining": 20.0,
-                "total": 30.0
-            },
-            "quota_auto": {
-                "remaining": 7.0,
-                "total": 7.0
-            }
-        }
-    });
-    let bucket = bucket.as_object().expect("bucket should be object");
-
-    assert_eq!(grok_pool_tier_from_quota_bucket(bucket), Some("basic"));
-}
-
-#[test]
-fn grok_model_name_maps_to_quota_window() {
-    assert_eq!(
-        grok_quota_window_key_for_model(Some("grok-4.20-fast")),
-        Some("quota_fast")
-    );
-    assert_eq!(
-        grok_quota_window_key_for_model(Some("grok-4.20-multi-agent-0309")),
-        Some("quota_heavy")
-    );
-    assert_eq!(
-        grok_quota_window_key_for_model(Some("grok-4.3-beta")),
-        Some("quota_grok_4_3")
-    );
 }
 
 #[test]

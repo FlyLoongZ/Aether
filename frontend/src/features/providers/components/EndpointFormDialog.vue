@@ -1924,9 +1924,7 @@ const isFixedProvider = computed(() => {
   return !!t && t !== 'custom'
 })
 
-const isEndpointConfigReadOnly = computed(() => {
-  return (props.provider?.provider_type || '').trim().toLowerCase() === 'gemini_cli'
-})
+const isEndpointConfigReadOnly = computed(() => false)
 
 // 新端点表单
 const newEndpoint = ref({

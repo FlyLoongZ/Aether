@@ -18,10 +18,6 @@ use crate::ai_serving::planner::common::{
     endpoint_config_forces_body_stream_field, enforce_provider_body_stream_policy,
     request_requires_body_stream_field, resolve_upstream_is_stream_for_provider,
 };
-use crate::ai_serving::planner::gemini_cli::{
-    build_gemini_cli_v1internal_provider_request, GeminiCliV1InternalRequestError,
-    GeminiCliV1InternalRequestInput,
-};
 use crate::ai_serving::planner::redaction::{
     request_identity_response_encoding_when_redacted, resolve_provider_chat_pii_redaction,
 };
@@ -47,14 +43,12 @@ use crate::ai_serving::transport::kiro::{
     KiroRequestAuth, KIRO_ENVELOPE_NAME,
 };
 use crate::ai_serving::transport::{
-    apply_local_auth_config_header_overrides,
-    build_kiro_cross_format_upstream_url, build_openai_image_headers,
-    build_openai_image_upstream_url, build_standard_provider_request_headers,
-    is_gemini_cli_provider_transport,
+    apply_local_auth_config_header_overrides, build_kiro_cross_format_upstream_url,
+    build_openai_image_headers, build_openai_image_upstream_url,
+    build_standard_provider_request_headers,
     local_standard_transport_unsupported_reason_with_network,
     openai_image_transport_unsupported_reason, resolve_openai_image_auth,
     ProviderOpenAiImageHeadersInput, StandardProviderRequestHeadersInput,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME,
 };
 use crate::ai_serving::{
     ai_local_execution_contract_for_formats, request_conversion_direct_auth,
@@ -233,7 +227,6 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
     let transport = Arc::clone(&eligible.transport);
     let transport_profile = crate::ai_serving::transport::resolve_transport_profile(&transport);
     let is_antigravity = is_antigravity_provider_transport(&transport);
-    let is_gemini_cli = is_gemini_cli_provider_transport(&transport);
     let is_kiro_claude_cli = is_kiro_claude_messages_transport(&transport, provider_api_format);
     if provider_api_format.eq_ignore_ascii_case("openai:image") {
         return Ok(resolve_openai_responses_to_openai_image_payload_parts(
@@ -258,7 +251,7 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
     } else {
         match conversion_kind {
             Some(_)
-                if (is_antigravity || is_gemini_cli)
+                if is_antigravity
                     && normalized_provider_api_format == "gemini:generate_content" =>
             {
                 None
@@ -628,30 +621,6 @@ pub(crate) async fn resolve_local_openai_responses_candidate_payload_parts_with_
         )
         .await;
     }
-    if provider_api_format == "gemini:generate_content"
-        && is_gemini_cli_provider_transport(&transport)
-    {
-        return Ok(build_gemini_cli_openai_responses_payload_parts(
-            state,
-            parts,
-            trace_id,
-            body_json,
-            input,
-            eligible,
-            candidate_index,
-            candidate_id,
-            spec_metadata.api_format,
-            &transport,
-            provider_api_format,
-            mapped_model,
-            auth_header,
-            auth_value,
-            provider_request_body,
-            upstream_is_stream,
-            redaction.redacted,
-        )
-        .await);
-    }
     if is_antigravity {
         return Ok(build_antigravity_openai_responses_payload_parts(
             state,
@@ -975,155 +944,6 @@ async fn build_antigravity_openai_responses_payload_parts(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn build_gemini_cli_openai_responses_payload_parts(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    original_body_json: &serde_json::Value,
-    input: &LocalOpenAiResponsesDecisionInput,
-    eligible: &EligibleLocalExecutionCandidate,
-    candidate_index: u32,
-    candidate_id: &str,
-    client_api_format: &str,
-    transport: &Arc<GatewayProviderTransportSnapshot>,
-    provider_api_format: &str,
-    mapped_model: String,
-    auth_header: String,
-    auth_value: String,
-    gemini_request_body: Value,
-    upstream_is_stream: bool,
-    request_redacted: bool,
-) -> Option<LocalOpenAiResponsesCandidatePayloadParts> {
-    let candidate = &eligible.candidate;
-    let effective_headers = input.effective_headers(&parts.headers);
-    let resolved =
-        match build_gemini_cli_v1internal_provider_request(GeminiCliV1InternalRequestInput {
-            state,
-            parts,
-            transport,
-            trace_id,
-            mapped_model: &mapped_model,
-            provider_api_format,
-            auth_header: &auth_header,
-            auth_value: &auth_value,
-            request_headers: effective_headers,
-            original_request_body: original_body_json,
-            gemini_request_body: &gemini_request_body,
-            upstream_is_stream,
-        })
-        .await
-        {
-            Ok(resolved) => resolved,
-            Err(GeminiCliV1InternalRequestError::ProjectUnavailable) => {
-                mark_skipped_local_openai_responses_candidate(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    candidate_index,
-                    candidate_id,
-                    "transport_auth_unavailable",
-                )
-                .await;
-                return None;
-            }
-            Err(GeminiCliV1InternalRequestError::EnvelopeUnsupported) => {
-                mark_skipped_local_openai_responses_candidate_with_extra_data(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    candidate_index,
-                    candidate_id,
-                    "provider_request_body_build_failed",
-                    request_body_build_failure_extra_data(
-                        original_body_json,
-                        client_api_format,
-                        provider_api_format,
-                    ),
-                )
-                .await;
-                return None;
-            }
-            Err(GeminiCliV1InternalRequestError::UpstreamUrlUnavailable) => {
-                mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    candidate_index,
-                    candidate_id,
-                    "upstream_url_missing",
-                    CandidateFailureDiagnostic::upstream_url_missing(
-                        client_api_format,
-                        provider_api_format,
-                        "openai_responses_gemini_cli_url",
-                    ),
-                )
-                .await;
-                return None;
-            }
-            Err(GeminiCliV1InternalRequestError::HeaderRulesApplyFailed) => {
-                mark_skipped_local_openai_responses_candidate_with_failure_diagnostic(
-                    state,
-                    input,
-                    trace_id,
-                    candidate,
-                    candidate_index,
-                    candidate_id,
-                    "transport_header_rules_apply_failed",
-                    CandidateFailureDiagnostic::header_rules_apply_failed(
-                        client_api_format,
-                        provider_api_format,
-                        "openai_responses_gemini_cli_headers",
-                    ),
-                )
-                .await;
-                return None;
-            }
-        };
-    let mut provider_request_headers = resolved.headers.headers;
-    apply_local_auth_config_header_overrides(
-        &mut provider_request_headers,
-        resolved.transport.key.decrypted_auth_config.as_deref(),
-    );
-    apply_codex_openai_special_headers(
-        &mut provider_request_headers,
-        &resolved.body,
-        effective_headers,
-        resolved.transport.provider.provider_type.as_str(),
-        provider_api_format,
-        Some(trace_id),
-        resolved.transport.key.decrypted_auth_config.as_deref(),
-    );
-    request_identity_response_encoding_when_redacted(
-        &mut provider_request_headers,
-        request_redacted,
-    );
-
-    let (execution_strategy, conversion_mode) =
-        ai_local_execution_contract_for_formats(client_api_format, provider_api_format);
-
-    Some(LocalOpenAiResponsesCandidatePayloadParts {
-        auth_header: resolved.headers.auth_header,
-        auth_value: resolved.headers.auth_value,
-        mapped_model,
-        provider_api_format: provider_api_format.to_string(),
-        provider_request_body: resolved.body,
-        provider_request_headers,
-        upstream_url: resolved.upstream_url,
-        execution_strategy,
-        conversion_mode,
-        envelope_name: Some(GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME),
-        upstream_is_stream,
-        transport: resolved.transport,
-        transport_profile: None,
-        image_request_summary: None,
-        request_redacted,
-    })
-}
-
-#[allow(clippy::too_many_arguments)]
 fn api_format_alias_matches(left: &str, right: &str) -> bool {
     crate::ai_serving::api_format_alias_matches(left, right)
 }
@@ -1245,7 +1065,8 @@ async fn resolve_openai_responses_to_openai_image_payload_parts(
         OpenAiImageOperation::Generate => "/v1/images/generations",
         OpenAiImageOperation::Edit => "/v1/images/edits",
     };
-    let upstream_url = build_openai_image_upstream_url(transport, Some(request_path), parts.uri.query());
+    let upstream_url =
+        build_openai_image_upstream_url(transport, Some(request_path), parts.uri.query());
     let Some(mut provider_request_headers) =
         build_openai_image_headers(ProviderOpenAiImageHeadersInput {
             transport,
@@ -1770,37 +1591,5 @@ mod tests {
             OpenAiImageOperation::Generate
         )
         .is_none());
-    }
-
-    #[test]
-    fn chatgpt_web_responses_image_body_preserves_usage_options() {
-        let body_json = json!({
-            "model": "gpt-image-2",
-            "input": "Draw a glass city",
-            "tools": [
-                {
-                    "type": "image_generation",
-                    "size": "1024x1024",
-                    "quality": "high",
-                    "output_format": "png",
-                    "partial_images": 2
-                }
-            ],
-            "tool_choice": {
-                "type": "image_generation"
-            }
-        });
-
-        let (provider_body, summary) =
-            build_chatgpt_web_image_provider_body_from_openai_responses_body(
-                &body_json,
-                "gpt-image-2",
-            )
-            .expect("responses image body should convert");
-
-        assert_eq!(provider_body["quality"], "high");
-        assert_eq!(provider_body["partial_images"], 2);
-        assert_eq!(summary["quality"], "high");
-        assert_eq!(summary["partial_images"], 2);
     }
 }

@@ -122,12 +122,6 @@ const FORCE_STREAM_ENDPOINT_CONFIG_DEFAULTS: &[FixedProviderEndpointConfigDefaul
         key: "upstream_stream_policy",
         value: FixedProviderEndpointConfigValue::String("force_stream"),
     }];
-const AUTO_STREAM_ENDPOINT_CONFIG_DEFAULTS: &[FixedProviderEndpointConfigDefault] =
-    &[FixedProviderEndpointConfigDefault {
-        key: "upstream_stream_policy",
-        value: FixedProviderEndpointConfigValue::String("auto"),
-    }];
-
 const STANDARD_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy::standard();
 const CUSTOM_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     local_embedding_support: ProviderLocalEmbeddingSupport::AnyKnown,
@@ -167,12 +161,6 @@ const CODEX_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
     fixed_provider: true,
     enable_format_conversion_by_default: true,
     supports_model_fetch: false,
-    supports_local_openai_chat_transport: false,
-    ..STANDARD_RUNTIME_POLICY
-};
-const GEMINI_CLI_RUNTIME_POLICY: ProviderRuntimePolicy = ProviderRuntimePolicy {
-    fixed_provider: true,
-    oauth_is_bearer_like: true,
     supports_local_openai_chat_transport: false,
     ..STANDARD_RUNTIME_POLICY
 };
@@ -267,19 +255,6 @@ const KIRO_FIXED_PROVIDER_TEMPLATE: FixedProviderTemplate = FixedProviderTemplat
         config_defaults: EMPTY_ENDPOINT_CONFIG_DEFAULTS,
     }],
     runtime_policy: crate::kiro::RUNTIME_POLICY,
-};
-
-const GEMINI_CLI_FIXED_PROVIDER_TEMPLATE: FixedProviderTemplate = FixedProviderTemplate {
-    provider_type: "gemini_cli",
-    version: 3,
-    base_url: "https://cloudcode-pa.googleapis.com",
-    endpoints: &[FixedProviderEndpointTemplate {
-        item_key: "gemini:generate_content",
-        api_format: "gemini:generate_content",
-        custom_path: Some("/v1internal:{action}"),
-        config_defaults: AUTO_STREAM_ENDPOINT_CONFIG_DEFAULTS,
-    }],
-    runtime_policy: GEMINI_CLI_RUNTIME_POLICY,
 };
 
 const VERTEX_AI_FIXED_PROVIDER_TEMPLATE: FixedProviderTemplate = FixedProviderTemplate {
@@ -408,7 +383,6 @@ pub fn fixed_provider_template(provider_type: &str) -> Option<&'static FixedProv
         "claude_code" => Some(&CLAUDE_CODE_FIXED_PROVIDER_TEMPLATE),
         "codex" => Some(&CODEX_FIXED_PROVIDER_TEMPLATE),
         "kiro" => Some(&KIRO_FIXED_PROVIDER_TEMPLATE),
-        "gemini_cli" => Some(&GEMINI_CLI_FIXED_PROVIDER_TEMPLATE),
         "vertex_ai" => Some(&VERTEX_AI_FIXED_PROVIDER_TEMPLATE),
         "antigravity" => Some(&ANTIGRAVITY_FIXED_PROVIDER_TEMPLATE),
         "xai" => Some(&XAI_FIXED_PROVIDER_TEMPLATE),
@@ -477,20 +451,6 @@ pub fn provider_type_admin_oauth_template(provider_type: &str) -> Option<Provide
             redirect_uri: "http://localhost:1455/auth/callback",
             use_pkce: true,
         }),
-        "gemini_cli" => Some(ProviderOAuthTemplate {
-            provider_type: "gemini_cli",
-            display_name: "GeminiCli",
-            authorize_url: "https://accounts.google.com/o/oauth2/v2/auth",
-            token_url: "https://oauth2.googleapis.com/token",
-            client_id: "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
-            scopes: &[
-                "https://www.googleapis.com/auth/cloud-platform",
-                "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile",
-            ],
-            redirect_uri: "http://localhost:8085/oauth2callback",
-            use_pkce: false,
-        }),
         "antigravity" => Some(ProviderOAuthTemplate {
             provider_type: "antigravity",
             display_name: "Antigravity",
@@ -521,22 +481,16 @@ pub fn provider_type_admin_oauth_template(provider_type: &str) -> Option<Provide
     }
 }
 
-pub const ADMIN_PROVIDER_OAUTH_TEMPLATE_TYPES: &[&str] = &[
-    "claude_code",
-    "codex",
-    "gemini_cli",
-    "antigravity",
-];
+pub const ADMIN_PROVIDER_OAUTH_TEMPLATE_TYPES: &[&str] = &["claude_code", "codex", "antigravity"];
 
 #[cfg(test)]
 mod tests {
     use super::{
         fixed_provider_endpoint_template_by_api_format, fixed_provider_key_inherits_api_formats,
         fixed_provider_template, provider_runtime_policy, provider_type_admin_oauth_template,
-        provider_type_allows_auth_channel_mismatch_by_default, provider_type_oauth_is_bearer_like,
+        provider_type_allows_auth_channel_mismatch_by_default,
         provider_type_supports_local_embedding_transport,
-        provider_type_supports_local_same_format_transport, FixedProviderEndpointConfigValue,
-        ADMIN_PROVIDER_OAUTH_TEMPLATE_TYPES,
+        provider_type_supports_local_same_format_transport, ADMIN_PROVIDER_OAUTH_TEMPLATE_TYPES,
     };
 
     #[test]
@@ -588,30 +542,6 @@ mod tests {
         assert_eq!(live_template.item_key, "codex:live");
         assert_eq!(live_template.custom_path, None);
         assert!(live_template.config_defaults.is_empty());
-    }
-
-    #[test]
-    fn gemini_cli_fixed_provider_template_uses_v1internal_endpoint_path() {
-        let template =
-            fixed_provider_template("gemini_cli").expect("gemini_cli template should exist");
-        assert_eq!(template.base_url, "https://cloudcode-pa.googleapis.com");
-        assert_eq!(template.version, 3);
-
-        let endpoint =
-            fixed_provider_endpoint_template_by_api_format("gemini_cli", "gemini:generate_content")
-                .expect("gemini_cli generateContent endpoint should exist");
-        assert_eq!(endpoint.custom_path, Some("/v1internal:{action}"));
-        assert_eq!(
-            endpoint
-                .config_defaults
-                .iter()
-                .map(|item| (item.key, item.value))
-                .collect::<Vec<_>>(),
-            vec![(
-                "upstream_stream_policy",
-                FixedProviderEndpointConfigValue::String("auto")
-            )]
-        );
     }
 
     #[test]
@@ -682,10 +612,6 @@ mod tests {
             "codex", "oauth", None
         ));
         assert!(fixed_provider_key_inherits_api_formats(
-                    "oauth",
-            None
-        ));
-        assert!(fixed_provider_key_inherits_api_formats(
             "kiro",
             "bearer",
             Some("{}")
@@ -747,14 +673,6 @@ mod tests {
         assert!(!codex.supports_model_fetch);
         assert!(!codex.supports_local_openai_chat_transport);
         assert!(codex.supports_local_same_format_transport);
-
-        let gemini_cli = provider_runtime_policy("gemini_cli");
-        assert!(gemini_cli.fixed_provider);
-        assert!(!gemini_cli.enable_format_conversion_by_default);
-        assert!(provider_type_oauth_is_bearer_like("gemini_cli"));
-        assert!(gemini_cli.supports_model_fetch);
-        assert!(!gemini_cli.supports_local_openai_chat_transport);
-        assert!(gemini_cli.supports_local_same_format_transport);
     }
 
     #[test]

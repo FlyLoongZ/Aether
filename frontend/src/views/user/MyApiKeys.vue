@@ -1035,7 +1035,6 @@ const { success, error: showError } = useToast()
 const installCliOptions: Array<{ value: InstallTargetCli; label: string }> = [
   { value: 'claude_code', label: 'Claude Code' },
   { value: 'codex_cli', label: 'Codex CLI' },
-  { value: 'gemini_cli', label: 'Gemini CLI' }
 ]
 
 const installSystemOptions: Array<{ value: InstallSessionTargetSystem; label: string }> = [

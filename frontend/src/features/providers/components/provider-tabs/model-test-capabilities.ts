@@ -34,7 +34,6 @@ const MODEL_TEST_UNSUPPORTED_API_FORMATS = new Set([
 const MODEL_TEST_OAUTH_INHERITS_PROVIDER_FORMATS = new Set([
   'claude_code',
   'codex',
-  'gemini_cli',
   'vertex_ai',
   'antigravity',
   'kiro',

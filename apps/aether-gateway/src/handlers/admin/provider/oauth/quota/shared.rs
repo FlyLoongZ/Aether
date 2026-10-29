@@ -243,40 +243,6 @@ pub(super) fn extract_execution_error_message(result: &ExecutionResult) -> Optio
     admin_provider_quota_pure::extract_execution_error_message(result)
 }
 
-pub(super) fn extract_execution_error_message_ref(result: &ExecutionResult) -> Option<&str> {
-    if let Some(body_json) = result
-        .body
-        .as_ref()
-        .and_then(|body| body.json_body.as_ref())
-        .and_then(serde_json::Value::as_object)
-    {
-        if let Some(message) = body_json
-            .get("error")
-            .and_then(serde_json::Value::as_object)
-            .and_then(|error| error.get("message"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|message| !message.is_empty())
-        {
-            return Some(message);
-        }
-        if let Some(message) = body_json
-            .get("message")
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|message| !message.is_empty())
-        {
-            return Some(message);
-        }
-    }
-
-    result
-        .error
-        .as_ref()
-        .map(|error| error.message.trim())
-        .filter(|message| !message.is_empty())
-}
-
 fn extract_execution_error_detail(result: &ExecutionResult) -> Option<String> {
     admin_provider_quota_pure::extract_execution_error_detail(result)
 }
@@ -1691,7 +1657,6 @@ fn provider_quota_url_has_allowed_origin(provider_name: &str, value: &str) -> bo
                 | "daily-cloudcode-pa.googleapis.com"
                 | "daily-cloudcode-pa.sandbox.googleapis.com"
         ),
-        "gemini_cli" => host == "cloudcode-pa.googleapis.com",
         "claude_code" => host == "api.anthropic.com",
         "codex" => host == "chatgpt.com",
         "xai" => host == "cli-chat-proxy.grok.com",

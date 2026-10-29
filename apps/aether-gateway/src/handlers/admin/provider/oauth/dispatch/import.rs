@@ -145,7 +145,6 @@ fn codex_access_token_identity_hints(
     Ok(hints)
 }
 
-
 async fn prepare_codex_agent_identity_enrollment(
     state: &AdminAppState<'_>,
     provider_id: &str,
@@ -685,7 +684,6 @@ async fn resolve_admin_provider_oauth_single_import_tokens(
         expires_at,
     })
 }
-
 
 pub(super) async fn handle_admin_provider_oauth_import_refresh_token(
     state: &AdminAppState<'_>,
@@ -1418,5 +1416,4 @@ mod tests {
 
         assert!(auth_config.get("access_token").is_none());
     }
-
-    }
+}

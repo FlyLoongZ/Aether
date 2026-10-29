@@ -317,6 +317,4 @@ impl<'a> AdminAppState<'a> {
         crate::execution_runtime::execute_execution_runtime_sync_plan(self.app, trace_id, plan)
             .await
     }
-
-
 }

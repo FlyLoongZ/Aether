@@ -2,7 +2,6 @@ pub(crate) mod antigravity;
 pub(crate) mod claude_code;
 pub(crate) mod codex;
 pub(crate) mod dispatch;
-pub(crate) mod gemini_cli;
 pub(crate) mod kiro;
 pub(crate) mod shared;
 pub(crate) mod xai;
