@@ -357,7 +357,6 @@ fn config_import_normalizes_python_cli_api_format_aliases() {
         ("claude:chat", "claude:messages"),
         ("claude:cli", "claude:messages"),
         ("gemini:chat", "gemini:generate_content"),
-        ("gemini:cli", "gemini:generate_content"),
     ] {
         assert_eq!(normalize_import_endpoint_format(raw).unwrap(), expected);
     }

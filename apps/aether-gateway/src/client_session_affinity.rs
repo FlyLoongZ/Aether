@@ -249,17 +249,6 @@ fn detect_client_family(request: &ClientSessionRequest<'_>) -> String {
 }
 
 fn detect_fingerprint_client_family(request: &ClientSessionRequest<'_>) -> Option<&'static str> {
-    if header_contains(
-        request.headers,
-        http::header::USER_AGENT.as_str(),
-        "geminicli",
-    ) || header_contains(
-        request.headers,
-        http::header::USER_AGENT.as_str(),
-        "gemini-cli",
-    ) {
-        return Some("gemini_cli");
-    }
     if header_contains(request.headers, http::header::USER_AGENT.as_str(), "cursor") {
         return Some("cursor");
     }

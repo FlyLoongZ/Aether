@@ -1364,10 +1364,6 @@ function recommendedDefaultCcSwitchModel(targetApp: CcSwitchTargetApp, models: s
       || ''
   }
 
-  if (targetApp === 'gemini') {
-    return findModel(model => model.includes('gemini')) || models[0] || ''
-  }
-
   return findModel(model => model.startsWith('gpt') || model.includes('gpt-'))
     || models[0]
     || ''

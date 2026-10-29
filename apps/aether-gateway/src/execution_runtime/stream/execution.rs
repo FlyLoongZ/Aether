@@ -70,10 +70,9 @@ use crate::ai_serving::api::{
     maybe_build_provider_private_stream_normalizer, maybe_build_stream_response_rewriter,
     normalize_provider_private_report_context, StreamingStandardTerminalObserver,
     CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CLI_STREAM_PLAN_KIND, GEMINI_CHAT_STREAM_PLAN_KIND,
-    GEMINI_CLI_STREAM_PLAN_KIND, GEMINI_INTERACTIONS_STREAM_PLAN_KIND,
-    OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_IMAGE_STREAM_PLAN_KIND,
-    OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND, OPENAI_RESPONSES_STREAM_PLAN_KIND,
-    UPSTREAM_IS_STREAM_KEY,
+    GEMINI_INTERACTIONS_STREAM_PLAN_KIND, OPENAI_CHAT_STREAM_PLAN_KIND,
+    OPENAI_IMAGE_STREAM_PLAN_KIND, OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND,
+    OPENAI_RESPONSES_STREAM_PLAN_KIND, UPSTREAM_IS_STREAM_KEY,
 };
 use crate::ai_serving::is_openai_responses_family_format;
 use crate::ai_serving::record_local_runtime_candidate_skip_reason;
@@ -4656,7 +4655,6 @@ fn plan_kind_uses_text_event_stream(plan_kind: &str) -> bool {
             | CLAUDE_CHAT_STREAM_PLAN_KIND
             | CLAUDE_CLI_STREAM_PLAN_KIND
             | GEMINI_CHAT_STREAM_PLAN_KIND
-            | GEMINI_CLI_STREAM_PLAN_KIND
             | GEMINI_INTERACTIONS_STREAM_PLAN_KIND
     )
 }

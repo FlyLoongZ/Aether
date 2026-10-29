@@ -10,7 +10,7 @@ use crate::provider_compat::kiro_stream::KiroToClaudeCliStreamState;
 use super::surfaces::{
     provider_adaptation_allows_sync_finalize_envelope, provider_adaptation_descriptor_for_envelope,
     provider_adaptation_should_unwrap_stream_envelope, ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME,
-    GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME, KIRO_ENVELOPE_NAME,
+    KIRO_ENVELOPE_NAME,
 };
 
 pub fn provider_private_response_allows_sync_finalize(report_context: &Value) -> bool {
@@ -91,17 +91,6 @@ pub fn normalize_provider_private_response_value(
 
     let mut unwrapped = match report_context.get("envelope_name").and_then(Value::as_str) {
         Some(KIRO_ENVELOPE_NAME) => data,
-        Some(GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME) => {
-            if let Some(response) = data
-                .get("response")
-                .and_then(Value::as_object)
-                .filter(|response| !response.contains_key("response"))
-            {
-                Value::Object(response.clone())
-            } else {
-                data
-            }
-        }
         Some(ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME) => {
             normalize_antigravity_sync_response_value(data, provider_api_format)
         }
@@ -228,7 +217,6 @@ fn transform_provider_private_stream_line_with_event_state(
         return Ok(line);
     }
     let unwrapped = match envelope_name {
-        GEMINI_CLI_V1INTERNAL_ENVELOPE_NAME => body.get("response").cloned().unwrap_or(body),
         ANTIGRAVITY_V1INTERNAL_ENVELOPE_NAME => {
             let mut response = body.get("response").cloned().unwrap_or(body.clone());
             if let Some(response_id) = body.get("responseId").cloned() {

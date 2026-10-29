@@ -1936,7 +1936,6 @@ fn is_standard_cli_finalize_kind(report_kind: &str) -> bool {
             | "openai_cli_sync_finalize"
             | "openai_compact_sync_finalize"
             | "claude_cli_sync_finalize"
-            | "gemini_cli_sync_finalize"
     )
 }
 
@@ -1958,7 +1957,6 @@ fn standard_same_format_api_format(report_kind: &str) -> Option<&'static str> {
         "gemini_chat_sync_finalize" => Some("gemini:generate_content"),
         "openai_embedding_sync_finalize" => Some("openai:embedding"),
         "claude_cli_sync_finalize" => Some("claude:messages"),
-        "gemini_cli_sync_finalize" => Some("gemini:generate_content"),
         _ => None,
     }
 }

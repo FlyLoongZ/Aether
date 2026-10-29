@@ -230,7 +230,7 @@ function withHealthTimelineDetails<T extends {
 // Mock 端点健康数据
 // 注意：success_rate 使用 0-1 之间的小数，前端会乘以 100 显示为百分比
 // 事件的成功/失败/跳过比例必须与 success_rate 保持一致
-// 覆盖所有 API 格式：claude, claude_cli, openai, openai_responses, gemini, gemini_cli
+// 覆盖所有 API 格式：claude, claude_cli, openai, openai_responses, gemini
 const MOCK_ENDPOINT_STATUS = {
   generated_at: new Date().toISOString(),
   formats: [

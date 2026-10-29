@@ -23,9 +23,7 @@ use aether_data::repository::auth::{
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data_contracts::repository::candidate_selection::{
-    StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
-};
+use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
@@ -46,4 +44,3 @@ where
 }
 
 mod local_chat;
-mod local_cli;

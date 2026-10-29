@@ -289,7 +289,6 @@ pub fn classify_same_format_provider_request_behavior_for_operation(
     } else if is_antigravity && !params.require_streaming {
         match params.report_kind {
             "gemini_chat_sync_success" => "gemini_chat_sync_finalize",
-            "gemini_cli_sync_success" => "gemini_cli_sync_finalize",
             _ => params.report_kind,
         }
     } else {

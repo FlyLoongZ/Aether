@@ -763,7 +763,6 @@ fn standard_text_sync_heartbeat_applies_to_plan_kind(plan_kind: &str) -> bool {
             | "claude_chat_sync"
             | "claude_cli_sync"
             | "gemini_chat_sync"
-            | "gemini_cli_sync"
     )
 }
 
@@ -780,7 +779,7 @@ fn standard_text_sync_heartbeat_client_api_format_for_plan_kind(plan_kind: &str)
         "openai_responses_sync" => "openai:responses",
         "openai_responses_compact_sync" => "openai:responses:compact",
         "claude_chat_sync" | "claude_cli_sync" => "claude:messages",
-        "gemini_chat_sync" | "gemini_cli_sync" => "gemini:generate_content",
+        "gemini_chat_sync" => "gemini:generate_content",
         _ => "openai:chat",
     }
 }
@@ -2319,7 +2318,7 @@ mod tests {
             "gemini_chat_sync"
         ));
         assert!(standard_text_sync_heartbeat_applies_to_plan_kind(
-            "gemini_cli_sync"
+            "gemini_chat_sync"
         ));
         assert!(!standard_text_sync_heartbeat_applies_to_plan_kind(
             "openai_embedding_sync"

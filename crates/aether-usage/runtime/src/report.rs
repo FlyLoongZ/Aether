@@ -176,9 +176,6 @@ pub fn infer_internal_finalize_signature(payload: &GatewaySyncReportRequest) -> 
     if report_kind.starts_with("gemini_chat_") {
         return Some("gemini:generate_content".to_string());
     }
-    if report_kind.starts_with("gemini_cli_") {
-        return Some("gemini:generate_content".to_string());
-    }
     if report_kind.starts_with("gemini_video_") {
         return Some("gemini:video".to_string());
     }
@@ -298,7 +295,6 @@ pub fn is_local_ai_sync_report_kind(report_kind: &str) -> bool {
         report_kind,
         "openai_chat_sync_success"
             | "claude_chat_sync_success"
-            | "gemini_chat_sync_success"
             | "openai_chat_sync_error"
             | "claude_chat_sync_error"
             | "gemini_chat_sync_error"
@@ -315,11 +311,9 @@ pub fn is_local_ai_sync_report_kind(report_kind: &str) -> bool {
             | "openai_embedding_sync_error"
             | "gemini_embedding_sync_success"
             | "claude_cli_sync_success"
-            | "gemini_cli_sync_success"
             | "openai_cli_sync_error"
             | "openai_compact_sync_error"
             | "claude_cli_sync_error"
-            | "gemini_cli_sync_error"
             | "openai_video_create_sync_success"
             | "openai_video_remix_sync_success"
             | "gemini_video_create_sync_success"
@@ -347,7 +341,6 @@ pub fn is_local_ai_stream_report_kind(report_kind: &str) -> bool {
             | "openai_responses_compact_stream_success"
             | "openai_cli_stream_success"
             | "claude_cli_stream_success"
-            | "gemini_cli_stream_success"
     )
 }
 

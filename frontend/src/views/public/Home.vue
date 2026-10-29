@@ -170,16 +170,6 @@
     <main class="relative z-10">
       <!-- Fixed Logo Container -->
       <div class="fixed top-0 left-0 right-0 bottom-0 z-20 pointer-events-none flex items-center justify-center overflow-hidden">
-        <!-- Gemini Star Cluster - positioned behind logo -->
-        <Transition name="fade">
-          <GeminiStarCluster
-            v-if="currentSection === SECTIONS.GEMINI"
-            :is-visible="sectionVisibility[SECTIONS.GEMINI] > 0.05"
-            class="absolute gemini-stars"
-            :class="windowWidth < 768 ? 'scale-75 opacity-60' : ''"
-            :style="fixedLogoStyle"
-          />
-        </Transition>
 
         <div
           class="transform-gpu logo-container"
@@ -205,14 +195,13 @@
             <div
               v-else
               :key="`ripple-wrapper-${currentLogoType}`"
-              :class="{ 'heartbeat-wrapper': currentSection === SECTIONS.GEMINI && geminiFillComplete }"
             >
               <RippleLogo
                 ref="rippleLogoRef"
                 :type="currentLogoType"
                 :size="windowWidth < 768 ? 200 : 320"
                 :use-adaptive="false"
-                :disable-ripple="currentSection === SECTIONS.GEMINI || currentSection === SECTIONS.FEATURES"
+                :disable-ripple="currentSection === SECTIONS.FEATURES"
                 :anim-delay="logoTransitionDelay"
                 :static="currentSection === SECTIONS.FEATURES"
                 class="logo-active"
@@ -299,32 +288,9 @@
         @copy="copyToClipboard"
       />
 
-      <!-- Section 3: Gemini CLI -->
-      <CliSection
-        ref="section3"
-        v-model:platform-value="geminiPlatform"
-        :title="t('site.home.cli.geminiTitle')"
-        :description="t('site.home.cli.geminiDescription')"
-        :badge-icon="Sparkles"
-        :badge-text="t('site.home.cli.multimodalAi')"
-        badge-class="bg-[#cc785c]/10 dark:bg-[#cc785c]/20 border border-[#cc785c]/20 dark:border-[#d4a27f]/30 text-[#cc785c] dark:text-[#d4a27f]"
-        :platform-options="platformPresets.gemini.options"
-        :install-command="geminiInstallCommand"
-        :config-files="[
-          { path: '~/.gemini/.env', content: geminiEnvConfig, language: 'dotenv' },
-          { path: '~/.gemini/settings.json', content: geminiSettingsConfig, language: 'json' }
-        ]"
-        :badge-style="getBadgeStyle(SECTIONS.GEMINI)"
-        :title-style="getTitleStyle(SECTIONS.GEMINI)"
-        :desc-style="getDescStyle(SECTIONS.GEMINI)"
-        :card-style-fn="(idx) => getCardStyle(SECTIONS.GEMINI, idx)"
-        content-position="right"
-        @copy="copyToClipboard"
-      />
-
-      <!-- Section 4: Features -->
+      <!-- Section 3: Features -->
       <section
-        ref="section4"
+        ref="section3"
         class="min-h-screen snap-start flex items-center justify-center px-4 sm:px-8 md:px-16 lg:px-20 py-12 md:py-20 relative overflow-hidden"
       >
         <div class="max-w-4xl mx-auto text-center relative z-10">
@@ -441,7 +407,6 @@ import LoginDialog from '@/features/auth/components/LoginDialog.vue'
 import RippleLogo from '@/components/RippleLogo.vue'
 import HeaderLogo from '@/components/HeaderLogo.vue'
 import AetherLineByLineLogo from '@/components/AetherLineByLineLogo.vue'
-import GeminiStarCluster from '@/components/GeminiStarCluster.vue'
 import CliSection from './CliSection.vue'
 import { platformPresets, getInstallCommand } from '@/config/platform-presets'
 import {
@@ -487,15 +452,14 @@ const currentSection = ref(0)
 const previousSection = ref(0)
 const scrollDirection = ref<'up' | 'down'>('down')
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
-const sectionVisibility = ref<number[]>([0, 0, 0, 0, 0])
+const sectionVisibility = ref<number[]>([0, 0, 0, 0])
 let lastScrollY = 0
 
-// Section refs - section0 and section4 are direct HTML elements, section1-3 are CliSection components
+// Section refs - section0 and section3 are direct HTML elements, section1-2 are CliSection components
 const section0 = ref<HTMLElement | null>(null)
 const section1 = ref<InstanceType<typeof CliSection> | null>(null)
 const section2 = ref<InstanceType<typeof CliSection> | null>(null)
-const section3 = ref<InstanceType<typeof CliSection> | null>(null)
-const section4 = ref<HTMLElement | null>(null)
+const section3 = ref<HTMLElement | null>(null)
 
 // Helper to get DOM element from ref (handles both direct elements and component instances)
 const getSectionElement = (index: number): HTMLElement | null => {
@@ -503,8 +467,7 @@ const getSectionElement = (index: number): HTMLElement | null => {
     case 0: return section0.value
     case 1: return (section1.value?.sectionEl as HTMLElement | null | undefined) ?? null
     case 2: return (section2.value?.sectionEl as HTMLElement | null | undefined) ?? null
-    case 3: return (section3.value?.sectionEl as HTMLElement | null | undefined) ?? null
-    case 4: return section4.value
+    case 3: return section3.value
     default: return null
   }
 }
@@ -513,7 +476,6 @@ const getSectionElement = (index: number): HTMLElement | null => {
 const aetherLogoRef = ref<InstanceType<typeof AetherLineByLineLogo> | null>(null)
 const rippleLogoRef = ref<InstanceType<typeof RippleLogo> | null>(null)
 const hasLogoAnimationStarted = ref(false)
-const geminiFillComplete = ref(false)
 
 // Animation composables
 const {
@@ -544,15 +506,13 @@ const logoTransitionDelay = computed(() => {
 // Platform states
 const claudePlatform = ref(platformPresets.claude.defaultValue)
 const codexPlatform = ref(platformPresets.codex.defaultValue)
-const geminiPlatform = ref(platformPresets.gemini.defaultValue)
 
 // Install commands
 const claudeInstallCommand = computed(() => getInstallCommand('claude', claudePlatform.value))
 const codexInstallCommand = computed(() => getInstallCommand('codex', codexPlatform.value))
-const geminiInstallCommand = computed(() => getInstallCommand('gemini', geminiPlatform.value))
 
 // CLI configs
-const { claudeConfig, codexConfig, codexAuthConfig, geminiEnvConfig, geminiSettingsConfig } =
+const { claudeConfig, codexConfig, codexAuthConfig } =
   useCliConfigs(baseUrl)
 
 // Dialog state
@@ -669,18 +629,6 @@ const scrollToSection = (index: number) => {
   const target = getSectionElement(index)
   if (target) target.scrollIntoView({ behavior: 'smooth' })
 }
-
-// Watch Gemini fill complete
-watch(
-  () => rippleLogoRef.value?.fillComplete,
-  (val) => {
-    if (currentSection.value === SECTIONS.GEMINI && val) geminiFillComplete.value = true
-  }
-)
-
-watch(currentSection, (_, old) => {
-  if (old === SECTIONS.GEMINI) geminiFillComplete.value = false
-})
 
 const handleResize = () => {
   windowWidth.value = window.innerWidth
@@ -897,28 +845,6 @@ h1, h2, p {
     width: 280px;
     height: 280px;
   }
-}
-
-/* Heartbeat animation */
-.heartbeat-wrapper {
-  animation: heartbeat 1.5s ease-in-out infinite;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-}
-
-@keyframes heartbeat {
-  0%, 70%, 100% { transform: scale(1); }
-  14% { transform: scale(1.06); }
-  28% { transform: scale(1); }
-  42% { transform: scale(1.1); }
-}
-
-/* Gemini star cluster positioning */
-.gemini-stars {
-  z-index: -1;
 }
 
 /* Fade transition */

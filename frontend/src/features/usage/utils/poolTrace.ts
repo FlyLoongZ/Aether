@@ -18,8 +18,6 @@ const PROVIDER_TYPE_LIKE_NAMES = new Set<string>([
   'antigravity',
   'claude_code',
   'claude code',
-  'gemini_cli',
-  'gemini cli',
   'oauth',
   'api_key',
   'api key',

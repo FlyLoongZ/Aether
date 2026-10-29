@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>一站式 AI 基础设施平台</strong><br>
-  支持 Claude / OpenAI / Gemini 及其 CLI 客户端的统一接入、格式转换、正/反向代理, 致力于成为用户驱动AI服务的底座
+  支持 Claude / OpenAI / Gemini 等协议及 Claude Code、Codex 等客户端的统一接入、格式转换、正/反向代理, 致力于成为用户驱动AI服务的底座
 </p>
 <p align="center">
   <a href="#简介">简介</a> •
@@ -21,7 +21,7 @@
 
 ## 简介
 
-Aether 是一个自托管的 AI API 网关，为团队和个人提供多租户管理、智能负载均衡、成本配额控制和健康监控能力。通过统一的 API 入口，可以无缝对接 Claude、OpenAI、Gemini 等主流 AI 服务及其 CLI 工具。
+Aether 是一个自托管的 AI API 网关，为团队和个人提供多租户管理、智能负载均衡、成本配额控制和健康监控能力。通过统一的 API 入口，可以无缝对接 Claude、OpenAI、Gemini 等主流 AI 服务，以及 Claude Code、Codex 等客户端。
 
 <p align="center">
   <picture>

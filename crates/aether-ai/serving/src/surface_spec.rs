@@ -250,11 +250,11 @@ mod tests {
     fn gemini_requested_model_parser_uses_body_model_when_path_has_no_model() {
         let requested_model = extract_ai_requested_model_from_request_path(
             "/v1internal:streamGenerateContent",
-            &serde_json::json!({ "model": " gemini-cli " }),
+            &serde_json::json!({ "model": " gemini-2.5-pro " }),
             AiRequestedModelFamily::Gemini,
         );
 
-        assert_eq!(requested_model.as_deref(), Some("gemini-cli"));
+        assert_eq!(requested_model.as_deref(), Some("gemini-2.5-pro"));
     }
 
     #[test]

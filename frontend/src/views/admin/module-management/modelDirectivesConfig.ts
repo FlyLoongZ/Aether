@@ -422,7 +422,6 @@ function normalizeModelDirectiveApiFormat(value: string): string {
     case 'claude:cli':
       return 'claude:messages'
     case 'gemini:chat':
-    case 'gemini:cli':
       return 'gemini:generate_content'
     case '/v1/chat/completions':
       return 'openai:chat'

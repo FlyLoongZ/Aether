@@ -30,10 +30,10 @@ const ANIMATION_CONFIG = {
 } as const
 
 // Get horizontal direction based on section layout
-// Claude(1) and Gemini(3) content on right, slide from right
+// Claude(1) content on right, slide from right
 // Codex(2) content on left, slides from left
 function getDirectionMultiplier(index: number): number {
-  if (index === SECTIONS.CLAUDE || index === SECTIONS.GEMINI) return 1
+  if (index === SECTIONS.CLAUDE) return 1
   if (index === SECTIONS.CODEX) return -1
   return 0
 }
@@ -165,9 +165,6 @@ export function useLogoPosition(
       opacity = isDesktop ? 1 : 0.2
     } else if (section === SECTIONS.CODEX) {
       transform = isDesktop ? 'translateX(25vw) scale(1)' : 'translateY(-32vh) scale(0.6)'
-      opacity = isDesktop ? 1 : 0.2
-    } else if (section === SECTIONS.GEMINI) {
-      transform = isDesktop ? 'translateX(-25vw) scale(1)' : 'translateY(-32vh) scale(0.6)'
       opacity = isDesktop ? 1 : 0.2
     } else {
       transform = isDesktop ? 'translateX(0) scale(1)' : 'translateY(-20vh) scale(0.8)'

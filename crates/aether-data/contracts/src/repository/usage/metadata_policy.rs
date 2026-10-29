@@ -390,7 +390,6 @@ fn sanitize_client_family(value: &str) -> Option<String> {
             "codex_vscode",
             "continue",
             "cursor",
-            "gemini_cli",
             "generic",
             "kilocode",
             "langchain",
@@ -443,9 +442,6 @@ pub fn infer_known_client_family(user_agent: &str) -> Option<&'static str> {
     }
     if normalized.contains("opencode") {
         return Some("opencode");
-    }
-    if normalized.contains("geminicli") || normalized.contains("gemini-cli") {
-        return Some("gemini_cli");
     }
     if normalized.contains("qwencode") {
         return Some("qwen_code");

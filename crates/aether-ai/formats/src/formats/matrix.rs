@@ -22,7 +22,6 @@ pub enum SyncChatResponseConversionKind {
 pub enum SyncCliResponseConversionKind {
     ToOpenAiResponses,
     ToClaudeCli,
-    ToGeminiCli,
 }
 
 const NON_COMPACT_STANDARD_CANDIDATE_API_FORMATS: &[&str] = &[
@@ -225,7 +224,6 @@ pub fn sync_cli_response_conversion_kind(
             Some(SyncCliResponseConversionKind::ToOpenAiResponses)
         }
         "claude:messages" => Some(SyncCliResponseConversionKind::ToClaudeCli),
-        "gemini:generate_content" => Some(SyncCliResponseConversionKind::ToGeminiCli),
         _ => None,
     }
 }
@@ -461,10 +459,6 @@ mod tests {
         assert_eq!(
             sync_chat_response_conversion_kind("gemini:generate_content", "openai:chat"),
             Some(SyncChatResponseConversionKind::ToOpenAIChat)
-        );
-        assert_eq!(
-            sync_cli_response_conversion_kind("openai:responses", "gemini:generate_content"),
-            Some(SyncCliResponseConversionKind::ToGeminiCli)
         );
         assert_eq!(
             sync_cli_response_conversion_kind("claude:messages", "openai:responses"),

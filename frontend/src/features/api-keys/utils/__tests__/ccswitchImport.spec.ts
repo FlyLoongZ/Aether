@@ -116,11 +116,6 @@ describe('ccswitchImport', () => {
   })
 
   it.each([
-    ['gemini', {
-      GEMINI_API_KEY: 'sk-user-live-1',
-      GOOGLE_GEMINI_BASE_URL: 'https://aether.example.com',
-      GEMINI_MODEL: 'gpt-5',
-    }],
     ['opencode', {
       npm: '@ai-sdk/openai-compatible',
       options: {
@@ -151,11 +146,7 @@ describe('ccswitchImport', () => {
     }))
 
     expect(params.get('app')).toBe(targetApp)
-    expect(params.get('endpoint')).toBe(
-      targetApp === 'gemini'
-        ? 'https://aether.example.com'
-        : 'https://aether.example.com/v1',
-    )
+    expect(params.get('endpoint')).toBe('https://aether.example.com/v1')
     expect(params.get('apiKey')).toBe('sk-user-live-1')
     expect(params.get('model')).toBe('gpt-5')
     expect(config).toEqual(expectedConfig)

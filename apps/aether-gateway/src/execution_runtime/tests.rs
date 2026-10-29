@@ -127,7 +127,6 @@ fn resolve_core_error_background_report_kind_maps_all_core_finalize_kinds() {
             Some("openai_responses_compact_sync_error"),
         ),
         ("claude_cli_sync_finalize", Some("claude_cli_sync_error")),
-        ("gemini_cli_sync_finalize", Some("gemini_cli_sync_error")),
         ("openai_video_create_sync_finalize", None),
         ("gemini_video_cancel_sync_finalize", None),
         ("unknown_finalize_kind", None),
@@ -178,7 +177,6 @@ fn resolve_core_success_background_report_kind_maps_all_core_finalize_kinds() {
             Some("openai_responses_compact_sync_success"),
         ),
         ("claude_cli_sync_finalize", Some("claude_cli_sync_success")),
-        ("gemini_cli_sync_finalize", Some("gemini_cli_sync_success")),
         ("openai_video_create_sync_finalize", None),
         ("gemini_video_cancel_sync_finalize", None),
         ("unknown_finalize_kind", None),
@@ -351,7 +349,7 @@ fn build_best_effort_local_core_error_body_converts_sync_errors_across_standard_
             }),
         ),
         (
-            "gemini cli -> openai responses",
+            "gemini api -> openai responses",
             core_finalize_payload(
                 "openai_responses_sync_finalize",
                 "openai:responses",
@@ -374,7 +372,7 @@ fn build_best_effort_local_core_error_body_converts_sync_errors_across_standard_
             }),
         ),
         (
-            "gemini cli -> claude cli",
+            "gemini api -> claude cli",
             core_finalize_payload(
                 "claude_cli_sync_finalize",
                 "claude:messages",
@@ -397,9 +395,9 @@ fn build_best_effort_local_core_error_body_converts_sync_errors_across_standard_
             }),
         ),
         (
-            "claude cli -> gemini cli",
+            "claude cli -> gemini api",
             core_finalize_payload(
-                "gemini_cli_sync_finalize",
+                "gemini_chat_sync_finalize",
                 "gemini:generate_content",
                 "claude:messages",
                 404,

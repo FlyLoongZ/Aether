@@ -2,8 +2,7 @@ use crate::contracts::{
     ApiOperation, CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CHAT_SYNC_PLAN_KIND,
     CLAUDE_CLI_STREAM_PLAN_KIND, CLAUDE_CLI_SYNC_PLAN_KIND, CLAUDE_COUNT_TOKENS_SYNC_PLAN_KIND,
     CLAUDE_COUNT_TOKENS_SYNC_SUCCESS_REPORT_KIND, CODEX_LIVE_STREAM_PLAN_KIND,
-    GEMINI_CHAT_STREAM_PLAN_KIND, GEMINI_CHAT_SYNC_PLAN_KIND, GEMINI_CLI_STREAM_PLAN_KIND,
-    GEMINI_CLI_SYNC_PLAN_KIND, GEMINI_EMBEDDING_SYNC_PLAN_KIND,
+    GEMINI_CHAT_STREAM_PLAN_KIND, GEMINI_CHAT_SYNC_PLAN_KIND, GEMINI_EMBEDDING_SYNC_PLAN_KIND,
     GEMINI_EMBEDDING_SYNC_SUCCESS_REPORT_KIND, GEMINI_INTERACTIONS_STREAM_PLAN_KIND,
     GEMINI_INTERACTIONS_STREAM_SUCCESS_REPORT_KIND, GEMINI_INTERACTIONS_SYNC_PLAN_KIND,
     GEMINI_INTERACTIONS_SYNC_SUCCESS_REPORT_KIND, OPENAI_EMBEDDING_SYNC_PLAN_KIND,
@@ -66,14 +65,6 @@ pub fn resolve_sync_spec(plan_kind: &str) -> Option<LocalSameFormatProviderSpec>
             api_format: "gemini:generate_content",
             decision_kind: GEMINI_CHAT_SYNC_PLAN_KIND,
             report_kind: "gemini_chat_sync_success",
-            family: LocalSameFormatProviderFamily::Gemini,
-            require_streaming: false,
-            operation: None,
-        }),
-        GEMINI_CLI_SYNC_PLAN_KIND => Some(LocalSameFormatProviderSpec {
-            api_format: "gemini:generate_content",
-            decision_kind: GEMINI_CLI_SYNC_PLAN_KIND,
-            report_kind: "gemini_cli_sync_success",
             family: LocalSameFormatProviderFamily::Gemini,
             require_streaming: false,
             operation: None,
@@ -164,14 +155,6 @@ pub fn resolve_stream_spec(plan_kind: &str) -> Option<LocalSameFormatProviderSpe
             require_streaming: true,
             operation: None,
         }),
-        GEMINI_CLI_STREAM_PLAN_KIND => Some(LocalSameFormatProviderSpec {
-            api_format: "gemini:generate_content",
-            decision_kind: GEMINI_CLI_STREAM_PLAN_KIND,
-            report_kind: "gemini_cli_stream_success",
-            family: LocalSameFormatProviderFamily::Gemini,
-            require_streaming: true,
-            operation: None,
-        }),
         GEMINI_INTERACTIONS_STREAM_PLAN_KIND => Some(LocalSameFormatProviderSpec {
             api_format: "gemini:interactions",
             decision_kind: GEMINI_INTERACTIONS_STREAM_PLAN_KIND,
@@ -198,9 +181,9 @@ mod tests {
 
     #[test]
     fn resolves_gemini_stream_same_format_spec() {
-        let spec = resolve_stream_spec("gemini_cli_stream").expect("spec");
+        let spec = resolve_stream_spec("gemini_chat_stream").expect("spec");
         assert_eq!(spec.api_format, "gemini:generate_content");
-        assert_eq!(spec.report_kind, "gemini_cli_stream_success");
+        assert_eq!(spec.report_kind, "gemini_chat_stream_success");
         assert!(spec.require_streaming);
     }
 

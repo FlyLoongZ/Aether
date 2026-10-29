@@ -833,7 +833,7 @@ fn normalize_import_endpoint_format(value: &str) -> Result<String, String> {
             "openai:image"
         }
         "claude:chat" | "claude:cli" => "claude:messages",
-        "gemini:chat" | "gemini:cli" => "gemini:generate_content",
+        "gemini:chat" => "gemini:generate_content",
         _ => value.trim(),
     };
     admin_endpoint_signature_parts(normalized)

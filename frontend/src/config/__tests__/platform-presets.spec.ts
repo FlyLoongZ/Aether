@@ -11,7 +11,6 @@ describe('platform presets', () => {
   it('resolves install commands from the shared preset table', () => {
     expect(getInstallCommand('claude', 'nodejs')).toBe('npm install -g @anthropic-ai/claude-code')
     expect(getInstallCommand('codex', 'homebrew')).toBe('brew install --cask codex')
-    expect(getInstallCommand('gemini', 'nodejs')).toBe('npm install -g @google/gemini-cli')
   })
 
   it('returns an empty command for an unknown option value', () => {

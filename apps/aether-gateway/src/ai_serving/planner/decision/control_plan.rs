@@ -1,8 +1,7 @@
 use crate::ai_serving::planner::common::{
     CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CHAT_SYNC_PLAN_KIND, CLAUDE_CLI_STREAM_PLAN_KIND,
     CLAUDE_CLI_SYNC_PLAN_KIND, CLAUDE_COUNT_TOKENS_SYNC_PLAN_KIND, GEMINI_CHAT_STREAM_PLAN_KIND,
-    GEMINI_CHAT_SYNC_PLAN_KIND, GEMINI_CLI_STREAM_PLAN_KIND, GEMINI_CLI_SYNC_PLAN_KIND,
-    GEMINI_EMBEDDING_SYNC_PLAN_KIND, GEMINI_FILES_DELETE_PLAN_KIND,
+    GEMINI_CHAT_SYNC_PLAN_KIND, GEMINI_EMBEDDING_SYNC_PLAN_KIND, GEMINI_FILES_DELETE_PLAN_KIND,
     GEMINI_FILES_DOWNLOAD_PLAN_KIND, GEMINI_FILES_GET_PLAN_KIND, GEMINI_FILES_LIST_PLAN_KIND,
     GEMINI_VIDEO_CANCEL_SYNC_PLAN_KIND, GEMINI_VIDEO_CREATE_SYNC_PLAN_KIND,
     OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_CHAT_SYNC_PLAN_KIND, OPENAI_EMBEDDING_SYNC_PLAN_KIND,
@@ -117,9 +116,7 @@ fn build_sync_plan_payload_from_decision(
         | OPENAI_RERANK_SYNC_PLAN_KIND => {
             build_standard_sync_plan_from_decision(parts, body_json, payload)?
         }
-        GEMINI_CHAT_SYNC_PLAN_KIND
-        | GEMINI_CLI_SYNC_PLAN_KIND
-        | GEMINI_EMBEDDING_SYNC_PLAN_KIND => {
+        GEMINI_CHAT_SYNC_PLAN_KIND | GEMINI_EMBEDDING_SYNC_PLAN_KIND => {
             build_gemini_sync_plan_from_decision(parts, body_json, payload)?
         }
         OPENAI_VIDEO_CREATE_SYNC_PLAN_KIND
@@ -163,7 +160,7 @@ fn build_stream_plan_payload_from_decision(
         CLAUDE_CHAT_STREAM_PLAN_KIND | CLAUDE_CLI_STREAM_PLAN_KIND => {
             build_standard_stream_plan_from_decision(parts, body_json, payload, true)?
         }
-        GEMINI_CHAT_STREAM_PLAN_KIND | GEMINI_CLI_STREAM_PLAN_KIND => {
+        GEMINI_CHAT_STREAM_PLAN_KIND => {
             build_gemini_stream_plan_from_decision(parts, body_json, payload)?
         }
         OPENAI_VIDEO_CONTENT_PLAN_KIND | GEMINI_FILES_DOWNLOAD_PLAN_KIND => {
