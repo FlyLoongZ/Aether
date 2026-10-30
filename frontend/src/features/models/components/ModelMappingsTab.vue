@@ -222,7 +222,7 @@
 <script setup lang="ts">
 import { ref, watch, onUnmounted, computed } from 'vue'
 import { Card, Button, Input, Badge } from '@/components/ui'
-import { Plus, Trash2, GitMerge, RefreshCw, ChevronRight, Save, AlertCircle, Link } from 'lucide-vue-next'
+import { Plus, Trash2, GitMerge, RefreshCw, ChevronRight, Save, AlertCircle, Link } from '@lucide/vue'
 import { updateGlobalModel, getGlobalModel, getGlobalModelRoutingPreview } from '@/api/global-models'
 import type { ModelRoutingPreviewResponse } from '@/api/endpoints/types'
 import { log } from '@/utils/logger'

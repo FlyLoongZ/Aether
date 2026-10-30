@@ -421,7 +421,7 @@
 <script setup lang="ts">
 import { getI18nLocale } from '@/i18n'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { CircleHelp, PlugZap, Plus, Save, Trash2 } from 'lucide-vue-next'
+import { CircleHelp, PlugZap, Plus, Save, Trash2 } from '@lucide/vue'
 import { epayGatewayApi, type EpayChannelConfig, type PaymentGatewayProvider } from '@/api/billing'
 import {
   Badge,

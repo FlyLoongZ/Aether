@@ -104,7 +104,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Download } from 'lucide-vue-next'
+import { Download } from '@lucide/vue'
 import { Button } from '@/components/ui'
 import { overviewApi } from '@/api/overview'
 import OverviewStatus from '../components/OverviewStatus.vue'

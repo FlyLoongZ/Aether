@@ -50,7 +50,7 @@
 
 <script setup lang="ts">
 import { Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui'
-import { UserCog } from 'lucide-vue-next'
+import { UserCog } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 import type { UserRole } from '@/api/users'
 

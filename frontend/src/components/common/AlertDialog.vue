@@ -70,7 +70,7 @@
 import { computed } from 'vue'
 import { Dialog } from '@/components/ui'
 import Button from '@/components/ui/button.vue'
-import { AlertTriangle, AlertCircle, Info, Trash2, HelpCircle, Loader2 } from 'lucide-vue-next'
+import { AlertTriangle, AlertCircle, Info, Trash2, HelpCircle, Loader2 } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 
 export type AlertType = 'danger' | 'destructive' | 'warning' | 'info' | 'question'

@@ -48,7 +48,7 @@
 
 <script setup lang="ts">
 import { Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui'
-import { ShieldCheck } from 'lucide-vue-next'
+import { ShieldCheck } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 import type { UserBatchQuotaMode } from './user-management-types'
 

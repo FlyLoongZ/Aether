@@ -347,7 +347,7 @@ import { sanitizeMarkdown } from '@/utils/sanitize'
 import { safeExternalHttpsUrl } from '@/utils/navigationSecurity'
 import { useI18n } from '@/i18n'
 import { marked } from 'marked'
-import { ChevronRight, ExternalLink, Info, RefreshCw } from 'lucide-vue-next'
+import { ChevronRight, ExternalLink, Info, RefreshCw } from '@lucide/vue'
 
 const props = defineProps<{
   status: CheckUpdateResponse | null

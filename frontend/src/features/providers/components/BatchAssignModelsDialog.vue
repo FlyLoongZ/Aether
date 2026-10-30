@@ -189,7 +189,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Layers, Loader2, Search, Check, ListChecks, Plus } from 'lucide-vue-next'
+import { Layers, Loader2, Search, Check, ListChecks, Plus } from '@lucide/vue'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
 import Button from '@/components/ui/button.vue'
 import Input from '@/components/ui/input.vue'

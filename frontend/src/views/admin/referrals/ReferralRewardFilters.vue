@@ -127,7 +127,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Search, SlidersHorizontal } from 'lucide-vue-next'
+import { Search, SlidersHorizontal } from '@lucide/vue'
 import { Button, Input } from '@/components/ui'
 import ReferralUserSelect from './ReferralUserSelect.vue'
 export interface RewardFilters { inviter: string; invitee: string; order_no: string; referral_id: string; reward_type: string; status: string; trigger_point: string; pending_reversal: string }

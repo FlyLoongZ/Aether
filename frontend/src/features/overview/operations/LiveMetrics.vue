@@ -162,7 +162,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Activity, Cpu, Database, Layers, ListChecks, ListTodo, Network, Radio, ShieldCheck } from 'lucide-vue-next'
+import { Activity, Cpu, Database, Layers, ListChecks, ListTodo, Network, Radio, ShieldCheck } from '@lucide/vue'
 import { Card } from '@/components/ui'
 import { buildGatewayMetricsSummary } from '@/api/monitoring'
 import type { OverviewLive } from '@/api/overview'

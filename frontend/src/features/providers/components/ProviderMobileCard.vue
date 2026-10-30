@@ -238,7 +238,7 @@ import {
   Check,
   X,
   Loader2,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Badge from '@/components/ui/badge.vue'
 import { type ProviderWithEndpointsSummary, formatApiFormatShort } from '@/api/endpoints'

@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { BarChart3, Play, Loader2 } from 'lucide-vue-next'
+import { BarChart3, Play, Loader2 } from '@lucide/vue'
 import { Dialog } from '@/components/ui'
 import {
   DropdownMenu,

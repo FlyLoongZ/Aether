@@ -107,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { FolderKanban, Plus } from 'lucide-vue-next'
+import { FolderKanban, Plus } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import RefreshButton from '@/components/ui/refresh-button.vue'
 import type { UserGroup, UserRole } from '@/api/users'

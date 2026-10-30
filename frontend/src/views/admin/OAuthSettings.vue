@@ -379,7 +379,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { Plus } from '@lucide/vue'
 import { oauthApi, type OAuthProviderAdminConfig, type OAuthProviderTestResponse, type SupportedOAuthType } from '@/api/oauth'
 import { PageContainer, PageHeader, CardSection } from '@/components/layout'
 import Button from '@/components/ui/button.vue'

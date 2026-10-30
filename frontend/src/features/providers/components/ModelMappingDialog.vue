@@ -309,7 +309,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Tag, Loader2, Plus, Search, Check, ChevronDown, RefreshCw, Zap } from 'lucide-vue-next'
+import { Tag, Loader2, Plus, Search, Check, ChevronDown, RefreshCw, Zap } from '@lucide/vue'
 import {
   Button,
   Input,

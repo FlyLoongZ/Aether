@@ -116,7 +116,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { CalendarRange } from 'lucide-vue-next'
+import { CalendarRange } from '@lucide/vue'
 import { Button, RefreshButton } from '@/components/ui'
 import TimeRangePicker from '@/components/common/TimeRangePicker.vue'
 import type { DateRangeParams } from '@/features/usage/types'

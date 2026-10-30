@@ -406,7 +406,7 @@ import {
   TabsTrigger,
   Textarea,
 } from '@/components/ui'
-import { Loader2, Plus, RefreshCw, Search, SquarePen } from 'lucide-vue-next'
+import { Loader2, Plus, RefreshCw, Search, SquarePen } from '@lucide/vue'
 import { getProviderModels } from '@/api/endpoints/models'
 import { batchUpdatePoolKeys } from '@/api/endpoints/pool'
 import { formatApiFormat, sortApiFormats, type UpstreamModel } from '@/api/endpoints/types'

@@ -166,7 +166,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Button, Dialog } from '@/components/ui'
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 
 export interface PoolDemandMetricSample {
   providerId: string

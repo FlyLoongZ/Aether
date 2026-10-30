@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { CheckCircle } from 'lucide-vue-next'
+import { CheckCircle } from '@lucide/vue'
 import { Button, Dialog, Input, Label } from '@/components/ui'
 import { useI18n } from '@/i18n'
 

@@ -784,7 +784,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Check, Code2, Copy, Loader2, Maximize2, Minimize2, RotateCcw } from 'lucide-vue-next'
+import { Check, Code2, Copy, Loader2, Maximize2, Minimize2, RotateCcw } from '@lucide/vue'
 import {
   Badge,
   Card,

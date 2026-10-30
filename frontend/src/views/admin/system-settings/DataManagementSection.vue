@@ -135,7 +135,7 @@ import {
   Shield,
   FileText,
   PieChart,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import { Separator } from '@/components/ui'
 import { CardSection } from '@/components/layout'

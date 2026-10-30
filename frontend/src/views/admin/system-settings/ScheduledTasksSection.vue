@@ -121,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { Clock, Check, Loader2, X } from 'lucide-vue-next'
+import { Clock, Check, Loader2, X } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Switch from '@/components/ui/switch.vue'
 import Select from '@/components/ui/select.vue'

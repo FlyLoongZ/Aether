@@ -738,7 +738,7 @@ import {
   Check,
   ListChecks,
   RefreshCw,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import ModelDetailDrawer from '@/features/models/components/ModelDetailDrawer.vue'
 import GlobalModelFormDialog from '@/features/models/components/GlobalModelFormDialog.vue'
 import ExternalModelsAccessControl from '@/features/models/components/ExternalModelsAccessControl.vue'

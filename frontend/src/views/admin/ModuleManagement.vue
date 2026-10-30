@@ -253,7 +253,7 @@ import {
   Search,
   Settings,
   RotateCcw,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Switch from '@/components/ui/switch.vue'
 import Input from '@/components/ui/input.vue'

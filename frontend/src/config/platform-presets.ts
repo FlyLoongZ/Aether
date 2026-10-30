@@ -1,4 +1,4 @@
-import { Apple, Box, Monitor, Terminal } from 'lucide-vue-next'
+import { Apple, Box, Monitor, Terminal } from '@lucide/vue'
 import type { Component } from 'vue'
 import type { MessageKey } from '@/i18n'
 

@@ -80,7 +80,7 @@ import {
   AlertCircle,
   PackageOpen,
   Filter
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { Component } from 'vue'
 import { useI18n } from '@/i18n'
 

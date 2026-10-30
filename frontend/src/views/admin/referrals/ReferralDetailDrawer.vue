@@ -370,7 +370,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, ArrowUpRight, Copy, History, ListOrdered, LoaderCircle, ReceiptText, Undo2, Users, Wallet } from 'lucide-vue-next'
+import { AlertCircle, ArrowUpRight, Copy, History, ListOrdered, LoaderCircle, ReceiptText, Undo2, Users, Wallet } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 import type { ReferralRewardDetail, ReferralRewardRecord } from '@/api/referrals'
 import { Badge, Button, Dialog } from '@/components/ui'

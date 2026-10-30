@@ -571,7 +571,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue'
-import { Plus, Repeat2, Trash2, X } from 'lucide-vue-next'
+import { Plus, Repeat2, Trash2, X } from '@lucide/vue'
 import { Button, Checkbox, Input, Label } from '@/components/ui'
 import { formatTokens } from '@/utils/format'
 import type {

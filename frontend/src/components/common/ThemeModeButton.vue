@@ -23,7 +23,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Moon, SunMedium, SunMoon } from 'lucide-vue-next'
+import { Moon, SunMedium, SunMoon } from '@lucide/vue'
 import { useDarkMode } from '@/composables/useDarkMode'
 import { useI18n } from '@/i18n'
 

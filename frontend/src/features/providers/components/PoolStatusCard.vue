@@ -200,7 +200,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RefreshCw, RotateCcw } from 'lucide-vue-next'
+import { RefreshCw, RotateCcw } from '@lucide/vue'
 
 import { getPoolStatus, clearPoolCooldown, resetPoolCost } from '@/api/endpoints/pool'
 import type { PoolStatusResponse } from '@/api/endpoints/pool'

@@ -96,7 +96,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Upload } from 'lucide-vue-next'
+import { Upload } from '@lucide/vue'
 import { Label, Textarea } from '@/components/ui'
 import { useI18n } from '@/i18n'
 

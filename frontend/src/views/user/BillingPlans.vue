@@ -192,7 +192,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { CreditCard } from 'lucide-vue-next'
+import { CreditCard } from '@lucide/vue'
 import {
   billingApi,
   type BillingDurationUnit,

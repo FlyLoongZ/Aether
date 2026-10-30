@@ -436,7 +436,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ChevronRight, Plus, Trash2 } from 'lucide-vue-next'
+import { ChevronRight, Plus, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui'
 import HelpHint from '@/components/common/HelpHint.vue'
 import type { GlobalModelResponse } from '@/api/global-models'

@@ -1069,7 +1069,7 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from '@/components/ui'
-import { Settings, Trash2, Check, X, Power, ChevronRight, Plus, Shuffle, RotateCcw, Radio, CheckCircle, Save, Filter, HelpCircle, GripVertical, Globe, Code2, AlignLeft, Eye } from 'lucide-vue-next'
+import { Settings, Trash2, Check, X, Power, ChevronRight, Plus, Shuffle, RotateCcw, Radio, CheckCircle, Save, Filter, HelpCircle, GripVertical, Globe, Code2, AlignLeft, Eye } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { parseApiError } from '@/utils/errorParser'
 import { log } from '@/utils/logger'

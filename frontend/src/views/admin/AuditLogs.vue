@@ -449,7 +449,7 @@ import {
   Settings,
   Search,
   FilterX
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 interface AuditLog {
   id: string

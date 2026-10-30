@@ -849,7 +849,7 @@ import {
   SquarePen,
   Search,
   Terminal
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 import { StandaloneKeyFormDialog, type StandaloneKeyFormData } from '@/features/api-keys'
 import { parseApiError } from '@/utils/errorParser'

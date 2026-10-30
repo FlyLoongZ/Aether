@@ -812,7 +812,7 @@ import {
   Hash,
   Zap,
   Database,
-} from "lucide-vue-next";
+} from "@lucide/vue";
 import { formatTokens, formatCurrency } from "@/utils/format";
 import { parseDateLike } from "@/utils/date";
 import type {

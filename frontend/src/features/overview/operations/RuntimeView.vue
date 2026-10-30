@@ -65,7 +65,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Activity, CheckCircle2, Cpu, Gauge, Hash, MemoryStick, TriangleAlert } from 'lucide-vue-next'
+import { Activity, CheckCircle2, Cpu, Gauge, Hash, MemoryStick, TriangleAlert } from '@lucide/vue'
 import { overviewApi } from '@/api/overview'
 import { buildGatewayMetricsSummary } from '@/api/monitoring'
 import { Badge } from '@/components/ui'

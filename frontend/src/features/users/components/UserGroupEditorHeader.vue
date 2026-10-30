@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { BadgeCheck, Trash2 } from 'lucide-vue-next'
+import { BadgeCheck, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui'
 import { useI18n } from '@/i18n'
 

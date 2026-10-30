@@ -1450,7 +1450,7 @@ import {
   Textarea,
 } from '@/components/ui'
 import { EmptyState } from '@/components/common'
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 import {
   adminWalletApi,
   type AdminGlobalRefund,

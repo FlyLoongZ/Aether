@@ -97,7 +97,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ChevronRight, ChevronDown } from 'lucide-vue-next'
+import { ChevronRight, ChevronDown } from '@lucide/vue'
 import Card from '@/components/ui/card.vue'
 import VirtualBodyContent from './VirtualBodyContent.vue'
 import { getRawTextChunk, JsonPageReader, JSON_SCROLL_CHUNK_SIZE, JSON_TEXT_CHUNK_SIZE, type JsonDisplayLine } from '../../utils/json-viewer'

@@ -4,7 +4,7 @@ import {
   ShieldCheck,
   UserCog,
   Wallet,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { Component } from 'vue'
 import type { UserBatchAction, UserRole } from '@/api/users'
 import type {

@@ -402,7 +402,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, Trash2, ShieldX, ShieldCheck, AlertCircle } from 'lucide-vue-next'
+import { Plus, Trash2, ShieldX, ShieldCheck, AlertCircle } from '@lucide/vue'
 import {
   Card,
   Button,

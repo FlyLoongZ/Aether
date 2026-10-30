@@ -199,7 +199,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onScopeDispose, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { RefreshCw, Settings2, CircleAlert, History, Users, RotateCcw, ChevronRight } from 'lucide-vue-next'
+import { RefreshCw, Settings2, CircleAlert, History, Users, RotateCcw, ChevronRight } from '@lucide/vue'
 import { Button } from '@/components/ui'
 import { referralApi, type AdminReferralOverview, type ReferralRewardDetail, type ReferralRewardQuery, type ReferralRewardRecord } from '@/api/referrals'
 import { useToast } from '@/composables/useToast'

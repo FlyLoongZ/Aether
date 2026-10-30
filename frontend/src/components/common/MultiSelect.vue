@@ -127,7 +127,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { ChevronDown, Search } from 'lucide-vue-next'
+import { ChevronDown, Search } from '@lucide/vue'
 import { Input } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { matchesSearchQuery } from '@/utils/search'

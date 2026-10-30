@@ -333,7 +333,7 @@ import Card from '@/components/ui/card.vue'
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
 import Separator from '@/components/ui/separator.vue'
-import { X, Play, Loader2, ChevronRight, Copy, Check } from 'lucide-vue-next'
+import { X, Play, Loader2, ChevronRight, Copy, Check } from '@lucide/vue'
 import { log } from '@/utils/logger'
 
 interface ProviderOption {

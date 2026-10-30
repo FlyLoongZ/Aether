@@ -395,7 +395,7 @@ import {
   Rocket,
   Sparkles,
   Terminal
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import GithubIcon from '@/components/icons/GithubIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDarkMode } from '@/composables/useDarkMode'

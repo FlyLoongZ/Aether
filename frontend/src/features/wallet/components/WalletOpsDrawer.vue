@@ -493,7 +493,7 @@ import {
 } from '@/utils/walletDisplay'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import { Wallet, X } from 'lucide-vue-next'
+import { Wallet, X } from '@lucide/vue'
 import { log } from '@/utils/logger'
 
 const props = withDefaults(

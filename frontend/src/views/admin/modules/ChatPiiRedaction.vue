@@ -213,7 +213,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Plus, RefreshCw, RotateCcw, ShieldCheck, Trash2 } from 'lucide-vue-next'
+import { Plus, RefreshCw, RotateCcw, ShieldCheck, Trash2 } from '@lucide/vue'
 import { PageContainer, PageHeader, CardSection } from '@/components/layout'
 import Button from '@/components/ui/button.vue'
 import Input from '@/components/ui/input.vue'

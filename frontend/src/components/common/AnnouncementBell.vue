@@ -148,7 +148,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bell, CheckCheck, ChevronDown, Loader2, Plus, RefreshCw } from 'lucide-vue-next'
+import { Bell, CheckCheck, ChevronDown, Loader2, Plus, RefreshCw } from '@lucide/vue'
 import { marked } from 'marked'
 import type { Announcement } from '@/api/announcements'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'

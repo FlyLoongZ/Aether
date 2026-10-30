@@ -53,7 +53,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2 } from '@lucide/vue'
 import { Button } from '@/components/ui'
 import type { OverviewMeta } from '@/api/overview'
 import { count, timestamp } from '../format'

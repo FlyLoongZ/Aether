@@ -494,7 +494,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Globe, LoaderCircle, Plus, RefreshCw, Save, Trash2 } from 'lucide-vue-next'
+import { AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Globe, LoaderCircle, Plus, RefreshCw, Save, Trash2 } from '@lucide/vue'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
 import {
   getAdminHealthObject, getAdminHealthObjects, getAdminHealthSummary, getHealthPublication,

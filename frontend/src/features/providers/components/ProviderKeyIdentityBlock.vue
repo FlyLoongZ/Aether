@@ -142,7 +142,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Copy, Download, RefreshCw, ShieldX } from 'lucide-vue-next'
+import { Copy, Download, RefreshCw, ShieldX } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Badge from '@/components/ui/badge.vue'
 import { useI18n } from '@/i18n'

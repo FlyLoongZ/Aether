@@ -363,7 +363,7 @@ import {
   LockOpen,
   RefreshCw,
   Zap
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { Dialog, Button, Input } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'

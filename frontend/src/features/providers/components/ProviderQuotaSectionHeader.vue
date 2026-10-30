@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { RefreshCw } from 'lucide-vue-next'
+import { RefreshCw } from '@lucide/vue'
 
 withDefaults(defineProps<{
   title: string

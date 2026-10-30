@@ -109,7 +109,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
-import { Bot, Loader2 } from "lucide-vue-next";
+import { Bot, Loader2 } from "@lucide/vue";
 import Card from "@/components/ui/card.vue";
 import Badge from "@/components/ui/badge.vue";
 import Button from "@/components/ui/button.vue";

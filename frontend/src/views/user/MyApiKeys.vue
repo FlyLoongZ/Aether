@@ -1010,7 +1010,7 @@ import {
   TableRow
 } from '@/components/ui'
 import RefreshButton from '@/components/ui/refresh-button.vue'
-import { Plus, Key, Copy, Trash2, Loader2, Activity, CheckCircle, Power, SquarePen, Terminal, Download } from 'lucide-vue-next'
+import { Plus, Key, Copy, Trash2, Loader2, Activity, CheckCircle, Power, SquarePen, Terminal, Download } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { log } from '@/utils/logger'
 import { parseApiError } from '@/utils/errorParser'

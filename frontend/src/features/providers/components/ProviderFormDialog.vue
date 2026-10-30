@@ -323,7 +323,7 @@ import {
   SelectItem,
   Switch,
 } from '@/components/ui'
-import { Server, SquarePen } from 'lucide-vue-next'
+import { Server, SquarePen } from '@lucide/vue'
 import HelpHint from '@/components/common/HelpHint.vue'
 import { useToast } from '@/composables/useToast'
 import { useFormDialog } from '@/composables/useFormDialog'

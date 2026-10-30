@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, Languages } from 'lucide-vue-next'
+import { Check, Languages } from '@lucide/vue'
 import {
   DropdownMenu,
   DropdownMenuContent,

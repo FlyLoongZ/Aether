@@ -178,7 +178,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Key } from 'lucide-vue-next'
+import { Key } from '@lucide/vue'
 import { Button, Dialog, Input, Label, Switch } from '@/components/ui'
 import { useI18n } from '@/i18n'
 import { parseNumberInput } from '@/utils/form'

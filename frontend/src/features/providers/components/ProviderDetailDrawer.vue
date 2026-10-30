@@ -758,7 +758,7 @@ import {
   Loader2,
   GripVertical,
   ShieldX,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { parseApiError } from '@/utils/errorParser'
 import { useEscapeKey } from '@/composables/useEscapeKey'
 import { getI18nLocale, useI18n } from '@/i18n'

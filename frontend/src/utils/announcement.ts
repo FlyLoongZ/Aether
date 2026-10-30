@@ -1,7 +1,7 @@
 /**
  * 公告类型相关工具函数
  */
-import { AlertCircle, AlertTriangle, Wrench, Info, type LucideIcon } from 'lucide-vue-next'
+import { AlertCircle, AlertTriangle, Wrench, Info, type LucideIcon } from '@lucide/vue'
 
 export type AnnouncementType = 'important' | 'warning' | 'maintenance' | 'info'
 

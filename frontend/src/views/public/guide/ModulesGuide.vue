@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Blocks } from 'lucide-vue-next'
+import { Blocks } from '@lucide/vue'
 import { panelClasses } from './guide-config'
 </script>
 

@@ -100,7 +100,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bell, Check, Loader2, X } from 'lucide-vue-next'
+import { Bell, Check, Loader2, X } from '@lucide/vue'
 import { marked } from 'marked'
 import type { Announcement } from '@/api/announcements'
 import { Button, Dialog } from '@/components/ui'

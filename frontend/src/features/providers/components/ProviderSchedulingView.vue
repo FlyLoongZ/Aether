@@ -433,7 +433,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useLocalStorage } from '@vueuse/core'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from 'vue-router'
-import { ChevronRight, Plus, Save, Star, Trash2 } from 'lucide-vue-next'
+import { ChevronRight, Plus, Save, Star, Trash2 } from '@lucide/vue'
 import { Button, Card, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch } from '@/components/ui'
 import { AlertDialog } from '@/components/common'
 import HelpHint from '@/components/common/HelpHint.vue'

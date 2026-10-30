@@ -174,7 +174,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Edit, GitBranch, Globe, Layers, Loader2, Plus, Power, Shuffle, X } from 'lucide-vue-next'
+import { Edit, GitBranch, Globe, Layers, Loader2, Plus, Power, Shuffle, X } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Badge from '@/components/ui/badge.vue'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui'

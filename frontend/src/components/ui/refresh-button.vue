@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import { Button } from '@/components/ui'
-import { RefreshCcw } from 'lucide-vue-next'
+import { RefreshCcw } from '@lucide/vue'
 
 interface Props {
   loading?: boolean

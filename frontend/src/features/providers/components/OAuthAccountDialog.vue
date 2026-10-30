@@ -795,7 +795,7 @@ import {
   ShieldCheck,
   ChevronsUpDown,
   Check,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { useClipboard } from '@/composables/useClipboard'
 import { useTotp } from '@/composables/useTotp'

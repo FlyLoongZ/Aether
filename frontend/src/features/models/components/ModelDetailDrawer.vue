@@ -544,7 +544,7 @@ import {
   Layers,
   BarChart3,
   Video
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useEscapeKey } from '@/composables/useEscapeKey'
 import { useClipboard } from '@/composables/useClipboard'
 import Card from '@/components/ui/card.vue'

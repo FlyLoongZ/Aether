@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Target } from 'lucide-vue-next'
+import { Target } from '@lucide/vue'
 </script>
 
 <template>

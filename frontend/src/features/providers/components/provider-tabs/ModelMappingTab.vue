@@ -363,7 +363,7 @@
 import { ref, computed, watch } from 'vue'
 import { useSmartPagination } from '@/composables/useSmartPagination'
 import { useModelTest } from '@/composables/useModelTest'
-import { Tag, Plus, Edit, Trash2, ChevronRight, Loader2, Play } from 'lucide-vue-next'
+import { Tag, Plus, Edit, Trash2, ChevronRight, Loader2, Play } from '@lucide/vue'
 import {
   Card, Button, Badge,
 } from '@/components/ui'

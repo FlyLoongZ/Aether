@@ -291,7 +291,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ArrowUpRight, Download, Plus } from 'lucide-vue-next'
+import { ArrowUpRight, Download, Plus } from '@lucide/vue'
 import { Button, Card } from '@/components/ui'
 import LineChart from '@/components/charts/LineChart.vue'
 import { overviewApi } from '@/api/overview'

@@ -106,7 +106,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, watch } from 'vue'
-import { Activity, Loader2 } from 'lucide-vue-next'
+import { Activity, Loader2 } from '@lucide/vue'
 import Card from '@/components/ui/card.vue'
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'

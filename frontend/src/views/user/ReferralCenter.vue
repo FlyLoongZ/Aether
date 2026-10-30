@@ -192,7 +192,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Copy, Gift, Loader2, RefreshCw, Users } from 'lucide-vue-next'
+import { Copy, Gift, Loader2, RefreshCw, Users } from '@lucide/vue'
 import { referralApi, type ReferralDashboardResponse } from '@/api/referrals'
 import { Button, Card, Input, Label } from '@/components/ui'
 import { useClipboard } from '@/composables/useClipboard'

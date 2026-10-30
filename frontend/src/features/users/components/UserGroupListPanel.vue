@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronRight, Plus } from 'lucide-vue-next'
+import { ChevronRight, Plus } from '@lucide/vue'
 import { Badge, Button, Label } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/i18n'

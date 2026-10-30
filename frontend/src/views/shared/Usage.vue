@@ -179,7 +179,7 @@ import type { ImageProgress } from '@/api/requestTrace'
 import { usersApi } from '@/api/users'
 import { meApi } from '@/api/me'
 import { dashboardApi } from '@/api/dashboard'
-import { PanelTopClose, PanelTopOpen, X } from 'lucide-vue-next'
+import { PanelTopClose, PanelTopOpen, X } from '@lucide/vue'
 import {
   UsageModelTable,
   UsageProviderTable,
