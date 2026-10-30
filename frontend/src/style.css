@@ -334,6 +334,15 @@
     background-color: var(--slate-medium) !important;
   }
 
+  /* JS 被禁用或 bootstrap 被 CSP 阻止时，外部 CSS 不得覆盖首屏系统深色兜底。 */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      color-scheme: dark;
+      --background: oklch(0.2679 0.0036 106.6427);
+      --color-text: #faf9f5;
+    }
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     min-height: 100vh;

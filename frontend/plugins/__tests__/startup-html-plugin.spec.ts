@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { compileThemeBootstrap, startupHtmlPlugin } from '../startup-html-plugin'
+import { compileThemeBootstrap, startupHtmlPlugin, startupCspSources } from '../startup-html-plugin'
 import type { IndexHtmlTransformContext } from 'vite'
 
 describe('HTML 首屏构建', () => {
@@ -13,7 +13,10 @@ describe('HTML 首屏构建', () => {
     ] as const) {
       const root = { dataset: {}, classList: { toggle: () => {} } }
       runInNewContext(code, {
-        window: { localStorage: { getItem: () => stored }, matchMedia: () => ({ matches: system }) },
+        window: {
+          localStorage: { getItem: () => stored }, matchMedia: () => ({ matches: system }),
+          setTimeout: () => 0, addEventListener: () => {},
+        },
         document: { documentElement: root },
       })
       expect(root.dataset).toMatchObject({ theme: expected })
@@ -33,5 +36,8 @@ describe('HTML 首屏构建', () => {
     expect(output).toContain('class="startup-screen"')
     expect(output).not.toContain('<!-- aether:startup')
     expect(output).toContain(':root:not([data-theme])')
+    const csp = startupCspSources(output)
+    expect(csp.scriptSrc[0]).toMatch(/^'sha256-[A-Za-z0-9+/]+=*'$/)
+    expect(csp.styleSrc[0]).toMatch(/^'sha256-[A-Za-z0-9+/]+=*'$/)
   })
 })

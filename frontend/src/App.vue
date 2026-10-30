@@ -1,5 +1,11 @@
 <template>
-  <RouterView />
+  <StartupScreen
+    v-if="startupState.phase !== 'ready'"
+    :phase="startupState.phase"
+    :slow="startupState.slow"
+    :retry-href="startupState.retryHref"
+  />
+  <RouterView v-else />
   <ToastContainer />
   <ConfirmContainer />
 </template>
@@ -15,76 +21,43 @@ import {
   parseAuthSessionSignal,
   type AuthStateChangeDetail,
 } from '@/api/client'
-import { NETWORK_CONFIG } from '@/config/constants'
+import StartupScreen from '@/startup/StartupScreen.vue'
+import { startup } from '@/startup/state'
+import { isModuleLoadError } from '@/utils/importRetry'
 import router from '@/router'
 import { requiresAuthentication } from '@/router/authBootstrap'
 import { log } from '@/utils/logger'
 
 const authStore = useAuthStore()
+const startupState = startup.state
 
 // 全局错误处理器 - 只处理特定错误,避免完全吞掉所有错误
 onErrorCaptured((error: Error) => {
   log.error('Error captured in component', error)
+  if (startup.state.phase !== 'ready' || isModuleLoadError(error)) {
+    startup.fail()
+    return false
+  }
   // 对于非关键错误,不阻止传播
   return true
 })
 
-// 统一的模块加载错误处理
-let moduleLoadFailureCount = 0
+// 模块失败由可见启动壳承接，禁止自动刷新循环与全局清缓存。
+function handleUnhandledRejection(event: PromiseRejectionEvent): void {
+  if (isModuleLoadError(event.reason)) {
+    event.preventDefault()
+    startup.fail()
+  }
+  log.error('Unhandled promise rejection', event.reason)
+}
 
-if (typeof window !== 'undefined') {
-  // 处理未捕获的 Promise 拒绝
-  window.addEventListener('unhandledrejection', (event) => {
-    const error = event.reason
-
-    // 只处理模块加载失败的情况
-    if (error?.message?.includes('Failed to fetch dynamically imported module')) {
-      event.preventDefault() // 阻止控制台显示这个特定错误
-
-      if (moduleLoadFailureCount < NETWORK_CONFIG.MODULE_LOAD_RETRY_LIMIT) {
-        moduleLoadFailureCount++
-        log.info(`模块加载失败,尝试刷新页面 (${moduleLoadFailureCount}/${NETWORK_CONFIG.MODULE_LOAD_RETRY_LIMIT})`)
-        window.location.reload()
-      } else {
-        // 超过最大重试次数,显示友好提示
-        alert('页面加载失败,请手动刷新浏览器。如问题持续,请清除浏览器缓存后重试。')
-      }
-      return
-    }
-
-    // 其他 Promise 错误记录日志
-    log.error('Unhandled promise rejection', event.reason)
-  })
-
-  // 处理全局错误
-  window.addEventListener('error', (event) => {
-    // 过滤掉常见的无害警告
-    const harmlessWarnings = [
-      'ResizeObserver loop completed with undelivered notifications',
-      'ResizeObserver loop limit exceeded'
-    ]
-
-    const isHarmless = harmlessWarnings.some(warning =>
-      event.message?.includes(warning)
-    )
-
-    if (isHarmless) {
-      event.preventDefault()
-      return
-    }
-
-    // 记录其他错误
-    if (event.error) {
-      log.error('Global error', event.error)
-    } else {
-      log.warn('Global error event', {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno
-      })
-    }
-  })
+function handleGlobalError(event: ErrorEvent): void {
+  if (event.message?.includes('ResizeObserver loop')) {
+    event.preventDefault()
+    return
+  }
+  if (isModuleLoadError(event.error)) startup.fail()
+  if (event.error) log.error('Global error', event.error)
 }
 
 async function syncExternalAuthState(authenticated: boolean): Promise<void> {
@@ -129,8 +102,10 @@ function handleLocalAuthStateChange(event: Event): void {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   if (typeof window !== 'undefined') {
+    window.addEventListener('unhandledrejection', handleUnhandledRejection)
+    window.addEventListener('error', handleGlobalError)
     window.addEventListener('storage', handleAuthStorageChange)
     window.addEventListener(AUTH_STATE_CHANGE_EVENT, handleLocalAuthStateChange as (event: Event) => void)
   }
@@ -140,6 +115,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
+    window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+    window.removeEventListener('error', handleGlobalError)
     window.removeEventListener('storage', handleAuthStorageChange)
     window.removeEventListener(
       AUTH_STATE_CHANGE_EVENT,
