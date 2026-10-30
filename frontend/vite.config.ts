@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { execSync } from 'child_process'
 import { legacyTemplateI18nPlugin } from './src/i18n/legacy-template-transform.ts'
+import { startupHtmlPlugin } from './plugins/startup-html-plugin.ts'
 
 function normalizeVersion(version: string): string {
   const trimmed = version.trim()
@@ -40,7 +41,7 @@ export default defineConfig(({ mode }) => {
   return {
     // GitHub Pages 部署时使用仓库名作为 base
     base: process.env.GITHUB_PAGES === 'true' ? '/Aether/' : '/',
-    plugins: [tailwindcss(), legacyTemplateI18nPlugin(), vue()],
+    plugins: [startupHtmlPlugin(), tailwindcss(), legacyTemplateI18nPlugin(), vue()],
     define: {
       __APP_VERSION__: JSON.stringify(getGitVersion()),
     },
