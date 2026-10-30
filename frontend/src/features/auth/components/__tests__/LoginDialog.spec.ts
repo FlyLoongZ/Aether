@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApp, defineComponent, nextTick, type App } from 'vue'
+import { createApp, defineComponent, h, nextTick, type App } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import LoginDialog from '../LoginDialog.vue'
@@ -13,6 +13,7 @@ const authStoreMock = vi.hoisted(() => ({
 
 const routerPushMock = vi.hoisted(() => vi.fn())
 const routeMock = vi.hoisted(() => ({
+  path: '/',
   query: {},
 }))
 const toastMocks = vi.hoisted(() => ({
@@ -86,8 +87,9 @@ vi.mock('@/utils/oauth-icons', () => ({
 vi.mock('../RegisterDialog.vue', () => ({
   default: defineComponent({
     name: 'RegisterDialogStub',
-    setup() {
-      return () => null
+    props: { open: Boolean },
+    setup(props) {
+      return () => props.open ? h('div', { 'data-testid': 'register-dialog' }) : null
     },
   }),
 }))
@@ -181,6 +183,7 @@ beforeEach(() => {
   authStoreMock.error = ''
   authStoreMock.canAccessAdmin = false
   authStoreMock.login.mockReset()
+  routeMock.path = '/'
   routeMock.query = {}
   routerPushMock.mockReset()
   toastMocks.success.mockReset()
@@ -215,6 +218,32 @@ afterEach(() => {
 })
 
 describe('LoginDialog password manager contract', () => {
+  it('shows registration configuration loading immediately, independently of session recovery', async () => {
+    routeMock.path = '/register'
+    let finish!: (settings: object) => void
+    authApiMocks.getRegistrationSettings.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const root = mountLoginDialog()
+    await nextTick()
+    expect(root.textContent).toContain('正在加载登录与注册配置')
+    expect(root.querySelector('button[type="submit"]')?.getAttribute('disabled')).not.toBeNull()
+    finish({ enable_registration: true, password_policy_level: 'weak' })
+    await settle()
+    expect(root.querySelector('[data-testid="register-dialog"]')).not.toBeNull()
+  })
+
+  it('registration settings failure remains visible and supports retry', async () => {
+    routeMock.path = '/register'
+    authApiMocks.getRegistrationSettings.mockRejectedValueOnce(new Error('network'))
+    const root = mountLoginDialog()
+    await settle()
+    expect(root.textContent).toContain('登录与注册配置加载失败')
+    authApiMocks.getRegistrationSettings.mockResolvedValueOnce({ enable_registration: true })
+    const retry = [...root.querySelectorAll('button')].find(button => button.textContent?.includes('重新加载配置'))
+    retry?.click()
+    await settle()
+    expect(root.querySelector('[data-testid="register-dialog"]')).not.toBeNull()
+  })
+
   it('exposes standard login form and field autocomplete metadata', async () => {
     const root = mountLoginDialog()
     await settle()

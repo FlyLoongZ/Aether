@@ -49,7 +49,17 @@ function isPublicEndpoint(url?: string, method?: string): boolean {
   const isHealthCheck = ['/health', '/v1/health', '/_gateway/health'].includes(path) &&
                        method?.toLowerCase() === 'get'
 
-  return path === '/api/public' || path.startsWith('/api/public/') ||
+  const anonymousGet = method?.toLowerCase() === 'get' && [
+    '/api/auth/registration-settings', '/api/auth/settings',
+    '/api/auth/invite-code', '/api/oauth/providers',
+  ].includes(path)
+  const anonymousPost = method?.toLowerCase() === 'post' && [
+    '/api/auth/register', '/api/auth/send-verification-code',
+    '/api/auth/verify-email', '/api/auth/verification-status',
+  ].includes(path)
+
+  return anonymousGet || anonymousPost ||
+         path === '/api/public' || path.startsWith('/api/public/') ||
          path === '/public' || path.startsWith('/public/') ||
          (!path.startsWith('/api/') && path.endsWith('.json')) ||
          isHealthCheck
@@ -251,6 +261,9 @@ class ApiClient {
     }
 
     const status = error.response?.status ?? 0
+
+    // 匿名请求失败不代表当前会话失效，也不应触发强制跳转。
+    if (isPublicEndpoint(originalRequest?.url, originalRequest?.method)) return Promise.reject(error)
 
     // 处理 403 用户账号级别错误（被禁用/删除）
     if (status === 403) {

@@ -18,6 +18,9 @@ export async function ensureUserLoaded(
 ): Promise<boolean> {
   if (!authStore.token) {
     await authStore.restoreSession()
+    if (!authStore.token && authStore.sessionStatus === 'unavailable') {
+      throw new Error('会话恢复暂时不可用，请检查网络后重试。')
+    }
   }
 
   if (authStore.token && !authStore.user) {

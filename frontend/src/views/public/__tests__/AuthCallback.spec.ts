@@ -15,6 +15,10 @@ vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {
     ...actual,
+    RouterLink: defineComponent({
+      props: { to: String },
+      setup(props, { slots }) { return () => h('a', { href: props.to }, slots.default?.()) },
+    }),
     useRoute: () => ({ query: {} }),
     useRouter: () => ({ replace: routerReplaceMock }),
   }
@@ -64,6 +68,37 @@ describe('AuthCallback', () => {
     document.body.innerHTML = ''
   })
 
+  it('renders before session restoration and keeps failures local with a retry', async () => {
+    let finish!: (success: boolean) => void
+    authStoreMock.restoreSession.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const root = document.createElement('div')
+    document.body.appendChild(root)
+    app = createApp(AuthCallback)
+    app.mount(root)
+    expect(root.textContent).toContain('site.auth.processing')
+    expect(routerReplaceMock).not.toHaveBeenCalled()
+    finish(false)
+    await settle()
+    expect(root.querySelector('[role="alert"]')).not.toBeNull()
+    expect(routerReplaceMock).not.toHaveBeenCalled()
+    root.querySelector('button')?.click()
+    await settle()
+    expect(routerReplaceMock).toHaveBeenCalledWith('/dashboard')
+  })
+
+  it('does not navigate after the user leaves during restoration', async () => {
+    let finish!: (success: boolean) => void
+    authStoreMock.restoreSession.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    app = createApp(AuthCallback)
+    app.mount(document.createElement('div'))
+    app.unmount()
+    app = null
+    finish(true)
+    await settle()
+    expect(routerReplaceMock).not.toHaveBeenCalled()
+    expect(authStoreMock.fetchCurrentUser).not.toHaveBeenCalled()
+  })
+
   it('discards a legacy fragment and restores only through the HttpOnly cookie', async () => {
     const root = document.createElement('div')
     document.body.appendChild(root)
@@ -72,7 +107,7 @@ describe('AuthCallback', () => {
     await settle()
 
     expect(window.location.hash).toBe('')
-    expect(authStoreMock.restoreSession).toHaveBeenCalledWith(false, true)
+    expect(authStoreMock.restoreSession).toHaveBeenCalledWith(true, true)
     expect(authStoreMock.fetchCurrentUser).toHaveBeenCalledTimes(1)
     expect(routerReplaceMock).toHaveBeenCalledWith('/dashboard')
   })

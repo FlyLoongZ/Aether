@@ -42,20 +42,10 @@
 
         <!-- Right: Login + Icons -->
         <div class="flex items-center gap-2">
-          <RouterLink
-            v-if="authStore.isAuthenticated"
-            :to="dashboardPath"
-            class="min-w-[60px] text-center rounded-lg bg-[#191919] dark:bg-[#cc785c] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-[#262625] dark:hover:bg-[#b86d52] whitespace-nowrap"
-          >
-            {{ t('site.home.enterDashboard') }}
-          </RouterLink>
-          <button
-            v-else
-            class="min-w-[60px] text-center rounded-lg bg-[#cc785c] px-3 py-1.5 text-xs font-medium text-white shadow-lg shadow-[#cc785c]/30 transition hover:bg-[#d4a27f] whitespace-nowrap"
-            @click="showLoginDialog = true"
-          >
-            {{ t('site.home.login') }}
-          </button>
+          <SessionAction
+            variant="compact"
+            @login="showLoginDialog = true"
+          />
           <ThemeModeButton size="sm" />
           <LanguageSwitcher />
           <a
@@ -133,20 +123,10 @@
           </nav>
 
           <!-- Login/Dashboard Button -->
-          <RouterLink
-            v-if="authStore.isAuthenticated"
-            :to="dashboardPath"
-            class="min-w-[72px] text-center rounded-xl bg-[#191919] dark:bg-[#cc785c] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#262625] dark:hover:bg-[#b86d52] whitespace-nowrap"
-          >
-            {{ t('site.home.enterDashboard') }}
-          </RouterLink>
-          <button
-            v-else
-            class="min-w-[72px] text-center rounded-xl bg-[#cc785c] px-4 py-2 text-sm font-medium text-white shadow-lg shadow-[#cc785c]/30 transition hover:bg-[#d4a27f] whitespace-nowrap"
-            @click="showLoginDialog = true"
-          >
-            {{ t('site.home.login') }}
-          </button>
+          <SessionAction
+            variant="header"
+            @login="showLoginDialog = true"
+          />
         </div>
 
         <!-- Right: Theme Toggle + GitHub Icons -->
@@ -360,22 +340,10 @@
             class="mt-6 md:mt-12 transition-all duration-700 flex items-center justify-center gap-4 relative z-30"
             :style="getButtonsStyle(SECTIONS.FEATURES)"
           >
-            <RouterLink
-              v-if="authStore.isAuthenticated"
-              :to="dashboardPath"
-              class="inline-flex items-center justify-center gap-2 rounded-xl bg-transparent border-2 border-[#cc785c] px-6 py-3 text-base font-semibold text-[#cc785c] dark:text-[#d4a27f] dark:border-[#d4a27f] transition hover:bg-[#cc785c]/10 dark:hover:bg-[#d4a27f]/10 hover:scale-105 w-[160px]"
-            >
-              <Rocket class="h-5 w-5" />
-              {{ t('site.home.enterDashboard') }}
-            </RouterLink>
-            <button
-              v-else
-              class="inline-flex items-center justify-center gap-2 rounded-xl bg-transparent border-2 border-[#cc785c] px-6 py-3 text-base font-semibold text-[#cc785c] dark:text-[#d4a27f] dark:border-[#d4a27f] transition hover:bg-[#cc785c]/10 dark:hover:bg-[#d4a27f]/10 hover:scale-105 w-[160px]"
-              @click="showLoginDialog = true"
-            >
-              <Rocket class="h-5 w-5" />
-              {{ t('site.home.startNow') }}
-            </button>
+            <SessionAction
+              variant="hero"
+              @login="showLoginDialog = true"
+            />
           </div>
         </div>
       </section>
@@ -391,18 +359,17 @@ import { RouterLink } from 'vue-router'
 import {
   ChevronDown,
   Code2,
-  Rocket,
   Sparkles,
   Terminal
 } from '@lucide/vue'
 import GithubIcon from '@/components/icons/GithubIcon.vue'
-import { useAuthStore } from '@/stores/auth'
 import { useDarkMode } from '@/composables/useDarkMode'
 import { useClipboard } from '@/composables/useClipboard'
 import { useSiteInfo } from '@/composables/useSiteInfo'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import ThemeModeButton from '@/components/common/ThemeModeButton.vue'
 import LoginDialog from '@/features/auth/components/LoginDialog.vue'
+import SessionAction from '@/features/auth/components/SessionAction.vue'
 import RippleLogo from '@/components/RippleLogo.vue'
 import HeaderLogo from '@/components/HeaderLogo.vue'
 import AetherLineByLineLogo from '@/components/AetherLineByLineLogo.vue'
@@ -423,15 +390,11 @@ import {
 } from './useSectionAnimations'
 import { useI18n } from '@/i18n'
 
-const authStore = useAuthStore()
 const { isDark } = useDarkMode()
 const { copyToClipboard } = useClipboard()
 const { siteName, siteSubtitle } = useSiteInfo()
 const { t } = useI18n()
 
-const dashboardPath = computed(() =>
-  authStore.canAccessAdmin ? '/admin/dashboard' : '/dashboard'
-)
 const baseUrl = computed(() => window.location.origin)
 
 const resolvedSections = computed(() => sections.map(section => ({

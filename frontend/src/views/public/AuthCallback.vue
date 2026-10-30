@@ -4,16 +4,42 @@
       <h1 class="text-lg font-semibold text-foreground">
         {{ t('site.auth.processing') }}
       </h1>
-      <p class="text-sm text-muted-foreground">
+      <p
+        class="text-sm text-muted-foreground"
+        role="status"
+        aria-live="polite"
+      >
         {{ hint }}
       </p>
+      <div
+        v-if="failure"
+        role="alert"
+        class="space-y-3"
+      >
+        <p class="text-sm text-destructive">
+          {{ failure }}
+        </p>
+        <button
+          type="button"
+          class="startup-retry"
+          @click="processCallback"
+        >
+          {{ t('auth.session.retry') }}
+        </button>
+        <RouterLink
+          to="/"
+          class="ml-3 text-sm underline"
+        >
+          {{ t('site.home.login') }}
+        </RouterLink>
+      </div>
     </Card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Card from '@/components/ui/card.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -25,22 +51,18 @@ const router = useRouter()
 const authStore = useAuthStore()
 const { success, error: showError } = useToast()
 const { t } = useI18n()
-
+const callbackQuery = { ...route.query }
 const hint = ref(t('site.auth.waiting'))
+const failure = ref('')
+let active = true
+let processing = false
 
 function consumeRedirectPath(): string | null {
-  const redirectPath = sessionStorage.getItem('redirectPath')
-  if (redirectPath) {
+  try {
+    const redirectPath = sessionStorage.getItem('redirectPath')
     sessionStorage.removeItem('redirectPath')
-  }
-  return safeInternalNavigationPath(redirectPath)
-}
-
-function clearUrlState() {
-  // 清理 fragment，避免刷新时重复处理
-  // 同时清理 query（oauth_bound / error_code / error_detail）
-  const newUrl = window.location.pathname
-  window.history.replaceState({}, document.title, newUrl)
+    return safeInternalNavigationPath(redirectPath)
+  } catch { return null }
 }
 
 function errorMessageFromCode(code: string): string {
@@ -65,44 +87,45 @@ function errorMessageFromCode(code: string): string {
   return map[code] || t('site.auth.failed')
 }
 
-onMounted(async () => {
-  // 1) 绑定成功提示
-  const oauthBound = route.query.oauth_bound
-  if (typeof oauthBound === 'string' && oauthBound) {
-    success(t('site.auth.bound', { provider: oauthBound }))
-    clearUrlState()
-    const redirectPath = consumeRedirectPath()
-    await router.replace(redirectPath || '/dashboard/settings')
-    return
+async function processCallback() {
+  if (processing) return
+  processing = true
+  failure.value = ''
+  try {
+    const oauthBound = callbackQuery.oauth_bound
+    if (typeof oauthBound === 'string' && oauthBound) {
+      success(t('site.auth.bound', { provider: oauthBound }))
+      await router.replace(consumeRedirectPath() || '/dashboard/settings')
+      return
+    }
+    const errorCode = callbackQuery.error_code
+    if (typeof errorCode === 'string' && errorCode) {
+      showError(errorMessageFromCode(errorCode))
+      await router.replace(consumeRedirectPath() || '/')
+      return
+    }
+
+    // 回调代表新的登录事件，不能复用先前“无会话”的已完成判断。
+    hint.value = t('site.auth.writing')
+    if (!(await authStore.restoreSession(true, true))) throw new Error(t('site.auth.failed'))
+    if (!active) return
+    hint.value = t('site.auth.fetchingUser')
+    const user = await authStore.fetchCurrentUser()
+    if (!active) return
+    if (!user) throw new Error(t('site.auth.userinfoFetchFailed'))
+    success(t('site.auth.success'))
+    await router.replace(consumeRedirectPath() || (authStore.canAccessAdmin ? '/admin/dashboard' : '/dashboard'))
+  } catch (error) {
+    if (active) failure.value = error instanceof Error ? error.message : t('site.auth.failed')
+  } finally {
+    processing = false
   }
+}
 
-  // 2) 错误提示
-  const errorCode = route.query.error_code
-  if (typeof errorCode === 'string' && errorCode) {
-    showError(errorMessageFromCode(errorCode))
-    clearUrlState()
-    const redirectPath = consumeRedirectPath()
-    await router.replace(redirectPath || '/')
-    return
-  }
-
-  // 3) Login success: recover through the HttpOnly refresh cookie. Any
-  // legacy fragment is removed without reading or retaining its token.
-  clearUrlState()
-  hint.value = t('site.auth.writing')
-  if (!(await authStore.restoreSession(false, true))) {
-    showError(t('site.auth.noToken'))
-    await router.replace('/')
-    return
-  }
-
-  hint.value = t('site.auth.fetchingUser')
-  await authStore.fetchCurrentUser()
-
-  success(t('site.auth.success'))
-
-  const redirectPath = consumeRedirectPath()
-  const target = redirectPath || (authStore.canAccessAdmin ? '/admin/dashboard' : '/dashboard')
-  await router.replace(target)
+onMounted(() => {
+  // 不读取旧 fragment 中的 token；在恢复会话之前移除 URL 中的敏感状态。
+  window.history.replaceState({}, document.title, window.location.pathname)
+  void processCallback()
 })
+onUnmounted(() => { active = false })
 </script>

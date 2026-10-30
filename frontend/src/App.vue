@@ -15,8 +15,9 @@ import {
   parseAuthSessionSignal,
   type AuthStateChangeDetail,
 } from '@/api/client'
-import { NETWORK_CONFIG, AUTH_CONFIG } from '@/config/constants'
+import { NETWORK_CONFIG } from '@/config/constants'
 import router from '@/router'
+import { requiresAuthentication } from '@/router/authBootstrap'
 import { log } from '@/utils/logger'
 
 const authStore = useAuthStore()
@@ -90,7 +91,7 @@ async function syncExternalAuthState(authenticated: boolean): Promise<void> {
   if (!authenticated) {
     if (authStore.token || authStore.user) {
       authStore.applyExternalLogout()
-      await router.replace('/')
+      if (requiresAuthentication(router.currentRoute.value)) await router.replace('/')
     }
     return
   }
@@ -134,15 +135,7 @@ onMounted(async () => {
     window.addEventListener(AUTH_STATE_CHANGE_EVENT, handleLocalAuthStateChange as (event: Event) => void)
   }
 
-  // 延迟检查认证状态,让页面先加载
-  setTimeout(async () => {
-    try {
-      await authStore.checkAuth()
-    } catch (error) {
-      // 即使checkAuth失败,也不要做任何会导致退出的操作
-      log.warn('Auth check failed, but keeping session', error)
-    }
-  }, AUTH_CONFIG.TOKEN_REFRESH_INTERVAL)
+  // 会话恢复由路由策略或 OAuth 回调负责，不再无条件抢先发起。
 })
 
 onUnmounted(() => {

@@ -11,6 +11,17 @@ export const useAuthStore = defineStore('auth', () => {
 
   const user = ref<User | null>(null)
   const token = ref<string | null>(apiClient.getToken())
+  const sessionStatus = ref<'unknown' | 'restoring' | 'authenticated' | 'anonymous' | 'unavailable'>(
+    token.value ? 'authenticated' : 'unknown',
+  )
+  const userLoading = ref(false)
+  const accountState = computed(() => {
+    if (token.value && user.value) return 'authenticated'
+    if (!token.value && sessionStatus.value === 'anonymous') return 'anonymous'
+    if (sessionStatus.value === 'unknown' || sessionStatus.value === 'restoring' || userLoading.value) return 'checking'
+    if (token.value || sessionStatus.value === 'unavailable') return 'unavailable'
+    return 'anonymous'
+  })
   const loading = ref(false)
   const error = ref<string | null>(null)
   let sessionRestoreAttempted = false
@@ -28,6 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function markAuthStateChanged() {
     authStateVersion += 1
+    sessionStatus.value = token.value ? 'authenticated' : 'anonymous'
     resetCurrentUserFailure()
   }
 
@@ -58,6 +70,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     sessionRestoreAttempted = true
+    sessionStatus.value = 'restoring'
     const requestAuthStateVersion = authStateVersion
     const requestToken = token.value
     const request = (async () => {
@@ -69,7 +82,7 @@ export const useAuthStore = defineStore('auth', () => {
         token.value = accessToken
         markAuthStateChanged()
         return true
-      } catch {
+      } catch (err) {
         if (requestAuthStateVersion === authStateVersion && token.value === requestToken) {
           // A forced refresh can race with another tab or fail transiently.
           // Preserve an already-issued in-memory access token; its next
@@ -79,6 +92,9 @@ export const useAuthStore = defineStore('auth', () => {
             token.value = null
             user.value = null
           }
+          const status = getErrorStatus(err)
+          sessionStatus.value = requestToken ? 'authenticated'
+            : status === 401 || status === 403 ? 'anonymous' : 'unavailable'
         }
         return false
       }
@@ -186,6 +202,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     fetchCurrentUserToken = requestToken
+    userLoading.value = true
     const requestAuthStateVersion = authStateVersion
     const request = (async () => {
       try {
@@ -220,11 +237,18 @@ export const useAuthStore = defineStore('auth', () => {
       if (fetchCurrentUserPromise === request) {
         fetchCurrentUserPromise = null
         fetchCurrentUserToken = null
+        userLoading.value = false
       }
     })
 
     fetchCurrentUserPromise = request
     return request
+  }
+
+  async function retryAuth() {
+    resetCurrentUserFailure()
+    await restoreSession(true)
+    if (token.value && !user.value) await fetchCurrentUser()
   }
 
   async function checkAuth() {
@@ -241,6 +265,9 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     isAuthenticated,
+    sessionStatus,
+    accountState,
+    retryAuth,
     isAdmin,
     isAuditAdmin,
     canAccessAdmin,
