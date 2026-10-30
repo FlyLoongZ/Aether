@@ -16,18 +16,18 @@
             variant="outline"
             size="sm"
             :disabled="backupRunDisabled"
-            @click="backup.runS3BackupNow"
+            @click="runS3BackupNow"
           >
             <Play class="w-3.5 h-3.5 mr-1.5" />
-            {{ backup.running.value ? '提交中...' : '立即备份' }}
+            {{ running ? '提交中...' : '立即备份' }}
           </Button>
           <Button
             size="sm"
-            :disabled="backup.saving.value || !backup.hasChanges.value"
-            @click="backup.saveS3BackupConfig"
+            :disabled="saving || !hasChanges"
+            @click="saveS3BackupConfig"
           >
             <Save class="w-3.5 h-3.5 mr-1.5" />
-            {{ backup.saving.value ? '保存中...' : '保存' }}
+            {{ saving ? '保存中...' : '保存' }}
           </Button>
         </div>
       </template>
@@ -43,13 +43,13 @@
                 自动备份
               </h4>
               <p class="text-xs text-muted-foreground mt-0.5">
-                {{ backup.config.value.enabled ? '已启用' : '未启用' }}
+                {{ config.enabled ? '已启用' : '未启用' }}
               </p>
             </div>
           </div>
           <Switch
-            :model-value="backup.config.value.enabled"
-            @update:model-value="backup.config.value.enabled = $event"
+            :model-value="config.enabled"
+            @update:model-value="config.enabled = $event"
           />
         </div>
 
@@ -62,7 +62,7 @@
               备份范围
             </Label>
             <Select
-              :model-value="backup.config.value.scope"
+              :model-value="config.scope"
               @update:model-value="setScope"
             >
               <SelectTrigger
@@ -94,10 +94,10 @@
             </Label>
             <Input
               id="backup-bucket"
-              :model-value="backup.config.value.bucket"
+              :model-value="config.bucket"
               class="mt-1"
               placeholder="aether-backups"
-              @update:model-value="backup.config.value.bucket = String($event)"
+              @update:model-value="config.bucket = String($event)"
             />
           </div>
 
@@ -110,10 +110,10 @@
             </Label>
             <Input
               id="backup-endpoint"
-              :model-value="backup.config.value.endpoint"
+              :model-value="config.endpoint"
               class="mt-1"
               placeholder="https://s3.example.com"
-              @update:model-value="backup.config.value.endpoint = String($event)"
+              @update:model-value="config.endpoint = String($event)"
             />
           </div>
 
@@ -126,10 +126,10 @@
             </Label>
             <Input
               id="backup-access-key"
-              :model-value="backup.config.value.accessKeyId"
+              :model-value="config.accessKeyId"
               class="mt-1"
               autocomplete="off"
-              @update:model-value="backup.config.value.accessKeyId = String($event)"
+              @update:model-value="config.accessKeyId = String($event)"
             />
           </div>
 
@@ -142,11 +142,11 @@
                 Secret Access Key
               </Label>
               <button
-                v-if="backup.config.value.secretAccessKeyIsSet"
+                v-if="config.secretAccessKeyIsSet"
                 type="button"
                 class="text-xs text-muted-foreground hover:text-foreground"
-                :disabled="backup.saving.value"
-                @click="backup.clearS3SecretAccessKey"
+                :disabled="saving"
+                @click="clearS3SecretAccessKey"
               >
                 清除
               </button>
@@ -154,15 +154,15 @@
             <div class="relative mt-1">
               <Input
                 id="backup-secret-key"
-                :model-value="backup.config.value.secretAccessKey"
+                :model-value="config.secretAccessKey"
                 masked
                 disable-autofill
                 autocomplete="new-password"
-                :placeholder="backup.config.value.secretAccessKeyIsSet ? '已配置，留空不变' : ''"
-                @update:model-value="backup.config.value.secretAccessKey = String($event)"
+                :placeholder="config.secretAccessKeyIsSet ? '已配置，留空不变' : ''"
+                @update:model-value="config.secretAccessKey = String($event)"
               />
               <KeyRound
-                v-if="backup.config.value.secretAccessKeyIsSet && !backup.config.value.secretAccessKey"
+                v-if="config.secretAccessKeyIsSet && !config.secretAccessKey"
                 class="absolute right-10 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none"
               />
             </div>
@@ -177,7 +177,7 @@
             </Label>
             <Input
               id="backup-retention"
-              :model-value="backup.config.value.retentionCount"
+              :model-value="config.retentionCount"
               type="number"
               min="1"
               class="mt-1"
@@ -196,7 +196,7 @@
             </Label>
             <Input
               id="backup-interval"
-              :model-value="backup.config.value.scheduleInterval"
+              :model-value="config.scheduleInterval"
               type="number"
               min="1"
               class="mt-1"
@@ -211,7 +211,7 @@
               周期单位
             </Label>
             <Select
-              :model-value="backup.config.value.scheduleUnit"
+              :model-value="config.scheduleUnit"
               @update:model-value="setScheduleUnit"
             >
               <SelectTrigger
@@ -243,10 +243,10 @@
             variant="ghost"
             size="sm"
             class="px-0"
-            @click="backup.advancedOpen.value = !backup.advancedOpen.value"
+            @click="advancedOpen = !advancedOpen"
           >
             <ChevronDown
-              v-if="backup.advancedOpen.value"
+              v-if="advancedOpen"
               class="w-3.5 h-3.5 mr-1.5"
             />
             <ChevronRight
@@ -257,7 +257,7 @@
           </Button>
 
           <div
-            v-if="backup.advancedOpen.value"
+            v-if="advancedOpen"
             class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4"
           >
             <div>
@@ -269,10 +269,10 @@
               </Label>
               <Input
                 id="backup-region"
-                :model-value="backup.config.value.region"
+                :model-value="config.region"
                 class="mt-1"
                 placeholder="auto"
-                @update:model-value="backup.config.value.region = String($event)"
+                @update:model-value="config.region = String($event)"
               />
             </div>
             <div>
@@ -284,10 +284,10 @@
               </Label>
               <Input
                 id="backup-user-agent"
-                :model-value="backup.config.value.userAgent"
+                :model-value="config.userAgent"
                 class="mt-1"
                 placeholder="rclone/v1.68.0"
-                @update:model-value="backup.config.value.userAgent = String($event)"
+                @update:model-value="config.userAgent = String($event)"
               />
             </div>
             <div>
@@ -299,10 +299,10 @@
               </Label>
               <Input
                 id="backup-prefix"
-                :model-value="backup.config.value.prefix"
+                :model-value="config.prefix"
                 class="mt-1"
                 placeholder="aether/backups/"
-                @update:model-value="backup.config.value.prefix = String($event)"
+                @update:model-value="config.prefix = String($event)"
               />
             </div>
             <div>
@@ -314,7 +314,7 @@
               </Label>
               <Input
                 id="backup-hour"
-                :model-value="backup.config.value.scheduleHour"
+                :model-value="config.scheduleHour"
                 type="number"
                 min="0"
                 max="23"
@@ -331,7 +331,7 @@
               </Label>
               <Input
                 id="backup-minute"
-                :model-value="backup.config.value.scheduleMinute"
+                :model-value="config.scheduleMinute"
                 type="number"
                 min="0"
                 max="59"
@@ -339,7 +339,7 @@
                 @update:model-value="setNumber('scheduleMinute', $event, 0)"
               />
             </div>
-            <div v-if="backup.config.value.scheduleUnit === 'weeks'">
+            <div v-if="config.scheduleUnit === 'weeks'">
               <Label
                 for="backup-weekday"
                 class="block text-sm font-medium"
@@ -347,7 +347,7 @@
                 星期
               </Label>
               <Select
-                :model-value="String(backup.config.value.scheduleWeekday)"
+                :model-value="String(config.scheduleWeekday)"
                 @update:model-value="setNumber('scheduleWeekday', $event, 1)"
               >
                 <SelectTrigger
@@ -367,7 +367,7 @@
                 </SelectContent>
               </Select>
             </div>
-            <div v-if="backup.config.value.scheduleUnit === 'months'">
+            <div v-if="config.scheduleUnit === 'months'">
               <Label
                 for="backup-month-day"
                 class="block text-sm font-medium"
@@ -376,7 +376,7 @@
               </Label>
               <Input
                 id="backup-month-day"
-                :model-value="backup.config.value.scheduleMonthDay"
+                :model-value="config.scheduleMonthDay"
                 type="number"
                 min="1"
                 max="31"
@@ -387,8 +387,8 @@
             <div class="flex items-center justify-between rounded-lg border border-border p-4">
               <span class="text-sm font-medium">Path Style</span>
               <Switch
-                :model-value="backup.config.value.pathStyle"
-                @update:model-value="backup.config.value.pathStyle = $event"
+                :model-value="config.pathStyle"
+                @update:model-value="config.pathStyle = $event"
               />
             </div>
             <div>
@@ -399,8 +399,8 @@
                 压缩格式
               </Label>
               <Select
-                :model-value="backup.config.value.compression"
-                @update:model-value="backup.config.value.compression = $event"
+                :model-value="config.compression"
+                @update:model-value="config.compression = $event"
               >
                 <SelectTrigger
                   id="backup-compression"
@@ -449,13 +449,24 @@ import {
 } from './composables/useS3BackupConfig'
 import type { S3BackupScope } from '@/api/admin'
 
-const backup = useS3BackupConfig()
+const {
+  config,
+  loading,
+  saving,
+  running,
+  advancedOpen,
+  hasChanges,
+  loadS3BackupConfig,
+  saveS3BackupConfig,
+  clearS3SecretAccessKey,
+  runS3BackupNow,
+} = useS3BackupConfig()
 
 const backupRunDisabled = computed(() =>
-  backup.running.value ||
-  backup.saving.value ||
-  backup.loading.value ||
-  backup.hasChanges.value
+  running.value ||
+  saving.value ||
+  loading.value ||
+  hasChanges.value
 )
 
 const weekdays = [
@@ -470,13 +481,13 @@ const weekdays = [
 
 function setScope(value: string) {
   if (value === 'config' || value === 'users' || value === 'data') {
-    backup.config.value.scope = value as S3BackupScope
+    config.value.scope = value as S3BackupScope
   }
 }
 
 function setScheduleUnit(value: string) {
   if (value === 'hours' || value === 'days' || value === 'weeks' || value === 'months') {
-    backup.config.value.scheduleUnit = value as S3BackupScheduleUnit
+    config.value.scheduleUnit = value as S3BackupScheduleUnit
   }
 }
 
@@ -490,10 +501,10 @@ function setNumber(field: keyof Pick<
   | 'scheduleMonthDay'
 >, value: string | number, fallback: number) {
   const next = Number(value)
-  backup.config.value[field] = Number.isFinite(next) ? next : fallback
+  config.value[field] = Number.isFinite(next) ? next : fallback
 }
 
 onMounted(() => {
-  backup.loadS3BackupConfig()
+  loadS3BackupConfig()
 })
 </script>

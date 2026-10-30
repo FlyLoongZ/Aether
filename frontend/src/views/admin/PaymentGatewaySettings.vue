@@ -420,7 +420,7 @@
 
 <script setup lang="ts">
 import { getI18nLocale } from '@/i18n'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { CircleHelp, PlugZap, Plus, Save, Trash2 } from '@lucide/vue'
 import { epayGatewayApi, type EpayChannelConfig, type PaymentGatewayProvider } from '@/api/billing'
 import {
@@ -521,11 +521,11 @@ const testing = ref(false)
 const hasSecret = ref(false)
 const hasSecretKeys = ref<string[]>([])
 const updatedAt = ref<number | null>(null)
-const fieldValues = reactive<Record<string, string>>({})
+const fieldValues = ref<Record<string, string>>({})
 const paymentHelpOpen = ref<PaymentGatewayProvider | null>(null)
 const paymentHelpRef = ref<HTMLElement | null>(null)
 
-const form = reactive({
+const form = ref({
   enabled: false,
   endpoint_url: '',
   callback_base_url: '',
@@ -588,15 +588,15 @@ async function loadConfig() {
   loading.value = true
   try {
     const config = await epayGatewayApi.get(activeProvider.value)
-    form.enabled = config.enabled
-    form.endpoint_url = config.endpoint_url || ''
-    form.callback_base_url = config.callback_base_url || ''
-    form.pay_currency = config.pay_currency || 'CNY'
-    form.usd_exchange_rate = Number(config.usd_exchange_rate || 7.2)
-    form.min_recharge_usd = Number(config.min_recharge_usd || 1)
-    form.refund_enabled = Boolean(config.refund_enabled)
-    form.allow_user_refund = form.refund_enabled && Boolean(config.allow_user_refund)
-    form.channels = config.channels?.length
+    form.value.enabled = config.enabled
+    form.value.endpoint_url = config.endpoint_url || ''
+    form.value.callback_base_url = config.callback_base_url || ''
+    form.value.pay_currency = config.pay_currency || 'CNY'
+    form.value.usd_exchange_rate = Number(config.usd_exchange_rate || 7.2)
+    form.value.min_recharge_usd = Number(config.min_recharge_usd || 1)
+    form.value.refund_enabled = Boolean(config.refund_enabled)
+    form.value.allow_user_refund = form.value.refund_enabled && Boolean(config.allow_user_refund)
+    form.value.channels = config.channels?.length
       ? config.channels.map((item) => {
         const feeRate = Number(item.fee_rate ?? 0)
         return { ...item, fee_rate: Number.isFinite(feeRate) && feeRate >= 0 ? feeRate : 0 }
@@ -610,10 +610,10 @@ async function loadConfig() {
     const savedConfig = config.config || {}
     for (const field of visibleFields.value) {
       if (field.key === 'merchant_id') {
-        fieldValues[field.key] = config.merchant_id || ''
+        fieldValues.value[field.key] = config.merchant_id || ''
       } else {
         const value = savedConfig[field.key]
-        fieldValues[field.key] = typeof value === 'string' ? value : ''
+        fieldValues.value[field.key] = typeof value === 'string' ? value : ''
       }
     }
   } catch (err) {
@@ -625,11 +625,9 @@ async function loadConfig() {
 }
 
 function resetFieldValues() {
-  for (const key of Object.keys(fieldValues)) {
-    delete fieldValues[key]
-  }
+  fieldValues.value = {}
   for (const field of visibleFields.value) {
-    fieldValues[field.key] = ''
+    fieldValues.value[field.key] = ''
   }
 }
 
@@ -639,16 +637,16 @@ function hasSecretKey(key: string): boolean {
 }
 
 function setRefundEnabled(value: boolean) {
-  form.refund_enabled = value
-  if (!value) form.allow_user_refund = false
+  form.value.refund_enabled = value
+  if (!value) form.value.allow_user_refund = false
 }
 
 function setAllowUserRefund(value: boolean) {
-  form.allow_user_refund = form.refund_enabled && value
+  form.value.allow_user_refund = form.value.refund_enabled && value
 }
 
 function normalizeChannels(): EpayChannelConfig[] {
-  return form.channels
+  return form.value.channels
     .map((item) => {
       const feeRate = Number(item.fee_rate ?? 0)
       return {
@@ -661,17 +659,17 @@ function normalizeChannels(): EpayChannelConfig[] {
 }
 
 function validateForm(): string | null {
-  if (activeProvider.value === 'epay' && !form.endpoint_url.trim()) return '请输入易支付接口地址'
-  if (!form.pay_currency.trim()) return '请输入支付币种'
-  if (!Number.isFinite(Number(form.usd_exchange_rate)) || Number(form.usd_exchange_rate) <= 0) {
+  if (activeProvider.value === 'epay' && !form.value.endpoint_url.trim()) return '请输入易支付接口地址'
+  if (!form.value.pay_currency.trim()) return '请输入支付币种'
+  if (!Number.isFinite(Number(form.value.usd_exchange_rate)) || Number(form.value.usd_exchange_rate) <= 0) {
     return 'USD 汇率必须大于 0'
   }
-  if (!Number.isFinite(Number(form.min_recharge_usd)) || Number(form.min_recharge_usd) <= 0) {
+  if (!Number.isFinite(Number(form.value.min_recharge_usd)) || Number(form.value.min_recharge_usd) <= 0) {
     return '最低充值金额必须大于 0'
   }
   const channels = normalizeChannels()
   if (channels.length === 0) return '至少需要一个支付通道'
-  for (const [index, channel] of form.channels.entries()) {
+  for (const [index, channel] of form.value.channels.entries()) {
     if (!channel.channel.trim() || !channel.display_name.trim()) continue
     const feeRate = Number(channel.fee_rate ?? 0)
     if (!Number.isFinite(feeRate) || feeRate < 0) {
@@ -679,7 +677,7 @@ function validateForm(): string | null {
     }
   }
   for (const field of visibleFields.value) {
-    const value = fieldValues[field.key]?.trim() || ''
+    const value = fieldValues.value[field.key]?.trim() || ''
     if (!field.secret && !value) return `请输入${field.label}`
     if (field.secret && !hasSecretKey(field.key) && !value) return `首次配置需要填写${field.label}`
   }
@@ -698,7 +696,7 @@ async function saveConfig() {
     const configFields: Record<string, unknown> = {}
     const secrets: Record<string, string> = {}
     for (const field of visibleFields.value) {
-      const value = fieldValues[field.key]?.trim() || ''
+      const value = fieldValues.value[field.key]?.trim() || ''
       if (field.secret) {
         if (value) secrets[field.key] = value
       } else if (field.key !== 'merchant_id') {
@@ -706,31 +704,31 @@ async function saveConfig() {
       }
     }
     const payload = {
-      enabled: form.enabled,
-      endpoint_url: form.endpoint_url.trim(),
-      callback_base_url: form.callback_base_url.trim() || null,
-      merchant_id: fieldValues.merchant_id?.trim() || '',
-      pay_currency: form.pay_currency.trim().toUpperCase(),
-      usd_exchange_rate: Number(form.usd_exchange_rate),
-      min_recharge_usd: Number(form.min_recharge_usd),
+      enabled: form.value.enabled,
+      endpoint_url: form.value.endpoint_url.trim(),
+      callback_base_url: form.value.callback_base_url.trim() || null,
+      merchant_id: fieldValues.value.merchant_id?.trim() || '',
+      pay_currency: form.value.pay_currency.trim().toUpperCase(),
+      usd_exchange_rate: Number(form.value.usd_exchange_rate),
+      min_recharge_usd: Number(form.value.min_recharge_usd),
       channels: normalizeChannels(),
-      refund_enabled: form.refund_enabled,
-      allow_user_refund: form.refund_enabled && form.allow_user_refund,
+      refund_enabled: form.value.refund_enabled,
+      allow_user_refund: form.value.refund_enabled && form.value.allow_user_refund,
       config: configFields,
       secrets,
-      ...(activeProvider.value === 'epay' && fieldValues.merchant_key?.trim()
-        ? { merchant_key: fieldValues.merchant_key.trim() }
+      ...(activeProvider.value === 'epay' && fieldValues.value.merchant_key?.trim()
+        ? { merchant_key: fieldValues.value.merchant_key.trim() }
         : {}),
     }
     const config = await epayGatewayApi.update(payload, activeProvider.value)
     hasSecret.value = config.has_secret
     hasSecretKeys.value = config.has_secret_keys || []
     updatedAt.value = config.updated_at ?? null
-    form.refund_enabled = Boolean(config.refund_enabled)
-    form.allow_user_refund = form.refund_enabled && Boolean(config.allow_user_refund)
-    fieldValues.merchant_key = ''
+    form.value.refund_enabled = Boolean(config.refund_enabled)
+    form.value.allow_user_refund = form.value.refund_enabled && Boolean(config.allow_user_refund)
+    fieldValues.value.merchant_key = ''
     for (const field of visibleFields.value) {
-      if (field.secret) fieldValues[field.key] = ''
+      if (field.secret) fieldValues.value[field.key] = ''
     }
     success('支付配置已保存')
   } catch (err) {
@@ -755,11 +753,11 @@ async function testGateway() {
 }
 
 function addChannel() {
-  form.channels.push({ channel: '', display_name: '', fee_rate: 0 })
+  form.value.channels.push({ channel: '', display_name: '', fee_rate: 0 })
 }
 
 function removeChannel(index: number) {
-  if (form.channels.length <= 1) return
-  form.channels.splice(index, 1)
+  if (form.value.channels.length <= 1) return
+  form.value.channels.splice(index, 1)
 }
 </script>
