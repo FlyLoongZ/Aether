@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
-import { legacyTemplateI18nPlugin } from './src/i18n/legacy-template-transform'
+import { legacyTemplateI18nPlugin } from './src/i18n/legacy-template-transform.ts'
 
 export default defineConfig({
   plugins: [legacyTemplateI18nPlugin(), vue()],
@@ -23,7 +23,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
 })

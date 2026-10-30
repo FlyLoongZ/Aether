@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { execSync } from 'child_process'
-import { legacyTemplateI18nPlugin } from './src/i18n/legacy-template-transform'
+import { legacyTemplateI18nPlugin } from './src/i18n/legacy-template-transform.ts'
 
 function normalizeVersion(version: string): string {
   const trimmed = version.trim()
@@ -33,7 +33,7 @@ function getGitVersion(): string {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const rootEnv = loadEnv(mode, path.resolve(__dirname, '..'), '')
+  const rootEnv = loadEnv(mode, path.resolve(import.meta.dirname, '..'), '')
   const appPort = rootEnv.APP_PORT || process.env.APP_PORT || '8084'
   const gatewayTarget = `http://127.0.0.1:${appPort}`
 
@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
+        '@': path.resolve(import.meta.dirname, './src'),
       },
     },
     build: {
