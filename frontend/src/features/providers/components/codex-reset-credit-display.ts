@@ -145,7 +145,7 @@ export function getCodexResetCreditReservationIdempotencyKey(
 }
 
 export function createCodexResetCreditIdempotencyKey(
-  cryptoSource: CodexResetCreditCrypto | undefined = globalThis.crypto,
+  cryptoSource: CodexResetCreditCrypto | undefined = globalThis.crypto as unknown as CodexResetCreditCrypto,
 ): string {
   const randomUUID = cryptoSource?.randomUUID?.bind(cryptoSource)
   if (randomUUID) return randomUUID()

@@ -35,7 +35,7 @@ class MockIntersectionObserver {
   constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     this.callback = callback
     this.options = options
-    instances.push(this)
+    instances.push(this as unknown as MockObserverInstance)
   }
 
   observe(target: Element) {
