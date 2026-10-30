@@ -9,7 +9,6 @@ import { setI18nLocale } from '@/i18n'
 
 const { chartConstructor } = vi.hoisted(() => ({ chartConstructor: vi.fn() }))
 
-vi.mock('chartjs-adapter-date-fns', () => ({}))
 vi.mock('chart.js', async importOriginal => {
   const original = await importOriginal<typeof import('chart.js')>()
   return {
