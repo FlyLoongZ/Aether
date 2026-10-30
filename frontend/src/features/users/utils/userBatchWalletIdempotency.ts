@@ -180,7 +180,7 @@ export function createUserBatchWalletRetryCoordinator(options: CoordinatorOption
   }
 
   function readPending(storageKey: string): PendingUserBatchWalletRequest | null {
-    let serialized: string | null = null
+    let serialized: string | null
     let storageReadFailed = false
     try {
       serialized = storage?.getItem(storageKey) ?? null

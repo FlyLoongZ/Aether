@@ -61,7 +61,8 @@
             <Input
               v-model="localMappings[index]"
               placeholder="例如: claude-haiku-.*"
-              :class="`font-mono text-sm ${normalizedMappings[index] && !mappingValidations[index].valid ? 'border-destructive' : ''}`"
+              class="font-mono text-sm"
+              :class="normalizedMappings[index] && !mappingValidations[index].valid ? 'border-destructive' : ''"
               @click.stop
               @input="markDirty"
             />

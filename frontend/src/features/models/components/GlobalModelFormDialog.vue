@@ -1346,13 +1346,12 @@ function fillVideoResolutionPricePreset(preset: 'common' | 'sora' | 'veo') {
 
 async function loadExistingModels() {
   const models: GlobalModelResponse[] = []
-  let total = 0
-  do {
-    const response = await listGlobalModels({ skip: models.length, limit: 1000 })
+  let response = await listGlobalModels({ skip: 0, limit: 1000 })
+  models.push(...response.models)
+  while (response.models.length > 0 && models.length < response.total) {
+    response = await listGlobalModels({ skip: models.length, limit: 1000 })
     models.push(...response.models)
-    total = response.total
-    if (response.models.length === 0) break
-  } while (models.length < total)
+  }
   existingModelsCache.value = models
 }
 

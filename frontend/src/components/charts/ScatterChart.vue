@@ -259,7 +259,6 @@ function compressTimeGaps(data: TimeScatterChartData): {
   }
 
   // 更新间隙的 startX 为压缩后的坐标
-  gapIndex = 0
   currentCompression = 0
   for (const gap of gaps) {
     gap.startX = gap.originalStart.getTime() - currentCompression + compressedGapSizeMs / 2

@@ -153,8 +153,8 @@ export function useLogoPosition(
   const fixedLogoStyle = computed(() => {
     const section = currentSection.value
     const isDesktop = windowWidth.value >= 768
-    let transform = ''
-    let opacity = 1
+    let transform: string
+    let opacity: number
 
     if (section === SECTIONS.HOME) {
       transform = 'scale(1.1) translateY(-12vh)'

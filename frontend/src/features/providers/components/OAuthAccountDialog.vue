@@ -650,17 +650,17 @@
           :aria-hidden="mode !== 'import'"
         >
           <JsonImportInput
-              v-model="importText"
-              :disabled="importing"
-              :reset-key="importInputResetKey"
-              :drop-title="importDropTitle"
-              :drop-hint="importDropHint"
-              :manual-placeholder="importManualPlaceholder"
-              :paste-toggle-text="importPasteToggleText"
-              :file-toggle-text="importFileToggleText"
-              textarea-class="min-h-[200px] text-xs font-mono break-all !rounded-xl"
-              @error="handleImportInputError"
-            />
+            v-model="importText"
+            :disabled="importing"
+            :reset-key="importInputResetKey"
+            :drop-title="importDropTitle"
+            :drop-hint="importDropHint"
+            :manual-placeholder="importManualPlaceholder"
+            :paste-toggle-text="importPasteToggleText"
+            :file-toggle-text="importFileToggleText"
+            textarea-class="min-h-[200px] text-xs font-mono break-all !rounded-xl"
+            @error="handleImportInputError"
+          />
           <div
             v-if="importTask"
             class="rounded-xl border border-border bg-muted/20 p-3 space-y-2"
@@ -1046,12 +1046,6 @@ const deviceCountdownFormatted = computed(() => {
   const sec = s % 60
   return `${min}:${String(sec).padStart(2, '0')}`
 })
-
-const sessionRemainingText = computed(() => (
-  isEnglishLocale()
-    ? `Session remaining ${deviceCountdownFormatted.value}`
-    : `会话剩余 ${deviceCountdownFormatted.value}`
-))
 
 const remainingText = computed(() => (
   isEnglishLocale()

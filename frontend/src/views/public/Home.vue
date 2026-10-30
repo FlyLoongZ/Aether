@@ -170,7 +170,6 @@
     <main class="relative z-10">
       <!-- Fixed Logo Container -->
       <div class="fixed top-0 left-0 right-0 bottom-0 z-20 pointer-events-none flex items-center justify-center overflow-hidden">
-
         <div
           class="transform-gpu logo-container"
           :class="[currentSection === SECTIONS.HOME ? 'home-section' : '', `logo-transition-${scrollDirection}`]"
@@ -387,7 +386,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   ChevronDown,
