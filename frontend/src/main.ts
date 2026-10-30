@@ -5,6 +5,9 @@ import './style.css'
 import App from './App.vue'
 import { preloadCriticalModules } from './utils/importRetry'
 import { createI18n } from './i18n'
+import { initializeTheme } from './theme/runtime'
+
+initializeTheme()
 
 const app = createApp(App)
 const pinia = createPinia()

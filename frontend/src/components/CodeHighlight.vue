@@ -286,130 +286,98 @@ function highlightPlaceholders(html: string): string {
 }
 
 /* Highlight.js 深色主题 */
-.dark .code-highlight :deep(.hljs-string),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-string) {
+.dark .code-highlight :deep(.hljs-string) {
   color: #f1ead8;
   font-weight: 450;
 }
 
 .dark .code-highlight :deep(.hljs-attr),
-.dark .code-highlight :deep(.hljs-attribute),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-attr),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-attribute) {
+.dark .code-highlight :deep(.hljs-attribute) {
   color: #d4a27f;
   font-weight: 500;
 }
 
 .dark .code-highlight :deep(.hljs-keyword),
 .dark .code-highlight :deep(.hljs-selector-tag),
-.dark .code-highlight :deep(.hljs-built_in),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-keyword),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-selector-tag),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-built_in) {
+.dark .code-highlight :deep(.hljs-built_in) {
   color: #569cd6;
   font-weight: 500;
 }
 
-.dark .code-highlight :deep(.hljs-comment),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-comment) {
+.dark .code-highlight :deep(.hljs-comment) {
   color: #6a9955;
   font-style: italic;
   opacity: 0.85;
 }
 
 .dark .code-highlight :deep(.hljs-function),
-.dark .code-highlight :deep(.hljs-title),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-function),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-title) {
+.dark .code-highlight :deep(.hljs-title) {
   color: #d4a27f;
   font-weight: 500;
 }
 
-.dark .code-highlight :deep(.hljs-section),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-section) {
+.dark .code-highlight :deep(.hljs-section) {
   color: #d4a27f;
   font-weight: 500;
 }
 
-.dark .code-highlight :deep(.hljs-number),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-number) {
+.dark .code-highlight :deep(.hljs-number) {
   color: #b5cea8;
 }
 
 .dark .code-highlight :deep(.hljs-literal),
 .dark .code-highlight :deep(.language-json .hljs-literal),
-.dark .code-highlight :deep(.language-json .hljs-literal .hljs-keyword),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-literal),
-body[theme-mode='dark'] .code-highlight :deep(.language-json .hljs-literal),
-body[theme-mode='dark'] .code-highlight :deep(.language-json .hljs-literal .hljs-keyword) {
+.dark .code-highlight :deep(.language-json .hljs-literal .hljs-keyword) {
   color: #e3e0d3;
   font-weight: normal;
 }
 
 .dark .code-highlight :deep(.hljs-variable),
-.dark .code-highlight :deep(.hljs-property),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-variable),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-property) {
+.dark .code-highlight :deep(.hljs-property) {
   color: #9cdcfe;
 }
 
-.dark .code-highlight :deep(.hljs-punctuation),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-punctuation) {
+.dark .code-highlight :deep(.hljs-punctuation) {
   color: #c9c3b4;
   opacity: 0.7;
 }
 
-/* Placeholder values - dark mode */
-.dark .code-highlight :deep(.hljs-placeholder),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-placeholder) {
+.dark .code-highlight :deep(.hljs-placeholder) {
   color: #f97583;
   font-weight: 500;
   font-style: italic;
 }
 
-/* Bash 深色主题 */
 .dark .code-highlight :deep(.hljs-built_in),
 .dark .code-highlight :deep(.hljs-name),
 .dark .code-highlight :deep(.language-bash .hljs-built_in),
-.dark .code-highlight :deep(.language-bash .hljs-name),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-built_in),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-name),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash .hljs-built_in),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash .hljs-name) {
+.dark .code-highlight :deep(.language-bash .hljs-name) {
   color: #e67764;
   font-weight: 500;
 }
 
 .dark .code-highlight :deep(.hljs-meta),
-.dark .code-highlight :deep(.language-bash .hljs-meta),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-meta),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash .hljs-meta) {
+.dark .code-highlight :deep(.language-bash .hljs-meta) {
   color: #e67764;
 }
 
 .dark .code-highlight :deep(.hljs-params),
-.dark .code-highlight :deep(.language-bash .hljs-params),
-body[theme-mode='dark'] .code-highlight :deep(.hljs-params),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash .hljs-params) {
+.dark .code-highlight :deep(.language-bash .hljs-params) {
   color: #6fa9e6;
   font-weight: 500;
 }
 
 .dark .code-highlight :deep(.language-bash .hljs-keyword),
-.dark .code-highlight :deep(.language-bash .hljs-literal),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash .hljs-keyword),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash .hljs-literal) {
+.dark .code-highlight :deep(.language-bash .hljs-literal) {
   color: #6fa9e6;
   font-weight: 500;
 }
 
-.dark .code-highlight :deep(.language-bash),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash) {
+.dark .code-highlight :deep(.language-bash) {
   color: #e3e0d3;
 }
 
-.dark .code-highlight :deep(.language-bash .hljs-string),
-body[theme-mode='dark'] .code-highlight :deep(.language-bash .hljs-string) {
+.dark .code-highlight :deep(.language-bash .hljs-string) {
   color: #e3e0d3;
   font-weight: 400;
 }
