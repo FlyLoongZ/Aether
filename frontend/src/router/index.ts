@@ -15,7 +15,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, from) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
 
   try {
@@ -23,38 +23,32 @@ router.beforeEach(async (to, from, next) => {
     const moduleStore = useModuleStore()
     const isAuthenticated = await ensureUserLoaded(authStore)
 
-    // 首页重定向
     const homeRedirect = resolveHomeRedirect(to, from, authStore)
-    if (homeRedirect !== null) return homeRedirect === '' ? next() : next(homeRedirect)
+    if (homeRedirect !== null) return homeRedirect === '' ? true : homeRedirect
 
-    // 需要认证但未认证
     if (requiresAuth && !isAuthenticated) {
       sessionStorage.setItem('redirectPath', to.fullPath)
       log.debug('No valid token found, redirecting to home')
-      return next('/')
+      return '/'
     }
 
-    // 管理端检查
     const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin)
     if (requiresAdmin) {
       const adminRedirect = await checkAdminAccess(to, authStore, moduleStore)
-      if (adminRedirect) return next(adminRedirect)
+      if (adminRedirect) return adminRedirect
+      return true
     }
 
-    // 非管理端的模块检查
-    if (!requiresAdmin) {
-      const moduleRedirect = await checkModuleAccess(to, moduleStore)
-      if (moduleRedirect) return next(moduleRedirect)
-    }
-
-    next()
+    const moduleRedirect = await checkModuleAccess(to, moduleStore)
+    if (moduleRedirect) return moduleRedirect
+    return true
   } catch (error) {
     log.error('Router guard error', error)
     if (requiresAuth) {
       sessionStorage.setItem('redirectPath', to.fullPath)
-      return next('/')
+      return '/'
     }
-    next()
+    return true
   }
 })
 
