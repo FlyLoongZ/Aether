@@ -495,7 +495,7 @@
                         </ComboboxAnchor>
                         <ComboboxContent
                           position="popper"
-                          class="z-[99] mt-1 max-h-[200px] w-[--radix-combobox-trigger-width] overflow-y-auto rounded-md border border-border bg-popover shadow-md"
+                          class="z-[99] mt-1 max-h-[200px] w-(--radix-combobox-trigger-width) overflow-y-auto rounded-md border border-border bg-popover shadow-md"
                         >
                           <ComboboxViewport>
                             <ComboboxEmpty class="px-2 py-1.5 text-xs text-muted-foreground">

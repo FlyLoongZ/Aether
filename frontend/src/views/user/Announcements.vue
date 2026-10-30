@@ -862,6 +862,7 @@ function formatDate(dateString: string): string {
 </script>
 
 <style scoped>
+@reference "../../style.css";
 /* Markdown 内容样式 */
 :deep(.prose) {
   max-width: none;

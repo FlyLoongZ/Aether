@@ -297,6 +297,7 @@ const initial = (name: string) => Array.from(name)[0]?.toLocaleUpperCase() || '?
 </script>
 
 <style scoped>
+@reference "../../../style.css";
 .avatar { @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold; }
 .copy-button { @apply h-7 w-7 shrink-0 rounded-md p-0 text-muted-foreground; }
 </style>

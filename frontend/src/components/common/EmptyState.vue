@@ -298,6 +298,7 @@ function handleAction() {
 </script>
 
 <style scoped>
+@reference "../../style.css";
 .empty-state {
   @apply flex flex-col items-center justify-center;
 }

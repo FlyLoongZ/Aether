@@ -1318,6 +1318,7 @@ const mainClasses = computed(() => {
 </script>
 
 <style scoped>
+@reference "../style.css";
 .sidebar-mode-enter-active {
   transition: opacity 120ms ease-out;
 }
