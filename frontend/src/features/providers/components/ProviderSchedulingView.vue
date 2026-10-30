@@ -44,7 +44,9 @@
                   aria-label="当前调度策略"
                 >
                   <span class="min-w-0 truncate">
-                    <SelectValue :placeholder="loading ? '正在加载分组' : '选择策略分组'" />
+                    <SelectValue :placeholder="loading ? '正在加载分组' : '选择策略分组'">
+                      {{ selectedGroupLabel }}
+                    </SelectValue>
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -520,6 +522,13 @@ let discardConfirmation: Promise<boolean> | null = null
 
 const routeGroupId = computed(() => queryToString(route.query.group))
 const defaultGroupId = computed(() => groups.value.find(group => group.is_system_default)?.id ?? groups.value[0]?.id ?? null)
+const selectedGroupLabel = computed(() => {
+  if (isNewDraft.value) return '新建策略'
+  const group = groups.value.find(item => item.id === selectedValue.value)
+  if (!group) return ''
+  const suffix = `${group.is_system_default ? ' · 默认' : ''}${group.enabled ? '' : ' · 停用'}`
+  return `${group.name}${suffix}`
+})
 const isNewDraft = computed(() => draft.value != null && !draft.value.id)
 const selectedValue = computed(() => isNewDraft.value ? 'new' : draft.value?.id ?? '')
 const priorityMode = 'provider' as const

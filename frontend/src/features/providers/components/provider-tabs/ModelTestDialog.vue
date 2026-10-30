@@ -48,7 +48,7 @@
                 <SelectValue :placeholder="requestedModelName || '当前模型'" />
               </SelectTrigger>
               <SelectContent
-                class="w-[var(--radix-select-trigger-width)]"
+                class="w-[var(--reka-select-trigger-width)]"
                 align="end"
                 :disable-portal="false"
                 :searchable="false"

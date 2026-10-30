@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { DropdownMenuRoot } from 'radix-vue'
+import { DropdownMenuRoot } from 'reka-ui'
 
 interface Props {
   defaultOpen?: boolean
@@ -17,7 +17,7 @@ defineEmits<{
   'update:open': [value: boolean]
 }>()
 
-// open 未传入时不绑定，让 radix-vue 走 uncontrolled 模式
+
 const openProp = computed(() =>
   props.open !== undefined ? { open: props.open } : {}
 )

@@ -3,7 +3,7 @@ import {
   SelectItem as SelectItemPrimitive,
   SelectItemIndicator,
   SelectItemText,
-} from 'radix-vue'
+} from 'reka-ui'
 import { Check } from '@lucide/vue'
 import { cn } from '@/lib/utils'
 import {
@@ -16,6 +16,7 @@ import {
   watch,
 } from 'vue'
 import { SELECT_SEARCH_CONTEXT_KEY } from './select-search-context'
+import { SELECT_LABEL_CONTEXT_KEY } from './select-label-context'
 
 interface Props {
   class?: string
@@ -27,6 +28,7 @@ interface Props {
 const props = defineProps<Props>()
 const slots = useSlots()
 const searchContext = inject(SELECT_SEARCH_CONTEXT_KEY, null)
+const labelContext = inject(SELECT_LABEL_CONTEXT_KEY, null)
 const instance = getCurrentInstance()
 const itemId = instance?.uid
   ? `select-item-${instance.uid}`
@@ -72,6 +74,7 @@ onMounted(() => {
     value: props.value,
     text: normalizedText.value,
   })
+  labelContext?.labels.set(props.value, normalizedText.value)
 })
 
 watch(
@@ -81,6 +84,7 @@ watch(
       value,
       text,
     })
+    labelContext?.labels.set(value, text)
   },
 )
 

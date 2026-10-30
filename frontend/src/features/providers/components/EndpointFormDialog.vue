@@ -955,7 +955,7 @@
             <SelectContent
               :disable-portal="false"
               align="start"
-              class="max-h-[min(24rem,var(--radix-select-content-available-height))] min-w-[max(12rem,var(--radix-select-trigger-width))]"
+              class="max-h-[min(24rem,var(--reka-select-content-available-height))] min-w-[max(12rem,var(--reka-select-trigger-width))]"
             >
               <SelectItem
                 v-for="format in availableFormats"
