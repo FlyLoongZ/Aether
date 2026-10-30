@@ -223,7 +223,7 @@ import {
   Loader2,
   Search,
   Copy,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { useClipboard } from '@/composables/useClipboard'
 import {

@@ -198,7 +198,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Dialog, Button, Input, Label, Switch } from '@/components/ui'
-import { SquarePen } from 'lucide-vue-next'
+import { SquarePen } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useFormDialog } from '@/composables/useFormDialog'

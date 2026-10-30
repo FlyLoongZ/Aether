@@ -709,7 +709,7 @@ import {
   Pencil,
   RefreshCw,
   AlertTriangle
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { log } from '@/utils/logger'
 import { parseApiError } from '@/utils/errorParser'

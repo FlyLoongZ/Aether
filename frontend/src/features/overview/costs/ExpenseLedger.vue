@@ -171,7 +171,7 @@
 
 <script setup lang="ts">
 import { onScopeDispose, ref, watch } from 'vue'
-import { Download, Plus } from 'lucide-vue-next'
+import { Download, Plus } from '@lucide/vue'
 import { Button, Card, Dialog } from '@/components/ui'
 import { providerFinanceApi, type ProviderExpense, type ProviderExpenseKind, type ProviderExpenses } from '@/api/providerFinance'
 import type { OverviewRange } from '@/api/overview'

@@ -119,7 +119,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { AlertCircle, Zap, Settings, ChevronRight, ChevronDown } from 'lucide-vue-next'
+import { AlertCircle, Zap, Settings, ChevronRight, ChevronDown } from '@lucide/vue'
 import TurnCard from './TurnCard.vue'
 import BlockRenderer from './BlockRenderer.vue'
 import type { RenderResult } from '../../conversation'

@@ -61,7 +61,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Check, ChevronDown } from 'lucide-vue-next'
+import { Check, ChevronDown } from '@lucide/vue'
 import { defaultPlatformOptions, type PlatformOption } from '@/config/platform-presets'
 import { useI18n } from '@/i18n'
 

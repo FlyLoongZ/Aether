@@ -124,7 +124,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { loadStripe, type Stripe, type StripeElements, type StripePaymentElement } from '@stripe/stripe-js'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2 } from '@lucide/vue'
 import { Badge, Button, Dialog, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui'
 import {
   getStripePaymentInstructions,

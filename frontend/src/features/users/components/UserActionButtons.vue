@@ -95,7 +95,7 @@ import {
   PlayCircle,
   SquarePen,
   Trash2,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import { useI18n } from '@/i18n'
 

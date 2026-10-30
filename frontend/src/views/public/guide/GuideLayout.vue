@@ -295,7 +295,7 @@ import {
   Menu,
   ChevronRight,
   X
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import GithubIcon from '@/components/icons/GithubIcon.vue'
 import HeaderLogo from '@/components/HeaderLogo.vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'

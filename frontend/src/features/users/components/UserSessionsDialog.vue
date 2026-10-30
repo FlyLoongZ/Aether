@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { MonitorSmartphone } from 'lucide-vue-next'
+import { MonitorSmartphone } from '@lucide/vue'
 import { Button, Dialog } from '@/components/ui'
 import { useI18n } from '@/i18n'
 import type { UserSession } from '@/api/users'

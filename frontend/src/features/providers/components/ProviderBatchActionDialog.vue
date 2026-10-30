@@ -185,7 +185,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, type Component } from 'vue'
-import { AlertTriangle, Power, PowerOff, Search, Trash2, Users } from 'lucide-vue-next'
+import { AlertTriangle, Power, PowerOff, Search, Trash2, Users } from '@lucide/vue'
 import { Badge, Button, Checkbox, Dialog, Input } from '@/components/ui'
 import {
   deleteProvider,

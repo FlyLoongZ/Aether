@@ -284,7 +284,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronRight, Copy, CornerDownRight, LoaderCircle, Search, Users } from 'lucide-vue-next'
+import { ChevronRight, Copy, CornerDownRight, LoaderCircle, Search, Users } from '@lucide/vue'
 import type { ReferralRelationshipRecord } from '@/api/referrals'
 import { Badge, Button, Card, Input, Pagination, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui'
 import { date } from './presentation'

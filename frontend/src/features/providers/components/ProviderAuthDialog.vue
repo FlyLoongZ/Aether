@@ -325,7 +325,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { KeyRound } from 'lucide-vue-next'
+import { KeyRound } from '@lucide/vue'
 import {
   Dialog,
   Button,

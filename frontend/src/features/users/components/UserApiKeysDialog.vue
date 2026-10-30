@@ -173,7 +173,7 @@
 </template>
 
 <script setup lang="ts">
-import { Copy, Key, Lock, LockOpen, SquarePen, Trash2 } from 'lucide-vue-next'
+import { Copy, Key, Lock, LockOpen, SquarePen, Trash2 } from '@lucide/vue'
 import { Badge, Button, Dialog } from '@/components/ui'
 import { useI18n } from '@/i18n'
 import type { ApiKey } from '@/api/users'

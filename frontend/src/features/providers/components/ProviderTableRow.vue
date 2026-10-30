@@ -225,7 +225,7 @@ import {
   Pencil,
   Check,
   X,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Badge from '@/components/ui/badge.vue'
 import TableRow from '@/components/ui/table-row.vue'

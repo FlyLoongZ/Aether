@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { ToggleLeft, ToggleRight } from 'lucide-vue-next'
+import { ToggleLeft, ToggleRight } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import { useI18n } from '@/i18n'
 

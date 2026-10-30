@@ -262,7 +262,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { GripVertical } from 'lucide-vue-next'
+import { GripVertical } from '@lucide/vue'
 import { Dialog, Button, Switch } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { parseApiError } from '@/utils/errorParser'

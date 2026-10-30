@@ -1,5 +1,5 @@
-import { Mail, Shield, AlertTriangle, BellRing } from 'lucide-vue-next'
-import type { LucideIcon } from 'lucide-vue-next'
+import { Mail, Shield, AlertTriangle, BellRing } from '@lucide/vue'
+import type { LucideIcon } from '@lucide/vue'
 
 export interface BuiltinTool {
   name: string

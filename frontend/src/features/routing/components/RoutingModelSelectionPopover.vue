@@ -67,7 +67,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { Pencil, X } from 'lucide-vue-next'
+import { Pencil, X } from '@lucide/vue'
 import { Button, Popover, PopoverContent, PopoverTrigger } from '@/components/ui'
 import type { GlobalModelResponse } from '@/api/global-models'
 import RoutingModelSelector from './RoutingModelSelector.vue'

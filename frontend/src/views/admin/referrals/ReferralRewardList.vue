@@ -247,7 +247,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, ChevronRight, CornerDownRight, Inbox, LoaderCircle, RefreshCw } from 'lucide-vue-next'
+import { AlertCircle, ChevronRight, CornerDownRight, Inbox, LoaderCircle, RefreshCw } from '@lucide/vue'
 import type { ReferralRewardRecord } from '@/api/referrals'
 import { Badge, Button, Card, Pagination, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui'
 import { date, reversalStatus, rewardStatus, rewardType, source, statusVariant, trigger, usd } from './presentation'

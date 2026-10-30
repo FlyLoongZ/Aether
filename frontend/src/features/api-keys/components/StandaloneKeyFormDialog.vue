@@ -359,7 +359,7 @@ import {
   Label,
   Switch,
 } from '@/components/ui'
-import { ChevronDown, Plus, SquarePen, X } from 'lucide-vue-next'
+import { ChevronDown, Plus, SquarePen, X } from '@lucide/vue'
 import { useFormDialog } from '@/composables/useFormDialog'
 import { MultiSelect } from '@/components/common'
 import { getProvidersSummary } from '@/api/endpoints/providers'

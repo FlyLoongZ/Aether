@@ -1078,7 +1078,7 @@ import {
   SortableTableHead,
   TableFilterMenu,
 } from '@/components/ui'
-import { Ban, EyeOff, RefreshCcw, Search, ShieldCheck, Shuffle } from 'lucide-vue-next'
+import { Ban, EyeOff, RefreshCcw, Search, ShieldCheck, Shuffle } from '@lucide/vue'
 import { formatTokens } from '@/utils/format'
 import { getCacheCreationTokens, getCacheReadTokens, getEffectiveInputTokens } from '../token-normalization'
 import {

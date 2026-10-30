@@ -49,7 +49,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Activity, CheckCircle2, Clock, Gauge, Hash, Timer, TriangleAlert, Zap } from 'lucide-vue-next'
+import { Activity, CheckCircle2, Clock, Gauge, Hash, Timer, TriangleAlert, Zap } from '@lucide/vue'
 import type { OverviewMetrics } from '@/api/overview'
 import { count, money, percent } from '../format'
 import { useOverviewI18n } from '../i18n'

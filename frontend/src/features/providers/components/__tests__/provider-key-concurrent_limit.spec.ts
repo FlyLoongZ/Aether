@@ -194,7 +194,7 @@ vi.mock('@/composables/useConfirm', () => ({
   }),
 }))
 
-vi.mock('lucide-vue-next', async () => {
+vi.mock('@lucide/vue', async () => {
   const { defineComponent, h } = await import('vue')
   const Icon = defineComponent({
     name: 'IconStub',

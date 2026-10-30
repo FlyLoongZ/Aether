@@ -300,7 +300,7 @@ import {
   Switch,
   Textarea,
 } from '@/components/ui'
-import { AlignLeft, Code2, GitBranch, Plus, Trash2 } from 'lucide-vue-next'
+import { AlignLeft, Code2, GitBranch, Plus, Trash2 } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { updateProvider, type ProviderWithEndpointsSummary } from '@/api/endpoints'
 import { parseApiError } from '@/utils/errorParser'

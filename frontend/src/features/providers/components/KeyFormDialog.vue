@@ -370,7 +370,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui'
-import { Key, SquarePen, CircleHelp } from 'lucide-vue-next'
+import { Key, SquarePen, CircleHelp } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { useFormDialog } from '@/composables/useFormDialog'
 import { useI18n } from '@/i18n'

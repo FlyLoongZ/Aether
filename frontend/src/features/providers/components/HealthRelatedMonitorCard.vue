@@ -75,7 +75,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Activity, Bot, Server } from 'lucide-vue-next'
+import { Activity, Bot, Server } from '@lucide/vue'
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'
 import type { HealthRelatedMonitor } from '@/api/endpoints/types'

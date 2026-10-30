@@ -1,5 +1,5 @@
 import { computed, type Ref } from 'vue'
-import { Layers, Puzzle, Users } from 'lucide-vue-next'
+import { Layers, Puzzle, Users } from '@lucide/vue'
 
 // Section index constants
 export const SECTIONS = {

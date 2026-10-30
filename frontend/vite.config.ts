@@ -58,7 +58,7 @@ export default defineConfig(({ mode }) => {
             // Vue 核心库
             'vue-vendor': ['vue', 'vue-router', 'pinia'],
             // UI 组件库
-            'ui-vendor': ['radix-vue', 'lucide-vue-next'],
+            'ui-vendor': ['radix-vue', '@lucide/vue'],
             // 工具库
             'utils-vendor': ['axios', 'marked', 'dompurify'],
             // 图表库

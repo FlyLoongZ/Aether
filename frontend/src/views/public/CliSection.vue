@@ -118,7 +118,7 @@
 
 <script setup lang="ts">
 import { ref, computed, type CSSProperties, type Component } from 'vue'
-import { Copy } from 'lucide-vue-next'
+import { Copy } from '@lucide/vue'
 import PlatformSelect from '@/components/PlatformSelect.vue'
 import CodeHighlight from '@/components/CodeHighlight.vue'
 import { panelClasses } from './home-config'

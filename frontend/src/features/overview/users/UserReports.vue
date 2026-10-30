@@ -129,7 +129,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ChartOptions } from 'chart.js'
-import { Download } from 'lucide-vue-next'
+import { Download } from '@lucide/vue'
 import { Button } from '@/components/ui'
 import { overviewApi } from '@/api/overview'
 import LineChart from '@/components/charts/LineChart.vue'

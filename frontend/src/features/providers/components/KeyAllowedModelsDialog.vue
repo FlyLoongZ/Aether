@@ -193,7 +193,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Box, Layers, Loader2, RefreshCw, AlertCircle } from 'lucide-vue-next'
+import { Box, Layers, Loader2, RefreshCw, AlertCircle } from '@lucide/vue'
 import { Dialog } from '@/components/ui'
 import Button from '@/components/ui/button.vue'
 import Badge from '@/components/ui/badge.vue'

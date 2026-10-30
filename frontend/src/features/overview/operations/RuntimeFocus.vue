@@ -71,7 +71,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { GitBranch, ListTodo, ShieldCheck } from 'lucide-vue-next'
+import { GitBranch, ListTodo, ShieldCheck } from '@lucide/vue'
 import { Badge, Card } from '@/components/ui'
 import { buildGatewayMetricsSummary } from '@/api/monitoring'
 import type { OverviewLive } from '@/api/overview'

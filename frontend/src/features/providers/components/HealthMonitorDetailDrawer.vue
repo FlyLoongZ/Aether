@@ -112,7 +112,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { AlertTriangle, Loader2 } from 'lucide-vue-next'
+import { AlertTriangle, Loader2 } from '@lucide/vue'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
 import Button from '@/components/ui/button.vue'
 import {

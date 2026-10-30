@@ -164,7 +164,7 @@ import {
   Input,
   Label,
 } from '@/components/ui'
-import { Minus, Plus, RotateCcw } from 'lucide-vue-next'
+import { Minus, Plus, RotateCcw } from '@lucide/vue'
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'

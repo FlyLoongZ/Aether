@@ -79,7 +79,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-vue-next'
+import { CheckCircle2, XCircle, AlertTriangle, Info, X } from '@lucide/vue'
 
 interface Toast {
   id: string

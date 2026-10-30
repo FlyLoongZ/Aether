@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Check, Copy, Maximize2, Minimize2 } from 'lucide-vue-next'
+import { Check, Copy, Maximize2, Minimize2 } from '@lucide/vue'
 import { useClipboard } from '@/composables/useClipboard'
 import JsonContent from './RequestDetailDrawer/JsonContent.vue'
 

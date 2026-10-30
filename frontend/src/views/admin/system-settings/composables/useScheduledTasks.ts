@@ -1,5 +1,5 @@
 import { ref, computed, type Ref } from 'vue'
-import { CalendarCheck, RefreshCw } from 'lucide-vue-next'
+import { CalendarCheck, RefreshCw } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { adminApi } from '@/api/admin'
 import { log } from '@/utils/logger'

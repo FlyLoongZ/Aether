@@ -395,7 +395,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Plus, Send, Trash2 } from 'lucide-vue-next'
+import { Plus, Send, Trash2 } from '@lucide/vue'
 import {
   Badge,
   Button,

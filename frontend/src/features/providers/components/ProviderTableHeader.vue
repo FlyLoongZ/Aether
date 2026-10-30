@@ -126,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { Search, Plus, FilterX, SlidersHorizontal, Users } from 'lucide-vue-next'
+import { Search, Plus, FilterX, SlidersHorizontal, Users } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Input from '@/components/ui/input.vue'
 import Select from '@/components/ui/select.vue'

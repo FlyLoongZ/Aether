@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BookOpen } from 'lucide-vue-next'
+import { BookOpen } from '@lucide/vue'
 </script>
 
 <template>

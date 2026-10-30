@@ -315,7 +315,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { RefreshCw, Trash2 } from 'lucide-vue-next'
+import { RefreshCw, Trash2 } from '@lucide/vue'
 import { adminApi, type CleanupRunRecord } from '@/api/admin'
 import Button from '@/components/ui/button.vue'
 import Input from '@/components/ui/input.vue'

@@ -197,7 +197,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { Check, ChevronDown, Search } from 'lucide-vue-next'
+import { Check, ChevronDown, Search } from '@lucide/vue'
 import { Button, Checkbox, Input } from '@/components/ui'
 import type { GlobalModelResponse } from '@/api/global-models'
 

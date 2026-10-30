@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ClassValue } from 'clsx'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useSlots } from 'vue'
-import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from '@lucide/vue'
 
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/i18n'

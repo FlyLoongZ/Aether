@@ -436,7 +436,7 @@ import {
   FileText,
   Music,
   Upload
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { geminiFilesApi, type FileMappingStatsResponse, type FileMappingResponse, type CapableKeyResponse } from '@/api/gemini-files'
 import { parseApiError } from '@/utils/errorParser'
 import { log } from '@/utils/logger'

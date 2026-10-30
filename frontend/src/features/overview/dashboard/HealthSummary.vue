@@ -71,7 +71,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ArrowUpRight } from 'lucide-vue-next'
+import { ArrowUpRight } from '@lucide/vue'
 import { getAdminHealthSummary } from '@/api/endpoints/health-v2'
 import { useOverviewRequest } from '../useOverviewRequest'
 import { useOverviewI18n } from '../i18n'

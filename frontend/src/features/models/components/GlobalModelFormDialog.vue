@@ -825,7 +825,7 @@ import {
   Loader2, Layers, SquarePen,
   Search, ChevronLeft, ChevronRight, Plus, Trash2, Check,
   BrainCircuit, Eye, Wrench, Braces, Database, PackageOpen, RefreshCw, TriangleAlert
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import {
   Dialog, Button, Input, Label, Checkbox,
   Tabs, TabsContent, TabsList, TabsTrigger,

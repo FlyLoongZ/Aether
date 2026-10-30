@@ -48,7 +48,7 @@ import {
   SelectPortal,
   SelectViewport,
 } from 'radix-vue'
-import { Search } from 'lucide-vue-next'
+import { Search } from '@lucide/vue'
 import {
   computed,
   inject,

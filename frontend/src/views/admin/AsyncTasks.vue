@@ -898,7 +898,7 @@ import {
   Eye,
   ExternalLink,
   Copy,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 import { log } from '@/utils/logger'
 

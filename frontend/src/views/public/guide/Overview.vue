@@ -10,7 +10,7 @@ import {
   Check,
   Copy,
   Zap,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import { panelClasses } from './guide-config'
 
 // 部署步骤数据

@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { GripVertical } from 'lucide-vue-next'
+import { GripVertical } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import { useI18n } from '@/i18n'
 

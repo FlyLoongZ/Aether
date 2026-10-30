@@ -1,5 +1,5 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
-import type { LucideIcon } from 'lucide-vue-next'
+import type { LucideIcon } from '@lucide/vue'
 import {
   Activity,
   BarChart3,
@@ -25,7 +25,7 @@ import {
   Wallet,
   Zap,
   Megaphone,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { NavigationGroup } from '@/components/layout/SidebarNav.vue'
 import type { ModuleStatus } from '@/api/modules'
 import { BUILTIN_TOOL_BREADCRUMBS } from '@/config/builtin-tools'

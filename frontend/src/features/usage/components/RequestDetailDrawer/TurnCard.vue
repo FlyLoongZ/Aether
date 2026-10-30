@@ -79,7 +79,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { User, Bot, ChevronRight, ChevronDown } from 'lucide-vue-next'
+import { User, Bot, ChevronRight, ChevronDown } from '@lucide/vue'
 import BlockRenderer from './BlockRenderer.vue'
 import TurnBadges from './TurnBadges.vue'
 import type { ConversationTurn } from '../../conversation/types'

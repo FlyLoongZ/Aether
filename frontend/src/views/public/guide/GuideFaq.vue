@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive } from 'vue'
-import { HelpCircle, ChevronRight } from 'lucide-vue-next'
+import { HelpCircle, ChevronRight } from '@lucide/vue'
 
 const faqs = reactive([
   {

@@ -199,7 +199,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ArrowDown, ArrowUp, ChevronsDown, ChevronsUp, GripVertical, ListChecks, Search } from 'lucide-vue-next'
+import { ArrowDown, ArrowUp, ChevronsDown, ChevronsUp, GripVertical, ListChecks, Search } from '@lucide/vue'
 
 import {
   Checkbox,

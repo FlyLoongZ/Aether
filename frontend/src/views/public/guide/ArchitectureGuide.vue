@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Network, ArrowRight } from 'lucide-vue-next'
+import { Network, ArrowRight } from '@lucide/vue'
 import { panelClasses } from './guide-config'
 import ArchitectureDiagram from './components/ArchitectureDiagram.vue'
 </script>

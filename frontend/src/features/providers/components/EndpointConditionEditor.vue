@@ -185,7 +185,7 @@
 
 <script setup lang="ts">
 import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui'
-import { ListFilter, Plus, X } from 'lucide-vue-next'
+import { ListFilter, Plus, X } from '@lucide/vue'
 
 import type { BodyRuleConditionOp } from '@/api/endpoints'
 import {

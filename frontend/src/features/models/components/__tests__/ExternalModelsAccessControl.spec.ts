@@ -61,7 +61,7 @@ vi.mock('@/components/ui', async () => {
   }
 })
 
-vi.mock('lucide-vue-next', async () => {
+vi.mock('@lucide/vue', async () => {
   const { defineComponent, h } = await import('vue')
   return {
     Globe: defineComponent({

@@ -334,7 +334,7 @@ import {
   SlidersHorizontal,
   SquareCheckBig,
   Upload,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import {
   Button,
   DropdownMenu,

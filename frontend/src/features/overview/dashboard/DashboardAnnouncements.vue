@@ -84,7 +84,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2 } from '@lucide/vue'
 import { marked } from 'marked'
 import { Card } from '@/components/ui'
 import { openAnnouncementKey } from '@/components/common/announcementContext'

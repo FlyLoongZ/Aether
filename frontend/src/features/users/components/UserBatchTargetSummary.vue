@@ -48,7 +48,7 @@
 
 <script setup lang="ts">
 import { Badge } from '@/components/ui'
-import { UsersRound } from 'lucide-vue-next'
+import { UsersRound } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 import type { UserBatchSelectionItem } from '@/api/users'
 

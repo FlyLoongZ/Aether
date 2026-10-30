@@ -231,7 +231,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Download, Search, ReceiptText, ChartNoAxesCombined } from 'lucide-vue-next'
+import { Download, Search, ReceiptText, ChartNoAxesCombined } from '@lucide/vue'
 import { Button, Input, Pagination, SortableTableHead, Table, TableBody, TableCard, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui'
 import TimeRangePicker from '@/components/common/TimeRangePicker.vue'
 import type { DateRangeParams } from '@/features/usage/types'

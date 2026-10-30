@@ -117,7 +117,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { Check, ChevronDown, Search } from 'lucide-vue-next'
+import { Check, ChevronDown, Search } from '@lucide/vue'
 
 import { Input } from '@/components/ui'
 import { cn } from '@/lib/utils'

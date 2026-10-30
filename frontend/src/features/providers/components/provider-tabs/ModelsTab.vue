@@ -257,7 +257,7 @@
 import { ref, computed, watch } from 'vue'
 import { useSmartPagination } from '@/composables/useSmartPagination'
 import { useModelTest } from '@/composables/useModelTest'
-import { Box, Edit, Layers, Power, Copy, Loader2, Play } from 'lucide-vue-next'
+import { Box, Edit, Layers, Power, Copy, Loader2, Play } from '@lucide/vue'
 import Card from '@/components/ui/card.vue'
 import Button from '@/components/ui/button.vue'
 import { useToast } from '@/composables/useToast'

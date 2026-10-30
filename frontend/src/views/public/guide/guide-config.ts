@@ -7,7 +7,7 @@ import {
   Settings,
   Blocks,
   HelpCircle
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import type { MessageKey } from '@/i18n'
 
 // 导航配置

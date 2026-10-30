@@ -592,7 +592,7 @@ import {
   AlertCircle,
   Power,
   Link
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 import Card from '@/components/ui/card.vue'
 import Badge from '@/components/ui/badge.vue'
 import Button from '@/components/ui/button.vue'

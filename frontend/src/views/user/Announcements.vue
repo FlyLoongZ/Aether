@@ -565,7 +565,7 @@ import SelectContent from '@/components/ui/select-content.vue'
 import SelectItem from '@/components/ui/select-item.vue'
 import { AlertDialog } from '@/components/common'
 import AnnouncementDialog from '@/components/common/AnnouncementDialog.vue'
-import { Bell, AlertCircle, AlertTriangle, Info, Pin, Wrench, Loader2, Plus, SquarePen, Trash2 } from 'lucide-vue-next'
+import { Bell, AlertCircle, AlertTriangle, Info, Pin, Wrench, Loader2, Plus, SquarePen, Trash2 } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { log } from '@/utils/logger'
 

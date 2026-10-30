@@ -181,7 +181,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { AlignLeft, Code2, Plus, Trash2 } from 'lucide-vue-next'
+import { AlignLeft, Code2, Plus, Trash2 } from '@lucide/vue'
 import { Button, Input, Textarea } from '@/components/ui'
 import {
   MAX_ROUTING_FAILOVER_PATTERN_BYTES,

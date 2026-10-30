@@ -150,7 +150,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { ChartOptions } from 'chart.js'
-import { ArrowUpRight } from 'lucide-vue-next'
+import { ArrowUpRight } from '@lucide/vue'
 import { Badge, Card } from '@/components/ui'
 import BarChart from '@/components/charts/BarChart.vue'
 import LineChart from '@/components/charts/LineChart.vue'

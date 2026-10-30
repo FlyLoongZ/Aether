@@ -218,7 +218,7 @@
 
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
-import { Check, Plus, RotateCcw, Save, X } from 'lucide-vue-next'
+import { Check, Plus, RotateCcw, Save, X } from '@lucide/vue'
 import Button from '@/components/ui/button.vue'
 import Input from '@/components/ui/input.vue'
 import {

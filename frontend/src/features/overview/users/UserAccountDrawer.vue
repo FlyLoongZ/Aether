@@ -113,7 +113,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { X } from 'lucide-vue-next'
+import { X } from '@lucide/vue'
 import { Button, Dialog, Pagination, RefreshButton } from '@/components/ui'
 import { adminWalletApi } from '@/api/admin-wallets'
 import { usersApi } from '@/api/users'

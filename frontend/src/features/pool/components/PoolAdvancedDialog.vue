@@ -526,7 +526,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { CircleHelp } from 'lucide-vue-next'
+import { CircleHelp } from '@lucide/vue'
 import { Dialog, Button, Input, Label, Switch, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
 import { parseApiError } from '@/utils/errorParser'

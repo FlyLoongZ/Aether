@@ -182,7 +182,7 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue'
 import { useRoute } from 'vue-router'
-import { Activity, Bot, Gauge, Server, Zap } from 'lucide-vue-next'
+import { Activity, Bot, Gauge, Server, Zap } from '@lucide/vue'
 import Card from '@/components/ui/card.vue'
 import Badge from '@/components/ui/badge.vue'
 import HealthMonitorCard from '@/features/providers/components/HealthMonitorCard.vue'

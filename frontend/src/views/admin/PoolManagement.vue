@@ -1042,7 +1042,7 @@ import {
   SquarePen,
   Trash2,
   CircleHelp,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 import {
   Card,

@@ -5,7 +5,7 @@ import ProviderKeyIdentityBlock from '@/features/providers/components/ProviderKe
 import type { EndpointAPIKey } from '@/api/endpoints'
 import { createI18n } from '@/i18n'
 
-vi.mock('lucide-vue-next', async () => {
+vi.mock('@lucide/vue', async () => {
   const { defineComponent, h } = await import('vue')
   const Icon = defineComponent({
     name: 'IconStub',

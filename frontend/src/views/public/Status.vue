@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowLeft } from 'lucide-vue-next'
+import { ArrowLeft } from '@lucide/vue'
 import HeaderLogo from '@/components/HeaderLogo.vue'
 import { useSiteInfo } from '@/composables/useSiteInfo'
 import HealthMonitorView from '@/features/health-monitor/HealthMonitorView.vue'

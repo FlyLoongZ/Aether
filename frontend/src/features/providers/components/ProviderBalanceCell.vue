@@ -128,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2 } from '@lucide/vue'
 import Badge from '@/components/ui/badge.vue'
 import type { ProviderWithEndpointsSummary } from '@/api/endpoints'
 import { formatBillingType } from '@/utils/format'

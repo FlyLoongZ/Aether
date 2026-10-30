@@ -61,7 +61,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import { ArrowLeft } from 'lucide-vue-next'
+import { ArrowLeft } from '@lucide/vue'
 import { overviewApi, type OverviewRange } from '@/api/overview'
 import OverviewToolbar from '@/features/overview/components/OverviewToolbar.vue'
 import OverviewStatus from '@/features/overview/components/OverviewStatus.vue'

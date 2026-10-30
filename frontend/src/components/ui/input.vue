@@ -61,7 +61,7 @@
 <script setup lang="ts">
 import type { ClassValue } from 'clsx'
 import { computed, useAttrs, ref } from 'vue'
-import { Eye, EyeOff } from 'lucide-vue-next'
+import { Eye, EyeOff } from '@lucide/vue'
 import { cn } from '@/lib/utils'
 
 const props = defineProps<Props>()

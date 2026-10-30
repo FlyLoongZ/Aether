@@ -140,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { PackageCheck } from 'lucide-vue-next'
+import { PackageCheck } from '@lucide/vue'
 import UserPlanList from './UserPlanList.vue'
 import {
   Button,

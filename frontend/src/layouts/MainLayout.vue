@@ -546,7 +546,7 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
-} from 'lucide-vue-next'
+} from '@lucide/vue'
 
 import GithubIcon from '@/components/icons/GithubIcon.vue'
 import { prefetchNavigationTarget } from '@/utils/adminNavigationPrefetch'

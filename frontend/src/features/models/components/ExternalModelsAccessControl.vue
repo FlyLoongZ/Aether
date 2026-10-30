@@ -63,7 +63,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Globe } from 'lucide-vue-next'
+import { Globe } from '@lucide/vue'
 import {
   getExternalModelsAccessConfig,
   updateExternalModelsAccessConfig,

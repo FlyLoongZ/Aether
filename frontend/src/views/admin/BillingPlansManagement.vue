@@ -1151,7 +1151,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { CircleHelp, MoreHorizontal, Plus, Trash2 } from 'lucide-vue-next'
+import { CircleHelp, MoreHorizontal, Plus, Trash2 } from '@lucide/vue'
 import {
   adminBillingPlansApi,
   type BillingDurationUnit,
