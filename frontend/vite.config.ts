@@ -49,29 +49,22 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      // 使用 esbuild 进行压缩（默认）
-      minify: 'esbuild',
-      rollupOptions: {
+      minify: true,
+      rolldownOptions: {
         output: {
-          // 手动分块以优化加载性能
-          manualChunks: {
-            // Vue 核心库
-            'vue-vendor': ['vue', 'vue-router', 'pinia'],
-            // UI 组件库
-            'ui-vendor': ['radix-vue', '@lucide/vue'],
-            // 工具库
-            'utils-vendor': ['axios', 'marked', 'dompurify'],
-            // 图表库
-            'chart-vendor': ['chart.js'],
+          minify: mode === 'production'
+            ? { compress: { dropConsole: true, dropDebugger: true } }
+            : false,
+          manualChunks(id: string) {
+            if (!id.includes('node_modules')) return undefined
+            if (id.includes('chart.js')) return 'chart-vendor'
+            if (id.includes('radix-vue') || id.includes('@lucide/vue')) return 'ui-vendor'
+            if (id.includes('axios') || id.includes('marked') || id.includes('dompurify')) return 'utils-vendor'
+            if (id.includes('/vue/') || id.includes('vue-router') || id.includes('/pinia/')) return 'vue-vendor'
+            return undefined
           },
         },
       },
-      // esbuild 配置用于移除 console
-      target: 'es2015',
-    },
-    esbuild: {
-      // 生产环境移除 console 和 debugger
-      drop: mode === 'production' ? ['console', 'debugger'] : [],
     },
     server: {
       port: 5173,
