@@ -1,6 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@config "../tailwind.config.js";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* Styrene A - 只保留常用字重 */
 @font-face {
@@ -346,52 +349,49 @@
 
   * {
     @apply border-border;
+    font-variant-ligatures: normal;
   }
-}
 
-* {
-  font-variant-ligatures: normal;
-}
+  /* Literary Tech 全局字体默认值，允许 utilities 层覆盖 */
+  /* 标题层级使用衬线体 */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  .literary-heading {
+    font-family: var(--serif);
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
 
-/* Literary Tech 全局字体规则 */
-/* 标题层级使用衬线体 */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-.literary-heading {
-  font-family: var(--serif);
-  font-weight: 500;
-  letter-spacing: -0.015em;
-}
+  /* 大标题特殊处理 */
+  h1 {
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
 
-/* 大标题特殊处理 */
-h1 {
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
+  /* 正文内容使用衬线体 */
+  .literary-body,
+  article p,
+  .prose p {
+    font-family: var(--serif);
+    line-height: 1.7;
+    letter-spacing: 0.005em;
+  }
 
-/* 正文内容使用衬线体 */
-.literary-body,
-article p,
-.prose p {
-  font-family: var(--serif);
-  line-height: 1.7;
-  letter-spacing: 0.005em;
-}
-
-/* UI 元素保持无衬线体 */
-.literary-ui,
-button,
-input,
-select,
-label,
-nav,
-.btn,
-[class*="button"] {
-  font-family: var(--sans-serif);
+  /* UI 元素保持无衬线体 */
+  .literary-ui,
+  button,
+  input,
+  select,
+  label,
+  nav,
+  .btn,
+  [class*="button"] {
+    font-family: var(--sans-serif);
+  }
 }
 
 #app {

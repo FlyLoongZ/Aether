@@ -450,6 +450,7 @@ const mainClasses = computed(() => {
 </script>
 
 <style scoped>
+@reference "../../../style.css";
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 

@@ -382,6 +382,7 @@ const initial = (name: string) => Array.from(name)[0]?.toLocaleUpperCase() || '?
 </script>
 
 <style scoped>
+@reference "../../../style.css";
 .avatar { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold; }
 .copy-button { @apply h-7 w-7 shrink-0 rounded-md p-0 text-muted-foreground; }
 .detail-link { @apply inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline; }
