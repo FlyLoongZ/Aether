@@ -3696,17 +3696,6 @@ function formatQuotaValue(value: number | null | undefined): string {
   return normalized.toFixed(1)
 }
 
-function getQuotaWindowValueText(window: QuotaWindowSnapshot | null | undefined): string | undefined {
-  if (!window || typeof window.limit_value !== 'number' || window.limit_value <= 0) return undefined
-  if (typeof window.remaining_value === 'number') {
-    return `${formatQuotaValue(window.remaining_value)}/${formatQuotaValue(window.limit_value)}`
-  }
-  if (typeof window.used_value === 'number') {
-    return `${formatQuotaValue(Math.max(window.limit_value - window.used_value, 0))}/${formatQuotaValue(window.limit_value)}`
-  }
-  return undefined
-}
-
 function resolvePoolKeyPlanType(key: PoolKeyDetail): string | null {
   const direct = key.oauth_plan_type?.trim()
   if (direct) return direct

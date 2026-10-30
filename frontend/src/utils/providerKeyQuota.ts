@@ -79,33 +79,6 @@ function getQuotaWindow(
   return getQuotaWindows(quota).find(window => normalizeText(window.code)?.toLowerCase() === normalizedCode) ?? null
 }
 
-function finiteNumber(value: unknown): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  if (typeof value === 'string') {
-    const parsed = Number(value.trim())
-    return Number.isFinite(parsed) ? parsed : null
-  }
-  return null
-}
-
-function firstFiniteNumber(...values: unknown[]): number | null {
-  for (const value of values) {
-    const parsed = finiteNumber(value)
-    if (parsed != null) return parsed
-  }
-  return null
-}
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
-}
-
-function positiveNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
-}
-
 function getQuotaWindowsByScope(
   quota: QuotaStatusSnapshot | null | undefined,
   scope: string,

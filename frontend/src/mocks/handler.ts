@@ -825,7 +825,6 @@ function generateMockUsageRecords(count: number = 100) {
     { id: 'demo-user-uuid-0004', username: 'Bob Zhang', email: 'bob@demo.aether.ai' }
   ]
 
-  const apiFormats = ['claude:messages', 'openai:chat', 'openai:responses', 'gemini:generate_content']
   const statusOptions: Array<'completed' | 'failed' | 'streaming'> = ['completed', 'completed', 'completed', 'completed', 'failed', 'streaming']
 
   for (let i = 0; i < count; i++) {
@@ -834,7 +833,7 @@ function generateMockUsageRecords(count: number = 100) {
     const status = statusOptions[Math.floor(Math.random() * statusOptions.length)]
 
     // 根据模型类型选择 API 格式
-    let apiFormat = apiFormats[0]
+    let apiFormat: string
     if (model.provider === 'anthropic') {
       apiFormat = 'claude:messages'
     } else if (model.provider === 'openai') {

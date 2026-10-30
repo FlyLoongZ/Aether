@@ -3001,7 +3001,7 @@ function rulesToBodyRules(rules: EditableBodyRule[]): BodyRule[] | null {
     const condition = editableConditionToApi(rule.condition)
     const common = { ...(rule.enabled ? {} : { enabled: false }), ...(condition ? { condition } : {}) }
     if (rule.action === 'set' && rule.path.trim()) {
-      let value: unknown = rule.value
+      let value: unknown
       try { value = restoreOriginalPlaceholder(JSON.parse(prepareValueForJsonParse(rule.value.trim()))) } catch { value = rule.value }
       result.push({ action: 'set', path: rule.path.trim(), value, ...endpointSecretMarkerPayload('has_value', rule.retainValue, value), ...common })
     } else if (rule.action === 'drop' && rule.path.trim()) {
@@ -3009,11 +3009,11 @@ function rulesToBodyRules(rules: EditableBodyRule[]): BodyRule[] | null {
     } else if (rule.action === 'rename' && rule.from.trim() && rule.to.trim()) {
       result.push({ action: 'rename', from: rule.from.trim(), to: rule.to.trim(), ...common })
     } else if (rule.action === 'append' && rule.path.trim()) {
-      let value: unknown = rule.value
+      let value: unknown
       try { value = restoreOriginalPlaceholder(JSON.parse(prepareValueForJsonParse(rule.value.trim()))) } catch { value = rule.value }
       result.push({ action: 'append', path: rule.path.trim(), value, ...endpointSecretMarkerPayload('has_value', rule.retainValue, value), ...common })
     } else if (rule.action === 'insert' && rule.path.trim()) {
-      let value: unknown = rule.value
+      let value: unknown
       try { value = restoreOriginalPlaceholder(JSON.parse(prepareValueForJsonParse(rule.value.trim()))) } catch { value = rule.value }
       if (!isStrictIntegerString(rule.index)) continue
       const idx = parseInt(rule.index.trim(), 10)

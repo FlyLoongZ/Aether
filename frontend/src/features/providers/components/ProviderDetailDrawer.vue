@@ -837,7 +837,6 @@ import {
   getCodexPrimaryQuotaWindow,
   getCodexQuotaWindowLimitLabel,
 } from '@/utils/codexQuotaWindow'
-import { formatCompactNumber } from '@/utils/format'
 import {
   canEditOAuthCredential,
   canExportOAuthCredential,
@@ -2063,39 +2062,6 @@ function hasXaiQuotaDisplayData(key: EndpointAPIKey): boolean {
   )
 }
 
-function getXaiUsageLabel(key: EndpointAPIKey): string {
-  const display = getXaiQuotaDisplay(key)
-  if (display?.usage_label) return display.usage_label
-  const title = display?.subscription_title
-  return title ? `使用额度 (${title})` : '使用额度'
-}
-
-function getXaiUsedPercent(key: EndpointAPIKey): number {
-  return Math.min(Math.max(100 - getXaiRemainingPercent(key), 0), 100)
-}
-
-function getXaiRemainingPercent(key: EndpointAPIKey): number {
-  const xai = getXaiQuotaDisplay(key)
-  if (xai?.remaining_percentage != null && Number.isFinite(xai.remaining_percentage)) {
-    return Math.min(Math.max(xai.remaining_percentage, 0), 100)
-  }
-  if (xai?.usage_percentage != null && Number.isFinite(xai.usage_percentage)) {
-    return Math.min(Math.max(100 - xai.usage_percentage, 0), 100)
-  }
-  return 0
-}
-
-function getXaiOnDemandUsedPercent(key: EndpointAPIKey): number {
-  const xai = getXaiQuotaDisplay(key)
-  if (!xai?.on_demand_cap || xai.on_demand_cap <= 0) return 0
-  return Math.max(Math.min(((xai.on_demand_used || 0) / xai.on_demand_cap) * 100, 100), 0)
-}
-
-function isKiroBannedKey(key: EndpointAPIKey): boolean {
-  const quota = getQuotaSnapshotForProvider(key, 'kiro')
-  return String(quota?.code || '').trim().toLowerCase() === 'banned'
-}
-
 // 格式化封禁/禁止时间（后端返回秒级时间戳，Kiro/Antigravity 通用）
 function formatBanTimestamp(timestamp: number | null | undefined): string {
   if (!timestamp) return ''
@@ -2126,44 +2092,6 @@ function getAntigravityQuotaUpdatedAt(key: EndpointAPIKey): number | undefined {
   return getQuotaSnapshotUpdatedAt(getQuotaSnapshotForProvider(key, 'antigravity'))
 }
 
-// 格式化 Kiro 更新时间
-const formatKiroUpdatedAt = formatUpdatedAt
-
-// 格式化 Kiro 使用量（带单位）
-function formatKiroUsage(value: number | undefined): string {
-  if (value === undefined || value === null) return '-'
-  const normalized = Number(value)
-  if (!Number.isFinite(normalized)) return '-'
-  if (normalized >= 1000) return formatCompactNumber(normalized, { fractionDigits: 1 })
-  return normalized.toFixed(1)
-}
-
-// 格式化 Kiro 重置时间
-function formatKiroResetTime(timestamp: number | null | undefined): string {
-  if (!timestamp) return ''
-  // timestamp 可能是毫秒或秒，需要判断
-  const ts = timestamp > 1e12 ? timestamp : timestamp * 1000
-  const now = Date.now()
-  const diff = ts - now
-
-  if (diff <= 0) {
-    return legacyT('已重置')
-  }
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-
-  if (days > 0) {
-    return locale.value === 'en-US' ? `${days}d ${hours}h later` : `${days}天${hours}小时后`
-  }
-
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-  if (hours > 0) {
-    return locale.value === 'en-US' ? `${hours}h ${minutes}m later` : `${hours}小时${minutes}分钟后`
-  }
-
-  return locale.value === 'en-US' ? `${minutes}m later` : `${minutes}分钟后`
-}
 
 // 格式化 Kiro 订阅类型显示
 function formatKiroSubscription(title: string | undefined): string {

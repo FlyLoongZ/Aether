@@ -83,7 +83,7 @@ export function canRefreshOAuthCredential(input: ProviderKeyAuthCarrier): boolea
 
 export function shouldShowOAuthRefreshControl(
   input: ProviderKeyAuthCarrier,
-  providerType?: string | null,
+  _providerType?: string | null,
 ): boolean {
   return canRefreshOAuthCredential(input)
 }
@@ -112,7 +112,7 @@ export function getProviderAuthLabel(input: ProviderKeyAuthCarrier): string {
 
 export function getProviderMaskedSecretLabel(
   input: ProviderKeyAuthCarrier,
-  providerType?: string | null,
+  _providerType?: string | null,
 ): string {
   if (input.agent_identity === true) return '[Agent Identity]'
   if (isOAuthManagedCredential(input) && input.oauth_header_auth === true) return '[OAuth Header]'
