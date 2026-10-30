@@ -1,4 +1,20 @@
 <template>
+  <section
+    v-if="isRegistrationEntry && (settingsLoading || settingsError || !allowRegistration)"
+    class="fixed inset-x-4 top-24 z-[60] mx-auto max-w-md rounded-xl border border-border bg-background p-4 text-sm text-foreground shadow-sm"
+    role="status"
+    aria-live="polite"
+  >
+    <p>{{ settingsLoading ? t('auth.settings.loading') : settingsError ? t('auth.settings.error') : t('auth.register.closed') }}</p>
+    <button
+      v-if="settingsError"
+      type="button"
+      class="mt-3 rounded-lg border border-border px-3 py-2"
+      @click="loadSettings"
+    >
+      {{ t('auth.settings.retry') }}
+    </button>
+  </section>
   <Dialog
     v-model="isOpen"
     size="md"
@@ -15,6 +31,28 @@
         <h2 class="text-2xl font-semibold text-foreground">
           {{ t('auth.login.title', { siteName }) }}
         </h2>
+      </div>
+
+      <p
+        v-if="settingsLoading"
+        class="mb-4 text-sm text-muted-foreground"
+        role="status"
+      >
+        {{ t('auth.settings.loading') }}
+      </p>
+      <div
+        v-else-if="settingsError"
+        class="mb-4 text-sm text-destructive"
+        role="alert"
+      >
+        <p>{{ t('auth.settings.error') }}</p>
+        <button
+          type="button"
+          class="mt-2 underline"
+          @click="loadSettings"
+        >
+          {{ t('auth.settings.retry') }}
+        </button>
       </div>
 
       <!-- Demo 模式提示 -->
@@ -201,7 +239,7 @@
         <!-- 登录按钮 -->
         <Button
           type="submit"
-          :disabled="authStore.loading"
+          :disabled="authStore.loading || settingsLoading || !!settingsError"
           class="w-full h-12"
         >
           {{ authStore.loading ? t('auth.login.submitting') : t('auth.login.submit') }}
@@ -284,6 +322,9 @@ const { success: showSuccess, warning: showWarning, error: showError } = useToas
 const { siteName } = useSiteInfo()
 const { t } = useI18n()
 
+const settingsLoading = ref(true)
+const settingsError = ref(false)
+const isRegistrationEntry = computed(() => route.path === '/register' || typeof route.query.invite === 'string')
 const isOpen = ref(props.modelValue)
 const isDemo = computed(() => isDemoMode())
 const showRegisterDialog = ref(false)
@@ -433,8 +474,10 @@ function handleSwitchToLogin() {
   isOpen.value = true
 }
 
-// Load authentication and registration settings on mount
-onMounted(async () => {
+// 配置加载与会话恢复互相独立，失败不会被误认为已关闭注册。
+async function loadSettings() {
+  settingsLoading.value = true
+  settingsError.value = false
   try {
     const [regSettings, authSettings, providers] = await Promise.all([
       authApi.getRegistrationSettings(),
@@ -473,11 +516,8 @@ onMounted(async () => {
     }
 
     oauthProviders.value = providers
-    if (allowRegistration.value && (route.path === '/register' || typeof route.query.invite === 'string')) {
-      isOpen.value = false
-      showRegisterDialog.value = true
-    }
   } catch {
+    settingsError.value = true
     // If获取失败，保持默认：关闭注册 & 关闭邮箱验证 & 使用本地认证
     allowRegistration.value = false
     requireEmailVerification.value = false
@@ -496,8 +536,18 @@ onMounted(async () => {
     ldapExclusive.value = false
     authType.value = 'local'
     oauthProviders.value = []
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+watch([isRegistrationEntry, settingsLoading], ([entry, pending]) => {
+  if (entry && !pending && !settingsError.value && allowRegistration.value) {
+    isOpen.value = false
+    showRegisterDialog.value = true
   }
 })
+onMounted(loadSettings)
 </script>
 
 <style scoped>

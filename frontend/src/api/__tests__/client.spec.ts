@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios'
+import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
 
 import apiClient, {
   AUTH_SESSION_SIGNAL_KEY,
@@ -220,6 +220,27 @@ describe('apiClient auth state change event', () => {
     } finally {
       rawClient.defaults.adapter = previousAdapter
     }
+  })
+
+  it.each([401, 403])('anonymous settings errors (%s) never refresh or clear a valid session', async status => {
+    const rawClient = apiClient['client']
+    const previousAdapter = rawClient.defaults.adapter
+    const requests: InternalAxiosRequestConfig[] = []
+    rawClient.defaults.adapter = (async config => {
+      requests.push(config)
+      throw new AxiosError('settings unavailable', undefined, config, undefined, {
+        data: { detail: 'User account is disabled' }, status, statusText: 'Error', headers: {}, config,
+      })
+    }) as AxiosAdapter
+    try {
+      apiClient.setToken('existing-token')
+      for (const path of ['/api/auth/registration-settings', '/api/auth/settings', '/api/oauth/providers']) {
+        await expect(apiClient.get(path)).rejects.toBeInstanceOf(AxiosError)
+      }
+      expect(requests).toHaveLength(3)
+      expect(requests.every(request => !request.headers.Authorization)).toBe(true)
+      expect(apiClient.getToken()).toBe('existing-token')
+    } finally { rawClient.defaults.adapter = previousAdapter }
   })
 
   it('keeps publication and protected JSON routes authenticated despite public-looking names or query strings', async () => {

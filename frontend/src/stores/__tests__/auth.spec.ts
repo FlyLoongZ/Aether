@@ -334,6 +334,48 @@ describe('auth store logout', () => {
     expect(getCurrentUserMock).not.toHaveBeenCalled()
   })
 
+  it('distinguishes pending identity, network failure, and confirmed anonymous state', async () => {
+    const store = useAuthStore()
+    expect(store.accountState).toBe('checking')
+    await store.restoreSession()
+    expect(store.sessionStatus).toBe('unavailable')
+    expect(store.accountState).toBe('unavailable')
+    restoreSessionMock.mockRejectedValueOnce({ response: { status: 401 } })
+    await store.restoreSession(true)
+    expect(store.sessionStatus).toBe('anonymous')
+    expect(store.accountState).toBe('anonymous')
+  })
+
+  it('does not expose a dashboard action before role restoration completes', async () => {
+    restoreSessionMock.mockImplementation(async () => {
+      getTokenMock.mockReturnValue('restored-token')
+      return 'restored-token'
+    })
+    const store = useAuthStore()
+    await store.restoreSession()
+    expect(store.isAuthenticated).toBe(true)
+    expect(store.accountState).not.toBe('authenticated')
+    getCurrentUserMock.mockResolvedValue({
+      id: 'admin', username: 'admin', role: 'admin', is_active: true, created_at: '',
+    })
+    await store.fetchCurrentUser()
+    expect(store.accountState).toBe('authenticated')
+    expect(store.canAccessAdmin).toBe(true)
+  })
+
+  it('manual retry bypasses current-user failure backoff', async () => {
+    getTokenMock.mockReturnValue('access-token')
+    const store = useAuthStore()
+    getCurrentUserMock.mockRejectedValueOnce(new Error('network unavailable'))
+    await store.fetchCurrentUser()
+    getCurrentUserMock.mockResolvedValueOnce({
+      id: 'user', username: 'user', role: 'user', is_active: true, created_at: '',
+    })
+    await store.retryAuth()
+    expect(getCurrentUserMock).toHaveBeenCalledTimes(2)
+    expect(store.accountState).toBe('authenticated')
+  })
+
   it('separates admin access from admin operations for audit administrators', () => {
     const store = useAuthStore()
 

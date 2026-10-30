@@ -2,6 +2,15 @@ import type { RouteLocationNormalized } from 'vue-router'
 import type { useAuthStore } from '@/stores/auth'
 import { safeInternalNavigationPath } from '@/utils/navigationSecurity'
 
+export function canStayOnHome(
+  to: RouteLocationNormalized,
+  from: RouteLocationNormalized,
+): boolean {
+  return to.path === '/' && (!!to.query.returnTo ||
+    from.path.startsWith('/dashboard') || from.path.startsWith('/admin') ||
+    from.path.startsWith('/guide') || from.path === '/')
+}
+
 /**
  * 处理已认证用户访问首页时的重定向。
  * @returns 重定向路径，null 表示不需要重定向，空字符串表示放行（不跳转）
@@ -20,9 +29,7 @@ export function resolveHomeRedirect(
   }
 
   // 已登录用户如果是从dashboard返回首页、刷新首页、或者有returnTo参数,允许访问首页
-  const isFromApp =
-    from.path.startsWith('/dashboard') || from.path.startsWith('/admin') || from.path.startsWith('/guide') || from.path === '/'
-  if (to.query.returnTo || isFromApp) {
+  if (canStayOnHome(to, from)) {
     return ''
   }
 
