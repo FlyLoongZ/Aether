@@ -97,17 +97,17 @@
     </TableCell>
     <TableCell class="py-3.5 text-center">
       <div class="inline-grid grid-cols-[1.75rem_1.75rem_1.75rem] gap-x-0.5 gap-y-0.5 text-xs text-left">
-        <span class="text-muted-foreground/70">{{ legacyT('端点:') }}</span>
-        <span class="font-medium text-foreground/90 tabular-nums text-right">{{ provider.active_endpoints }}</span>
-        <span class="text-muted-foreground/50 tabular-nums">/{{ provider.total_endpoints }}</span>
+        <span>{{ legacyT('端点:') }}</span>
+        <span class="font-medium tabular-nums text-right">{{ provider.active_endpoints }}</span>
+        <span class="tabular-nums">/{{ provider.total_endpoints }}</span>
 
-        <span class="text-muted-foreground/70">{{ `${getCredentialLabel(provider)}:` }}</span>
-        <span class="font-medium text-foreground/90 tabular-nums text-right">{{ provider.active_keys }}</span>
-        <span class="text-muted-foreground/50 tabular-nums">/{{ provider.total_keys }}</span>
+        <span>{{ `${getCredentialLabel(provider)}:` }}</span>
+        <span class="font-medium tabular-nums text-right">{{ provider.active_keys }}</span>
+        <span class="tabular-nums">/{{ provider.total_keys }}</span>
 
-        <span class="text-muted-foreground/70">{{ legacyT('模型:') }}</span>
-        <span class="font-medium text-foreground/90 tabular-nums text-right">{{ provider.active_models }}</span>
-        <span class="text-muted-foreground/50 tabular-nums">/{{ provider.total_models }}</span>
+        <span>{{ legacyT('模型:') }}</span>
+        <span class="font-medium tabular-nums text-right">{{ provider.active_models }}</span>
+        <span class="tabular-nums">/{{ provider.total_models }}</span>
       </div>
     </TableCell>
     <TableCell class="py-3.5 align-middle">
@@ -123,10 +123,10 @@
         >
           <!-- 上排：缩写 + 百分比 -->
           <div class="flex items-center justify-between text-[10px] leading-none">
-            <span class="font-medium text-muted-foreground/80">
+            <span class="font-medium">
               {{ formatApiFormatShort(endpoint.api_format) }}
             </span>
-            <span class="font-medium text-muted-foreground/80">
+            <span class="font-medium">
               {{ getEndpointHealthLabel(endpoint) }}
             </span>
           </div>
@@ -143,7 +143,7 @@
       </div>
       <span
         v-else
-        class="text-xs text-muted-foreground/50"
+        class="text-xs text-muted-foreground/90"
       >{{ legacyT('暂无端点') }}</span>
     </TableCell>
     <TableCell class="py-3.5 text-center">
@@ -166,7 +166,7 @@
         <Button
           variant="ghost"
           size="icon"
-          class="h-7 w-7 text-muted-foreground/70 hover:text-foreground"
+          class="h-7 w-7 hover:text-foreground"
           :title="legacyT('查看详情')"
           @click="$emit('viewDetail', provider.id)"
         >
@@ -175,7 +175,7 @@
         <Button
           variant="ghost"
           size="icon"
-          class="h-7 w-7 text-muted-foreground/70 hover:text-foreground"
+          class="h-7 w-7 hover:text-foreground"
           :title="legacyT('编辑提供商')"
           @click="$emit('editProvider', provider)"
         >
@@ -184,7 +184,7 @@
         <Button
           variant="ghost"
           size="icon"
-          class="h-7 w-7 text-muted-foreground/70 hover:text-foreground"
+          class="h-7 w-7 hover:text-foreground"
           :title="legacyT('扩展操作配置')"
           @click="$emit('openOpsConfig', provider)"
         >
@@ -193,7 +193,7 @@
         <Button
           variant="ghost"
           size="icon"
-          class="h-7 w-7 text-muted-foreground/70 hover:text-foreground"
+          class="h-7 w-7 hover:text-foreground"
           :title="legacyT(provider.is_active ? '全局停用提供商' : '全局启用提供商')"
           @click="$emit('toggleStatus', provider)"
         >
@@ -202,7 +202,7 @@
         <Button
           variant="ghost"
           size="icon"
-          class="h-7 w-7 text-muted-foreground/70 hover:text-destructive"
+          class="h-7 w-7 hover:text-destructive"
           :title="legacyT('删除提供商')"
           @click="$emit('deleteProvider', provider)"
         >
