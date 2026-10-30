@@ -22,7 +22,6 @@
     "@vueuse/core": "^15.0.0",
     "axios": "^1.21.0",
     "chart.js": "^4.6.1",
-    "chartjs-adapter-date-fns": "^3.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

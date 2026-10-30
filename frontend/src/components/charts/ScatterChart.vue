@@ -3,7 +3,8 @@
     <canvas ref="chartRef" />
     <div
       v-if="crosshairStats"
-      class="absolute top-2 right-2 max-w-[calc(100%-1rem)] break-words bg-gray-800/90 text-gray-100 px-3 py-2 rounded-lg text-sm shadow-lg border border-gray-600"
+      class="absolute top-2 max-w-[calc(100%-1rem)] break-words rounded-lg border border-gray-600 bg-gray-800/90 px-3 py-2 text-sm text-gray-100 shadow-lg transition-[left,right] duration-150"
+      :class="cardSide === 'left' ? 'left-12' : 'right-2'"
     >
       <div class="font-medium text-yellow-400">
         {{ t('chart.crosshairValue', { value: crosshairStats.yValue.toFixed(1) }) }}
@@ -62,7 +63,7 @@ import {
   type Plugin,
   type Scale
 } from 'chart.js'
-import 'chartjs-adapter-date-fns'
+import './dateFnsAdapter'
 import { enUS, zhCN } from 'date-fns/locale'
 
 const props = withDefaults(defineProps<Props>(), {
@@ -120,6 +121,7 @@ const { locale, t } = useI18n()
 let chart: ChartJS<'scatter', TimeScatterPoint[]> | null = null
 
 const crosshairY = ref<number | null>(null)
+const cardSide = ref<'left' | 'right'>('right')
 const gapInfoList = ref<GapInfo[]>([])
 
 interface PreparedRenderData {
@@ -174,34 +176,16 @@ const crosshairStats = computed<CrosshairStats | null>(() => {
   }
 })
 
-// 自定义非线性 Y 轴转换函数
-// 0-10 分钟占据 70% 的空间，10-120 分钟占据 30% 的空间
-const BREAKPOINT = 10  // 分界点：10 分钟
-const LOWER_RATIO = 0.7  // 0-10 分钟占 70% 空间
+const MAX_INTERVAL_MINUTES = 120
+const TARGET_TICKS = [0, 1, 2, 5, 10, 30, 60, 120]
 
-// 将实际值转换为显示值（用于绘图）
 function toDisplayValue(realValue: number): number {
-  if (realValue <= BREAKPOINT) {
-    // 0-10 分钟线性映射到 0-70
-    return realValue * (LOWER_RATIO * 100 / BREAKPOINT)
-  } else {
-    // 10-120 分钟映射到 70-100
-    const upperRange = 120 - BREAKPOINT
-    const displayUpperRange = (1 - LOWER_RATIO) * 100
-    return LOWER_RATIO * 100 + ((realValue - BREAKPOINT) / upperRange) * displayUpperRange
-  }
+  const clamped = Math.min(Math.max(realValue, 0), MAX_INTERVAL_MINUTES)
+  return Math.log1p(clamped)
 }
 
-// 将显示值转换回实际值（用于读取鼠标位置）
 function toRealValue(displayValue: number): number {
-  const breakpointDisplay = LOWER_RATIO * 100
-  if (displayValue <= breakpointDisplay) {
-    return displayValue / (LOWER_RATIO * 100 / BREAKPOINT)
-  } else {
-    const upperRange = 120 - BREAKPOINT
-    const displayUpperRange = (1 - LOWER_RATIO) * 100
-    return BREAKPOINT + ((displayValue - breakpointDisplay) / displayUpperRange) * upperRange
-  }
+  return Math.expm1(displayValue)
 }
 
 // 压缩时间间隙的数据转换
@@ -294,7 +278,7 @@ function transformData(data: TimeScatterChartData): TimeScatterChartData {
       ...dataset,
       data: (dataset.data).map(point => ({
         ...point,
-        y: toDisplayValue(Math.min(point.y, 120)),
+        y: toDisplayValue(point.y),
         _originalY: point._originalY ?? point.y  // 保存原始值用于 tooltip
       }))
     }))
@@ -360,27 +344,18 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
     y: {
       type: 'linear',
       min: 0,
-      max: 100,  // 显示值范围 0-100
+      max: toDisplayValue(MAX_INTERVAL_MINUTES),
       grid: {
         color: 'rgba(156, 163, 175, 0.1)'
       },
       ticks: {
         color: 'rgb(107, 114, 128)',
-        // 自定义刻度值：在实际值 0, 2, 5, 10, 30, 60, 120 处显示
-        callback(this: Scale, tickValue: string | number) {
-          const displayVal = Number(tickValue)
-          // 只在特定的显示位置显示刻度
-          const targetTicks = [0, 2, 5, 10, 30, 60, 120]
-          for (const target of targetTicks) {
-            const targetDisplay = toDisplayValue(target)
-            if (Math.abs(displayVal - targetDisplay) < 1) {
-              return `${target}`
-            }
-          }
-          return ''
-        },
-        stepSize: 5,  // 显示值的步长
-        autoSkip: false
+        autoSkip: false,
+        callback(this: Scale, value: string | number) {
+          const display = Number(value)
+          const match = TARGET_TICKS.find(target => Math.abs(toDisplayValue(target) - display) < 1e-6)
+          return match === undefined ? '' : `${match}`
+        }
       },
       title: {
         display: true,
@@ -388,12 +363,7 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
         color: 'rgb(107, 114, 128)'
       },
       afterBuildTicks(scale: Scale) {
-        // 在特定实际值处设置刻度
-        const targetTicks = [0, 2, 5, 10, 30, 60, 120]
-        scale.ticks = targetTicks.map(val => ({
-          value: toDisplayValue(val),
-          label: `${val}`
-        }))
+        scale.ticks = TARGET_TICKS.map(val => ({ value: toDisplayValue(val) }))
       }
     }
   },
@@ -433,10 +403,12 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
     if (!canvas) return
 
     const rect = canvas.getBoundingClientRect()
+    const mouseX = (event.native as MouseEvent)?.clientX
     const mouseY = (event.native as MouseEvent)?.clientY
 
     if (mouseY === undefined) {
       crosshairY.value = null
+      cardSide.value = 'right'
       return
     }
 
@@ -449,10 +421,20 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
 
     if (relativeY < chartArea.top || relativeY > chartArea.bottom) {
       crosshairY.value = null
+      cardSide.value = 'right'
     } else {
       const displayValue = yScale.getValueForPixel(relativeY)
-      // 转换回实际值
       crosshairY.value = displayValue !== undefined ? toRealValue(displayValue) : null
+
+      if (mouseX !== undefined) {
+        const relativeX = mouseX - rect.left
+        const ratio = (relativeX - chartArea.left) / Math.max(chartArea.right - chartArea.left, 1)
+        if (cardSide.value === 'right' && ratio > 0.62) {
+          cardSide.value = 'left'
+        } else if (cardSide.value === 'left' && ratio < 0.5) {
+          cardSide.value = 'right'
+        }
+      }
     }
 
     chartInstance.draw()

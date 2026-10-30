@@ -23,8 +23,8 @@ function resolveText(selectedLabel: string[] | undefined): string {
 
 <template>
   <SelectValuePrimitive
-    :placeholder="placeholder"
     v-slot="slotProps"
+    :placeholder="placeholder"
   >
     <slot
       v-if="$slots.default"
