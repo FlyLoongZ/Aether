@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TooltipTrigger as TooltipTriggerPrimitive } from 'radix-vue'
+import { TooltipTrigger as TooltipTriggerPrimitive } from 'reka-ui'
 
 interface Props {
   asChild?: boolean

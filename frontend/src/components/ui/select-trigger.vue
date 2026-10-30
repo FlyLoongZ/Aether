@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ClassValue } from 'clsx'
-import { SelectTrigger as SelectTriggerPrimitive } from 'radix-vue'
+import { SelectTrigger as SelectTriggerPrimitive } from 'reka-ui'
 import { ChevronDown } from '@lucide/vue'
 import { cn } from '@/lib/utils'
 import { computed } from 'vue'

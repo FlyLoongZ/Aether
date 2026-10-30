@@ -59,7 +59,7 @@ export default defineConfig(({ mode }) => {
           manualChunks(id: string) {
             if (!id.includes('node_modules')) return undefined
             if (id.includes('chart.js')) return 'chart-vendor'
-            if (id.includes('radix-vue') || id.includes('@lucide/vue')) return 'ui-vendor'
+            if (id.includes('reka-ui') || id.includes('@lucide/vue')) return 'ui-vendor'
             if (id.includes('axios') || id.includes('marked') || id.includes('dompurify')) return 'utils-vendor'
             if (id.includes('/vue/') || id.includes('vue-router') || id.includes('/pinia/')) return 'vue-vendor'
             return undefined

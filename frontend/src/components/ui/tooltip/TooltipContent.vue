@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { TooltipContent as TooltipContentPrimitive, TooltipPortal } from 'radix-vue'
+import { TooltipContent as TooltipContentPrimitive, TooltipPortal } from 'reka-ui'
 import { cn } from '@/lib/utils'
 
 interface Props {

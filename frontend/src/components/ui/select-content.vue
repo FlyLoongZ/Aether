@@ -47,7 +47,7 @@ import {
   SelectContent as SelectContentPrimitive,
   SelectPortal,
   SelectViewport,
-} from 'radix-vue'
+} from 'reka-ui'
 import { Search } from '@lucide/vue'
 import {
   computed,
@@ -180,14 +180,14 @@ watch(showSearchInput, async (visible) => {
 
 const contentClass = computed(() =>
   cn(
-    'z-[200] max-h-96 min-w-[var(--radix-select-trigger-width,8rem)] max-w-[min(calc(100vw-1rem),var(--radix-select-content-available-width,100vw))] overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl backdrop-blur-xl pointer-events-auto',
+    'z-[200] max-h-96 min-w-[var(--reka-select-trigger-width,8rem)] max-w-[min(calc(100vw-1rem),var(--reka-select-content-available-width,100vw))] overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl backdrop-blur-xl pointer-events-auto',
     'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
     'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
     props.class,
   ),
 )
 
-const viewportClass = 'p-1 max-h-[var(--radix-select-content-available-height)]'
+const viewportClass = 'p-1 max-h-[var(--reka-select-content-available-height)]'
 
 onUnmounted(() => {
   searchQuery.value = ''

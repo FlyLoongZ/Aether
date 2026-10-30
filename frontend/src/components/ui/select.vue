@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { SelectRoot as SelectRootPrimitive } from 'radix-vue'
+import { computed, provide, reactive } from 'vue'
+import { SelectRoot as SelectRootPrimitive } from 'reka-ui'
+import { SELECT_LABEL_CONTEXT_KEY } from './select-label-context'
 
 interface Props {
   defaultValue?: string
@@ -28,12 +29,18 @@ const emit = defineEmits<{
   'update:open': [value: boolean]
 }>()
 
-// open 未传入时不绑定，让 radix-vue 走 uncontrolled 模式
+const labels = reactive(new Map<string, string>())
+
+provide(SELECT_LABEL_CONTEXT_KEY, {
+  modelValue: computed(() => props.modelValue ?? null),
+  labels,
+})
+
 const openProp = computed(() =>
   props.open !== undefined ? { open: props.open } : {}
 )
 
-// modelValue 未传入时不绑定，让 radix-vue 走 uncontrolled 模式
+
 const modelValueProp = computed(() =>
   props.modelValue !== undefined ? { modelValue: props.modelValue ?? '' } : {}
 )
