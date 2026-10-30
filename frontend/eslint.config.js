@@ -139,6 +139,7 @@ export default [
         UIEvent: 'readonly',
         ProgressEvent: 'readonly',
         ErrorEvent: 'readonly',
+        PromiseRejectionEvent: 'readonly',
         StorageEvent: 'readonly',
         PopStateEvent: 'readonly',
         HashChangeEvent: 'readonly',

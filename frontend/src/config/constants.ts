@@ -13,12 +13,10 @@ export const APP_CONFIG = {
 export const NETWORK_CONFIG = {
   API_TIMEOUT: 30000, // 30秒
   REQUEST_RETRY_LIMIT: 3, // 最大重试次数
-  MODULE_LOAD_RETRY_LIMIT: 2, // 模块加载失败重试次数
 } as const
 
 // 认证配置
 export const AUTH_CONFIG = {
-  TOKEN_REFRESH_INTERVAL: 100, // 延迟检查认证状态(ms)
   MAX_RETRY_COUNT: 3, // token刷新最大重试次数
 } as const
 

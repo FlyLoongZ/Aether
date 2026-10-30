@@ -5,6 +5,7 @@
         {{ t('site.auth.processing') }}
       </h1>
       <p
+        v-if="!failure"
         class="text-sm text-muted-foreground"
         role="status"
         aria-live="polite"
@@ -117,6 +118,7 @@ async function processCallback() {
     await router.replace(consumeRedirectPath() || (authStore.canAccessAdmin ? '/admin/dashboard' : '/dashboard'))
   } catch (error) {
     if (active) failure.value = error instanceof Error ? error.message : t('site.auth.failed')
+    if (active) hint.value = t('site.auth.waiting')
   } finally {
     processing = false
   }

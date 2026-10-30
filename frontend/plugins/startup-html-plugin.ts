@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { build, type Plugin } from 'vite'
 
@@ -25,6 +26,14 @@ export async function compileThemeBootstrap(): Promise<string> {
   return script.code.replace(/<\/script/gi, '<\\/script')
 }
 
+export function startupCspSources(html: string) {
+  const script = html.match(/<script id="aether-theme-bootstrap">([\s\S]*?)<\/script>/)?.[1]
+  const style = html.match(/<style id="aether-startup-style">([\s\S]*?)<\/style>/)?.[1]
+  if (!script || !style) throw new Error('HTML 缺少首屏初始化资源')
+  const hash = (value: string) => `'sha256-${createHash('sha256').update(value).digest('base64')}'`
+  return { scriptSrc: [hash(script)], styleSrc: [hash(style)] }
+}
+
 export function startupHtmlPlugin(): Plugin {
   let script: Promise<string> | undefined
   return {
@@ -39,6 +48,18 @@ export function startupHtmlPlugin(): Plugin {
         return html
           .replace('<!-- aether:startup-head -->', `<script id="aether-theme-bootstrap">${code}</script>\n<style id="aether-startup-style">${css}</style>`)
           .replace('<!-- aether:startup-placeholder -->', placeholder)
+      },
+    },
+    generateBundle: {
+      order: 'post',
+      handler(_options, bundle) {
+        const html = bundle['index.html']
+        if (html?.type !== 'asset') throw new Error('构建缺少 index.html')
+        this.emitFile({
+          type: 'asset',
+          fileName: 'startup-csp.json',
+          source: JSON.stringify(startupCspSources(String(html.source)), null, 2),
+        })
       },
     },
     configureServer(server) {

@@ -6,6 +6,10 @@ import { legacyGuideEnglishMessages } from './legacy-guide-messages'
 export const messages = {
   'zh-CN': {
     'common.loading': '加载中...',
+    'startup.loading': '正在加载…',
+    'startup.slow': '加载时间较长，你可以继续等待或重新加载。',
+    'startup.failed': '页面暂时无法加载，请检查网络后重试。',
+    'startup.retry': '重新加载',
     'poolQuota.claudeCode.window5h': '5H',
     'poolQuota.claudeCode.weekly': '周',
     'poolQuota.claudeCode.weeklySonnet': '周 Sonnet',
@@ -472,6 +476,10 @@ export const messages = {
   },
   'en-US': {
     'common.loading': 'Loading...',
+    'startup.loading': 'Loading…',
+    'startup.slow': 'Loading is taking longer than expected. You can wait or reload.',
+    'startup.failed': 'The page could not be loaded. Check your connection and retry.',
+    'startup.retry': 'Reload',
     'poolQuota.claudeCode.window5h': '5H',
     'poolQuota.claudeCode.weekly': 'Weekly',
     'poolQuota.claudeCode.weeklySonnet': 'Weekly Sonnet',
