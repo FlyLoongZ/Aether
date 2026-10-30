@@ -105,6 +105,28 @@ describe('CrossTabRefreshCoordinator', () => {
     channelRegistry.clear()
   })
 
+  it('releases the refresh lock when a page is hidden or unloaded mid-request', async () => {
+    const pending = createDeferred<string>()
+    const firstExecutor = vi.fn(() => pending.promise)
+    const secondExecutor = vi.fn(async () => 'recovered-token')
+    const first = new CrossTabRefreshCoordinator({ storage: localStorage, channelFactory: createChannel })
+    const second = new CrossTabRefreshCoordinator({ storage: localStorage, channelFactory: createChannel })
+
+    const firstRun = first.run(firstExecutor)
+    await vi.waitFor(() => expect(firstExecutor).toHaveBeenCalledTimes(1))
+    expect(localStorage.getItem('aether_auth_refresh_lock')).not.toBeNull()
+
+    window.dispatchEvent(new PageTransitionEvent('pagehide'))
+    await expect(second.run(secondExecutor)).resolves.toBe('recovered-token')
+    expect(secondExecutor).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('aether_auth_refresh_lock')).toBeNull()
+
+    pending.resolve('late-token')
+    await expect(firstRun).resolves.toBe('late-token')
+    first.destroy()
+    second.destroy()
+  })
+
   it('serializes refresh requests without transferring access tokens between tabs', async () => {
     let resolveRefresh!: (token: string) => void
     const firstExecutor = vi.fn(
@@ -227,6 +249,21 @@ describe('CrossTabRefreshCoordinator', () => {
     expect(outcome).toBe(refreshError)
     expect(executor).toHaveBeenCalledTimes(1)
 
+    coordinator.destroy()
+  })
+
+  it('bounds retryable refresh failures so startup can offer a retry', async () => {
+    const coordinator = new CrossTabRefreshCoordinator({
+      storage: localStorage,
+      channelFactory: createChannel,
+      waitTimeoutMs: 500,
+      failureGraceMs: 20,
+    })
+    const executor = vi.fn(() => Promise.reject(createHttpError(503, 'upstream unavailable')))
+    const started = Date.now()
+    await expect(coordinator.run(executor)).rejects.toThrow('upstream unavailable')
+    expect(Date.now() - started).toBeLessThan(250)
+    expect(executor).toHaveBeenCalledTimes(1)
     coordinator.destroy()
   })
 

@@ -4,6 +4,7 @@ const REFRESH_LOCK_KEY = 'aether_auth_refresh_lock'
 const REFRESH_RESULT_KEY = 'aether_auth_refresh_result'
 const REFRESH_CHANNEL_NAME = 'aether-auth-refresh'
 const DEFAULT_WAIT_TIMEOUT_MS = NETWORK_CONFIG.API_TIMEOUT + 5000
+const DEFAULT_FAILURE_GRACE_MS = 4000
 const MAX_RETRIES = 2
 
 type RefreshStatus = 'success' | 'failure'
@@ -48,6 +49,7 @@ export type BroadcastChannelLike = {
 type CoordinatorOptions = {
   storage?: Storage | null
   waitTimeoutMs?: number
+  failureGraceMs?: number
   channelFactory?: (name: string) => BroadcastChannelLike | null
 }
 
@@ -99,12 +101,21 @@ function isDefinitiveRefreshRejection(error: unknown): boolean {
 export class CrossTabRefreshCoordinator {
   private readonly storage: Storage | null
   private readonly waitTimeoutMs: number
+  private readonly failureGraceMs: number
   private readonly tabId = createId()
   private readonly channel: BroadcastChannelLike | null
   private readonly waiters = new Map<string, Waiter>()
   private readonly earlyResults = new Map<string, RefreshResult>()
   private readonly recentSuccesses = new Map<string, number>()
   private readonly successObservers = new Set<() => void>()
+  private activeLock: RefreshLock | null = null
+
+  // 页面被关闭或整页导航时 finally 可能不再执行；同步释放锁，避免新页面等满 TTL。
+  private readonly onPageHide = (): void => {
+    const lock = this.activeLock
+    this.activeLock = null
+    if (lock) this.releaseLock(lock)
+  }
 
   private readonly onStorage = (event: StorageEvent): void => {
     if (event.key !== REFRESH_RESULT_KEY || !event.newValue) {
@@ -127,10 +138,13 @@ export class CrossTabRefreshCoordinator {
   constructor(options: CoordinatorOptions = {}) {
     this.storage = options.storage ?? (typeof window !== 'undefined' ? window.localStorage : null)
     this.waitTimeoutMs = options.waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS
+    // 网络错误/5xx 只需短暂等待并发成功；长时间“恢复中”比明确重试更糟。
+    this.failureGraceMs = Math.min(options.failureGraceMs ?? DEFAULT_FAILURE_GRACE_MS, this.waitTimeoutMs)
     this.channel = (options.channelFactory ?? defaultChannelFactory)(REFRESH_CHANNEL_NAME)
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', this.onStorage)
+      window.addEventListener('pagehide', this.onPageHide)
     }
     this.channel?.addEventListener('message', this.onBroadcastMessage)
   }
@@ -138,7 +152,9 @@ export class CrossTabRefreshCoordinator {
   destroy(): void {
     if (typeof window !== 'undefined') {
       window.removeEventListener('storage', this.onStorage)
+      window.removeEventListener('pagehide', this.onPageHide)
     }
+    this.activeLock = null
     this.channel?.removeEventListener('message', this.onBroadcastMessage)
     this.channel?.close?.()
     for (const waiter of this.waiters.values()) {
@@ -165,6 +181,7 @@ export class CrossTabRefreshCoordinator {
       return executor()
     }
 
+    this.activeLock = lock
     const attemptStartedAt = Date.now()
     try {
       const accessToken = await executor()
@@ -220,6 +237,7 @@ export class CrossTabRefreshCoordinator {
         throw error
       })
     } finally {
+      if (this.activeLock?.requestId === lock.requestId) this.activeLock = null
       this.releaseLock(lock)
     }
   }
@@ -319,7 +337,7 @@ export class CrossTabRefreshCoordinator {
       this.successObservers.add(onSuccess)
       // A competing request can legitimately run until the HTTP client timeout.
       // The coordinator timeout includes that budget for retryable failures.
-      const timeoutId = setTimeout(() => finish(hasSuccess()), this.waitTimeoutMs)
+      const timeoutId = setTimeout(() => finish(hasSuccess()), this.failureGraceMs)
       // A result may have arrived between the initial check and observer
       // registration, so check once more synchronously.
       onSuccess()
