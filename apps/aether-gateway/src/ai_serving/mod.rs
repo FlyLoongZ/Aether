@@ -144,10 +144,6 @@ pub(crate) fn decoded_request_body_bytes<'a>(
     crate::headers::decoded_request_body_bytes(headers, body_bytes)
 }
 
-pub(crate) fn tls_fingerprint_from_headers(headers: &http::HeaderMap) -> Option<serde_json::Value> {
-    crate::headers::tls_fingerprint_from_headers(headers)
-}
-
 pub(crate) fn build_execution_runtime_auth_context(
     auth_context: &crate::control::GatewayControlAuthContext,
 ) -> ExecutionRuntimeAuthContext {

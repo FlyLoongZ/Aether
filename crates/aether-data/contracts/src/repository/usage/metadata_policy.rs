@@ -1577,7 +1577,6 @@ mod tests {
                 "session_key": "tenant/session-secret"
             },
             "proxy": {"url": "https://user:pass@proxy.example"},
-            "tls_fingerprint": {"ja3": "fingerprint"},
             "stage_timings_ms": {"secret_operation": 12},
             "db_timings_ms": {"query": "SELECT credential"},
             "scheduling_audit": {"key_id": "secret-key"},
@@ -1610,7 +1609,6 @@ mod tests {
             "user_agent",
             "client_session_affinity",
             "proxy",
-            "tls_fingerprint",
             "stage_timings_ms",
             "db_timings_ms",
             "scheduling_audit",
