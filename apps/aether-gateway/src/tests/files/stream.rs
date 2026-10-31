@@ -9,7 +9,7 @@ use super::{
     InMemoryMinimalCandidateSelectionReadRepository, InMemoryProviderCatalogReadRepository,
     InMemoryRequestCandidateRepository, Infallible, Json, Mutex, Request,
     RequestCandidateReadRepository, RequestCandidateStatus, Response, Router, StatusCode,
-    CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER,
+    TRACE_ID_HEADER,
 };
 use crate::tests::DEV_FERNET_KEY;
 
@@ -344,7 +344,6 @@ async fn gateway_locally_denies_gemini_files_upload_control_sync_with_opt_in_hea
         .post(format!(
             "{gateway_url}/upload/v1beta/files?uploadType=resumable"
         ))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .header(http::header::CONTENT_TYPE, "application/octet-stream")
         .body("upload-body-bytes")
         .send()
@@ -386,11 +385,10 @@ async fn gateway_locally_denies_gemini_files_upload_control_sync_without_opt_in_
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::CREATED)
                         .body(Body::from("{\"uploaded\":true}"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )

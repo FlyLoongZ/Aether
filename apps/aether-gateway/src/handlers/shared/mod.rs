@@ -112,8 +112,7 @@ pub(crate) use self::provider_ops_credential::{
 pub(crate) use self::request_utils::{
     json_string_list, local_proxy_route_requires_buffered_body,
     mark_external_models_official_providers, query_param_bool, query_param_optional_bool,
-    query_param_value, request_enables_control_execute, security_log_url_origin,
-    unix_ms_to_rfc3339, unix_secs_to_rfc3339,
+    query_param_value, security_log_url_origin, unix_ms_to_rfc3339, unix_secs_to_rfc3339,
 };
 
 pub(crate) use self::runtime_secret::{

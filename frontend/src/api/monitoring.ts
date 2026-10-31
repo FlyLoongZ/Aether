@@ -417,8 +417,6 @@ export interface GatewayStageLatencyMetrics {
 const FALLBACK_METRICS: Array<{ name: string; label: string }> = [
   { name: 'decision_remote_total', label: '远端决策回退' },
   { name: 'plan_fallback_total', label: 'Plan 回退' },
-  { name: 'control_execute_fallback_total', label: '控制执行回退' },
-  { name: 'remote_execute_emergency_total', label: '紧急远端执行' },
   { name: 'local_execution_runtime_miss_total', label: '本地运行时缺失' },
 ]
 

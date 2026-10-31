@@ -1,8 +1,6 @@
-use crate::constants::CONTROL_EXECUTE_FALLBACK_HEADER;
 #[cfg(test)]
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
-use crate::headers::header_value_str;
 use axum::http::{self};
 use chrono::{SecondsFormat, Utc};
 use url::form_urlencoded;
@@ -143,15 +141,6 @@ pub(crate) fn query_param_value(query: Option<&str>, key: &str) -> Option<String
         }
     }
     None
-}
-
-pub(crate) fn request_enables_control_execute(headers: &http::HeaderMap) -> bool {
-    header_value_str(headers, CONTROL_EXECUTE_FALLBACK_HEADER).is_some_and(|value| {
-        matches!(
-            value.to_ascii_lowercase().as_str(),
-            "1" | "true" | "yes" | "on"
-        )
-    })
 }
 
 pub(crate) fn unix_secs_to_rfc3339(unix_secs: u64) -> Option<String> {

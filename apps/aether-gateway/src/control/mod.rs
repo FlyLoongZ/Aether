@@ -1,5 +1,4 @@
 mod auth;
-mod execute;
 mod management_token_permissions;
 mod public;
 mod route;
@@ -12,7 +11,6 @@ pub(crate) use auth::{
     GatewayAdminPrincipalContext, GatewayControlAuthContext, GatewayCredentialCarrier,
     GatewayLocalAuthRejection,
 };
-pub(crate) use execute::{allows_control_execute_emergency, maybe_execute_via_control};
 #[cfg(test)]
 pub(crate) use management_token_permissions::{
     all_assignable_management_token_permissions, management_token_required_permission,

@@ -7,9 +7,7 @@ use axum::{extract::Request, Router};
 use http::header::HeaderValue;
 use http::StatusCode;
 
-use crate::constants::{
-    CONTROL_EXECUTE_FALLBACK_HEADER, EXECUTION_PATH_HEADER,
-};
+use crate::constants::EXECUTION_PATH_HEADER;
 
 use super::{build_router, start_server};
 
@@ -56,7 +54,6 @@ async fn gateway_hides_video_task_from_unauthenticated_caller_with_opt_in_header
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/v1/videos/task-123"))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .send()
         .await
         .expect("request should succeed");
@@ -87,11 +84,10 @@ async fn gateway_hides_video_task_without_calling_public_or_control_upstream() {
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("{\"unexpected\":true}"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )
@@ -123,7 +119,6 @@ async fn gateway_hides_video_task_without_calling_public_or_control_upstream() {
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/v1/videos/task-123"))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .send()
         .await
         .expect("request should succeed");
@@ -160,11 +155,10 @@ async fn gateway_hides_video_task_from_unauthenticated_caller_without_opt_in_hea
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("{\"status\":\"queued\"}"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )

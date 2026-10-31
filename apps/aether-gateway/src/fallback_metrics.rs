@@ -11,9 +11,7 @@ pub(crate) enum GatewayFallbackMetricKind {
     DecisionRemote,
     #[cfg_attr(not(test), allow(dead_code))]
     PlanFallback,
-    ControlExecuteFallback,
     LocalExecutionRuntimeMiss,
-    RemoteExecuteEmergency,
 }
 
 impl GatewayFallbackMetricKind {
@@ -21,9 +19,7 @@ impl GatewayFallbackMetricKind {
         match self {
             Self::DecisionRemote => "decision_remote_total",
             Self::PlanFallback => "plan_fallback_total",
-            Self::ControlExecuteFallback => "control_execute_fallback_total",
             Self::LocalExecutionRuntimeMiss => "local_execution_runtime_miss_total",
-            Self::RemoteExecuteEmergency => "remote_execute_emergency_total",
         }
     }
 
@@ -33,14 +29,8 @@ impl GatewayFallbackMetricKind {
                 "Number of requests that fell back to Python decision endpoints."
             }
             Self::PlanFallback => "Number of requests that fell back to Python plan endpoints.",
-            Self::ControlExecuteFallback => {
-                "Number of requests that fell back to Python control execution."
-            }
             Self::LocalExecutionRuntimeMiss => {
                 "Number of requests that were terminated locally after execution runtime miss because no proxy fallback exists."
-            }
-            Self::RemoteExecuteEmergency => {
-                "Number of requests that used remote emergency execution fallback."
             }
         }
     }
@@ -53,7 +43,6 @@ pub(crate) enum GatewayFallbackReason {
     RemoteDecisionMiss,
     SchedulerDecisionUnsupported,
     LocalExecutionPathRequired,
-    ControlExecuteEmergency,
 }
 
 impl GatewayFallbackReason {
@@ -63,7 +52,6 @@ impl GatewayFallbackReason {
             Self::RemoteDecisionMiss => "remote_decision_miss",
             Self::SchedulerDecisionUnsupported => "scheduler_decision_unsupported",
             Self::LocalExecutionPathRequired => "local_execution_path_required",
-            Self::ControlExecuteEmergency => "control_execute_emergency",
         }
     }
 }

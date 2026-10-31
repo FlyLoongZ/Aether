@@ -18,7 +18,7 @@ use serde_json::json;
 
 use std::sync::{Arc, Mutex};
 
-use crate::constants::{CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER};
+use crate::constants::TRACE_ID_HEADER;
 
 use super::{
     build_router_with_state, build_state_with_execution_runtime_override, start_server,
@@ -80,11 +80,10 @@ async fn gateway_executes_openai_video_content_from_reconstructed_data_task_with
                 let execute_stream_hits_inner = Arc::clone(&execute_stream_hits_clone);
                 async move {
                     *execute_stream_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("fallback"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )
@@ -269,7 +268,6 @@ async fn gateway_executes_openai_video_content_from_reconstructed_data_task_with
         .get(format!(
             "{gateway_url}/v1/videos/task-content-local-123/content?variant=video"
         ))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .bearer_auth("client-video-content-foreign-key")
         .header(
             TRACE_ID_HEADER,
@@ -297,7 +295,6 @@ async fn gateway_executes_openai_video_content_from_reconstructed_data_task_with
         .get(format!(
             "{gateway_url}/v1/videos/task-content-local-123/content?variant=video"
         ))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .bearer_auth("client-video-content-owner-key")
         .header(TRACE_ID_HEADER, "trace-openai-video-content-local-123")
         .send()

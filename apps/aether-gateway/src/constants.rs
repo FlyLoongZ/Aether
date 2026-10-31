@@ -13,8 +13,6 @@ pub(crate) const EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED: &str =
     "local_proxy_passthrough_removed";
 pub(crate) const EXECUTION_PATH_EXECUTION_RUNTIME_SYNC: &str = "execution_runtime_sync";
 pub(crate) const EXECUTION_PATH_EXECUTION_RUNTIME_STREAM: &str = "execution_runtime_stream";
-pub(crate) const EXECUTION_PATH_CONTROL_EXECUTE_SYNC: &str = "control_execute_sync";
-pub(crate) const EXECUTION_PATH_CONTROL_EXECUTE_STREAM: &str = "control_execute_stream";
 pub(crate) const EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS: &str = "local_execution_runtime_miss";
 pub(crate) const EXECUTION_PATH_LOCAL_EXECUTION_PLANNING_TIMEOUT: &str =
     "local_execution_planning_timeout";
@@ -35,7 +33,6 @@ pub(crate) const CONTROL_REQUEST_ID_HEADER: &str = "x-aether-control-request-id"
 pub(crate) const CONTROL_CANDIDATE_ID_HEADER: &str = "x-aether-control-candidate-id";
 pub(crate) const CONTROL_ENDPOINT_SIGNATURE_HEADER: &str = "x-aether-control-endpoint-signature";
 pub(crate) const CONTROL_ACTION_PROXY_PUBLIC: &str = "proxy_public";
-pub(crate) const CONTROL_EXECUTE_FALLBACK_HEADER: &str = "x-aether-control-execute-fallback";
 pub(crate) const TRUSTED_AUTH_USER_ID_HEADER: &str = "x-aether-auth-user-id";
 pub(crate) const TRUSTED_AUTH_API_KEY_ID_HEADER: &str = "x-aether-auth-api-key-id";
 pub(crate) const TRUSTED_AUTH_BALANCE_HEADER: &str = "x-aether-auth-balance-remaining";
