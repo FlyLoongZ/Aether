@@ -147,7 +147,10 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
                 stored.body_state(field),
                 Some(UsageBodyCaptureState::Reference)
             );
-            assert_eq!(stored.body_ref(field), Some(usage_body_ref(&request_id, field)));
+            assert_eq!(
+                stored.body_ref(field),
+                Some(usage_body_ref(&request_id, field))
+            );
             assert_eq!(
                 repository
                     .resolve_body_ref(&stored.body_ref(field).unwrap())
