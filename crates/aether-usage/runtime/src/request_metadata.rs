@@ -642,28 +642,6 @@ mod tests {
     }
 
     #[test]
-    fn sanitizes_request_metadata_drops_tls_fingerprint() {
-        assert!(sanitize_usage_request_metadata(Some(json!({
-            "tls_fingerprint": {
-                "incoming": {
-                    "source": "forwarded_header",
-                    "ja3": "incoming-ja3",
-                    "ja4": "incoming-ja4"
-                },
-                "outgoing": {
-                    "source": "aether_transport_config",
-                    "backend": "reqwest_rustls",
-                    "observed": false
-                }
-            },
-            "untrusted_tls_fingerprint": {
-                "ja3": "spoofed"
-            }
-        })))
-        .is_none());
-    }
-
-    #[test]
     fn routing_group_snapshot_survives_seed_and_sanitization() {
         for multiplier in [0.0, 0.25, 1.0, 2.5] {
             let context = json!({

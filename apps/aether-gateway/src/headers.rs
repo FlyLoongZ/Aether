@@ -10,7 +10,6 @@ use std::{
 use crate::constants::*;
 use axum::body::Bytes;
 use flate2::read::{DeflateDecoder, GzDecoder, ZlibDecoder};
-use serde_json::{Map, Value};
 use uuid::Uuid;
 
 const MAX_REQUEST_BODY_MB_ENV: &str = "AETHER_MAX_REQUEST_BODY_MB";
@@ -108,7 +107,6 @@ pub(crate) fn header_value_str(headers: &http::HeaderMap, key: &str) -> Option<S
 pub(crate) struct RequestOrigin {
     pub(crate) client_ip: Option<String>,
     pub(crate) user_agent: Option<String>,
-    pub(crate) forwarded_headers_trusted: bool,
 }
 
 pub(crate) fn request_origin_from_headers(headers: &http::HeaderMap) -> RequestOrigin {
@@ -116,7 +114,6 @@ pub(crate) fn request_origin_from_headers(headers: &http::HeaderMap) -> RequestO
         client_ip: None,
         user_agent: header_value_str(headers, http::header::USER_AGENT.as_str())
             .map(|value| truncate_chars(value.as_str(), 1_000)),
-        forwarded_headers_trusted: false,
     }
 }
 
@@ -125,7 +122,6 @@ pub(crate) fn request_origin_from_trusted_headers(headers: &http::HeaderMap) -> 
         client_ip: client_ip_from_headers(headers),
         user_agent: header_value_str(headers, http::header::USER_AGENT.as_str())
             .map(|value| truncate_chars(value.as_str(), 1_000)),
-        forwarded_headers_trusted: true,
     }
 }
 
@@ -137,7 +133,6 @@ pub(crate) fn request_origin_from_headers_and_remote_addr(
         client_ip: Some(effective_client_ip(headers, remote_addr).to_string()),
         user_agent: header_value_str(headers, http::header::USER_AGENT.as_str())
             .map(|value| truncate_chars(value.as_str(), 1_000)),
-        forwarded_headers_trusted: trusted_proxy_ip(remote_addr.ip()),
     }
 }
 
@@ -237,44 +232,6 @@ pub(crate) fn request_origin_from_parts(parts: &http::request::Parts) -> Request
         .get::<RequestOrigin>()
         .cloned()
         .unwrap_or_else(|| request_origin_from_headers(&parts.headers))
-}
-
-pub(crate) fn tls_fingerprint_from_headers(headers: &http::HeaderMap) -> Option<Value> {
-    let mut object = Map::new();
-
-    copy_tls_header(headers, &mut object, "x-aether-tls-ja3", "ja3");
-    copy_tls_header(headers, &mut object, "x-aether-tls-ja3-hash", "ja3_hash");
-    copy_tls_header(headers, &mut object, "x-aether-tls-ja4", "ja4");
-    copy_tls_header(headers, &mut object, "x-aether-tls-protocol", "protocol");
-    copy_tls_header(headers, &mut object, "x-aether-tls-version", "tls_version");
-    copy_tls_header(headers, &mut object, "x-aether-tls-cipher", "cipher");
-    copy_tls_header(headers, &mut object, "x-aether-tls-sni", "sni");
-    copy_tls_header(headers, &mut object, "x-aether-tls-alpn", "alpn");
-
-    if object.is_empty() {
-        return None;
-    }
-
-    let source = header_value_str(headers, "x-aether-tls-source")
-        .unwrap_or_else(|| "forwarded_header".to_string());
-    object.insert("source".to_string(), Value::String(source));
-
-    Some(Value::Object(object))
-}
-
-fn copy_tls_header(
-    headers: &http::HeaderMap,
-    object: &mut Map<String, Value>,
-    header_name: &str,
-    field_name: &str,
-) {
-    let Some(value) = header_value_str(headers, header_name) else {
-        return;
-    };
-    object.insert(
-        field_name.to_string(),
-        Value::String(truncate_chars(&value, 512)),
-    );
 }
 
 fn client_ip_from_headers(headers: &http::HeaderMap) -> Option<String> {
@@ -808,7 +765,7 @@ mod tests {
         decoded_request_body_bytes, effective_client_ip, normalize_request_body_headers_and_bytes,
         request_origin_from_headers, request_origin_from_headers_and_remote_addr,
         request_origin_from_trusted_headers, should_skip_response_header,
-        tls_fingerprint_from_headers, RequestBodyNormalizationError, RequestOrigin,
+        RequestBodyNormalizationError, RequestOrigin,
     };
 
     #[test]
@@ -865,7 +822,6 @@ mod tests {
         Compression,
     };
     use http::{HeaderMap, HeaderValue};
-    use serde_json::json;
     use std::{
         io::Write,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -889,7 +845,6 @@ mod tests {
             RequestOrigin {
                 client_ip: Some("203.0.113.8".to_string()),
                 user_agent: Some("Claude-Code/1.0".to_string()),
-                forwarded_headers_trusted: true,
             }
         );
         assert_eq!(request_origin_from_headers(&headers).client_ip, None);
@@ -917,21 +872,6 @@ mod tests {
         assert_eq!(
             effective_client_ip(&headers, &remote_addr),
             IpAddr::V4(Ipv4Addr::new(198, 51, 100, 4))
-        );
-        assert!(
-            request_origin_from_headers_and_remote_addr(&headers, &remote_addr)
-                .forwarded_headers_trusted
-        );
-    }
-
-    #[test]
-    fn request_origin_does_not_trust_forwarded_metadata_from_public_peer() {
-        let headers = HeaderMap::new();
-        let remote_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10)), 443);
-
-        assert!(
-            !request_origin_from_headers_and_remote_addr(&headers, &remote_addr)
-                .forwarded_headers_trusted
         );
     }
 
@@ -1536,42 +1476,6 @@ mod tests {
                 .client_ip
                 .as_deref(),
             Some("192.0.2.10")
-        );
-    }
-
-    #[test]
-    fn tls_fingerprint_from_headers_collects_forwarded_tls_fields() {
-        let mut headers = HeaderMap::new();
-        headers.insert("x-aether-tls-ja3", HeaderValue::from_static("ja3-value"));
-        headers.insert(
-            "x-aether-tls-ja3-hash",
-            HeaderValue::from_static("ja3-hash"),
-        );
-        headers.insert("x-aether-tls-ja4", HeaderValue::from_static("ja4-value"));
-        headers.insert("x-aether-tls-protocol", HeaderValue::from_static("TLSv1.3"));
-        headers.insert(
-            "x-aether-tls-cipher",
-            HeaderValue::from_static("TLS_AES_128_GCM_SHA256"),
-        );
-        headers.insert(
-            "x-aether-tls-sni",
-            HeaderValue::from_static("api.example.com"),
-        );
-        headers.insert("x-aether-tls-alpn", HeaderValue::from_static("h2"));
-        headers.insert("x-aether-tls-source", HeaderValue::from_static("nginx"));
-
-        assert_eq!(
-            tls_fingerprint_from_headers(&headers),
-            Some(json!({
-                "source": "nginx",
-                "ja3": "ja3-value",
-                "ja3_hash": "ja3-hash",
-                "ja4": "ja4-value",
-                "protocol": "TLSv1.3",
-                "cipher": "TLS_AES_128_GCM_SHA256",
-                "sni": "api.example.com",
-                "alpn": "h2"
-            }))
         );
     }
 }
