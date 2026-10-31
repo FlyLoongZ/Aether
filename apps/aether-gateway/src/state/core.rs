@@ -36,8 +36,8 @@ use super::super::async_task::{
 };
 use super::super::cache::{
     AuthApiKeyLastUsedCache, AuthContextCache, AuthSnapshotCache, DashboardResponseCache,
-    DirectPlanBypassCache, JsonValueCache, OverviewTotalCache, SchedulerAffinityCache,
-    SchedulerAffinitySnapshotEntry, SchedulerAffinityTarget, SystemConfigCache, ValueCache,
+    JsonValueCache, OverviewTotalCache, SchedulerAffinityCache, SchedulerAffinitySnapshotEntry,
+    SchedulerAffinityTarget, SystemConfigCache, ValueCache,
 };
 use super::super::data::{GatewayDataConfig, GatewayDataState};
 use super::super::fallback_metrics;
@@ -406,7 +406,6 @@ impl AppState {
             routing_group_selection_cache: Arc::new(ValueCache::default()),
             auth_api_key_last_used_cache: Arc::new(AuthApiKeyLastUsedCache::default()),
             oauth_refresh: Arc::new(provider_transport::LocalOAuthRefreshCoordinator::new()),
-            direct_plan_bypass_cache: Arc::new(DirectPlanBypassCache::default()),
             scheduler_affinity_cache: Arc::new(SchedulerAffinityCache::default()),
             scheduler_affinity_epoch: Arc::new(AtomicU64::new(0)),
             dashboard_response_cache: Arc::new(DashboardResponseCache::default()),

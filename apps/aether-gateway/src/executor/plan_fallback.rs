@@ -17,7 +17,6 @@ pub(crate) async fn maybe_execute_sync_via_plan_fallback(
     body_json: &serde_json::Value,
     body_base64: Option<String>,
     _plan_kind: &str,
-    _bypass_cache_key: String,
     _fallback_reason: GatewayFallbackReason,
     transfer_tracker: &ProviderTransferTracker,
 ) -> Result<LocalExecutionRequestOutcome, GatewayError> {
@@ -74,7 +73,6 @@ pub(crate) async fn maybe_execute_stream_via_plan_fallback(
     body_json: &serde_json::Value,
     body_base64: Option<String>,
     _plan_kind: &str,
-    _bypass_cache_key: String,
     _fallback_reason: GatewayFallbackReason,
     transfer_tracker: &ProviderTransferTracker,
 ) -> Result<LocalExecutionRequestOutcome, GatewayError> {
