@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aether_cache::Snapshot;
+use aether_cache::{value_weight, vec_weight, CacheWeight, OnceMapError, Snapshot};
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::routing_profiles::{
     RoutingGroupBindingQuery, RoutingGroupLookupKey, RoutingGroupReadRepository,
@@ -13,6 +13,8 @@ use async_trait::async_trait;
 // bounded so a missed cross-node invalidation cannot route traffic stale for
 // minutes.
 const ROUTING_GROUP_SNAPSHOT_TTL: Duration = Duration::from_secs(60);
+/// A hung table read must not hold the reload slot for every caller.
+const ROUTING_GROUP_SNAPSHOT_LOAD_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The whole routing configuration, loaded as one version.
 ///
@@ -29,14 +31,39 @@ struct RoutingGroupTables {
 
 pub(super) struct CachedRoutingGroupReadRepository {
     inner: Arc<dyn RoutingGroupReadRepository>,
-    tables: Snapshot<RoutingGroupTables>,
+    tables: Snapshot<RoutingGroupTables, DataLayerError>,
+}
+
+impl CacheWeight for RoutingGroupTables {
+    fn cache_weight(&self) -> usize {
+        let groups = vec_weight(&self.groups, |group| {
+            value_weight::<StoredRoutingGroup>(
+                group.id.capacity()
+                    + group.name.capacity()
+                    + group.description.as_ref().map_or(0, String::capacity)
+                    + CacheWeight::cache_weight(&group.config_json),
+            )
+        });
+        let bindings = vec_weight(&self.bindings, |binding| {
+            value_weight::<StoredRoutingGroupBinding>(
+                binding.id.capacity() + binding.group_id.capacity() + binding.subject_id.capacity(),
+            )
+        });
+        groups + bindings
+    }
+}
+
+/// The cache's own failures (a load that timed out, or admission saturation on
+/// a single-key map) mean the table read did not complete.
+fn snapshot_failure(error: OnceMapError<DataLayerError>) -> DataLayerError {
+    error.or_else_load(DataLayerError::TimedOut)
 }
 
 impl CachedRoutingGroupReadRepository {
     pub(super) fn new(inner: Arc<dyn RoutingGroupReadRepository>) -> Self {
         Self {
             inner,
-            tables: Snapshot::new(),
+            tables: Snapshot::with_load_timeout(ROUTING_GROUP_SNAPSHOT_LOAD_TIMEOUT),
         }
     }
 
@@ -44,6 +71,7 @@ impl CachedRoutingGroupReadRepository {
         self.tables
             .get_or_load(ROUTING_GROUP_SNAPSHOT_TTL, || self.load_tables())
             .await
+            .map_err(snapshot_failure)
     }
 
     async fn load_tables(&self) -> Result<RoutingGroupTables, DataLayerError> {

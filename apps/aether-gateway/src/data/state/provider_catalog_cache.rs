@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aether_cache::Snapshot;
+use aether_cache::{value_weight, vec_weight, CacheWeight, OnceMapError, Snapshot};
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogKeyListQuery, ProviderCatalogReadRepository, StoredProviderCatalogEndpoint,
@@ -13,6 +13,8 @@ use async_trait::async_trait;
 // A missed cross-node invalidation may not keep routing on a catalog older than
 // this; the local write path drops the version explicitly.
 const PROVIDER_CATALOG_SNAPSHOT_TTL: Duration = Duration::from_secs(5);
+/// A hung catalog read must not hold the reload slot for every caller.
+const PROVIDER_CATALOG_SNAPSHOT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The whole provider catalog, loaded as one version.
 ///
@@ -22,7 +24,7 @@ const PROVIDER_CATALOG_SNAPSHOT_TTL: Duration = Duration::from_secs(5);
 /// produces one immutable version and every read answers from it.
 pub(super) struct CachedProviderCatalogReadRepository {
     inner: Arc<dyn ProviderCatalogReadRepository>,
-    catalog: Snapshot<ProviderCatalogSnapshot>,
+    catalog: Snapshot<ProviderCatalogSnapshot, DataLayerError>,
 }
 
 struct ProviderCatalogSnapshot {
@@ -34,11 +36,89 @@ struct ProviderCatalogSnapshot {
     keys: Vec<StoredProviderCatalogKey>,
 }
 
+impl CacheWeight for ProviderCatalogSnapshot {
+    fn cache_weight(&self) -> usize {
+        fn optional_string(value: &Option<String>) -> usize {
+            value.as_ref().map_or(0, String::capacity)
+        }
+        fn optional_json(value: &Option<serde_json::Value>) -> usize {
+            value.as_ref().map_or(0, CacheWeight::cache_weight)
+        }
+
+        let providers = vec_weight(&self.providers, |provider| {
+            value_weight::<StoredProviderCatalogProvider>(
+                provider.id.capacity()
+                    + provider.name.capacity()
+                    + provider.provider_type.capacity()
+                    + optional_string(&provider.description)
+                    + optional_string(&provider.website)
+                    + optional_string(&provider.billing_type)
+                    + optional_json(&provider.proxy)
+                    + optional_json(&provider.config),
+            )
+        });
+        let endpoints = vec_weight(&self.endpoints, |endpoint| {
+            value_weight::<StoredProviderCatalogEndpoint>(
+                endpoint.id.capacity()
+                    + endpoint.provider_id.capacity()
+                    + endpoint.api_format.capacity()
+                    + endpoint.base_url.capacity()
+                    + optional_string(&endpoint.api_family)
+                    + optional_string(&endpoint.endpoint_kind)
+                    + optional_string(&endpoint.custom_path)
+                    + optional_json(&endpoint.header_rules)
+                    + optional_json(&endpoint.body_rules)
+                    + optional_json(&endpoint.config)
+                    + optional_json(&endpoint.format_acceptance_config)
+                    + optional_json(&endpoint.proxy),
+            )
+        });
+        let keys = vec_weight(&self.keys, |key| {
+            value_weight::<StoredProviderCatalogKey>(
+                key.id.capacity()
+                    + key.provider_id.capacity()
+                    + key.name.capacity()
+                    + key.auth_type.capacity()
+                    + optional_string(&key.encrypted_api_key)
+                    + optional_string(&key.encrypted_auth_config)
+                    + optional_string(&key.note)
+                    + optional_string(&key.last_models_fetch_error)
+                    + optional_string(&key.oauth_invalid_reason)
+                    + optional_json(&key.capabilities)
+                    + optional_json(&key.api_formats)
+                    + optional_json(&key.auth_type_by_format)
+                    + optional_json(&key.allow_auth_channel_mismatch_formats)
+                    + optional_json(&key.rate_multipliers)
+                    + optional_json(&key.global_priority_by_format)
+                    + optional_json(&key.allowed_models)
+                    + optional_json(&key.proxy)
+                    + optional_json(&key.fingerprint)
+                    + optional_json(&key.adjustment_history)
+                    + optional_json(&key.utilization_samples)
+                    + optional_json(&key.locked_models)
+                    + optional_json(&key.model_include_patterns)
+                    + optional_json(&key.model_exclude_patterns)
+                    + optional_json(&key.upstream_metadata)
+                    + optional_json(&key.status_snapshot)
+                    + optional_json(&key.health_by_format)
+                    + optional_json(&key.circuit_breaker_by_format),
+            )
+        });
+        providers + endpoints + keys
+    }
+}
+
+/// The cache's own failures (a load that timed out, or admission saturation on
+/// a single-key map) mean the catalog read did not complete.
+fn snapshot_failure(error: OnceMapError<DataLayerError>) -> DataLayerError {
+    error.or_else_load(DataLayerError::TimedOut)
+}
+
 impl CachedProviderCatalogReadRepository {
     pub(super) fn new(inner: Arc<dyn ProviderCatalogReadRepository>) -> Self {
         Self {
             inner,
-            catalog: Snapshot::new(),
+            catalog: Snapshot::with_load_timeout(PROVIDER_CATALOG_SNAPSHOT_LOAD_TIMEOUT),
         }
     }
 
@@ -46,6 +126,7 @@ impl CachedProviderCatalogReadRepository {
         self.catalog
             .get_or_load(PROVIDER_CATALOG_SNAPSHOT_TTL, || self.load_catalog())
             .await
+            .map_err(snapshot_failure)
     }
 
     /// Reads that the version cannot answer go to the repository: a key or
