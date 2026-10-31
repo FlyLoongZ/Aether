@@ -154,6 +154,11 @@ const MAX_EVICTIONS_PER_INSERT: usize = 32;
 /// is additionally bounded by `capacity_bytes` and, when one is installed, by a
 /// shared [`CacheBudget`]. Reclamation happens on write, so there is no
 /// background task.
+///
+/// Flights are coalesced per `(key, load kind)`, never per key alone: a caller
+/// only joins a load that promises the same thing it does. [`OnceMap::reload`]
+/// therefore never inherits the result of a [`OnceMap::get_or_load`], and the
+/// cold load's `None` can never stand in for an authoritative answer.
 pub struct OnceMap<K, V, E> {
     inner: Arc<Inner<K, V, E>>,
 }
@@ -193,7 +198,7 @@ pub type PublishedMap<K, V> = OnceMap<K, V, std::convert::Infallible>;
 
 struct Inner<K, V, E> {
     store: RwLock<Store<K, V>>,
-    inflight: Mutex<HashMap<K, Arc<Flight<V, E>>>>,
+    inflight: Mutex<Inflight<K, V, E>>,
     limits: Limits,
     observer: CacheObserver,
     #[cfg(test)]
@@ -271,6 +276,187 @@ impl<V, E: Clone> Clone for Completion<V, E> {
             Self::Cancelled => Self::Cancelled,
             Self::Invalidated => Self::Invalidated,
         }
+    }
+}
+
+/// Which loading contract a flight belongs to.
+///
+/// Flights are keyed by `(key, kind)`, so two callers only share a load when
+/// they also share the post-condition that load has to satisfy. A cold load may
+/// legitimately resolve to "nothing"; an authoritative reload must produce the
+/// value it was asked for, and it may overwrite results from flights that
+/// started before it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LoadKind {
+    /// A read that may be served from, and merged with, any other cold read.
+    Cold,
+    /// A read that must be answered by its own loader. It may coalesce with
+    /// another authoritative reload, but never with a cold load.
+    Authoritative,
+}
+
+impl LoadKind {
+    const ALL: [LoadKind; 2] = [LoadKind::Cold, LoadKind::Authoritative];
+}
+
+/// The in-flight flights of one map, at most one per `(key, kind)`.
+///
+/// The fields are private on purpose: every access has an invariant to keep
+/// (counting, slot matching, tombstone reclamation), and a new accessor that
+/// forgets one would silently let a load that started before an invalidation
+/// publish anyway.
+struct Inflight<K, V, E> {
+    by_key: HashMap<K, Flights<V, E>>,
+    count: usize,
+}
+
+impl<K, V, E> Default for Inflight<K, V, E> {
+    fn default() -> Self {
+        Self {
+            by_key: HashMap::new(),
+            count: 0,
+        }
+    }
+}
+
+struct Flights<V, E> {
+    cold: Option<Arc<Flight<V, E>>>,
+    authoritative: Option<Arc<Flight<V, E>>>,
+}
+
+impl<V, E> Default for Flights<V, E> {
+    fn default() -> Self {
+        Self {
+            cold: None,
+            authoritative: None,
+        }
+    }
+}
+
+impl<V, E> Flights<V, E> {
+    fn slot(&self, kind: LoadKind) -> Option<&Arc<Flight<V, E>>> {
+        match kind {
+            LoadKind::Cold => self.cold.as_ref(),
+            LoadKind::Authoritative => self.authoritative.as_ref(),
+        }
+    }
+
+    fn slot_mut(&mut self, kind: LoadKind) -> &mut Option<Arc<Flight<V, E>>> {
+        match kind {
+            LoadKind::Cold => &mut self.cold,
+            LoadKind::Authoritative => &mut self.authoritative,
+        }
+    }
+
+    fn take(&mut self, kind: LoadKind) -> Option<Arc<Flight<V, E>>> {
+        self.slot_mut(kind).take()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.cold.is_none() && self.authoritative.is_none()
+    }
+}
+
+impl<K, V, E> Inflight<K, V, E> {
+    fn len(&self) -> usize {
+        self.count
+    }
+}
+
+impl<K, V, E> Inflight<K, V, E>
+where
+    K: Clone + Eq + Hash,
+{
+    fn get(&self, key: &K, kind: LoadKind) -> Option<&Arc<Flight<V, E>>> {
+        self.by_key.get(key).and_then(|flights| flights.slot(kind))
+    }
+
+    /// Whether any flight, of either kind, holds this key.
+    fn has(&self, key: &K) -> bool {
+        self.by_key
+            .get(key)
+            .is_some_and(|flights| !flights.is_empty())
+    }
+
+    fn insert(&mut self, key: K, kind: LoadKind, flight: Arc<Flight<V, E>>) {
+        let flights = self.by_key.entry(key).or_default();
+        let slot = flights.slot_mut(kind);
+        debug_assert!(
+            slot.is_none(),
+            "a flight for this key and kind already exists"
+        );
+        *slot = Some(flight);
+        self.count += 1;
+    }
+
+    /// Removes `flight` only if it still owns the slot, so a superseded leader
+    /// cannot take its replacement's slot.
+    fn remove(&mut self, key: &K, kind: LoadKind, flight: &Arc<Flight<V, E>>) {
+        let Self { by_key, count } = self;
+        let Some(flights) = by_key.get_mut(key) else {
+            return;
+        };
+        let owns_slot = flights
+            .slot(kind)
+            .is_some_and(|current| Arc::ptr_eq(current, flight));
+        if owns_slot {
+            flights.take(kind);
+            *count -= 1;
+        }
+        let empty = flights.is_empty();
+        if empty {
+            by_key.remove(key);
+        }
+    }
+
+    /// Takes every flight for `key` that captured `stamp`, whichever kind it is.
+    fn take_matching<Q>(&mut self, key: &Q, stamp: Stamp) -> Vec<Arc<Flight<V, E>>>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        let Self { by_key, count } = self;
+        let Some(flights) = by_key.get_mut(key) else {
+            return Vec::new();
+        };
+        let mut taken = Vec::new();
+        for kind in LoadKind::ALL {
+            if flights
+                .slot(kind)
+                .is_some_and(|flight| flight.stamp == stamp)
+            {
+                if let Some(flight) = flights.take(kind) {
+                    taken.push(flight);
+                    *count -= 1;
+                }
+            }
+        }
+        let empty = flights.is_empty();
+        if empty {
+            by_key.remove(key);
+        }
+        taken
+    }
+
+    /// Takes every flight registered before `epoch`, of either kind.
+    fn drain_before(&mut self, epoch: u64) -> Vec<Arc<Flight<V, E>>> {
+        let Self { by_key, count } = self;
+        let mut stale = Vec::new();
+        by_key.retain(|_, flights| {
+            for kind in LoadKind::ALL {
+                if flights
+                    .slot(kind)
+                    .is_some_and(|flight| flight.stamp.epoch == epoch)
+                {
+                    if let Some(flight) = flights.take(kind) {
+                        stale.push(flight);
+                        *count -= 1;
+                    }
+                }
+            }
+            !flights.is_empty()
+        });
+        stale
     }
 }
 
@@ -357,7 +543,7 @@ where
                 stale
             }
         };
-        self.abort_flight_if(&key, stale);
+        self.abort_flights_if(&key, stale);
         self.inner.maintain();
     }
 
@@ -383,7 +569,7 @@ where
                 (removed, stale)
             }
         };
-        self.abort_flight_if(key, stale);
+        self.abort_flights_if(key, stale);
         removed
     }
 
@@ -416,23 +602,10 @@ where
             }
         };
 
-        let mut stale_flights = Vec::new();
-        let mut inflight = match self.inner.inflight.lock() {
-            Ok(inflight) => inflight,
-            Err(poisoned) => poisoned.into_inner(),
+        let stale_flights = match self.inner.inflight.lock() {
+            Ok(mut inflight) => inflight.drain_before(stale_epoch),
+            Err(poisoned) => poisoned.into_inner().drain_before(stale_epoch),
         };
-        let keys = inflight.keys().cloned().collect::<Vec<_>>();
-        for key in keys {
-            let is_stale = inflight
-                .get(&key)
-                .is_some_and(|flight| flight.stamp.epoch == stale_epoch);
-            if is_stale {
-                if let Some(flight) = inflight.remove(&key) {
-                    stale_flights.push(flight);
-                }
-            }
-        }
-        drop(inflight);
         for flight in stale_flights {
             flight.complete(Completion::Invalidated);
         }
@@ -529,27 +702,20 @@ where
         (age <= max_age.min(entry.ttl)).then(|| (Arc::clone(&entry.value), age))
     }
 
-    /// Aborts the flight only if it captured `stale`; a load that registered
-    /// after the mutation belongs to the new generation and must be left alone.
-    fn abort_flight_if<Q>(&self, key: &Q, stale: Stamp)
+    /// Aborts every flight for the key that captured `stale`; a load that
+    /// registered after the mutation belongs to the new generation and must be
+    /// left alone. Both load kinds are covered: a mutation outdates a cold read
+    /// and an authoritative reload alike.
+    fn abort_flights_if<Q>(&self, key: &Q, stale: Stamp)
     where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        let flight = match self.inner.inflight.lock() {
-            Ok(mut inflight) => match inflight.get(key) {
-                Some(flight) if flight.stamp == stale => inflight.remove(key),
-                _ => None,
-            },
-            Err(poisoned) => {
-                let mut inflight = poisoned.into_inner();
-                match inflight.get(key) {
-                    Some(flight) if flight.stamp == stale => inflight.remove(key),
-                    _ => None,
-                }
-            }
+        let flights = match self.inner.inflight.lock() {
+            Ok(mut inflight) => inflight.take_matching(key, stale),
+            Err(poisoned) => poisoned.into_inner().take_matching(key, stale),
         };
-        if let Some(flight) = flight {
+        for flight in flights {
             flight.complete(Completion::Invalidated);
         }
     }
@@ -558,6 +724,14 @@ where
         match self.inner.inflight.lock() {
             Ok(inflight) => inflight.len(),
             Err(poisoned) => poisoned.into_inner().len(),
+        }
+    }
+
+    /// Whether any load, of either kind, currently owns this key.
+    fn has_flight(&self, key: &K) -> bool {
+        match self.inner.inflight.lock() {
+            Ok(inflight) => inflight.has(key),
+            Err(poisoned) => poisoned.into_inner().has(key),
         }
     }
 
@@ -643,14 +817,17 @@ where
             self.note_hit();
             return Ok(value);
         }
-        self.drive(key, window, load).await
+        self.drive(key, window, LoadKind::Cold, load).await
     }
 
-    /// Runs the loader even when a value is cached, still only once per key.
+    /// Runs the loader even when a value is cached, coalescing only with other
+    /// reloads of the same key.
     ///
     /// Callers that must not act on a stale value at all — authorization, for
     /// one — use this instead of lowering the window and losing the ability to
-    /// serve the stale window at all.
+    /// serve the stale window at all. It never joins a [`OnceMap::get_or_load`]
+    /// in flight: that load is allowed to resolve to "nothing", while this one
+    /// is not, so inheriting its answer would silently skip the reload.
     pub async fn reload<F, Fut>(
         &self,
         key: K,
@@ -661,7 +838,7 @@ where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<V, E>>,
     {
-        self.drive(key, window, load).await
+        self.drive(key, window, LoadKind::Authoritative, load).await
     }
 
     /// Returns a stale value immediately and revalidates in the background.
@@ -695,7 +872,7 @@ where
         }
         // Past the stale window the entry is not a candidate, so the load must
         // not consult it again on the way in.
-        self.drive(key, stale, cold_load).await
+        self.drive(key, stale, LoadKind::Cold, cold_load).await
     }
 
     /// Starts a background refresh unless one is already in flight, or the last
@@ -709,9 +886,15 @@ where
         B: FnOnce() -> BF,
         BF: Future<Output = Result<V, E>> + Send + 'static,
     {
-        let mut guard = match self.register(&key) {
+        // A refresh must not add a second load while an authoritative reload is
+        // already running for this key: that reload is the fresher read and it
+        // is not something a background refresh can improve on.
+        if self.has_flight(&key) {
+            return false;
+        }
+        let mut guard = match self.register(&key, LoadKind::Cold) {
             Registration::Leader(guard) => guard,
-            Registration::Follower(_) | Registration::Saturated => return false,
+            Registration::Follower(_) | Registration::Saturated(_) => return false,
         };
         let refresh = refresh();
         let load_timeout = self.inner.limits.load_timeout;
@@ -744,6 +927,7 @@ where
         &self,
         key: K,
         window: Duration,
+        kind: LoadKind,
         load: F,
     ) -> Result<Arc<V>, OnceMapError<E>>
     where
@@ -756,8 +940,8 @@ where
         // The caller already decided there is nothing within its window, so the
         // loop never re-consults the store on the way in.
         loop {
-            match self.register(&key) {
-                Registration::Saturated => {
+            match self.register(&key, kind) {
+                Registration::Saturated(stamp) => {
                     if self.inner.limits.admission == Admission::Reject {
                         return Err(OnceMapError::AdmissionSaturated {
                             inflight: self.inflight_len(),
@@ -769,7 +953,7 @@ where
                     self.note_load();
                     let load = load.take().expect("a caller runs the loader at most once");
                     return match self.run_load(load).await {
-                        Ok(value) => Ok(self.publish_bypass(key, value, window)),
+                        Ok(value) => Ok(self.publish_bypass(key, value, window, stamp)),
                         Err(error) => Err(error),
                     };
                 }
@@ -801,6 +985,7 @@ where
                             Err(OnceMapError::LoadTimeout { elapsed })
                         }
                         Err(OnceMapError::AdmissionSaturated { inflight }) => {
+                            debug_assert!(false, "a leader never runs under admission saturation");
                             Err(OnceMapError::AdmissionSaturated { inflight })
                         }
                     };
@@ -823,30 +1008,33 @@ where
         }
     }
 
-    /// Publishes an unregistered load's result (admission bypass). It is a
-    /// fresh read, so it takes the next generation like `publish` does.
-    fn publish_bypass(&self, key: K, value: V, window: Duration) -> Arc<V> {
+    /// Publishes an unregistered load's result (admission bypass).
+    ///
+    /// The result belongs to the generation the load started under: if the key
+    /// was written or invalidated while it ran, the result is handed to the
+    /// caller but not stored, so a slow bypass cannot overwrite a newer value.
+    fn publish_bypass(&self, key: K, value: V, window: Duration, stamp: Stamp) -> Arc<V> {
         let key_weight = key.cache_weight();
         let value = Arc::new(value);
         let now = Instant::now();
         if let Ok(mut store) = self.inner.store.write() {
-            let stale = store.stamp(&key);
-            store.invalidate(&key, key_weight, now);
-            store.insert(
-                key,
-                Arc::clone(&value),
-                window,
-                stale.key_epoch.wrapping_add(1),
-                key_weight,
-                now,
-            );
-            self.inner.reap(&mut store, now);
+            if store.stamp(&key) == stamp {
+                store.insert(
+                    key,
+                    Arc::clone(&value),
+                    window,
+                    stamp.key_epoch,
+                    key_weight,
+                    now,
+                );
+                self.inner.reap(&mut store, now);
+            }
         }
         self.inner.maintain();
         value
     }
 
-    fn register(&self, key: &K) -> Registration<K, V, E> {
+    fn register(&self, key: &K, kind: LoadKind) -> Registration<K, V, E> {
         let stamp = match self.inner.store.read() {
             Ok(store) => store.stamp(key),
             Err(poisoned) => poisoned.into_inner().stamp(key),
@@ -856,20 +1044,21 @@ where
             Ok(inflight) => inflight,
             Err(poisoned) => poisoned.into_inner(),
         };
-        if let Some(flight) = inflight.get(key) {
+        if let Some(flight) = inflight.get(key, kind) {
             return Registration::Follower(Arc::clone(flight));
         }
         if inflight.len() >= self.inner.limits.max_inflight {
-            return Registration::Saturated;
+            return Registration::Saturated(stamp);
         }
 
         let flight = Arc::new(Flight::new(stamp));
-        inflight.insert(key.clone(), Arc::clone(&flight));
+        inflight.insert(key.clone(), kind, Arc::clone(&flight));
         Registration::Leader(FlightGuard {
             inner: Arc::clone(&self.inner),
             key: key.clone(),
             flight,
             stamp,
+            kind,
             done: false,
         })
     }
@@ -882,11 +1071,14 @@ where
 {
     Leader(FlightGuard<K, V, E>),
     Follower(Arc<Flight<V, E>>),
-    Saturated,
+    /// No slot was available; the stamp the caller would have registered with
+    /// is carried out so a bypass load can still publish under its generation.
+    Saturated(Stamp),
 }
 
-/// Owns the leader slot for one key. Dropping it without finishing means the
-/// leader went away, so waiters are woken to elect a replacement.
+/// Owns the leader slot for one key and one load kind. Dropping it without
+/// finishing means the leader went away, so waiters are woken to elect a
+/// replacement.
 ///
 /// The bounds live on the struct so `Drop` can clean up the in-flight map
 /// without knowing anything else about the call site.
@@ -899,6 +1091,7 @@ where
     key: K,
     flight: Arc<Flight<V, E>>,
     stamp: Stamp,
+    kind: LoadKind,
     done: bool,
 }
 
@@ -909,17 +1102,29 @@ where
 {
     /// Stores the loaded value unless the key was mutated while this load ran,
     /// then hands it to every waiter regardless.
+    ///
+    /// An authoritative result is stored like an application write: it advances
+    /// the key's generation, so every flight that started before it can no
+    /// longer publish over it.
     fn publish(&mut self, value: V, window: Duration) -> Arc<V> {
         let key_weight = self.key.cache_weight();
         let value = Arc::new(value);
         let now = Instant::now();
         if let Ok(mut store) = self.inner.store.write() {
             if store.stamp(&self.key) == self.stamp {
+                let epoch = if self.kind == LoadKind::Authoritative {
+                    // Leaves a tombstone for the new generation, so the bump
+                    // survives even if the value itself cannot be retained.
+                    store.invalidate(&self.key, key_weight, now);
+                    self.stamp.key_epoch.wrapping_add(1)
+                } else {
+                    self.stamp.key_epoch
+                };
                 store.insert(
                     self.key.clone(),
                     Arc::clone(&value),
                     window,
-                    self.stamp.key_epoch,
+                    epoch,
                     key_weight,
                     now,
                 );
@@ -963,26 +1168,13 @@ where
             return;
         }
         self.done = true;
+        // A newer flight for this key may have replaced ours; only the owner of
+        // the slot may remove it, and only for its own load kind.
         match self.inner.inflight.lock() {
-            Ok(mut inflight) => {
-                // A newer flight for this key may have replaced ours; only the
-                // owner may remove the slot.
-                if inflight
-                    .get(&self.key)
-                    .is_some_and(|flight| Arc::ptr_eq(flight, &self.flight))
-                {
-                    inflight.remove(&self.key);
-                }
-            }
-            Err(poisoned) => {
-                let mut inflight = poisoned.into_inner();
-                if inflight
-                    .get(&self.key)
-                    .is_some_and(|flight| Arc::ptr_eq(flight, &self.flight))
-                {
-                    inflight.remove(&self.key);
-                }
-            }
+            Ok(mut inflight) => inflight.remove(&self.key, self.kind, &self.flight),
+            Err(poisoned) => poisoned
+                .into_inner()
+                .remove(&self.key, self.kind, &self.flight),
         }
     }
 }
@@ -1053,7 +1245,7 @@ where
                 Ok(inflight) => inflight,
                 Err(poisoned) => poisoned.into_inner(),
             };
-            store.reap_tombstones(now, &|key: &K| inflight.contains_key(key));
+            store.reap_tombstones(now, &|key: &K| inflight.has(key));
         }
         store.reap_entries(now);
     }
@@ -1287,8 +1479,8 @@ where
             }
 
             // The ledger only admits or refuses; it never reclaims. Anything
-            // over `capacity_bytes` is evicted here, and the charge that put it
-            // there was already refused by the budget.
+            // that is over `capacity_bytes` is evicted here, and the charge
+            // that put it there was already refused by the budget.
             let expired = now.saturating_duration_since(entry.inserted_at) > entry.ttl;
             let over_capacity = self.weight > self.capacity_bytes;
             if !expired && !over_capacity {
@@ -1496,7 +1688,7 @@ impl<K, V, E> OnceMapBuilder<K, V, E> {
                     tombstone_ttl: self.tombstone_ttl,
                     budget: self.budget,
                 }),
-                inflight: Mutex::new(HashMap::new()),
+                inflight: Mutex::new(Inflight::default()),
                 limits: Limits {
                     max_inflight: self.max_inflight,
                     load_timeout: self.load_timeout,
@@ -1519,6 +1711,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
+    use tokio::sync::Semaphore;
 
     const WINDOW: Duration = Duration::from_secs(60);
 
@@ -2094,5 +2287,250 @@ mod tests {
             map.peek_within(&"small".to_string(), WINDOW).is_some(),
             "the resident entry was evicted for a value that cannot be kept"
         );
+    }
+
+    /// A reload must run its own loader even while a cold load for the same key
+    /// is in flight: the cold load is allowed to answer "nothing", so
+    /// inheriting it would silently skip the reload.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_reload_does_not_inherit_a_cold_loads_answer() {
+        let map: OnceMap<String, Option<String>, String> = OnceMap::builder().build();
+        let key = "k".to_string();
+        let cold_started = Arc::new(tokio::sync::Notify::new());
+        let cold_gate = Arc::new(Semaphore::new(0));
+        let authoritative_loads = Arc::new(AtomicUsize::new(0));
+
+        let cold = {
+            let map = map.clone();
+            let key = key.clone();
+            let started = Arc::clone(&cold_started);
+            let gate = Arc::clone(&cold_gate);
+            tokio::spawn(async move {
+                map.get_or_load(key, WINDOW, || async move {
+                    started.notify_one();
+                    let _permit = gate.acquire().await.expect("gate is never closed");
+                    Ok::<_, String>(None)
+                })
+                .await
+            })
+        };
+        cold_started.notified().await;
+
+        let reload = {
+            let map = map.clone();
+            let key = key.clone();
+            let loads = Arc::clone(&authoritative_loads);
+            tokio::spawn(async move {
+                map.reload(key, WINDOW, || async move {
+                    loads.fetch_add(1, Ordering::SeqCst);
+                    Ok::<_, String>(Some("fresh".to_string()))
+                })
+                .await
+            })
+        };
+
+        // The reload answers from its own loader instead of waiting for the
+        // cold flight; the cold flight is still parked on its gate.
+        let reloaded = tokio::time::timeout(Duration::from_secs(5), reload)
+            .await
+            .expect("the reload must not wait for the cold load")
+            .expect("reload task should join")
+            .expect("reload should succeed");
+        assert_eq!(Some("fresh".to_string()), *reloaded);
+        assert_eq!(1, authoritative_loads.load(Ordering::SeqCst));
+
+        cold_gate.add_permits(1);
+        assert_eq!(
+            None,
+            *cold
+                .await
+                .expect("cold task should join")
+                .expect("cold read")
+        );
+    }
+
+    /// Two authoritative reloads still coalesce into a single loader run.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_reloads_coalesce() {
+        let map: OnceMap<String, String, String> = OnceMap::builder().build();
+        let loads = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(tokio::sync::Notify::new());
+        let gate = Arc::new(Semaphore::new(0));
+
+        let leader = {
+            let map = map.clone();
+            let loads = Arc::clone(&loads);
+            let started = Arc::clone(&started);
+            let gate = Arc::clone(&gate);
+            tokio::spawn(async move {
+                map.reload("k".to_string(), WINDOW, || async move {
+                    loads.fetch_add(1, Ordering::SeqCst);
+                    started.notify_one();
+                    let _permit = gate.acquire().await.expect("gate is never closed");
+                    Ok::<_, String>("value".to_string())
+                })
+                .await
+            })
+        };
+        started.notified().await;
+
+        let follower = {
+            let map = map.clone();
+            let loads = Arc::clone(&loads);
+            tokio::spawn(async move {
+                map.reload("k".to_string(), WINDOW, || async move {
+                    loads.fetch_add(1, Ordering::SeqCst);
+                    Ok::<_, String>("second".to_string())
+                })
+                .await
+            })
+        };
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(1, loads.load(Ordering::SeqCst));
+
+        gate.add_permits(1);
+        assert_eq!("value", leader.await.unwrap().unwrap().as_str());
+        assert_eq!("value", follower.await.unwrap().unwrap().as_str());
+        assert_eq!(1, loads.load(Ordering::SeqCst));
+    }
+
+    /// An authoritative result is stored like an application write: a cold load
+    /// that started before it must not overwrite it when it finishes.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn an_authoritative_result_survives_an_earlier_cold_load() {
+        let map = cache();
+        let key = "k".to_string();
+        let cold_started = Arc::new(tokio::sync::Notify::new());
+        let cold_gate = Arc::new(Semaphore::new(0));
+
+        let cold = {
+            let map = map.clone();
+            let key = key.clone();
+            let started = Arc::clone(&cold_started);
+            let gate = Arc::clone(&cold_gate);
+            tokio::spawn(async move {
+                map.get_or_load(key, WINDOW, || async move {
+                    started.notify_one();
+                    let _permit = gate.acquire().await.expect("gate is never closed");
+                    Ok::<_, String>("cold".to_string())
+                })
+                .await
+            })
+        };
+        cold_started.notified().await;
+
+        map.reload(key.clone(), WINDOW, || async {
+            Ok::<_, String>("authoritative".to_string())
+        })
+        .await
+        .expect("authoritative reload should succeed");
+
+        cold_gate.add_permits(1);
+        assert_eq!("cold", cold.await.unwrap().unwrap().as_str());
+        assert_eq!(
+            "authoritative",
+            map.peek_within(&key, WINDOW).unwrap().as_str(),
+            "the cold load started first and must not win"
+        );
+    }
+
+    /// `invalidate_all` has to wake waiters of both load kinds, otherwise a
+    /// reload waiting on a cold flight would sit there through the clear.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn invalidate_all_aborts_both_load_kinds() {
+        let map: OnceMap<String, Option<String>, String> = OnceMap::builder().build();
+        let started = Arc::new(AtomicUsize::new(0));
+        let gate = Arc::new(Semaphore::new(0));
+
+        let cold = {
+            let map = map.clone();
+            let started = Arc::clone(&started);
+            let gate = Arc::clone(&gate);
+            tokio::spawn(async move {
+                map.get_or_load("cold".to_string(), WINDOW, || async move {
+                    started.fetch_add(1, Ordering::SeqCst);
+                    let _permit = gate.acquire().await.expect("gate is never closed");
+                    Ok::<_, String>(None)
+                })
+                .await
+            })
+        };
+        let authoritative = {
+            let map = map.clone();
+            let started = Arc::clone(&started);
+            let gate = Arc::clone(&gate);
+            tokio::spawn(async move {
+                map.reload("authoritative".to_string(), WINDOW, || async move {
+                    started.fetch_add(1, Ordering::SeqCst);
+                    let _permit = gate.acquire().await.expect("gate is never closed");
+                    Ok::<_, String>(Some("auth".to_string()))
+                })
+                .await
+            })
+        };
+
+        while started.load(Ordering::SeqCst) < 2 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(2, map.inflight_len());
+
+        map.invalidate_all();
+        assert_eq!(0, map.inflight_len());
+
+        gate.add_permits(2);
+        cold.await.unwrap().unwrap();
+        authoritative.await.unwrap().unwrap();
+        // Neither load may repopulate a key the clear already dropped.
+        assert!(map.is_empty());
+    }
+
+    /// A key can hold a cold flight and an authoritative flight at once, so an
+    /// authoritative reload never waits on a cold load for the same key.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_key_can_hold_one_flight_per_kind() {
+        let map: OnceMap<String, Option<String>, String> =
+            OnceMap::builder().max_inflight(2).build();
+        let gate = Arc::new(Semaphore::new(0));
+        let started = Arc::new(tokio::sync::Notify::new());
+        let authoritative_loads = Arc::new(AtomicUsize::new(0));
+
+        let cold = {
+            let map = map.clone();
+            let gate = Arc::clone(&gate);
+            let started = Arc::clone(&started);
+            tokio::spawn(async move {
+                map.get_or_load("k".to_string(), WINDOW, || async move {
+                    started.notify_one();
+                    let _permit = gate.acquire().await.expect("gate is never closed");
+                    Ok::<_, String>(None)
+                })
+                .await
+            })
+        };
+        started.notified().await;
+        assert_eq!(1, map.inflight_len());
+
+        let reloaded = {
+            let map = map.clone();
+            let loads = Arc::clone(&authoritative_loads);
+            tokio::spawn(async move {
+                map.reload("k".to_string(), WINDOW, || async move {
+                    loads.fetch_add(1, Ordering::SeqCst);
+                    Ok::<_, String>(Some("auth".to_string()))
+                })
+                .await
+            })
+        };
+
+        let reloaded = tokio::time::timeout(Duration::from_secs(5), reloaded)
+            .await
+            .expect("the reload must not wait on the cold flight")
+            .expect("reload task should join")
+            .expect("a reload owns its own slot");
+        assert_eq!(Some("auth".to_string()), *reloaded);
+        assert_eq!(1, authoritative_loads.load(Ordering::SeqCst));
+
+        gate.add_permits(1);
+        cold.await.unwrap().unwrap();
     }
 }
