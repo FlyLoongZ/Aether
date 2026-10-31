@@ -19,8 +19,7 @@ use crate::api::response::{
     build_local_plan_usage_limited_response, build_local_user_rpm_limited_response,
 };
 use crate::constants::{
-    CONTROL_CANDIDATE_ID_HEADER, DEPENDENCY_REASON_HEADER, EXECUTION_PATH_CONTROL_EXECUTE_STREAM,
-    EXECUTION_PATH_CONTROL_EXECUTE_SYNC, EXECUTION_PATH_DISTRIBUTED_OVERLOADED,
+    CONTROL_CANDIDATE_ID_HEADER, EXECUTION_PATH_DISTRIBUTED_OVERLOADED,
     EXECUTION_PATH_EXECUTION_RUNTIME_STREAM, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
     EXECUTION_PATH_LOCAL_AI_PUBLIC, EXECUTION_PATH_LOCAL_API_KEY_CONCURRENCY_LIMITED,
     EXECUTION_PATH_LOCAL_AUTH_DENIED, EXECUTION_PATH_LOCAL_EXECUTION_PLANNING_TIMEOUT,
@@ -31,9 +30,8 @@ use crate::constants::{
 };
 
 use crate::control::{
-    allows_control_execute_emergency, maybe_execute_via_control, request_model_local_rejection,
-    should_buffer_request_for_local_auth, trusted_auth_local_rejection, GatewayControlDecision,
-    GatewayPublicRequestContext,
+    request_model_local_rejection, should_buffer_request_for_local_auth, trusted_auth_local_rejection,
+    GatewayControlDecision, GatewayPublicRequestContext,
 };
 use crate::executor::{
     beautify_local_execution_client_error_message, build_local_execution_runtime_miss_context,
@@ -43,7 +41,7 @@ use crate::executor::{
 };
 use crate::handlers::shared::{
     build_admin_proxy_auth_required_response, build_unhandled_admin_proxy_response, ip_rules_allow,
-    local_proxy_route_requires_buffered_body, request_enables_control_execute,
+    local_proxy_route_requires_buffered_body,
 };
 
 use crate::headers::{
@@ -820,10 +818,6 @@ async fn proxy_request_inner(
         || should_buffer_for_local_auth
         || should_buffer_for_local_ai_public;
 
-    let allow_control_execute_fallback = should_try_control_execute
-        && control_decision.is_some_and(allows_control_execute_emergency)
-        && request_enables_control_execute(&parts.headers);
-
     let buffered_body = if should_buffer_body {
         let body_buffer_policy =
             RequestBodyBufferPolicy::for_request_context(&state, &request_context);
@@ -1341,73 +1335,6 @@ async fn proxy_request_inner(
                         &remote_addr,
                         &request_context,
                         EXECUTION_PATH_EXECUTION_RUNTIME_STREAM,
-                        &started_at,
-                        request_permit.take(),
-                    ));
-                }
-                LocalExecutionRequestOutcome::Exhausted(outcome) => {
-                    local_execution_exhaustion = Some(*outcome);
-                }
-                LocalExecutionRequestOutcome::NoPath => {}
-            }
-        }
-        if allow_control_execute_fallback {
-            match maybe_execute_via_control(
-                &state,
-                &parts,
-                buffered_body.clone(),
-                &trace_id,
-                control_decision,
-                stream_request,
-            )
-            .await?
-            {
-                LocalExecutionRequestOutcome::Responded(control_response) => {
-                    crate::executor::record_failed_usage_for_deferred_response(
-                        &state,
-                        &control_response,
-                    )
-                    .await;
-                    let reason = GatewayFallbackReason::ControlExecuteEmergency;
-                    let control_execution_path = if stream_request {
-                        EXECUTION_PATH_CONTROL_EXECUTE_STREAM
-                    } else {
-                        EXECUTION_PATH_CONTROL_EXECUTE_SYNC
-                    };
-                    state.record_fallback_metric(
-                        GatewayFallbackMetricKind::ControlExecuteFallback,
-                        control_decision,
-                        None,
-                        Some(control_execution_path),
-                        reason,
-                    );
-                    state.record_fallback_metric(
-                        GatewayFallbackMetricKind::RemoteExecuteEmergency,
-                        control_decision,
-                        None,
-                        Some(control_execution_path),
-                        reason,
-                    );
-                    let control_response = if stream_request {
-                        restore_redacted_stream_execution_response(
-                            control_response,
-                            &redaction_slot,
-                        )?
-                    } else {
-                        restore_redacted_sync_execution_response(control_response, &redaction_slot)
-                            .await?
-                    };
-                    let mut control_response = control_response;
-                    state.clear_local_execution_runtime_miss_diagnostic(&trace_id);
-                    control_response.headers_mut().insert(
-                        HeaderName::from_static(DEPENDENCY_REASON_HEADER),
-                        HeaderValue::from_static(reason.as_label_value()),
-                    );
-                    return Ok(finalize_gateway_response_with_context(
-                        control_response,
-                        &remote_addr,
-                        &request_context,
-                        control_execution_path,
                         &started_at,
                         request_permit.take(),
                     ));

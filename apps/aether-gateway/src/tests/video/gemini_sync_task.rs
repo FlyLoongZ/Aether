@@ -18,7 +18,7 @@ use serde_json::json;
 
 use std::sync::{Arc, Mutex};
 
-use crate::constants::{CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER};
+use crate::constants::TRACE_ID_HEADER;
 use crate::tests::DEV_FERNET_KEY;
 
 use super::{
@@ -406,11 +406,10 @@ async fn gateway_executes_gemini_video_cancel_via_reconstructed_data_backed_loca
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("{\"fallback\":true}"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )
@@ -553,7 +552,6 @@ async fn gateway_executes_gemini_video_cancel_via_reconstructed_data_backed_loca
             "{gateway_url}/v1beta/models/veo-3/operations/opshort123:cancel"
         ))
         .header("x-goog-api-key", "client-gemini-video-cancel-op-key")
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .header(TRACE_ID_HEADER, "trace-gemini-video-cancel-op-123")
         .send()
         .await

@@ -5466,12 +5466,6 @@ aether_gateway_decision_remote_total{route_kind="responses",reason="remote_decis
 # HELP aether_gateway_plan_fallback_total Number of requests that fell back to Python plan endpoints.
 # TYPE aether_gateway_plan_fallback_total counter
 aether_gateway_plan_fallback_total{route_kind="chat",reason="scheduler_decision_unsupported"} 3
-# HELP aether_gateway_control_execute_fallback_total Number of requests that fell back to Python control execution.
-# TYPE aether_gateway_control_execute_fallback_total counter
-aether_gateway_control_execute_fallback_total{route_kind="chat",reason="control_execute_emergency"} 1
-# HELP aether_gateway_remote_execute_emergency_total Number of requests that used remote emergency execution fallback.
-# TYPE aether_gateway_remote_execute_emergency_total counter
-aether_gateway_remote_execute_emergency_total{route_kind="chat",reason="control_execute_emergency"} 2
 `)
 }
 

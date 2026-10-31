@@ -12,8 +12,7 @@ use http::StatusCode;
 use serde_json::json;
 
 use crate::constants::{
-    CONTROL_EXECUTE_FALLBACK_HEADER, DEPENDENCY_REASON_HEADER,
-    EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AI_PUBLIC,
+    DEPENDENCY_REASON_HEADER, EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AI_PUBLIC,
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
     TRACE_ID_HEADER,
 };
@@ -93,7 +92,6 @@ pub(super) fn ai_execute_provider_stop_on_status_code(
     provider
 }
 
-mod control_execute;
 mod fallback;
 mod finalize_local;
 mod finalize_local_cli;

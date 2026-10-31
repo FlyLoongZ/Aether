@@ -1,8 +1,7 @@
 use super::{
     any, build_router, build_router_with_state, build_state_with_execution_runtime_override, json,
-    start_server, to_bytes, AppState, Arc, Body, Bytes, HeaderValue, Infallible, Json,
-    Mutex, Request, Response, Router, StatusCode,
-    CONTROL_EXECUTE_FALLBACK_HEADER, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
+    start_server, to_bytes, AppState, Arc, Body, Bytes, HeaderValue, Infallible, Json, Mutex,
+    Request, Response, Router, StatusCode, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 use crate::tests::DEV_FERNET_KEY;
 use aether_data::repository::auth::{
@@ -257,7 +256,6 @@ async fn gateway_locally_denies_gemini_files_download_control_sync_even_with_opt
         .get(format!(
             "{gateway_url}/v1beta/files/file-123:download?alt=media"
         ))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .header(TRACE_ID_HEADER, "trace-files-download-123")
         .send()
         .await
@@ -295,11 +293,10 @@ async fn gateway_locally_denies_gemini_files_download_control_sync_without_opt_i
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("unexpected-execute"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )
@@ -333,7 +330,6 @@ async fn gateway_locally_denies_gemini_files_download_control_sync_without_opt_i
         .get(format!(
             "{gateway_url}/v1beta/files/file-123:download?alt=media"
         ))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .header(TRACE_ID_HEADER, "trace-files-download-public-123")
         .send()
         .await
@@ -378,11 +374,10 @@ async fn gateway_skips_gemini_files_download_control_sync_without_opt_in_header_
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("file-bytes"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )

@@ -19,7 +19,7 @@ use serde_json::json;
 
 use std::sync::{Arc, Mutex};
 
-use crate::constants::{CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER};
+use crate::constants::TRACE_ID_HEADER;
 
 use super::{
     build_router_with_state, build_state_with_execution_runtime_override, start_server,
@@ -90,11 +90,10 @@ async fn gateway_executes_openai_video_delete_via_reconstructed_data_backed_loca
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let response = Response::builder()
+                    Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("{\"fallback\":true}"))
-                        .expect("response should build");
-                    response
+                        .expect("response should build")
                 }
             }),
         )
@@ -243,7 +242,6 @@ async fn gateway_executes_openai_video_delete_via_reconstructed_data_backed_loca
     let client = reqwest::Client::new();
     let foreign_response = client
         .delete(format!("{gateway_url}/v1/videos/task-local-followup-123"))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .bearer_auth("client-video-delete-foreign-key")
         .header(
             TRACE_ID_HEADER,
@@ -270,7 +268,6 @@ async fn gateway_executes_openai_video_delete_via_reconstructed_data_backed_loca
 
     let response = client
         .delete(format!("{gateway_url}/v1/videos/task-local-followup-123"))
-        .header(CONTROL_EXECUTE_FALLBACK_HEADER, "true")
         .bearer_auth("client-video-delete-owner-key")
         .header(TRACE_ID_HEADER, "trace-openai-video-delete-local-123")
         .send()
