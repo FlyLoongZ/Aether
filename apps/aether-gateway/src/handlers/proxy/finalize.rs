@@ -1,7 +1,6 @@
 use crate::audit::emit_admin_audit;
 use crate::constants::{
-    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_EXECUTION_RUNTIME_HEADER, CONTROL_REQUEST_ID_HEADER,
-    CONTROL_ROUTE_CLASS_HEADER, CONTROL_ROUTE_FAMILY_HEADER, CONTROL_ROUTE_KIND_HEADER,
+    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_REQUEST_ID_HEADER, CONTROL_ROUTE_CLASS_HEADER,
     DEPENDENCY_REASON_HEADER, EXECUTION_PATH_HEADER, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
     TRACE_ID_HEADER,
 };
@@ -245,37 +244,6 @@ fn attach_control_decision_headers(
             )
             .expect("route class should be a valid header value"),
         );
-    }
-    if !response
-        .headers()
-        .contains_key(CONTROL_EXECUTION_RUNTIME_HEADER)
-    {
-        response.headers_mut().insert(
-            HeaderName::from_static(CONTROL_EXECUTION_RUNTIME_HEADER),
-            HeaderValue::from_static(if control_decision.is_execution_runtime_candidate() {
-                "true"
-            } else {
-                "false"
-            }),
-        );
-    }
-    if let Some(route_family) = control_decision.route_family.as_deref() {
-        if !response.headers().contains_key(CONTROL_ROUTE_FAMILY_HEADER) {
-            response.headers_mut().insert(
-                HeaderName::from_static(CONTROL_ROUTE_FAMILY_HEADER),
-                HeaderValue::from_str(route_family)
-                    .expect("route family should be a valid header value"),
-            );
-        }
-    }
-    if let Some(route_kind) = control_decision.route_kind.as_deref() {
-        if !response.headers().contains_key(CONTROL_ROUTE_KIND_HEADER) {
-            response.headers_mut().insert(
-                HeaderName::from_static(CONTROL_ROUTE_KIND_HEADER),
-                HeaderValue::from_str(route_kind)
-                    .expect("route kind should be a valid header value"),
-            );
-        }
     }
     if let Some(endpoint_signature) = control_decision.auth_endpoint_signature.as_deref() {
         if !response

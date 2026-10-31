@@ -10,9 +10,8 @@ use super::super::{
     start_server, AppState, InMemoryAuthApiKeySnapshotRepository,
 };
 use crate::constants::{
-    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_EXECUTION_RUNTIME_HEADER,
-    CONTROL_ROUTE_CLASS_HEADER, CONTROL_ROUTE_FAMILY_HEADER, CONTROL_ROUTE_KIND_HEADER,
-    GATEWAY_HEADER, TRACE_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
+    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_ROUTE_CLASS_HEADER, GATEWAY_HEADER,
+    TRACE_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
     TRUSTED_ADMIN_USER_ROLE_HEADER,
 };
 
@@ -102,27 +101,6 @@ async fn gateway_handles_models_support_routes_locally_with_public_support_contr
             .get(CONTROL_ROUTE_CLASS_HEADER)
             .and_then(|value| value.to_str().ok()),
         Some("public_support")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTION_RUNTIME_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("false")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_FAMILY_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("models")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_KIND_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("list")
     );
     assert_eq!(
         response

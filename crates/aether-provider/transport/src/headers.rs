@@ -1,7 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use aether_contracts::USAGE_SERVER_NOW_UNIX_MS_HEADER;
-
 /// Return the case-insensitive field names nominated by all `Connection`
 /// header values in a request.  Those fields are hop-by-hop even when their
 /// names are application-defined and therefore must not cross to a provider.
@@ -76,7 +74,6 @@ pub fn should_skip_request_header(name: &str) -> bool {
             | "transfer-encoding"
             | "upgrade"
             | "set-cookie"
-            | USAGE_SERVER_NOW_UNIX_MS_HEADER
     )
 }
 
@@ -287,7 +284,6 @@ mod tests {
         normalize_upstream_accept_encoding, should_skip_request_header,
         should_skip_upstream_complete_passthrough_header, should_skip_upstream_passthrough_header,
     };
-    use aether_contracts::USAGE_SERVER_NOW_UNIX_MS_HEADER;
     use std::collections::BTreeMap;
 
     #[test]
@@ -477,24 +473,6 @@ mod tests {
             assert!(should_skip_request_header(header));
             assert!(should_skip_upstream_passthrough_header(header));
             assert!(should_skip_upstream_complete_passthrough_header(header));
-        }
-    }
-
-    #[test]
-    fn strips_usage_server_time_header_from_provider_requests() {
-        for h in [
-            USAGE_SERVER_NOW_UNIX_MS_HEADER,
-            "X-Aether-Server-Now-Unix-Ms",
-        ] {
-            assert!(should_skip_request_header(h), "should skip {h}");
-            assert!(
-                should_skip_upstream_passthrough_header(h),
-                "should skip passthrough {h}"
-            );
-            assert!(
-                should_skip_upstream_complete_passthrough_header(h),
-                "should skip complete passthrough {h}"
-            );
         }
     }
 

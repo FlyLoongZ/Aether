@@ -35,10 +35,6 @@ pub(crate) const EXECUTION_PATH_LOCAL_AI_PUBLIC: &str = "local_ai_public";
 pub(crate) const EXECUTION_PATH_LOCAL_EXECUTION_LOOP_DETECTED: &str =
     "local_execution_loop_detected";
 pub(crate) const CONTROL_ROUTE_CLASS_HEADER: &str = "x-aether-control-route-class";
-pub(crate) const CONTROL_ROUTE_FAMILY_HEADER: &str = "x-aether-control-route-family";
-pub(crate) const CONTROL_ROUTE_KIND_HEADER: &str = "x-aether-control-route-kind";
-pub(crate) const CONTROL_EXECUTION_RUNTIME_HEADER: &str =
-    "x-aether-control-execution-runtime-candidate";
 pub(crate) const CONTROL_EXECUTION_RUNTIME_CANDIDATE_KEY: &str = "execution_runtime_candidate";
 pub(crate) const CONTROL_REQUEST_ID_HEADER: &str = "x-aether-control-request-id";
 pub(crate) const CONTROL_CANDIDATE_ID_HEADER: &str = "x-aether-control-candidate-id";

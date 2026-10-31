@@ -14,9 +14,7 @@ use super::super::{
     InMemoryProviderCatalogReadRepository, Json, Router,
 };
 use crate::constants::{
-    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_EXECUTION_RUNTIME_HEADER,
-    CONTROL_ROUTE_FAMILY_HEADER, CONTROL_ROUTE_KIND_HEADER, EXECUTION_PATH_HEADER,
-    EXECUTION_PATH_LOCAL_AUTH_DENIED,
+    CONTROL_ENDPOINT_SIGNATURE_HEADER, EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AUTH_DENIED,
 };
 use crate::tests::DEV_FERNET_KEY;
 use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
@@ -803,44 +801,9 @@ async fn embeddings_route_accepts_openai_payload_impl() {
     assert_eq!(
         response
             .headers()
-            .get(CONTROL_ROUTE_FAMILY_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("openai")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_KIND_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("embedding")
-    );
-    assert_ne!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_KIND_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("chat")
-    );
-    assert_ne!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_KIND_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("responses")
-    );
-    assert_eq!(
-        response
-            .headers()
             .get(CONTROL_ENDPOINT_SIGNATURE_HEADER)
             .and_then(|value| value.to_str().ok()),
         Some("openai:embedding")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTION_RUNTIME_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("true")
     );
     let payload: serde_json::Value = response.json().await.expect("body should parse");
     assert_eq!(payload["object"], "list");
@@ -889,13 +852,6 @@ async fn embeddings_route_converts_openai_payload_to_gemini_embedding_provider_i
             .get(CONTROL_ENDPOINT_SIGNATURE_HEADER)
             .and_then(|value| value.to_str().ok()),
         Some("openai:embedding")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTION_RUNTIME_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("true")
     );
     let payload: serde_json::Value = response.json().await.expect("body should parse");
     assert_eq!(payload["object"], "list");
@@ -1253,20 +1209,6 @@ async fn gemini_embed_content_route_uses_native_gemini_embedding_provider_impl()
     assert_eq!(
         response
             .headers()
-            .get(CONTROL_ROUTE_FAMILY_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("gemini")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_KIND_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("embedding")
-    );
-    assert_eq!(
-        response
-            .headers()
             .get(CONTROL_ENDPOINT_SIGNATURE_HEADER)
             .and_then(|value| value.to_str().ok()),
         Some("gemini:embedding")
@@ -1385,13 +1327,6 @@ async fn embeddings_route_rejects_invalid_local_payloads_impl() {
             .expect("request should succeed");
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            response
-                .headers()
-                .get(CONTROL_ROUTE_KIND_HEADER)
-                .and_then(|value| value.to_str().ok()),
-            Some("embedding")
-        );
         let payload: serde_json::Value = response.json().await.expect("body should parse");
         assert_eq!(payload["detail"], expected_detail);
     }
