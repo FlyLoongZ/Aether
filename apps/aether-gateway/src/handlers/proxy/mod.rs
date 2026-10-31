@@ -23,12 +23,11 @@ use crate::constants::{
     EXECUTION_PATH_CONTROL_EXECUTE_SYNC, EXECUTION_PATH_DISTRIBUTED_OVERLOADED,
     EXECUTION_PATH_EXECUTION_RUNTIME_STREAM, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
     EXECUTION_PATH_LOCAL_AI_PUBLIC, EXECUTION_PATH_LOCAL_API_KEY_CONCURRENCY_LIMITED,
-    EXECUTION_PATH_LOCAL_AUTH_DENIED, EXECUTION_PATH_LOCAL_EXECUTION_LOOP_DETECTED,
-    EXECUTION_PATH_LOCAL_EXECUTION_PLANNING_TIMEOUT, EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS,
-    EXECUTION_PATH_LOCAL_INVALID_REQUEST, EXECUTION_PATH_LOCAL_OVERLOADED,
-    EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED, EXECUTION_PATH_LOCAL_RATE_LIMITED,
-    EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH,
-    EXECUTION_RUNTIME_LOOP_GUARD_HEADER, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
+    EXECUTION_PATH_LOCAL_AUTH_DENIED, EXECUTION_PATH_LOCAL_EXECUTION_PLANNING_TIMEOUT,
+    EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, EXECUTION_PATH_LOCAL_INVALID_REQUEST,
+    EXECUTION_PATH_LOCAL_OVERLOADED, EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED,
+    EXECUTION_PATH_LOCAL_RATE_LIMITED, EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND,
+    EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
 };
 
 use crate::control::{
@@ -41,9 +40,6 @@ use crate::executor::{
     maybe_execute_stream_request, maybe_execute_sync_request,
     record_failed_usage_for_exhausted_request, record_failed_usage_for_runtime_miss_request,
     LocalExecutionRequestOutcome,
-};
-use crate::frontdoor_loop_guard::{
-    frontdoor_self_loop_public_ai_path, request_has_execution_runtime_loop_guard,
 };
 use crate::handlers::shared::{
     build_admin_proxy_auth_required_response, build_unhandled_admin_proxy_response, ip_rules_allow,
@@ -89,8 +85,6 @@ const GEMINI_FILES_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
 const LOCAL_ROUTE_NOT_FOUND_DETAIL: &str = "Route not found";
 const LOCAL_PROXY_PASSTHROUGH_REMOVED_DETAIL: &str =
     "Route matched a removed compatibility passthrough; implement it in Rust or retire the route";
-const LOCAL_EXECUTION_LOOP_DETECTED_DETAIL: &str =
-    "Gateway detected an execution runtime request loop back into the local frontdoor";
 const AUTH_API_KEY_CONCURRENCY_LIMIT_REACHED_DETAIL: &str =
     "当前调用方 API Key 并发请求数已达上限，请稍后重试";
 const PROVIDER_KEY_CAPACITY_LIMIT_REACHED_DETAIL: &str =
@@ -185,11 +179,6 @@ fn local_execution_outcome_label(outcome: &LocalExecutionRequestOutcome) -> &'st
         LocalExecutionRequestOutcome::Exhausted(_) => "exhausted",
         LocalExecutionRequestOutcome::NoPath => "no_path",
     }
-}
-
-fn request_hits_execution_loop_guard(parts: &http::request::Parts) -> bool {
-    request_has_execution_runtime_loop_guard(&parts.headers)
-        && frontdoor_self_loop_public_ai_path(parts.uri.path())
 }
 
 fn api_key_remote_ip_allowed(ip_rules: Option<&[String]>, remote_ip: std::net::IpAddr) -> bool {
@@ -588,40 +577,6 @@ async fn proxy_request_inner(
     parts.extensions.insert(request_origin);
     let trace_id = extract_or_generate_trace_id(&parts.headers);
     state.clear_local_execution_runtime_miss_diagnostic(&trace_id);
-    if request_hits_execution_loop_guard(&parts) {
-        warn!(
-            event_name = "frontdoor_execution_loop_detected",
-            log_type = "ops",
-            trace_id = %trace_id,
-            method = %parts.method,
-            path = %parts.uri.path(),
-            loop_guard_header = EXECUTION_RUNTIME_LOOP_GUARD_HEADER,
-            "gateway rejected execution runtime request loop into frontdoor"
-        );
-        let response = build_local_http_error_response_with_request_path(
-            &trace_id,
-            None,
-            Some(parts.uri.path()),
-            http::StatusCode::LOOP_DETECTED,
-            LOCAL_EXECUTION_LOOP_DETECTED_DETAIL,
-        )?;
-        return Ok(finalize_gateway_response(
-            response,
-            &trace_id,
-            &remote_addr,
-            client_ip,
-            &parts.method,
-            parts
-                .uri
-                .path_and_query()
-                .map(|value| value.as_str())
-                .unwrap_or("/"),
-            None,
-            EXECUTION_PATH_LOCAL_EXECUTION_LOOP_DETECTED,
-            &started_at,
-            request_permit.take(),
-        ));
-    }
     let request_context_started_at = Instant::now();
     let mut request_context = crate::control::resolve_public_request_context_without_trusted_auth(
         &state,

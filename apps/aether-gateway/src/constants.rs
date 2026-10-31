@@ -6,9 +6,6 @@ pub(crate) const READYZ_PATH: &str = "/readyz";
 pub(crate) const GATEWAY_HEADER: &str = "x-aether-gateway";
 pub(crate) const EXECUTION_PATH_HEADER: &str = "x-aether-execution-path";
 pub(crate) const DEPENDENCY_REASON_HEADER: &str = "x-aether-dependency-reason";
-pub(crate) const EXECUTION_RUNTIME_LOOP_GUARD_HEADER: &str = "x-aether-execution-loop-guard";
-pub(crate) const EXECUTION_RUNTIME_LOOP_GUARD_VALUE: &str = "local-runtime";
-pub(crate) const EXECUTION_RUNTIME_LOOP_GUARD_VIA_TOKEN: &str = "aether-execution-runtime";
 pub(crate) const LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER: &str =
     "x-aether-local-execution-runtime-miss-reason";
 pub(crate) const EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH: &str = "public_proxy_passthrough";
@@ -32,8 +29,6 @@ pub(crate) const EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND: &str = "local_route_not_f
 pub(crate) const EXECUTION_PATH_LOCAL_OVERLOADED: &str = "local_overloaded";
 pub(crate) const EXECUTION_PATH_DISTRIBUTED_OVERLOADED: &str = "distributed_overloaded";
 pub(crate) const EXECUTION_PATH_LOCAL_AI_PUBLIC: &str = "local_ai_public";
-pub(crate) const EXECUTION_PATH_LOCAL_EXECUTION_LOOP_DETECTED: &str =
-    "local_execution_loop_detected";
 pub(crate) const CONTROL_ROUTE_CLASS_HEADER: &str = "x-aether-control-route-class";
 pub(crate) const CONTROL_EXECUTION_RUNTIME_CANDIDATE_KEY: &str = "execution_runtime_candidate";
 pub(crate) const CONTROL_REQUEST_ID_HEADER: &str = "x-aether-control-request-id";
