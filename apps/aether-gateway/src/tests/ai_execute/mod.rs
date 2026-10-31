@@ -7,12 +7,12 @@ use axum::body::{to_bytes, Body, Bytes};
 use axum::response::Response;
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};
-use http::header::{HeaderName, HeaderValue};
+use http::header::HeaderValue;
 use http::StatusCode;
 use serde_json::json;
 
 use crate::constants::{
-    CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, DEPENDENCY_REASON_HEADER,
+    CONTROL_EXECUTE_FALLBACK_HEADER, DEPENDENCY_REASON_HEADER,
     EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AI_PUBLIC,
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
     TRACE_ID_HEADER,

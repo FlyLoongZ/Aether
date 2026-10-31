@@ -12,13 +12,13 @@ use axum::response::Response;
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
-use http::header::{HeaderName, HeaderValue};
+use http::header::HeaderValue;
 use http::StatusCode;
 use serde_json::json;
 
 use std::sync::{Arc, Mutex};
 
-use crate::constants::{CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER};
+use crate::constants::{CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER};
 
 use super::{
     build_router_with_state, build_state_with_execution_runtime_override, start_server,
@@ -80,14 +80,10 @@ async fn gateway_executes_openai_video_content_from_reconstructed_data_task_with
                 let execute_stream_hits_inner = Arc::clone(&execute_stream_hits_clone);
                 async move {
                     *execute_stream_hits_inner.lock().expect("mutex should lock") += 1;
-                    let mut response = Response::builder()
+                    let response = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("fallback"))
                         .expect("response should build");
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),

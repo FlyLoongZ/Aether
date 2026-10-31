@@ -1,7 +1,5 @@
-use axum::body::{Body, Bytes};
-use axum::http::{HeaderName, HeaderValue, Response};
+use axum::body::Bytes;
 
-use crate::constants::CONTROL_EXECUTED_HEADER;
 use crate::control::GatewayControlDecision;
 use crate::executor::{
     maybe_execute_stream_request, maybe_execute_sync_request, LocalExecutionRequestOutcome,
@@ -48,21 +46,5 @@ pub(crate) async fn maybe_execute_via_control(
             .await?
     };
 
-    Ok(match response {
-        LocalExecutionRequestOutcome::Responded(response) => {
-            LocalExecutionRequestOutcome::Responded(mark_control_executed(response))
-        }
-        LocalExecutionRequestOutcome::Exhausted(outcome) => {
-            LocalExecutionRequestOutcome::Exhausted(outcome)
-        }
-        LocalExecutionRequestOutcome::NoPath => LocalExecutionRequestOutcome::NoPath,
-    })
-}
-
-fn mark_control_executed(mut response: Response<Body>) -> Response<Body> {
-    response.headers_mut().insert(
-        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-        HeaderValue::from_static("true"),
-    );
-    response
+    Ok(response)
 }

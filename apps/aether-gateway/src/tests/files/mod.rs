@@ -1,7 +1,7 @@
 use super::{
     any, build_router, build_router_with_state, build_state_with_execution_runtime_override, json,
-    start_server, to_bytes, AppState, Arc, Body, Bytes, HeaderName, HeaderValue, Infallible, Json,
-    Mutex, Request, Response, Router, StatusCode, CONTROL_EXECUTED_HEADER,
+    start_server, to_bytes, AppState, Arc, Body, Bytes, HeaderValue, Infallible, Json,
+    Mutex, Request, Response, Router, StatusCode,
     CONTROL_EXECUTE_FALLBACK_HEADER, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 use crate::tests::DEV_FERNET_KEY;
@@ -234,10 +234,6 @@ async fn gateway_locally_denies_gemini_files_download_control_sync_even_with_opt
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/octet-stream"),
                     );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
@@ -299,14 +295,10 @@ async fn gateway_locally_denies_gemini_files_download_control_sync_without_opt_i
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let mut response = Response::builder()
+                    let response = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("unexpected-execute"))
                         .expect("response should build");
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
@@ -386,14 +378,10 @@ async fn gateway_skips_gemini_files_download_control_sync_without_opt_in_header_
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let mut response = Response::builder()
+                    let response = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("file-bytes"))
                         .expect("response should build");
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),

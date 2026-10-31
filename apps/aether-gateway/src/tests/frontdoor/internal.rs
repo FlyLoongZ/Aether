@@ -10,7 +10,7 @@ use crate::tests::DEV_FERNET_KEY;
 use crate::tests::{
     any, build_router, build_router_with_state, build_state_with_execution_runtime_override, json,
     start_server, AppState, Arc, Body, HeaderValue, Json, Mutex, Request, Response, Router,
-    StatusCode, CONTROL_ACTION_PROXY_PUBLIC, CONTROL_EXECUTED_HEADER,
+    StatusCode, CONTROL_ACTION_PROXY_PUBLIC,
 };
 use aether_data::repository::billing::InMemoryBillingReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
@@ -1242,13 +1242,6 @@ async fn gateway_handles_internal_gateway_finalize_sync_locally() {
         .expect("request should succeed");
 
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTED_HEADER)
-            .expect("control executed header should exist"),
-        "true"
-    );
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(
         payload,
@@ -1325,13 +1318,6 @@ async fn gateway_handles_internal_gateway_finalize_sync_openai_video_locally() {
         .expect("request should succeed");
 
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTED_HEADER)
-            .expect("control executed header should exist"),
-        "true"
-    );
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert!(payload["id"]
         .as_str()
@@ -1407,13 +1393,6 @@ async fn gateway_handles_internal_gateway_finalize_sync_gemini_video_locally() {
         .expect("request should succeed");
 
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTED_HEADER)
-            .expect("control executed header should exist"),
-        "true"
-    );
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert!(payload["name"]
         .as_str()
@@ -1486,13 +1465,6 @@ async fn gateway_handles_internal_gateway_finalize_sync_openai_video_delete_loca
         .expect("request should succeed");
 
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTED_HEADER)
-            .expect("control executed header should exist"),
-        "true"
-    );
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(
         payload,
@@ -1568,13 +1540,6 @@ async fn gateway_handles_internal_gateway_finalize_sync_gemini_video_cancel_loca
         .expect("request should succeed");
 
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTED_HEADER)
-            .expect("control executed header should exist"),
-        "true"
-    );
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(payload, json!({}));
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);

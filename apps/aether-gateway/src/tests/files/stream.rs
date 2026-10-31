@@ -5,11 +5,11 @@ use super::{
     hash_api_key, json, sample_auth_snapshot, sample_files_candidate_row,
     sample_files_provider_catalog_endpoint, sample_files_provider_catalog_key,
     sample_files_provider_catalog_provider, sample_files_proxy_node_repository, start_server,
-    to_bytes, Arc, Body, Bytes, HeaderName, HeaderValue, InMemoryAuthApiKeySnapshotRepository,
+    to_bytes, Arc, Body, Bytes, HeaderValue, InMemoryAuthApiKeySnapshotRepository,
     InMemoryMinimalCandidateSelectionReadRepository, InMemoryProviderCatalogReadRepository,
     InMemoryRequestCandidateRepository, Infallible, Json, Mutex, Request,
     RequestCandidateReadRepository, RequestCandidateStatus, Response, Router, StatusCode,
-    CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER,
+    CONTROL_EXECUTE_FALLBACK_HEADER, TRACE_ID_HEADER,
 };
 use crate::tests::DEV_FERNET_KEY;
 
@@ -321,10 +321,6 @@ async fn gateway_locally_denies_gemini_files_upload_control_sync_with_opt_in_hea
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
                     );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
@@ -390,14 +386,10 @@ async fn gateway_locally_denies_gemini_files_upload_control_sync_without_opt_in_
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let mut response = Response::builder()
+                    let response = Response::builder()
                         .status(StatusCode::CREATED)
                         .body(Body::from("{\"uploaded\":true}"))
                         .expect("response should build");
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),

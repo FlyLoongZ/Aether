@@ -1,8 +1,7 @@
 use super::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json, start_server,
-    to_bytes, Arc, Body, HeaderName, HeaderValue, Json, Mutex, Request, Response, Router,
-    StatusCode, CONTROL_EXECUTED_HEADER, EXECUTION_PATH_HEADER,
-    LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER, TRACE_ID_HEADER,
+    to_bytes, Arc, Body, HeaderValue, Json, Mutex, Request, Response, Router, StatusCode,
+    EXECUTION_PATH_HEADER, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER, TRACE_ID_HEADER,
 };
 use crate::data::GatewayDataState;
 use crate::tests::hash_api_key;
@@ -197,10 +196,6 @@ async fn gateway_executes_openai_chat_sync_upstream_stream_via_local_finalize_re
                     response.headers_mut().insert(
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
-                    );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
                     );
                     response
                 }
