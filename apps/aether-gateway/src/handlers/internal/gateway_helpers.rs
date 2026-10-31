@@ -1,11 +1,11 @@
 use crate::admin_api::build_internal_control_error_response;
 use crate::constants::{
-    CONTROL_ACTION_HEADER, CONTROL_ACTION_PROXY_PUBLIC, CONTROL_EXECUTED_HEADER,
-    CONTROL_EXECUTION_RUNTIME_CANDIDATE_KEY, EXECUTION_PATH_CONTROL_EXECUTE_STREAM,
-    EXECUTION_PATH_CONTROL_EXECUTE_SYNC, EXECUTION_PATH_DISTRIBUTED_OVERLOADED,
-    EXECUTION_PATH_EXECUTION_RUNTIME_STREAM, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
-    EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AUTH_DENIED, EXECUTION_PATH_LOCAL_OVERLOADED,
-    EXECUTION_PATH_LOCAL_RATE_LIMITED, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH,
+    CONTROL_ACTION_PROXY_PUBLIC, CONTROL_EXECUTION_RUNTIME_CANDIDATE_KEY,
+    EXECUTION_PATH_CONTROL_EXECUTE_STREAM, EXECUTION_PATH_CONTROL_EXECUTE_SYNC,
+    EXECUTION_PATH_DISTRIBUTED_OVERLOADED, EXECUTION_PATH_EXECUTION_RUNTIME_STREAM,
+    EXECUTION_PATH_EXECUTION_RUNTIME_SYNC, EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AUTH_DENIED,
+    EXECUTION_PATH_LOCAL_OVERLOADED, EXECUTION_PATH_LOCAL_RATE_LIMITED,
+    EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH,
 };
 use crate::control::{management_token_permission_mode_and_summary, GatewayControlDecision};
 use crate::execution_runtime::{
@@ -106,7 +106,6 @@ pub(crate) fn build_internal_gateway_fallback_plan_payload(
 pub(crate) fn build_internal_gateway_proxy_public_response() -> Response<Body> {
     (
         http::StatusCode::CONFLICT,
-        [(CONTROL_ACTION_HEADER, CONTROL_ACTION_PROXY_PUBLIC)],
         Json(json!({ "action": CONTROL_ACTION_PROXY_PUBLIC })),
     )
         .into_response()
@@ -318,17 +317,12 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
                         crate::usage::spawn_sync_report(state.clone(), report_payload);
                     }
                 }
-                let mut response = response;
-                response.headers_mut().insert(
-                    HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                    HeaderValue::from_static("true"),
-                );
                 return Ok(Some(response));
             }
             LocalVideoSyncSuccessBuild::NotHandled(payload) => *payload,
         };
 
-    if let Some(mut response) =
+    if let Some(response) =
         maybe_build_local_sync_finalize_response(state, &plan, trace_id, decision, &mut payload)
             .await?
     {
@@ -354,14 +348,10 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
             payload.report_kind = success_report_kind.to_string();
             crate::usage::spawn_sync_report(state.clone(), payload);
         }
-        response.headers_mut().insert(
-            HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-            HeaderValue::from_static("true"),
-        );
         return Ok(Some(response));
     }
 
-    if let Some(mut response) =
+    if let Some(response) =
         maybe_build_local_video_error_response(state, &plan, trace_id, decision, &mut payload)
             .await?
     {
@@ -371,10 +361,6 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
             payload.report_kind = error_report_kind.to_string();
             crate::usage::spawn_sync_report(state.clone(), payload);
         }
-        response.headers_mut().insert(
-            HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-            HeaderValue::from_static("true"),
-        );
         return Ok(Some(response));
     }
 

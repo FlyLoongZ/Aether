@@ -4,11 +4,11 @@ use axum::body::Body;
 use axum::response::Response;
 use axum::routing::any;
 use axum::{extract::Request, Router};
-use http::header::{HeaderName, HeaderValue};
+use http::header::HeaderValue;
 use http::StatusCode;
 
 use crate::constants::{
-    CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, EXECUTION_PATH_HEADER,
+    CONTROL_EXECUTE_FALLBACK_HEADER, EXECUTION_PATH_HEADER,
 };
 
 use super::{build_router, start_server};
@@ -34,10 +34,6 @@ async fn gateway_hides_video_task_from_unauthenticated_caller_with_opt_in_header
                     response.headers_mut().insert(
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
-                    );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
                     );
                     response
                 }
@@ -91,14 +87,10 @@ async fn gateway_hides_video_task_without_calling_public_or_control_upstream() {
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let mut response = Response::builder()
+                    let response = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("{\"unexpected\":true}"))
                         .expect("response should build");
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
@@ -168,14 +160,10 @@ async fn gateway_hides_video_task_from_unauthenticated_caller_without_opt_in_hea
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let mut response = Response::builder()
+                    let response = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("{\"status\":\"queued\"}"))
                         .expect("response should build");
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),

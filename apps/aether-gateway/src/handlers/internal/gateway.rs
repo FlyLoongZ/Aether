@@ -8,8 +8,7 @@ use super::{
 };
 use crate::ai_serving::api;
 use crate::constants::{
-    CONTROL_EXECUTED_HEADER, EXECUTION_PATH_EXECUTION_RUNTIME_STREAM,
-    EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
+    EXECUTION_PATH_EXECUTION_RUNTIME_STREAM, EXECUTION_PATH_EXECUTION_RUNTIME_SYNC,
 };
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
@@ -19,7 +18,7 @@ use crate::handlers::shared::{
 };
 use crate::{AppState, GatewayError};
 use axum::body::{Body, Bytes};
-use axum::http::{self, HeaderName, HeaderValue, Response};
+use axum::http::{self, Response};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::{json, Value};
@@ -890,11 +889,7 @@ pub(crate) async fn maybe_build_local_internal_proxy_response_impl(
                     if let Some(background_report) = outcome.background_report {
                         crate::usage::spawn_sync_report(state.clone(), background_report);
                     }
-                    let mut response = outcome.response;
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
+                    let response = outcome.response;
                     return Ok(Some(response));
                 }
                 if let Some(response) = maybe_build_internal_finalize_video_response(

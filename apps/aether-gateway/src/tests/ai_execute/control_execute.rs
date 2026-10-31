@@ -1,7 +1,7 @@
 use super::{
     any, build_router, build_router_with_execution_runtime_override, json, start_server, Arc, Body,
-    Bytes, HeaderName, HeaderValue, Infallible, Json, Mutex, Request, Response, Router, StatusCode,
-    CONTROL_EXECUTED_HEADER, CONTROL_EXECUTE_FALLBACK_HEADER, DEPENDENCY_REASON_HEADER,
+    Bytes, HeaderValue, Infallible, Json, Mutex, Request, Response, Router, StatusCode,
+    CONTROL_EXECUTE_FALLBACK_HEADER, DEPENDENCY_REASON_HEADER,
     EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, TRACE_ID_HEADER,
 };
 
@@ -64,10 +64,6 @@ async fn gateway_locally_denies_sync_ai_control_execute_when_opted_in_and_execut
                     response.headers_mut().insert(
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
-                    );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
                     );
                     response
                 }
@@ -200,10 +196,6 @@ async fn gateway_locally_denies_stream_ai_control_execute_when_opted_in_and_exec
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("text/event-stream"),
                     );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
@@ -334,10 +326,6 @@ async fn gateway_does_not_proxy_control_execute_over_http_when_opted_in_and_exec
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
                     );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
@@ -355,10 +343,6 @@ async fn gateway_does_not_proxy_control_execute_over_http_when_opted_in_and_exec
                     response.headers_mut().insert(
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
-                    );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
                     );
                     response
                 }
@@ -479,10 +463,6 @@ async fn gateway_does_not_proxy_control_execute_over_http_when_opted_in_and_exec
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("text/event-stream"),
                     );
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
@@ -493,14 +473,10 @@ async fn gateway_does_not_proxy_control_execute_over_http_when_opted_in_and_exec
                 let execute_hits_inner = Arc::clone(&execute_hits_clone);
                 async move {
                     *execute_hits_inner.lock().expect("mutex should lock") += 1;
-                    let mut response = Response::builder()
+                    let response = Response::builder()
                         .status(StatusCode::OK)
                         .body(Body::from("data: fallback\n\n"))
                         .expect("response should build");
-                    response.headers_mut().insert(
-                        HeaderName::from_static(CONTROL_EXECUTED_HEADER),
-                        HeaderValue::from_static("true"),
-                    );
                     response
                 }
             }),
