@@ -14,9 +14,7 @@ use super::super::{
     InMemoryProviderCatalogReadRepository, Json, Router,
 };
 use crate::constants::{
-    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_EXECUTION_RUNTIME_HEADER,
-    CONTROL_ROUTE_FAMILY_HEADER, CONTROL_ROUTE_KIND_HEADER, EXECUTION_PATH_HEADER,
-    EXECUTION_PATH_LOCAL_AUTH_DENIED,
+    CONTROL_ENDPOINT_SIGNATURE_HEADER, EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AUTH_DENIED,
 };
 use crate::tests::DEV_FERNET_KEY;
 
@@ -187,30 +185,9 @@ async fn rerank_route_accepts_openai_payload_impl() {
     assert_eq!(
         response
             .headers()
-            .get(CONTROL_ROUTE_FAMILY_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("openai")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_KIND_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("rerank")
-    );
-    assert_eq!(
-        response
-            .headers()
             .get(CONTROL_ENDPOINT_SIGNATURE_HEADER)
             .and_then(|value| value.to_str().ok()),
         Some("openai:rerank")
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_EXECUTION_RUNTIME_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("true")
     );
     let payload: serde_json::Value = response.json().await.expect("body should parse");
     assert_eq!(payload["results"][0]["index"], 0);
@@ -270,13 +247,6 @@ async fn rerank_route_rejects_invalid_local_payloads_impl() {
             .expect("request should succeed");
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            response
-                .headers()
-                .get(CONTROL_ROUTE_KIND_HEADER)
-                .and_then(|value| value.to_str().ok()),
-            Some("rerank")
-        );
         let payload: serde_json::Value = response.json().await.expect("body should parse");
         assert_eq!(payload["detail"], expected_detail);
     }

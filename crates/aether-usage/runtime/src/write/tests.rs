@@ -1079,10 +1079,10 @@ fn stream_terminal_usage_marks_redirect_status_as_failed() {
             "provider_api_format": "gemini:generate_content"
         })),
         status_code: 302,
-        provider_headers: BTreeMap::from([
-            ("content-type".to_string(), "application/json".to_string()),
-            ("x-aether-upstream-status".to_string(), "302".to_string()),
-        ]),
+        provider_headers: BTreeMap::from([(
+            "content-type".to_string(),
+            "application/json".to_string(),
+        )]),
         client_headers: None,
         provider_body_base64: Some(
             base64::engine::general_purpose::STANDARD

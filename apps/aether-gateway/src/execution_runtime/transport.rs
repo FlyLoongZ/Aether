@@ -63,8 +63,6 @@ const DEFAULT_STREAM_FIRST_BYTE_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_NON_STREAM_TOTAL_TIMEOUT_MS: u64 = 300_000;
 const DEFAULT_CODEX_COMPACT_TOTAL_TIMEOUT_MS: u64 = 1_200_000;
 const EXECUTION_RESPONSE_BODY_LIMIT_HEADER: &str = "x-aether-execution-response-body-limit-bytes";
-const LEGACY_EXECUTION_REQUEST_ACCEPT_INVALID_CERTS_HEADER: &str =
-    "x-aether-execution-accept-invalid-certs";
 const DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 const MIN_SCOPED_RESPONSE_BODY_LIMIT_BYTES: usize = 64 * 1024;
 const MAX_SCOPED_RESPONSE_BODY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
@@ -4101,7 +4099,6 @@ pub(crate) fn build_request_headers(
             || normalized_key == "content-encoding"
             || normalized_key == EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER
             || normalized_key == EXECUTION_REQUEST_HTTP1_ONLY_HEADER
-            || normalized_key == LEGACY_EXECUTION_REQUEST_ACCEPT_INVALID_CERTS_HEADER
             || normalized_key == EXECUTION_RESPONSE_BODY_MODE_HEADER
             || normalized_key == EXECUTION_RESPONSE_BODY_LIMIT_HEADER
         {

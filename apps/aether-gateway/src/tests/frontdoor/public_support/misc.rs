@@ -1694,20 +1694,6 @@ async fn gateway_rejects_users_me_api_key_nested_get_path_as_local_not_found_wit
         .expect("request should succeed");
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_FAMILY_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        None
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(CONTROL_ROUTE_KIND_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        None
-    );
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(payload["error"]["type"], "http_error");
     assert_eq!(payload["error"]["message"], "Route not found");

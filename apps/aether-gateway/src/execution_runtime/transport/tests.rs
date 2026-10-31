@@ -31,7 +31,7 @@ use super::{
     json_value_fits_serialized_limit, maximum_base64_len_for_decoded_limit,
     record_manual_proxy_request_failure, record_manual_proxy_request_outcome,
     record_manual_proxy_request_success, record_manual_proxy_stream_error,
-    reqwest_urls_have_same_origin, resolve_execution_transport_controls,
+    reqwest_urls_have_same_origin,
     resolve_non_stream_total_timeout, resolve_proxy_url, safe_redirect_decision,
     validate_execution_upstream_url, with_upstream_response_body_limit, DirectSyncExecutionRuntime,
     ExecutionRuntimeTransportError, ExecutionTransportControls, SafeRedirectDecision,
@@ -1633,27 +1633,6 @@ fn direct_reqwest_prewarm_skips_browser_transport() {
         !super::try_prewarm_direct_reqwest_client_cache_for_plan(&plan)
             .expect("browser transport should skip prewarm")
     );
-}
-
-#[test]
-fn direct_sync_execution_runtime_strips_accept_invalid_certs_control_header() {
-    let headers = BTreeMap::from([
-        ("content-type".into(), "application/json".into()),
-        (
-            "x-aether-execution-accept-invalid-certs".into(),
-            "true".into(),
-        ),
-    ]);
-
-    let controls = resolve_execution_transport_controls(&headers);
-    assert!(!controls.http1_only);
-
-    let forwarded = build_request_headers(&headers, None, false)
-        .expect("headers should build after stripping internal controls");
-    assert!(forwarded.get("content-type").is_some());
-    assert!(forwarded
-        .get("x-aether-execution-accept-invalid-certs")
-        .is_none());
 }
 
 #[test]

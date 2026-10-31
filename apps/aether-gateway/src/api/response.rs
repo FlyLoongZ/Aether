@@ -15,22 +15,6 @@ use crate::plan_usage_policy::PlanUsagePolicyRejection;
 use crate::rate_limit::FrontdoorUserRpmRejection;
 use crate::{insert_header_if_missing, GatewayError};
 
-fn execution_runtime_candidate_header_value(decision: &GatewayControlDecision) -> &'static str {
-    if decision.is_execution_runtime_candidate() {
-        "true"
-    } else {
-        "false"
-    }
-}
-
-fn insert_execution_runtime_candidate_headers(
-    headers: &mut http::HeaderMap,
-    decision: &GatewayControlDecision,
-) -> Result<(), GatewayError> {
-    let value = execution_runtime_candidate_header_value(decision);
-    insert_header_if_missing(headers, CONTROL_EXECUTION_RUNTIME_HEADER, value)
-}
-
 fn response_is_sse(headers: &http::HeaderMap) -> bool {
     headers
         .get(http::header::CONTENT_TYPE)
@@ -202,21 +186,6 @@ where
             CONTROL_ROUTE_CLASS_HEADER,
             decision.route_class.as_deref().unwrap_or("passthrough"),
         )?;
-        insert_execution_runtime_candidate_headers(response.headers_mut(), decision)?;
-        if let Some(route_family) = decision.route_family.as_deref() {
-            insert_header_if_missing(
-                response.headers_mut(),
-                CONTROL_ROUTE_FAMILY_HEADER,
-                route_family,
-            )?;
-        }
-        if let Some(route_kind) = decision.route_kind.as_deref() {
-            insert_header_if_missing(
-                response.headers_mut(),
-                CONTROL_ROUTE_KIND_HEADER,
-                route_kind,
-            )?;
-        }
     }
     Ok(response)
 }

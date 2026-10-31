@@ -19,7 +19,4 @@ pub use plan::{
     TRANSPORT_POOL_SCOPE_KEY,
 };
 pub use result::{ExecutionResponseObservation, ExecutionResult, ExecutionTelemetry, ResponseBody};
-pub use usage::{
-    ExecutionStreamTerminalSummary, StandardizedUsage, UsageTokenSource,
-    USAGE_SERVER_NOW_UNIX_MS_HEADER,
-};
+pub use usage::{ExecutionStreamTerminalSummary, StandardizedUsage, UsageTokenSource};

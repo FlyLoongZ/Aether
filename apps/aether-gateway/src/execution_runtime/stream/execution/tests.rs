@@ -7071,13 +7071,6 @@ async fn execute_execution_runtime_stream_rewrites_redirect_to_structured_failur
             .and_then(|value| value.to_str().ok()),
         Some("application/json")
     );
-    assert_eq!(
-        response
-            .headers()
-            .get("x-aether-upstream-status")
-            .and_then(|value| value.to_str().ok()),
-        Some("302")
-    );
     assert!(
         response.headers().get(header::LOCATION).is_none(),
         "redirect location should not be forwarded to AI clients"

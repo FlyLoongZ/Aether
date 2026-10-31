@@ -727,8 +727,7 @@ async fn admin_monitoring_trace_request_exposes_failed_candidate_response_payloa
         "content-type": "text/html"
     }));
     usage.client_response_headers = Some(json!({
-        "content-type": "application/json",
-        "x-aether-upstream-status": "302"
+        "content-type": "application/json"
     }));
     usage.client_response_body = Some(json!({
         "error": {

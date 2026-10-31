@@ -78,10 +78,7 @@ use crate::ai_serving::is_openai_responses_family_format;
 use crate::ai_serving::record_local_runtime_candidate_skip_reason;
 #[cfg(test)]
 pub(crate) use crate::api::response::build_client_response;
-use crate::api::response::{
-    attach_control_metadata_headers, build_client_response_from_parts,
-    build_client_response_from_parts_with_mutator,
-};
+use crate::api::response::{attach_control_metadata_headers, build_client_response_from_parts};
 use crate::clock::current_unix_ms as current_request_candidate_unix_ms;
 use crate::constants::{CONTROL_CANDIDATE_ID_HEADER, CONTROL_REQUEST_ID_HEADER};
 use crate::control::GatewayControlDecision;
@@ -6196,12 +6193,7 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
         }
 
         let mut client_headers = if (300..400).contains(&status_code) {
-            let mut headers = synthetic_error_response_headers(headers.clone());
-            headers.insert(
-                "x-aether-upstream-status".to_string(),
-                status_code.to_string(),
-            );
-            headers
+            synthetic_error_response_headers(headers.clone())
         } else {
             headers.clone()
         };
@@ -6284,31 +6276,13 @@ async fn execute_stream_from_frame_stream_with_retry_scope(
                 candidate_id,
             )?));
         }
-        let response = if (300..400).contains(&status_code) {
-            build_client_response_from_parts_with_mutator(
-                client_status_code,
-                &client_response_headers,
-                Body::from(client_error_body),
-                trace_id,
-                Some(decision),
-                |headers| {
-                    headers.insert(
-                        http::HeaderName::from_static("x-aether-upstream-status"),
-                        http::HeaderValue::from_str(&status_code.to_string())
-                            .map_err(|error| GatewayError::Internal(error.to_string()))?,
-                    );
-                    Ok(())
-                },
-            )?
-        } else {
-            build_client_response_from_parts(
-                client_status_code,
-                &client_response_headers,
-                Body::from(client_error_body),
-                trace_id,
-                Some(decision),
-            )?
-        };
+        let response = build_client_response_from_parts(
+            client_status_code,
+            &client_response_headers,
+            Body::from(client_error_body),
+            trace_id,
+            Some(decision),
+        )?;
         return Ok(Some(attach_control_metadata_headers(
             response,
             Some(request_id),
