@@ -31,16 +31,12 @@ use super::{
     json_value_fits_serialized_limit, maximum_base64_len_for_decoded_limit,
     record_manual_proxy_request_failure, record_manual_proxy_request_outcome,
     record_manual_proxy_request_success, record_manual_proxy_stream_error,
-    reqwest_urls_have_same_origin,
-    resolve_non_stream_total_timeout, resolve_proxy_url, safe_redirect_decision,
-    validate_execution_upstream_url, with_upstream_response_body_limit, DirectSyncExecutionRuntime,
-    ExecutionRuntimeTransportError, ExecutionTransportControls, SafeRedirectDecision,
-    UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
+    reqwest_urls_have_same_origin, resolve_non_stream_total_timeout, resolve_proxy_url,
+    safe_redirect_decision, validate_execution_upstream_url, with_upstream_response_body_limit,
+    DirectSyncExecutionRuntime, ExecutionRuntimeTransportError, ExecutionTransportControls,
+    SafeRedirectDecision, UpstreamResponseBodyPhase, DEFAULT_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
     EXECUTION_RESPONSE_BODY_LIMIT_HEADER, MAX_SAFE_REDIRECTS, MAX_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
     MIN_SCOPED_RESPONSE_BODY_LIMIT_BYTES,
-};
-use crate::constants::{
-    EXECUTION_RUNTIME_LOOP_GUARD_HEADER, EXECUTION_RUNTIME_LOOP_GUARD_VIA_TOKEN,
 };
 use crate::frontdoor_loop_guard::{
     frontdoor_self_loop_public_ai_path, gateway_frontdoor_self_loop_guard_error_with_port,
@@ -1809,21 +1805,7 @@ async fn direct_sync_execution_runtime_preserves_upstream_status_and_json_body()
     let addr = listener.local_addr().expect("local addr should resolve");
     let app = Router::new().route(
         "/chat",
-        post(|headers: AxumHeaderMap| async move {
-            assert!(
-                !headers.contains_key(EXECUTION_RUNTIME_LOOP_GUARD_HEADER),
-                "plain upstream requests must not leak internal execution loop guard headers"
-            );
-            assert!(
-                !headers
-                    .get_all("via")
-                    .iter()
-                    .filter_map(|value| value.to_str().ok())
-                    .any(|value| value
-                        .to_ascii_lowercase()
-                        .contains(EXECUTION_RUNTIME_LOOP_GUARD_VIA_TOKEN)),
-                "plain upstream requests must not leak internal execution runtime Via markers"
-            );
+        post(|_headers: AxumHeaderMap| async move {
             (
                 axum::http::StatusCode::TOO_MANY_REQUESTS,
                 Json(json!({"error": {"message": "slow down"}})),

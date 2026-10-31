@@ -1,35 +1,10 @@
 use std::sync::OnceLock;
 
-use axum::http::HeaderMap;
 use url::Url;
-
-use crate::constants::{
-    EXECUTION_RUNTIME_LOOP_GUARD_HEADER, EXECUTION_RUNTIME_LOOP_GUARD_VALUE,
-    EXECUTION_RUNTIME_LOOP_GUARD_VIA_TOKEN,
-};
-use crate::headers::header_value_str;
 
 const DEFAULT_APP_PORT: u16 = 8084;
 
 static GATEWAY_FRONTDOOR_APP_PORT: OnceLock<u16> = OnceLock::new();
-
-pub(crate) fn request_has_execution_runtime_loop_guard(headers: &HeaderMap) -> bool {
-    header_value_str(headers, EXECUTION_RUNTIME_LOOP_GUARD_HEADER)
-        .is_some_and(|value| value.eq_ignore_ascii_case(EXECUTION_RUNTIME_LOOP_GUARD_VALUE))
-        || request_has_execution_runtime_via_guard(headers)
-}
-
-fn request_has_execution_runtime_via_guard(headers: &HeaderMap) -> bool {
-    headers
-        .get_all("via")
-        .iter()
-        .filter_map(|value| value.to_str().ok())
-        .any(|value| {
-            value
-                .to_ascii_lowercase()
-                .contains(EXECUTION_RUNTIME_LOOP_GUARD_VIA_TOKEN)
-        })
-}
 
 pub(crate) fn frontdoor_self_loop_public_ai_path(path: &str) -> bool {
     let path = path
