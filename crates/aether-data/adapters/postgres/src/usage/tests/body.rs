@@ -599,7 +599,12 @@ fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys(
 fn usage_http_audit_capture_mode_prefers_refs_over_inline_legacy() {
     assert_eq!(
         usage_http_audit_capture_mode(
-            [Some("usage://request/req-123/request_body"), None, None, None],
+            [
+                Some("usage://request/req-123/request_body"),
+                None,
+                None,
+                None
+            ],
             [Some(&json!({"request": true})), None, None, None]
         ),
         "ref_backed"

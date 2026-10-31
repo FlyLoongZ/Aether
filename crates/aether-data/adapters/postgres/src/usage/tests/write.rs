@@ -754,4 +754,3 @@ fn terminal_capture_rejects_late_non_terminal_updates() {
         "completed",
     ));
 }
-
