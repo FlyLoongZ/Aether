@@ -24,7 +24,6 @@ pub(crate) use outcome::{
 pub(crate) use plan_fallback::{
     maybe_execute_stream_via_plan_fallback, maybe_execute_sync_via_plan_fallback,
 };
-pub(crate) use policy::{build_direct_plan_bypass_cache_key, should_skip_direct_plan};
 
 #[cfg(test)]
 pub(crate) use policy::{

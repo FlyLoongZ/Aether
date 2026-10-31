@@ -3,7 +3,6 @@ mod auth_context;
 mod auth_runtime;
 mod candidate_page;
 mod dashboard_response;
-mod direct_plan_bypass;
 mod overview_total;
 mod scheduler_affinity;
 mod system_config;
@@ -28,7 +27,6 @@ pub(crate) use dashboard_response::{
     DashboardResponseCache, DASHBOARD_DAILY_CACHE_TTL, DASHBOARD_PROVIDER_STATUS_CACHE_TTL,
     DASHBOARD_STATS_CACHE_TTL,
 };
-pub(crate) use direct_plan_bypass::DirectPlanBypassCache;
 pub(crate) use overview_total::{OverviewTotalCache, OverviewTotalRead};
 pub(crate) use scheduler_affinity::{
     SchedulerAffinityCache, SchedulerAffinitySnapshotEntry, SchedulerAffinityTarget,

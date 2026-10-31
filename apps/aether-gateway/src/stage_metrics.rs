@@ -23,7 +23,6 @@ const STAGES: &[&str] = &[
     "frontdoor_stream_plan_kind",
     "frontdoor_stream_parse",
     "frontdoor_stream_match",
-    "frontdoor_stream_bypass",
     "frontdoor_stream_fast_path",
     "frontdoor_stream_fast_path_total",
     "frontdoor_to_stream_response_ready",

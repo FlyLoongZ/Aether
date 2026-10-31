@@ -17,8 +17,8 @@ use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock, Semaphore};
 use super::super::async_task::{VideoTaskPollerConfig, VideoTaskService};
 use super::super::cache::{
     AuthApiKeyFeatureCacheKey, AuthApiKeyIdentityCacheKey, AuthApiKeyLastUsedCache,
-    AuthContextCache, AuthSnapshotCache, DashboardResponseCache, DirectPlanBypassCache,
-    JsonValueCache, OverviewTotalCache, SchedulerAffinityCache, SystemConfigCache, ValueCache,
+    AuthContextCache, AuthSnapshotCache, DashboardResponseCache, JsonValueCache,
+    OverviewTotalCache, SchedulerAffinityCache, SystemConfigCache, ValueCache,
 };
 use super::super::data::GatewayDataState;
 use super::super::fallback_metrics;
@@ -423,7 +423,6 @@ pub struct AppState {
         Arc<ValueCache<String, crate::routing::GatewayRoutingGroupSelection>>,
     pub(crate) auth_api_key_last_used_cache: Arc<AuthApiKeyLastUsedCache>,
     pub(crate) oauth_refresh: Arc<provider_transport::LocalOAuthRefreshCoordinator>,
-    pub(crate) direct_plan_bypass_cache: Arc<DirectPlanBypassCache>,
     pub(crate) scheduler_affinity_cache: Arc<SchedulerAffinityCache>,
     pub(crate) scheduler_affinity_epoch: Arc<AtomicU64>,
     pub(crate) dashboard_response_cache: Arc<DashboardResponseCache>,
