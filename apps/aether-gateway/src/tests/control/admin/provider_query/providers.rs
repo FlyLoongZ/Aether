@@ -87,10 +87,8 @@ async fn gateway_handles_admin_provider_query_models_with_openai_responses_endpo
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/models"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "api_key_id": "key-openai-responses"
@@ -222,10 +220,8 @@ async fn gateway_recovers_codex_slug_only_models_from_a_stale_legacy_cache_impl(
     ] {
         let response = reqwest::Client::new()
             .post(format!("{gateway_url}/api/admin/provider-query/models"))
-            .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({
                 "provider_id": "provider-codex-dynamic",
                 "api_key_id": "key-codex-dynamic",
@@ -396,10 +392,8 @@ async fn gateway_handles_admin_provider_query_models_falls_back_to_codex_preset_
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/models"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-codex",
             "api_key_id": "key-codex-invalidated"
@@ -537,10 +531,8 @@ async fn gateway_streams_codex_openai_responses_upstream_for_admin_pool_model_te
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-codex",
             "mode": "pool",
@@ -705,10 +697,8 @@ async fn gateway_executes_codex_search_admin_pool_model_test_with_search_contrac
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-codex-search",
             "mode": "pool",
@@ -852,10 +842,8 @@ async fn gateway_uses_pool_scheduler_order_for_admin_pool_model_test_impl() {
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-codex",
             "mode": "pool",
@@ -1007,10 +995,8 @@ async fn gateway_handles_admin_provider_query_test_model_for_kiro_locally_impl()
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-kiro",
             "model_name": "claude-sonnet-4-upstream",
@@ -1162,10 +1148,8 @@ async fn gateway_uses_kiro_mapped_model_name_for_explicit_model_mapping_test_imp
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-kiro",
             "mode": "pool",
@@ -1199,10 +1183,8 @@ async fn gateway_uses_kiro_mapped_model_name_for_explicit_model_mapping_test_imp
 
     let direct_response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-kiro",
             "mode": "direct",
@@ -1334,10 +1316,8 @@ async fn gateway_handles_openai_image_test_model_locally_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-image-1",
@@ -1399,10 +1379,8 @@ async fn gateway_reports_transport_unsupported_reason_for_non_kiro_provider_impl
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-antigravity",
             "model": "gemini-2.5-pro",
@@ -1570,10 +1548,8 @@ async fn gateway_handles_antigravity_endpoint_test_model_locally_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-antigravity",
             "model": "gemini-2.5-pro",
@@ -1746,10 +1722,8 @@ async fn gateway_hydrates_antigravity_project_id_from_load_code_assist_for_test_
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-antigravity",
             "model": "gemini-3.1-flash-lite",
@@ -1876,10 +1850,8 @@ async fn gateway_prefers_supported_non_kiro_endpoint_when_api_format_is_omitted_
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-5.4-mini"
@@ -1983,10 +1955,8 @@ async fn gateway_prefers_transport_supported_non_kiro_endpoint_when_api_format_i
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-5.4-mini"
@@ -2086,10 +2056,8 @@ async fn gateway_prefers_supported_non_kiro_endpoint_with_compatible_key_when_ap
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-5.4-mini"
@@ -2188,10 +2156,8 @@ async fn gateway_uses_compatible_cli_endpoint_when_api_format_is_omitted_impl() 
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-5.4-mini"
@@ -2293,10 +2259,8 @@ async fn gateway_uses_runnable_cli_endpoint_after_chat_preference_when_api_forma
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-5.4-mini"
@@ -2390,10 +2354,8 @@ async fn gateway_handles_claude_cli_test_model_locally_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-claude",
             "model": "claude-sonnet-4-5",
@@ -2485,10 +2447,8 @@ async fn gateway_uses_compatible_claude_cli_endpoint_when_api_format_is_omitted_
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-claude",
             "model": "claude-sonnet-4-5"

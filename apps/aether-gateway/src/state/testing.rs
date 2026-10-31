@@ -252,13 +252,13 @@ impl AppState {
                 .or_insert_with(|| json!(session_id));
             payload
                 .entry("initiated_by_user_id".to_string())
-                .or_insert_with(|| json!("admin-user-123"));
+                .or_insert_with(|| json!(crate::tests::TEST_ADMIN_USER_ID));
             payload
                 .entry("initiated_by_session_id".to_string())
-                .or_insert_with(|| json!("session-123"));
+                .or_insert_with(|| json!(crate::tests::TEST_ADMIN_SESSION_ID));
             payload
                 .entry("initiated_by_management_token_id".to_string())
-                .or_insert_with(|| json!("management-token-123"));
+                .or_insert_with(|| serde_json::Value::Null);
         }
         let key =
             aether_data::repository::provider_oauth::provider_oauth_device_session_storage_key(

@@ -19,10 +19,7 @@ use super::super::{
     build_router_with_state, build_state_with_execution_runtime_override, sample_provider,
     start_server,
 };
-use crate::constants::{
-    TRACE_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
+use crate::constants::TRACE_ID_HEADER;
 use crate::data::GatewayDataState;
 use crate::tests::DEV_FERNET_KEY;
 
@@ -252,10 +249,8 @@ async fn gateway_uploads_admin_gemini_file_locally_with_trusted_admin_principal(
         .post(format!(
             "{gateway_url}/api/admin/gemini-files/upload?key_ids=key-gemini-admin-ok,key-gemini-admin-fail"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .header(
             http::header::CONTENT_TYPE,
             format!("multipart/form-data; boundary={boundary}"),

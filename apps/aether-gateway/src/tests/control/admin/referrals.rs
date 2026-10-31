@@ -1,8 +1,4 @@
 use super::super::{build_router_with_state, start_server, AppState};
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use http::StatusCode;
 
 #[tokio::test]
@@ -15,10 +11,8 @@ async fn admin_referral_reads_fail_explicitly_without_database() {
     ] {
         let response = reqwest::Client::new()
             .get(format!("{url}{path}"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-1")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-1")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .send()
             .await
             .unwrap();
@@ -37,10 +31,8 @@ async fn admin_referral_reads_reject_invalid_debt_filter() {
         .get(format!(
             "{url}/api/admin/referral-rewards?pending_reversal=invalid"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-1")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-1")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .unwrap();
@@ -57,10 +49,6 @@ async fn admin_referral_reads_reject_non_admin_principal() {
     ] {
         let response = reqwest::Client::new()
             .get(format!("{url}{path}"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "user-1")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "user")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-1")
             .send()
             .await
             .unwrap();

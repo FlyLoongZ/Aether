@@ -25,6 +25,12 @@ async fn gateway_requires_oauth_admin_management_token_to_configure_frontend_cal
         .await
         .expect("admin user should be created")
         .expect("admin user should exist");
+    let admin_session_token = crate::tests::issue_access_token_for_user(
+        &state,
+        &admin_user,
+        "device-oauth-callback-admin",
+    )
+    .await;
 
     let write_raw_token = "ae-oauth-callback-write";
     let mut write_token = sample_management_token(
@@ -85,7 +91,6 @@ async fn gateway_requires_oauth_admin_management_token_to_configure_frontend_cal
 
     let denied_create = client
         .put(&provider_url)
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(write_raw_token)
         .json(&provider_payload("https://attacker.example/auth/callback"))
         .send()
@@ -106,7 +111,6 @@ async fn gateway_requires_oauth_admin_management_token_to_configure_frontend_cal
 
     let allowed_create = client
         .put(&provider_url)
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(admin_raw_token)
         .json(&provider_payload(
             "https://configured.example/auth/callback",
@@ -124,7 +128,6 @@ async fn gateway_requires_oauth_admin_management_token_to_configure_frontend_cal
 
     let denied_change = client
         .put(&provider_url)
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(write_raw_token)
         .json(&provider_payload(
             "https://second-attacker.example/auth/callback",
@@ -145,13 +148,8 @@ async fn gateway_requires_oauth_admin_management_token_to_configure_frontend_cal
 
     let allowed_session_change = client
         .put(&provider_url)
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, admin_user.id.as_str())
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(
-            TRUSTED_ADMIN_SESSION_ID_HEADER,
-            "session-oauth-callback-admin",
-        )
+        .bearer_auth(&admin_session_token)
+        .header("x-client-device-id", "device-oauth-callback-admin")
         .json(&provider_payload(
             "https://frontend.example.com/auth/callback",
         ))
@@ -221,10 +219,8 @@ async fn gateway_handles_admin_management_token_detail_locally_with_trusted_admi
         .get(format!(
             "{gateway_url}/api/admin/management-tokens/mt-admin-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -277,6 +273,12 @@ async fn gateway_creates_updates_and_regenerates_admin_management_token_locally_
         .await
         .expect("admin user should be created")
         .expect("admin user should exist");
+    let admin_session_token = crate::tests::issue_access_token_for_user(
+        &state,
+        &admin_user,
+        crate::tests::TEST_ADMIN_DEVICE_ID,
+    )
+    .await;
 
     let (upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(state.with_data_state_for_tests(
@@ -287,10 +289,8 @@ async fn gateway_creates_updates_and_regenerates_admin_management_token_locally_
 
     let create_response = client
         .post(format!("{gateway_url}/api/admin/management-tokens"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, admin_user.id.as_str())
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(&admin_session_token)
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "name": "admin-token",
             "description": "admin token",
@@ -324,10 +324,8 @@ async fn gateway_creates_updates_and_regenerates_admin_management_token_locally_
         .put(format!(
             "{gateway_url}/api/admin/management-tokens/{token_id}"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, admin_user.id.as_str())
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(&admin_session_token)
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "name": "admin-token-updated",
             "description": null,
@@ -359,10 +357,8 @@ async fn gateway_creates_updates_and_regenerates_admin_management_token_locally_
         .post(format!(
             "{gateway_url}/api/admin/management-tokens/{token_id}/regenerate"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, admin_user.id.as_str())
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(&admin_session_token)
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -450,7 +446,6 @@ async fn gateway_allows_management_token_with_pool_write_for_provider_oauth_batc
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-123/batch-import"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(raw_token)
         .send()
         .await
@@ -517,7 +512,6 @@ async fn gateway_rejects_management_token_without_pool_write_for_provider_oauth_
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-123/batch-import"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(raw_token)
         .send()
         .await
@@ -572,10 +566,8 @@ async fn gateway_deletes_admin_management_token_locally_with_trusted_admin_princ
         .delete(format!(
             "{gateway_url}/api/admin/management-tokens/mt-admin-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -636,10 +628,8 @@ async fn gateway_toggles_admin_management_token_locally_with_trusted_admin_princ
         .patch(format!(
             "{gateway_url}/api/admin/management-tokens/mt-admin-1/status"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -726,7 +716,6 @@ async fn gateway_rejects_partial_management_token_for_admin_management_token_rou
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/management-tokens"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(raw_token)
         .send()
         .await

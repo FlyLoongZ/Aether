@@ -80,22 +80,22 @@ async fn load_admin_usage_capture_detail(
     include_bodies: bool,
 ) -> serde_json::Value {
     use crate::admin_api::{maybe_build_local_admin_response, AdminRouteRequest};
-    use crate::constants::{
-        GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-        TRUSTED_ADMIN_USER_ROLE_HEADER,
-    };
     use crate::control::resolve_public_request_context;
     use http_body_util::BodyExt;
 
     let mut headers = http::HeaderMap::new();
-    for (name, value) in [
-        (GATEWAY_HEADER, "rust-phase3b"),
-        (TRUSTED_ADMIN_USER_ID_HEADER, "admin-user"),
-        (TRUSTED_ADMIN_USER_ROLE_HEADER, "admin"),
-        (TRUSTED_ADMIN_SESSION_ID_HEADER, "admin-session"),
-    ] {
-        headers.insert(name, HeaderValue::from_static(value));
-    }
+    headers.insert(
+        http::header::AUTHORIZATION,
+        HeaderValue::from_str(&format!(
+            "Bearer {}",
+            crate::tests::test_admin_access_token()
+        ))
+        .expect("admin token should be a valid header value"),
+    );
+    headers.insert(
+        "x-client-device-id",
+        HeaderValue::from_static(crate::tests::TEST_ADMIN_DEVICE_ID),
+    );
     let uri = format!("/api/admin/usage/{usage_id}?include_bodies={include_bodies}")
         .parse()
         .unwrap();

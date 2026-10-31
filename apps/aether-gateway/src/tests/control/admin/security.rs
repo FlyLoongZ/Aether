@@ -13,10 +13,6 @@ use aether_test_support::ManagedRedisServer;
 use super::super::super::send_request;
 use super::super::{build_router_with_state, start_server, AppState};
 use crate::audit::AdminAuditEvent;
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::control::resolve_public_request_context;
 use crate::handlers::admin::auth::security::maybe_build_local_admin_security_response;
 use crate::handlers::admin::{AdminAppState, AdminRequestContext};
@@ -273,10 +269,11 @@ async fn send_admin_security_request_on_large_stack(
     let mut request_builder = Request::builder()
         .method(method.as_str())
         .uri(&path)
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123");
+        .header(
+            http::header::AUTHORIZATION,
+            format!("Bearer {}", crate::tests::test_admin_access_token()),
+        )
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID);
     if let Some(body) = body {
         request_builder = request_builder.header(http::header::CONTENT_TYPE, "application/json");
         let request = request_builder
@@ -379,10 +376,8 @@ async fn gateway_serves_admin_security_blacklist_over_real_tcp() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/security/ip/blacklist"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "ip_address": "1.2.3.4", "reason": "manual", "ttl": 60 }))
         .send()
         .await

@@ -14,7 +14,5 @@ pub(crate) use resolution::{
     refresh_execution_runtime_auth_context_with_snapshot, resolve_execution_runtime_auth_context,
     resolve_local_admin_session_principal, GatewayAdminPrincipalContext, GatewayControlAuthContext,
 };
-pub(super) use resolution::{
-    resolve_control_decision_auth_with_trusted_auth, ControlDecisionAuthResolution,
-};
+pub(super) use resolution::{resolve_control_decision_auth, ControlDecisionAuthResolution};
 pub(crate) use types::GatewayCredentialCarrier;

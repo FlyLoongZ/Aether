@@ -341,10 +341,8 @@ async fn gateway_handles_admin_provider_oauth_device_authorize_locally_with_trus
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-kiro/device-authorize"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "start_url": "https://view.awsapps.com/start",
             "region": "us-east-1",
@@ -574,14 +572,8 @@ async fn gateway_handles_admin_provider_oauth_device_poll_locally_with_trusted_a
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-kiro/device-poll"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .header(
-            TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-            "management-token-123",
-        )
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "session_id": "session-123"
         }))
@@ -742,14 +734,8 @@ async fn gateway_handles_admin_provider_oauth_device_poll_for_kiro_social_callba
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-kiro/device-poll"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .header(
-            TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-            "management-token-123",
-        )
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "session_id": "session-social",
             "callback_url": "http://localhost:49153/signin/callback?login_option=github&code=social-code-123&state=session-social"
@@ -1155,10 +1141,8 @@ async fn gateway_handles_admin_provider_oauth_device_authorize_via_execution_run
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-kiro/device-authorize"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "start_url": "https://view.awsapps.com/start",
             "region": "us-east-1",

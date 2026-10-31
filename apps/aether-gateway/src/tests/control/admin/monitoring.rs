@@ -24,9 +24,6 @@ use http::StatusCode;
 use serde_json::json;
 
 use super::super::{build_router_with_state, start_server, AppState};
-use crate::constants::{
-    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::tests::DEV_FERNET_KEY;
 
 #[tokio::test]
@@ -52,10 +49,8 @@ async fn gateway_handles_admin_monitoring_audit_logs_locally_with_trusted_admin_
         .get(format!(
             "{gateway_url}/api/admin/monitoring/audit-logs?days=14&limit=20&offset=5&username=alice&event_type=login_failed"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -210,10 +205,8 @@ async fn gateway_handles_admin_monitoring_system_status_locally_with_trusted_adm
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/monitoring/system-status"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -462,11 +455,18 @@ async fn gateway_handles_admin_monitoring_trace_request_locally_with_trusted_adm
         vec![sample_key()],
     ));
 
+    let state = AppState::new().expect("gateway should build");
+    const NON_ADMIN_DEVICE_ID: &str = "device-non-admin-monitoring-trace";
+    let non_admin_token = crate::tests::operational_auth::issue_operational_session_access_token(
+        &state,
+        NON_ADMIN_DEVICE_ID,
+        "user",
+    )
+    .await;
+
     let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
-        AppState::new()
-            .expect("gateway should build")
-            .with_decision_trace_data_readers_for_tests(request_candidates, provider_catalog),
+        state.with_decision_trace_data_readers_for_tests(request_candidates, provider_catalog),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -474,10 +474,8 @@ async fn gateway_handles_admin_monitoring_trace_request_locally_with_trusted_adm
         .get(format!(
             "{gateway_url}/api/admin/monitoring/trace/request-1?attempted_only=true"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -509,25 +507,20 @@ async fn gateway_handles_admin_monitoring_trace_request_locally_with_trusted_adm
         payload["candidates"][0]["extra_data"]["upstream_response"]["body"]["error"]["message"],
         "private upstream diagnostic"
     );
-    for role in [None, Some("user")] {
+    for token in [None, Some(non_admin_token.as_str())] {
         let mut request = reqwest::Client::new().get(format!(
             "{gateway_url}/api/admin/monitoring/trace/request-1"
         ));
-        if let Some(role) = role {
+        if let Some(token) = token {
             request = request
-                .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-                .header(TRUSTED_ADMIN_USER_ID_HEADER, "regular-user")
-                .header(TRUSTED_ADMIN_USER_ROLE_HEADER, role)
-                .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "regular-session");
+                .bearer_auth(token)
+                .header("x-client-device-id", NON_ADMIN_DEVICE_ID);
         }
         let response = request
             .send()
             .await
             .expect("unauthorized probe should complete");
-        assert!(matches!(
-            response.status(),
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
-        ));
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         let body = response.text().await.expect("denial body should read");
         assert!(!body.contains("private upstream diagnostic"));
         assert!(!body.contains("upstream-diagnostic-id"));
@@ -614,10 +607,8 @@ async fn gateway_handles_admin_monitoring_trace_provider_stats_locally_with_trus
         .get(format!(
             "{gateway_url}/api/admin/monitoring/trace/stats/provider/provider-1?limit=10"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -695,10 +686,8 @@ async fn gateway_handles_admin_monitoring_cache_stats_locally_with_trusted_admin
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/monitoring/cache/stats"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -780,10 +769,8 @@ async fn gateway_handles_admin_monitoring_cache_affinities_locally_with_trusted_
         .get(format!(
             "{gateway_url}/api/admin/monitoring/cache/affinities?keyword=alice&limit=20&offset=0"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -867,10 +854,8 @@ async fn gateway_handles_admin_monitoring_cache_affinity_locally_with_trusted_ad
         .get(format!(
             "{gateway_url}/api/admin/monitoring/cache/affinity/alice"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -910,10 +895,8 @@ async fn gateway_handles_admin_monitoring_cache_affinities_locally_without_redis
         .get(format!(
             "{gateway_url}/api/admin/monitoring/cache/affinities?limit=20&offset=0"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -971,10 +954,8 @@ async fn gateway_handles_admin_monitoring_cache_affinity_locally_without_redis_o
         .get(format!(
             "{gateway_url}/api/admin/monitoring/cache/affinity/alice"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1045,10 +1026,8 @@ async fn gateway_handles_admin_monitoring_cache_users_delete_locally_with_truste
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/users/alice"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1120,10 +1099,8 @@ async fn gateway_handles_admin_monitoring_cache_affinity_delete_locally_with_tru
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/affinity/user-key-1/endpoint-1/model-alpha/openai"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1187,10 +1164,8 @@ async fn gateway_handles_admin_monitoring_cache_flush_locally_with_trusted_admin
 
     let response = reqwest::Client::new()
         .delete(format!("{gateway_url}/api/admin/monitoring/cache"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1253,10 +1228,8 @@ async fn gateway_handles_admin_monitoring_cache_provider_delete_locally_with_tru
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/providers/provider-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1296,10 +1269,8 @@ async fn gateway_handles_admin_monitoring_cache_redis_keys_delete_locally_with_t
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/redis-keys/upstream_models"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1371,10 +1342,8 @@ async fn gateway_handles_admin_monitoring_cache_metrics_locally_with_trusted_adm
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/monitoring/cache/metrics"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1418,10 +1387,8 @@ async fn gateway_handles_admin_monitoring_cache_config_locally_with_trusted_admi
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/monitoring/cache/config"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1473,10 +1440,8 @@ async fn gateway_handles_admin_monitoring_model_mapping_stats_locally_with_trust
         .get(format!(
             "{gateway_url}/api/admin/monitoring/cache/model-mapping/stats"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1528,10 +1493,8 @@ async fn gateway_handles_admin_monitoring_model_mapping_delete_locally_with_trus
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/model-mapping"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1587,10 +1550,8 @@ async fn gateway_handles_admin_monitoring_model_mapping_delete_model_locally_wit
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/model-mapping/model-alpha"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1647,10 +1608,8 @@ async fn gateway_handles_admin_monitoring_model_mapping_delete_provider_locally_
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/model-mapping/provider/provider-1/model-alpha"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1693,10 +1652,8 @@ async fn gateway_handles_admin_monitoring_redis_keys_locally_with_trusted_admin_
         .get(format!(
             "{gateway_url}/api/admin/monitoring/cache/redis-keys"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1741,10 +1698,8 @@ async fn gateway_handles_admin_monitoring_redis_keys_delete_locally_with_trusted
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/cache/redis-keys/dashboard"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1788,10 +1743,8 @@ async fn gateway_handles_admin_monitoring_suspicious_activities_locally_with_tru
         .get(format!(
             "{gateway_url}/api/admin/monitoring/suspicious-activities?hours=48"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1869,10 +1822,8 @@ async fn gateway_handles_admin_monitoring_resilience_status_locally_with_trusted
         .get(format!(
             "{gateway_url}/api/admin/monitoring/resilience-status"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1963,10 +1914,8 @@ async fn gateway_resets_admin_monitoring_error_stats_locally_with_trusted_admin_
         .delete(format!(
             "{gateway_url}/api/admin/monitoring/resilience/error-stats"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1975,17 +1924,15 @@ async fn gateway_resets_admin_monitoring_error_stats_locally_with_trusted_admin_
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(payload["message"], json!("错误统计已重置"));
     assert_eq!(payload["previous_stats"]["total_errors"], json!(1));
-    assert_eq!(payload["reset_by"], json!("admin-user-123"));
+    assert_eq!(payload["reset_by"], json!("test-admin@aether.invalid"));
     assert!(payload["reset_at"].as_str().is_some());
 
     let response = client
         .get(format!(
             "{gateway_url}/api/admin/monitoring/resilience-status"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2059,10 +2006,8 @@ async fn gateway_handles_admin_monitoring_resilience_circuit_history_locally_wit
         .get(format!(
             "{gateway_url}/api/admin/monitoring/resilience/circuit-history?limit=10"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2109,10 +2054,8 @@ async fn gateway_handles_admin_monitoring_user_behavior_locally_with_trusted_adm
         .get(format!(
             "{gateway_url}/api/admin/monitoring/user-behavior/user-1?days=30"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

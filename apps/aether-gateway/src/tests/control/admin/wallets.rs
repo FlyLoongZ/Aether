@@ -15,9 +15,6 @@ use serde_json::json;
 use super::super::{
     build_router_with_state, issue_test_admin_access_token, start_server, AppState,
 };
-use crate::constants::{
-    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 
 const ADMIN_WALLETS_API_KEY_REFUND_DETAIL: &str = "独立密钥钱包不支持退款审批";
 
@@ -162,10 +159,8 @@ async fn gateway_handles_admin_wallets_list_locally_with_trusted_admin_principal
         .get(format!(
             "{gateway_url}/api/admin/wallets?status=active&limit=20&offset=1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -248,10 +243,8 @@ async fn gateway_handles_admin_wallets_ledger_locally_with_trusted_admin_princip
         .get(format!(
             "{gateway_url}/api/admin/wallets/ledger?owner_type=user&category=adjust&limit=5&offset=2"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -391,10 +384,8 @@ async fn gateway_handles_admin_wallets_refund_requests_locally_with_trusted_admi
         .get(format!(
             "{gateway_url}/api/admin/wallets/refund-requests?status=pending_approval&limit=8&offset=1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -440,10 +431,8 @@ async fn gateway_rejects_admin_wallets_refund_requests_for_api_key_owner_type_lo
         .get(format!(
             "{gateway_url}/api/admin/wallets/refund-requests?owner_type=api_key"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -545,10 +534,8 @@ async fn gateway_handles_admin_wallets_detail_locally_with_trusted_admin_princip
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/wallets/wallet-user-123"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -632,10 +619,8 @@ async fn gateway_handles_admin_api_key_wallet_detail_locally_with_trusted_admin_
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/wallets/wallet-key-123"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -738,10 +723,8 @@ async fn gateway_handles_admin_wallets_transactions_locally_with_trusted_admin_p
         .get(format!(
             "{gateway_url}/api/admin/wallets/wallet-user-123/transactions?limit=20&offset=1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -803,10 +786,8 @@ async fn gateway_returns_bad_request_for_admin_wallet_transactions_with_empty_wa
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/wallets//transactions"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -917,10 +898,8 @@ async fn gateway_handles_admin_wallets_refunds_locally_with_trusted_admin_princi
         .get(format!(
             "{gateway_url}/api/admin/wallets/wallet-user-123/refunds?limit=10&offset=2"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1008,10 +987,8 @@ async fn gateway_rejects_admin_api_key_wallet_refunds_locally_with_trusted_admin
         .get(format!(
             "{gateway_url}/api/admin/wallets/wallet-key-123/refunds"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1060,10 +1037,8 @@ async fn gateway_handles_admin_wallets_adjust_locally_with_trusted_admin_princip
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-adjust-123/adjust"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "amount_usd": 4.0,
             "balance_type": "recharge",
@@ -1122,10 +1097,8 @@ async fn gateway_handles_admin_wallets_recharge_locally_with_trusted_admin_princ
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-recharge-123/recharge"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "amount_usd": 8.0,
             "payment_method": "admin_manual",
@@ -1201,10 +1174,8 @@ async fn gateway_handles_admin_wallets_process_refund_locally_with_trusted_admin
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-123/refunds/refund-1/process"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1216,8 +1187,14 @@ async fn gateway_handles_admin_wallets_process_refund_locally_with_trusted_admin
     assert_eq!(payload["wallet"]["recharge_balance"], json!(8.5));
     assert_eq!(payload["wallet"]["total_refunded"], json!(7.0));
     assert_eq!(payload["refund"]["status"], json!("processing"));
-    assert_eq!(payload["refund"]["approved_by"], json!("admin-user-123"));
-    assert_eq!(payload["refund"]["processed_by"], json!("admin-user-123"));
+    assert_eq!(
+        payload["refund"]["approved_by"],
+        json!(crate::tests::TEST_ADMIN_USER_ID)
+    );
+    assert_eq!(
+        payload["refund"]["processed_by"],
+        json!(crate::tests::TEST_ADMIN_USER_ID)
+    );
     assert_eq!(payload["transaction"]["category"], json!("refund"));
     assert_eq!(payload["transaction"]["reason_code"], json!("refund_out"));
     assert_eq!(payload["transaction"]["amount"], json!(-4.0));
@@ -1227,10 +1204,8 @@ async fn gateway_handles_admin_wallets_process_refund_locally_with_trusted_admin
         .get(format!(
             "{gateway_url}/api/admin/wallets/wallet-123/transactions?limit=20&offset=0"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("transaction list request should succeed");
@@ -1274,10 +1249,8 @@ async fn gateway_returns_bad_request_for_admin_wallet_process_refund_with_empty_
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-123/refunds//process"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1334,10 +1307,8 @@ async fn gateway_handles_admin_wallets_complete_refund_locally_with_trusted_admi
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-123/refunds/refund-1/complete"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "gateway_refund_id": "gw-refund-123",
             "payout_reference": "bank-slip-1",
@@ -1419,10 +1390,8 @@ async fn gateway_rejects_admin_wallets_fail_processing_refund_with_trusted_admin
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-123/refunds/refund-1/fail"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "reason": "原路退款失败"
         }))
@@ -1494,10 +1463,8 @@ async fn gateway_releases_offline_processing_refund_without_gateway_evidence() {
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-123/refunds/refund-1/fail"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "reason": "线下退款未打款"
         }))
@@ -1521,10 +1488,8 @@ async fn gateway_releases_offline_processing_refund_without_gateway_evidence() {
         .get(format!(
             "{gateway_url}/api/admin/wallets/wallet-123/transactions?limit=20&offset=0"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("transaction list request should succeed");
@@ -1619,10 +1584,8 @@ async fn gateway_rejects_admin_api_key_wallet_process_refund_locally_with_truste
         .post(format!(
             "{gateway_url}/api/admin/wallets/wallet-key-123/refunds/refund-1/process"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1672,10 +1635,8 @@ async fn referral_refund_complete_rejects_unapproved_before_gateway_lookup() {
         .post(format!(
             "{url}/api/admin/wallets/wallet-123/refunds/refund-1/complete"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({"gateway_refund":true}))
         .send()
         .await
@@ -1716,10 +1677,8 @@ async fn referral_refund_preview_reports_no_order_as_not_applicable() {
         .get(format!(
             "{url}/api/admin/wallets/wallet-123/refunds/refund-1/referral-preview"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("response");
@@ -1769,10 +1728,8 @@ async fn referral_refund_approved_gateway_failure_stays_processing_and_retries()
             .post(format!(
                 "{url}/api/admin/wallets/wallet-retry/refunds/refund-retry/complete"
             ))
-            .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({"gateway_refund":true}))
             .send()
             .await
@@ -1844,10 +1801,8 @@ async fn admin_referral_wallet_links_return_scoped_records_and_public_proof() {
         let request = |wallet: &str| {
             reqwest::Client::new()
                 .get(format!("{url}/api/admin/wallets/{wallet}/{suffix}"))
-                .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-                .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-1")
-                .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-                .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-1")
+                .bearer_auth(crate::tests::test_admin_access_token())
+                .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         };
         let response = request("wallet-linked").send().await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);

@@ -22,10 +22,6 @@ use super::super::{
     sample_admin_provider_model, sample_bound_auth_config, sample_bound_key, sample_endpoint,
     sample_provider, start_server, AppState,
 };
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 
 // Child modules reach these through `use super::*`.
@@ -75,10 +71,8 @@ async fn assert_admin_provider_query_route(
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}{path}"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&request_payload)
         .send()
         .await

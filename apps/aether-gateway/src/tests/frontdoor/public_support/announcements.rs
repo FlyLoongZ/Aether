@@ -342,10 +342,8 @@ async fn gateway_creates_announcement_locally_with_trusted_admin_principal() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/announcements"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "title": "系统维护",
             "content": "今晚维护",
@@ -375,7 +373,10 @@ async fn gateway_creates_announcement_locally_with_trusted_admin_principal() {
     assert_eq!(created.kind, "maintenance");
     assert_eq!(created.priority, 8);
     assert!(created.is_pinned);
-    assert_eq!(created.author_id.as_deref(), Some("admin-user-123"));
+    assert_eq!(
+        created.author_id.as_deref(),
+        Some(crate::tests::TEST_ADMIN_USER_ID)
+    );
     assert_eq!(created.start_time_unix_secs, Some(1_774_828_800));
     assert_eq!(created.end_time_unix_secs, Some(1_774_915_200));
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
@@ -433,10 +434,8 @@ async fn gateway_updates_announcement_locally_with_trusted_admin_principal() {
 
     let response = reqwest::Client::new()
         .put(format!("{gateway_url}/api/announcements/announcement-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "title": "系统升级",
             "content": "维护延长",
@@ -523,10 +522,8 @@ async fn gateway_deletes_announcement_locally_with_trusted_admin_principal() {
 
     let response = reqwest::Client::new()
         .delete(format!("{gateway_url}/api/announcements/announcement-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -607,10 +604,8 @@ async fn gateway_returns_service_unavailable_for_admin_announcement_writes_witho
 
     let create_response = client
         .post(format!("{gateway_url}/api/announcements"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "title": "系统维护",
             "content": "今晚维护",
@@ -628,10 +623,8 @@ async fn gateway_returns_service_unavailable_for_admin_announcement_writes_witho
 
     let update_response = client
         .put(format!("{gateway_url}/api/announcements/announcement-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "title": "系统升级"
         }))
@@ -647,10 +640,8 @@ async fn gateway_returns_service_unavailable_for_admin_announcement_writes_witho
 
     let delete_response = client
         .delete(format!("{gateway_url}/api/announcements/announcement-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

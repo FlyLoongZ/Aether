@@ -28,22 +28,6 @@ impl GatewayCredentialCarrier {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(super) struct GatewayTrustedAuthHeaders {
-    pub(super) user_id: String,
-    pub(super) api_key_id: String,
-    pub(super) balance_remaining: Option<f64>,
-    pub(super) access_allowed: Option<bool>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct GatewayTrustedAdminHeaders {
-    pub(super) user_id: String,
-    pub(super) user_role: String,
-    pub(super) session_id: Option<String>,
-    pub(super) management_token_id: Option<String>,
-}
-
 #[derive(Clone, Default, PartialEq, Eq)]
 pub(super) struct GatewayCredentialBundle {
     pub(super) authorization_bearer: Option<String>,
@@ -105,15 +89,12 @@ impl std::fmt::Debug for GatewayPrimaryCredential {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct GatewayExtractedCredentials {
-    pub(super) trusted_headers: Option<GatewayTrustedAuthHeaders>,
-    pub(super) trusted_admin_headers: Option<GatewayTrustedAdminHeaders>,
     pub(super) bundle: GatewayCredentialBundle,
     pub(super) primary: Option<GatewayPrimaryCredential>,
 }
 
 #[derive(Clone, PartialEq)]
 pub(super) enum GatewayPrincipalCandidate {
-    TrustedHeaders(GatewayTrustedAuthHeaders),
     ApiKeyHash {
         key_hash: String,
         carrier: GatewayCredentialCarrier,
@@ -131,10 +112,6 @@ pub(super) enum GatewayPrincipalCandidate {
 impl std::fmt::Debug for GatewayPrincipalCandidate {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TrustedHeaders(headers) => formatter
-                .debug_tuple("TrustedHeaders")
-                .field(headers)
-                .finish(),
             Self::ApiKeyHash { carrier, .. } => formatter
                 .debug_struct("ApiKeyHash")
                 .field("key_hash", &"[REDACTED]")

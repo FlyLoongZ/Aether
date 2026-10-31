@@ -425,43 +425,29 @@ pub(super) fn sample_recent_key_rpm_candidate(
     .expect("request candidate should build")
 }
 
-/// Trusted-admin request headers shared by every local admin-route test.
+/// Real admin auth headers shared by every local admin-route test.
 pub(super) fn trusted_admin_headers() -> http::HeaderMap {
     let mut headers = http::HeaderMap::new();
-    for (name, value) in [
-        (crate::constants::GATEWAY_HEADER, "rust-phase3b"),
-        (
-            crate::constants::TRUSTED_ADMIN_USER_ID_HEADER,
-            "admin-user-123",
-        ),
-        (crate::constants::TRUSTED_ADMIN_USER_ROLE_HEADER, "admin"),
-        (
-            crate::constants::TRUSTED_ADMIN_SESSION_ID_HEADER,
-            "session-123",
-        ),
-        (
-            crate::constants::TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-            "management-token-123",
-        ),
-    ] {
-        headers.insert(name, http::HeaderValue::from_static(value));
-    }
+    headers.insert(
+        http::header::AUTHORIZATION,
+        http::HeaderValue::from_str(&format!(
+            "Bearer {}",
+            crate::tests::test_admin_access_token()
+        ))
+        .expect("admin token should be a valid header value"),
+    );
+    headers.insert(
+        "x-client-device-id",
+        http::HeaderValue::from_static(crate::tests::TEST_ADMIN_DEVICE_ID),
+    );
     headers
 }
 
-/// Attach the same trusted-admin headers to an outgoing reqwest request.
+/// Attach the same real admin auth to an outgoing reqwest request.
 pub(super) fn admin_request(builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     builder
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(
-            crate::constants::TRUSTED_ADMIN_USER_ID_HEADER,
-            "admin-user-123",
-        )
-        .header(crate::constants::TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(
-            crate::constants::TRUSTED_ADMIN_SESSION_ID_HEADER,
-            "session-123",
-        )
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
 }
 
 /// Spin up an upstream that must never be reached; the counter proves it.

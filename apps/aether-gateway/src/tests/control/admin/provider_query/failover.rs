@@ -126,10 +126,8 @@ async fn gateway_handles_admin_provider_query_test_model_failover_locally_with_t
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "mode": "direct",
@@ -301,10 +299,8 @@ async fn gateway_handles_admin_provider_query_test_model_failover_for_kiro_local
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-kiro",
             "mode": "direct",
@@ -461,10 +457,8 @@ async fn gateway_retries_kiro_failover_after_http_error_without_message_impl() {
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-kiro",
             "mode": "direct",
@@ -587,10 +581,8 @@ async fn gateway_handles_non_kiro_multi_model_failover_locally_impl() {
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "failover_models": ["gpt-4.1", "gpt-4o-mini"],
@@ -689,10 +681,8 @@ async fn gateway_handles_admin_provider_query_test_model_failover_with_single_mo
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "failover_models": ["gpt-4.1"],
@@ -817,10 +807,8 @@ async fn gateway_retries_non_kiro_failover_after_http_error_without_message_impl
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "failover_models": ["gpt-4.1"],
@@ -1007,10 +995,8 @@ async fn gateway_retries_non_kiro_failover_after_success_status_without_body_imp
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "failover_models": ["gpt-4.1"],
@@ -1119,10 +1105,8 @@ async fn gateway_handles_claude_cli_test_model_failover_locally_impl() {
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-claude",
             "failover_models": ["claude-sonnet-4-5"],
@@ -1219,10 +1203,8 @@ async fn gateway_handles_openai_responses_test_model_failover_locally_impl() {
         .post(format!(
             "{gateway_url}/api/admin/provider-query/test-model-failover"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "failover_models": ["gpt-5.4-mini"],

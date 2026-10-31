@@ -37,10 +37,6 @@ use crate::ai_serving::{
     build_provider_key_pool_score_upsert, provider_key_pool_score_id, provider_key_pool_score_scope,
 };
 use crate::audit::AdminAuditEvent;
-use crate::constants::{
-    TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER,
-    TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::handlers::admin::provider::oauth::dispatch::maybe_build_local_admin_provider_oauth_response;
@@ -333,8 +329,8 @@ async fn assert_antigravity_oauth_account_uses_google_userinfo_email(
                     "provider_id": "provider-antigravity",
                     "provider_type": "antigravity",
                     "pkce_verifier": "verifier-antigravity-123",
-                    "initiated_by_user_id": "admin-user-123",
-                    "initiated_by_session_id": "session-123",
+                    "initiated_by_user_id": crate::tests::TEST_ADMIN_USER_ID,
+                    "initiated_by_session_id": crate::tests::TEST_ADMIN_SESSION_ID,
                     "created_at": aether_admin::provider::state::current_unix_secs(),
                 }),
             )
@@ -353,10 +349,8 @@ async fn assert_antigravity_oauth_account_uses_google_userinfo_email(
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-antigravity/{operation}"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&request_body)
         .send()
         .await
@@ -545,10 +539,8 @@ async fn run_gateway_manual_kiro_oauth_refresh_maintenance_endpoint_test(
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-kiro-oauth-refresh/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

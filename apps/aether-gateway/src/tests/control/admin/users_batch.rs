@@ -16,13 +16,8 @@ use crate::data::GatewayDataState;
 
 fn admin_headers(request: RequestBuilder) -> RequestBuilder {
     request
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(crate::constants::TRUSTED_ADMIN_USER_ID_HEADER, "admin-user")
-        .header(crate::constants::TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(
-            crate::constants::TRUSTED_ADMIN_SESSION_ID_HEADER,
-            "session-admin",
-        )
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
 }
 
 fn sample_user(user_id: &str) -> StoredUserAuthRecord {
@@ -377,7 +372,6 @@ async fn gateway_requires_wallet_write_permission_for_batch_balance_adjustments(
 
     let denied = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(users_write_token)
         .json(&payload)
         .send()
@@ -397,7 +391,6 @@ async fn gateway_requires_wallet_write_permission_for_batch_balance_adjustments(
 
     let allowed = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(wallet_write_token)
         .json(&payload)
         .send()
@@ -413,7 +406,6 @@ async fn gateway_requires_wallet_write_permission_for_batch_balance_adjustments(
 
     let allowed_with_wallet_admin = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(wallet_admin_token)
         .json(&json!({
             "selection": payload["selection"],

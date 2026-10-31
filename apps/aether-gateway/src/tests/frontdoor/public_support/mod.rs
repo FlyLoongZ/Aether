@@ -13,8 +13,7 @@ use crate::data::GatewayDataState;
 use crate::tests::support::build_test_auth_token;
 use crate::tests::{
     any, build_router, build_router_with_state, json, start_server, to_bytes, AppState, Arc, Body,
-    Json, Mutex, Request, Router, StatusCode, TRUSTED_ADMIN_SESSION_ID_HEADER,
-    TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
+    Json, Mutex, Request, Router, StatusCode,
 };
 use aether_crypto::encrypt_python_fernet_plaintext;
 use aether_data::repository::announcements::{AnnouncementListQuery, AnnouncementReadRepository};

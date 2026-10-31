@@ -69,10 +69,8 @@ async fn gateway_referral_module_toggle_controls_user_status_and_actual_rewards(
             .put(format!(
                 "{gateway_url}/api/admin/modules/status/referral/enabled"
             ))
-            .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({ "enabled": true }))
             .send()
             .await
@@ -87,10 +85,8 @@ async fn gateway_referral_module_toggle_controls_user_status_and_actual_rewards(
             .put(format!(
                 "{gateway_url}/api/admin/modules/status/referral/enabled"
             ))
-            .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({ "enabled": enabled }))
             .send()
             .await
@@ -126,10 +122,8 @@ async fn gateway_referral_module_toggle_controls_user_status_and_actual_rewards(
 
         let response = client
             .get(format!("{gateway_url}/api/admin/modules/status/referral"))
-            .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .send()
             .await
             .expect("request should succeed");

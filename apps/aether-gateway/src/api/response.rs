@@ -179,7 +179,6 @@ where
     apply_streaming_response_headers(response.headers_mut());
     apply_gateway_browser_security_headers(response.headers_mut());
     insert_header_if_missing(response.headers_mut(), TRACE_ID_HEADER, trace_id)?;
-    insert_header_if_missing(response.headers_mut(), GATEWAY_HEADER, "rust-phase3b")?;
     if let Some(decision) = control_decision {
         insert_header_if_missing(
             response.headers_mut(),
@@ -590,14 +589,6 @@ mod tests {
             &BTreeMap::from([
                 ("set-cookie".to_string(), "session=attacker".to_string()),
                 (
-                    "x-aether-gateway".to_string(),
-                    "attacker-gateway".to_string(),
-                ),
-                (
-                    "x-aether-control-action".to_string(),
-                    "attacker-action".to_string(),
-                ),
-                (
                     "x-aether-future-control".to_string(),
                     "attacker-future".to_string(),
                 ),
@@ -651,13 +642,7 @@ mod tests {
             Body::empty(),
             "trace-upstream-header-filter",
             None,
-            |headers| {
-                headers.insert(
-                    http::HeaderName::from_static("x-aether-control-action"),
-                    http::HeaderValue::from_static("gateway-action"),
-                );
-                Ok(())
-            },
+            |_headers| Ok(()),
         )
         .expect("response should build");
 
@@ -696,11 +681,7 @@ mod tests {
             response.headers()[http::header::X_CONTENT_TYPE_OPTIONS],
             "nosniff"
         );
-        assert_eq!(response.headers()["x-aether-gateway"], "rust-phase3b");
-        assert_eq!(
-            response.headers()["x-aether-control-action"],
-            "gateway-action"
-        );
+        assert!(response.headers().get("x-aether-gateway").is_none());
         assert_eq!(response.headers()["x-upstream-visible"], "ok");
     }
 

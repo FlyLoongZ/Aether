@@ -43,10 +43,6 @@ use crate::ai_serving::{
 };
 use crate::backup::executor::{encrypt_backup_bytes, BackupDecryptionKey, BackupRestoreLimits};
 use crate::backup::{apply_restored_backup, BackupRestoreScope};
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 use crate::handlers::shared::{
     decrypt_or_migrate_identity_oauth_provider_client_secret,
@@ -130,10 +126,8 @@ async fn referral_system_import_applies_valid_rule_groups_independent_of_item_or
         let url = format!("{gateway_url}/api/admin/system/config/import");
         async move {
             client.post(url)
-                .header(GATEWAY_HEADER, "rust-phase3b")
-                .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-                .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-                .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+                .bearer_auth(crate::tests::test_admin_access_token())
+                .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
                 .json(&json!({"version":"2.2","merge_mode":"overwrite","global_models":[],"providers":[],"oauth_providers":[],"system_configs":configs}))
                 .send().await.expect("import request")
         }
@@ -461,10 +455,8 @@ async fn gateway_rejects_ldap_filter_and_attribute_injection_before_system_impor
         import_payload["ldap_config"][field] = json!(value);
         let response = client
             .post(format!("{gateway_url}/api/admin/system/config/import"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&import_payload)
             .send()
             .await
@@ -539,10 +531,8 @@ async fn gateway_imports_admin_system_config_locally_and_persists_data_impl() {
         }));
     let response = client
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&import_payload)
         .send()
         .await
@@ -670,10 +660,8 @@ async fn gateway_imports_admin_system_config_locally_and_persists_data_impl() {
 
     let export_response = client
         .get(format!("{gateway_url}/api/admin/system/config/export"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("export request should succeed");
@@ -771,10 +759,8 @@ async fn gateway_imports_admin_system_config_openai_image_aliases_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&payload)
         .send()
         .await
@@ -834,10 +820,8 @@ async fn gateway_returns_503_for_admin_system_config_import_when_local_data_is_u
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "version": "2.2" }))
         .send()
         .await
@@ -986,10 +970,8 @@ async fn assert_legacy_admin_system_config_import_model_test_succeeds(
 
     let import_response = client
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&fixture_system_import_payload(fixture_name))
         .send()
         .await
@@ -1046,10 +1028,8 @@ async fn assert_legacy_admin_system_config_import_model_test_succeeds(
 
     let test_response = client
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": provider_id,
             "endpoint_id": endpoint_id,
@@ -1098,10 +1078,8 @@ async fn gateway_rejects_unknown_admin_system_config_import_versions_impl() {
     for version in ["1.9", "2.4"] {
         let response = client
             .post(format!("{gateway_url}/api/admin/system/config/import"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({
                 "version": version,
                 "merge_mode": "skip",
@@ -1154,10 +1132,8 @@ async fn gateway_rejects_unsafe_oauth_targets_before_system_import_mutates_data_
         payload["oauth_providers"][0][field] = json!(value);
         let response = reqwest::Client::new()
             .post(format!("{gateway_url}/api/admin/system/config/import"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&payload)
             .send()
             .await
@@ -1211,10 +1187,8 @@ async fn gateway_prevalidates_aggregate_user_data_before_config_mutation_impl() 
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/data/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.0",
             "merge_mode": "overwrite",
@@ -1278,10 +1252,8 @@ async fn gateway_prevalidates_provider_key_duplicates_before_config_mutation_imp
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "2.3",
             "merge_mode": "overwrite",
@@ -1366,10 +1338,8 @@ async fn gateway_prevalidates_nested_user_key_before_user_mutation_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.5",
             "merge_mode": "overwrite",
@@ -1469,10 +1439,8 @@ async fn gateway_rejects_credentials_in_v16_user_import_before_mutation_impl() {
 
         let response = client
             .post(format!("{gateway_url}/api/admin/system/users/import"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({
                 "version": "1.6",
                 "merge_mode": "overwrite",
@@ -1524,10 +1492,8 @@ async fn gateway_prevalidates_usage_integer_storage_before_user_mutation_impl() 
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.5",
             "merge_mode": "overwrite",
@@ -1613,10 +1579,8 @@ async fn gateway_prevalidates_duplicate_usage_dimensions_before_user_mutation_im
     });
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.5",
             "merge_mode": "error",
@@ -1709,10 +1673,8 @@ async fn gateway_user_import_allows_chained_username_release_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.5",
             "merge_mode": "overwrite",
@@ -1803,10 +1765,8 @@ async fn gateway_user_import_preserves_omitted_email_in_simulated_state_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.5",
             "merge_mode": "overwrite",
@@ -2309,10 +2269,8 @@ async fn gateway_user_import_password_hash_overwrite_revokes_existing_sessions_i
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.5",
             "merge_mode": "overwrite",
@@ -2396,10 +2354,8 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.4",
             "merge_mode": "overwrite",
@@ -2809,10 +2765,8 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&import_payload)
         .send()
         .await
@@ -2827,10 +2781,8 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
 
     let response = client
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&import_payload)
         .send()
         .await
@@ -2925,10 +2877,8 @@ async fn gateway_imports_admin_system_config_fixture_v22_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&fixture_system_import_payload("v22"))
         .send()
         .await
@@ -2960,10 +2910,8 @@ async fn gateway_imports_admin_system_config_fixtures_from_legacy_exports_impl()
 
         let response = reqwest::Client::new()
             .post(format!("{gateway_url}/api/admin/system/config/import"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&fixture_system_import_payload(fixture))
             .send()
             .await
@@ -3073,10 +3021,8 @@ async fn gateway_imports_python_cli_alias_export_and_model_test_smoke_impl() {
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&import_payload)
         .send()
         .await
@@ -3107,10 +3053,8 @@ async fn gateway_imports_python_cli_alias_export_and_model_test_smoke_impl() {
 
     let response = client
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": provider_id,
             "model": "claude-sonnet-python",
@@ -3165,10 +3109,8 @@ async fn gateway_rejects_legacy_user_import_string_bool_field_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "1.3",
             "merge_mode": "overwrite",
@@ -3206,10 +3148,8 @@ async fn gateway_reports_field_path_for_invalid_admin_system_config_import_shape
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "2.2",
             "providers": [{
@@ -3266,10 +3206,8 @@ async fn gateway_rejects_invalid_anthropic_profiles_during_admin_system_config_i
 
         let response = client
             .post(format!("{gateway_url}/api/admin/system/config/import"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&payload)
             .send()
             .await
@@ -3336,10 +3274,8 @@ async fn gateway_does_not_restore_retired_vertex_claude_endpoint_from_system_imp
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&payload)
         .send()
         .await
@@ -3410,10 +3346,8 @@ async fn gateway_imports_admin_system_config_with_numeric_string_prices_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&payload)
         .send()
         .await
@@ -3497,10 +3431,8 @@ async fn gateway_imports_oauth_provider_key_credentials_from_admin_system_config
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&sample_oauth_system_import_payload(
             "oauth-access-token-1",
             "oauth-refresh-token-1",
@@ -3587,10 +3519,8 @@ async fn gateway_overwrites_oauth_provider_key_credentials_from_admin_system_imp
     ] {
         let response = client
             .post(format!("{gateway_url}/api/admin/system/config/import"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&sample_oauth_system_import_payload(
                 access_token,
                 refresh_token,
@@ -3645,10 +3575,8 @@ async fn gateway_overwrites_oauth_provider_key_credentials_from_admin_system_imp
 
     let response = client
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&metadata_only_payload)
         .send()
         .await
@@ -3668,10 +3596,8 @@ async fn gateway_overwrites_oauth_provider_key_credentials_from_admin_system_imp
 
     let response = client
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&sample_oauth_system_import_payload(
             "oauth-access-token-new",
             "oauth-refresh-token-new",
@@ -3833,10 +3759,8 @@ async fn gateway_overwrites_oauth_provider_key_credentials_from_admin_system_imp
     import_payload["providers"][0]["config"] = json!({"pool_advanced": {}});
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&import_payload)
         .send()
         .await
@@ -3949,10 +3873,8 @@ async fn gateway_skips_proxy_nodes_during_admin_system_config_import_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "2.2",
             "merge_mode": "overwrite",
@@ -4046,10 +3968,8 @@ async fn gateway_preserves_manual_proxy_configs_while_skipping_proxy_nodes_durin
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "version": "2.2",
             "merge_mode": "overwrite",
