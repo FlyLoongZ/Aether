@@ -1215,10 +1215,11 @@ fn provider_key_adaptive_success_persist_gate_admission_is_current(
     if cfg!(test) || ADAPTIVE_SUCCESS_PERSIST_MIN_INTERVAL.is_zero() {
         return true;
     }
-    ADAPTIVE_SUCCESS_PERSIST_GATE.peek(
-        &provider_key_adaptive_success_persist_gate_key(key_id),
-        *ADAPTIVE_SUCCESS_PERSIST_MIN_INTERVAL,
-    ) == Some(token)
+    // Validate against the window the admission was entered with: a live
+    // change to the interval must not make an in-flight admission look expired.
+    ADAPTIVE_SUCCESS_PERSIST_GATE
+        .peek_stored_window(&provider_key_adaptive_success_persist_gate_key(key_id))
+        == Some(token)
 }
 
 fn provider_key_adaptive_success_persist_gate_reset(key_id: &str) {
