@@ -6,53 +6,12 @@ use axum::{extract::Request, Router};
 use http::StatusCode;
 
 use super::super::{
-    build_router, build_router_with_state, hash_api_key, sample_currently_usable_auth_snapshot,
-    start_server, AppState, InMemoryAuthApiKeySnapshotRepository,
+    build_router_with_state, hash_api_key, sample_currently_usable_auth_snapshot, start_server,
+    AppState, InMemoryAuthApiKeySnapshotRepository,
 };
 use crate::constants::{
-    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_ROUTE_CLASS_HEADER, GATEWAY_HEADER,
-    TRACE_ID_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
+    CONTROL_ENDPOINT_SIGNATURE_HEADER, CONTROL_ROUTE_CLASS_HEADER, TRACE_ID_HEADER,
 };
-
-#[tokio::test]
-async fn gateway_rejects_spoofed_admin_principal_headers_without_gateway_marker_locally() {
-    let upstream_hits = Arc::new(Mutex::new(0usize));
-    let upstream_hits_clone = Arc::clone(&upstream_hits);
-    let upstream = Router::new().route(
-        "/api/admin/endpoints/health/api-formats",
-        any(move |_request: Request| {
-            let upstream_hits_inner = Arc::clone(&upstream_hits_clone);
-            async move {
-                *upstream_hits_inner.lock().expect("mutex should lock") += 1;
-                (StatusCode::OK, Body::from("unexpected upstream hit"))
-            }
-        }),
-    );
-
-    let (_upstream_url, upstream_handle) = start_server(upstream).await;
-    let gateway = build_router().expect("gateway should build");
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .get(format!(
-            "{gateway_url}/api/admin/endpoints/health/api-formats"
-        ))
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    let payload: serde_json::Value = response.json().await.expect("body should parse");
-    assert_eq!(payload["detail"], "admin authentication required");
-    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
-
-    gateway_handle.abort();
-    upstream_handle.abort();
-}
 
 #[tokio::test]
 async fn gateway_handles_models_support_routes_locally_with_public_support_control_headers() {
@@ -66,7 +25,6 @@ async fn gateway_handles_models_support_routes_locally_with_public_support_contr
                 *upstream_hits_inner.lock().expect("mutex should lock") += 1;
                 (
                     StatusCode::OK,
-                    [(GATEWAY_HEADER, "fallback-probe")],
                     Body::from("{\"object\":\"list\",\"data\":[]}"),
                 )
             }

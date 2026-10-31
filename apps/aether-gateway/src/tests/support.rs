@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use aether_crypto::{derive_python_fernet_key, encrypt_python_fernet_plaintext};
 
 /// Precomputed derive_python_fernet_key() of DEVELOPMENT_ENCRYPTION_KEY.
@@ -9,6 +11,160 @@ use aether_crypto::{derive_python_fernet_key, encrypt_python_fernet_plaintext};
 /// ciphertext still round-trips with the gateway configured for the
 /// passphrase; only the encoding of the same key changes.
 pub(crate) const DEV_FERNET_KEY: &str = "qGVbbzTSey8Hi1DRtS6wkb2jL33pRBHXTQW-GO6qne0=";
+
+/// Fixed administrator identity seeded into every `AppState` under `cfg(test)`.
+///
+/// Admin route tests authenticate through the real local access-token path
+/// instead of trusted identity headers, so they exercise the same authorization
+/// and audit code as production.
+pub(crate) const TEST_ADMIN_USER_ID: &str = "test-admin-user";
+pub(crate) const TEST_ADMIN_SESSION_ID: &str = "test-admin-session";
+pub(crate) const TEST_ADMIN_DEVICE_ID: &str = "test-admin-device";
+pub(crate) const TEST_ADMIN_ALT_SESSION_ID: &str = "test-admin-session-alt";
+pub(crate) const TEST_ADMIN_ALT_DEVICE_ID: &str = "test-admin-device-alt";
+pub(crate) const TEST_ADMIN_EMAIL: &str = "test-admin@aether.invalid";
+pub(crate) const TEST_ADMIN_CREATED_AT_RFC3339: &str = "2024-01-01T00:00:00+00:00";
+
+/// Test-only fallback: the fixed administrator identity exists outside the
+/// regular auth user/session stores so it never appears in user lists or
+/// last-active-admin counts.
+pub(crate) fn test_admin_user_record() -> aether_data::repository::users::StoredUserAuthRecord {
+    let created_at = chrono::DateTime::parse_from_rfc3339(TEST_ADMIN_CREATED_AT_RFC3339)
+        .expect("test admin created_at should parse")
+        .with_timezone(&chrono::Utc);
+    aether_data::repository::users::StoredUserAuthRecord::new(
+        TEST_ADMIN_USER_ID.to_string(),
+        Some(TEST_ADMIN_EMAIL.to_string()),
+        true,
+        "test-admin".to_string(),
+        Some("test-admin-password-hash".to_string()),
+        "admin".to_string(),
+        "local".to_string(),
+        None,
+        None,
+        None,
+        true,
+        false,
+        Some(created_at),
+        None,
+    )
+    .expect("test admin user should build")
+}
+
+#[cfg(test)]
+pub(crate) fn test_admin_session_record(
+    session_id: &str,
+    device_id: &str,
+) -> crate::data::state::StoredUserSessionRecord {
+    let now = chrono::Utc::now();
+    crate::data::state::StoredUserSessionRecord::new(
+        session_id.to_string(),
+        TEST_ADMIN_USER_ID.to_string(),
+        device_id.to_string(),
+        Some("test-admin".to_string()),
+        format!("test-admin-refresh-hash-{session_id}"),
+        None,
+        None,
+        Some(now),
+        Some(now + chrono::Duration::days(1)),
+        None,
+        None,
+        Some("127.0.0.1".to_string()),
+        Some("test-admin".to_string()),
+        Some(now),
+        Some(now),
+    )
+    .expect("test admin session should build")
+}
+
+/// Stable access token for the test administrator.
+pub(crate) fn test_admin_access_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN.get_or_init(|| {
+        build_test_auth_token(
+            "access",
+            serde_json::Map::from_iter([
+                ("user_id".to_string(), json!(TEST_ADMIN_USER_ID)),
+                ("role".to_string(), json!("admin")),
+                (
+                    "created_at".to_string(),
+                    json!(TEST_ADMIN_CREATED_AT_RFC3339),
+                ),
+                ("session_id".to_string(), json!(TEST_ADMIN_SESSION_ID)),
+            ]),
+            chrono::Utc::now() + chrono::Duration::days(1),
+        )
+    })
+}
+
+/// Second valid administrator session, used by tests that need a session
+/// mismatch without falling back to unsigned identity headers.
+pub(crate) fn test_admin_alt_access_token() -> &'static str {
+    static TOKEN: OnceLock<String> = OnceLock::new();
+    TOKEN.get_or_init(|| {
+        build_test_auth_token(
+            "access",
+            serde_json::Map::from_iter([
+                ("user_id".to_string(), json!(TEST_ADMIN_USER_ID)),
+                ("role".to_string(), json!("admin")),
+                (
+                    "created_at".to_string(),
+                    json!(TEST_ADMIN_CREATED_AT_RFC3339),
+                ),
+                ("session_id".to_string(), json!(TEST_ADMIN_ALT_SESSION_ID)),
+            ]),
+            chrono::Utc::now() + chrono::Duration::days(1),
+        )
+    })
+}
+
+/// Mint an access token for an existing test user and register a matching
+/// session in the state's in-memory session store.
+pub(crate) async fn issue_access_token_for_user(
+    state: &crate::AppState,
+    user: &aether_data::repository::users::StoredUserAuthRecord,
+    device_id: &str,
+) -> String {
+    let session_id = format!("session-{}", user.id);
+    let now = chrono::Utc::now();
+    let session = crate::data::state::StoredUserSessionRecord::new(
+        session_id.clone(),
+        user.id.clone(),
+        device_id.to_string(),
+        Some("test".to_string()),
+        format!("refresh-{session_id}"),
+        None,
+        None,
+        Some(now),
+        Some(now + chrono::Duration::days(1)),
+        None,
+        None,
+        Some("127.0.0.1".to_string()),
+        Some("test".to_string()),
+        Some(now),
+        Some(now),
+    )
+    .expect("test user session should build");
+    if let Some(store) = state.auth_session_store.as_ref() {
+        store
+            .lock()
+            .expect("auth session store should lock")
+            .insert(format!("{}:{session_id}", user.id), session);
+    }
+    build_test_auth_token(
+        "access",
+        serde_json::Map::from_iter([
+            ("user_id".to_string(), json!(user.id)),
+            ("role".to_string(), json!(user.role)),
+            (
+                "created_at".to_string(),
+                json!(user.created_at.map(|value| value.to_rfc3339())),
+            ),
+            ("session_id".to_string(), json!(session_id)),
+        ]),
+        now + chrono::Duration::hours(12),
+    )
+}
 
 /// Credential-only gateway state for fixtures that just seal or open a
 /// provider secret. Avoids repeating the five-line AppState::new() chain in

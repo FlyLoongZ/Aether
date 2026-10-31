@@ -91,10 +91,8 @@ async fn gateway_handles_admin_provider_query_test_model_locally_with_trusted_ad
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-4.1",
@@ -266,10 +264,8 @@ async fn gateway_handles_openai_responses_test_model_locally_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "model": "gpt-5.4-mini",
@@ -309,10 +305,8 @@ async fn gateway_preserves_non_success_status_for_test_model_local_wrapper_impl(
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-does-not-exist",
             "model": "gpt-4.1"

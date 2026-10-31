@@ -30,8 +30,8 @@ use crate::constants::{
 };
 
 use crate::control::{
-    request_model_local_rejection, should_buffer_request_for_local_auth, trusted_auth_local_rejection,
-    GatewayControlDecision, GatewayPublicRequestContext,
+    request_model_local_rejection, should_buffer_request_for_local_auth,
+    trusted_auth_local_rejection, GatewayControlDecision, GatewayPublicRequestContext,
 };
 use crate::executor::{
     beautify_local_execution_client_error_message, build_local_execution_runtime_miss_context,
@@ -576,7 +576,7 @@ async fn proxy_request_inner(
     let trace_id = extract_or_generate_trace_id(&parts.headers);
     state.clear_local_execution_runtime_miss_diagnostic(&trace_id);
     let request_context_started_at = Instant::now();
-    let mut request_context = crate::control::resolve_public_request_context_without_trusted_auth(
+    let mut request_context = crate::control::resolve_public_request_context(
         &state,
         &parts.method,
         &parts.uri,

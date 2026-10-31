@@ -22,10 +22,6 @@ use super::super::super::{
     sample_admin_global_model, sample_bound_auth_config, sample_bound_key, sample_endpoint,
     sample_key, sample_proxy_node, start_server,
 };
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 use crate::tests::DEV_FERNET_KEY;
 
@@ -202,10 +198,8 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_codex_with_trusted_a
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/refresh-quota"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -463,10 +457,8 @@ async fn gateway_codex_quota_refresh_persists_after_automatic_oauth_token_refres
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex-expired-quota/refresh-quota"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -704,10 +696,8 @@ async fn gateway_codex_reset_credit_retries_until_same_window_usage_drop_is_auth
         .post(format!(
             "{gateway_url}/api/admin/endpoints/keys/key-codex-reset/codex-reset-credit/consume"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "idempotency_key": "reset-e2e",
             "expected_credential_generation": "credential-reset-e2e"
@@ -833,10 +823,8 @@ async fn gateway_marks_codex_quota_exhausted_when_wham_usage_returns_payment_req
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/refresh-quota"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -978,10 +966,8 @@ async fn gateway_auto_removes_codex_key_when_quota_proves_oauth_invalid() {
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/refresh-quota"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1124,10 +1110,8 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_requested_codex_keys
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/refresh-quota"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "key_ids": ["key-codex-a"] }))
         .send()
         .await
@@ -1275,10 +1259,8 @@ async fn gateway_refreshes_admin_provider_quota_for_codex_proxy_with_extended_ti
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/refresh-quota"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1435,10 +1417,8 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_kiro_with_trusted_ad
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-kiro/refresh-quota"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1678,10 +1658,8 @@ async fn gateway_auto_removes_kiro_quota_refresh_after_terminal_oauth_refresh_fa
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-kiro-auto-remove/refresh-quota"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1793,10 +1771,8 @@ async fn gateway_refresh_kiro_quota_reconciles_missing_fixed_endpoint_before_ref
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-kiro-reconcile/refresh-quota"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1872,10 +1848,8 @@ async fn gateway_refresh_quota_reconciles_unsupported_fixed_provider_endpoints_b
             .post(format!(
                 "{gateway_url}/api/admin/endpoints/providers/{provider_id}/refresh-quota"
             ))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .send()
             .await
             .expect("request should succeed");
@@ -1968,10 +1942,8 @@ async fn gateway_reports_codex_quota_runtime_failures_locally_without_falling_ba
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/refresh-quota"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2217,10 +2189,8 @@ async fn gateway_refreshes_admin_provider_quota_locally_for_antigravity_with_tru
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-antigravity/refresh-quota"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

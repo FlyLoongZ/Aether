@@ -8,9 +8,6 @@ use http::StatusCode;
 use serde_json::json;
 
 use super::super::{build_router_with_state, start_server, AppState};
-use crate::constants::{
-    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 
 async fn send_admin_billing_request(
@@ -22,10 +19,8 @@ async fn send_admin_billing_request(
     let client = reqwest::Client::new();
     let mut request = client
         .request(method, format!("{gateway_url}{path}"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123");
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID);
     if let Some(body) = body {
         request = request.json(&body);
     }
@@ -185,10 +180,8 @@ async fn gateway_handles_admin_billing_presets_locally_with_trusted_admin_princi
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/billing/presets"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -400,10 +393,8 @@ async fn gateway_handles_admin_billing_rule_routes_locally_with_trusted_admin_pr
         .get(format!(
             "{gateway_url}/api/admin/billing/rules?task_type=chat&is_enabled=true&page=1&page_size=1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -422,10 +413,8 @@ async fn gateway_handles_admin_billing_rule_routes_locally_with_trusted_admin_pr
 
     let detail_response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/billing/rules/rule-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -633,10 +622,8 @@ async fn gateway_handles_admin_billing_collector_routes_locally_with_trusted_adm
         .get(format!(
             "{gateway_url}/api/admin/billing/collectors?api_format=OPENAI&task_type=chat&is_enabled=true&page=1&page_size=10"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -655,10 +642,8 @@ async fn gateway_handles_admin_billing_collector_routes_locally_with_trusted_adm
         .get(format!(
             "{gateway_url}/api/admin/billing/collectors/collector-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

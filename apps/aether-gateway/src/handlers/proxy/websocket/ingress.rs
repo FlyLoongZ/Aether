@@ -374,15 +374,6 @@ fn websocket_planning_headers(mut headers: HeaderMap) -> HeaderMap {
         "proxy-connection",
         "x-api-key",
         "x-goog-api-key",
-        crate::constants::GATEWAY_HEADER,
-        crate::constants::TRUSTED_AUTH_USER_ID_HEADER,
-        crate::constants::TRUSTED_AUTH_API_KEY_ID_HEADER,
-        crate::constants::TRUSTED_AUTH_BALANCE_HEADER,
-        crate::constants::TRUSTED_AUTH_ACCESS_ALLOWED_HEADER,
-        crate::constants::TRUSTED_ADMIN_USER_ID_HEADER,
-        crate::constants::TRUSTED_ADMIN_USER_ROLE_HEADER,
-        crate::constants::TRUSTED_ADMIN_SESSION_ID_HEADER,
-        crate::constants::TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
     ] {
         headers.remove(name);
     }

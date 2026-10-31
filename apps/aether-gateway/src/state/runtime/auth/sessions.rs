@@ -7,6 +7,20 @@ impl AppState {
         session_id: &str,
     ) -> Result<Option<GatewayUserSessionView>, GatewayError> {
         #[cfg(test)]
+        if user_id == crate::tests::TEST_ADMIN_USER_ID
+            && (session_id == crate::tests::TEST_ADMIN_SESSION_ID
+                || session_id == crate::tests::TEST_ADMIN_ALT_SESSION_ID)
+        {
+            let device_id = if session_id == crate::tests::TEST_ADMIN_SESSION_ID {
+                crate::tests::TEST_ADMIN_DEVICE_ID
+            } else {
+                crate::tests::TEST_ADMIN_ALT_DEVICE_ID
+            };
+            return Ok(Some(
+                crate::tests::test_admin_session_record(session_id, device_id).into(),
+            ));
+        }
+        #[cfg(test)]
         if let Some(store) = self.auth_session_store.as_ref() {
             let key = format!("{user_id}:{session_id}");
             return Ok(store

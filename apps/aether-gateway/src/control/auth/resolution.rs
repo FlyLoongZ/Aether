@@ -16,15 +16,11 @@ use crate::{AppState, GatewayError};
 
 use super::super::GatewayControlDecision;
 use super::credentials::{
-    build_auth_context_cache_key, build_auth_context_cache_key_with_trusted_auth,
-    current_unix_secs, extract_request_credentials, extract_request_credentials_with_trusted_auth,
-    extract_trusted_admin_headers, hash_api_key,
+    build_auth_context_cache_key, current_unix_secs, extract_request_credentials, hash_api_key,
 };
 use super::gate::GatewayLocalAuthRejection;
 use super::principal::derive_principal_candidate;
-use super::types::{
-    GatewayCredentialCarrier, GatewayPrincipalCandidate, GatewayTrustedAuthHeaders,
-};
+use super::types::{GatewayCredentialCarrier, GatewayPrincipalCandidate};
 use crate::cache::{is_negative_auth_context, AUTH_CONTEXT_CACHE_TTL};
 use crate::headers::header_value_str;
 use crate::local_auth_token::{
@@ -137,39 +133,14 @@ pub(in super::super) enum ControlDecisionAuthResolution {
     Resolved(GatewayControlDecision),
 }
 
-#[cfg(test)]
 pub(in super::super) async fn resolve_control_decision_auth(
     state: &AppState,
     headers: &http::HeaderMap,
     uri: &Uri,
     trace_id: &str,
-    decision: GatewayControlDecision,
-) -> Result<ControlDecisionAuthResolution, GatewayError> {
-    resolve_control_decision_auth_with_trusted_auth(
-        state,
-        headers,
-        uri,
-        trace_id,
-        decision,
-        cfg!(test),
-    )
-    .await
-}
-
-pub(in super::super) async fn resolve_control_decision_auth_with_trusted_auth(
-    state: &AppState,
-    headers: &http::HeaderMap,
-    uri: &Uri,
-    trace_id: &str,
     mut decision: GatewayControlDecision,
-    trusted_auth_verified: bool,
 ) -> Result<ControlDecisionAuthResolution, GatewayError> {
-    if let Some(admin_principal) =
-        resolve_trusted_admin_principal(headers, decision.auth_endpoint_signature.as_deref())
-    {
-        log_admin_principal_resolution(trace_id, &decision, "trusted_headers", &admin_principal);
-        decision.admin_principal = Some(admin_principal);
-    } else if let Some(admin_principal) = resolve_local_admin_principal(
+    if let Some(admin_principal) = resolve_local_admin_principal(
         state,
         headers,
         uri,
@@ -181,18 +152,10 @@ pub(in super::super) async fn resolve_control_decision_auth_with_trusted_auth(
         decision.admin_principal = Some(admin_principal);
     }
 
-    let auth_context_cache_key =
-        decision
-            .auth_endpoint_signature
-            .as_deref()
-            .and_then(|signature| {
-                build_auth_context_cache_key_with_trusted_auth(
-                    headers,
-                    uri,
-                    signature,
-                    trusted_auth_verified,
-                )
-            });
+    let auth_context_cache_key = decision
+        .auth_endpoint_signature
+        .as_deref()
+        .and_then(|signature| build_auth_context_cache_key(headers, uri, signature));
 
     let mut resolved_auth_context = None;
     if let Some(cache_key) = auth_context_cache_key.as_deref() {
@@ -206,7 +169,6 @@ pub(in super::super) async fn resolve_control_decision_auth_with_trusted_auth(
                         decision.auth_endpoint_signature.as_deref(),
                         headers,
                         uri,
-                        trusted_auth_verified,
                     )
                     .await?,
                 );
@@ -225,7 +187,6 @@ pub(in super::super) async fn resolve_control_decision_auth_with_trusted_auth(
             headers,
             uri,
             decision.auth_endpoint_signature.as_deref(),
-            trusted_auth_verified,
         )
         .await?;
     }
@@ -355,27 +316,6 @@ fn allows_missing_data_backed_auth_context(decision: &GatewayControlDecision) ->
         decision.route_kind.as_deref(),
         Some("chat" | "cli" | "compact")
     )
-}
-
-fn resolve_trusted_admin_principal(
-    headers: &http::HeaderMap,
-    auth_endpoint_signature: Option<&str>,
-) -> Option<GatewayAdminPrincipalContext> {
-    if !auth_endpoint_signature
-        .map(str::trim)
-        .unwrap_or_default()
-        .starts_with("admin:")
-    {
-        return None;
-    }
-    let trusted_headers = extract_trusted_admin_headers(headers)?;
-    Some(GatewayAdminPrincipalContext {
-        user_id: trusted_headers.user_id,
-        user_role: trusted_headers.user_role,
-        session_id: trusted_headers.session_id,
-        management_token_id: trusted_headers.management_token_id,
-        management_token_permissions: None,
-    })
 }
 
 async fn resolve_local_admin_principal(
@@ -533,7 +473,6 @@ pub(crate) async fn resolve_execution_runtime_auth_context(
                 Some(auth_endpoint_signature),
                 headers,
                 uri,
-                cfg!(test),
             )
             .await
             .map(Some);
@@ -547,7 +486,6 @@ pub(crate) async fn resolve_execution_runtime_auth_context(
         headers,
         uri,
         Some(auth_endpoint_signature),
-        cfg!(test),
     )
     .await?
     {
@@ -567,7 +505,6 @@ async fn revalidate_cached_auth_context(
     auth_endpoint_signature: Option<&str>,
     headers: &http::HeaderMap,
     uri: &Uri,
-    trusted_auth_verified: bool,
 ) -> Result<GatewayControlAuthContext, GatewayError> {
     if is_negative_auth_context(&auth_context)
         || !auth_context.access_allowed
@@ -595,7 +532,6 @@ async fn revalidate_cached_auth_context(
                     uri,
                     auth_context.clone(),
                     auth_endpoint_signature,
-                    trusted_auth_verified,
                 )
             },
         )
@@ -617,7 +553,6 @@ async fn revalidate_cached_auth_context(
                 uri,
                 auth_context,
                 auth_endpoint_signature,
-                trusted_auth_verified,
             )
             .await?;
             put_cached_auth_context(state, cache_key, refreshed.clone());
@@ -632,16 +567,9 @@ async fn resolve_security_fresh_auth_context(
     uri: &Uri,
     stale: GatewayControlAuthContext,
     auth_endpoint_signature: Option<&str>,
-    trusted_auth_verified: bool,
 ) -> Result<GatewayControlAuthContext, GatewayError> {
-    if let Some(refreshed) = resolve_data_backed_auth_context_with_trusted_auth(
-        state,
-        headers,
-        uri,
-        auth_endpoint_signature,
-        trusted_auth_verified,
-    )
-    .await?
+    if let Some(refreshed) =
+        resolve_data_backed_auth_context(state, headers, uri, auth_endpoint_signature).await?
     {
         return Ok(refreshed);
     }
@@ -659,17 +587,10 @@ async fn resolve_data_backed_auth_context_cached(
     headers: &http::HeaderMap,
     uri: &Uri,
     auth_endpoint_signature: Option<&str>,
-    trusted_auth_verified: bool,
 ) -> Result<Option<GatewayControlAuthContext>, GatewayError> {
     let Some(cache_key) = cache_key else {
-        return resolve_data_backed_auth_context_with_trusted_auth(
-            state,
-            headers,
-            uri,
-            auth_endpoint_signature,
-            trusted_auth_verified,
-        )
-        .await;
+        return resolve_data_backed_auth_context(state, headers, uri, auth_endpoint_signature)
+            .await;
     };
     let resolved = state
         .auth_context_cache
@@ -677,15 +598,7 @@ async fn resolve_data_backed_auth_context_cached(
             cache_key,
             AUTH_CONTEXT_CACHE_TTL,
             auth_context_negative_cache_ttl(),
-            || {
-                resolve_data_backed_auth_context_with_trusted_auth(
-                    state,
-                    headers,
-                    uri,
-                    auth_endpoint_signature,
-                    trusted_auth_verified,
-                )
-            },
+            || resolve_data_backed_auth_context(state, headers, uri, auth_endpoint_signature),
         )
         .await?;
     Ok(resolved)
@@ -853,29 +766,11 @@ fn apply_resolved_auth_context_to_decision(
     }
 }
 
-#[cfg(test)]
-pub(super) async fn resolve_data_backed_auth_context(
+async fn resolve_data_backed_auth_context(
     state: &AppState,
     headers: &http::HeaderMap,
     uri: &Uri,
     auth_endpoint_signature: Option<&str>,
-) -> Result<Option<GatewayControlAuthContext>, GatewayError> {
-    resolve_data_backed_auth_context_with_trusted_auth(
-        state,
-        headers,
-        uri,
-        auth_endpoint_signature,
-        cfg!(test),
-    )
-    .await
-}
-
-async fn resolve_data_backed_auth_context_with_trusted_auth(
-    state: &AppState,
-    headers: &http::HeaderMap,
-    uri: &Uri,
-    auth_endpoint_signature: Option<&str>,
-    trusted_auth_verified: bool,
 ) -> Result<Option<GatewayControlAuthContext>, GatewayError> {
     let Some(signature) = auth_endpoint_signature
         .map(str::trim)
@@ -886,19 +781,11 @@ async fn resolve_data_backed_auth_context_with_trusted_auth(
     if !state.has_auth_api_key_reader() {
         return Ok(None);
     }
-    let extracted = extract_request_credentials_with_trusted_auth(
-        headers,
-        uri,
-        signature,
-        trusted_auth_verified,
-    );
+    let extracted = extract_request_credentials(headers, uri, signature);
     let principal = derive_principal_candidate(&extracted);
     let now_unix_secs = current_unix_secs();
 
     match principal {
-        Some(GatewayPrincipalCandidate::TrustedHeaders(trusted_headers)) => {
-            resolve_trusted_auth_context(state, signature, trusted_headers, now_unix_secs).await
-        }
         Some(GatewayPrincipalCandidate::ApiKeyHash { key_hash, .. }) => {
             let snapshot = {
                 let _permit = state.acquire_auth_snapshot_load_gate().await?;
@@ -1062,57 +949,6 @@ async fn resolve_antigravity_bearer_bridge_auth_context(
         "resolved Antigravity bearer bridge auth context"
     );
     Ok(Some(auth_context))
-}
-
-async fn resolve_trusted_auth_context(
-    state: &AppState,
-    auth_endpoint_signature: &str,
-    trusted_headers: GatewayTrustedAuthHeaders,
-    now_unix_secs: u64,
-) -> Result<Option<GatewayControlAuthContext>, GatewayError> {
-    let snapshot = {
-        let _permit = state.acquire_auth_snapshot_load_gate().await?;
-        state
-            .data
-            .read_auth_api_key_snapshot_strong(
-                &trusted_headers.user_id,
-                &trusted_headers.api_key_id,
-                now_unix_secs,
-            )
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))?
-    };
-    let Some(snapshot) = snapshot else {
-        return Ok(Some(GatewayControlAuthContext {
-            user_id: trusted_headers.user_id,
-            api_key_id: trusted_headers.api_key_id,
-            username: None,
-            api_key_name: None,
-            balance_remaining: trusted_headers.balance_remaining,
-            access_allowed: false,
-            user_rate_limit: None,
-            api_key_rate_limit: None,
-            api_key_is_standalone: false,
-            admin_bypass_limits: false,
-            local_rejection: Some(GatewayLocalAuthRejection::InvalidApiKey),
-            allowed_models: None,
-            ip_rules: None,
-            verified_api_key_hash: None,
-        }));
-    };
-
-    let wallet_access = resolve_wallet_auth_gate_uncached(state, &snapshot).await?;
-    Ok(Some(
-        build_data_backed_auth_context(
-            state,
-            snapshot,
-            auth_endpoint_signature,
-            trusted_headers.access_allowed,
-            trusted_headers.balance_remaining,
-            wallet_access,
-        )
-        .await,
-    ))
 }
 
 async fn build_data_backed_auth_context(

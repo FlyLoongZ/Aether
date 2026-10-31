@@ -20,7 +20,7 @@ fn hash_token(value: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-async fn issue_operational_session_access_token(
+pub(crate) async fn issue_operational_session_access_token(
     state: &AppState,
     client_device_id: &str,
     role: &str,

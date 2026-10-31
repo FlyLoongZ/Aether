@@ -87,10 +87,8 @@ async fn gateway_handles_admin_provider_query_embedding_model_test_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-siliconflow",
             "model": "Qwen/Qwen3-Embedding-4B",
@@ -208,10 +206,8 @@ async fn gateway_handles_admin_provider_query_doubao_text_embedding_model_test_i
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-doubao",
             "model": "doubao-embedding-text-240515",
@@ -330,10 +326,8 @@ async fn gateway_handles_admin_provider_query_gemini_embedding_model_test_impl()
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-gemini",
             "model": "gemini-embedding-001",
@@ -458,10 +452,8 @@ async fn gateway_handles_admin_provider_query_vertex_gemini_embedding_model_test
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-vertex-ai",
             "model": "gemini-embedding-2",
@@ -595,10 +587,8 @@ async fn gateway_handles_admin_provider_query_jina_embedding_model_test_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-jina-embedding",
             "model": "jina-embeddings-v3",
@@ -717,10 +707,8 @@ async fn gateway_handles_admin_provider_query_openai_rerank_model_test_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai-rerank",
             "model": "bge-reranker-base",
@@ -845,10 +833,8 @@ async fn gateway_handles_admin_provider_query_rerank_model_test_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-jina",
             "model": "jina-reranker-v2-base-multilingual",

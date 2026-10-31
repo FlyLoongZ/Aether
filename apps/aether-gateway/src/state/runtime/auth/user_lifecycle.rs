@@ -185,6 +185,10 @@ impl AppState {
         user_id: &str,
     ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
         #[cfg(test)]
+        if user_id == crate::tests::TEST_ADMIN_USER_ID {
+            return Ok(Some(crate::tests::test_admin_user_record()));
+        }
+        #[cfg(test)]
         if let Some(store) = self.auth_user_store.as_ref() {
             if let Some(user) = store
                 .lock()

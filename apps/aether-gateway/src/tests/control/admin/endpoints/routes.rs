@@ -12,10 +12,6 @@ use super::super::super::{
     build_router_with_state, sample_bound_key as sample_key, sample_endpoint, sample_provider,
     start_server, AppState,
 };
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 
 const ADMIN_ENDPOINTS_DATA_UNAVAILABLE_DETAIL: &str = "Admin endpoint data unavailable";
@@ -44,10 +40,8 @@ async fn gateway_returns_service_unavailable_for_admin_provider_endpoints_when_c
         .get(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-openai/endpoints?skip=0&limit=50"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -124,10 +118,8 @@ async fn gateway_handles_admin_provider_endpoints_locally_with_trusted_admin_pri
         .get(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-openai/endpoints?skip=0&limit=50"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -196,10 +188,8 @@ async fn gateway_counts_fixed_provider_oauth_keys_for_inherited_endpoint_formats
         .get(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/endpoints?skip=0&limit=50"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -281,10 +271,8 @@ async fn gateway_counts_keys_with_null_api_formats_for_each_fixed_provider_endpo
         .get(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-codex/endpoints?skip=0&limit=50"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -341,10 +329,8 @@ async fn gateway_returns_service_unavailable_for_admin_provider_endpoint_create_
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-openai/endpoints"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "api_format": "openai:chat",
@@ -400,10 +386,8 @@ async fn gateway_creates_admin_http_provider_endpoint_locally_with_trusted_admin
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-openai/endpoints"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-openai",
             "api_format": "openai:chat",
@@ -480,10 +464,8 @@ async fn gateway_rejects_streaming_policy_for_search_endpoint_before_catalog_wri
         .post(format!(
             "{gateway_url}/api/admin/endpoints/providers/provider-search-create/endpoints"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_id": "provider-search-create",
             "api_format": "openai:search",
@@ -507,10 +489,8 @@ async fn gateway_rejects_streaming_policy_for_search_endpoint_before_catalog_wri
         .put(format!(
             "{gateway_url}/api/admin/endpoints/endpoint-search-update"
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "config": {"upstreamStreamPolicy": true}
         }))
@@ -600,10 +580,8 @@ async fn gateway_updates_admin_http_provider_endpoint_locally_with_trusted_admin
         .put(format!(
             "{gateway_url}/api/admin/endpoints/endpoint-openai-chat"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "base_url": "http://updated.openai.example:8080/",
             "custom_path": "/v1/responses",
@@ -680,10 +658,8 @@ async fn gateway_updates_fixed_provider_endpoint_base_url_as_template_override()
         .put(format!(
             "{gateway_url}/api/admin/endpoints/endpoint-codex-responses"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "base_url": "http://127.0.0.1:18181/v1",
             "max_retries": 0
@@ -773,10 +749,8 @@ async fn gateway_deletes_admin_provider_endpoint_locally_with_trusted_admin_prin
         .delete(format!(
             "{gateway_url}/api/admin/endpoints/endpoint-openai-chat"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -858,10 +832,8 @@ async fn gateway_handles_admin_get_endpoint_locally_with_trusted_admin_principal
         .get(format!(
             "{gateway_url}/api/admin/endpoints/endpoint-openai-chat"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -903,10 +875,8 @@ async fn gateway_handles_admin_default_body_rules_locally_with_trusted_admin_pri
         .get(format!(
             "{gateway_url}/api/admin/endpoints/defaults/openai:responses/body-rules?provider_type=codex"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

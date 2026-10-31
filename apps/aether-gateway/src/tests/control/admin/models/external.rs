@@ -10,10 +10,6 @@ use http::StatusCode;
 use serde_json::json;
 
 use super::super::super::{build_router_with_state, sample_proxy_node, start_server, AppState};
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 use crate::handlers::admin::{
     set_admin_external_models_source_url_for_tests, ADMIN_EXTERNAL_MODELS_CONFIG_MUTATION_LOCK_KEY,
@@ -21,10 +17,8 @@ use crate::handlers::admin::{
 
 fn trusted_admin(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
     request
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
 }
 
 fn online_manual_proxy_node(node_id: &str, proxy_url: impl Into<String>) -> StoredProxyNode {

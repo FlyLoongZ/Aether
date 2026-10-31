@@ -16,7 +16,11 @@ use sha2::{Digest, Sha256};
 /// per-module copies that had to be kept in sync by hand.
 pub(crate) const LARGE_TEST_STACK_BYTES: usize = 16 * 1024 * 1024;
 
-pub(crate) use support::DEV_FERNET_KEY;
+pub(crate) use support::{
+    issue_access_token_for_user, test_admin_access_token, test_admin_alt_access_token,
+    test_admin_session_record, test_admin_user_record, DEV_FERNET_KEY, TEST_ADMIN_ALT_DEVICE_ID,
+    TEST_ADMIN_ALT_SESSION_ID, TEST_ADMIN_DEVICE_ID, TEST_ADMIN_SESSION_ID, TEST_ADMIN_USER_ID,
+};
 
 /// Wrap an async impl future in a deep-stack thread and a plain #[test].
 macro_rules! large_stack_async_test {
@@ -39,7 +43,7 @@ mod concurrency;
 mod control;
 mod files;
 mod frontdoor;
-mod operational_auth;
+pub(crate) mod operational_auth;
 pub(crate) mod support;
 mod usage;
 mod video;

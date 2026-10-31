@@ -16,9 +16,6 @@ use super::super::super::{
     build_router_with_state, sample_admin_global_model, sample_admin_provider_model,
     sample_provider, start_server, AppState,
 };
-use crate::constants::{
-    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 
 #[tokio::test]
@@ -71,10 +68,8 @@ async fn gateway_handles_admin_provider_models_locally_with_trusted_admin_princi
         .get(format!(
             "{gateway_url}/api/admin/providers/provider-openai/models?skip=0&limit=20"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -150,10 +145,8 @@ async fn gateway_handles_admin_provider_model_detail_locally_with_trusted_admin_
         .get(format!(
             "{gateway_url}/api/admin/providers/provider-openai/models/model-openai-gpt5"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -224,10 +217,8 @@ async fn gateway_creates_admin_provider_model_locally_with_trusted_admin_princip
         .post(format!(
             "{gateway_url}/api/admin/providers/provider-openai/models"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_model_name": "gpt-5-upstream",
             "global_model_id": "global-gpt-5",
@@ -325,10 +316,8 @@ async fn gateway_updates_and_deletes_admin_provider_model_locally_with_trusted_a
         .patch(format!(
             "{gateway_url}/api/admin/providers/provider-openai/models/model-openai-gpt5"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "provider_model_name": "gpt-5-mini-upstream",
             "global_model_id": "global-gpt-5-mini",
@@ -354,10 +343,8 @@ async fn gateway_updates_and_deletes_admin_provider_model_locally_with_trusted_a
         .delete(format!(
             "{gateway_url}/api/admin/providers/provider-openai/models/model-openai-gpt5"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -430,10 +417,8 @@ async fn gateway_batch_creates_admin_provider_models_locally_with_trusted_admin_
         .post(format!(
             "{gateway_url}/api/admin/providers/provider-openai/models/batch"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!([
             {"provider_model_name": "gpt-5-upstream", "global_model_id": "global-gpt-5"},
             {"provider_model_name": "gpt-4.1-upstream", "global_model_id": "global-gpt-4.1"}
@@ -521,10 +506,8 @@ async fn gateway_handles_admin_provider_available_source_models_locally_with_tru
         .get(format!(
             "{gateway_url}/api/admin/providers/provider-openai/available-source-models"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -610,10 +593,8 @@ async fn gateway_assigns_and_imports_admin_provider_models_locally_with_trusted_
         .post(format!(
             "{gateway_url}/api/admin/providers/provider-openai/assign-global-models"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({"global_model_ids": ["global-gpt-5", "global-gpt-4.1"]}))
         .send()
         .await
@@ -642,10 +623,8 @@ async fn gateway_assigns_and_imports_admin_provider_models_locally_with_trusted_
         .post(format!(
             "{gateway_url}/api/admin/providers/provider-openai/import-from-upstream"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "model_ids": ["gpt-5-upstream", "brand-new-model"],
             "price_per_request": 0.1

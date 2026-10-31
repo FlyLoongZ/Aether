@@ -147,14 +147,8 @@ async fn gateway_revalidates_kiro_device_poll_via_idc_refresh_and_backfills_emai
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-kiro/device-poll"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
-        .header(
-            TRUSTED_ADMIN_MANAGEMENT_TOKEN_ID_HEADER,
-            "management-token-123",
-        )
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "session_id": "session-refresh-email"
         }))
@@ -344,10 +338,8 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_locally_with_trusted
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-codex/import-refresh-token"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "refresh_token": "provider-import-refresh-token",
             "proxy_node_id": "proxy-node-codex-import",
@@ -464,10 +456,8 @@ async fn gateway_imports_codex_access_token_without_refresh_token_as_temporary_a
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-codex/import-refresh-token"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "access_token": access_token,
             "name": "temporary-codex-access-token",
@@ -618,10 +608,8 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_over_active_expired_
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-codex/import-refresh-token"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "refresh_token": "provider-import-refresh-token",
             "proxy_node_id": "proxy-node-codex-import",
@@ -827,10 +815,8 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-codex/import-refresh-token"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "refresh_token": "provider-import-refresh-token",
             "proxy_node_id": "proxy-node-codex-import",
@@ -957,10 +943,8 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-codex/import-refresh-token"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "refresh_token": "provider-import-refresh-token",
             "name": "codex-import"
@@ -1072,10 +1056,8 @@ async fn gateway_imports_admin_provider_oauth_refresh_token_via_execution_runtim
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-codex/import-refresh-token"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "refresh_token": "provider-import-refresh-token",
             "name": "codex-import"
@@ -1148,10 +1130,8 @@ async fn gateway_import_refresh_token_surfaces_execution_runtime_error_detail_im
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/providers/provider-codex/import-refresh-token"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "refresh_token": "provider-import-refresh-token",
             "name": "codex-import"
@@ -1481,10 +1461,8 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_with_trusted_admin_p
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1799,10 +1777,8 @@ async fn gateway_manual_codex_oauth_refresh_reconciles_missing_fixed_endpoint_im
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-missing-endpoint-refresh/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2031,10 +2007,8 @@ async fn gateway_marks_manual_oauth_refresh_failures_as_invalid_in_pool_payload_
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh-invalid/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("refresh request should succeed");
@@ -2054,10 +2028,8 @@ async fn gateway_marks_manual_oauth_refresh_failures_as_invalid_in_pool_payload_
         .get(format!(
             "{gateway_url}/api/admin/pool/provider-codex/keys?page=1&page_size=50&status=all"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("pool request should succeed");
@@ -2201,10 +2173,8 @@ async fn gateway_auto_removes_manual_oauth_refresh_failure_after_access_token_ex
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh-expired/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("refresh request should succeed");
@@ -2357,10 +2327,8 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh-provider/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2511,10 +2479,8 @@ async fn gateway_refreshes_admin_provider_oauth_key_via_proxy_node_with_direct_r
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh-proxy-node/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2691,10 +2657,8 @@ async fn gateway_consecutive_manual_oauth_refresh_uses_rotated_refresh_token_imp
             .post(format!(
                 "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-consecutive-refresh/refresh"
             ))
-            .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .send()
             .await
             .expect("request should succeed");
@@ -2908,17 +2872,13 @@ async fn gateway_concurrent_manual_oauth_refresh_reuses_winner_after_lock_wait_i
 
     let request_a = client
         .post(refresh_url.clone())
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send();
     let request_b = client
         .post(refresh_url)
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send();
     let (response_a, response_b) = tokio::join!(request_a, request_b);
     let response_a = response_a.expect("first request should succeed");
@@ -3163,10 +3123,8 @@ async fn gateway_manual_oauth_refresh_prefers_fresher_transport_auth_config_over
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-stale-cache/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -3327,10 +3285,8 @@ async fn gateway_refreshes_admin_provider_oauth_key_locally_via_execution_runtim
         .post(format!(
             "{gateway_url}/api/admin/provider-oauth/keys/key-codex-oauth-refresh/refresh"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

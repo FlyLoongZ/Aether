@@ -28,10 +28,8 @@ async fn gateway_rejects_admin_provider_query_invalid_json_body_impl() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/provider-query/models"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .header(reqwest::header::CONTENT_TYPE, "application/json")
         .body("{")
         .send()

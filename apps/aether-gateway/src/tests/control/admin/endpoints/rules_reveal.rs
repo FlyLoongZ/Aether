@@ -9,10 +9,6 @@ use serde_json::{json, Value};
 use super::super::super::{build_router_with_state, sample_endpoint, sample_provider, AppState};
 use crate::admin_api::{maybe_build_local_admin_response, AdminRouteRequest};
 use crate::audit::AdminAuditEvent;
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::control::resolve_public_request_context;
 use crate::data::GatewayDataState;
 use crate::tests::send_request;
@@ -44,14 +40,18 @@ fn seeded_state() -> AppState {
 
 fn admin_headers() -> HeaderMap {
     let mut headers = HeaderMap::new();
-    for (name, value) in [
-        (GATEWAY_HEADER, "rust-phase3b"),
-        (TRUSTED_ADMIN_USER_ID_HEADER, "admin-user"),
-        (TRUSTED_ADMIN_USER_ROLE_HEADER, "admin"),
-        (TRUSTED_ADMIN_SESSION_ID_HEADER, "admin-session"),
-    ] {
-        headers.insert(name, HeaderValue::from_static(value));
-    }
+    headers.insert(
+        http::header::AUTHORIZATION,
+        HeaderValue::from_str(&format!(
+            "Bearer {}",
+            crate::tests::test_admin_access_token()
+        ))
+        .expect("admin token should be a valid header value"),
+    );
+    headers.insert(
+        "x-client-device-id",
+        HeaderValue::from_static(crate::tests::TEST_ADMIN_DEVICE_ID),
+    );
     headers
 }
 
@@ -100,25 +100,44 @@ async fn endpoint_rules_reveal_is_scoped_audited_and_not_cached() {
 
 #[tokio::test]
 async fn endpoint_rules_reveal_denies_anonymous_and_non_admin_requests() {
-    let router = build_router_with_state(seeded_state());
-    for role in [None, Some("user")] {
-        let mut request =
-            Request::builder().uri("/api/admin/endpoints/endpoint-rules/rules/reveal");
-        if let Some(role) = role {
-            request = request
-                .header(GATEWAY_HEADER, "rust-phase3b")
-                .header(TRUSTED_ADMIN_USER_ID_HEADER, "normal-user")
-                .header(TRUSTED_ADMIN_USER_ROLE_HEADER, role)
-                .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "user-session");
-        }
-        let response = send_request(router.clone(), request.body(Body::empty()).unwrap()).await;
-        assert!(matches!(
-            response.status(),
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
-        ));
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        assert!(!String::from_utf8_lossy(&body).contains("request-secret"));
-    }
+    const NON_ADMIN_DEVICE_ID: &str = "device-non-admin-rules-reveal";
+    let state = seeded_state();
+    let non_admin_token = crate::tests::operational_auth::issue_operational_session_access_token(
+        &state,
+        NON_ADMIN_DEVICE_ID,
+        "user",
+    )
+    .await;
+    let router = build_router_with_state(state);
+
+    let anonymous = send_request(
+        router.clone(),
+        Request::builder()
+            .uri("/api/admin/endpoints/endpoint-rules/rules/reveal")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+    let body = anonymous.into_body().collect().await.unwrap().to_bytes();
+    assert!(!String::from_utf8_lossy(&body).contains("request-secret"));
+
+    let non_admin = send_request(
+        router,
+        Request::builder()
+            .uri("/api/admin/endpoints/endpoint-rules/rules/reveal")
+            .header(
+                http::header::AUTHORIZATION,
+                format!("Bearer {non_admin_token}"),
+            )
+            .header("x-client-device-id", NON_ADMIN_DEVICE_ID)
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(non_admin.status(), StatusCode::UNAUTHORIZED);
+    let body = non_admin.into_body().collect().await.unwrap().to_bytes();
+    assert!(!String::from_utf8_lossy(&body).contains("request-secret"));
 }
 
 #[tokio::test]

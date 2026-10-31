@@ -425,10 +425,10 @@ mod tests {
     #[test]
     fn strips_all_aether_owned_headers_from_provider_requests() {
         for header in [
-            "x-aether-gateway",
-            "x-aether-auth-user-id",
-            "x-aether-auth-api-key-id",
-            "x-aether-auth-balance-remaining",
+            "x-aether-control-route-class",
+            "x-aether-execution-path",
+            "x-aether-dependency-reason",
+            "x-aether-control-request-id",
             "X-Aether-Tunnel-Forwarded-By",
         ] {
             assert!(should_skip_request_header(header));

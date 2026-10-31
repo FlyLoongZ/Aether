@@ -24,10 +24,6 @@ use super::super::{
     build_router_with_state, hash_api_key, hash_management_token, issue_test_admin_access_token,
     sample_management_token, start_server, AppState,
 };
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 use crate::tests::DEV_FERNET_KEY;
 
@@ -302,10 +298,8 @@ async fn gateway_sorts_admin_users_by_created_at() {
         .get(format!(
             "{gateway_url}/api/admin/users?skip=0&limit=10&sort_by=created_at&sort_order=desc"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -323,10 +317,8 @@ async fn gateway_sorts_admin_users_by_created_at() {
         .get(format!(
             "{gateway_url}/api/admin/users?skip=0&limit=10&sort_by=created_at&sort_order=asc"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -427,10 +419,8 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
         .get(format!(
             "{gateway_url}/api/admin/users?skip=0&limit=20&role=user&is_active=true"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -460,10 +450,8 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
         .get(format!(
             "{gateway_url}/api/admin/users?skip=0&limit=20&search=carol"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("search request should succeed");
@@ -485,10 +473,8 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
         .get(format!(
             "{gateway_url}/api/admin/users?skip=0&limit=20&search=user-3"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("id search request should succeed");
@@ -508,10 +494,8 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
         .get(format!(
             "{gateway_url}/api/admin/users?skip=0&limit=2&search=example.com"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("limited search request should succeed");
@@ -542,10 +526,8 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
 
     let create_response = reqwest::Client::new()
         .post(format!("{create_gateway_url}/api/admin/users"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "email": "new-user@example.com",
             "username": "new_user",
@@ -570,10 +552,8 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
 
     let hidden_policy_response = reqwest::Client::new()
         .post(format!("{create_gateway_url}/api/admin/users"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "email": "hidden-policy@example.com",
             "username": "hidden_policy",
@@ -651,10 +631,8 @@ async fn gateway_allows_default_user_group_access_policy_updates() {
 
     let default_response = client
         .put(format!("{gateway_url}/api/admin/user-groups/default"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "group_id": group_id }))
         .send()
         .await
@@ -675,10 +653,8 @@ async fn gateway_allows_default_user_group_access_policy_updates() {
 
     let update_response = client
         .put(format!("{gateway_url}/api/admin/user-groups/{group_id}"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "name": "Baseline Limited",
             "allowed_providers": ["openai", "anthropic"],
@@ -798,10 +774,8 @@ async fn gateway_allows_removing_default_group_members_when_other_group_remains(
             "{gateway_url}/api/admin/user-groups/{}/members",
             default_group.id
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "user_ids": ["user-3"] }))
         .send()
         .await
@@ -813,10 +787,8 @@ async fn gateway_allows_removing_default_group_members_when_other_group_remains(
             "{gateway_url}/api/admin/user-groups/{}/members",
             default_group.id
         ))
-        .header(GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "user_ids": [] }))
         .send()
         .await
@@ -864,10 +836,8 @@ async fn gateway_resolves_admin_user_batch_selection_locally() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/users/resolve-selection"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "filters": {
                 "search": "ali",
@@ -893,10 +863,8 @@ async fn gateway_resolves_admin_user_batch_selection_locally() {
 
     let all_filtered_response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/users/resolve-selection"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "filters": {} }))
         .send()
         .await
@@ -910,10 +878,8 @@ async fn gateway_resolves_admin_user_batch_selection_locally() {
 
     let empty_selection_response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/users/resolve-selection"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({}))
         .send()
         .await
@@ -948,10 +914,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let disable_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1", "user-1", "missing-user"]
@@ -973,10 +937,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let empty_selection_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {},
             "action": "disable"
@@ -988,10 +950,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let access_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1"]
@@ -1016,10 +976,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let hidden_access_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1"]
@@ -1044,10 +1002,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let role_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1"]
@@ -1069,10 +1025,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let blank_role_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1"]
@@ -1089,10 +1043,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let enable_admin_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1"]
@@ -1106,10 +1058,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let last_admin_demotion_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1"]
@@ -1136,10 +1086,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let last_admin_audit_demotion_response = client
         .post(format!("{gateway_url}/api/admin/users/batch-action"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "selection": {
                 "user_ids": ["user-1"]
@@ -1166,10 +1114,8 @@ async fn gateway_handles_admin_user_batch_actions_locally() {
 
     let detail_response = client
         .get(format!("{gateway_url}/api/admin/users/user-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1396,7 +1342,6 @@ async fn gateway_rejects_users_write_management_token_for_administrator_account_
     for (method, path, body, route_kind) in cases {
         let response = client
             .request(method, format!("{gateway_url}{path}"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
             .bearer_auth(raw_token)
             .json(&body)
             .send()
@@ -1412,7 +1357,6 @@ async fn gateway_rejects_users_write_management_token_for_administrator_account_
 
     let ordinary_create_response = client
         .post(format!("{gateway_url}/api/admin/users"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(raw_token)
         .json(&json!({
             "email": "delegated-user@example.com",
@@ -1427,7 +1371,6 @@ async fn gateway_rejects_users_write_management_token_for_administrator_account_
 
     let ordinary_update_response = client
         .put(format!("{gateway_url}/api/admin/users/target-user"))
-        .header(GATEWAY_HEADER, "rust-phase3b")
         .bearer_auth(raw_token)
         .json(&json!({ "is_active": false }))
         .send()
@@ -1510,7 +1453,6 @@ async fn gateway_requires_users_admin_to_revoke_privileged_user_sessions() {
         ] {
             let response = client
                 .delete(format!("{gateway_url}{path}"))
-                .header(GATEWAY_HEADER, "rust-phase3b")
                 .bearer_auth(&raw_token)
                 .send()
                 .await
@@ -1553,10 +1495,8 @@ async fn gateway_handles_admin_user_detail_routes_locally_with_trusted_admin_pri
 
     let update_response = client
         .put(format!("{gateway_url}/api/admin/users/user-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "email": "alice-updated@example.com",
             "username": "alice_updated",
@@ -1592,10 +1532,8 @@ async fn gateway_handles_admin_user_detail_routes_locally_with_trusted_admin_pri
 
     let hidden_update_response = client
         .put(format!("{gateway_url}/api/admin/users/user-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "allowed_providers": ["openai"]
         }))
@@ -1614,10 +1552,8 @@ async fn gateway_handles_admin_user_detail_routes_locally_with_trusted_admin_pri
 
     let delete_response = client
         .delete(format!("{gateway_url}/api/admin/users/user-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1651,10 +1587,8 @@ async fn gateway_rejects_demoting_the_last_active_admin() {
     for role in ["user", "audit_admin"] {
         let response = client
             .put(format!("{gateway_url}/api/admin/users/admin-1"))
-            .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({ "role": role }))
             .send()
             .await
@@ -1704,10 +1638,8 @@ async fn gateway_handles_admin_user_detail_locally_with_trusted_admin_principal(
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/users/user-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1775,10 +1707,8 @@ async fn gateway_handles_admin_user_session_routes_locally_with_trusted_admin_pr
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/users/user-1/sessions"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1870,10 +1800,8 @@ async fn gateway_handles_admin_user_api_key_routes_locally_with_trusted_admin_pr
 
     let create_response = client
         .post(format!("{gateway_url}/api/admin/users/user-1/api-keys"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "name": "new-key",
             "rate_limit": 90,
@@ -1909,10 +1837,8 @@ async fn gateway_handles_admin_user_api_key_routes_locally_with_trusted_admin_pr
         .put(format!(
             "{gateway_url}/api/admin/users/user-1/api-keys/key-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "name": "renamed",
             "rate_limit": 120,
@@ -1938,10 +1864,8 @@ async fn gateway_handles_admin_user_api_key_routes_locally_with_trusted_admin_pr
         .patch(format!(
             "{gateway_url}/api/admin/users/user-1/api-keys/key-1/lock"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "locked": true }))
         .send()
         .await
@@ -1957,10 +1881,8 @@ async fn gateway_handles_admin_user_api_key_routes_locally_with_trusted_admin_pr
         .delete(format!(
             "{gateway_url}/api/admin/users/user-1/api-keys/key-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -1991,6 +1913,11 @@ async fn admin_created_user_keys_inherit_owner_group_policy() {
         sample_admin_user_with_role("admin-user", "admin", "admin@example.com", "admin"),
         sample_admin_user_with_role("target-user", "user", "target@example.com", "target"),
     ]));
+    let admin_user = user_repository
+        .find_user_auth_by_id("admin-user")
+        .await
+        .expect("admin user lookup should succeed")
+        .expect("admin user should exist");
 
     let admin_group = user_repository
         .create_user_group(UpsertUserGroupRecord {
@@ -2055,6 +1982,9 @@ async fn admin_created_user_keys_inherit_owner_group_policy() {
     let app_state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(data_state);
+    let access_token =
+        crate::tests::issue_access_token_for_user(&app_state, &admin_user, "device-admin-user")
+            .await;
     let inspection_state = app_state.clone();
     let gateway = build_router_with_state(app_state);
     let (gateway_url, gateway_handle) = start_server(gateway).await;
@@ -2063,10 +1993,8 @@ async fn admin_created_user_keys_inherit_owner_group_policy() {
         .post(format!(
             "{gateway_url}/api/admin/users/target-user/api-keys"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "admin-session")
+        .bearer_auth(&access_token)
+        .header("x-client-device-id", "device-admin-user")
         .json(&json!({"name": "target-key"}))
         .send()
         .await
@@ -2162,10 +2090,8 @@ async fn admin_created_user_keys_inherit_owner_group_policy() {
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/users/admin-user/api-keys"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "admin-session")
+        .bearer_auth(&access_token)
+        .header("x-client-device-id", "device-admin-user")
         .json(&json!({"name": "admin-user-key"}))
         .send()
         .await
@@ -2260,10 +2186,8 @@ async fn gateway_returns_conflict_for_admin_create_user_api_key_when_writer_unav
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/users/user-1/api-keys"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "name": "new-key",
             "rate_limit": 90,
@@ -2307,10 +2231,8 @@ async fn gateway_returns_conflict_for_admin_create_user_when_writer_unavailable(
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/users"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "email": "new-user@example.com",
             "username": "new_user",
@@ -2387,10 +2309,8 @@ async fn gateway_returns_conflict_for_admin_lock_user_api_key_when_writer_unavai
         .patch(format!(
             "{gateway_url}/api/admin/users/user-1/api-keys/key-1/lock"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "locked": true }))
         .send()
         .await
@@ -2463,10 +2383,8 @@ async fn gateway_allows_admin_update_user_to_clear_explicit_groups() {
 
     let response = reqwest::Client::new()
         .put(format!("{gateway_url}/api/admin/users/user-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "group_ids": [] }))
         .send()
         .await
@@ -2515,10 +2433,8 @@ async fn gateway_returns_conflict_for_admin_update_user_when_writer_unavailable(
 
     let response = reqwest::Client::new()
         .put(format!("{gateway_url}/api/admin/users/user-1"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "email": "alice-updated@example.com" }))
         .send()
         .await
@@ -2590,10 +2506,8 @@ async fn gateway_returns_conflict_for_admin_update_user_api_key_when_writer_unav
         .put(format!(
             "{gateway_url}/api/admin/users/user-1/api-keys/key-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "name": "renamed", "rate_limit": 88 }))
         .send()
         .await
@@ -2665,10 +2579,8 @@ async fn gateway_returns_conflict_for_admin_delete_user_api_key_when_writer_unav
         .delete(format!(
             "{gateway_url}/api/admin/users/user-1/api-keys/key-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2751,10 +2663,8 @@ async fn gateway_lists_admin_user_api_keys_locally_with_trusted_admin_principal(
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/users/user-1/api-keys"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2823,10 +2733,8 @@ async fn gateway_revokes_admin_user_session_locally_with_trusted_admin_principal
         .delete(format!(
             "{gateway_url}/api/admin/users/user-1/sessions/session-1"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2875,10 +2783,8 @@ async fn gateway_revokes_all_admin_user_sessions_locally_with_trusted_admin_prin
 
     let response = reqwest::Client::new()
         .delete(format!("{gateway_url}/api/admin/users/user-1/sessions"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -2951,10 +2857,8 @@ async fn gateway_reveals_admin_user_full_key_locally_with_trusted_admin_principa
         .get(format!(
             "{gateway_url}/api/admin/users/user-1/api-keys/key-1/full-key"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");

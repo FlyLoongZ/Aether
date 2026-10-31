@@ -10,10 +10,6 @@ use http::StatusCode;
 use serde_json::json;
 
 use super::super::{build_router_with_state, sample_ldap_module_config, start_server, AppState};
-use crate::constants::{
-    GATEWAY_HEADER, TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER,
-    TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 
 #[tokio::test]
@@ -48,10 +44,8 @@ async fn gateway_handles_admin_ldap_config_locally_with_trusted_admin_principal(
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/ldap/config"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -110,10 +104,8 @@ async fn gateway_updates_admin_ldap_config_locally_with_trusted_admin_principal(
     let client = reqwest::Client::new();
     let update_response = client
         .put(format!("{gateway_url}/api/admin/ldap/config"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "server_url": "mockldap://ldap.internal.example.com",
             "bind_dn": "cn=svc,dc=example,dc=com",
@@ -142,10 +134,8 @@ async fn gateway_updates_admin_ldap_config_locally_with_trusted_admin_principal(
 
     let get_response = client
         .get(format!("{gateway_url}/api/admin/ldap/config"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -197,10 +187,8 @@ async fn gateway_tests_admin_ldap_connection_locally_with_trusted_admin_principa
 
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/ldap/test"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
             "server_url": "mockldap://ldap.example.com",
             "bind_dn": "cn=admin,dc=example,dc=com",
@@ -254,10 +242,8 @@ async fn gateway_rejects_ldap_filter_and_attribute_injection_on_admin_update() {
     ] {
         let response = client
             .put(format!("{gateway_url}/api/admin/ldap/config"))
-            .header(GATEWAY_HEADER, "rust-phase3b")
-            .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-            .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-            .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+            .bearer_auth(crate::tests::test_admin_access_token())
+            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({
                 "server_url": "mockldap://ldap.internal.example.com",
                 "bind_dn": "cn=svc,dc=example,dc=com",

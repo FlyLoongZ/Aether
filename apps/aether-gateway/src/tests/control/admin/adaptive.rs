@@ -11,9 +11,6 @@ use http::StatusCode;
 use serde_json::json;
 
 use super::super::{build_router_with_state, sample_key, sample_provider, start_server, AppState};
-use crate::constants::{
-    TRUSTED_ADMIN_SESSION_ID_HEADER, TRUSTED_ADMIN_USER_ID_HEADER, TRUSTED_ADMIN_USER_ROLE_HEADER,
-};
 use crate::data::GatewayDataState;
 
 fn adaptive_repository_with_keys(
@@ -56,10 +53,8 @@ async fn assert_adaptive_route_returns_local_503(
 
     let mut request = reqwest::Client::new()
         .request(method, format!("{gateway_url}{path}"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123");
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID);
     if let Some(body) = body {
         request = request.json(&body);
     }
@@ -115,10 +110,8 @@ async fn gateway_handles_admin_adaptive_keys_locally_with_trusted_admin_principa
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/adaptive/keys"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -182,10 +175,8 @@ async fn gateway_handles_admin_adaptive_summary_locally_with_trusted_admin_princ
 
     let response = reqwest::Client::new()
         .get(format!("{gateway_url}/api/admin/adaptive/summary"))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -279,10 +270,8 @@ async fn gateway_handles_admin_adaptive_stats_locally_with_trusted_admin_princip
         .get(format!(
             "{gateway_url}/api/admin/adaptive/keys/key-openai/stats"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -323,10 +312,8 @@ async fn gateway_toggles_admin_adaptive_mode_locally_with_trusted_admin_principa
         .patch(format!(
             "{gateway_url}/api/admin/adaptive/keys/key-openai/mode"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({ "enabled": false, "fixed_limit": 12 }))
         .send()
         .await
@@ -369,10 +356,8 @@ async fn gateway_sets_admin_adaptive_limit_locally_with_trusted_admin_principal(
         .patch(format!(
             "{gateway_url}/api/admin/adaptive/keys/key-openai/limit?limit=9"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
@@ -422,10 +407,8 @@ async fn gateway_resets_admin_adaptive_learning_locally_with_trusted_admin_princ
         .delete(format!(
             "{gateway_url}/api/admin/adaptive/keys/key-openai/learning"
         ))
-        .header(crate::constants::GATEWAY_HEADER, "rust-phase3b")
-        .header(TRUSTED_ADMIN_USER_ID_HEADER, "admin-user-123")
-        .header(TRUSTED_ADMIN_USER_ROLE_HEADER, "admin")
-        .header(TRUSTED_ADMIN_SESSION_ID_HEADER, "session-123")
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .expect("request should succeed");
