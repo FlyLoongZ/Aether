@@ -19,7 +19,7 @@ function start() {
   vi.stubGlobal('Worker', FakeWorker)
   const bytes = new ArrayBuffer(16)
   const controller = new AbortController()
-  const loading = BodyDocument.load(bytes, controller.signal)
+  const loading = BodyDocument.load(bytes, 'json', controller.signal)
   const worker = FakeWorker.instances[FakeWorker.instances.length - 1]
   return { bytes, controller, loading, worker }
 }
@@ -27,7 +27,7 @@ function start() {
 describe('body worker lifecycle', () => {
   it('transfers raw bytes and receives only a summary before requesting pages', async () => {
     const { bytes, loading, worker } = start()
-    expect(worker.postMessage).toHaveBeenCalledWith({ id: 1, action: 'load', bytes }, [bytes])
+    expect(worker.postMessage).toHaveBeenCalledWith({ id: 1, action: 'load', bytes, encoding: 'json' }, [bytes])
     worker.reply({ id: 1, ok: true, result: { byteLength: 100_000 } })
     const document = await loading
     expect(document.byteLength).toBe(100_000)
@@ -38,7 +38,7 @@ describe('body worker lifecycle', () => {
     expect(worker.terminate).toHaveBeenCalledOnce()
   })
 
-  it('terminates in-progress decompression on abort and ignores a late response', async () => {
+  it('terminates in-progress parsing on abort and ignores a late response', async () => {
     const { loading, controller, worker } = start()
     const rejected = expect(loading).rejects.toHaveProperty('name', 'AbortError')
     controller.abort()
@@ -71,6 +71,6 @@ describe('body worker lifecycle', () => {
 
   it('does not silently fall back to parsing on the main thread', async () => {
     vi.stubGlobal('Worker', undefined)
-    await expect(BodyDocument.load(new ArrayBuffer(1))).rejects.toHaveProperty('code', 'unsupported')
+    await expect(BodyDocument.load(new ArrayBuffer(1), 'json')).rejects.toHaveProperty('code', 'unsupported')
   })
 })

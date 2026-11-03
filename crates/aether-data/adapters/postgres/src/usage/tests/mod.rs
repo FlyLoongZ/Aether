@@ -5,20 +5,19 @@ use std::sync::Arc;
 
 use super::{
     attach_usage_routing_snapshot_metadata, attach_usage_settlement_pricing_snapshot_metadata,
-    build_usage_health_timeline_query, clear_previous_request_body_facts,
-    prepare_request_metadata_for_body_storage, prepare_usage_body_storage,
+    build_usage_health_timeline_query, prepare_request_metadata_for_body_storage,
     prepare_usage_for_persistence, push_postgres_usage_websocket_filter,
     request_body_capture_replaces_derived_facts, split_dashboard_daily_aggregate_range,
-    split_dashboard_hourly_aggregate_range, usage_body_capture_state_for_storage, usage_body_ref,
-    usage_capture_update_allowed, usage_effective_input_tokens, usage_http_audit_capture_mode,
-    usage_routing_snapshot_from_usage, usage_settlement_pricing_snapshot_from_usage,
-    usage_total_input_context, AggregateRangeSplit, SqlxUsageReadRepository, UsageRoutingSnapshot,
-    UsageSettlementPricingSnapshot, SELECT_STALE_PENDING_USAGE_BATCH_SQL,
+    split_dashboard_hourly_aggregate_range, usage_capture_update_allowed,
+    usage_effective_input_tokens, usage_routing_snapshot_from_usage,
+    usage_settlement_pricing_snapshot_from_usage, usage_total_input_context, AggregateRangeSplit,
+    SqlxUsageReadRepository, UsageRoutingSnapshot, UsageSettlementPricingSnapshot,
+    SELECT_STALE_PENDING_USAGE_BATCH_SQL,
 };
 use crate::{PostgresPoolConfig, PostgresPoolFactory};
 use aether_data_contracts::repository::usage::{
-    UpsertUsageRecord, UsageAuditListQuery, UsageBodyCaptureState, UsageBodyField,
-    UsageBreakdownGroupBy, UsageBreakdownSummaryQuery, UsageDashboardDailyBreakdownQuery,
+    BodyEncoding, CapturedBody, UpsertUsageRecord, UsageAuditListQuery, UsageBodyCaptureState,
+    UsageBodyField, UsageBreakdownGroupBy, UsageBreakdownSummaryQuery, UsageDashboardDailyBreakdownQuery,
     UsageHealthTimelineGroupBy, UsageHealthTimelineQuery, UsageWriteRepository,
 };
 
@@ -37,7 +36,7 @@ fn fast_clear_usage_record(
     provider_name: &str,
     now_unix_secs: u64,
     terminal: bool,
-    terminal_state: UsageBodyCaptureState,
+    terminal_body: Option<CapturedBody>,
     terminal_service_tier: Option<&str>,
 ) -> UpsertUsageRecord {
     UpsertUsageRecord {
@@ -83,29 +82,19 @@ fn fast_clear_usage_record(
         billing_status: "pending".to_string(),
         request_headers: None,
         request_body: None,
-        request_body_ref: None,
-        request_body_state: None,
         provider_request_headers: None,
-        provider_request_body: (!terminal).then(|| {
-            json!({
+        provider_request_body: if terminal {
+            terminal_body
+        } else {
+            Some(CapturedBody::json(json!({
                 "model": "gpt-5",
                 "service_tier": "priority"
-            })
-        }),
-        provider_request_body_ref: None,
-        provider_request_body_state: Some(if terminal {
-            terminal_state
-        } else {
-            UsageBodyCaptureState::Inline
-        }),
+            })))
+        },
         response_headers: None,
         response_body: None,
-        response_body_ref: None,
-        response_body_state: None,
         client_response_headers: None,
         client_response_body: None,
-        client_response_body_ref: None,
-        client_response_body_state: None,
         candidate_id: None,
         candidate_index: None,
         key_name: None,
@@ -131,21 +120,14 @@ fn first_byte_usage_record(
     now_unix_secs: u64,
     request_metadata: Option<serde_json::Value>,
 ) -> UpsertUsageRecord {
-    let mut record = fast_clear_usage_record(
-        request_id,
-        provider_name,
-        now_unix_secs,
-        false,
-        UsageBodyCaptureState::Inline,
-        None,
-    );
+    let mut record =
+        fast_clear_usage_record(request_id, provider_name, now_unix_secs, false, None, None);
     record.status = "streaming".to_string();
     record.is_stream = Some(true);
     record.status_code = Some(200);
     record.response_time_ms = Some(14);
     record.first_byte_time_ms = Some(12);
     record.provider_request_body = None;
-    record.provider_request_body_state = None;
     record.request_metadata = request_metadata;
     record
 }

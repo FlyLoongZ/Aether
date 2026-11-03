@@ -14,11 +14,11 @@ use crate::repository::usage::{
     UsageWriteRepository,
 };
 use aether_data_contracts::repository::usage::{
-    usage_body_ref, ProviderApiKeyWindowUsageRequest, UsageAuditAggregationGroupBy,
+    BodyEncoding, CapturedBody, ProviderApiKeyWindowUsageRequest, UsageAuditAggregationGroupBy,
     UsageAuditAggregationQuery, UsageAuditKeywordSearchQuery, UsageAuditListQuery,
-    UsageAuditSummaryQuery, UsageBodyCaptureState, UsageBodyField, UsageDashboardSummaryQuery,
-    UsageLeaderboardGroupBy, UsageLeaderboardQuery, UsageProviderPerformanceQuery,
-    UsageTimeSeriesGranularity, UsageTimeSeriesQuery,
+    UsageAuditSummaryQuery, UsageDashboardSummaryQuery, UsageLeaderboardGroupBy,
+    UsageLeaderboardQuery, UsageProviderPerformanceQuery, UsageTimeSeriesGranularity,
+    UsageTimeSeriesQuery,
 };
 use serde_json::json;
 
@@ -691,20 +691,12 @@ fn sample_upsert_usage_record(request_id: &str) -> UpsertUsageRecord {
         billing_status: "pending".to_string(),
         request_headers: None,
         request_body: None,
-        request_body_ref: None,
-        request_body_state: None,
         provider_request_headers: None,
         provider_request_body: None,
-        provider_request_body_ref: None,
-        provider_request_body_state: None,
         response_headers: None,
         response_body: None,
-        response_body_ref: None,
-        response_body_state: None,
         client_response_headers: None,
         client_response_body: None,
-        client_response_body_ref: None,
-        client_response_body_state: None,
         candidate_id: None,
         candidate_index: None,
         key_name: None,
@@ -778,11 +770,10 @@ async fn upsert_preserves_full_http_captures_across_lifecycle_updates() {
     let mut pending = sample_upsert_usage_record("req-full-capture");
     pending.request_headers =
         Some(json!({"content-type": "application/json", "authorization": "Bearer private"}));
-    pending.request_body =
-        Some(json!({"messages": [{"role": "user", "content": "original request"}]}));
-    pending.provider_request_body = Some(json!({"input": "provider request"}));
-    pending.request_body_state = Some(UsageBodyCaptureState::Inline);
-    pending.provider_request_body_state = Some(UsageBodyCaptureState::Inline);
+    pending.request_body = Some(CapturedBody::json(json!({
+        "messages": [{"role": "user", "content": "original request"}]
+    })));
+    pending.provider_request_body = Some(CapturedBody::json(json!({"input": "provider request"})));
     let stored_pending = repository.upsert(pending.clone()).await.unwrap();
     assert_eq!(stored_pending.request_body, pending.request_body);
     assert_eq!(
@@ -810,9 +801,14 @@ async fn upsert_preserves_full_http_captures_across_lifecycle_updates() {
     terminal.finalized_at_unix_secs = Some(terminal.updated_at_unix_secs);
     terminal.response_headers =
         Some(json!({"content-type": "text/event-stream", "set-cookie": "private"}));
-    terminal.response_body = Some(json!("data: upstream response\n\ndata: [DONE]\n\n"));
-    terminal.client_response_body =
-        Some(json!({"choices": [{"message": {"content": "client response"}}]}));
+    terminal.response_body = Some(CapturedBody::from_bytes(
+        b"data: upstream response\n\ndata: [DONE]\n\n".to_vec(),
+        BodyEncoding::Sse,
+        false,
+    ));
+    terminal.client_response_body = Some(CapturedBody::json(json!({
+        "choices": [{"message": {"content": "client response"}}]
+    })));
     let stored_terminal = repository.upsert(terminal.clone()).await.unwrap();
     assert_eq!(stored_terminal.request_body, pending.request_body);
     assert_eq!(
@@ -843,53 +839,38 @@ async fn upsert_preserves_full_http_captures_across_lifecycle_updates() {
 }
 
 #[tokio::test]
-async fn upsert_uses_typed_provider_capture_as_the_fast_fact_snapshot() {
-    for (name, state, incoming_tier, expected_tier) in [
+async fn upsert_uses_the_captured_provider_body_as_the_fast_fact_snapshot() {
+    for (name, body, incoming_tier, expected_tier) in [
         (
-            "disabled-clear",
-            UsageBodyCaptureState::Disabled,
+            "complete-clears",
+            Some(CapturedBody::json(json!({"model": "gpt-5"}))),
             None,
             None,
         ),
         (
-            "truncated-clear",
-            UsageBodyCaptureState::Truncated,
-            None,
-            None,
-        ),
-        (
-            "unavailable-clear",
-            UsageBodyCaptureState::Unavailable,
-            None,
-            None,
-        ),
-        (
-            "disabled-preserve",
-            UsageBodyCaptureState::Disabled,
+            "disabled-preserves",
+            Some(CapturedBody::Disabled),
             Some("priority"),
             Some("priority"),
         ),
         (
-            "truncated-preserve",
-            UsageBodyCaptureState::Truncated,
+            "truncated-preserves",
+            Some(CapturedBody::from_bytes(
+                b"{\"model\":\"gpt-5\"".to_vec(),
+                BodyEncoding::Json,
+                true,
+            )),
             Some("priority"),
             Some("priority"),
-        ),
-        (
-            "none-clears-residual",
-            UsageBodyCaptureState::None,
-            Some("priority"),
-            None,
         ),
     ] {
         let request_id = format!("req-memory-fast-{name}");
         let repository = InMemoryUsageReadRepository::default();
         let mut pending = sample_upsert_usage_record(&request_id);
-        pending.provider_request_body = Some(json!({
+        pending.provider_request_body = Some(CapturedBody::json(json!({
             "model": "gpt-5",
             "service_tier": "priority"
-        }));
-        pending.provider_request_body_state = Some(UsageBodyCaptureState::Inline);
+        })));
         pending.request_metadata = Some(json!({"provider_service_tier": "priority"}));
         pending.target_model = Some("candidate-a-target".to_string());
         pending.candidate_id = Some("candidate-a".to_string());
@@ -907,22 +888,12 @@ async fn upsert_uses_typed_provider_capture_as_the_fast_fact_snapshot() {
 
         let mut terminal = sample_upsert_usage_record(&request_id);
         terminal.status = "completed".to_string();
-        terminal.provider_request_body_state = Some(state);
         terminal.target_model = None;
+        terminal.provider_request_body = body;
         terminal.request_metadata =
             incoming_tier.map(|tier| json!({"provider_service_tier": tier}));
         terminal.updated_at_unix_secs += 1;
         terminal.finalized_at_unix_secs = Some(terminal.updated_at_unix_secs);
-        if state == UsageBodyCaptureState::None {
-            terminal.provider_request_body = Some(json!({
-                "model": "stale-model",
-                "service_tier": "priority"
-            }));
-            terminal.provider_request_body_ref = Some(usage_body_ref(
-                &request_id,
-                UsageBodyField::ProviderRequestBody,
-            ));
-        }
         let terminal = repository
             .upsert(terminal)
             .await
@@ -930,7 +901,7 @@ async fn upsert_uses_typed_provider_capture_as_the_fast_fact_snapshot() {
         assert_eq!(
             terminal.provider_service_tier().as_deref(),
             expected_tier,
-            "state={state:?} must use only incoming facts"
+            "{name} must use only incoming facts"
         );
         assert_eq!(terminal.target_model, None);
         assert_eq!(terminal.candidate_id, None);
@@ -940,26 +911,6 @@ async fn upsert_uses_typed_provider_capture_as_the_fast_fact_snapshot() {
         assert_eq!(terminal.route_family, None);
         assert_eq!(terminal.route_kind, None);
         assert_eq!(terminal.execution_path, None);
-        if state == UsageBodyCaptureState::None {
-            assert_eq!(terminal.provider_request_body, None);
-            assert_eq!(terminal.body_ref(UsageBodyField::ProviderRequestBody), None);
-
-            let mut late = sample_upsert_usage_record(&request_id);
-            late.provider_request_body = Some(json!({
-                "model": "late-model",
-                "service_tier": "priority"
-            }));
-            late.provider_request_body_state = Some(UsageBodyCaptureState::Inline);
-            late.request_metadata = Some(json!({"provider_service_tier": "priority"}));
-            late.updated_at_unix_secs += 2;
-            let late = repository
-                .upsert(late)
-                .await
-                .expect("late pending usage should not regress terminal capture");
-            assert_eq!(late.provider_service_tier(), None);
-            assert_eq!(late.provider_request_body, None);
-            assert_eq!(late.body_ref(UsageBodyField::ProviderRequestBody), None);
-        }
     }
 }
 
@@ -1214,20 +1165,12 @@ async fn stale_pending_update_does_not_regress_finalized_usage() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -1288,20 +1231,12 @@ async fn stale_pending_update_does_not_regress_finalized_usage() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -1376,20 +1311,12 @@ async fn upsert_allows_completed_recovery_after_void_failure() {
             billing_status: "void".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -1450,20 +1377,12 @@ async fn upsert_allows_completed_recovery_after_void_failure() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: Some("cand-1".to_string()),
             candidate_index: Some(1),
             key_name: Some("primary".to_string()),
@@ -1692,20 +1611,12 @@ async fn stale_pending_update_does_not_regress_streaming_usage() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: Some("cand-1".to_string()),
             candidate_index: Some(1),
             key_name: Some("primary".to_string()),
@@ -1768,20 +1679,12 @@ async fn stale_pending_update_does_not_regress_streaming_usage() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -1846,96 +1749,6 @@ async fn streaming_refresh_without_timing_does_not_clear_stream_timing() {
 }
 
 #[tokio::test]
-async fn seed_ignores_invalid_or_mismatched_legacy_body_ref_metadata() {
-    let repository = InMemoryUsageReadRepository::seed(vec![
-        StoredRequestUsageAudit {
-            request_metadata: Some(json!({
-                "request_body_ref": "blob://legacy-request"
-            })),
-            ..sample_usage("req-invalid-legacy", 100)
-        },
-        StoredRequestUsageAudit {
-            request_metadata: Some(json!({
-                "request_body_ref": "usage://request/req-other/request_body"
-            })),
-            ..sample_usage("req-mismatched-legacy", 200)
-        },
-    ]);
-
-    let invalid = repository
-        .find_by_request_id("req-invalid-legacy")
-        .await
-        .expect("find should succeed")
-        .expect("usage should exist");
-    let mismatched = repository
-        .find_by_request_id("req-mismatched-legacy")
-        .await
-        .expect("find should succeed")
-        .expect("usage should exist");
-
-    assert_eq!(invalid.body_ref(UsageBodyField::RequestBody), None);
-    assert_eq!(mismatched.body_ref(UsageBodyField::RequestBody), None);
-}
-
-#[tokio::test]
-async fn detached_body_seed_moves_large_payloads_behind_usage_refs() {
-    let mut usage = sample_usage("req-detached", 100);
-    usage.request_body = Some(json!({
-        "model": "gpt-4.1",
-        "messages": [{"role": "user", "content": "hello"}]
-    }));
-    usage.provider_request_body = Some(json!({
-        "model": "gpt-4.1-mini",
-        "stream": false
-    }));
-
-    let repository = InMemoryUsageReadRepository::seed_with_detached_bodies(vec![usage]);
-
-    let stored = repository
-        .find_by_request_id("req-detached")
-        .await
-        .expect("find should succeed")
-        .expect("usage should exist");
-
-    assert!(stored.request_body.is_none());
-    assert!(stored.provider_request_body.is_none());
-    assert_eq!(
-        stored.body_ref(UsageBodyField::RequestBody).as_deref(),
-        Some("usage://request/req-detached/request_body")
-    );
-    assert_eq!(
-        stored
-            .body_ref(UsageBodyField::ProviderRequestBody)
-            .as_deref(),
-        Some("usage://request/req-detached/provider_request_body")
-    );
-    assert_eq!(stored.request_metadata, None);
-    assert_eq!(
-        repository
-            .resolve_body_ref(&usage_body_ref("req-detached", UsageBodyField::RequestBody))
-            .await
-            .expect("body ref should resolve"),
-        Some(json!({
-            "model": "gpt-4.1",
-            "messages": [{"role": "user", "content": "hello"}]
-        }))
-    );
-    assert_eq!(
-        repository
-            .resolve_body_ref(&usage_body_ref(
-                "req-detached",
-                UsageBodyField::ProviderRequestBody
-            ))
-            .await
-            .expect("provider request body ref should resolve"),
-        Some(json!({
-            "model": "gpt-4.1-mini",
-            "stream": false
-        }))
-    );
-}
-
-#[tokio::test]
 async fn upsert_writes_usage_record() {
     let repository = InMemoryUsageReadRepository::default();
     let stored = repository
@@ -1981,21 +1794,13 @@ async fn upsert_writes_usage_record() {
             status: "completed".to_string(),
             billing_status: "pending".to_string(),
             request_headers: Some(json!({"authorization": "Bearer test"})),
-            request_body: Some(json!({"model": "gpt-5"})),
-            request_body_ref: None,
+            request_body: Some(CapturedBody::json(json!({"model": "gpt-5"}))),
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -2074,20 +1879,12 @@ async fn upsert_defaults_created_at_to_second_timestamp() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -2154,20 +1951,12 @@ async fn upsert_does_not_backfill_legacy_output_price_from_request_metadata() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -2188,89 +1977,6 @@ async fn upsert_does_not_backfill_legacy_output_price_from_request_metadata() {
 
     assert_eq!(stored.output_price_per_1m, None);
     assert_eq!(stored.settlement_output_price_per_1m(), Some(15.0));
-}
-
-#[tokio::test]
-async fn upsert_does_not_backfill_typed_body_refs_from_request_metadata() {
-    let repository = InMemoryUsageReadRepository::default();
-    let stored = repository
-        .upsert(UpsertUsageRecord {
-            capture_retention: Default::default(),
-            request_id: "req-upsert-body-ref-metadata".to_string(),
-            user_id: None,
-            api_key_id: None,
-            username: None,
-            api_key_name: None,
-            provider_name: "OpenAI".to_string(),
-            model: "gpt-5".to_string(),
-            target_model: None,
-            provider_id: None,
-            provider_endpoint_id: None,
-            provider_api_key_id: None,
-            request_type: Some("chat".to_string()),
-            api_format: Some("openai:chat".to_string()),
-            api_family: Some("openai".to_string()),
-            endpoint_kind: Some("chat".to_string()),
-            endpoint_api_format: Some("openai:chat".to_string()),
-            provider_api_family: Some("openai".to_string()),
-            provider_endpoint_kind: Some("chat".to_string()),
-            has_format_conversion: Some(false),
-            is_stream: Some(false),
-            input_tokens: Some(10),
-            output_tokens: Some(20),
-            total_tokens: None,
-            cache_creation_input_tokens: None,
-            cache_creation_ephemeral_5m_input_tokens: None,
-            cache_creation_ephemeral_1h_input_tokens: None,
-            cache_read_input_tokens: None,
-            cache_creation_cost_usd: None,
-            cache_read_cost_usd: None,
-            output_price_per_1m: None,
-            total_cost_usd: Some(0.25),
-            actual_total_cost_usd: Some(0.15),
-            status_code: Some(200),
-            error_message: None,
-            error_category: None,
-            response_time_ms: Some(300),
-            first_byte_time_ms: Some(120),
-            status: "completed".to_string(),
-            billing_status: "pending".to_string(),
-            request_headers: None,
-            request_body: None,
-            request_body_ref: None,
-            provider_request_headers: None,
-            provider_request_body: None,
-            provider_request_body_ref: None,
-            response_headers: None,
-            response_body: None,
-            response_body_ref: None,
-            client_response_headers: None,
-            client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
-            candidate_id: None,
-            candidate_index: None,
-            key_name: None,
-            planner_kind: None,
-            route_family: None,
-            route_kind: None,
-            execution_path: None,
-            local_execution_runtime_miss_reason: None,
-            request_metadata: Some(json!({
-                "request_body_ref": "usage://request/req-upsert-body-ref-metadata/request_body"
-            })),
-            finalized_at_unix_secs: None,
-            created_at_unix_ms: Some(100),
-            updated_at_unix_secs: 101,
-        })
-        .await
-        .expect("upsert should succeed");
-
-    assert_eq!(stored.body_ref(UsageBodyField::RequestBody), None);
-    assert_eq!(stored.request_metadata, None);
 }
 
 #[tokio::test]
@@ -2320,20 +2026,12 @@ async fn upsert_keeps_typed_routing_fields_out_of_request_metadata() {
             billing_status: "void".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: Some("cand-typed".to_string()),
             candidate_index: Some(2),
             key_name: Some("primary".to_string()),
@@ -2419,20 +2117,12 @@ async fn upsert_does_not_persist_legacy_display_columns_for_new_rows() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -2505,10 +2195,6 @@ async fn upsert_preserves_existing_legacy_display_columns_when_new_write_omits_t
         response_body: None,
         client_response_headers: None,
         client_response_body: None,
-        request_body_state: None,
-        provider_request_body_state: None,
-        response_body_state: None,
-        client_response_body_state: None,
         candidate_id: None,
         candidate_index: None,
         key_name: None,
@@ -2566,20 +2252,12 @@ async fn upsert_preserves_existing_legacy_display_columns_when_new_write_omits_t
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,

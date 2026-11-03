@@ -32,8 +32,14 @@ describe('dashboard body loading', () => {
     const bytes = new ArrayBuffer(20)
     const controller = new AbortController()
     getMock.mockResolvedValue({ data: bytes, headers: { 'x-aether-body-encoding': 'json', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'request_body' } })
-    await expect(dashboardApi.getRequestBody('usage-1', 'request_body', controller.signal)).resolves.toEqual({ bytes })
+    await expect(dashboardApi.getRequestBody('usage-1', 'request_body', controller.signal)).resolves.toEqual({ bytes, encoding: 'json', truncated: false })
     expect(getMock).toHaveBeenCalledWith('/api/admin/usage/usage-1', { params: { include_bodies: true, body_field: 'request_body', body_format: 'raw' }, responseType: 'arraybuffer', signal: controller.signal })
+  })
+
+  it('surfaces the stored truncation flag so the viewer can flag a cut capture', async () => {
+    const bytes = new ArrayBuffer(4)
+    getMock.mockResolvedValue({ data: bytes, headers: { 'x-aether-body-encoding': 'json', 'x-aether-body-truncated': 'true', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'request_body' } })
+    await expect(dashboardApi.getRequestBody('usage-1', 'request_body')).resolves.toEqual({ bytes, encoding: 'json', truncated: true })
   })
 
   it.each([

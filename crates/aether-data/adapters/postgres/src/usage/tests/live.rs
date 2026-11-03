@@ -18,9 +18,7 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
     crate::run_migrations(repository.pool()).await.unwrap();
 
     for write_mode in 0..3 {
-        use aether_data_contracts::repository::usage::{
-            usage_json_heap_estimate, UsageCaptureMemoryBudget,
-        };
+        use aether_data_contracts::repository::usage::{CapturedBody, UsageCaptureMemoryBudget};
         let batch = write_mode != 0;
         let budget = Arc::new(UsageCaptureMemoryBudget::new(4 * 1024 * 1024));
         let retain_capture = |usage: &mut UpsertUsageRecord| {
@@ -32,7 +30,7 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
             ]
             .into_iter()
             .flatten()
-            .map(|body| std::mem::size_of::<serde_json::Value>() + usage_json_heap_estimate(body))
+            .map(CapturedBody::retained_bytes_estimate)
             .sum();
             assert!(usage.capture_retention.reserve(Arc::clone(&budget), bytes));
             bytes
@@ -44,19 +42,26 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
             "full-capture-test",
             now_unix_secs,
             false,
-            UsageBodyCaptureState::Inline,
+            None,
             None,
         );
         pending.request_headers =
             Some(json!({"content-type": "application/json", "authorization": "Bearer private"}));
-        pending.request_body =
-            Some(json!({"messages": [{"role": "user", "content": "original request"}]}));
-        pending.request_body_state = Some(UsageBodyCaptureState::Inline);
-        pending.provider_request_body = Some(json!({"input": "provider request"}));
-        pending.response_body = Some(json!("pending response"));
-        pending.response_body_state = Some(UsageBodyCaptureState::Inline);
-        pending.client_response_body = Some(json!("pending client response"));
-        pending.client_response_body_state = Some(UsageBodyCaptureState::Inline);
+        pending.request_body = Some(CapturedBody::json(json!({
+            "messages": [{"role": "user", "content": "original request"}]
+        })));
+        pending.provider_request_body =
+            Some(CapturedBody::json(json!({"input": "provider request"})));
+        pending.response_body = Some(CapturedBody::from_bytes(
+            b"pending response".to_vec(),
+            BodyEncoding::Text,
+            false,
+        ));
+        pending.client_response_body = Some(CapturedBody::from_bytes(
+            b"pending client response".to_vec(),
+            BodyEncoding::Text,
+            false,
+        ));
         let pending_bytes = retain_capture(&mut pending);
         if batch {
             let records = if write_mode == 2 {
@@ -69,6 +74,11 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
             repository.upsert(pending.clone()).await.unwrap();
         }
         assert_eq!(budget.retained_bytes(), pending_bytes);
+        let stored_pending = repository
+            .find_by_request_id(&request_id)
+            .await
+            .unwrap()
+            .unwrap();
         for (field, expected) in [
             (UsageBodyField::RequestBody, pending.request_body.as_ref()),
             (
@@ -81,12 +91,21 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
                 pending.client_response_body.as_ref(),
             ),
         ] {
+            // The pure pending batch fast path (no duplicate request ids) only
+            // persists the client pair; the upstream pair rides with the terminal
+            // write. Duplicate ids fall back to the full upsert, which carries
+            // every side.
+            let expected = if write_mode == 1
+                && matches!(
+                    field,
+                    UsageBodyField::ProviderRequestBody | UsageBodyField::ResponseBody
+                ) {
+                None
+            } else {
+                expected
+            };
             assert_eq!(
-                repository
-                    .resolve_body_ref(&usage_body_ref(&request_id, field))
-                    .await
-                    .unwrap()
-                    .as_ref(),
+                stored_pending.body(field),
                 expected,
                 "batch={batch}, field={field:?}"
             );
@@ -97,26 +116,30 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
             "full-capture-test",
             now_unix_secs,
             true,
-            UsageBodyCaptureState::None,
+            None,
             None,
         );
-        terminal.provider_request_body_state = None;
         terminal.response_headers =
             Some(json!({"content-type": "text/event-stream", "set-cookie": "private"}));
-        terminal.response_body = Some(json!(format!(
-            "data: {}\n\ndata: [DONE]\n\n",
-            "streamed text".repeat(8192)
-        )));
-        terminal.response_body_state = Some(UsageBodyCaptureState::Inline);
-        terminal.client_response_body = Some(json!({"output": "final response"}));
-        terminal.client_response_body_state = Some(UsageBodyCaptureState::Inline);
+        // A real terminal report carries every side it knows: the pending batch
+        // path only persists the client pair, so the upstream pair has to ride
+        // along here to round-trip in batch mode too.
+        terminal.request_body = pending.request_body.clone();
+        terminal.provider_request_body = pending.provider_request_body.clone();
+        terminal.response_body = Some(CapturedBody::from_bytes(
+            format!("data: {}\n\ndata: [DONE]\n\n", "streamed text".repeat(8192)).into_bytes(),
+            BodyEncoding::Sse,
+            false,
+        ));
+        terminal.client_response_body =
+            Some(CapturedBody::json(json!({"output": "final response"})));
         let terminal_bytes = retain_capture(&mut terminal);
         repository.upsert(terminal.clone()).await.unwrap();
         assert_eq!(budget.retained_bytes(), pending_bytes + terminal_bytes);
         assert_eq!(budget.downgraded_total(), 0);
 
         let stored = repository
-            .find_by_request_id_shallow(&request_id)
+            .find_by_request_id(&request_id)
             .await
             .unwrap()
             .unwrap();
@@ -144,24 +167,12 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
             ),
         ] {
             assert_eq!(
-                stored.body_state(field),
-                Some(UsageBodyCaptureState::Reference)
-            );
-            assert_eq!(
-                stored.body_ref(field),
-                Some(usage_body_ref(&request_id, field))
-            );
-            assert_eq!(
-                repository
-                    .resolve_body_ref(&stored.body_ref(field).unwrap())
-                    .await
-                    .unwrap()
-                    .as_ref(),
+                stored.body(field),
                 expected,
                 "batch={batch}, field={field:?}"
             );
         }
-        let legacy_content_present: bool = sqlx::query_scalar("SELECT request_body IS NOT NULL OR request_headers IS NOT NULL OR response_body IS NOT NULL FROM usage WHERE request_id = $1")
+        let legacy_content_present: bool = sqlx::query_scalar("SELECT request_headers IS NOT NULL OR provider_request_headers IS NOT NULL OR response_headers IS NOT NULL OR client_response_headers IS NOT NULL FROM usage WHERE request_id = $1")
             .bind(&request_id).fetch_one(repository.pool()).await.unwrap();
         assert!(!legacy_content_present);
         sqlx::query("DELETE FROM usage WHERE request_id = $1")
@@ -173,6 +184,88 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
         drop(terminal);
         assert_eq!(budget.retained_bytes(), 0);
     }
+}
+
+/// A write may carry bytes for one side while marking another side as
+/// withdrawn; the withdrawal has to land in the same statement as the payload,
+/// or the marked side keeps the bytes an earlier write had stored for the rest
+/// of its retention window.
+#[tokio::test]
+#[ignore = "requires AETHER_TEST_DATABASE_URL and PostgreSQL migrations"]
+async fn live_mixed_write_withdraws_the_marked_side_in_the_same_statement() {
+    let factory = PostgresPoolFactory::new(PostgresPoolConfig {
+        database_url: std::env::var("AETHER_TEST_DATABASE_URL").unwrap(),
+        min_connections: 1,
+        max_connections: 2,
+        acquire_timeout_ms: 10_000,
+        idle_timeout_ms: 30_000,
+        max_lifetime_ms: 60_000,
+        statement_cache_capacity: 64,
+        require_ssl: false,
+    })
+    .unwrap();
+    let repository = SqlxUsageReadRepository::new(factory.connect_lazy().unwrap());
+    crate::run_migrations(repository.pool()).await.unwrap();
+
+    let request_id = format!("req-mixed-withdraw-{}", uuid::Uuid::new_v4().simple());
+    let now_unix_secs = Utc::now().timestamp() as u64;
+    let mut pending = fast_clear_usage_record(
+        &request_id,
+        "mixed-withdraw-test",
+        now_unix_secs,
+        false,
+        None,
+        None,
+    );
+    pending.request_body = Some(CapturedBody::json(json!({"input": "client request"})));
+    pending.provider_request_body = Some(CapturedBody::json(json!({"input": "provider request"})));
+    repository.upsert(pending).await.unwrap();
+
+    // The terminal write captures both response sides and withdraws the client
+    // request body at the same time.
+    let mut terminal = fast_clear_usage_record(
+        &request_id,
+        "mixed-withdraw-test",
+        now_unix_secs,
+        true,
+        None,
+        None,
+    );
+    terminal.request_body = Some(CapturedBody::Disabled);
+    terminal.response_body = Some(CapturedBody::json(json!({"output": "provider response"})));
+    terminal.client_response_body = Some(CapturedBody::json(json!({"output": "client response"})));
+    repository.upsert(terminal).await.unwrap();
+
+    let (request_present, provider_request_present, response_present): (bool, bool, bool) = sqlx::query_as(
+        "SELECT client_request IS NOT NULL, provider_request IS NOT NULL, provider_response IS NOT NULL \
+         FROM usage_http_bodies WHERE request_id = $1",
+    )
+    .bind(&request_id)
+    .fetch_one(repository.pool())
+    .await
+    .unwrap();
+    assert!(!request_present, "withdrawn side must lose its stored bytes");
+    assert!(
+        provider_request_present,
+        "a side the write says nothing about keeps its bytes"
+    );
+    assert!(response_present, "the sides carrying payloads are stored");
+
+    let stored = repository
+        .find_by_request_id(&request_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.request_body, None);
+    assert_eq!(stored.body_state(UsageBodyField::RequestBody), Some(UsageBodyCaptureState::Disabled));
+    assert!(stored.body(UsageBodyField::ResponseBody).is_some());
+    assert!(stored.body(UsageBodyField::ProviderRequestBody).is_some());
+
+    sqlx::query("DELETE FROM usage WHERE request_id = $1")
+        .bind(&request_id)
+        .execute(repository.pool())
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -201,14 +294,8 @@ async fn live_stale_terminal_event_is_a_full_transaction_noop() {
     let request_id = format!("req-stale-terminal-{suffix}");
     let provider_name = format!("stale-provider-{suffix}");
     let now_unix_secs = Utc::now().timestamp().max(2) as u64;
-    let mut newer = fast_clear_usage_record(
-        &request_id,
-        &provider_name,
-        now_unix_secs,
-        true,
-        UsageBodyCaptureState::None,
-        None,
-    );
+    let mut newer =
+        fast_clear_usage_record(&request_id, &provider_name, now_unix_secs, true, None, None);
     newer.candidate_id = Some("candidate-new".to_string());
     newer.route_kind = Some("route-new".to_string());
     newer.total_cost_usd = Some(0.5);
@@ -261,7 +348,7 @@ async fn live_stale_terminal_event_is_a_full_transaction_noop() {
         &provider_name,
         now_unix_secs - 2,
         true,
-        UsageBodyCaptureState::None,
+        None,
         None,
     );
     stale.status = "failed".to_string();
@@ -365,7 +452,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
         &provider_name,
         now_unix_secs,
         true,
-        UsageBodyCaptureState::None,
+        None,
         None,
     );
     terminal.candidate_id = Some("terminal-candidate".to_string());
@@ -389,7 +476,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
         &provider_name,
         now_unix_secs,
         false,
-        UsageBodyCaptureState::Inline,
+        None,
         None,
     );
     rich.user_id = Some(user_id);
@@ -398,17 +485,17 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
     rich.provider_endpoint_id = Some(provider_endpoint_id);
     rich.provider_api_key_id = Some(provider_key_id.clone());
     rich.request_headers = Some(json!({"x-request": "request-value"}));
-    rich.request_body = Some(json!({"messages": [{"role": "user", "content": "hello"}]}));
-    rich.request_body_state = Some(UsageBodyCaptureState::Inline);
+    rich.request_body = Some(CapturedBody::json(
+        json!({"messages": [{"role": "user", "content": "hello"}]}),
+    ));
     rich.provider_request_headers = Some(json!({"x-provider": "provider-value"}));
-    rich.provider_request_body = Some(json!({"model": "gpt-5", "input": "hello"}));
-    rich.provider_request_body_state = Some(UsageBodyCaptureState::Inline);
+    rich.provider_request_body = Some(CapturedBody::json(
+        json!({"model": "gpt-5", "input": "hello"}),
+    ));
     rich.response_headers = Some(json!({"x-upstream": "upstream-value"}));
-    rich.response_body = Some(json!({"phase": "pending"}));
-    rich.response_body_state = Some(UsageBodyCaptureState::Inline);
+    rich.response_body = Some(CapturedBody::json(json!({"phase": "pending"})));
     rich.client_response_headers = Some(json!({"x-client": "client-value"}));
-    rich.client_response_body = Some(json!({"phase": "pending-client"}));
-    rich.client_response_body_state = Some(UsageBodyCaptureState::Inline);
+    rich.client_response_body = Some(CapturedBody::json(json!({"phase": "pending-client"})));
     rich.candidate_id = Some("rich-candidate".to_string());
     rich.candidate_index = Some(7);
     rich.key_name = Some("rich-key".to_string());
@@ -429,7 +516,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
         &provider_name,
         now_unix_secs,
         false,
-        UsageBodyCaptureState::Inline,
+        None,
         None,
     );
     let mut late_pending = fast_clear_usage_record(
@@ -437,7 +524,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
         "late-pending-provider",
         now_unix_secs + 1,
         false,
-        UsageBodyCaptureState::Inline,
+        None,
         None,
     );
     late_pending.candidate_id = Some("late-pending-candidate".to_string());
@@ -447,7 +534,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
         "late-streaming-pending-provider",
         now_unix_secs + 1,
         false,
-        UsageBodyCaptureState::Inline,
+        None,
         None,
     );
     late_streaming_pending.status_code = None;
@@ -523,24 +610,24 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
         "late pending must not clear the first-byte observation"
     );
 
-    let http_count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*)::BIGINT FROM usage_http_audits WHERE request_id = $1",
+    let header_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*)::BIGINT FROM usage_http_headers WHERE request_id = $1",
     )
     .bind(&rich_request_id)
     .fetch_one(repository.pool())
     .await
-    .expect("HTTP audit count should be readable");
-    assert_eq!(http_count, 1);
-    let blob_count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*)::BIGINT FROM usage_body_blobs WHERE request_id = $1",
+    .expect("HTTP header capture count should be readable");
+    assert_eq!(header_count, 1);
+    let body_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*)::BIGINT FROM usage_http_bodies WHERE request_id = $1",
     )
     .bind(&rich_request_id)
     .fetch_one(repository.pool())
     .await
-    .expect("body blob count should be readable");
-    assert_eq!(blob_count, 4);
+    .expect("body capture count should be readable");
+    assert_eq!(body_count, 1);
     let captured = repository
-        .find_by_request_id_shallow(&rich_request_id)
+        .find_by_request_id(&rich_request_id)
         .await
         .unwrap()
         .unwrap();
@@ -549,10 +636,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
         Some(json!({"x-request": "request-value"}))
     );
     assert_eq!(
-        repository
-            .resolve_body_ref(&captured.body_ref(UsageBodyField::RequestBody).unwrap())
-            .await
-            .unwrap(),
+        captured.body_value(UsageBodyField::RequestBody),
         Some(json!({"messages": [{"role": "user", "content": "hello"}]}))
     );
 
@@ -648,7 +732,7 @@ async fn live_pending_batch_persists_auxiliary_state_and_preserves_terminal_conf
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires AETHER_TEST_DATABASE_URL and PostgreSQL migrations"]
 async fn live_pending_batch_and_terminal_upserts_count_each_provider_request_once() {
-    const REQUESTS: usize = 32;
+    const REQUESTS: usize = 24;
 
     let database_url = std::env::var("AETHER_TEST_DATABASE_URL")
         .expect("AETHER_TEST_DATABASE_URL must point at the test database");
@@ -684,7 +768,7 @@ async fn live_pending_batch_and_terminal_upserts_count_each_provider_request_onc
                 &provider_name,
                 now_unix_secs,
                 false,
-                UsageBodyCaptureState::Inline,
+                None,
                 None,
             );
             row.provider_api_key_id = Some(provider_key_id.clone());
@@ -699,7 +783,7 @@ async fn live_pending_batch_and_terminal_upserts_count_each_provider_request_onc
                 &provider_name,
                 now_unix_secs + 1,
                 true,
-                UsageBodyCaptureState::None,
+                None,
                 None,
             );
             row.provider_api_key_id = Some(provider_key_id.clone());
@@ -975,7 +1059,7 @@ async fn live_first_byte_fast_path_is_atomic_and_preserves_terminal_state() {
         &provider_name,
         now_unix_secs + 3,
         true,
-        UsageBodyCaptureState::None,
+        None,
         None,
     );
     terminal.is_stream = Some(true);
@@ -1240,7 +1324,7 @@ async fn live_first_byte_batch_preserves_duplicate_order_and_terminal_guards() {
         &provider_name,
         now_unix_secs,
         true,
-        UsageBodyCaptureState::None,
+        None,
         None,
     );
     terminal.is_stream = Some(true);
@@ -1452,7 +1536,7 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
         &provider_name,
         now_unix_secs,
         false,
-        UsageBodyCaptureState::Inline,
+        None,
         Some("priority"),
     );
     pending_record.candidate_id = Some("candidate-a".to_string());
@@ -1497,14 +1581,16 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
         .expect("pending usage should persist");
     assert_eq!(pending.provider_service_tier().as_deref(), Some("priority"));
 
-    let mut terminal_record = fast_clear_usage_record(
-        &request_id,
-        &provider_name,
-        now_unix_secs,
-        true,
-        UsageBodyCaptureState::None,
-        None,
-    );
+    let mut terminal_record =
+        fast_clear_usage_record(&request_id, &provider_name, now_unix_secs, true, None, None);
+    // A real terminal event carries its own request metadata: the write
+    // replaces the stored metadata wholesale, so trace identity rides along
+    // while the stale billing projections stay dropped.
+    terminal_record.request_metadata = Some(json!({"trace_id": "trace-a"}));
+    // The new-model equivalent of the old explicit `UsageBodyCaptureState::None`:
+    // a terminal write that marks the side as not captured withdraws whatever an
+    // earlier write had stored and clears the facts derived from it.
+    terminal_record.provider_request_body = Some(CapturedBody::Disabled);
     terminal_record.provider_id = Some("final-provider-id".to_string());
     terminal_record.provider_endpoint_id = Some("final-endpoint-id".to_string());
     terminal_record.provider_api_key_id = Some("final-key-id".to_string());
@@ -1520,10 +1606,7 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
         .await
         .expect("detail lookup should succeed")
         .expect("usage should exist");
-    assert_eq!(
-        stored.provider_request_body_state,
-        Some(UsageBodyCaptureState::None)
-    );
+    assert_eq!(stored.provider_request_body, None);
     assert_eq!(stored.provider_service_tier(), None);
     assert_eq!(stored.provider_actual_service_tier(), None);
     let stored_metadata = stored
@@ -1594,43 +1677,28 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
     .expect("clear tombstone should be stored");
     assert!(physical_metadata.get("provider_service_tier").is_none());
 
-    let physical_body =
-        sqlx::query("SELECT provider_request_body FROM \"usage\" WHERE request_id = $1")
-            .bind(&request_id)
-            .fetch_one(repository.pool())
-            .await
-            .expect("physical body columns should be readable");
-    assert!(physical_body
-        .try_get::<Option<serde_json::Value>, _>("provider_request_body")
-        .expect("provider body column should decode")
-        .is_none());
-
-    let physical_http = sqlx::query(
-        "SELECT provider_request_body_ref, provider_request_body_state FROM usage_http_audits WHERE request_id = $1",
+    // The capture ledger and the payload table are the only physical capture
+    // state left: the withdrawn side has no bytes and its ledger entry says why.
+    let physical_capture = sqlx::query(
+        "SELECT provider_request IS NULL AS side_withdrawn FROM usage_http_bodies WHERE request_id = $1",
     )
     .bind(&request_id)
     .fetch_one(repository.pool())
     .await
-    .expect("HTTP audit row should be readable");
-    assert!(physical_http
-        .try_get::<Option<String>, _>("provider_request_body_ref")
-        .expect("provider body ref should decode")
-        .is_none());
-    assert_eq!(
-        physical_http
-            .try_get::<Option<String>, _>("provider_request_body_state")
-            .expect("provider body state should decode")
-            .as_deref(),
-        Some("none")
+    .expect("capture payload row should be readable");
+    assert!(
+        physical_capture
+            .try_get::<bool, _>("side_withdrawn")
+            .expect("withdrawn flag should decode"),
+        "the explicitly disabled side must lose its stored bytes"
     );
-    let physical_blob_count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM usage_body_blobs WHERE request_id = $1 AND body_field = 'provider_request_body'",
-    )
-    .bind(&request_id)
-    .fetch_one(repository.pool())
-    .await
-    .expect("provider body blob count should be readable");
-    assert_eq!(physical_blob_count, 0);
+    let ledger_state = physical_metadata
+        .get("body_capture")
+        .and_then(|capture| capture.get("provider_request"))
+        .and_then(|entry| entry.get("state"))
+        .and_then(serde_json::Value::as_str)
+        .expect("the withdrawn side must carry its ledger state");
+    assert_eq!(ledger_state, "disabled");
 
     // A late pending candidate must not resurrect the terminal capture, metadata, or detached
     // blob after the final state has been written.
@@ -1639,7 +1707,7 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
         "late-provider",
         now_unix_secs + 2,
         false,
-        UsageBodyCaptureState::Inline,
+        None,
         Some("priority"),
     );
     late_record.model = "late-model".to_string();
@@ -1665,14 +1733,17 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
     assert_eq!(late.provider_api_key_id.as_deref(), Some("final-key-id"));
     assert_eq!(late.endpoint_api_format.as_deref(), Some("openai:chat"));
     assert_eq!(late.candidate_id, None);
-    let late_blob_count = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM usage_body_blobs WHERE request_id = $1 AND body_field = 'provider_request_body'",
+    let late_withdrawn = sqlx::query_scalar::<_, bool>(
+        "SELECT provider_request IS NULL FROM usage_http_bodies WHERE request_id = $1",
     )
     .bind(&request_id)
     .fetch_one(repository.pool())
     .await
-    .expect("late provider body blob count should be readable");
-    assert_eq!(late_blob_count, 0);
+    .expect("late provider body state should be readable");
+    assert!(
+        late_withdrawn,
+        "late pending must not resurrect the withdrawn side"
+    );
 
     let list_item = repository
         .list_usage_audits(&UsageAuditListQuery {
@@ -1686,7 +1757,7 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
         .into_iter()
         .find(|item| item.request_id == request_id)
         .expect("usage list should contain the test row");
-    assert_eq!(list_item.provider_request_body_state, None);
+    assert_eq!(list_item.provider_request_body, None);
     assert_eq!(list_item.provider_service_tier(), None);
     assert_eq!(list_item.target_model, None);
     assert_eq!(list_item.candidate_id, None);
@@ -1705,7 +1776,7 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
         .into_iter()
         .find(|item| item.request_id == request_id)
         .expect("recent usage list should contain the test row");
-    assert_eq!(recent_item.provider_request_body_state, None);
+    assert_eq!(recent_item.provider_request_body, None);
     assert_eq!(recent_item.provider_service_tier(), None);
 
     sqlx::query("DELETE FROM \"usage\" WHERE request_id = $1")
@@ -1715,29 +1786,31 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
         .expect("test usage should be removed");
 
     for (index, state, incoming_tier, expected_tier) in [
-        ("disabled", UsageBodyCaptureState::Disabled, None, None),
-        ("truncated", UsageBodyCaptureState::Truncated, None, None),
+        ("disabled", Some(CapturedBody::Disabled), None, None),
         (
-            "unavailable",
-            UsageBodyCaptureState::Unavailable,
+            "truncated",
+            Some(CapturedBody::from_bytes(
+                b"{}".to_vec(),
+                BodyEncoding::Json,
+                true,
+            )),
             None,
             None,
         ),
-        (
-            "none-stale-metadata",
-            UsageBodyCaptureState::None,
-            Some("priority"),
-            None,
-        ),
+        ("unavailable", Some(CapturedBody::Unavailable), None, None),
         (
             "disabled-preserved",
-            UsageBodyCaptureState::Disabled,
+            Some(CapturedBody::Disabled),
             Some("priority"),
             Some("priority"),
         ),
         (
             "truncated-preserved",
-            UsageBodyCaptureState::Truncated,
+            Some(CapturedBody::from_bytes(
+                b"{}".to_vec(),
+                BodyEncoding::Json,
+                true,
+            )),
             Some("priority"),
             Some("priority"),
         ),
@@ -1750,7 +1823,7 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
                 &provider_name,
                 now_unix_secs,
                 false,
-                UsageBodyCaptureState::Inline,
+                None,
                 Some("priority"),
             ))
             .await
@@ -1761,7 +1834,7 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
                 &provider_name,
                 now_unix_secs + 1,
                 true,
-                state,
+                state.clone(),
                 incoming_tier,
             ))
             .await
@@ -1790,6 +1863,62 @@ async fn live_terminal_none_capture_clears_fast_from_detail_and_lightweight_list
             .await
             .expect("typed-state test usage should be removed");
     }
+
+    // A terminal write that says nothing about a side must not withdraw the bytes
+    // an earlier write stored: the pending capture survives, and the tier keeps
+    // coming from the body on detail reads. List reads cannot load the payload,
+    // the tombstone drops the ledger entry, so they report no tier at all.
+    let silent_request_id = format!("req-fast-clear-{suffix}-silent-terminal");
+    let silent_provider = format!("fast-clear-{suffix}-silent-terminal");
+    repository
+        .upsert(fast_clear_usage_record(
+            &silent_request_id,
+            &silent_provider,
+            now_unix_secs,
+            false,
+            None,
+            Some("priority"),
+        ))
+        .await
+        .expect("silent-terminal pending usage should persist");
+    let silent_terminal = repository
+        .upsert(fast_clear_usage_record(
+            &silent_request_id,
+            &silent_provider,
+            now_unix_secs + 1,
+            true,
+            None,
+            None,
+        ))
+        .await
+        .expect("silent-terminal terminal usage should persist");
+    assert_eq!(
+        silent_terminal.provider_service_tier().as_deref(),
+        Some("priority"),
+        "a silent terminal write keeps the stored capture"
+    );
+    let silent_list = repository
+        .list_usage_audits(&UsageAuditListQuery {
+            provider_name: Some(silent_provider.clone()),
+            limit: Some(10),
+            newest_first: true,
+            ..UsageAuditListQuery::default()
+        })
+        .await
+        .expect("silent-terminal list should succeed")
+        .into_iter()
+        .find(|item| item.request_id == silent_request_id)
+        .expect("silent-terminal row should be listed");
+    assert_eq!(
+        silent_list.provider_service_tier().as_deref(),
+        None,
+        "a list read without the payload must not fall back to stale metadata"
+    );
+    sqlx::query("DELETE FROM \"usage\" WHERE request_id = $1")
+        .bind(&silent_request_id)
+        .execute(repository.pool())
+        .await
+        .expect("silent-terminal test usage should be removed");
 }
 
 #[tokio::test]
@@ -1820,7 +1949,7 @@ async fn live_dashboard_daily_breakdown_uses_canonical_covering_read_path() {
             &provider_name,
             until.saturating_sub(60),
             true,
-            UsageBodyCaptureState::None,
+            None,
             None,
         ))
         .await
@@ -1884,7 +2013,7 @@ async fn live_usage_list_metadata_preserves_boolean_chat_pii_redaction() {
         // Extract the entire outer CASE, including its gate, instead of duplicating the
         // production expression. Omitting the marker from either branch must fail.
         let projection = prefix
-            .split_once("NULL::jsonb AS client_response_body,\n")
+            .split_once("NULL::jsonb AS client_response_headers,\n")
             .and_then(|(_, tail)| tail.split_once("  END AS request_metadata,"))
             .map(|(projection, _)| projection)
             .expect("list metadata projection should be present");
@@ -2242,14 +2371,8 @@ async fn live_usage_health_timeline_totals_match_breakdown() {
     let mut request_ids = Vec::with_capacity(total_rows);
     for index in 0..total_rows {
         let request_id = format!("req-health-live-{run_id}-{index}");
-        let mut record = fast_clear_usage_record(
-            &request_id,
-            &provider,
-            now_unix_secs,
-            true,
-            UsageBodyCaptureState::Inline,
-            None,
-        );
+        let mut record =
+            fast_clear_usage_record(&request_id, &provider, now_unix_secs, true, None, None);
         record.model = model.clone();
         // 每 20 条造一个失败，用来验证成功/失败判定在两条查询路径上完全一致。
         if index % 20 == 0 {

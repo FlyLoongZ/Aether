@@ -1,3 +1,12 @@
+//! Usage retention.
+//!
+//! Every table this module sweeps owns a `created_at` and is retired by a plain
+//! `DELETE` bounded by it. Nothing is cleared in place: a swept row leaves the
+//! predicate, so the next batch starts where the last one stopped and the
+//! per-run cost stays linear in the rows removed. That is why there is no
+//! cursor and no stall guard here -- a batch that returns rows can only return
+//! rows it has not deleted yet.
+
 use aether_data_contracts::repository::usage::{
     UsageCleanupExecutionMode, UsageCleanupPreviewCounts, UsageCleanupSummary, UsageCleanupTargets,
     UsageCleanupWindow,
@@ -22,117 +31,40 @@ DELETE FROM usage AS usage_rows
 USING doomed
 WHERE usage_rows.id = doomed.id
 "#;
-const SELECT_USAGE_HEADER_BATCH_SQL: &str = r#"
-SELECT id, request_id
-FROM usage
-WHERE created_at < $1
-  AND ($2::timestamptz IS NULL OR created_at >= $2)
-  AND (
-    request_headers IS NOT NULL
-    OR response_headers IS NOT NULL
-    OR provider_request_headers IS NOT NULL
-    OR client_response_headers IS NOT NULL
-    OR EXISTS (
-      SELECT 1
-      FROM usage_http_audits
-      WHERE usage_http_audits.request_id = usage.request_id
-        AND (
-          usage_http_audits.request_headers IS NOT NULL
-          OR usage_http_audits.response_headers IS NOT NULL
-          OR usage_http_audits.provider_request_headers IS NOT NULL
-          OR usage_http_audits.client_response_headers IS NOT NULL
+
+macro_rules! delete_expired_batch_sql {
+    ($table:literal) => {
+        concat!(
+            "DELETE FROM ",
+            $table,
+            "\nWHERE ctid IN (\n",
+            "  SELECT ctid FROM ",
+            $table,
+            "\n  WHERE created_at < $1",
+            "\n  ORDER BY created_at ASC",
+            "\n  LIMIT $2",
+            "\n)"
         )
-    )
-  )
-ORDER BY created_at ASC, id ASC
-LIMIT $3
-"#;
-const CLEAR_USAGE_HEADER_FIELDS_SQL: &str = r#"
-UPDATE usage
-SET request_headers = NULL,
-    response_headers = NULL,
-    provider_request_headers = NULL,
-    client_response_headers = NULL
-WHERE id = ANY($1)
-"#;
-const CLEAR_USAGE_HTTP_AUDIT_HEADERS_SQL: &str = r#"
-UPDATE usage_http_audits
-SET request_headers = NULL,
-    response_headers = NULL,
-    provider_request_headers = NULL,
-    client_response_headers = NULL,
-    updated_at = NOW()
-WHERE request_id = ANY($1)
-"#;
-const DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL: &str = r#"
-DELETE FROM usage_http_audits
-WHERE request_id = ANY($1)
-  AND request_headers IS NULL
-  AND response_headers IS NULL
-  AND provider_request_headers IS NULL
-  AND client_response_headers IS NULL
-"#;
-const SELECT_USAGE_STALE_BODY_BATCH_SQL: &str = r#"
-SELECT id, request_id
-FROM usage
-WHERE created_at < $1
-  AND ($2::timestamptz IS NULL OR created_at >= $2)
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM usage_body_blobs
-      WHERE usage_body_blobs.request_id = usage.request_id
-    )
-    OR EXISTS (
-      SELECT 1
-      FROM usage_http_audits
-      WHERE usage_http_audits.request_id = usage.request_id
-        AND (
-          usage_http_audits.request_body_state IS NOT NULL
-          OR usage_http_audits.provider_request_body_state IS NOT NULL
-          OR usage_http_audits.response_body_state IS NOT NULL
-          OR usage_http_audits.client_response_body_state IS NOT NULL
+    };
+}
+
+macro_rules! count_expired_sql {
+    ($table:literal) => {
+        concat!(
+            "SELECT COUNT(*)::bigint FROM ",
+            $table,
+            " WHERE created_at < $1"
         )
-    )
-  )
-ORDER BY created_at ASC, id ASC
-LIMIT $3
-"#;
-const SELECT_USAGE_COMPRESSED_BODY_BATCH_SQL: &str = r#"
-SELECT id, request_id
-FROM usage
-WHERE created_at < $1
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM usage_body_blobs
-      WHERE usage_body_blobs.request_id = usage.request_id
-    )
-    OR EXISTS (
-      SELECT 1
-      FROM usage_http_audits
-      WHERE usage_http_audits.request_id = usage.request_id
-        AND (
-          usage_http_audits.request_body_state IS NOT NULL
-          OR usage_http_audits.provider_request_body_state IS NOT NULL
-          OR usage_http_audits.response_body_state IS NOT NULL
-          OR usage_http_audits.client_response_body_state IS NOT NULL
-        )
-    )
-  )
-ORDER BY created_at ASC, id ASC
-LIMIT $2
-"#;
-const DELETE_USAGE_BODY_BLOBS_SQL: &str = r#"
-DELETE FROM usage_body_blobs
-WHERE request_id = ANY($1)
-"#;
-const CLEAR_USAGE_HTTP_AUDIT_BODY_CAPTURE_SQL: &str = r#"
-UPDATE usage_http_audits
-SET body_capture_mode = 'none',
-    updated_at = NOW()
-WHERE request_id = ANY($1)
-"#;
+    };
+}
+
+const DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL: &str = delete_expired_batch_sql!("usage_http_headers");
+const DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL: &str = delete_expired_batch_sql!("usage_http_bodies");
+const COUNT_EXPIRED_USAGE_HTTP_HEADERS_SQL: &str = count_expired_sql!("usage_http_headers");
+const COUNT_EXPIRED_USAGE_HTTP_BODIES_SQL: &str = count_expired_sql!("usage_http_bodies");
+
+const TRUNCATE_USAGE_HTTP_BODIES_SQL: &str = "TRUNCATE TABLE usage_http_bodies";
+
 const SELECT_EXPIRED_ACTIVE_API_KEYS_SQL: &str = r#"
 SELECT id, auto_delete_on_expiry
 FROM api_keys
@@ -159,12 +91,6 @@ WHERE id = $1
   AND is_active IS TRUE
 "#;
 
-#[derive(Debug, Clone, PartialEq)]
-struct UsageBodyCleanupRow {
-    id: String,
-    request_id: String,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ExpiredApiKeyRow<'a> {
     id: &'a str,
@@ -185,7 +111,7 @@ impl SqlxUsageReadRepository {
         }
         if mode == UsageCleanupExecutionMode::BeforeNowBodyFields {
             let body_cleaned = if targets.body {
-                cleanup_usage_body_fields(&self.pool, window.body_cutoff, batch_size).await?
+                purge_usage_http_bodies(&self.pool, batch_size).await?
             } else {
                 0
             };
@@ -195,28 +121,34 @@ impl SqlxUsageReadRepository {
             });
         }
 
+        // Deleting the accounting row cascades to both capture tables, so the
+        // sweeps below only do work the record window did not already cover.
         let records_deleted = if targets.records {
             delete_old_usage_records(&self.pool, window.log_cutoff, batch_size).await?
         } else {
             0
         };
         let header_cleaned = if targets.headers {
-            cleanup_usage_header_fields(
+            sweep_expired_capture(
                 &self.pool,
+                DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL,
                 window.header_cutoff,
                 batch_size,
                 targets.records.then_some(window.log_cutoff),
+                "headers",
             )
             .await?
         } else {
             0
         };
         let body_cleaned = if targets.body {
-            cleanup_usage_stale_body_fields(
+            sweep_expired_capture(
                 &self.pool,
+                DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL,
                 window.body_cutoff,
                 batch_size,
                 targets.records.then_some(window.log_cutoff),
+                "bodies",
             )
             .await?
         } else {
@@ -253,7 +185,7 @@ pub async fn preview_usage_cleanup_impl(
 ) -> Result<UsageCleanupPreviewCounts, DataLayerError> {
     if mode == UsageCleanupExecutionMode::BeforeNowBodyFields {
         let body = if targets.body {
-            count_usage_body_candidates(pool, window.body_cutoff).await?
+            count_all_usage_http_bodies(pool).await?
         } else {
             0
         };
@@ -265,20 +197,20 @@ pub async fn preview_usage_cleanup_impl(
     }
 
     let body = if targets.body {
-        count_usage_stale_body_candidates(
+        count_expired_capture(
             pool,
+            COUNT_EXPIRED_USAGE_HTTP_BODIES_SQL,
             window.body_cutoff,
-            targets.records.then_some(window.log_cutoff),
         )
         .await?
     } else {
         0
     };
     let header = if targets.headers {
-        count_usage_header_candidates(
+        count_expired_capture(
             pool,
+            COUNT_EXPIRED_USAGE_HTTP_HEADERS_SQL,
             window.header_cutoff,
-            targets.records.then_some(window.log_cutoff),
         )
         .await?
     } else {
@@ -299,13 +231,46 @@ pub async fn preview_usage_cleanup_impl(
     Ok(UsageCleanupPreviewCounts { body, header, log })
 }
 
-async fn truncate_usage_body_blobs_table(pool: &PostgresPool) -> Result<(), DataLayerError> {
+/// Drops every captured body, keeping the headers.
+///
+/// `TRUNCATE` is the whole point of the manual "purge bodies now" action, so the
+/// fallback only matters when the table is locked.
+async fn purge_usage_http_bodies(
+    pool: &PostgresPool,
+    batch_size: usize,
+) -> Result<usize, DataLayerError> {
+    match truncate_usage_http_bodies(pool).await {
+        Ok(()) => Ok(usize::try_from(count_all_usage_http_bodies(pool).await?).unwrap_or(0)),
+        Err(err) => {
+            warn!(
+                error = %err,
+                "usage cleanup truncate usage_http_bodies failed or timed out, falling back to batch deletion"
+            );
+            loop {
+                let deleted = sqlx::query("DELETE FROM usage_http_bodies WHERE ctid IN (SELECT ctid FROM usage_http_bodies LIMIT $1)")
+                    .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
+                    .execute(pool)
+                    .await
+                    .map_err(postgres_error)?
+                    .rows_affected();
+                if deleted == 0 {
+                    return Ok(0);
+                }
+                if usize::try_from(deleted).unwrap_or(usize::MAX) < batch_size {
+                    return Ok(usize::try_from(deleted).unwrap_or(usize::MAX));
+                }
+            }
+        }
+    }
+}
+
+async fn truncate_usage_http_bodies(pool: &PostgresPool) -> Result<(), DataLayerError> {
     let mut tx = pool.begin().await.map_err(postgres_error)?;
     sqlx::query("SET LOCAL lock_timeout = '2s'")
         .execute(&mut *tx)
         .await
         .map_err(postgres_error)?;
-    sqlx::query("TRUNCATE TABLE usage_body_blobs")
+    sqlx::query(TRUNCATE_USAGE_HTTP_BODIES_SQL)
         .execute(&mut *tx)
         .await
         .map_err(postgres_error)?;
@@ -313,200 +278,66 @@ async fn truncate_usage_body_blobs_table(pool: &PostgresPool) -> Result<(), Data
     Ok(())
 }
 
-async fn cleanup_usage_body_fields(
-    pool: &PostgresPool,
-    cutoff_time: DateTime<Utc>,
-    batch_size: usize,
-) -> Result<usize, DataLayerError> {
-    if let Err(err) = truncate_usage_body_blobs_table(pool).await {
-        warn!(
-            error = %err,
-            "usage cleanup truncate usage_body_blobs table failed or timed out, falling back to batch deletion"
-        );
-    }
-    let mut total_cleaned = 0usize;
-    loop {
-        let rows = fetch_usage_body_cleanup_rows(
-            pool,
-            SELECT_USAGE_COMPRESSED_BODY_BATCH_SQL,
-            cutoff_time,
-            batch_size,
-        )
-        .await?;
-        if rows.is_empty() {
-            break;
-        }
-        let request_ids = rows
-            .iter()
-            .map(|row| row.request_id.clone())
-            .collect::<Vec<_>>();
-
-        let cleaned = rows.len();
-        sqlx::query(DELETE_USAGE_BODY_BLOBS_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_CAPTURE_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL)
-            .bind(request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        total_cleaned += cleaned;
-        if rows.len() < batch_size {
-            break;
-        }
-    }
-    Ok(total_cleaned)
+async fn count_all_usage_http_bodies(pool: &PostgresPool) -> Result<u64, DataLayerError> {
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM usage_http_bodies")
+        .fetch_one(pool)
+        .await
+        .map_err(postgres_error)?;
+    Ok(u64::try_from(count).unwrap_or(0))
 }
 
-async fn fetch_usage_body_cleanup_rows(
+async fn count_expired_capture(
+    pool: &PostgresPool,
+    sql: &'static str,
+    cutoff_time: DateTime<Utc>,
+) -> Result<u64, DataLayerError> {
+    let count: i64 = sqlx::query_scalar(sql)
+        .bind(cutoff_time)
+        .fetch_one(pool)
+        .await
+        .map_err(postgres_error)?;
+    Ok(u64::try_from(count).unwrap_or(0))
+}
+
+/// Deletes expired capture rows a batch at a time until one comes back short.
+///
+/// A row that is gone cannot be selected again, so the loop terminates on its
+/// own and never needs a resume position.
+async fn sweep_expired_capture(
     pool: &PostgresPool,
     sql: &'static str,
     cutoff_time: DateTime<Utc>,
     batch_size: usize,
-) -> Result<Vec<UsageBodyCleanupRow>, DataLayerError> {
-    let rows = sqlx::query(sql)
-        .bind(cutoff_time)
-        .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
-        .fetch_all(pool)
-        .await
-        .map_err(postgres_error)?
-        .into_iter()
-        .map(|row| {
-            Ok(UsageBodyCleanupRow {
-                id: row.try_get::<String, _>("id").map_err(postgres_error)?,
-                request_id: row
-                    .try_get::<String, _>("request_id")
-                    .map_err(postgres_error)?,
-            })
-        })
-        .collect::<Result<Vec<_>, DataLayerError>>()?;
-    Ok(rows)
-}
-
-async fn count_usage_body_candidates(
-    pool: &PostgresPool,
-    cutoff_time: DateTime<Utc>,
-) -> Result<u64, DataLayerError> {
-    let count: i64 = sqlx::query_scalar(
-        r#"
-SELECT COUNT(*)::bigint
-FROM usage
-WHERE created_at < $1
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM usage_body_blobs
-      WHERE usage_body_blobs.request_id = usage.request_id
-    )
-    OR EXISTS (
-      SELECT 1
-      FROM usage_http_audits
-      WHERE usage_http_audits.request_id = usage.request_id
-        AND (
-          usage_http_audits.request_body_state IS NOT NULL
-          OR usage_http_audits.provider_request_body_state IS NOT NULL
-          OR usage_http_audits.response_body_state IS NOT NULL
-          OR usage_http_audits.client_response_body_state IS NOT NULL
-        )
-    )
-  )
-"#,
-    )
-    .bind(cutoff_time)
-    .fetch_one(pool)
-    .await
-    .map_err(postgres_error)?;
-    Ok(u64::try_from(count).unwrap_or(0))
-}
-
-async fn count_usage_stale_body_candidates(
-    pool: &PostgresPool,
-    cutoff_time: DateTime<Utc>,
     newer_than: Option<DateTime<Utc>>,
-) -> Result<u64, DataLayerError> {
+    stage: &'static str,
+) -> Result<usize, DataLayerError> {
     if matches!(newer_than, Some(value) if value >= cutoff_time) {
+        warn!(
+            cutoff_time = %cutoff_time,
+            newer_than = ?newer_than,
+            stage,
+            "usage cleanup capture sweep skipped due to invalid window"
+        );
         return Ok(0);
     }
-    let count: i64 = sqlx::query_scalar(
-        r#"
-SELECT COUNT(*)::bigint
-FROM usage
-WHERE created_at < $1
-  AND ($2::timestamptz IS NULL OR created_at >= $2)
-  AND (
-    EXISTS (
-      SELECT 1
-      FROM usage_body_blobs
-      WHERE usage_body_blobs.request_id = usage.request_id
-    )
-    OR EXISTS (
-      SELECT 1
-      FROM usage_http_audits
-      WHERE usage_http_audits.request_id = usage.request_id
-        AND (
-          usage_http_audits.request_body_state IS NOT NULL
-          OR usage_http_audits.provider_request_body_state IS NOT NULL
-          OR usage_http_audits.response_body_state IS NOT NULL
-          OR usage_http_audits.client_response_body_state IS NOT NULL
-        )
-    )
-  )
-"#,
-    )
-    .bind(cutoff_time)
-    .bind(newer_than)
-    .fetch_one(pool)
-    .await
-    .map_err(postgres_error)?;
-    Ok(u64::try_from(count).unwrap_or(0))
-}
 
-async fn count_usage_header_candidates(
-    pool: &PostgresPool,
-    cutoff_time: DateTime<Utc>,
-    newer_than: Option<DateTime<Utc>>,
-) -> Result<u64, DataLayerError> {
-    if matches!(newer_than, Some(value) if value >= cutoff_time) {
-        return Ok(0);
+    let limit = i64::try_from(batch_size).unwrap_or(i64::MAX);
+    let mut total_deleted = 0usize;
+    loop {
+        let deleted = sqlx::query(sql)
+            .bind(cutoff_time)
+            .bind(limit)
+            .execute(pool)
+            .await
+            .map_err(postgres_error)?
+            .rows_affected();
+        let deleted = usize::try_from(deleted).unwrap_or(usize::MAX);
+        total_deleted += deleted;
+        if deleted < batch_size {
+            break;
+        }
     }
-    let count: i64 = sqlx::query_scalar(
-        r#"
-SELECT COUNT(*)::bigint
-FROM usage
-WHERE created_at < $1
-  AND ($2::timestamptz IS NULL OR created_at >= $2)
-  AND (
-    request_headers IS NOT NULL
-    OR response_headers IS NOT NULL
-    OR provider_request_headers IS NOT NULL
-    OR client_response_headers IS NOT NULL
-    OR EXISTS (
-      SELECT 1
-      FROM usage_http_audits
-      WHERE usage_http_audits.request_id = usage.request_id
-        AND (
-          usage_http_audits.request_headers IS NOT NULL
-          OR usage_http_audits.response_headers IS NOT NULL
-          OR usage_http_audits.provider_request_headers IS NOT NULL
-          OR usage_http_audits.client_response_headers IS NOT NULL
-        )
-    )
-  )
-"#,
-    )
-    .bind(cutoff_time)
-    .bind(newer_than)
-    .fetch_one(pool)
-    .await
-    .map_err(postgres_error)?;
-    Ok(u64::try_from(count).unwrap_or(0))
+    Ok(total_deleted)
 }
 
 async fn delete_old_usage_records(
@@ -530,134 +361,6 @@ async fn delete_old_usage_records(
         }
     }
     Ok(total_deleted)
-}
-
-async fn cleanup_usage_header_fields(
-    pool: &PostgresPool,
-    cutoff_time: DateTime<Utc>,
-    batch_size: usize,
-    newer_than: Option<DateTime<Utc>>,
-) -> Result<usize, DataLayerError> {
-    if matches!(newer_than, Some(value) if value >= cutoff_time) {
-        warn!(
-            cutoff_time = %cutoff_time,
-            newer_than = ?newer_than,
-            "usage cleanup header sweep skipped due to invalid window"
-        );
-        return Ok(0);
-    }
-
-    let mut total_cleaned = 0usize;
-    loop {
-        let mut stream = sqlx::query(SELECT_USAGE_HEADER_BATCH_SQL)
-            .bind(cutoff_time)
-            .bind(newer_than)
-            .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
-            .fetch(pool);
-        let mut rows = Vec::new();
-        while let Some(row) = stream.try_next().await.map_err(postgres_error)? {
-            rows.push(UsageBodyCleanupRow {
-                id: row.try_get::<String, _>("id").map_err(postgres_error)?,
-                request_id: row
-                    .try_get::<String, _>("request_id")
-                    .map_err(postgres_error)?,
-            });
-        }
-        if rows.is_empty() {
-            break;
-        }
-        let ids = rows.iter().map(|row| row.id.clone()).collect::<Vec<_>>();
-        let request_ids = rows
-            .iter()
-            .map(|row| row.request_id.clone())
-            .collect::<Vec<_>>();
-
-        let cleaned = sqlx::query(CLEAR_USAGE_HEADER_FIELDS_SQL)
-            .bind(ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?
-            .rows_affected();
-        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_HEADERS_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL)
-            .bind(request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        let cleaned = usize::try_from(cleaned).unwrap_or(usize::MAX);
-        total_cleaned += cleaned;
-        if rows.len() < batch_size {
-            break;
-        }
-    }
-    Ok(total_cleaned)
-}
-
-async fn cleanup_usage_stale_body_fields(
-    pool: &PostgresPool,
-    cutoff_time: DateTime<Utc>,
-    batch_size: usize,
-    newer_than: Option<DateTime<Utc>>,
-) -> Result<usize, DataLayerError> {
-    if matches!(newer_than, Some(value) if value >= cutoff_time) {
-        warn!(
-            cutoff_time = %cutoff_time,
-            newer_than = ?newer_than,
-            "usage cleanup body sweep skipped due to invalid window"
-        );
-        return Ok(0);
-    }
-
-    let mut total_cleaned = 0usize;
-    loop {
-        let mut stream = sqlx::query(SELECT_USAGE_STALE_BODY_BATCH_SQL)
-            .bind(cutoff_time)
-            .bind(newer_than)
-            .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
-            .fetch(pool);
-        let mut rows = Vec::new();
-        while let Some(row) = stream.try_next().await.map_err(postgres_error)? {
-            rows.push(UsageBodyCleanupRow {
-                id: row.try_get::<String, _>("id").map_err(postgres_error)?,
-                request_id: row
-                    .try_get::<String, _>("request_id")
-                    .map_err(postgres_error)?,
-            });
-        }
-        if rows.is_empty() {
-            break;
-        }
-        let request_ids = rows
-            .iter()
-            .map(|row| row.request_id.clone())
-            .collect::<Vec<_>>();
-
-        let cleaned = rows.len();
-        sqlx::query(DELETE_USAGE_BODY_BLOBS_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(CLEAR_USAGE_HTTP_AUDIT_BODY_CAPTURE_SQL)
-            .bind(&request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        sqlx::query(DELETE_EMPTY_USAGE_HTTP_AUDITS_SQL)
-            .bind(request_ids)
-            .execute(pool)
-            .await
-            .map_err(postgres_error)?;
-        total_cleaned += cleaned;
-        if rows.len() < batch_size {
-            break;
-        }
-    }
-    Ok(total_cleaned)
 }
 
 async fn cleanup_expired_api_keys(
@@ -710,7 +413,11 @@ async fn cleanup_expired_api_keys(
 
 #[cfg(test)]
 mod tests {
-    use super::UsageCleanupTargets;
+    use super::{
+        UsageCleanupTargets, COUNT_EXPIRED_USAGE_HTTP_BODIES_SQL,
+        COUNT_EXPIRED_USAGE_HTTP_HEADERS_SQL, DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL,
+        DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL,
+    };
 
     #[test]
     fn body_targets_select_only_body_cleanup() {
@@ -730,8 +437,52 @@ mod tests {
 
     #[test]
     fn stale_body_batch_covers_blobs_and_audit_refs() {
-        let sql = super::SELECT_USAGE_STALE_BODY_BATCH_SQL;
-        assert!(sql.contains("usage_body_blobs"));
-        assert!(sql.contains("usage_http_audits"));
+        assert!(DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL.contains("usage_http_bodies"));
+        assert!(DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL.contains("usage_http_headers"));
+    }
+
+    /// The sweep must be driven by the capture table's own timestamp. Driving it
+    /// from `usage` is what made a cleared row stay a candidate forever, because
+    /// clearing a column never removed it from the predicate.
+    #[test]
+    fn capture_sweeps_are_driven_by_their_own_timestamp() {
+        for sql in [
+            DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL,
+            DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL,
+            COUNT_EXPIRED_USAGE_HTTP_HEADERS_SQL,
+            COUNT_EXPIRED_USAGE_HTTP_BODIES_SQL,
+        ] {
+            assert!(sql.contains("created_at < $1"), "{sql}");
+            assert!(!sql.contains(" FROM usage "), "{sql}");
+            assert!(!sql.contains("EXISTS"), "{sql}");
+        }
+    }
+
+    /// Sweeping has to delete, not clear: a preserved row would be selected by
+    /// the next batch and rewritten on every pass.
+    #[test]
+    fn capture_sweeps_delete_whole_rows() {
+        for sql in [
+            DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL,
+            DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL,
+        ] {
+            assert!(sql.starts_with("DELETE FROM"), "{sql}");
+            assert!(!sql.contains("UPDATE"), "{sql}");
+            assert!(!sql.contains("= NULL"), "{sql}");
+            assert!(!sql.contains("updated_at"), "{sql}");
+        }
+    }
+
+    /// A sweep that is bounded only by the cutoff would re-walk the freed space
+    /// every pass; the batch limit is what keeps one pass short.
+    #[test]
+    fn capture_sweeps_are_batch_bounded_and_ordered() {
+        for sql in [
+            DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL,
+            DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL,
+        ] {
+            assert!(sql.contains("ORDER BY created_at ASC"), "{sql}");
+            assert!(sql.contains("LIMIT $2"), "{sql}");
+        }
     }
 }

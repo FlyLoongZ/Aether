@@ -12,7 +12,7 @@ async fn pending_batch_is_opt_in_and_rejects_non_pending_before_connecting() {
         "provider-invalid-pending-batch",
         1_700_000_000,
         false,
-        UsageBodyCaptureState::Inline,
+        None,
         None,
     );
     streaming.status = "streaming".to_string();
@@ -85,20 +85,12 @@ async fn validates_upsert_before_hitting_database() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -160,23 +152,21 @@ fn stale_pending_cleanup_index_matches_the_batch_filter_and_order() {
 #[test]
 fn usage_sql_insert_values_aligns_request_metadata_and_timestamps() {
     let sql = normalize_newlines(super::super::UPSERT_SQL);
-    assert!(sql.contains("\n  $48::jsonb,\n  $49::jsonb,\n  CASE"));
-    assert!(sql.contains("WHEN $50 IS NULL THEN NULL"));
-    assert!(sql.contains("TO_TIMESTAMP($51::double precision)"));
+    assert!(sql.contains("\n  $44::jsonb,\n  $45::jsonb,\n  CASE"));
+    assert!(sql.contains("WHEN $46 IS NULL THEN NULL"));
+    assert!(sql.contains("TO_TIMESTAMP($47::double precision)"));
 }
 
 #[test]
 fn usage_sql_upsert_materializes_upstream_stream_mode() {
     assert!(super::super::UPSERT_SQL.contains("upstream_is_stream,"));
-    assert!(super::super::UPSERT_SQL.contains("$49::jsonb->>'upstream_is_stream'"));
+    assert!(super::super::UPSERT_SQL.contains("$45::jsonb->>'upstream_is_stream'"));
     assert!(super::super::UPSERT_SQL.contains("COALESCE($21, FALSE)"));
     assert!(super::super::UPSERT_SQL.contains("upstream_is_stream = CASE"));
 }
 
 #[test]
 fn usage_sql_upsert_returning_includes_routing_placeholders() {
-    assert!(super::super::UPSERT_SQL.contains("NULL::varchar AS http_request_body_state"));
-    assert!(super::super::UPSERT_SQL.contains("NULL::varchar AS http_client_response_body_state"));
     assert!(super::super::UPSERT_SQL.contains("NULL::varchar AS routing_candidate_id"));
     assert!(super::super::UPSERT_SQL.contains("NULL::varchar AS routing_planner_kind"));
     assert!(super::super::UPSERT_SQL.contains("NULL::varchar AS routing_execution_path"));
@@ -202,9 +192,9 @@ fn usage_sql_writes_usage_settlement_pricing_snapshots() {
 #[test]
 fn usage_sql_upsert_recovers_missing_provider_links_after_billing_finalizes() {
     for assignment in [
-        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
-        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
-        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $57) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
+        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
+        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
+        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
     ] {
         assert!(
             super::super::UPSERT_SQL.contains(assignment),
@@ -283,7 +273,7 @@ fn usage_sql_clears_legacy_header_columns_on_upsert() {
 #[test]
 fn usage_sql_terminal_snapshots_replace_sparse_routing_and_settlement_facts() {
     assert!(super::super::UPSERT_SQL.contains(
-        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $57 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
+        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $49 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
     ));
     let routing = super::super::UPSERT_USAGE_ROUTING_SNAPSHOT_SQL;
     assert!(routing.contains("candidate_id = CASE WHEN $14 THEN EXCLUDED.candidate_id"));
@@ -669,55 +659,20 @@ fn usage_sql_recovers_void_failures_before_upsert_and_settlement() {
         .contains("finalized_at = NULL"));
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn usage_body_decode_does_not_block_the_async_runtime_thread() {
-    let runtime_thread = std::thread::current().id();
-    let payload = json!({"message": "background decoding"});
-    let bytes = prepare_usage_body_storage(Some(&payload))
-        .expect("body should serialize")
-        .detached_blob_bytes
-        .expect("body should be detached");
-
-    let decoded = super::super::decode_usage_body_in_background(move || {
-        assert_ne!(std::thread::current().id(), runtime_thread);
-        serde_json::from_slice::<serde_json::Value>(&bytes)
-            .map(Some)
-            .map_err(|error| {
-                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
-                    "failed to parse usage json: {error}"
-                ))
-            })
-    })
-    .await
-    .expect("body should decode");
-
-    assert_eq!(decoded, Some(payload));
-}
-
 #[test]
-fn explicit_none_capture_replaces_stale_request_body_facts_even_with_a_residual_body() {
-    let stale_body = json!({
-        "reasoning_effort": "xhigh",
-        "service_tier": "priority"
-    });
+fn only_a_complete_capture_replaces_the_stored_request_body_facts() {
+    use aether_data_contracts::repository::usage::{BodyEncoding, CapturedBody};
 
-    assert!(request_body_capture_replaces_derived_facts(
-        Some(&stale_body),
-        Some(UsageBodyCaptureState::None),
-    ));
-    assert!(request_body_capture_replaces_derived_facts(
-        Some(&stale_body),
-        None,
-    ));
-    assert!(request_body_capture_replaces_derived_facts(
-        Some(&stale_body),
-        Some(UsageBodyCaptureState::Disabled),
-    ));
-    assert!(request_body_capture_replaces_derived_facts(
-        None,
-        Some(UsageBodyCaptureState::Truncated),
-    ));
-    assert!(!request_body_capture_replaces_derived_facts(None, None,));
+    assert!(request_body_capture_replaces_derived_facts(Some(
+        &CapturedBody::json(json!({"reasoning_effort": "xhigh"}))
+    )));
+    assert!(!request_body_capture_replaces_derived_facts(Some(
+        &CapturedBody::from_bytes(b"{\"reasoning_effort\"".to_vec(), BodyEncoding::Json, true)
+    )));
+    assert!(!request_body_capture_replaces_derived_facts(Some(
+        &CapturedBody::Disabled
+    )));
+    assert!(!request_body_capture_replaces_derived_facts(None));
 }
 
 #[test]

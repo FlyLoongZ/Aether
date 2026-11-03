@@ -4,10 +4,10 @@ use std::sync::RwLock;
 
 use aether_ai_formats::UPSTREAM_IS_STREAM_KEY;
 use aether_data_contracts::repository::usage::{
-    parse_usage_body_ref, preserve_usage_routing_group_snapshot, sanitize_usage_request_metadata,
-    usage_body_ref, StoredUsageAuditAggregation, StoredUsageAuditSummary,
-    StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
-    StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
+    preserve_usage_routing_group_snapshot, sanitize_usage_request_metadata, CapturedBody,
+    StoredUsageAuditAggregation, StoredUsageAuditSummary, StoredUsageBreakdownSummaryRow,
+    StoredUsageCacheAffinityHitSummary, StoredUsageCacheAffinityIntervalRow,
+    StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
     StoredUsageDashboardSummary, StoredUsageErrorDistributionRow, StoredUsageHealthTimelineRow,
     StoredUsageLeaderboardSummary, StoredUsagePerformancePercentilesRow,
@@ -54,7 +54,6 @@ mod dashboard_summary;
 pub struct InMemoryUsageReadRepository {
     dashboard_projection: RwLock<dashboard_summary::DashboardProjection>,
     by_request_id: RwLock<BTreeMap<String, StoredRequestUsageAudit>>,
-    detached_bodies: RwLock<BTreeMap<String, Value>>,
     provider_usage_windows: RwLock<Vec<StoredProviderUsageWindow>>,
     auth_api_keys: Option<Arc<InMemoryAuthApiKeySnapshotRepository>>,
     provider_catalog: Option<Arc<InMemoryProviderCatalogReadRepository>>,
@@ -86,59 +85,6 @@ impl InMemoryUsageReadRepository {
         Self {
             dashboard_projection: Default::default(),
             by_request_id: RwLock::new(by_request_id),
-            detached_bodies: RwLock::new(BTreeMap::new()),
-            provider_usage_windows: RwLock::new(Vec::new()),
-            auth_api_keys: None,
-            provider_catalog: None,
-            analytics_users: Default::default(),
-            analytics_candidates: Default::default(),
-            analytics_allocations: Default::default(),
-        }
-    }
-
-    pub fn seed_with_detached_bodies<I>(items: I) -> Self
-    where
-        I: IntoIterator<Item = StoredRequestUsageAudit>,
-    {
-        let mut by_request_id = BTreeMap::new();
-        let mut detached_bodies = BTreeMap::new();
-        for mut item in items {
-            hydrate_client_family(&mut item);
-            let request_id = item.request_id.clone();
-            detach_usage_body(
-                &request_id,
-                &mut item.request_body,
-                &mut item.request_body_state,
-                &mut detached_bodies,
-                UsageBodyField::RequestBody,
-            );
-            detach_usage_body(
-                &request_id,
-                &mut item.provider_request_body,
-                &mut item.provider_request_body_state,
-                &mut detached_bodies,
-                UsageBodyField::ProviderRequestBody,
-            );
-            detach_usage_body(
-                &request_id,
-                &mut item.response_body,
-                &mut item.response_body_state,
-                &mut detached_bodies,
-                UsageBodyField::ResponseBody,
-            );
-            detach_usage_body(
-                &request_id,
-                &mut item.client_response_body,
-                &mut item.client_response_body_state,
-                &mut detached_bodies,
-                UsageBodyField::ClientResponseBody,
-            );
-            by_request_id.insert(request_id, item);
-        }
-        Self {
-            dashboard_projection: Default::default(),
-            by_request_id: RwLock::new(by_request_id),
-            detached_bodies: RwLock::new(detached_bodies),
             provider_usage_windows: RwLock::new(Vec::new()),
             auth_api_keys: None,
             provider_catalog: None,
@@ -155,7 +101,6 @@ impl InMemoryUsageReadRepository {
         Self {
             dashboard_projection: self.dashboard_projection,
             by_request_id: self.by_request_id,
-            detached_bodies: self.detached_bodies,
             provider_usage_windows: RwLock::new(items.into_iter().collect()),
             auth_api_keys: self.auth_api_keys,
             provider_catalog: self.provider_catalog,
@@ -1351,34 +1296,6 @@ impl UsageReadRepository for InMemoryUsageReadRepository {
             .expect("usage repository lock")
             .get(request_id)
             .cloned())
-    }
-
-    async fn resolve_body_ref(&self, body_ref: &str) -> Result<Option<Value>, DataLayerError> {
-        let Some((request_id, field)) = parse_usage_body_ref(body_ref) else {
-            return Ok(None);
-        };
-        let canonical_ref = usage_body_ref(&request_id, field);
-        if let Some(value) = self
-            .detached_bodies
-            .read()
-            .expect("usage repository lock")
-            .get(&canonical_ref)
-            .cloned()
-        {
-            return Ok(Some(value));
-        }
-        let usage = self
-            .by_request_id
-            .read()
-            .expect("usage repository lock")
-            .get(&request_id)
-            .cloned();
-        Ok(usage.and_then(|usage| match field {
-            UsageBodyField::RequestBody => usage.request_body,
-            UsageBodyField::ProviderRequestBody => usage.provider_request_body,
-            UsageBodyField::ResponseBody => usage.response_body,
-            UsageBodyField::ClientResponseBody => usage.client_response_body,
-        }))
     }
 
     async fn list_usage_audits(
@@ -2946,31 +2863,6 @@ impl UsageReadRepository for InMemoryUsageReadRepository {
     }
 }
 
-fn detach_usage_body(
-    request_id: &str,
-    body: &mut Option<Value>,
-    state: &mut Option<UsageBodyCaptureState>,
-    detached_bodies: &mut BTreeMap<String, Value>,
-    field: UsageBodyField,
-) {
-    let Some(value) = body.take() else {
-        return;
-    };
-    detached_bodies.insert(usage_body_ref(request_id, field), value);
-    // A body that lives in the detached store is a reference, mirroring
-    // `usage_body_capture_state_for_storage` in the Postgres adapter.
-    if !matches!(
-        *state,
-        Some(
-            UsageBodyCaptureState::Disabled
-                | UsageBodyCaptureState::Unavailable
-                | UsageBodyCaptureState::None
-        )
-    ) {
-        *state = Some(UsageBodyCaptureState::Reference);
-    }
-}
-
 fn sanitize_memory_request_metadata(metadata: Option<Value>) -> Option<Value> {
     sanitize_usage_request_metadata(metadata)
 }
@@ -2982,52 +2874,34 @@ fn hydrate_client_family(item: &mut StoredRequestUsageAudit) {
     }
 }
 
+/// A write either carries this side's bytes or says nothing about it.
+///
+/// The capture itself now owns its absence reason, so there is no parallel
+/// state field to reconcile: an incoming `Disabled`/`Unavailable` wins, an
+/// incoming payload wins, and otherwise the stored side survives untouched.
 fn merge_usage_body_capture(
-    incoming_body: Option<Value>,
-    incoming_ref: Option<String>,
-    incoming_state: Option<UsageBodyCaptureState>,
+    incoming_body: Option<CapturedBody>,
     existing: Option<&StoredRequestUsageAudit>,
     field: UsageBodyField,
-) -> (Option<Value>, Option<UsageBodyCaptureState>) {
-    if matches!(
-        incoming_state,
-        Some(
-            UsageBodyCaptureState::None
-                | UsageBodyCaptureState::Disabled
-                | UsageBodyCaptureState::Unavailable
-        )
-    ) {
-        return (None, incoming_state);
+) -> Option<CapturedBody> {
+    match incoming_body {
+        Some(body) => Some(body),
+        None => existing.and_then(|item| item.body(field).cloned()),
     }
-    if incoming_body.is_some() {
-        return (
-            incoming_body,
-            incoming_state.or(Some(UsageBodyCaptureState::Inline)),
-        );
-    }
-    if incoming_ref.is_some() {
-        return (None, Some(UsageBodyCaptureState::Reference));
-    }
-    (
-        existing.and_then(|item| item.body_value(field).cloned()),
-        incoming_state.or_else(|| existing.and_then(|item| item.body_state(field))),
-    )
 }
 
-fn request_body_capture_replaces_derived_facts(
-    request_body: Option<&Value>,
-    request_body_state: Option<UsageBodyCaptureState>,
-) -> bool {
-    if request_body_state.is_some() {
-        return true;
-    }
-    let Some(request_body) = request_body else {
-        return false;
-    };
-    !request_body.as_object().is_some_and(|body| {
-        body.get("truncated").and_then(Value::as_bool) == Some(true)
-            && body.get("reason").and_then(Value::as_str) == Some("body_capture_limit_exceeded")
-    })
+/// Whether a captured body is complete enough to replace the derived facts.
+///
+/// A truncated or absent capture still describes the request, but its derived
+/// facts are incomplete, so the ones already recorded stand.
+fn request_body_capture_replaces_derived_facts(request_body: Option<&CapturedBody>) -> bool {
+    matches!(
+        request_body,
+        Some(CapturedBody::Bytes {
+            truncated: false,
+            ..
+        })
+    )
 }
 
 fn clear_request_body_facts(
@@ -3154,45 +3028,6 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
             existing.request_metadata =
                 sanitize_usage_request_metadata(existing.request_metadata.take());
         }
-        {
-            let mut detached_bodies = self.detached_bodies.write().expect("usage repository lock");
-            for (field, state, body) in [
-                (
-                    UsageBodyField::RequestBody,
-                    capture_usage.request_body_state,
-                    &capture_usage.request_body,
-                ),
-                (
-                    UsageBodyField::ProviderRequestBody,
-                    capture_usage.provider_request_body_state,
-                    &capture_usage.provider_request_body,
-                ),
-                (
-                    UsageBodyField::ResponseBody,
-                    capture_usage.response_body_state,
-                    &capture_usage.response_body,
-                ),
-                (
-                    UsageBodyField::ClientResponseBody,
-                    capture_usage.client_response_body_state,
-                    &capture_usage.client_response_body,
-                ),
-            ] {
-                if body.is_some()
-                    || matches!(
-                        state,
-                        Some(
-                            UsageBodyCaptureState::None
-                                | UsageBodyCaptureState::Disabled
-                                | UsageBodyCaptureState::Unavailable
-                        )
-                    )
-                {
-                    detached_bodies.remove(&usage_body_ref(&usage.request_id, field));
-                }
-            }
-        }
-
         let created_at_unix_ms = by_request_id
             .get(&usage.request_id)
             .map(|existing| existing.created_at_unix_ms)
@@ -3208,18 +3043,15 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                 )
             })
             .unwrap_or_default();
-        let replace_client_request_body_facts = request_body_capture_replaces_derived_facts(
-            capture_usage.request_body.as_ref(),
-            capture_usage.request_body_state,
-        );
+        let replace_client_request_body_facts =
+            request_body_capture_replaces_derived_facts(capture_usage.request_body.as_ref());
         let replace_provider_request_body_facts = request_body_capture_replaces_derived_facts(
             capture_usage.provider_request_body.as_ref(),
-            capture_usage.provider_request_body_state,
         );
         let clear_request_body =
-            capture_usage.request_body_state == Some(UsageBodyCaptureState::None);
+            capture_usage.request_body_state() == Some(UsageBodyCaptureState::None);
         let clear_provider_request_body =
-            capture_usage.provider_request_body_state == Some(UsageBodyCaptureState::None);
+            capture_usage.provider_request_body_state() == Some(UsageBodyCaptureState::None);
         let replace_routing_snapshot = usage_status_is_finalized(&usage.status);
         let mut incoming_request_metadata = capture_usage.request_metadata.clone();
         if incoming_request_metadata.is_some()
@@ -3260,31 +3092,23 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                     .as_ref()
                     .and_then(|stored| stored.request_metadata.as_ref()),
             ));
-        let (request_body, request_body_state) = merge_usage_body_capture(
+        let request_body = merge_usage_body_capture(
             capture_usage.request_body.take(),
-            capture_usage.request_body_ref.take(),
-            capture_usage.request_body_state,
             existing.as_ref(),
             UsageBodyField::RequestBody,
         );
-        let (provider_request_body, provider_request_body_state) = merge_usage_body_capture(
+        let provider_request_body = merge_usage_body_capture(
             capture_usage.provider_request_body.take(),
-            capture_usage.provider_request_body_ref.take(),
-            capture_usage.provider_request_body_state,
             existing.as_ref(),
             UsageBodyField::ProviderRequestBody,
         );
-        let (response_body, response_body_state) = merge_usage_body_capture(
+        let response_body = merge_usage_body_capture(
             capture_usage.response_body.take(),
-            capture_usage.response_body_ref.take(),
-            capture_usage.response_body_state,
             existing.as_ref(),
             UsageBodyField::ResponseBody,
         );
-        let (client_response_body, client_response_body_state) = merge_usage_body_capture(
+        let client_response_body = merge_usage_body_capture(
             capture_usage.client_response_body.take(),
-            capture_usage.client_response_body_ref.take(),
-            capture_usage.client_response_body_state,
             existing.as_ref(),
             UsageBodyField::ClientResponseBody,
         );
@@ -3402,28 +3226,24 @@ impl UsageWriteRepository for InMemoryUsageReadRepository {
                     .and_then(|item| item.request_headers.clone())
             }),
             request_body,
-            request_body_state,
             provider_request_headers: capture_usage.provider_request_headers.or_else(|| {
                 existing
                     .as_ref()
                     .and_then(|item| item.provider_request_headers.clone())
             }),
             provider_request_body,
-            provider_request_body_state,
             response_headers: capture_usage.response_headers.or_else(|| {
                 existing
                     .as_ref()
                     .and_then(|item| item.response_headers.clone())
             }),
             response_body,
-            response_body_state,
             client_response_headers: capture_usage.client_response_headers.or_else(|| {
                 existing
                     .as_ref()
                     .and_then(|item| item.client_response_headers.clone())
             }),
             client_response_body,
-            client_response_body_state,
             candidate_id: if replace_routing_snapshot {
                 capture_usage.candidate_id
             } else {

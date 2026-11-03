@@ -15,7 +15,7 @@ describe('body document decoding', () => {
       const dispatch = globalThis.onmessage as unknown as (event: { data: BodyWorkerRequest }) => Promise<void>
       const value = { messages: [{ role: 'user', content: `${'x'.repeat(100_000)}BODY-END` }] }
       const text = JSON.stringify(value)
-      await dispatch({ data: { id: 1, action: 'load', bytes: bytes(text) } })
+      await dispatch({ data: { id: 1, action: 'load', bytes: bytes(text), encoding: 'json' } })
       expect(postMessage).toHaveBeenLastCalledWith({ id: 1, ok: true, result: { byteLength: bytes(text).byteLength } })
       await dispatch({ data: { id: 2, action: 'copy' } })
       expect(postMessage).toHaveBeenLastCalledWith({ id: 2, ok: true, result: JSON.stringify(value, null, 2) })
@@ -26,20 +26,44 @@ describe('body document decoding', () => {
 
   it('decodes raw json off the UI protocol with a byte count', async () => {
     const text = JSON.stringify({ text: '你好🙂', count: 0, enabled: false })
-    const decoded = await decodeBody(bytes(text))
+    const decoded = await decodeBody(bytes(text), 'json')
     expect(decoded.value).toEqual(JSON.parse(text))
     expect(decoded.byteLength).toBe(bytes(text).byteLength)
   })
 
   it('enforces body size while streaming, including exact boundaries', async () => {
     const text = JSON.stringify('x'.repeat(100_000))
-    await expect(decodeBody(bytes(text), text.length)).resolves.toHaveProperty('byteLength', text.length)
-    await expect(decodeBody(bytes(text), text.length - 1)).rejects.toHaveProperty('code', 'too_large')
+    await expect(decodeBody(bytes(text), 'json', text.length)).resolves.toHaveProperty('byteLength', text.length)
+    await expect(decodeBody(bytes(text), 'json', text.length - 1)).rejects.toHaveProperty('code', 'too_large')
   })
 
-  it('rejects invalid JSON and invalid UTF-8 with safe codes', async () => {
-    await expect(decodeBody(bytes('not json'))).rejects.toHaveProperty('code', 'decode_failed')
-    await expect(decodeBody(new Uint8Array([34, 255, 34]).buffer)).rejects.toHaveProperty('code', 'decode_failed')
+  it('rejects invalid UTF-8 with safe codes', async () => {
+    await expect(decodeBody(new Uint8Array([34, 255, 34]).buffer, 'json')).rejects.toHaveProperty('code', 'decode_failed')
+  })
+
+  it('keeps a truncated JSON capture as the text that arrived instead of failing', async () => {
+    const truncated = bytes('{"messages": [{"role": "user"')
+    const decoded = await decodeBody(truncated, 'json')
+    expect(decoded.value).toBe('{"messages": [{"role": "user"')
+    expect(decoded.byteLength).toBe(truncated.byteLength)
+  })
+})
+
+describe('body encodings', () => {
+  it('keeps an SSE stream as the text that arrived, for the stream renderers', async () => {
+    const stream = 'event: response.created\ndata: {"type":"response.created"}\n\ndata: [DONE]\n\n'
+    const decoded = await decodeBody(bytes(stream), 'sse')
+    expect(decoded.value).toBe(stream)
+  })
+
+  it('keeps plain text as text', async () => {
+    const decoded = await decodeBody(bytes('upstream said no'), 'text')
+    expect(decoded.value).toBe('upstream said no')
+  })
+
+  it('renders binary captures as base64 rather than failing the decode', async () => {
+    const decoded = await decodeBody(new Uint8Array([0xff, 0x00, 0x41]).buffer, 'binary')
+    expect(decoded.value).toBe('/wBB')
   })
 })
 

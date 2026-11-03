@@ -13,7 +13,7 @@ describe('body load error messages', () => {
       expect(formatRequestBodyLoadError(error)).toContain(expected)
     }
     expect(formatStoredBodyLoadError('too_large')).toContain('64 MiB')
-    expect(formatStoredBodyLoadError('decode_failed')).toContain('解压或 JSON 解析失败')
+    expect(formatStoredBodyLoadError('decode_failed')).toContain('解析失败')
     expect(formatStoredBodyLoadError('missing')).toContain('正文暂不可用')
     expect(formatStoredBodyLoadError('storage_unavailable')).toContain('读取正文存储失败')
     expect(formatStoredBodyLoadError()).toContain('读取正文存储失败')

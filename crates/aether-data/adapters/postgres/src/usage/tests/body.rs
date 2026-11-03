@@ -1,31 +1,17 @@
 use super::*;
 
 #[test]
-fn usage_sql_reads_http_audits_for_single_record_fetches() {
-    assert!(super::super::FIND_BY_REQUEST_ID_SQL.contains("LEFT JOIN usage_http_audits"));
-    assert!(super::super::FIND_BY_ID_SQL.contains("LEFT JOIN usage_http_audits"));
-    // The body reference is derived from the row identity, so no query reads a stored one.
+fn usage_sql_reads_split_capture_tables_for_single_record_fetches() {
     for sql in [
         super::super::FIND_BY_REQUEST_ID_SQL,
         super::super::FIND_BY_ID_SQL,
     ] {
-        assert!(!sql.contains("http_request_body_ref"));
-        assert!(!sql.contains("http_client_response_body_ref"));
-    }
-    for sql in [
-        super::super::FIND_BY_REQUEST_ID_SQL,
-        super::super::FIND_BY_ID_SQL,
-    ] {
-        for field in [
-            "request_body",
-            "provider_request_body",
-            "response_body",
-            "client_response_body",
-        ] {
-            assert!(sql.contains(&format!(
-                "usage_http_audits.{field}_state AS http_{field}_state"
-            )));
-        }
+        assert!(sql.contains("LEFT JOIN usage_http_headers"));
+        assert!(sql.contains("usage_http_headers.client_request AS request_headers"));
+        assert!(sql.contains("usage_http_headers.client_response AS client_response_headers"));
+        // Bodies are attached by a dedicated single-row query; the accounting
+        // join never needed the payload columns.
+        assert!(!sql.contains("LEFT JOIN usage_http_bodies"));
     }
 }
 
@@ -59,12 +45,10 @@ fn usage_sql_reads_routing_snapshots_for_single_record_fetches() {
 #[test]
 fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(super::super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS request_headers"));
-    assert!(super::super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS provider_request_body"));
-    assert!(
-        super::super::LIST_USAGE_AUDITS_PREFIX.contains("NULL::varchar AS http_request_body_state")
-    );
-    assert!(super::super::LIST_USAGE_AUDITS_PREFIX
-        .contains("NULL::varchar AS http_client_response_body_state"));
+    // Bounded list queries never load captured bodies: the bytes live in their
+    // own table and only detail reads ask for them.
+    assert!(!super::super::LIST_USAGE_AUDITS_PREFIX.contains("usage_http_bodies"));
+    assert!(!super::super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("usage_http_bodies"));
     assert!(super::super::LIST_USAGE_AUDITS_PREFIX.contains("usage_routing_snapshots.candidate_id"));
     assert!(
         super::super::LIST_USAGE_AUDITS_PREFIX.contains("usage_routing_snapshots.candidate_index")
@@ -77,12 +61,7 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
     assert!(
         super::super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("NULL::jsonb AS request_headers")
     );
-    assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
-        .contains("NULL::jsonb AS provider_request_body"));
-    assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
-        .contains("NULL::varchar AS http_request_body_state"));
-    assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
-        .contains("NULL::varchar AS http_client_response_body_state"));
+    assert!(!super::super::LIST_RECENT_USAGE_AUDITS_PREFIX.contains("usage_http_bodies"));
     assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
         .contains("usage_routing_snapshots.candidate_index"));
     assert!(super::super::LIST_RECENT_USAGE_AUDITS_PREFIX
@@ -183,7 +162,7 @@ fn usage_sql_websocket_filter_compares_json_metadata_without_boolean_casts() {
 
 #[test]
 fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
-    for placeholder in [41, 42, 43, 44, 45, 46, 47, 48, 49] {
+    for placeholder in [41, 42, 43, 44, 45] {
         assert!(
             super::super::UPSERT_SQL.contains(format!("${placeholder}::jsonb").as_str()),
             "missing ::jsonb cast for placeholder ${placeholder}"
@@ -223,124 +202,53 @@ fn usage_sql_settlement_pricing_snapshot_billing_values_use_authoritative_incomi
 }
 
 #[test]
-fn usage_sql_detached_body_flags_clear_body_columns() {
-    for flag in ["$53", "$54", "$55", "$56"] {
-        assert!(
-            super::super::UPSERT_SQL.contains(format!("WHEN {flag} THEN NULL").as_str()),
-            "missing detached body clear flag: {flag}"
-        );
-    }
-}
-
-#[test]
-fn usage_sql_capture_guard_covers_bodies_metadata_and_audit_body_states() {
-    for assignment in [
-        "request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "provider_request_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "client_response_body = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
-        "request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $57",
+fn usage_sql_capture_guard_covers_metadata_and_the_capture_tables() {
+    // Bodies are not columns of `usage` any more: the accounting row only guards
+    // its metadata, and the capture tables own the bytes.
+    assert!(super::super::UPSERT_SQL
+        .contains("request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $49"));
+    for body in [
+        "request_body",
+        "provider_request_body",
+        "response_body",
+        "client_response_body",
     ] {
         assert!(
-            super::super::UPSERT_SQL.contains(assignment),
-            "missing guard: {assignment}"
+            !super::super::UPSERT_SQL.contains(&format!("{body} = CASE")),
+            "{body} must not be written on the accounting row"
         );
     }
-    // The audit row keeps the capture states but no stored reference.
-    assert!(!super::super::UPSERT_USAGE_HTTP_AUDIT_SQL.contains("body_ref"));
-    for assignment in [
-        "request_body_state = COALESCE(",
-        "provider_request_body_state = COALESCE(",
-        "response_body_state = COALESCE(",
-        "client_response_body_state = COALESCE(",
+    let capture = include_str!("../http_capture.rs");
+    for column in [
+        "client_request",
+        "provider_request",
+        "provider_response",
+        "client_response",
     ] {
         assert!(
-            super::super::UPSERT_USAGE_HTTP_AUDIT_SQL.contains(assignment),
-            "missing HTTP body state assignment: {assignment}"
+            capture.contains(format!("{column},").as_str()),
+            "missing body column: {column}"
+        );
+        assert!(
+            capture.contains(format!("{column}_encoding").as_str()),
+            "missing encoding column: {column}"
         );
     }
     let source = include_str!("../mod.rs");
     assert!(source.contains(".bind(capture_update_allowed)"));
     assert!(source.contains("if capture_update_allowed {"));
+    // The capture write must be fed from the prepared row: the accounting row
+    // leaves `upsert` sanitized to None, and reading its capture fields in the
+    // sync is exactly how a full capture was lost while the metadata ledger
+    // still said the sides were captured.
+    assert!(!source.contains("client_request_headers: usage.request_headers.as_ref()"));
+    assert!(!source.contains("client_request_body: usage.request_body.as_ref()"));
 }
 
 #[test]
-fn prepare_usage_body_storage_detaches_small_payloads_into_blob_storage() {
-    let payload = json!({"message": "hello"});
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
-
-    let compressed = storage
-        .detached_blob_bytes
-        .as_deref()
-        .expect("small payload should now be ref-backed");
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
-        payload
-    );
-}
-
-#[tokio::test]
-async fn usage_body_decode_preserves_storage_decode_errors() {
-    let error = super::super::decode_usage_body_in_background(|| {
-        serde_json::from_slice::<serde_json::Value>(b"not json")
-            .map(Some)
-            .map_err(|error| {
-                aether_data_contracts::DataLayerError::UnexpectedValue(format!(
-                    "failed to parse usage json: {error}"
-                ))
-            })
-    })
-    .await
-    .expect_err("corrupt bodies should fail");
-
-    assert!(error.to_string().contains("failed to parse usage json:"));
-}
-
-#[test]
-fn prepare_usage_body_storage_detaches_large_payloads() {
-    let payload = json!({
-        "content": "x".repeat(64 * 1024)
-    });
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
-
-    let compressed = storage
-        .detached_blob_bytes
-        .as_deref()
-        .expect("large payload should be detached");
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(compressed).expect("payload should decode"),
-        payload
-    );
-}
-
-#[test]
-fn prepare_usage_body_storage_streams_json_shapes_into_raw_payloads() {
-    for payload in [
-        serde_json::Value::Null,
-        json!(false),
-        json!(42),
-        json!(["quoted\"text", "line\nbreak", "\u{4e2d}\u{6587}", null]),
-        json!({
-            "content": "escaped\n\"\\value".repeat(32 * 1024),
-            "nested": {"values": [true, null, 1.25, -7]}
-        }),
-    ] {
-        let storage = prepare_usage_body_storage(Some(&payload)).expect("body should serialize");
-        let compressed = storage
-            .detached_blob_bytes
-            .expect("body should be detached");
-        assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&compressed)
-                .expect("body should remain readable"),
-            payload
-        );
-    }
-}
-
-#[test]
-fn managed_capture_preparation_moves_bodies_without_a_second_reservation() {
+fn managed_capture_preparation_hands_bodies_to_storage_without_reparsing() {
     use aether_data_contracts::repository::usage::{
-        sanitize_usage_for_persistence, usage_json_heap_estimate, UsageCaptureMemoryBudget,
+        sanitize_usage_for_persistence, CapturedBody, UsageCaptureMemoryBudget,
     };
 
     let mut usage = fast_clear_usage_record(
@@ -348,37 +256,32 @@ fn managed_capture_preparation_moves_bodies_without_a_second_reservation() {
         "managed-capture",
         100,
         true,
-        UsageBodyCaptureState::Inline,
+        Some(CapturedBody::json(json!({"model": "gpt-5"}))),
         Some("priority"),
     );
     let bodies = [
-        json!({"messages": [{"role": "user", "content": "request".repeat(4096)}]}),
-        json!({"input": "provider request".repeat(4096), "service_tier": "priority"}),
-        json!({"output": "provider response".repeat(4096)}),
-        json!({"output": "client response".repeat(4096)}),
+        CapturedBody::json(
+            json!({"messages": [{"role": "user", "content": "request".repeat(4096)}]}),
+        ),
+        CapturedBody::json(
+            json!({"input": "provider request".repeat(4096), "service_tier": "priority"}),
+        ),
+        CapturedBody::json(json!({"output": "provider response".repeat(4096)})),
+        CapturedBody::json(json!({"output": "client response".repeat(4096)})),
     ];
     usage.request_body = Some(bodies[0].clone());
     usage.provider_request_body = Some(bodies[1].clone());
     usage.response_body = Some(bodies[2].clone());
     usage.client_response_body = Some(bodies[3].clone());
-    usage.request_body_state = Some(UsageBodyCaptureState::Inline);
-    usage.response_body_state = Some(UsageBodyCaptureState::Inline);
-    usage.client_response_body_state = Some(UsageBodyCaptureState::Inline);
     usage.request_headers = Some(json!({"content-type": "application/json"}));
     usage.cache_read_input_tokens = Some(0);
     usage.total_cost_usd = Some(0.25);
     usage.actual_total_cost_usd = Some(0.125);
     let expected_accounting = sanitize_usage_for_persistence(usage.clone());
-    let bytes = [
-        usage.request_body.as_ref(),
-        usage.provider_request_body.as_ref(),
-        usage.response_body.as_ref(),
-        usage.client_response_body.as_ref(),
-    ]
-    .into_iter()
-    .flatten()
-    .map(|body| std::mem::size_of::<serde_json::Value>() + usage_json_heap_estimate(body))
-    .sum();
+    let bytes: usize = bodies
+        .iter()
+        .map(CapturedBody::retained_bytes_estimate)
+        .sum();
     let budget = Arc::new(UsageCaptureMemoryBudget::new(bytes));
     assert!(usage.capture_retention.reserve(Arc::clone(&budget), bytes));
 
@@ -387,133 +290,167 @@ fn managed_capture_preparation_moves_bodies_without_a_second_reservation() {
     assert_eq!(budget.retained_bytes(), 0);
     assert_eq!(budget.downgraded_total(), 0);
     assert_eq!(accounting, expected_accounting);
-    for (storage, expected) in [
-        prepared.request_body_storage,
-        prepared.provider_request_body_storage,
-        prepared.response_body_storage,
-        prepared.client_response_body_storage,
-    ]
-    .into_iter()
-    .zip(bodies)
-    {
-        assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(
-                storage.detached_blob_bytes.as_deref().unwrap()
-            )
-            .unwrap(),
-            expected
-        );
+    // The prepared row keeps the exact bytes and their encoding: nothing is
+    // re-serialized on the way to the database.
+    assert_eq!(
+        prepared.client_request_body.bytes.as_deref(),
+        bodies[0].bytes()
+    );
+    assert_eq!(
+        prepared.client_request_body.encoding.as_deref(),
+        Some("json")
+    );
+    assert_eq!(
+        prepared.client_response_body.bytes.as_deref(),
+        bodies[3].bytes(),
+    );
+    assert_eq!(
+        prepared.client_response_body.encoding.as_deref(),
+        Some("json")
+    );
+    assert!(!prepared.client_request_body.withdrawn);
+    assert!(!prepared.client_response_body.withdrawn);
+}
+
+/// The terminal `upsert` writes the capture tables from the prepared row, not
+/// from the accounting row: preparation sanitizes the accounting row to drop
+/// every capture field, so a sync that reads payloads off it would store
+/// nothing while the metadata ledger still claims the sides were captured.
+#[test]
+fn terminal_preparation_carries_every_captured_side_for_storage() {
+    let mut usage =
+        fast_clear_usage_record("req-all-sides", "all-sides", 100, true, None, None);
+    usage.request_headers = Some(json!({"content-type": "application/json"}));
+    usage.provider_request_headers = Some(json!({"authorization": "Bearer upstream"}));
+    usage.response_headers = Some(json!({"content-type": "text/event-stream"}));
+    usage.client_response_headers = Some(json!({"x-marker": "client"}));
+    usage.request_body = Some(CapturedBody::json(json!({"messages": []})));
+    usage.provider_request_body = Some(CapturedBody::json(json!({"input": "upstream"})));
+    usage.response_body = Some(CapturedBody::from_bytes(
+        b"data: chunk\n\n".to_vec(),
+        BodyEncoding::Sse,
+        true,
+    ));
+    usage.client_response_body = Some(CapturedBody::json(json!({"output": "client"})));
+
+    let (_, prepared) = prepare_usage_for_persistence(usage);
+    let prepared = prepared.expect("usage should prepare");
+
+    // Every side survives preparation with its exact bytes and encoding, so the
+    // capture-table write can persist the whole exchange.
+    assert_eq!(
+        prepared.client_request_headers.as_deref(),
+        Some(r#"{"content-type":"application/json"}"#)
+    );
+    assert_eq!(
+        prepared.provider_request_headers.as_deref(),
+        Some(r#"{"authorization":"Bearer upstream"}"#)
+    );
+    assert_eq!(
+        prepared.provider_response_headers.as_deref(),
+        Some(r#"{"content-type":"text/event-stream"}"#)
+    );
+    assert_eq!(
+        prepared.client_response_headers.as_deref(),
+        Some(r#"{"x-marker":"client"}"#)
+    );
+    assert_eq!(
+        prepared.client_request_body.bytes.as_deref(),
+        Some(br#"{"messages":[]}"#.as_slice())
+    );
+    assert_eq!(
+        prepared.client_request_body.encoding.as_deref(),
+        Some("json")
+    );
+    assert_eq!(
+        prepared.provider_request_body.bytes.as_deref(),
+        Some(br#"{"input":"upstream"}"#.as_slice())
+    );
+    assert_eq!(
+        prepared.client_response_body.bytes.as_deref(),
+        Some(br#"{"output":"client"}"#.as_slice())
+    );
+    let response = &prepared.provider_response_body;
+    assert_eq!(response.bytes.as_deref(), Some(b"data: chunk\n\n".as_slice()));
+    assert_eq!(response.encoding.as_deref(), Some("sse"));
+    assert!(response.truncated);
+    for side in [
+        &prepared.client_request_body,
+        &prepared.client_response_body,
+        &prepared.provider_request_body,
+        response,
+    ] {
+        assert!(!side.withdrawn, "captured side must not be withdrawn");
     }
 }
 
+/// A side set to `Disabled` or `Unavailable` withdraws the bytes an earlier
+/// write stored; a side the write says nothing about keeps them.
 #[test]
-fn usage_body_capture_state_for_storage_marks_detached_bodies_as_reference() {
-    let payload = json!({"message": "hello"});
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
+fn terminal_preparation_marks_disabled_sides_as_withdrawals() {
+    let mut usage = fast_clear_usage_record("req-withdraw", "withdraw", 100, true, None, None);
+    usage.request_body = Some(CapturedBody::Disabled);
+    usage.provider_request_body = Some(CapturedBody::Unavailable);
+    usage.response_body = Some(CapturedBody::json(json!({"output": "kept"})));
 
-    assert!(storage.has_detached_blob());
+    let (_, prepared) = prepare_usage_for_persistence(usage);
+    let prepared = prepared.expect("usage should prepare");
+
+    assert!(prepared.client_request_body.withdrawn);
+    assert!(prepared.client_request_body.bytes.is_none());
+    assert!(prepared.provider_request_body.withdrawn);
+    assert!(prepared.provider_request_body.bytes.is_none());
+    // Sides the write leaves silent keep whatever was stored before.
+    assert!(!prepared.client_response_body.withdrawn);
+    assert!(!prepared.provider_response_body.withdrawn);
     assert_eq!(
-        usage_body_capture_state_for_storage(Some(UsageBodyCaptureState::Inline), &storage, None,),
-        Some(UsageBodyCaptureState::Reference)
-    );
-    assert_eq!(
-        usage_body_capture_state_for_storage(None, &storage, None),
-        Some(UsageBodyCaptureState::Reference)
+        prepared.provider_response_body.bytes.as_deref(),
+        Some(br#"{"output":"kept"}"#.as_slice())
     );
 }
 
 #[test]
-fn usage_body_capture_state_for_storage_preserves_unavailable_states() {
-    let payload = json!({"message": "hello"});
-    let storage = prepare_usage_body_storage(Some(&payload)).expect("storage should serialize");
+fn disabled_capture_keeps_previously_derived_facts() {
+    use aether_data_contracts::repository::usage::CapturedBody;
 
-    assert_eq!(
-        usage_body_capture_state_for_storage(
-            Some(UsageBodyCaptureState::Disabled),
-            &storage,
-            Some("usage://request/req-1/request_body"),
-        ),
-        Some(UsageBodyCaptureState::Disabled)
-    );
-    assert_eq!(
-        usage_body_capture_state_for_storage(
-            Some(UsageBodyCaptureState::Unavailable),
-            &storage,
-            Some("usage://request/req-1/request_body"),
-        ),
-        Some(UsageBodyCaptureState::Unavailable)
-    );
-}
-
-#[test]
-fn explicit_none_capture_drops_residual_body_ref_and_incoming_fast_metadata_before_storage() {
     let mut usage = fast_clear_usage_record(
-        "req-none-residual",
-        "none-residual",
+        "req-disabled-residual",
+        "disabled-residual",
         100,
         true,
-        UsageBodyCaptureState::None,
+        Some(CapturedBody::Disabled),
         Some("priority"),
     );
-    usage.provider_request_body = Some(json!({
-        "model": "gpt-5",
-        "service_tier": "priority"
-    }));
     usage.request_metadata = Some(json!({
         "trace_id": "trace-1",
         "provider_service_tier": "priority",
         "provider_reasoning_effort": "high",
         "provider_cache_ttl_minutes": 30,
-        "provider_request_body_ref": "usage://request/req-none-residual/provider_request_body"
+        "provider_request_body_ref": "usage://request/req-disabled-residual/provider_request_body"
     }));
 
     let (_, prepared) = prepare_usage_for_persistence(usage);
     let prepared = prepared.expect("usage should prepare");
-    assert!(prepared.clear_provider_request_body);
-    assert!(!prepared.provider_request_body_storage.has_detached_blob());
+    // A disabled capture cannot replace the facts derived from a body it never
+    // saw, so whatever the event carried stays.
+    assert!(!prepared.replace_provider_request_body_facts);
     assert_eq!(
         prepared.request_metadata_value,
-        Some(json!({"trace_id": "trace-1"}))
-    );
-}
-
-#[test]
-fn request_body_fact_clear_keeps_unrelated_metadata_and_emits_an_empty_tombstone() {
-    let previous = json!({
-        "trace_id": "trace-1",
-        "requested_reasoning_effort": "xhigh",
-        "provider_reasoning_effort": "max",
-        "provider_service_tier": "priority",
-        "provider_cache_ttl_minutes": 30,
-        "provider_actual_service_tier": "default"
-    });
-
-    assert_eq!(
-        clear_previous_request_body_facts(Some(&previous), true, true),
-        json!({
+        Some(json!({
+            "body_capture": {"provider_request": {"state": "disabled"}},
             "trace_id": "trace-1",
-            "provider_actual_service_tier": "default"
-        })
-    );
-    assert_eq!(
-        clear_previous_request_body_facts(
-            Some(&json!({"provider_service_tier": "priority"})),
-            false,
-            true,
-        ),
-        json!({})
+            "provider_service_tier": "priority",
+            "provider_reasoning_effort": "high",
+            "provider_cache_ttl_minutes": 30
+        }))
     );
 }
 
 #[test]
-fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys() {
-    let detached = prepare_usage_body_storage(Some(&json!({
-        "content": "x".repeat(64 * 1024)
-    })))
-    .expect("detached storage should build");
-    let inline =
-        prepare_usage_body_storage(Some(&json!({"message": "inline"}))).expect("inline body");
+fn prepare_request_metadata_for_body_storage_strips_retired_body_ref_keys() {
+    use aether_data_contracts::repository::usage::CapturedBody;
 
+    let request_body = CapturedBody::json(json!({"message": "inline"}));
     let metadata = prepare_request_metadata_for_body_storage(
         Some(json!({
             "trace_id": "trace-1",
@@ -521,18 +458,8 @@ fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys(
             "provider_request_body_ref": "blob://old-provider"
         })),
         [
-            (
-                UsageBodyField::RequestBody,
-                &detached,
-                Some(&json!({"request": true})),
-                Some("usage://request/req-123/request_body"),
-            ),
-            (
-                UsageBodyField::ProviderRequestBody,
-                &inline,
-                Some(&json!({"provider": true})),
-                None,
-            ),
+            (UsageBodyField::RequestBody, Some(&request_body)),
+            (UsageBodyField::ProviderRequestBody, None),
         ],
     )
     .expect("metadata should be present");
@@ -540,35 +467,9 @@ fn prepare_request_metadata_for_body_storage_strips_body_ref_compatibility_keys(
     assert_eq!(
         metadata,
         json!({
-            "trace_id": "trace-1"
+            "trace_id": "trace-1",
+            "provider_request_body_ref": "blob://old-provider"
         })
-    );
-}
-
-#[test]
-fn usage_http_audit_capture_mode_prefers_refs_over_inline_legacy() {
-    assert_eq!(
-        usage_http_audit_capture_mode(
-            [
-                Some("usage://request/req-123/request_body"),
-                None,
-                None,
-                None
-            ],
-            [Some(&json!({"request": true})), None, None, None]
-        ),
-        "ref_backed"
-    );
-    assert_eq!(
-        usage_http_audit_capture_mode(
-            [None, None, None, None],
-            [Some(&json!({"request": true})), None, None, None]
-        ),
-        "inline_legacy"
-    );
-    assert_eq!(
-        usage_http_audit_capture_mode([None, None, None, None], [None, None, None, None]),
-        "none"
     );
 }
 
@@ -618,20 +519,12 @@ fn usage_routing_snapshot_from_usage_only_activates_for_routing_metadata() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -718,20 +611,12 @@ fn usage_routing_snapshot_from_usage_only_activates_for_routing_metadata() {
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -797,20 +682,12 @@ fn usage_routing_snapshot_from_usage_prefers_typed_routing_fields_without_metada
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: Some("cand-typed".to_string()),
             candidate_index: Some(2),
             key_name: Some("primary".to_string()),
@@ -932,20 +809,12 @@ fn usage_settlement_pricing_snapshot_from_usage_extracts_typed_billing_fields() 
             billing_status: "pending".to_string(),
             request_headers: None,
             request_body: None,
-            request_body_ref: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_ref: None,
             response_headers: None,
             response_body: None,
-            response_body_ref: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_ref: None,
-            request_body_state: None,
-            provider_request_body_state: None,
-            response_body_state: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,

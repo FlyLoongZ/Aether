@@ -162,21 +162,14 @@ SELECT
     NULLIF(BTRIM("usage".request_metadata->'client_session_affinity'->>'client_family'), ''),
     NULLIF(BTRIM("usage".request_metadata->>'client_family'), '')
   ) AS client_family,
-  COALESCE(usage_http_audits.request_headers, "usage".request_headers) AS request_headers,
-  COALESCE(
-    usage_http_audits.provider_request_headers,
-    "usage".provider_request_headers
-  ) AS provider_request_headers,
-  COALESCE(usage_http_audits.response_headers, "usage".response_headers) AS response_headers,
-  COALESCE(
-    usage_http_audits.client_response_headers,
-    "usage".client_response_headers
-  ) AS client_response_headers,
+  -- HTTP capture: the exchange with the client, and the exchange with the
+  -- upstream that produced this row's outcome. One column each, so the read
+  -- model mirrors the capture table directly.
+  usage_http_headers.client_request AS request_headers,
+  usage_http_headers.provider_request AS provider_request_headers,
+  usage_http_headers.provider_response AS response_headers,
+  usage_http_headers.client_response AS client_response_headers,
   "usage".request_metadata,
-  usage_http_audits.request_body_state AS http_request_body_state,
-  usage_http_audits.provider_request_body_state AS http_provider_request_body_state,
-  usage_http_audits.response_body_state AS http_response_body_state,
-  usage_http_audits.client_response_body_state AS http_client_response_body_state,
   usage_routing_snapshots.candidate_id AS routing_candidate_id,
   usage_routing_snapshots.candidate_index AS routing_candidate_index,
   usage_routing_snapshots.key_name AS routing_key_name,
@@ -227,8 +220,11 @@ SELECT
     ) AS BIGINT
   ) AS finalized_at_unix_secs
 FROM "usage"
-LEFT JOIN usage_http_audits
-  ON usage_http_audits.request_id = "usage".request_id
+LEFT JOIN usage_http_headers
+  ON usage_http_headers.request_id = "usage".request_id
+-- Bodies are attached separately (see attach_usage_http_bodies): the detail
+-- reader asks for them once, and the accounting row itself never needed the
+-- payload columns this join would have dragged along.
 LEFT JOIN usage_routing_snapshots
   ON usage_routing_snapshots.request_id = "usage".request_id
 LEFT JOIN usage_settlement_snapshots

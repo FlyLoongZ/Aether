@@ -247,7 +247,7 @@ mod tests {
     #[tokio::test]
     async fn cancellation_keeps_capture_budget_until_blocking_input_is_dropped() {
         use aether_data_contracts::repository::usage::{
-            usage_json_heap_estimate, UpsertUsageRecord, UsageCaptureMemoryBudget,
+            CapturedBody, UpsertUsageRecord, UsageCaptureMemoryBudget,
         };
 
         let mut usage: UpsertUsageRecord = serde_json::from_value(serde_json::json!({
@@ -260,8 +260,11 @@ mod tests {
             "request_body": {"content": "retained".repeat(1024)}
         }))
         .unwrap();
-        let bytes = std::mem::size_of::<serde_json::Value>()
-            + usage_json_heap_estimate(usage.request_body.as_ref().unwrap());
+        let bytes = usage
+            .request_body
+            .as_ref()
+            .map(CapturedBody::retained_bytes_estimate)
+            .unwrap_or_default();
         let budget = Arc::new(UsageCaptureMemoryBudget::new(bytes));
         assert!(usage.capture_retention.reserve(Arc::clone(&budget), bytes));
         let executor = executor(1, Duration::from_secs(1), Duration::from_secs(2));

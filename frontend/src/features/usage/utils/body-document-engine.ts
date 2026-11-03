@@ -2,12 +2,26 @@ import { renderRequest, renderResponse, type RenderBlock, type RenderResult } fr
 import { getRawTextChunk, JsonPageReader, JSON_PAGE_SIZE, JSON_TEXT_CHUNK_SIZE } from './json-viewer'
 import {
   BodyDocumentError, MAX_BODY_BYTES, MAX_ENCODED_BODY_BYTES,
-  type BodyConversationOptions, type BodyConversationPage,
+  type BodyConversationOptions, type BodyConversationPage, type BodyEncoding,
   type BodyJsonOptions, type BodyJsonPage,
 } from './body-document-protocol'
 
-export async function decodeBody(bytes: ArrayBuffer, limit = MAX_BODY_BYTES) {
+/**
+ * Turns the stored bytes into the value the viewers speak.
+ *
+ * The row keeps the exchange verbatim, so this is the one place that decides how
+ * to read it: JSON is parsed, an SSE stream stays a string for the stream
+ * renderers to walk, plain text stays a string, and binary is base64 so a text
+ * view can still show something honest.
+ */
+export async function decodeBody(bytes: ArrayBuffer, encoding: BodyEncoding = 'json', limit = MAX_BODY_BYTES) {
   if (bytes.byteLength > MAX_ENCODED_BODY_BYTES) throw new BodyDocumentError('too_large')
+  // Binary bytes are not text: decoding them as UTF-8 first would reject the
+  // exact captures this branch exists to show.
+  if (encoding === 'binary') {
+    if (bytes.byteLength > limit) throw new BodyDocumentError('too_large')
+    return { value: toBase64(new Uint8Array(bytes)) as unknown, byteLength: bytes.byteLength }
+  }
   const source = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new Uint8Array(bytes))
@@ -27,7 +41,18 @@ export async function decodeBody(bytes: ArrayBuffer, limit = MAX_BODY_BYTES) {
       parts.push(decoder.decode(chunk.value, { stream: true }))
     }
     parts.push(decoder.decode())
-    return { value: JSON.parse(parts.join('')) as unknown, byteLength }
+    const text = parts.join('')
+    if (encoding === 'json') {
+      try {
+        return { value: JSON.parse(text) as unknown, byteLength }
+      } catch {
+        // Truncated or damaged JSON: the raw text is the honest rendering, so
+        // the viewer shows the capture as it arrived instead of failing the
+        // whole document.
+        return { value: text as unknown, byteLength }
+      }
+    }
+    return { value: text as unknown, byteLength }
   } catch (error) {
     await reader.cancel().catch(() => undefined)
     if (error instanceof BodyDocumentError) throw error
@@ -35,6 +60,16 @@ export async function decodeBody(bytes: ArrayBuffer, limit = MAX_BODY_BYTES) {
   } finally {
     reader.releaseLock()
   }
+}
+
+/** Base64 for a binary capture, chunked so a multi-megabyte body cannot blow the stack. */
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk))
+  }
+  return btoa(binary)
 }
 
 export class BodyDocumentEngine {

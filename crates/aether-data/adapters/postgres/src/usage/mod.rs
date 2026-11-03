@@ -1,7 +1,7 @@
 use aether_data_contracts::repository::usage::{
-    parse_usage_body_ref, usage_body_ref, ApiKeyLastUsedDelta, ManagementTokenCounterDelta,
+    ApiKeyLastUsedDelta, BodyEncoding, CapturedBody, ManagementTokenCounterDelta,
     ProxyNodeCounterDelta, StoredUsageAuditAggregation, StoredUsageAuditSummary,
-    StoredUsageBodyPayload, StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
+    StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
     StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
     StoredUsageDashboardStatsSummary, StoredUsageDashboardSummary, StoredUsageErrorDistributionRow,
@@ -11,7 +11,7 @@ use aether_data_contracts::repository::usage::{
     StoredUsageProviderPerformanceTimelineRow, StoredUsageSettledCostSummary,
     StoredUsageTimeSeriesBucket, StoredUsageUserTotals, UsageAuditAggregationGroupBy,
     UsageAuditAggregationQuery, UsageAuditKeywordSearchQuery, UsageAuditSummaryQuery,
-    UsageBodyCaptureState, UsageBodyField, UsageBreakdownGroupBy, UsageBreakdownSummaryQuery,
+    UsageBodyField, UsageBreakdownGroupBy, UsageBreakdownSummaryQuery,
     UsageCacheAffinityHitSummaryQuery, UsageCacheAffinityIntervalGroupBy,
     UsageCacheAffinityIntervalQuery, UsageCacheHitSummaryQuery, UsageCleanupExecutionMode,
     UsageCleanupSummary, UsageCleanupTargets, UsageCleanupWindow, UsageCostSavingsSummaryQuery,
@@ -20,7 +20,7 @@ use aether_data_contracts::repository::usage::{
     UsageHealthTimelineQuery, UsageLeaderboardGroupBy, UsageLeaderboardQuery,
     UsageMonitoringErrorCountQuery, UsageMonitoringErrorListQuery,
     UsagePerformancePercentilesQuery, UsageProviderPerformanceQuery, UsageSettledCostSummaryQuery,
-    UsageTimeSeriesGranularity, UsageTimeSeriesQuery, MAX_USAGE_BODY_BYTES,
+    UsageTimeSeriesGranularity, UsageTimeSeriesQuery,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -52,10 +52,8 @@ use aether_data_contracts::repository::usage::{
     UpsertUsageRecord, UsageAuditListQuery, UsageCounterFlushSummary, UsageCounterHealthSnapshot,
     UsageCounterPendingHealthSnapshot, UsageDailyHeatmapQuery, UsageReadRepository,
     UsageWriteRepository, BILLING_MULTIPLIER_SNAPSHOT_METADATA_KEY,
-    PROVIDER_CACHE_TTL_MINUTES_METADATA_KEY, PROVIDER_REASONING_EFFORT_METADATA_KEY,
-    PROVIDER_SERVICE_TIER_METADATA_KEY, REQUESTED_REASONING_EFFORT_METADATA_KEY,
-    ROUTING_GROUP_BILLING_MULTIPLIER_METADATA_KEY, ROUTING_GROUP_ID_METADATA_KEY,
-    ROUTING_GROUP_NAME_METADATA_KEY,
+    REQUESTED_REASONING_EFFORT_METADATA_KEY, ROUTING_GROUP_BILLING_MULTIPLIER_METADATA_KEY,
+    ROUTING_GROUP_ID_METADATA_KEY, ROUTING_GROUP_NAME_METADATA_KEY,
 };
 use aether_data_contracts::DataLayerError;
 
@@ -76,6 +74,7 @@ mod dashboard_summary;
 #[cfg(test)]
 mod dashboard_summary_tests;
 mod health;
+mod http_capture;
 mod overview_buckets;
 mod preparation;
 mod projection_reader;
@@ -83,9 +82,15 @@ mod projection_reader;
 use preparation::prepare_usage_in_background;
 
 const MAX_SUPPORTED_UNIX_SECS: u64 = 253_402_300_799;
-const FIND_USAGE_BODY_BLOB_BY_REF_SQL: &str = r#"SELECT payload FROM usage_body_blobs WHERE body_ref = $1 AND request_id = $2 AND body_field = $3 LIMIT 1"#;
-const DELETE_USAGE_BODY_BLOB_SQL: &str = include_str!("queries/delete_usage_body_blob_sql.sql");
-static USAGE_BODY_DECODE_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+const SELECT_USAGE_HTTP_HEADERS_SQL: &str = "SELECT
+  usage_http_headers.client_request,
+  usage_http_headers.provider_request,
+  usage_http_headers.provider_response,
+  usage_http_headers.client_response
+FROM usage_http_headers
+WHERE request_id = $1";
+const SELECT_USAGE_HTTP_BODY_PAYLOAD_SQL: &str =
+    include_str!("queries/select_usage_http_body_payload_sql.sql");
 
 struct UsageAnalyticsDrilldown<'a> {
     provider_id: Option<&'a str>,
@@ -145,22 +150,6 @@ fn push_usage_analytics_drilldown(
             .push("\"usage\".has_format_conversion = ")
             .push_bind(value);
     }
-}
-
-async fn decode_usage_body_in_background(
-    decode: impl FnOnce() -> Result<Option<Value>, DataLayerError> + Send + 'static,
-) -> Result<Option<Value>, DataLayerError> {
-    let permit = USAGE_BODY_DECODE_SLOTS.acquire().await.map_err(|error| {
-        DataLayerError::UnexpectedValue(format!("usage body decoder unavailable: {error}"))
-    })?;
-    tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        decode()
-    })
-    .await
-    .map_err(|error| {
-        DataLayerError::UnexpectedValue(format!("usage body decoder failed: {error}"))
-    })?
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -1597,8 +1586,6 @@ WHERE u.request_id = ANY($1)
 "#;
 const UPSERT_USAGE_ROUTING_SNAPSHOT_SQL: &str =
     include_str!("queries/upsert_usage_routing_snapshot_sql.sql");
-const UPSERT_USAGE_HTTP_AUDIT_SQL: &str = include_str!("queries/upsert_usage_http_audit_sql.sql");
-const UPSERT_USAGE_BODY_BLOB_SQL: &str = include_str!("queries/upsert_usage_body_blob_sql.sql");
 const UPSERT_USAGE_SETTLEMENT_PRICING_SNAPSHOT_SQL: &str =
     include_str!("queries/upsert_usage_settlement_pricing_snapshot_sql.sql");
 
@@ -3061,7 +3048,10 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .map_postgres_err()?;
         let usage = row.as_ref().map(map_usage_row).transpose()?;
         match usage {
-            Some(usage) => self.hydrate_usage_body_refs(usage).await.map(Some),
+            Some(mut usage) => {
+                attach_usage_http_bodies(&self.pool, &mut usage).await?;
+                Ok(Some(usage))
+            }
             None => Ok(None),
         }
     }
@@ -3087,7 +3077,11 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .fetch_optional(&self.pool)
             .await
             .map_postgres_err()?;
-        row.as_ref().map(map_usage_row).transpose()
+        let mut usage = row.as_ref().map(map_usage_row).transpose()?;
+        if let Some(usage) = usage.as_mut() {
+            attach_usage_http_bodies(&self.pool, usage).await?;
+        }
+        Ok(usage)
     }
 
     pub async fn list_by_ids(
@@ -3107,92 +3101,13 @@ ORDER BY request_count DESC, "usage".provider_name ASC
             .fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
-            items.push(map_usage_row(&row)?);
+            // A detail-grade batch: the ids route serves the admin and user
+            // detail views, which resolve the stored bytes themselves.
+            let mut item = map_usage_row(&row)?;
+            attach_usage_http_bodies(&self.pool, &mut item).await?;
+            items.push(item);
         }
         Ok(items)
-    }
-
-    pub async fn read_body_payload(
-        &self,
-        body_ref: &str,
-    ) -> Result<Option<StoredUsageBodyPayload>, DataLayerError> {
-        let Some((request_id, field)) = parse_usage_body_ref(body_ref) else {
-            return Ok(None);
-        };
-        let canonical_ref = usage_body_ref(&request_id, field);
-        let row = sqlx::query(FIND_USAGE_BODY_BLOB_BY_REF_SQL)
-            .bind(&canonical_ref)
-            .bind(&request_id)
-            .bind(field.as_storage_field())
-            .fetch_optional(&self.pool)
-            .await
-            .map_postgres_err()?;
-        let Some(row) = row else {
-            return Ok(None);
-        };
-        let Some(bytes) = row
-            .try_get::<Option<Vec<u8>>, _>("payload")
-            .map_postgres_err()?
-        else {
-            return Ok(None);
-        };
-        if bytes.len() > MAX_USAGE_BODY_BYTES {
-            return Err(DataLayerError::UnexpectedValue(format!(
-                "encoded usage json exceeds {MAX_USAGE_BODY_BYTES} bytes"
-            )));
-        }
-        Ok(Some(StoredUsageBodyPayload(bytes)))
-    }
-
-    pub async fn resolve_body_ref(&self, body_ref: &str) -> Result<Option<Value>, DataLayerError> {
-        let Some(StoredUsageBodyPayload(bytes)) = self.read_body_payload(body_ref).await? else {
-            return Ok(None);
-        };
-        decode_usage_body_in_background(move || {
-            serde_json::from_slice(&bytes).map(Some).map_err(|error| {
-                DataLayerError::UnexpectedValue(format!("failed to parse usage json: {error}"))
-            })
-        })
-        .await
-    }
-
-    async fn hydrate_usage_body_refs(
-        &self,
-        mut usage: StoredRequestUsageAudit,
-    ) -> Result<StoredRequestUsageAudit, DataLayerError> {
-        if usage.request_body.is_none() {
-            usage.request_body = self
-                .resolve_usage_body_ref(&usage, UsageBodyField::RequestBody)
-                .await?;
-        }
-        if usage.provider_request_body.is_none() {
-            usage.provider_request_body = self
-                .resolve_usage_body_ref(&usage, UsageBodyField::ProviderRequestBody)
-                .await?;
-        }
-        if usage.response_body.is_none() {
-            usage.response_body = self
-                .resolve_usage_body_ref(&usage, UsageBodyField::ResponseBody)
-                .await?;
-        }
-        if usage.client_response_body.is_none() {
-            usage.client_response_body = self
-                .resolve_usage_body_ref(&usage, UsageBodyField::ClientResponseBody)
-                .await?;
-        }
-        Ok(usage)
-    }
-
-    async fn resolve_usage_body_ref(
-        &self,
-        usage: &StoredRequestUsageAudit,
-        field: UsageBodyField,
-    ) -> Result<Option<Value>, DataLayerError> {
-        // `usage_body_blobs` is the canonical owner of captured bodies, and the reference it
-        // stores is always `usage://request/{request_id}/{field}`, so the row identity alone
-        // decides whether a body exists.
-        self.resolve_body_ref(&usage_body_ref(&usage.request_id, field))
-            .await
     }
 
     pub async fn summarize_provider_usage_since(
@@ -3350,6 +3265,9 @@ OR (\"usage\".error_message IS NOT NULL AND BTRIM(\"usage\".error_message) <> ''
         let mut rows = query.fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
+            // List reads never load the payload tables: the body_capture ledger
+            // in request_metadata answers every capture-state question these
+            // rows are asked, and the bytes stay a detail-read concern.
             items.push(map_usage_row(&row)?);
         }
         Ok(items)
@@ -3558,6 +3476,9 @@ OR (\"usage\".error_message IS NOT NULL AND BTRIM(\"usage\".error_message) <> ''
         let mut rows = builder.build().fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
+            // List reads never load the payload tables: the body_capture ledger
+            // in request_metadata answers every capture-state question these
+            // rows are asked, and the bytes stay a detail-read concern.
             items.push(map_usage_row(&row)?);
         }
         Ok(items)
@@ -5895,6 +5816,9 @@ ORDER BY "usage".created_at DESC, "usage".id ASC
         let mut rows = builder.build().fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
+            // List reads never load the payload tables: the body_capture ledger
+            // in request_metadata answers every capture-state question these
+            // rows are asked, and the bytes stay a detail-read concern.
             items.push(map_usage_row(&row)?);
         }
         Ok(items)
@@ -8354,6 +8278,9 @@ ORDER BY date ASC
         let mut rows = query.fetch(&self.pool);
         let mut items = Vec::new();
         while let Some(row) = rows.try_next().await.map_postgres_err()? {
+            // List reads never load the payload tables: the body_capture ledger
+            // in request_metadata answers every capture-state question these
+            // rows are asked, and the bytes stay a detail-read concern.
             items.push(map_usage_row(&row)?);
         }
         Ok(items)
@@ -8825,26 +8752,20 @@ ORDER BY "usage".user_id ASC
                     }
 
                     let PreparedUsageUpsert {
-                        request_headers_json,
-                        provider_request_headers_json,
-                        response_headers_json,
-                        client_response_headers_json,
-                        request_body_storage,
-                        provider_request_body_storage,
-                        response_body_storage,
-                        client_response_body_storage,
-                        http_audit_states,
-                        http_audit_capture_mode,
+                        client_request_headers,
+                        client_response_headers,
+                        provider_request_headers,
+                        provider_response_headers,
+                        client_request_body,
+                        client_response_body,
+                        provider_request_body,
+                        provider_response_body,
                         routing_snapshot,
                         settlement_pricing_snapshot,
                         mut request_metadata_value,
                         mut request_metadata_json,
                         replace_client_request_body_facts,
                         replace_provider_request_body_facts,
-                        clear_request_body,
-                        clear_provider_request_body,
-                        clear_response_body,
-                        clear_client_response_body,
                     } = prepared?;
                     let capture_update_allowed = recovers_terminal_failure
                         || usage_capture_update_allowed(
@@ -8867,18 +8788,10 @@ ORDER BY "usage".user_id ASC
                         let preserve_empty_tombstone = !replace_terminal_snapshots
                             && (replace_client_request_body_facts
                                 || replace_provider_request_body_facts);
-                        let previous_metadata = if replace_terminal_snapshots {
-                            retain_previous_request_audit_metadata(
-                                previous_metadata,
-                                !replace_client_request_body_facts,
-                            )
-                        } else {
-                            clear_previous_request_body_facts(
-                                previous_metadata,
-                                replace_client_request_body_facts,
-                                replace_provider_request_body_facts,
-                            )
-                        };
+                        let previous_metadata = retain_previous_request_audit_metadata(
+                            previous_metadata,
+                            !replace_client_request_body_facts,
+                        );
                         request_metadata_value = Some(
                             project_usage_request_metadata(
                                 Some(previous_metadata),
@@ -8966,54 +8879,25 @@ ORDER BY "usage".user_id ASC
                         .await
                         .map_postgres_err()?;
                     if capture_update_allowed {
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
+                        // The payloads must come from the prepared row: `usage` left
+                        // preparation sanitized to drop every capture field, so reading
+                        // them off the accounting row here would store nothing while the
+                        // metadata ledger still claims the sides were captured.
+                        http_capture::sync_usage_http_capture_in_tx(
+                            tx,
                             &usage.request_id,
-                            UsageBodyField::RequestBody,
-                            usage.request_body.as_ref(),
-                            &request_body_storage,
-                            clear_request_body,
-                        )
-                        .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            UsageBodyField::ProviderRequestBody,
-                            usage.provider_request_body.as_ref(),
-                            &provider_request_body_storage,
-                            clear_provider_request_body,
-                        )
-                        .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            UsageBodyField::ResponseBody,
-                            usage.response_body.as_ref(),
-                            &response_body_storage,
-                            clear_response_body,
-                        )
-                        .await?;
-                        sync_usage_body_blob_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            UsageBodyField::ClientResponseBody,
-                            usage.client_response_body.as_ref(),
-                            &client_response_body_storage,
-                            clear_client_response_body,
-                        )
-                        .await?;
-                        let http_audit_headers = UsageHttpAuditHeaders {
-                            request_headers_json: request_headers_json.as_deref(),
-                            provider_request_headers_json: provider_request_headers_json.as_deref(),
-                            response_headers_json: response_headers_json.as_deref(),
-                            client_response_headers_json: client_response_headers_json.as_deref(),
-                        };
-                        sync_usage_http_audit_storage(
-                            &mut **tx,
-                            &usage.request_id,
-                            &http_audit_headers,
-                            &http_audit_states,
-                            http_audit_capture_mode,
+                            http_capture::UsageHttpCapture {
+                                client_request_headers: client_request_headers.as_deref(),
+                                client_response_headers: client_response_headers.as_deref(),
+                                provider_request_headers: provider_request_headers.as_deref(),
+                                provider_response_headers: provider_response_headers.as_deref(),
+                                bodies: [
+                                    &client_request_body,
+                                    &client_response_body,
+                                    &provider_request_body,
+                                    &provider_response_body,
+                                ],
+                            },
                         )
                         .await?;
                     }
@@ -9043,32 +8927,21 @@ ORDER BY "usage".user_id ASC
                             ))
                         })?;
                     if capture_update_allowed {
-                        if request_body_storage.has_detached_blob() {
-                            stored.request_body = usage.request_body.clone();
-                        }
-                        stored.request_headers = usage.request_headers.clone();
-                        stored.provider_request_headers = usage.provider_request_headers.clone();
-                        if provider_request_body_storage.has_detached_blob() {
-                            stored.provider_request_body = usage.provider_request_body.clone();
-                        }
-                        stored.response_headers = usage.response_headers.clone();
-                        if response_body_storage.has_detached_blob() {
-                            stored.response_body = usage.response_body.clone();
-                        }
-                        stored.client_response_headers = usage.client_response_headers.clone();
-                        if client_response_body_storage.has_detached_blob() {
-                            stored.client_response_body = usage.client_response_body.clone();
-                        }
-                        stored.request_body_state =
-                            usage.request_body_state.or(stored.request_body_state);
-                        stored.provider_request_body_state = usage
-                            .provider_request_body_state
-                            .or(stored.provider_request_body_state);
-                        stored.response_body_state =
-                            usage.response_body_state.or(stored.response_body_state);
-                        stored.client_response_body_state = usage
-                            .client_response_body_state
-                            .or(stored.client_response_body_state);
+                        let (
+                            request_headers,
+                            provider_request_headers,
+                            response_headers,
+                            client_response_headers,
+                        ) = read_usage_http_headers_in_tx(tx, &usage.request_id).await?;
+                        stored.request_headers = request_headers;
+                        stored.provider_request_headers = provider_request_headers;
+                        stored.response_headers = response_headers;
+                        stored.client_response_headers = client_response_headers;
+                        let bodies = read_usage_http_bodies_in_tx(tx, &usage.request_id).await?;
+                        stored.request_body = bodies[0].clone();
+                        stored.client_response_body = bodies[1].clone();
+                        stored.provider_request_body = bodies[2].clone();
+                        stored.response_body = bodies[3].clone();
                         stored.request_metadata = request_metadata_value;
                     }
 
@@ -9266,8 +9139,7 @@ ORDER BY "usage".user_id ASC
                     .filter(|row| chunk_inserted_ids.contains(row.usage.request_id.as_str()))
                     .collect::<Vec<_>>();
 
-                Self::insert_pending_usage_body_blobs_batch(&mut tx, &inserted_rows).await?;
-                Self::insert_pending_usage_http_audits_batch(&mut tx, &inserted_rows).await?;
+                Self::insert_pending_usage_http_capture_batch(&mut tx, &inserted_rows).await?;
                 Self::insert_pending_usage_routing_snapshots_batch(&mut tx, &inserted_rows).await?;
                 Self::insert_pending_usage_settlement_snapshots_batch(&mut tx, &inserted_rows)
                     .await?;
@@ -9412,148 +9284,37 @@ RETURNING
             .collect()
     }
 
-    async fn insert_pending_usage_body_blobs_batch(
+    async fn insert_pending_usage_http_capture_batch(
         tx: &mut sqlx::Transaction<'_, Postgres>,
         rows: &[&PreparedPendingUsage],
     ) -> Result<(), DataLayerError> {
-        let mut blobs = Vec::<(String, String, &'static str, Vec<u8>)>::new();
-        for row in rows {
-            for (field, storage) in [
-                (
-                    UsageBodyField::RequestBody,
-                    &row.prepared.request_body_storage,
-                ),
-                (
-                    UsageBodyField::ProviderRequestBody,
-                    &row.prepared.provider_request_body_storage,
-                ),
-                (
-                    UsageBodyField::ResponseBody,
-                    &row.prepared.response_body_storage,
-                ),
-                (
-                    UsageBodyField::ClientResponseBody,
-                    &row.prepared.client_response_body_storage,
-                ),
-            ] {
-                if let Some(payload) = storage.detached_blob_bytes.as_ref() {
-                    blobs.push((
-                        usage_body_ref(&row.usage.request_id, field),
-                        row.usage.request_id.clone(),
-                        field.as_storage_field(),
-                        payload.clone(),
-                    ));
-                }
-            }
-        }
-        if blobs.is_empty() {
-            return Ok(());
-        }
-
-        let mut builder = QueryBuilder::<Postgres>::new(
-            "INSERT INTO usage_body_blobs (body_ref, request_id, body_field, payload) ",
-        );
-        builder.push_values(&blobs, |mut values, row| {
-            values
-                .push_bind(row.0.clone())
-                .push_bind(row.1.clone())
-                .push_bind(row.2)
-                .push_bind(row.3.clone());
-        });
-        builder.push(
-            " ON CONFLICT (body_ref) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()",
-        );
-        builder
-            .build()
-            .execute(&mut **tx)
-            .await
-            .map_postgres_err()?;
-        Ok(())
-    }
-
-    async fn insert_pending_usage_http_audits_batch(
-        tx: &mut sqlx::Transaction<'_, Postgres>,
-        rows: &[&PreparedPendingUsage],
-    ) -> Result<(), DataLayerError> {
-        let rows = rows
+        let captures = rows
             .iter()
-            .copied()
-            .filter(|row| {
-                row.prepared.request_headers_json.is_some()
-                    || row.prepared.provider_request_headers_json.is_some()
-                    || row.prepared.response_headers_json.is_some()
-                    || row.prepared.client_response_headers_json.is_some()
-                    || row.prepared.http_audit_states.any_present()
-                    || row.prepared.http_audit_capture_mode != "none"
+            .map(|row| {
+                (
+                    row.usage.request_id.as_str(),
+                    http_capture::UsageHttpCaptureRow {
+                        client_request_headers: row.prepared.client_request_headers.as_deref(),
+                        client_response_headers: row.prepared.client_response_headers.as_deref(),
+                        client_request_body: row.prepared.client_request_body.bytes.as_deref(),
+                        client_request_body_encoding: row
+                            .prepared
+                            .client_request_body
+                            .encoding
+                            .as_deref(),
+                        client_request_body_truncated: row.prepared.client_request_body.truncated,
+                        client_response_body: row.prepared.client_response_body.bytes.as_deref(),
+                        client_response_body_encoding: row
+                            .prepared
+                            .client_response_body
+                            .encoding
+                            .as_deref(),
+                        client_response_body_truncated: row.prepared.client_response_body.truncated,
+                    },
+                )
             })
             .collect::<Vec<_>>();
-        if rows.is_empty() {
-            return Ok(());
-        }
-
-        let mut builder = QueryBuilder::<Postgres>::new(
-            r#"INSERT INTO usage_http_audits (
-request_id, request_headers, provider_request_headers, response_headers,
-client_response_headers, request_body_state, provider_request_body_state,
-response_body_state, client_response_body_state, body_capture_mode
-) "#,
-        );
-        builder.push_values(&rows, |mut values, row| {
-            values
-                .push_bind(row.usage.request_id.clone())
-                .push("CAST(")
-                .push_bind_unseparated(row.prepared.request_headers_json.clone())
-                .push_unseparated(" AS jsonb)")
-                .push("CAST(")
-                .push_bind_unseparated(row.prepared.provider_request_headers_json.clone())
-                .push_unseparated(" AS jsonb)")
-                .push("CAST(")
-                .push_bind_unseparated(row.prepared.response_headers_json.clone())
-                .push_unseparated(" AS jsonb)")
-                .push("CAST(")
-                .push_bind_unseparated(row.prepared.client_response_headers_json.clone())
-                .push_unseparated(" AS jsonb)")
-                .push_bind(usage_body_capture_state_bind_text(
-                    row.prepared.http_audit_states.request_body_state,
-                ))
-                .push_bind(usage_body_capture_state_bind_text(
-                    row.prepared.http_audit_states.provider_request_body_state,
-                ))
-                .push_bind(usage_body_capture_state_bind_text(
-                    row.prepared.http_audit_states.response_body_state,
-                ))
-                .push_bind(usage_body_capture_state_bind_text(
-                    row.prepared.http_audit_states.client_response_body_state,
-                ))
-                .push_bind(row.prepared.http_audit_capture_mode);
-        });
-        builder.push(
-            r#"
-ON CONFLICT (request_id) DO UPDATE SET
-  request_headers = COALESCE(EXCLUDED.request_headers, usage_http_audits.request_headers),
-  provider_request_headers = COALESCE(EXCLUDED.provider_request_headers, usage_http_audits.provider_request_headers),
-  response_headers = COALESCE(EXCLUDED.response_headers, usage_http_audits.response_headers),
-  client_response_headers = COALESCE(EXCLUDED.client_response_headers, usage_http_audits.client_response_headers),
-  request_body_state = COALESCE(EXCLUDED.request_body_state, usage_http_audits.request_body_state),
-  provider_request_body_state = COALESCE(EXCLUDED.provider_request_body_state, usage_http_audits.provider_request_body_state),
-  response_body_state = COALESCE(EXCLUDED.response_body_state, usage_http_audits.response_body_state),
-  client_response_body_state = COALESCE(EXCLUDED.client_response_body_state, usage_http_audits.client_response_body_state),
-  body_capture_mode = CASE
-    WHEN EXCLUDED.body_capture_mode = 'none' AND (
-      EXCLUDED.request_body_state = 'none' OR EXCLUDED.provider_request_body_state = 'none'
-      OR EXCLUDED.response_body_state = 'none' OR EXCLUDED.client_response_body_state = 'none'
-    ) THEN 'none'
-    ELSE COALESCE(NULLIF(EXCLUDED.body_capture_mode, 'none'), usage_http_audits.body_capture_mode, 'none')
-  END,
-  updated_at = NOW()
-"#,
-        );
-        builder
-            .build()
-            .execute(&mut **tx)
-            .await
-            .map_postgres_err()?;
-        Ok(())
+        http_capture::insert_pending_usage_http_capture_batch(tx, &captures).await
     }
 
     async fn insert_pending_usage_routing_snapshots_batch(
@@ -10631,17 +10392,6 @@ impl UsageReadRepository for SqlxUsageReadRepository {
         Self::find_by_request_id_shallow(self, request_id).await
     }
 
-    async fn resolve_body_ref(&self, body_ref: &str) -> Result<Option<Value>, DataLayerError> {
-        Self::resolve_body_ref(self, body_ref).await
-    }
-
-    async fn read_body_payload(
-        &self,
-        body_ref: &str,
-    ) -> Result<Option<StoredUsageBodyPayload>, DataLayerError> {
-        Self::read_body_payload(self, body_ref).await
-    }
-
     async fn list_usage_audits(
         &self,
         query: &UsageAuditListQuery,
@@ -11028,6 +10778,136 @@ async fn find_usage_by_request_id_in_tx(
         .map_postgres_err()?
         .map(|row| map_usage_row(&row))
         .transpose()
+}
+
+/// The four header sets this request captured, if any.
+type UsageHttpHeaderColumns = (Option<Value>, Option<Value>, Option<Value>, Option<Value>);
+
+async fn read_usage_http_headers_in_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    request_id: &str,
+) -> Result<UsageHttpHeaderColumns, DataLayerError> {
+    let Some(row) = sqlx::query(SELECT_USAGE_HTTP_HEADERS_SQL)
+        .bind(request_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_postgres_err()?
+    else {
+        return Ok((None, None, None, None));
+    };
+    Ok((
+        row_try_get_optional::<Value>(&row, "client_request")?,
+        row_try_get_optional::<Value>(&row, "provider_request")?,
+        row_try_get_optional::<Value>(&row, "provider_response")?,
+        row_try_get_optional::<Value>(&row, "client_response")?,
+    ))
+}
+
+/// The four captured bodies, in the order the caller stores them:
+/// `[request, client_response, provider_request, provider_response]`.
+async fn read_usage_http_bodies_in_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    request_id: &str,
+) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
+    let row = sqlx::query(SELECT_USAGE_HTTP_BODY_PAYLOAD_SQL)
+        .bind(request_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_postgres_err()?;
+    row.as_ref()
+        .map(decode_usage_http_body_row)
+        .transpose()
+        .map(|bodies| bodies.unwrap_or([None, None, None, None]))
+}
+
+/// Loads one request's captured bodies outside a transaction.
+///
+/// The accounting row and the capture rows are separate tables, so every reader
+/// that needs the bytes asks for them explicitly instead of paying for them on
+/// the bounded list queries.
+async fn load_usage_http_bodies(
+    pool: &sqlx::PgPool,
+    request_id: &str,
+) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
+    let row = sqlx::query(SELECT_USAGE_HTTP_BODY_PAYLOAD_SQL)
+        .bind(request_id)
+        .fetch_optional(pool)
+        .await
+        .map_postgres_err()?;
+    row.as_ref()
+        .map(decode_usage_http_body_row)
+        .transpose()
+        .map(|bodies| bodies.unwrap_or([None, None, None, None]))
+}
+
+fn decode_usage_http_body_row(row: &PgRow) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
+    let side =
+        |column: &str, encoding_column: &str, truncated_column: &str| -> Result<Option<CapturedBody>, DataLayerError> {
+            let Some(bytes) = row
+                .try_get::<Option<Vec<u8>>, _>(column)
+                .map_postgres_err()?
+            else {
+                return Ok(None);
+            };
+            let encoding = row
+                .try_get::<Option<String>, _>(encoding_column)
+                .map_postgres_err()?
+                .as_deref()
+                .and_then(BodyEncoding::from_label)
+                .unwrap_or(BodyEncoding::Binary);
+            // The truncation cut is a stored column, not a re-derivation: the
+            // reloaded body is the exact value that was written, so the
+            // authority checks and capture labels stay truthful across a
+            // restart.
+            let truncated = row
+                .try_get::<bool, _>(truncated_column)
+                .map_postgres_err()?;
+            Ok(Some(CapturedBody::from_bytes(bytes, encoding, truncated)))
+        };
+    Ok([
+        side(
+            "client_request",
+            "client_request_encoding",
+            "client_request_truncated",
+        )?,
+        side(
+            "client_response",
+            "client_response_encoding",
+            "client_response_truncated",
+        )?,
+        side(
+            "provider_request",
+            "provider_request_encoding",
+            "provider_request_truncated",
+        )?,
+        side(
+            "provider_response",
+            "provider_response_encoding",
+            "provider_response_truncated",
+        )?,
+    ])
+}
+
+async fn attach_usage_http_bodies(
+    pool: &sqlx::PgPool,
+    usage: &mut StoredRequestUsageAudit,
+) -> Result<(), DataLayerError> {
+    let bodies = load_usage_http_bodies(pool, &usage.request_id).await?;
+    usage.request_body = bodies[0].clone();
+    usage.client_response_body = bodies[1].clone();
+    usage.provider_request_body = bodies[2].clone();
+    usage.response_body = bodies[3].clone();
+    Ok(())
+}
+
+/// The legacy metadata key that described an external body for one side.
+fn body_field_metadata_key(field: UsageBodyField) -> &'static str {
+    match field {
+        UsageBodyField::RequestBody => "request_body_ref",
+        UsageBodyField::ProviderRequestBody => "provider_request_body_ref",
+        UsageBodyField::ResponseBody => "response_body_ref",
+        UsageBodyField::ClientResponseBody => "client_response_body_ref",
+    }
 }
 
 async fn lock_usage_request_id_in_tx(
@@ -12164,37 +12044,14 @@ fn map_usage_row(row: &sqlx::postgres::PgRow) -> Result<StoredRequestUsageAudit,
     usage.client_family = row
         .try_get::<Option<String>, _>("client_family")
         .map_postgres_err()?;
-    usage.request_headers = row.try_get("request_headers").map_postgres_err()?;
-    usage.provider_request_headers = row.try_get("provider_request_headers").map_postgres_err()?;
-    usage.response_headers = row.try_get("response_headers").map_postgres_err()?;
-    usage.client_response_headers = row.try_get("client_response_headers").map_postgres_err()?;
+    usage.request_headers = row_try_get_optional::<Value>(row, "request_headers")?;
+    usage.provider_request_headers =
+        row_try_get_optional::<Value>(row, "provider_request_headers")?;
+    usage.response_headers = row_try_get_optional::<Value>(row, "response_headers")?;
+    usage.client_response_headers = row_try_get_optional::<Value>(row, "client_response_headers")?;
     let request_metadata: Option<Value> = row.try_get("request_metadata").map_postgres_err()?;
-    let http_audit_states = UsageHttpAuditStates {
-        request_body_state: row_try_get_optional::<String>(row, "http_request_body_state")?
-            .as_deref()
-            .and_then(parse_usage_body_capture_state),
-        provider_request_body_state: row_try_get_optional::<String>(
-            row,
-            "http_provider_request_body_state",
-        )?
-        .as_deref()
-        .and_then(parse_usage_body_capture_state),
-        response_body_state: row_try_get_optional::<String>(row, "http_response_body_state")?
-            .as_deref()
-            .and_then(parse_usage_body_capture_state),
-        client_response_body_state: row_try_get_optional::<String>(
-            row,
-            "http_client_response_body_state",
-        )?
-        .as_deref()
-        .and_then(parse_usage_body_capture_state),
-    };
     let routing_snapshot = usage_routing_snapshot_from_row(row)?;
     let settlement_pricing_snapshot = usage_settlement_pricing_snapshot_from_row(row)?;
-    usage.request_body_state = http_audit_states.request_body_state;
-    usage.provider_request_body_state = http_audit_states.provider_request_body_state;
-    usage.response_body_state = http_audit_states.response_body_state;
-    usage.client_response_body_state = http_audit_states.client_response_body_state;
     usage.candidate_id = routing_snapshot.candidate_id.clone();
     usage.candidate_index = routing_snapshot.candidate_index;
     usage.key_name = routing_snapshot.key_name.clone();
@@ -12220,51 +12077,6 @@ fn to_i32(value: u64) -> Result<i32, DataLayerError> {
 fn to_u64(value: i32, field_name: &str) -> Result<u64, DataLayerError> {
     u64::try_from(value)
         .map_err(|_| DataLayerError::UnexpectedValue(format!("invalid {field_name}: {value}")))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct UsageBodyStorage {
-    detached_blob_bytes: Option<Vec<u8>>,
-}
-
-impl UsageBodyStorage {
-    fn has_detached_blob(&self) -> bool {
-        self.detached_blob_bytes.is_some()
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct UsageHttpAuditStates {
-    request_body_state: Option<UsageBodyCaptureState>,
-    provider_request_body_state: Option<UsageBodyCaptureState>,
-    response_body_state: Option<UsageBodyCaptureState>,
-    client_response_body_state: Option<UsageBodyCaptureState>,
-}
-
-impl UsageHttpAuditStates {
-    fn any_present(&self) -> bool {
-        self.request_body_state.is_some()
-            || self.provider_request_body_state.is_some()
-            || self.response_body_state.is_some()
-            || self.client_response_body_state.is_some()
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct UsageHttpAuditHeaders<'a> {
-    request_headers_json: Option<&'a str>,
-    provider_request_headers_json: Option<&'a str>,
-    response_headers_json: Option<&'a str>,
-    client_response_headers_json: Option<&'a str>,
-}
-
-impl UsageHttpAuditHeaders<'_> {
-    fn any_present(&self) -> bool {
-        self.request_headers_json.is_some()
-            || self.provider_request_headers_json.is_some()
-            || self.response_headers_json.is_some()
-            || self.client_response_headers_json.is_some()
-    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -12369,74 +12181,60 @@ impl UsageSettlementPricingSnapshot {
     }
 }
 
+/// One write's prepared capture and derived projections.
+///
+/// The capture fields are the only values the capture-table write can use: the
+/// accounting row is sanitized to drop every capture field before it touches
+/// SQL, so reading payloads off it would store nothing while the metadata
+/// ledger still claims the sides were captured.
 #[derive(Debug)]
 struct PreparedUsageUpsert {
-    request_headers_json: Option<String>,
-    provider_request_headers_json: Option<String>,
-    response_headers_json: Option<String>,
-    client_response_headers_json: Option<String>,
-    request_body_storage: UsageBodyStorage,
-    provider_request_body_storage: UsageBodyStorage,
-    response_body_storage: UsageBodyStorage,
-    client_response_body_storage: UsageBodyStorage,
-    http_audit_states: UsageHttpAuditStates,
-    http_audit_capture_mode: &'static str,
+    client_request_headers: Option<String>,
+    client_response_headers: Option<String>,
+    provider_request_headers: Option<String>,
+    provider_response_headers: Option<String>,
+    client_request_body: http_capture::PreparedUsageBodyStorage,
+    client_response_body: http_capture::PreparedUsageBodyStorage,
+    provider_request_body: http_capture::PreparedUsageBodyStorage,
+    provider_response_body: http_capture::PreparedUsageBodyStorage,
     routing_snapshot: UsageRoutingSnapshot,
     settlement_pricing_snapshot: UsageSettlementPricingSnapshot,
     request_metadata_value: Option<Value>,
     request_metadata_json: Option<String>,
     replace_client_request_body_facts: bool,
     replace_provider_request_body_facts: bool,
-    clear_request_body: bool,
-    clear_provider_request_body: bool,
-    clear_response_body: bool,
-    clear_client_response_body: bool,
 }
 
-fn request_body_capture_replaces_derived_facts(
-    request_body: Option<&Value>,
-    request_body_state: Option<UsageBodyCaptureState>,
-) -> bool {
-    // A typed capture state belongs to the incoming request snapshot. Metadata derived before a
-    // body was externalized, truncated, disabled, or found unavailable is authoritative when
-    // present; its absence must clear facts from an older candidate instead of falling through to
-    // PostgreSQL's sparse-upsert COALESCE behavior.
-    if request_body_state.is_some() {
-        return true;
+/// Extracts the storage form of one captured body side: the exact bytes the
+/// capture held plus how to read them. A side without bytes that is explicitly
+/// disabled or unavailable still records `withdrawn`, so the write clears
+/// whatever an earlier write had stored for it instead of keeping the bytes for
+/// the rest of their retention window.
+fn prepared_usage_body_storage(
+    body: Option<&CapturedBody>,
+) -> http_capture::PreparedUsageBodyStorage {
+    http_capture::PreparedUsageBodyStorage {
+        bytes: body.and_then(CapturedBody::bytes).map(<[u8]>::to_vec),
+        encoding: body
+            .and_then(CapturedBody::encoding)
+            .map(|encoding| encoding.as_str().to_string()),
+        truncated: body.is_some_and(CapturedBody::truncated),
+        withdrawn: body.is_some_and(|body| !body.is_present()),
     }
-
-    let Some(request_body) = request_body else {
-        return false;
-    };
-
-    !request_body.as_object().is_some_and(|body| {
-        body.get("truncated").and_then(Value::as_bool) == Some(true)
-            && body.get("reason").and_then(Value::as_str) == Some("body_capture_limit_exceeded")
-    })
 }
 
-fn clear_previous_request_body_facts(
-    previous_metadata: Option<&Value>,
-    clear_client_request_body_facts: bool,
-    clear_provider_request_body_facts: bool,
-) -> Value {
-    let mut metadata = previous_metadata
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default();
-    if clear_client_request_body_facts {
-        metadata.remove(REQUESTED_REASONING_EFFORT_METADATA_KEY);
-        metadata.remove("request_body_ref");
-    }
-    if clear_provider_request_body_facts {
-        metadata.remove(PROVIDER_REASONING_EFFORT_METADATA_KEY);
-        metadata.remove(PROVIDER_SERVICE_TIER_METADATA_KEY);
-        metadata.remove(PROVIDER_CACHE_TTL_MINUTES_METADATA_KEY);
-        metadata.remove("provider_request_body_ref");
-    }
-    // Keep an explicit empty object as a tombstone. Binding SQL NULL here would make the upsert's
-    // COALESCE retain the previous candidate's request-derived facts.
-    Value::Object(metadata)
+/// Whether a captured body is complete enough to replace the derived facts.
+///
+/// A truncated or withdrawn capture still describes the request, but its derived
+/// facts are incomplete, so the ones already recorded stand.
+fn request_body_capture_replaces_derived_facts(body: Option<&CapturedBody>) -> bool {
+    matches!(
+        body,
+        Some(CapturedBody::Bytes {
+            truncated: false,
+            ..
+        })
+    )
 }
 
 fn retain_previous_request_audit_metadata(
@@ -12468,10 +12266,9 @@ fn retain_previous_request_audit_metadata(
         }
     }
     if preserve_client_request_body_facts {
-        for key in [REQUESTED_REASONING_EFFORT_METADATA_KEY, "request_body_ref"] {
-            if let Some(value) = previous_metadata.get(key) {
-                retained.insert(key.to_string(), value.clone());
-            }
+        let key = REQUESTED_REASONING_EFFORT_METADATA_KEY;
+        if let Some(value) = previous_metadata.get(key) {
+            retained.insert(key.to_string(), value.clone());
         }
     }
     Value::Object(retained)
@@ -12495,41 +12292,6 @@ fn usage_capture_update_allowed(
     }
 
     !(previous_status == "streaming" && incoming_status == "pending")
-}
-
-fn prepare_usage_body_storage(value: Option<&Value>) -> Result<UsageBodyStorage, DataLayerError> {
-    let Some(value) = value else {
-        return Ok(UsageBodyStorage {
-            detached_blob_bytes: None,
-        });
-    };
-    let bytes = serde_json::to_vec(value).map_err(|err| {
-        DataLayerError::UnexpectedValue(format!("failed to serialize usage json: {err}"))
-    })?;
-    Ok(UsageBodyStorage {
-        detached_blob_bytes: Some(bytes),
-    })
-}
-
-fn usage_body_capture_state_for_storage(
-    incoming_state: Option<UsageBodyCaptureState>,
-    storage: &UsageBodyStorage,
-    body_ref: Option<&str>,
-) -> Option<UsageBodyCaptureState> {
-    if matches!(
-        incoming_state,
-        Some(
-            UsageBodyCaptureState::Disabled
-                | UsageBodyCaptureState::Unavailable
-                | UsageBodyCaptureState::None
-        )
-    ) {
-        return incoming_state;
-    }
-    if storage.has_detached_blob() || body_ref.is_some() {
-        return Some(UsageBodyCaptureState::Reference);
-    }
-    incoming_state
 }
 
 fn json_bind_text(value: Option<&Value>) -> Result<Option<String>, DataLayerError> {
@@ -12588,180 +12350,57 @@ fn prepare_usage_for_persistence(
 fn prepare_usage_upsert_context(
     usage: &UpsertUsageRecord,
 ) -> Result<PreparedUsageUpsert, DataLayerError> {
-    let replace_client_request_body_facts = request_body_capture_replaces_derived_facts(
-        usage.request_body.as_ref(),
-        usage.request_body_state,
-    );
-    let replace_provider_request_body_facts = request_body_capture_replaces_derived_facts(
-        usage.provider_request_body.as_ref(),
-        usage.provider_request_body_state,
-    );
-    let clear_request_body = usage.request_body_state == Some(UsageBodyCaptureState::None);
-    let clear_provider_request_body =
-        usage.provider_request_body_state == Some(UsageBodyCaptureState::None);
-    let clear_response_body = usage.response_body_state == Some(UsageBodyCaptureState::None);
-    let clear_client_response_body =
-        usage.client_response_body_state == Some(UsageBodyCaptureState::None);
-    // A typed `none` marker wins over residual values left on a reused event by an earlier
-    // candidate. Do not serialize those values or recreate their detached references.
-    let request_body = (!clear_request_body)
-        .then_some(usage.request_body.as_ref())
-        .flatten();
-    let provider_request_body = (!clear_provider_request_body)
-        .then_some(usage.provider_request_body.as_ref())
-        .flatten();
-    let response_body = (!clear_response_body)
-        .then_some(usage.response_body.as_ref())
-        .flatten();
-    let client_response_body = (!clear_client_response_body)
-        .then_some(usage.client_response_body.as_ref())
-        .flatten();
-    let request_body_ref = (!clear_request_body)
-        .then_some(usage.request_body_ref.as_deref())
-        .flatten();
-    let provider_request_body_ref = (!clear_provider_request_body)
-        .then_some(usage.provider_request_body_ref.as_deref())
-        .flatten();
-    let response_body_ref = (!clear_response_body)
-        .then_some(usage.response_body_ref.as_deref())
-        .flatten();
-    let client_response_body_ref = (!clear_client_response_body)
-        .then_some(usage.client_response_body_ref.as_deref())
-        .flatten();
-    let request_headers_json = json_bind_text(usage.request_headers.as_ref())?;
-    let request_body_storage = prepare_usage_body_storage(request_body)?;
-    let provider_request_headers_json = json_bind_text(usage.provider_request_headers.as_ref())?;
-    let provider_request_body_storage = prepare_usage_body_storage(provider_request_body)?;
-    let response_headers_json = json_bind_text(usage.response_headers.as_ref())?;
-    let response_body_storage = prepare_usage_body_storage(response_body)?;
-    let client_response_headers_json = json_bind_text(usage.client_response_headers.as_ref())?;
-    let client_response_body_storage = prepare_usage_body_storage(client_response_body)?;
-    let http_audit_states = UsageHttpAuditStates {
-        request_body_state: usage_body_capture_state_for_storage(
-            usage.request_body_state,
-            &request_body_storage,
-            request_body_ref,
-        ),
-        provider_request_body_state: usage_body_capture_state_for_storage(
-            usage.provider_request_body_state,
-            &provider_request_body_storage,
-            provider_request_body_ref,
-        ),
-        response_body_state: usage_body_capture_state_for_storage(
-            usage.response_body_state,
-            &response_body_storage,
-            response_body_ref,
-        ),
-        client_response_body_state: usage_body_capture_state_for_storage(
-            usage.client_response_body_state,
-            &client_response_body_storage,
-            client_response_body_ref,
-        ),
-    };
+    // A body now carries its own bytes and how to read them, so there is no
+    // parallel state to reconcile: whatever the event captured is what gets
+    // written, and a side it stayed silent about keeps the stored value.
+    let request_body = usage.request_body.as_ref();
+    let provider_request_body = usage.provider_request_body.as_ref();
+    let response_body = usage.response_body.as_ref();
+    let client_response_body = usage.client_response_body.as_ref();
+    let replace_client_request_body_facts =
+        request_body_capture_replaces_derived_facts(request_body);
+    let replace_provider_request_body_facts =
+        request_body_capture_replaces_derived_facts(provider_request_body);
+    let client_request_headers = json_bind_text(usage.request_headers.as_ref())?;
+    let client_response_headers = json_bind_text(usage.client_response_headers.as_ref())?;
+    let provider_request_headers = json_bind_text(usage.provider_request_headers.as_ref())?;
+    let provider_response_headers = json_bind_text(usage.response_headers.as_ref())?;
     let mut request_metadata_value = prepare_request_metadata_for_body_storage(
         usage.request_metadata.clone(),
         [
-            (
-                UsageBodyField::RequestBody,
-                &request_body_storage,
-                request_body,
-                request_body_ref,
-            ),
-            (
-                UsageBodyField::ProviderRequestBody,
-                &provider_request_body_storage,
-                provider_request_body,
-                provider_request_body_ref,
-            ),
-            (
-                UsageBodyField::ResponseBody,
-                &response_body_storage,
-                response_body,
-                response_body_ref,
-            ),
-            (
-                UsageBodyField::ClientResponseBody,
-                &client_response_body_storage,
-                client_response_body,
-                client_response_body_ref,
-            ),
+            (UsageBodyField::RequestBody, request_body),
+            (UsageBodyField::ProviderRequestBody, provider_request_body),
+            (UsageBodyField::ResponseBody, response_body),
+            (UsageBodyField::ClientResponseBody, client_response_body),
         ],
     );
-    if request_metadata_value.is_some() && (clear_request_body || clear_provider_request_body) {
-        request_metadata_value = Some(clear_previous_request_body_facts(
-            request_metadata_value.as_ref(),
-            clear_request_body,
-            clear_provider_request_body,
-        ));
-    }
-    // The raw event is used above to build the capture and billing snapshots, but only the
-    // allow-listed metadata may reach the accounting row.  Keep an explicit empty object when a
-    // body `none` marker cleared the last derived fact: PostgreSQL's sparse upsert uses COALESCE
-    // and would otherwise resurrect the previous candidate's provider metadata from NULL.
-    let preserve_empty_metadata_tombstone =
-        (clear_request_body || clear_provider_request_body) && request_metadata_value.is_some();
-    request_metadata_value =
-        project_usage_request_metadata(request_metadata_value, preserve_empty_metadata_tombstone);
-    let http_audit_capture_mode = usage_http_audit_capture_mode(
-        [
-            request_body_ref,
-            provider_request_body_ref,
-            response_body_ref,
-            client_response_body_ref,
-        ],
-        [
-            request_body,
-            provider_request_body,
-            response_body,
-            client_response_body,
-        ],
-    );
+    request_metadata_value = project_usage_request_metadata(request_metadata_value, false);
     let routing_snapshot =
         usage_routing_snapshot_from_usage(usage, request_metadata_value.as_ref());
     let settlement_pricing_snapshot =
         usage_settlement_pricing_snapshot_from_usage(usage, request_metadata_value.as_ref())?;
     let request_metadata_json = json_bind_text(request_metadata_value.as_ref())?;
+    let client_request_body_storage = prepared_usage_body_storage(request_body);
+    let client_response_body_storage = prepared_usage_body_storage(client_response_body);
+    let provider_request_body_storage = prepared_usage_body_storage(provider_request_body);
+    let provider_response_body_storage = prepared_usage_body_storage(response_body);
 
     Ok(PreparedUsageUpsert {
-        request_headers_json,
-        provider_request_headers_json,
-        response_headers_json,
-        client_response_headers_json,
-        request_body_storage,
-        provider_request_body_storage,
-        response_body_storage,
-        client_response_body_storage,
-        http_audit_states,
-        http_audit_capture_mode,
+        client_request_headers,
+        client_response_headers,
+        provider_request_headers,
+        provider_response_headers,
+        client_request_body: client_request_body_storage,
+        client_response_body: client_response_body_storage,
+        provider_request_body: provider_request_body_storage,
+        provider_response_body: provider_response_body_storage,
         routing_snapshot,
         settlement_pricing_snapshot,
         request_metadata_value,
         request_metadata_json,
         replace_client_request_body_facts,
         replace_provider_request_body_facts,
-        clear_request_body,
-        clear_provider_request_body,
-        clear_response_body,
-        clear_client_response_body,
     })
-}
-
-fn usage_body_capture_state_bind_text(
-    value: Option<UsageBodyCaptureState>,
-) -> Option<&'static str> {
-    value.map(UsageBodyCaptureState::as_str)
-}
-
-fn parse_usage_body_capture_state(value: &str) -> Option<UsageBodyCaptureState> {
-    match value.trim() {
-        "none" => Some(UsageBodyCaptureState::None),
-        "inline" => Some(UsageBodyCaptureState::Inline),
-        "reference" => Some(UsageBodyCaptureState::Reference),
-        "truncated" => Some(UsageBodyCaptureState::Truncated),
-        "disabled" => Some(UsageBodyCaptureState::Disabled),
-        "unavailable" => Some(UsageBodyCaptureState::Unavailable),
-        _ => None,
-    }
 }
 
 fn metadata_ref_value(
@@ -12986,19 +12625,6 @@ fn billing_snapshot_string_field(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
-}
-
-fn usage_http_audit_capture_mode(
-    body_refs: [Option<&str>; 4],
-    body_values: [Option<&Value>; 4],
-) -> &'static str {
-    if body_refs.iter().any(Option::is_some) {
-        return "ref_backed";
-    }
-    if body_values.iter().any(Option::is_some) {
-        return "inline_legacy";
-    }
-    "none"
 }
 
 fn usage_routing_snapshot_from_usage(
@@ -13343,12 +12969,7 @@ fn attach_usage_routing_snapshot_metadata(
 
 fn prepare_request_metadata_for_body_storage<const N: usize>(
     metadata: Option<Value>,
-    body_fields: [(
-        UsageBodyField,
-        &UsageBodyStorage,
-        Option<&Value>,
-        Option<&str>,
-    ); N],
+    body_fields: [(UsageBodyField, Option<&CapturedBody>); N],
 ) -> Option<Value> {
     let mut metadata = match metadata {
         Some(Value::Object(object)) => object,
@@ -13359,99 +12980,15 @@ fn prepare_request_metadata_for_body_storage<const N: usize>(
         }
         None => Map::new(),
     };
-    let should_replace = !metadata.is_empty()
-        || body_fields.iter().any(|(_, storage, value, explicit_ref)| {
-            storage.has_detached_blob() || value.is_some() || explicit_ref.is_some()
-        });
-    if !should_replace {
+    if metadata.is_empty() && body_fields.iter().all(|(_, body)| body.is_none()) {
         return None;
     }
-
-    for (field, storage, value, explicit_ref) in body_fields {
-        if storage.has_detached_blob() || value.is_some() || explicit_ref.is_some() {
-            let ref_key = field.as_ref_key();
-            metadata.remove(ref_key);
+    for (field, body) in body_fields {
+        if body.is_some() {
+            metadata.remove(body_field_metadata_key(field));
         }
     }
-
     Some(Value::Object(metadata))
-}
-
-async fn sync_usage_body_blob_storage<'e, E>(
-    executor: E,
-    request_id: &str,
-    field: UsageBodyField,
-    value: Option<&Value>,
-    storage: &UsageBodyStorage,
-    clear_existing: bool,
-) -> Result<(), DataLayerError>
-where
-    E: sqlx::Executor<'e, Database = Postgres>,
-{
-    let body_ref = usage_body_ref(request_id, field);
-    if clear_existing {
-        sqlx::query(DELETE_USAGE_BODY_BLOB_SQL)
-            .bind(&body_ref)
-            .execute(executor)
-            .await
-            .map_postgres_err()?;
-    } else if let Some(payload) = storage.detached_blob_bytes.as_ref() {
-        sqlx::query(UPSERT_USAGE_BODY_BLOB_SQL)
-            .bind(&body_ref)
-            .bind(request_id)
-            .bind(field.as_storage_field())
-            .bind(payload)
-            .execute(executor)
-            .await
-            .map_postgres_err()?;
-    } else if value.is_some() {
-        sqlx::query(DELETE_USAGE_BODY_BLOB_SQL)
-            .bind(&body_ref)
-            .execute(executor)
-            .await
-            .map_postgres_err()?;
-    }
-    Ok(())
-}
-
-async fn sync_usage_http_audit_storage<'e, E>(
-    executor: E,
-    request_id: &str,
-    headers: &UsageHttpAuditHeaders<'_>,
-    states: &UsageHttpAuditStates,
-    body_capture_mode: &str,
-) -> Result<(), DataLayerError>
-where
-    E: sqlx::Executor<'e, Database = Postgres>,
-{
-    if !headers.any_present() && !states.any_present() && body_capture_mode == "none" {
-        return Ok(());
-    }
-
-    sqlx::query(UPSERT_USAGE_HTTP_AUDIT_SQL)
-        .bind(request_id)
-        .bind(headers.request_headers_json)
-        .bind(headers.provider_request_headers_json)
-        .bind(headers.response_headers_json)
-        .bind(headers.client_response_headers_json)
-        .bind(usage_body_capture_state_bind_text(
-            states.request_body_state,
-        ))
-        .bind(usage_body_capture_state_bind_text(
-            states.provider_request_body_state,
-        ))
-        .bind(usage_body_capture_state_bind_text(
-            states.response_body_state,
-        ))
-        .bind(usage_body_capture_state_bind_text(
-            states.client_response_body_state,
-        ))
-        .bind(body_capture_mode)
-        .execute(executor)
-        .await
-        .map_postgres_err()?;
-
-    Ok(())
 }
 
 async fn sync_usage_routing_snapshot_storage<'e, E>(

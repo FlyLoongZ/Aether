@@ -191,7 +191,14 @@ export interface RequestSettlementSnapshot {
 }
 
 export type RequestBodyField = 'request_body' | 'provider_request_body' | 'response_body' | 'client_response_body'
-export type RequestBodyLoadErrorCode = 'too_large' | 'decode_failed' | 'missing' | 'storage_unavailable'
+export type RequestBodyLoadErrorCode = 'too_large' | 'decode_failed' | 'missing' | 'expired' | 'storage_unavailable'
+
+/** The encodings `/body` reports in `x-aether-body-encoding`. */
+export type BodyEncoding = 'json' | 'text' | 'sse' | 'binary'
+
+function isBodyEncoding(value: string | undefined): value is BodyEncoding {
+  return value === 'json' || value === 'text' || value === 'sse' || value === 'binary'
+}
 
 export class RequestBodyProtocolError extends Error {
   constructor() {
@@ -495,11 +502,17 @@ export const dashboardApi = {
       signal,
       ...(onProgress ? { onDownloadProgress: (event: { loaded: number }) => onProgress(event.loaded) } : {}),
     })
+    // The row stores the bytes that crossed the wire and the label that says how
+    // to read them, so the reader dispatches on the label instead of assuming
+    // every capture is JSON.
     const encoding = response.headers['x-aether-body-encoding']
-    if (encoding !== 'json' || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
+    if (!isBodyEncoding(encoding) || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
       throw new RequestBodyProtocolError()
     }
-    return { bytes: response.data }
+    // A truncated capture is not a protocol error: the viewer flags it instead
+    // of presenting a cut stream as complete.
+    const truncated = response.headers['x-aether-body-truncated'] === 'true'
+    return { bytes: response.data, encoding, truncated }
   },
 
   async prefetchRequestDetail(requestId: string): Promise<void> {

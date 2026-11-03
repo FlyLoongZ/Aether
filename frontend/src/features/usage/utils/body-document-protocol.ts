@@ -13,6 +13,14 @@ export class BodyDocumentError extends Error {
   }
 }
 
+/**
+ * How the stored bytes should be read.
+ *
+ * `json` parses, `text` and `sse` stay strings (the conversation renderers
+ * already know how to walk an SSE stream), and `binary` is shown as base64.
+ */
+export type BodyEncoding = 'json' | 'text' | 'sse' | 'binary'
+
 export type BodyJsonOptions = JsonPageOptions
 
 export interface BodyJsonPage {
@@ -40,7 +48,7 @@ export interface BodyDocumentSummary {
 }
 
 export type BodyWorkerCommand =
-  | { action: 'load', bytes: ArrayBuffer }
+  | { action: 'load', bytes: ArrayBuffer, encoding: BodyEncoding }
   | { action: 'json', options: BodyJsonOptions }
   | { action: 'conversation', options: BodyConversationOptions }
   | { action: 'copy', conversation?: BodyConversationOptions }

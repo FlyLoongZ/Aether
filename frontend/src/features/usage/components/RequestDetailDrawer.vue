@@ -752,6 +752,12 @@
                         value="request-body"
                       >
                         <div
+                          v-if="activeBodyTruncated"
+                          class="mx-4 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
+                        >
+                          {{ bodyTruncatedNotice }}
+                        </div>
+                        <div
                           v-if="isRequestBodyLoading"
                           class="p-4"
                         >
@@ -830,6 +836,12 @@
                         v-if="activeTab === 'response-body'"
                         value="response-body"
                       >
+                        <div
+                          v-if="activeBodyTruncated"
+                          class="mx-4 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
+                        >
+                          {{ bodyTruncatedNotice }}
+                        </div>
                         <div
                           v-if="isResponseBodyLoading"
                           class="p-4"
@@ -1455,6 +1467,8 @@ const replayDialogOpen = ref(false)
 const bodyLoading = ref(false)
 const bodyLoadError = ref<string | null>(null)
 const bodyDocuments = shallowRef(new Map<RequestBodyField, BodyDocument>())
+const bodyTruncatedFields = shallowRef(new Map<RequestBodyField, boolean>())
+const bodyTruncatedNotice = '该正文因超过捕获大小上限被截断，以下内容不是完整报文。'
 const bodyCopying = ref(false)
 const bodyLoadFailures = new Map<RequestBodyField, string>()
 let bodyLoadController: AbortController | null = null
@@ -1767,7 +1781,7 @@ const bodyLoadErrorMessage = computed(() => {
 
 const canRetryBodyContentLoad = computed(() => {
   const code = activeBodyField.value ? detail.value?.body_load_error_codes?.[activeBodyField.value] : undefined
-  return code !== 'too_large' && code !== 'decode_failed'
+  return code !== 'too_large' && code !== 'decode_failed' && code !== 'expired'
 })
 
 const requestBodyLoadErrorVisible = computed(() => {
@@ -1881,6 +1895,24 @@ function setDataSource(source: 'client' | 'provider') {
     viewMode.value = 'formatted'
   }
 }
+
+function markBodyTruncated(field: RequestBodyField) {
+  const truncated = new Map(bodyTruncatedFields.value)
+  truncated.set(field, true)
+  bodyTruncatedFields.value = truncated
+}
+
+function clearBodyTruncated(field: RequestBodyField) {
+  if (!bodyTruncatedFields.value.has(field)) return
+  const truncated = new Map(bodyTruncatedFields.value)
+  truncated.delete(field)
+  bodyTruncatedFields.value = truncated
+}
+
+const activeBodyTruncated = computed(() => {
+  const field = activeBodyField.value
+  return field ? bodyTruncatedFields.value.get(field) === true : false
+})
 
 // 获取当前数据源的请求体数据
 const currentRequestBody = computed(() => {
@@ -2657,6 +2689,7 @@ async function ensureBodyContentLoaded() {
     bodyLoadError.value = previousFailure
     return
   }
+  clearBodyTruncated(field)
 
   const requestId = ++bodyLoadRequestId
   const controller = new AbortController()
@@ -2665,7 +2698,7 @@ async function ensureBodyContentLoaded() {
   bodyLoadError.value = null
   try {
     const response = await dashboardApi.getRequestBody(detail.value.id, field, controller.signal)
-    const document = await BodyDocument.load(response.bytes, controller.signal)
+    const document = await BodyDocument.load(response.bytes, response.encoding, controller.signal)
     if (requestId !== bodyLoadRequestId || controller.signal.aborted || !detail.value ||
       !props.isOpen || !detailMatchesRequestId(detail.value, usageId)) {
       document.dispose()
@@ -2682,6 +2715,7 @@ async function ensureBodyContentLoaded() {
     }
     documents.set(field, document)
     bodyDocuments.value = documents
+    if (response.truncated) markBodyTruncated(field)
     detail.value = { ...detail.value, body_load_errors: { ...detail.value.body_load_errors, [field]: false }, body_load_error_codes: { ...detail.value.body_load_error_codes, [field]: undefined } }
   } catch (err) {
     if (requestId !== bodyLoadRequestId || controller.signal.aborted || axios.isCancel(err)) return
@@ -2707,6 +2741,7 @@ function handleBodyDocumentError(error: unknown) {
   documents.get(field)?.dispose()
   documents.delete(field)
   bodyDocuments.value = documents
+  clearBodyTruncated(field)
   bodyLoadError.value = formatRequestBodyLoadError(error)
   bodyLoadFailures.set(field, bodyLoadError.value)
 }
@@ -2729,6 +2764,7 @@ function resetBodyContentState() {
   cancelBodyContentLoad()
   for (const document of bodyDocuments.value.values()) document.dispose()
   bodyDocuments.value = new Map()
+  bodyTruncatedFields.value = new Map()
   bodyLoadFailures.clear()
 }
 
