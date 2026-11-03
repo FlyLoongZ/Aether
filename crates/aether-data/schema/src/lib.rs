@@ -87,6 +87,20 @@ pub struct Table {
     pub indexes: Vec<Index>,
     #[serde(default)]
     pub foreign_keys: Vec<ForeignKey>,
+    #[serde(default)]
+    pub checks: Vec<CheckConstraint>,
+}
+
+/// A table-level `CHECK` constraint.
+///
+/// The expression is raw SQL on purpose: it is the one place where the logical
+/// model cannot stay portable without losing meaning (a `CHECK` may reference
+/// several columns at once).
+#[derive(Debug, Clone, serde::Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CheckConstraint {
+    pub name: String,
+    pub expression: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, PartialEq, Eq)]
@@ -151,6 +165,32 @@ pub struct DriverColumnOverride {
     pub default: Option<DefaultValue>,
     #[serde(default)]
     pub nullable: Option<bool>,
+    /// PostgreSQL `SET STORAGE` mode for this column.
+    ///
+    /// `external` keeps the value out of line (TOAST) without compressing it,
+    /// which is what payload columns want once they hold raw bytes.
+    #[serde(default)]
+    pub storage: Option<StorageMode>,
+}
+
+#[derive(Debug, Clone, Copy, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StorageMode {
+    Plain,
+    External,
+    Extended,
+    Main,
+}
+
+impl StorageMode {
+    pub const fn as_sql(self) -> &'static str {
+        match self {
+            Self::Plain => "PLAIN",
+            Self::External => "EXTERNAL",
+            Self::Extended => "EXTENDED",
+            Self::Main => "MAIN",
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, PartialEq, Eq)]
@@ -306,6 +346,21 @@ pub fn validate_schema(schema: &LogicalSchema) -> Result<(), SchemaError> {
                 &index.name,
                 &index.columns,
             )?;
+        }
+        for check in &table.checks {
+            validate_identifier(&check.name, "constraint/index", table_name)?;
+            if !names.insert(check.name.clone()) {
+                return Err(SchemaError::Validation(format!(
+                    "table {table_name} defines duplicate constraint/index name {}",
+                    check.name
+                )));
+            }
+            if check.expression.trim().is_empty() {
+                return Err(SchemaError::Validation(format!(
+                    "table {table_name} check {} must define an expression",
+                    check.name
+                )));
+            }
         }
         for foreign_key in &table.foreign_keys {
             validate_named_columns(
@@ -884,6 +939,7 @@ mod tests {
                         unique: false,
                     }],
                     foreign_keys: vec![],
+                    checks: vec![],
                 },
             )]),
         }
@@ -905,6 +961,62 @@ mod tests {
 
         let err = validate_schema(&schema).expect_err("invalid schema should fail");
         assert!(err.to_string().contains("unknown column missing"));
+    }
+
+    #[test]
+    fn emitters_generate_column_storage_and_check_constraints() {
+        let mut schema = announcements_schema();
+        let table = schema
+            .tables
+            .get_mut("announcements")
+            .expect("fixture table exists");
+        table.columns[0].driver.postgres = Some(DriverColumnOverride {
+            sql_type: None,
+            default: None,
+            nullable: None,
+            storage: Some(StorageMode::External),
+        });
+        table.checks.push(CheckConstraint {
+            name: "announcements_is_active_check".to_string(),
+            expression: "(is_active = true)".to_string(),
+        });
+        validate_schema(&schema).expect("fixture schema should be valid");
+
+        let postgres_sql = postgres::emit_schema(&schema);
+        assert!(postgres_sql.contains(
+            "ALTER TABLE ONLY public.announcements ALTER COLUMN id SET STORAGE EXTERNAL;"
+        ));
+        assert!(postgres_sql.contains(
+            "ALTER TABLE ONLY public.announcements ADD CONSTRAINT announcements_is_active_check CHECK ((is_active = true));"
+        ));
+    }
+
+    #[test]
+    fn validator_rejects_duplicate_check_name_and_empty_expression() {
+        let mut schema = announcements_schema();
+        let table = schema
+            .tables
+            .get_mut("announcements")
+            .expect("fixture table exists");
+        table.checks.push(CheckConstraint {
+            name: "announcements_is_active_idx".to_string(),
+            expression: "(is_active = true)".to_string(),
+        });
+        let err = validate_schema(&schema).expect_err("duplicate name should fail");
+        assert!(err.to_string().contains("duplicate constraint/index name"));
+
+        let mut schema = announcements_schema();
+        schema
+            .tables
+            .get_mut("announcements")
+            .expect("fixture table exists")
+            .checks
+            .push(CheckConstraint {
+                name: "announcements_blank_check".to_string(),
+                expression: "   ".to_string(),
+            });
+        let err = validate_schema(&schema).expect_err("blank expression should fail");
+        assert!(err.to_string().contains("must define an expression"));
     }
 
     #[test]

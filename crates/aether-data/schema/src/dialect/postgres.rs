@@ -39,6 +39,27 @@ pub fn emit_named_schema(schema: &LogicalSchema, table_names: &[String]) -> Stri
         }
         out.push_str(");\n\n");
 
+        for column in &table.columns {
+            let Some(storage) = column
+                .driver
+                .postgres
+                .as_ref()
+                .and_then(|override_| override_.storage)
+            else {
+                continue;
+            };
+            out.push_str(&format!(
+                "ALTER TABLE ONLY public.{table_name} ALTER COLUMN {} SET STORAGE {};\n",
+                column.name,
+                storage.as_sql()
+            ));
+        }
+        for check in &table.checks {
+            out.push_str(&format!(
+                "ALTER TABLE ONLY public.{table_name} ADD CONSTRAINT {} CHECK ({});\n",
+                check.name, check.expression
+            ));
+        }
         if !table.primary_key.is_empty() {
             out.push_str(&format!(
                 "ALTER TABLE ONLY public.{table_name} ADD CONSTRAINT {table_name}_pkey PRIMARY KEY ({});\n",
