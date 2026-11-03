@@ -13,7 +13,7 @@ use super::{
 };
 use crate::constants::LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER;
 use crate::tests::DEV_FERNET_KEY;
-use aether_data_contracts::repository::usage::UsageBodyCaptureState;
+use aether_data_contracts::repository::usage::{UsageBodyCaptureState, UsageBodyField};
 
 fn deep_nested_metadata(levels: usize) -> serde_json::Value {
     let mut current = json!({"leaf": "value"});
@@ -444,7 +444,9 @@ async fn gateway_truncates_deep_request_echo_for_local_openai_chat_sync_usage_im
     let stored_usage = stored_usage.expect("usage should be recorded");
     assert_eq!(stored_usage.status, "completed");
     assert_eq!(stored_usage.total_tokens, 5);
-    let request_body = stored_usage.request_body.as_ref().unwrap();
+    let request_body = stored_usage
+        .body_value(UsageBodyField::RequestBody)
+        .expect("request body should be captured");
     assert_eq!(
         request_body["messages"][0]["content"]
             .as_str()
@@ -458,7 +460,7 @@ async fn gateway_truncates_deep_request_echo_for_local_openai_chat_sync_usage_im
             .is_some()
     );
     assert_eq!(
-        stored_usage.request_body_state,
+        stored_usage.body_state(UsageBodyField::RequestBody),
         Some(UsageBodyCaptureState::Inline)
     );
     assert_eq!(
@@ -595,25 +597,29 @@ async fn gateway_ignores_legacy_max_request_body_size_for_local_openai_chat_sync
     .await;
     assert_eq!(stored_usage.total_tokens, 5);
     assert!(
-        stored_usage.request_body.as_ref().unwrap()["messages"][0]["content"]
+        stored_usage
+            .body_value(UsageBodyField::RequestBody)
+            .unwrap()["messages"][0]["content"]
             .as_str()
             .unwrap()
             .len()
             > 128
     );
     assert_eq!(
-        stored_usage.request_body_state,
+        stored_usage.body_state(UsageBodyField::RequestBody),
         Some(UsageBodyCaptureState::Inline)
     );
     assert!(
-        stored_usage.provider_request_body.as_ref().unwrap()["messages"][0]["content"]
+        stored_usage
+            .body_value(UsageBodyField::ProviderRequestBody)
+            .unwrap()["messages"][0]["content"]
             .as_str()
             .unwrap()
             .len()
             > 128
     );
     assert_eq!(
-        stored_usage.provider_request_body_state,
+        stored_usage.body_state(UsageBodyField::ProviderRequestBody),
         Some(UsageBodyCaptureState::Inline)
     );
 
@@ -927,14 +933,20 @@ async fn gateway_records_failed_usage_when_all_local_openai_chat_candidates_exha
         stored_usage.request_id,
         "trace-openai-chat-local-report-sync-failure-123"
     );
-    assert!(stored_usage.response_body.is_none());
+    assert!(!stored_usage
+        .response_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert_eq!(
-        stored_usage.response_body_state,
+        stored_usage.body_state(UsageBodyField::ResponseBody),
         Some(UsageBodyCaptureState::Disabled)
     );
-    assert!(stored_usage.client_response_body.is_none());
+    assert!(!stored_usage
+        .client_response_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert_eq!(
-        stored_usage.client_response_body_state,
+        stored_usage.body_state(UsageBodyField::ClientResponseBody),
         Some(UsageBodyCaptureState::Disabled)
     );
 
@@ -1036,9 +1048,12 @@ async fn gateway_records_failed_usage_when_sync_runtime_transport_is_unavailable
     assert_eq!(stored_usage.status, "failed");
     assert_eq!(stored_usage.billing_status, "void");
     assert_eq!(stored_usage.status_code, Some(503));
-    assert!(stored_usage.response_body.is_none());
+    assert!(!stored_usage
+        .response_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert_eq!(
-        stored_usage.response_body_state,
+        stored_usage.body_state(UsageBodyField::ResponseBody),
         Some(UsageBodyCaptureState::Disabled)
     );
 
@@ -1380,9 +1395,12 @@ async fn gateway_records_failed_usage_for_claude_runtime_miss_without_execution_
             .and_then(|value| value.as_str()),
         Some("trace-claude-runtime-miss-usage-123")
     );
-    assert!(stored_usage.client_response_body.is_none());
+    assert!(!stored_usage
+        .client_response_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert_eq!(
-        stored_usage.client_response_body_state,
+        stored_usage.body_state(UsageBodyField::ClientResponseBody),
         Some(UsageBodyCaptureState::Disabled)
     );
     assert!(stored_usage.error_message.is_none());
@@ -1771,28 +1789,26 @@ async fn gateway_ignores_legacy_max_response_body_size_for_stream_usage_impl() {
     assert_eq!(stored_usage.total_tokens, 6);
     assert!(
         stored_usage
-            .response_body
-            .as_ref()
-            .unwrap()
-            .to_string()
-            .len()
+            .body(UsageBodyField::ResponseBody)
+            .and_then(|body| body.bytes())
+            .map(<[u8]>::len)
+            .unwrap_or_default()
             > 128
     );
     assert_eq!(
-        stored_usage.response_body_state,
+        stored_usage.body_state(UsageBodyField::ResponseBody),
         Some(UsageBodyCaptureState::Inline)
     );
     assert!(
         stored_usage
-            .client_response_body
-            .as_ref()
-            .unwrap()
-            .to_string()
-            .len()
+            .body(UsageBodyField::ClientResponseBody)
+            .and_then(|body| body.bytes())
+            .map(<[u8]>::len)
+            .unwrap_or_default()
             > 128
     );
     assert_eq!(
-        stored_usage.client_response_body_state,
+        stored_usage.body_state(UsageBodyField::ClientResponseBody),
         Some(UsageBodyCaptureState::Inline)
     );
 
@@ -2057,12 +2073,18 @@ async fn gateway_records_failed_usage_when_all_local_claude_cli_candidates_are_s
         stored_usage.request_headers.as_ref().unwrap()["authorization"],
         "Bearer sk-client-claude-cli-usage-local-miss"
     );
-    assert!(stored_usage.request_body.is_none());
+    assert!(!stored_usage
+        .request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert_eq!(
-        stored_usage.request_body_state,
+        stored_usage.body_state(UsageBodyField::RequestBody),
         Some(UsageBodyCaptureState::Disabled)
     );
-    assert!(stored_usage.provider_request_body.is_none());
+    assert!(!stored_usage
+        .provider_request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert_eq!(
         stored_usage
             .request_metadata
@@ -2310,11 +2332,17 @@ fn gateway_keeps_failed_usage_request_capture_lightweight_for_large_local_claude
         .await;
         assert_eq!(stored_usage.status, "failed");
         assert_eq!(
-            stored_usage.request_body_state,
+            stored_usage.body_state(UsageBodyField::RequestBody),
             Some(UsageBodyCaptureState::Disabled)
         );
-        assert!(stored_usage.request_body.is_none());
-        assert!(stored_usage.provider_request_body.is_none());
+        assert!(!stored_usage
+            .request_body
+            .as_ref()
+            .is_some_and(|body| body.is_present()));
+        assert!(!stored_usage
+            .provider_request_body
+            .as_ref()
+            .is_some_and(|body| body.is_present()));
         assert_eq!(
             stored_usage
                 .request_metadata

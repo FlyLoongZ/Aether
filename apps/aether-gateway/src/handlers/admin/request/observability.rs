@@ -215,31 +215,6 @@ impl<'a> AdminAppState<'a> {
         self.app.list_request_usage_by_ids(usage_ids).await
     }
 
-    pub(crate) async fn resolve_request_usage_body_ref(
-        &self,
-        body_ref: &str,
-    ) -> Result<Option<serde_json::Value>, GatewayError> {
-        self.app
-            .data
-            .resolve_request_usage_body_ref(body_ref)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn read_request_usage_body_payload(
-        &self,
-        body_ref: &str,
-    ) -> Result<
-        Option<aether_data_contracts::repository::usage::StoredUsageBodyPayload>,
-        GatewayError,
-    > {
-        self.app
-            .data
-            .read_request_usage_body_payload(body_ref)
-            .await
-            .map_err(|error| GatewayError::Internal(error.to_string()))
-    }
-
     pub(crate) async fn build_api_format_health_monitor_payload(
         &self,
         lookback_hours: u64,

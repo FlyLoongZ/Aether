@@ -672,10 +672,22 @@ async fn gateway_executes_codex_cli_stream_via_local_decision_gate_after_oauth_r
     assert_eq!(stored_usage.input_tokens, 1);
     assert_eq!(stored_usage.output_tokens, 2);
     assert_eq!(stored_usage.total_tokens, 3);
-    assert!(stored_usage.request_body.is_none());
-    assert!(stored_usage.provider_request_body.is_none());
-    assert!(stored_usage.response_body.is_none());
-    assert!(stored_usage.client_response_body.is_none());
+    assert!(!stored_usage
+        .request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
+    assert!(!stored_usage
+        .provider_request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
+    assert!(!stored_usage
+        .response_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
+    assert!(!stored_usage
+        .client_response_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert!(

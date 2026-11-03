@@ -441,9 +441,15 @@ async fn gateway_keeps_active_sync_usage_lightweight_for_large_request_body_impl
     let active = active.expect("active usage should be recorded before sync result resolves");
     assert_eq!(active.status, "streaming");
     assert!(active.request_headers.is_none());
-    assert!(active.request_body.is_none());
+    assert!(!active
+        .request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert!(active.provider_request_headers.is_none());
-    assert!(active.provider_request_body.is_none());
+    assert!(!active
+        .provider_request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert!(active.response_headers.is_none());
     assert!(active.client_response_headers.is_none());
 
@@ -740,9 +746,15 @@ async fn gateway_keeps_pending_stream_usage_lightweight_for_large_request_body_i
     let pending = pending.expect("pending usage should be recorded before stream headers arrive");
     assert_eq!(pending.status, "pending");
     assert!(pending.request_headers.is_none());
-    assert!(pending.request_body.is_none());
+    assert!(!pending
+        .request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert!(pending.provider_request_headers.is_none());
-    assert!(pending.provider_request_body.is_none());
+    assert!(!pending
+        .provider_request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert!(pending.response_headers.is_none());
     assert!(pending.client_response_headers.is_none());
 

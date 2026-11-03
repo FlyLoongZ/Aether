@@ -18,8 +18,7 @@ use aether_admin::observability::usage::{
     admin_usage_provider_key_name, ADMIN_USAGE_DATA_UNAVAILABLE_DETAIL,
 };
 use aether_data_contracts::repository::usage::{
-    StoredRequestUsageAudit, StoredUsageBodyPayload, UsageBodyCaptureState, UsageBodyField,
-    MAX_USAGE_BODY_BYTES,
+    BodyEncoding, CapturedBody, StoredRequestUsageAudit, UsageBodyField, MAX_USAGE_BODY_BYTES,
 };
 use axum::{
     body::Body,
@@ -43,36 +42,16 @@ impl AdminUsageDetailBodyValue {
         field: UsageBodyField,
         value: Option<Value>,
     ) -> Self {
-        let missing = value.is_none()
-            && item
-                .body_capture_result(field, item.body_value(field))
-                .available;
-        Self {
-            value,
-            error_code: missing.then_some("missing"),
-        }
+        // "available but absent" is the retention case: the ledger recorded a
+        // capture, the payload table no longer holds it. That is an expired
+        // body, not a missing one.
+        let error_code =
+            (value.is_none() && item.body_capture_result(field).available).then_some("expired");
+        Self { value, error_code }
     }
 }
 
-fn admin_usage_body_load_error_code(error: &GatewayError) -> &'static str {
-    if let GatewayError::Internal(message) = error {
-        if message.contains("decompressed usage json exceeds ")
-            || message.contains("encoded usage json exceeds ")
-        {
-            return "too_large";
-        }
-        if message.contains("failed to parse usage json:")
-            || message.contains("failed to decompress usage json:")
-            || message.contains("failed to parse decompressed usage json:")
-        {
-            return "decode_failed";
-        }
-    }
-    "storage_unavailable"
-}
-
-async fn resolve_admin_usage_detail_field(
-    state: &AdminAppState<'_>,
+fn resolve_admin_usage_detail_field(
     item: &StoredRequestUsageAudit,
     field: UsageBodyField,
     selected_field: Option<UsageBodyField>,
@@ -81,125 +60,85 @@ async fn resolve_admin_usage_detail_field(
         return AdminUsageDetailBodyValue::default();
     }
     if field == UsageBodyField::RequestBody {
-        resolve_admin_usage_detail_request_body(state, item).await
+        resolve_admin_usage_detail_request_body(item)
     } else {
-        resolve_admin_usage_detail_body_value(state, item, field).await
+        resolve_admin_usage_detail_body_value(item, field)
     }
 }
 
-async fn resolve_admin_usage_detail_request_body(
-    state: &AdminAppState<'_>,
+fn resolve_admin_usage_detail_request_body(
     item: &StoredRequestUsageAudit,
 ) -> AdminUsageDetailBodyValue {
-    match admin_usage_resolve_request_capture_body_for_item(state, item, None).await {
-        Ok(body) => AdminUsageDetailBodyValue::resolved(item, UsageBodyField::RequestBody, body),
-        Err(err) => {
-            tracing::warn!(
-                error = ?err,
-                usage_id = %item.id,
-                request_id = %item.request_id,
-                field = UsageBodyField::RequestBody.as_storage_field(),
-                "failed to resolve admin usage detail body"
-            );
-            let value = admin_usage_resolve_request_capture_body(item, None);
-            AdminUsageDetailBodyValue {
-                error_code: value
-                    .is_none()
-                    .then(|| admin_usage_body_load_error_code(&err)),
-                value,
-            }
-        }
-    }
+    let body = admin_usage_resolve_request_capture_body_for_item(item, None);
+    AdminUsageDetailBodyValue::resolved(item, UsageBodyField::RequestBody, body)
 }
 
-async fn resolve_admin_usage_detail_body_value(
-    state: &AdminAppState<'_>,
+fn resolve_admin_usage_detail_body_value(
     item: &StoredRequestUsageAudit,
     field: UsageBodyField,
 ) -> AdminUsageDetailBodyValue {
-    let inline_body = item.body_value(field);
-    match admin_usage_resolve_body_value(state, item, inline_body, field).await {
-        Ok(body) => AdminUsageDetailBodyValue::resolved(item, field, body),
-        Err(err) => {
-            tracing::warn!(
-                error = ?err,
-                usage_id = %item.id,
-                request_id = %item.request_id,
-                field = field.as_storage_field(),
-                "failed to resolve admin usage detail body"
-            );
-            let value = inline_body.cloned();
-            AdminUsageDetailBodyValue {
-                error_code: value
-                    .is_none()
-                    .then(|| admin_usage_body_load_error_code(&err)),
-                value,
-            }
-        }
-    }
+    let body = admin_usage_resolve_body_value(item, field);
+    AdminUsageDetailBodyValue::resolved(item, field, body)
 }
 
-async fn read_admin_usage_raw_body(
-    state: &AdminAppState<'_>,
+/// The stored bytes of one captured side, exactly as they arrived.
+struct AdminUsageRawBody {
+    bytes: Vec<u8>,
+    encoding: BodyEncoding,
+    truncated: bool,
+}
+
+enum AdminUsageRawBodyOutcome {
+    Present(AdminUsageRawBody),
+    /// The capture ledger says the side was captured, but the payload table no
+    /// longer holds it: retention retired the bytes. Distinct from "never
+    /// captured" so a viewer can say the body expired instead of guessing.
+    Expired,
+    /// The side was never captured, or capture was turned off for it.
+    Absent,
+}
+
+fn read_admin_usage_raw_body(
     item: &StoredRequestUsageAudit,
     field: UsageBodyField,
-) -> Result<Option<StoredUsageBodyPayload>, GatewayError> {
-    if matches!(
-        item.body_state(field),
-        Some(
-            UsageBodyCaptureState::Disabled
-                | UsageBodyCaptureState::Unavailable
-                | UsageBodyCaptureState::None
-        )
-    ) {
-        return Ok(None);
+) -> AdminUsageRawBodyOutcome {
+    if let Some(CapturedBody::Bytes {
+        bytes,
+        encoding,
+        truncated,
+    }) = item.body(field)
+    {
+        return AdminUsageRawBodyOutcome::Present(AdminUsageRawBody {
+            bytes: bytes.clone(),
+            encoding: *encoding,
+            truncated: *truncated,
+        });
     }
-    let inline_body = item.body_value(field);
-    let prefer_inline = matches!(
-        item.body_state(field),
-        Some(UsageBodyCaptureState::Inline | UsageBodyCaptureState::Truncated)
-    ) && inline_body.is_some();
-    if !prefer_inline {
-        if let Some(body_ref) = item.body_ref(field) {
-            if let Some(payload) = state.read_request_usage_body_payload(&body_ref).await? {
-                return Ok(Some(payload));
-            }
-        }
+    // No bytes in the row: the ledger decides between "never captured" and
+    // "captured once, since swept". Inline and truncated ledger states describe
+    // sides whose bytes used to exist.
+    if item.body_capture_result(field).available {
+        return AdminUsageRawBodyOutcome::Expired;
     }
-    let fallback = inline_body.cloned().or_else(|| {
-        (field == UsageBodyField::RequestBody)
-            .then(|| admin_usage_resolve_request_capture_body(item, None))
-            .flatten()
-    });
-    fallback
-        .map(|value| {
-            serde_json::to_vec(&value)
-                .map(StoredUsageBodyPayload)
-                .map_err(|error| GatewayError::Internal(error.to_string()))
-        })
-        .transpose()
+    AdminUsageRawBodyOutcome::Absent
 }
 
-async fn build_admin_usage_raw_body_response(
-    state: &AdminAppState<'_>,
+fn build_admin_usage_raw_body_response(
     item: &StoredRequestUsageAudit,
     field: UsageBodyField,
 ) -> Response<Body> {
-    let result = read_admin_usage_raw_body(state, item, field).await;
+    let result = read_admin_usage_raw_body(item, field);
+    let payload_truncated = matches!(
+        &result,
+        AdminUsageRawBodyOutcome::Present(payload) if payload.truncated
+    );
     let mut response = match result {
-        Ok(Some(payload)) => admin_usage_raw_payload_response(payload),
-        Ok(None) => admin_usage_raw_body_error(http::StatusCode::NOT_FOUND, "missing"),
-        Err(error) => {
-            tracing::warn!(error = ?error, usage_id = %item.id, field = field.as_storage_field(), "failed to read admin usage raw body");
-            let code = admin_usage_body_load_error_code(&error);
-            admin_usage_raw_body_error(
-                if code == "too_large" {
-                    http::StatusCode::PAYLOAD_TOO_LARGE
-                } else {
-                    http::StatusCode::SERVICE_UNAVAILABLE
-                },
-                code,
-            )
+        AdminUsageRawBodyOutcome::Present(payload) => admin_usage_raw_payload_response(payload),
+        AdminUsageRawBodyOutcome::Expired => {
+            admin_usage_raw_body_error(http::StatusCode::GONE, "expired")
+        }
+        AdminUsageRawBodyOutcome::Absent => {
+            admin_usage_raw_body_error(http::StatusCode::NOT_FOUND, "missing")
         }
     };
     let headers = response.headers_mut();
@@ -218,6 +157,14 @@ async fn build_admin_usage_raw_body_response(
     if let Ok(value) = http::HeaderValue::from_str(&item.id) {
         headers.insert("x-aether-usage-id", value);
     }
+    if payload_truncated {
+        // The capture stopped early; the viewer can say so before parsing
+        // the bytes instead of presenting a cut stream as complete.
+        headers.insert(
+            "x-aether-body-truncated",
+            http::HeaderValue::from_static("true"),
+        );
+    }
     attach_admin_audit_response(
         response,
         "admin_usage_detail_viewed",
@@ -227,21 +174,27 @@ async fn build_admin_usage_raw_body_response(
     )
 }
 
-fn admin_usage_raw_payload_response(payload: StoredUsageBodyPayload) -> Response<Body> {
-    let StoredUsageBodyPayload(bytes) = payload;
-    if bytes.len() > MAX_USAGE_BODY_BYTES {
-        admin_usage_raw_body_error(http::StatusCode::PAYLOAD_TOO_LARGE, "too_large")
-    } else {
-        (
-            [
-                ("content-type", "application/octet-stream"),
-                ("content-encoding", "identity"),
-                ("x-aether-body-encoding", "json"),
-            ],
-            bytes,
-        )
-            .into_response()
+fn admin_usage_raw_payload_response(payload: AdminUsageRawBody) -> Response<Body> {
+    if payload.bytes.len() > MAX_USAGE_BODY_BYTES {
+        return admin_usage_raw_body_error(http::StatusCode::PAYLOAD_TOO_LARGE, "too_large");
     }
+    // The label is whatever the bytes really are, so a reader can parse them
+    // without guessing: JSON stays JSON, an SSE stream stays an SSE stream.
+    let content_type = match payload.encoding {
+        BodyEncoding::Json => "application/json",
+        BodyEncoding::Sse => "text/event-stream",
+        BodyEncoding::Text => "text/plain; charset=utf-8",
+        BodyEncoding::Binary => "application/octet-stream",
+    };
+    (
+        [
+            ("content-type", content_type),
+            ("content-encoding", "identity"),
+            ("x-aether-body-encoding", payload.encoding.as_str()),
+        ],
+        payload.bytes,
+    )
+        .into_response()
 }
 
 fn admin_usage_raw_body_error(status: http::StatusCode, code: &'static str) -> Response<Body> {
@@ -314,20 +267,9 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
                 .and_then(admin_usage_headers_from_value)
                 .filter(|headers| !headers.is_empty())
                 .unwrap_or_else(admin_usage_curl_headers);
-            let provider_request_body = admin_usage_resolve_body_value(
-                state,
-                &item,
-                item.provider_request_body.as_ref(),
-                UsageBodyField::ProviderRequestBody,
-            )
-            .await?;
-            let request_body = admin_usage_resolve_body_value(
-                state,
-                &item,
-                item.request_body.as_ref(),
-                UsageBodyField::RequestBody,
-            )
-            .await?;
+            let provider_request_body =
+                admin_usage_resolve_body_value(&item, UsageBodyField::ProviderRequestBody);
+            let request_body = admin_usage_resolve_body_value(&item, UsageBodyField::RequestBody);
             let body = provider_request_body
                 .or(request_body)
                 .or_else(|| admin_usage_resolve_request_capture_body(&item, None));
@@ -423,9 +365,7 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
                     )));
                 }
                 if let Some(field) = body_field {
-                    return Ok(Some(
-                        build_admin_usage_raw_body_response(state, &item, field).await,
-                    ));
+                    return Ok(Some(build_admin_usage_raw_body_response(&item, field)));
                 }
             }
 
@@ -458,27 +398,23 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
             let mut body_load_errors = serde_json::Map::new();
             let mut body_load_error_codes = serde_json::Map::new();
             let mut request_body = if include_bodies {
-                let (request_body, provider_request_body, response_body, client_response_body) = tokio::join!(
+                let (request_body, provider_request_body, response_body, client_response_body) = (
                     resolve_admin_usage_detail_field(
-                        state,
                         &item,
                         UsageBodyField::RequestBody,
-                        body_field
+                        body_field,
                     ),
                     resolve_admin_usage_detail_field(
-                        state,
                         &item,
                         UsageBodyField::ProviderRequestBody,
                         body_field,
                     ),
                     resolve_admin_usage_detail_field(
-                        state,
                         &item,
                         UsageBodyField::ResponseBody,
                         body_field,
                     ),
                     resolve_admin_usage_detail_field(
-                        state,
                         &item,
                         UsageBodyField::ClientResponseBody,
                         body_field,
@@ -496,15 +432,9 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
                             .insert(field.as_storage_field().to_string(), json!(error_code));
                     }
                 }
-                if body_field.is_none_or(|field| field == UsageBodyField::ProviderRequestBody) {
-                    detail_item.provider_request_body = provider_request_body.value;
-                }
-                if body_field.is_none_or(|field| field == UsageBodyField::ResponseBody) {
-                    detail_item.response_body = response_body.value;
-                }
-                if body_field.is_none_or(|field| field == UsageBodyField::ClientResponseBody) {
-                    detail_item.client_response_body = client_response_body.value;
-                }
+                // The detail payload reports which sides exist; the bytes
+                // themselves are always fetched through the `/body` route, so a
+                // multi-megabyte body never travels inside the JSON view.
                 request_body.value
             } else {
                 None
@@ -526,13 +456,7 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
                 &default_headers,
             );
             if let Some(field) = body_field {
-                payload[field.as_storage_field()] = match field {
-                    UsageBodyField::RequestBody => request_body,
-                    UsageBodyField::ProviderRequestBody => detail_item.provider_request_body.take(),
-                    UsageBodyField::ResponseBody => detail_item.response_body.take(),
-                    UsageBodyField::ClientResponseBody => detail_item.client_response_body.take(),
-                }
-                .unwrap_or(Value::Null);
+                payload[field.as_storage_field()] = Value::Null;
             }
             payload["body_load_errors"] = if include_bodies && !body_load_errors.is_empty() {
                 Value::Object(body_load_errors)
@@ -561,40 +485,20 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
 
 #[cfg(test)]
 mod tests {
-    use super::admin_usage_body_load_error_code;
-    use crate::GatewayError;
-
     #[tokio::test]
     async fn admin_usage_raw_body_does_not_decode_or_reencode_stored_bytes() {
-        use super::{admin_usage_raw_payload_response, StoredUsageBodyPayload};
-        let response = admin_usage_raw_payload_response(StoredUsageBodyPayload(
-            b"{ \"untouched\" : true }".to_vec(),
-        ));
+        use super::{admin_usage_raw_payload_response, AdminUsageRawBody};
+        let response = admin_usage_raw_payload_response(AdminUsageRawBody {
+            bytes: b"{ \"untouched\" : true }".to_vec(),
+            encoding: aether_data_contracts::repository::usage::BodyEncoding::Json,
+            truncated: false,
+        });
         assert_eq!(response.headers()["content-encoding"], "identity");
         assert_eq!(response.headers()["x-aether-body-encoding"], "json");
+        assert!(response.headers().get("x-aether-body-truncated").is_none());
         let bytes = axum::body::to_bytes(response.into_body(), 1024)
             .await
             .unwrap();
         assert_eq!(bytes.as_ref(), b"{ \"untouched\" : true }".as_slice());
-    }
-
-    #[test]
-    fn body_load_errors_expose_safe_codes_instead_of_internal_messages() {
-        for (message, expected) in [
-            (
-                "unexpected database value: encoded usage json exceeds 67108864 bytes",
-                "too_large",
-            ),
-            ("failed to parse usage json: invalid JSON", "decode_failed"),
-            (
-                "postgres error: private connection details",
-                "storage_unavailable",
-            ),
-        ] {
-            assert_eq!(
-                admin_usage_body_load_error_code(&GatewayError::Internal(message.to_string())),
-                expected
-            );
-        }
     }
 }

@@ -6,7 +6,7 @@ use aether_data_contracts::repository::{
         DecisionTrace, DecisionTraceCandidate, RequestCandidateStatus,
     },
     provider_catalog::StoredProviderCatalogKey,
-    usage::StoredRequestUsageAudit,
+    usage::{StoredRequestUsageAudit, UsageBodyField},
 };
 use axum::{
     body::Body,
@@ -314,7 +314,7 @@ pub fn build_admin_monitoring_trace_request_payload_response_with_key_accounts(
         "total_latency_ms": trace.total_latency_ms,
         "diagnostic_request": usage.filter(|usage| admin_monitoring_usage_matches_trace(usage, &trace.request_id)).map(|usage| json!({
             "usage_id": usage.id,
-            "body_state": usage.request_body_state.map(|state| state.as_str()),
+            "body_state": usage.body_state(UsageBodyField::RequestBody).map(|state| state.as_str()),
         })),
         "candidates": candidates,
     }))
@@ -539,10 +539,10 @@ fn build_admin_monitoring_trace_candidate_extra_data(
             "model": usage.model,
             "target_model": usage.target_model,
             "body_states": {
-                "request_body": usage.request_body_state.map(|state| state.as_str()),
-                "provider_request_body": usage.provider_request_body_state.map(|state| state.as_str()),
-                "response_body": usage.response_body_state.map(|state| state.as_str()),
-                "client_response_body": usage.client_response_body_state.map(|state| state.as_str()),
+                "request_body": usage.body_state(UsageBodyField::RequestBody).map(|state| state.as_str()),
+                "provider_request_body": usage.body_state(UsageBodyField::ProviderRequestBody).map(|state| state.as_str()),
+                "response_body": usage.body_state(UsageBodyField::ResponseBody).map(|state| state.as_str()),
+                "client_response_body": usage.body_state(UsageBodyField::ClientResponseBody).map(|state| state.as_str()),
             }
             }));
         }
@@ -570,7 +570,7 @@ fn build_admin_monitoring_trace_candidate_extra_data(
             if let Some(response) = admin_monitoring_trace_response_data(
                 "upstream_response",
                 candidate_status_code,
-                usage.response_body_state,
+                usage.body_state(UsageBodyField::ResponseBody),
             ) {
                 merge_admin_monitoring_trace_response(extra_object, "upstream_response", response);
             }

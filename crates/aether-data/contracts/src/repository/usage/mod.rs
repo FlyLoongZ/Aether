@@ -34,7 +34,7 @@ pub use types::{
     ProxyNodeCounterDelta, StoredProviderApiKeyUsageSummary,
     StoredProviderApiKeyWindowUsageSummary, StoredProviderUsageSummary, StoredProviderUsageWindow,
     StoredRequestUsageAudit, StoredUsageAuditAggregation, StoredUsageAuditSummary,
-    StoredUsageBodyPayload, StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
+    StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
     StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDailySummary, StoredUsageDashboardDailyBreakdownRow,
     StoredUsageDashboardProviderCount, StoredUsageDashboardStatsSummary,

@@ -1577,6 +1577,7 @@ mod tests {
     use super::*;
     use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
     use aether_data::repository::usage::InMemoryUsageReadRepository;
+    use aether_data_contracts::repository::usage::CapturedBody;
     use aether_data_contracts::repository::usage::UsageReadRepository;
     use aether_usage_runtime::UsageRuntimeConfig;
     use futures_util::StreamExt;
@@ -2255,8 +2256,12 @@ mod tests {
             usage
                 .client_response_body
                 .as_ref()
-                .and_then(|body| body.get("error"))
-                .and_then(|error| error.get("message")),
+                .and_then(CapturedBody::as_json_value)
+                .and_then(|body| body
+                    .get("error")
+                    .and_then(|error| error.get("message"))
+                    .cloned())
+                .as_ref(),
             Some(&json!("slow down"))
         );
     }

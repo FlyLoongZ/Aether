@@ -10,7 +10,7 @@ import { claudeParser } from './claude'
 import { openaiParser } from './openai'
 import { geminiParser } from './gemini'
 
-function parseRawSseResponse(responseBody: unknown): StreamResponseBody | null {
+export function parseRawSseResponse(responseBody: unknown): StreamResponseBody | null {
   if (typeof responseBody !== 'string') {
     return null
   }

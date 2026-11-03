@@ -11,7 +11,7 @@ use super::{
     build_admin_usage_detail_payload,
 };
 use aether_data_contracts::repository::usage::{
-    StoredRequestUsageAudit, UsageBodyCaptureState, UsageBodyField,
+    BodyEncoding, CapturedBody, StoredRequestUsageAudit, UsageBodyField,
 };
 
 fn sample_usage(
@@ -473,13 +473,13 @@ fn admin_usage_record_prefers_typed_client_family() {
 #[test]
 fn admin_usage_record_includes_requested_and_provider_reasoning_efforts() {
     let item = StoredRequestUsageAudit {
-        request_body: Some(json!({
+        request_body: Some(CapturedBody::json(json!({
             "reasoning": { "effort": "xhigh" }
-        })),
-        provider_request_body: Some(json!({
+        }))),
+        provider_request_body: Some(CapturedBody::json(json!({
             "reasoning": { "effort": "max" },
             "service_tier": "priority"
-        })),
+        }))),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -534,10 +534,10 @@ fn client_requested_stream_uses_stream_generate_content_path_over_stale_metadata
 fn client_requested_stream_falls_back_to_request_body_stream_flag() {
     let item = StoredRequestUsageAudit {
         is_stream: true,
-        request_body: Some(json!({
+        request_body: Some(CapturedBody::json(json!({
             "model": "gpt-5.4",
             "stream": false
-        })),
+        }))),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -555,11 +555,11 @@ fn client_requested_stream_defaults_to_non_stream_for_openai_responses_request_b
     let item = StoredRequestUsageAudit {
         is_stream: true,
         api_format: Some("openai:responses".to_string()),
-        request_body: Some(json!({
+        request_body: Some(CapturedBody::json(json!({
             "model": "gpt-5.4",
             "input": [{"role": "user", "content": "hi"}],
             "store": false
-        })),
+        }))),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -584,11 +584,11 @@ fn client_requested_stream_defaults_to_non_stream_for_openai_search() {
     let item = StoredRequestUsageAudit {
         is_stream: true,
         api_format: Some("openai:search".to_string()),
-        request_body: Some(json!({
+        request_body: Some(CapturedBody::json(json!({
             "id": "session-search-1",
             "model": "gpt-5.6-sol",
             "input": "current documentation"
-        })),
+        }))),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -635,23 +635,23 @@ fn upstream_stream_prefers_request_metadata_flag() {
 fn stream_modes_fall_back_to_captured_response_bodies_when_request_metadata_is_missing() {
     let item = StoredRequestUsageAudit {
         is_stream: true,
-        response_body: Some(json!({
-            "chunks": [
-                {"type": "response.created"},
-                {"type": "response.output_text.delta", "delta": "Hello"}
-            ],
-            "metadata": {
-                "stream": true,
-                "stored_chunks": 2,
-                "total_chunks": 2
-            }
-        })),
-        client_response_body: Some(json!({
+        // An SSE capture is recognised by its encoding, not by a chunk shape.
+        response_body: Some(CapturedBody::from_bytes(
+            concat!(
+                "data: {\"type\":\"response.created\"}\n\n",
+                "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello\"}\n\n"
+            )
+            .as_bytes()
+            .to_vec(),
+            BodyEncoding::Sse,
+            false,
+        )),
+        client_response_body: Some(CapturedBody::json(json!({
             "id": "resp-1",
             "object": "response",
             "status": "completed",
             "output": []
-        })),
+        }))),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -682,8 +682,6 @@ fn stream_modes_fall_back_to_captured_response_headers_when_bodies_are_detached(
         client_response_headers: Some(json!({
             "content-type": "application/json"
         })),
-        response_body_state: Some(UsageBodyCaptureState::Reference),
-        client_response_body_state: Some(UsageBodyCaptureState::Reference),
         ..sample_usage("completed", Some(200), None)
     };
 
@@ -708,10 +706,10 @@ fn stream_modes_fall_back_to_captured_response_headers_when_bodies_are_detached(
 fn replay_body_defaults_stream_to_client_requested_mode() {
     let item = StoredRequestUsageAudit {
         is_stream: true,
-        request_body: Some(json!({
+        request_body: Some(CapturedBody::json(json!({
             "model": "gpt-5.4",
             "input": "hello"
-        })),
+        }))),
         request_metadata: Some(json!({
             "client_requested_stream": false
         })),
@@ -785,15 +783,19 @@ fn admin_usage_fallback_flag_uses_routing_candidate_index() {
 }
 
 #[test]
-fn body_availability_considers_typed_reference_fields() {
-    let item = StoredRequestUsageAudit {
-        request_body_state: Some(UsageBodyCaptureState::Reference),
+fn body_availability_follows_the_stored_capture() {
+    let missing = sample_usage("completed", Some(200), None);
+    assert!(!admin_usage_has_body_value(
+        &missing,
+        UsageBodyField::RequestBody
+    ));
+
+    let captured = StoredRequestUsageAudit {
+        request_body: Some(CapturedBody::json(json!({"model": "gpt-5"}))),
         ..sample_usage("completed", Some(200), None)
     };
-
     assert!(admin_usage_has_body_value(
-        &item,
-        item.request_body.as_ref(),
+        &captured,
         UsageBodyField::RequestBody
     ));
 }
@@ -853,16 +855,13 @@ fn detail_payload_preserves_original_headers_with_or_without_bodies() {
 }
 
 #[test]
-fn detail_payload_marks_reference_backed_bodies_as_available() {
+fn detail_payload_marks_stored_bodies_as_available() {
     let item = StoredRequestUsageAudit {
-        request_body: None,
-        request_body_state: Some(UsageBodyCaptureState::Reference),
-        provider_request_body: None,
-        provider_request_body_state: Some(UsageBodyCaptureState::Reference),
-        response_body: None,
-        response_body_state: Some(UsageBodyCaptureState::Reference),
-        client_response_body: None,
-        client_response_body_state: Some(UsageBodyCaptureState::Reference),
+        request_body: Some(CapturedBody::json(json!({"model": "gpt-5"}))),
+        provider_request_body: Some(CapturedBody::json(json!({"model": "gpt-5"}))),
+        response_body: Some(CapturedBody::json(json!({"id": "resp-1"}))),
+        client_response_body: Some(CapturedBody::json(json!({"id": "resp-1"}))),
+        // A legacy row may still carry the retired external-reference keys.
         request_metadata: Some(json!({
             "request_body_ref": "usage://request/req-1/request_body",
             "provider_request_body_ref": "usage://request/req-1/provider_request_body",
@@ -884,37 +883,25 @@ fn detail_payload_marks_reference_backed_bodies_as_available() {
         &BTreeMap::new(),
     );
 
-    assert!(payload["metadata"]["request_body_ref"].is_null());
-    assert!(payload["metadata"]["provider_request_body_ref"].is_null());
-    assert!(payload["metadata"]["response_body_ref"].is_null());
-    assert!(payload["metadata"]["client_response_body_ref"].is_null());
-    assert_eq!(payload["body_capture"]["request"]["available"], true);
-    assert_eq!(payload["body_capture"]["request"]["storage"], "reference");
-    assert_eq!(
-        payload["body_capture"]["request"]["body_ref"],
-        "usage://request/req-1/request_body"
-    );
-    assert_eq!(
-        payload["body_capture"]["request"]["capture_source"],
-        "stored_reference"
-    );
-    assert_eq!(
-        payload["body_capture"]["provider_request"]["body_ref"],
-        "usage://request/req-1/provider_request_body"
-    );
-    assert_eq!(
-        payload["body_capture"]["response"]["body_ref"],
-        "usage://request/req-1/response_body"
-    );
-    assert_eq!(
-        payload["body_capture"]["client_response"]["body_ref"],
-        "usage://request/req-1/client_response_body"
-    );
-    assert_eq!(payload["body_capture"]["response"]["available"], true);
-    assert_eq!(
-        payload["body_capture"]["client_response"]["available"],
-        true
-    );
+    for key in [
+        "request_body_ref",
+        "provider_request_body_ref",
+        "response_body_ref",
+        "client_response_body_ref",
+    ] {
+        assert!(
+            payload["metadata"].get(key).is_none(),
+            "{key} must not survive the projection"
+        );
+    }
+    for side in ["request", "provider_request", "response", "client_response"] {
+        assert_eq!(
+            payload["body_capture"][side]["available"], true,
+            "{side} should report the stored bytes"
+        );
+        assert_eq!(payload["body_capture"][side]["storage"], "inline");
+        assert_eq!(payload["body_capture"][side]["encoding"], "json");
+    }
     assert_eq!(payload["has_provider_request_body"], true);
     assert_eq!(payload["has_response_body"], true);
     assert_eq!(payload["has_client_response_body"], true);
@@ -968,22 +955,22 @@ fn detail_payload_separates_upstream_client_and_summary_errors() {
         response_headers: Some(json!({
             "content-type": "application/json"
         })),
-        response_body: Some(json!({
+        response_body: Some(CapturedBody::json(json!({
             "error": {
                 "type": "retryable_upstream_status",
                 "message": "execution runtime stream returned retryable status 400",
                 "code": 400
             }
-        })),
+        }))),
         client_response_headers: Some(json!({
             "content-type": "application/json"
         })),
-        client_response_body: Some(json!({
+        client_response_body: Some(CapturedBody::json(json!({
             "error": {
                 "type": "http_error",
                 "message": "local execution runtime exhausted"
             }
-        })),
+        }))),
         ..sample_usage(
             "failed",
             Some(503),
@@ -1031,18 +1018,18 @@ fn detail_payload_marks_sensitive_upstream_account_errors_suppressed() {
     let item = StoredRequestUsageAudit {
         error_message: Some("credit balance exhausted".to_string()),
         error_category: Some("server_error".to_string()),
-        response_body: Some(json!({
+        response_body: Some(CapturedBody::json(json!({
             "error": {
                 "type": "insufficient_quota",
                 "message": "credit balance exhausted"
             }
-        })),
-        client_response_body: Some(json!({
+        }))),
+        client_response_body: Some(CapturedBody::json(json!({
             "error": {
                 "type": "http_error",
                 "message": "upstream provider unavailable"
             }
-        })),
+        }))),
         ..sample_usage("failed", Some(503), Some("credit balance exhausted"))
     };
 
@@ -1079,18 +1066,18 @@ fn detail_payload_does_not_promote_local_client_error_to_upstream_error() {
         execution_path: Some("local_execution_runtime_miss".to_string()),
         local_execution_runtime_miss_reason: Some("candidate_list_empty".to_string()),
         error_category: Some("http_error".to_string()),
-        client_response_body: Some(json!({
+        client_response_body: Some(CapturedBody::json(json!({
             "error": {
                 "type": "http_error",
                 "message": client_message
             }
-        })),
-        response_body: Some(json!({
+        }))),
+        response_body: Some(CapturedBody::json(json!({
             "error": {
                 "type": "http_error",
                 "message": message
             }
-        })),
+        }))),
         ..sample_usage("failed", Some(503), Some(message))
     };
 
@@ -1129,7 +1116,6 @@ fn detail_payload_simplifies_local_client_error_when_client_body_is_unloaded() {
         error_category: Some("http_error".to_string()),
         client_response_headers: Some(json!({"content-type": "application/json"})),
         client_response_body: None,
-        client_response_body_state: Some(UsageBodyCaptureState::Reference),
         response_body: None,
         ..sample_usage("failed", Some(503), Some(message))
     };
@@ -1174,7 +1160,6 @@ fn detail_payload_simplifies_all_candidates_skipped_when_client_body_is_unloaded
         error_category: Some("http_error".to_string()),
         client_response_headers: Some(json!({"content-type": "application/json"})),
         client_response_body: None,
-        client_response_body_state: Some(UsageBodyCaptureState::Reference),
         response_body: None,
         ..sample_usage("failed", Some(503), Some(message))
     };

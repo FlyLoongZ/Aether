@@ -1,7 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use axum::http::{HeaderMap, HeaderValue};
-
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
 };
@@ -14,7 +12,7 @@ use aether_data::repository::users::{
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
 };
-use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UsageBodyCaptureState};
+use aether_data_contracts::repository::usage::{CapturedBody, StoredRequestUsageAudit};
 use axum::body::{to_bytes, Body, Bytes};
 use axum::routing::any;
 use axum::{extract::Request, Router};
@@ -1921,7 +1919,7 @@ async fn gateway_handles_admin_usage_detail_locally_with_trusted_admin_principal
         "Content-Type": "application/json",
         "Authorization": "Bearer provider-real",
     }));
-    usage.request_body = Some(json!({
+    usage.request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5",
         "messages": [
             {
@@ -1930,32 +1928,32 @@ async fn gateway_handles_admin_usage_detail_locally_with_trusted_admin_principal
             }
         ],
         "stream": false,
-    }));
-    usage.provider_request_body = Some(json!({
+    })));
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5-target",
         "stream": false,
         "temperature": 0.2,
-    }));
+    })));
     usage.response_headers = Some(json!({
         "Content-Type": "application/json",
         "X-Upstream": "openai",
     }));
-    usage.response_body = Some(json!({
+    usage.response_body = Some(CapturedBody::json(json!({
         "id": "resp-1",
         "usage": {
             "prompt_tokens": 120,
             "completion_tokens": 30,
             "total_tokens": 150
         }
-    }));
+    })));
     usage.client_response_headers = Some(json!({
         "Content-Type": "application/json",
         "X-Request-Id": "req-1",
     }));
-    usage.client_response_body = Some(json!({
+    usage.client_response_body = Some(CapturedBody::json(json!({
         "id": "resp-1",
         "output_text": "hello",
-    }));
+    })));
     usage.request_metadata = Some(json!({
         "trace_id": "trace-123",
         "candidate_id": "cand-detail-1",
@@ -2208,7 +2206,7 @@ async fn gateway_admin_usage_detail_preserves_live_websocket_session_metadata() 
 }
 
 #[tokio::test]
-async fn gateway_handles_admin_usage_detail_with_ref_backed_bodies() {
+async fn gateway_handles_admin_usage_detail_with_stored_bodies() {
     let (_upstream_url, upstream_hits, upstream_handle) =
         start_unreachable_upstream("/api/admin/usage/usage-ref-detail").await;
 
@@ -2227,30 +2225,28 @@ async fn gateway_handles_admin_usage_detail_with_ref_backed_bodies() {
         0.36,
         DAY_1_UNIX_SECS,
     );
-    usage.request_body = Some(json!({
+    usage.request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5",
         "messages": [{"role": "user", "content": "ref-backed request body"}],
         "stream": false,
-    }));
-    usage.provider_request_body = Some(json!({
+    })));
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5-target",
         "temperature": 0.2,
         "stream": false,
-    }));
-    usage.response_body = Some(json!({
+    })));
+    usage.response_body = Some(CapturedBody::json(json!({
         "id": "resp-ref-detail",
         "usage": {"total_tokens": 150},
-    }));
-    usage.client_response_body = Some(json!({
+    })));
+    usage.client_response_body = Some(CapturedBody::json(json!({
         "id": "resp-ref-detail",
         "output_text": "hello from ref",
-    }));
+    })));
     usage.request_metadata = Some(json!({
         "trace_id": "trace-ref-detail",
     }));
-    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed_with_detached_bodies(
-        vec![usage],
-    ));
+    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let user_repository = Arc::new(InMemoryUserReadRepository::seed(vec![sample_user_summary(
         "user-1", "alice",
     )]));
@@ -2274,36 +2270,14 @@ async fn gateway_handles_admin_usage_detail_with_ref_backed_bodies() {
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert!(payload["metadata"]["trace_id"].is_null());
     assert_eq!(payload["trace"]["trace_id"], "trace-ref-detail");
-    assert_eq!(payload["body_capture"]["request"]["storage"], "reference");
-    assert_eq!(payload["body_capture"]["request"]["available"], true);
+    for side in ["request", "provider_request", "response", "client_response"] {
+        assert_eq!(payload["body_capture"][side]["storage"], "inline", "{side}");
+        assert_eq!(payload["body_capture"][side]["available"], true, "{side}");
+        assert_eq!(payload["body_capture"][side]["encoding"], "json", "{side}");
+    }
     assert_eq!(
         payload["body_capture"]["request"]["capture_source"],
-        "stored_reference"
-    );
-    assert_eq!(
-        payload["body_capture"]["provider_request"]["storage"],
-        "reference"
-    );
-    assert_eq!(payload["body_capture"]["response"]["storage"], "reference");
-    assert_eq!(
-        payload["body_capture"]["client_response"]["storage"],
-        "reference"
-    );
-    assert_eq!(
-        payload["body_capture"]["request"]["body_ref"],
-        "usage://request/req-ref-detail/request_body"
-    );
-    assert_eq!(
-        payload["body_capture"]["provider_request"]["body_ref"],
-        "usage://request/req-ref-detail/provider_request_body"
-    );
-    assert_eq!(
-        payload["body_capture"]["response"]["body_ref"],
-        "usage://request/req-ref-detail/response_body"
-    );
-    assert_eq!(
-        payload["body_capture"]["client_response"]["body_ref"],
-        "usage://request/req-ref-detail/client_response_body"
+        "stored_original"
     );
     assert_eq!(payload["request_body"]["model"], "gpt-5");
     assert_eq!(
@@ -2338,10 +2312,14 @@ fn sample_selective_body_usage() -> StoredRequestUsageAudit {
         0.36,
         DAY_1_UNIX_SECS,
     );
-    usage.request_body = Some(json!({ "marker": "request_body" }));
-    usage.provider_request_body = Some(json!({ "marker": "provider_request_body" }));
-    usage.response_body = Some(json!({ "marker": "response_body" }));
-    usage.client_response_body = Some(json!({ "marker": "client_response_body" }));
+    usage.request_body = Some(CapturedBody::json(json!({ "marker": "request_body" })));
+    usage.provider_request_body = Some(CapturedBody::json(
+        json!({ "marker": "provider_request_body" }),
+    ));
+    usage.response_body = Some(CapturedBody::json(json!({ "marker": "response_body" })));
+    usage.client_response_body = Some(CapturedBody::json(
+        json!({ "marker": "client_response_body" }),
+    ));
     usage
 }
 
@@ -2353,44 +2331,34 @@ async fn gateway_admin_usage_detail_returns_only_the_selected_body() {
         "response_body",
         "client_response_body",
     ];
-    for detached in [false, true] {
-        let usage = sample_selective_body_usage();
-        let repository = if detached {
-            InMemoryUsageReadRepository::seed_with_detached_bodies(vec![usage])
-        } else {
-            InMemoryUsageReadRepository::seed(vec![usage])
-        };
-        let state = AppState::new()
-            .expect("gateway should build")
-            .with_data_state_for_tests(GatewayDataState::with_usage_reader_for_tests(Arc::new(
-                repository,
-            )));
-        for selected in fields {
-            let response = local_admin_usage_response(
-                &state, http::Method::GET,
-                &format!("/api/admin/usage/usage-selected-body?include_bodies=true&body_field={selected}"),
-                None,
-            ).await;
-            assert_eq!(response.status(), StatusCode::OK);
-            let bytes = to_bytes(response.into_body(), usize::MAX)
-                .await
-                .expect("body should collect");
-            let payload: serde_json::Value =
-                serde_json::from_slice(&bytes).expect("json should parse");
-            for field in fields {
-                assert_eq!(payload[format!("has_{field}")], true);
-                if field == selected {
-                    assert_eq!(payload[field]["marker"], selected);
-                } else {
-                    assert!(
-                        payload[field].is_null(),
-                        "unselected {field} must not be returned"
-                    );
-                }
-            }
-            assert!(payload["body_load_errors"].is_null());
-            assert!(payload["body_load_error_codes"].is_null());
+    let state = AppState::new()
+        .expect("gateway should build")
+        .with_data_state_for_tests(GatewayDataState::with_usage_reader_for_tests(Arc::new(
+            InMemoryUsageReadRepository::seed(vec![sample_selective_body_usage()]),
+        )));
+    for selected in fields {
+        let response = local_admin_usage_response(
+            &state,
+            http::Method::GET,
+            &format!(
+                "/api/admin/usage/usage-selected-body?include_bodies=true&body_field={selected}"
+            ),
+            None,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body should collect");
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("json should parse");
+        // Every side reports its captured bytes, and none of them travels in
+        // this JSON: `body_field` only selects what `/body` would serve.
+        for field in fields {
+            assert_eq!(payload[format!("has_{field}")], true);
+            assert!(payload[field].is_null(), "{field} must not be inlined");
         }
+        assert!(payload["body_load_errors"].is_null());
+        assert!(payload["body_load_error_codes"].is_null());
     }
 }
 
@@ -2426,16 +2394,11 @@ async fn gateway_admin_usage_detail_validates_body_field_selection() {
 
 #[tokio::test]
 async fn gateway_admin_usage_detail_raw_reads_only_selected_body_and_is_not_cacheable() {
-    for detached in [false, true] {
-        let repository = if detached {
-            InMemoryUsageReadRepository::seed_with_detached_bodies(vec![
-                sample_selective_body_usage(),
-            ])
-        } else {
-            InMemoryUsageReadRepository::seed(vec![sample_selective_body_usage()])
-        };
+    {
         let state = AppState::new().unwrap().with_data_state_for_tests(
-            GatewayDataState::with_usage_reader_for_tests(Arc::new(repository)),
+            GatewayDataState::with_usage_reader_for_tests(Arc::new(
+                InMemoryUsageReadRepository::seed(vec![sample_selective_body_usage()]),
+            )),
         );
         for field in [
             "request_body",
@@ -2473,20 +2436,16 @@ async fn gateway_admin_usage_detail_raw_reads_only_selected_body_and_is_not_cach
 
 #[tokio::test]
 async fn gateway_admin_usage_detail_raw_rejects_foreign_refs_and_disabled_capture() {
-    for body_state in [
-        UsageBodyCaptureState::Reference,
-        UsageBodyCaptureState::Disabled,
-    ] {
+    {
         let mut usage = sample_selective_body_usage();
         usage.response_body = None;
-        usage.response_body_state = Some(body_state);
         let mut foreign = sample_selective_body_usage();
         foreign.id = "foreign-usage".to_string();
         foreign.request_id = "foreign-request".to_string();
-        foreign.response_body = Some(json!({ "secret": "must not leak" }));
+        foreign.response_body = Some(CapturedBody::json(json!({ "secret": "must not leak" })));
         let state = AppState::new().unwrap().with_data_state_for_tests(
             GatewayDataState::with_usage_reader_for_tests(Arc::new(
-                InMemoryUsageReadRepository::seed_with_detached_bodies(vec![usage, foreign]),
+                InMemoryUsageReadRepository::seed(vec![usage, foreign]),
             )),
         );
         let response = local_admin_usage_response(
@@ -2506,11 +2465,9 @@ async fn gateway_admin_usage_detail_raw_rejects_foreign_refs_and_disabled_captur
 #[tokio::test]
 async fn gateway_admin_usage_detail_raw_preserves_authorization_and_binary_headers() {
     let state = AppState::new().unwrap().with_data_state_for_tests(
-        GatewayDataState::with_usage_reader_for_tests(Arc::new(
-            InMemoryUsageReadRepository::seed_with_detached_bodies(vec![
-                sample_selective_body_usage(),
-            ]),
-        )),
+        GatewayDataState::with_usage_reader_for_tests(Arc::new(InMemoryUsageReadRepository::seed(
+            vec![sample_selective_body_usage()],
+        ))),
     );
     let gateway =
         build_router_with_state(state).layer(tower_http::compression::CompressionLayer::new());
@@ -2545,20 +2502,22 @@ async fn gateway_admin_usage_detail_raw_preserves_authorization_and_binary_heade
 }
 
 #[tokio::test]
-async fn gateway_admin_usage_detail_isolates_missing_body_errors() {
+async fn gateway_admin_usage_detail_reports_a_missing_body_as_absent() {
     let mut usage = sample_selective_body_usage();
     usage.request_body = None;
-    usage.request_body_state = Some(UsageBodyCaptureState::Reference);
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(GatewayDataState::with_usage_reader_for_tests(Arc::new(
-            InMemoryUsageReadRepository::seed_with_detached_bodies(vec![usage]),
+            InMemoryUsageReadRepository::seed(vec![usage]),
         )));
-    for selected in ["response_body", "request_body"] {
+    for (side, field, captured) in [
+        ("response", "response_body", true),
+        ("request", "request_body", false),
+    ] {
         let response = local_admin_usage_response(
             &state,
             http::Method::GET,
-            &format!("/api/admin/usage/usage-selected-body?body_field={selected}"),
+            &format!("/api/admin/usage/usage-selected-body?include_bodies=true&body_field={field}"),
             None,
         )
         .await;
@@ -2567,20 +2526,25 @@ async fn gateway_admin_usage_detail_isolates_missing_body_errors() {
             .await
             .expect("body should collect");
         let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("json should parse");
-        if selected == "request_body" {
-            assert_eq!(payload["body_load_errors"]["request_body"], true);
-            assert_eq!(payload["body_load_error_codes"]["request_body"], "missing");
-            assert!(payload["request_body"].is_null());
-        } else {
-            assert_eq!(payload["response_body"]["marker"], "response_body");
-            assert!(payload["body_load_errors"].is_null());
-            assert!(payload["body_load_error_codes"].is_null());
-        }
+        assert!(payload[field].is_null());
+        // A side without captured bytes is reported as absent by its capture
+        // record; the JSON view never carries the bytes either way.
+        assert_eq!(
+            payload["body_capture"][side]["available"], captured,
+            "{side}"
+        );
+        assert_eq!(
+            payload["body_capture"][side]["storage"],
+            if captured { "inline" } else { "missing" },
+            "{side}"
+        );
+        assert!(payload["body_load_errors"].is_null(), "{side}");
+        assert!(payload["body_load_error_codes"].is_null(), "{side}");
     }
 }
 
 #[tokio::test]
-async fn gateway_resolves_admin_usage_detail_when_inline_state_has_body_ref() {
+async fn gateway_resolves_admin_usage_bodies_through_the_body_route() {
     let (_upstream_url, upstream_hits, upstream_handle) =
         start_unreachable_upstream("/api/admin/usage/usage-inline-state-ref-detail").await;
 
@@ -2599,27 +2563,21 @@ async fn gateway_resolves_admin_usage_detail_when_inline_state_has_body_ref() {
         0.36,
         DAY_1_UNIX_SECS,
     );
-    usage.request_body = Some(json!({
+    usage.request_body = Some(CapturedBody::json(json!({
         "contents": [{"role": "user", "parts": [{"text": "hello"}]}],
-    }));
-    usage.provider_request_body = Some(json!({
+    })));
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gemini-3-flash-agent",
         "request": {"contents": [{"role": "user", "parts": [{"text": "hello"}]}]},
-    }));
-    usage.response_body = Some(json!({
+    })));
+    usage.response_body = Some(CapturedBody::json(json!({
         "chunks": [{"candidates": [{"content": {"parts": [{"text": "hello back"}]}}]}],
-    }));
-    usage.client_response_body = Some(json!({
+    })));
+    usage.client_response_body = Some(CapturedBody::json(json!({
         "candidates": [{"content": {"parts": [{"text": "hello back"}]}}],
-    }));
-    usage.request_body_state = Some(UsageBodyCaptureState::Inline);
-    usage.provider_request_body_state = Some(UsageBodyCaptureState::Inline);
-    usage.response_body_state = Some(UsageBodyCaptureState::Inline);
-    usage.client_response_body_state = Some(UsageBodyCaptureState::Inline);
+    })));
 
-    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed_with_detached_bodies(
-        vec![usage],
-    ));
+    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let data_state = GatewayDataState::with_usage_reader_for_tests(usage_repository);
     let gateway = build_router_with_state(
         AppState::new()
@@ -2629,7 +2587,7 @@ async fn gateway_resolves_admin_usage_detail_when_inline_state_has_body_ref() {
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
     let response = admin_request(reqwest::Client::new().get(format!(
-        "{gateway_url}/api/admin/usage/usage-inline-state-ref-detail"
+        "{gateway_url}/api/admin/usage/usage-inline-state-ref-detail?include_bodies=true"
     )))
     .send()
     .await
@@ -2650,7 +2608,23 @@ async fn gateway_resolves_admin_usage_detail_when_inline_state_has_body_ref() {
         payload["client_response_body"]["candidates"][0]["content"]["parts"][0]["text"],
         "hello back"
     );
+    for side in ["request", "provider_request", "response", "client_response"] {
+        assert_eq!(payload["body_capture"][side]["storage"], "inline", "{side}");
+    }
     assert!(payload["body_load_errors"].is_null());
+
+    let raw = admin_request(reqwest::Client::new().get(format!(
+        "{gateway_url}/api/admin/usage/usage-inline-state-ref-detail?body_field=response_body&body_format=raw"
+    )))
+    .send()
+    .await
+    .expect("raw request should succeed");
+    assert_eq!(raw.status(), StatusCode::OK);
+    let raw_payload: serde_json::Value = raw.json().await.expect("raw body should parse");
+    assert_eq!(
+        raw_payload["chunks"][0]["candidates"][0]["content"]["parts"][0]["text"],
+        "hello back"
+    );
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();
@@ -2828,7 +2802,7 @@ async fn gateway_handles_admin_usage_replay_locally_with_trusted_admin_principal
 }
 
 #[tokio::test]
-async fn gateway_handles_admin_usage_replay_with_ref_backed_request_body() {
+async fn gateway_handles_admin_usage_replay_with_stored_request_body() {
     let upstream_hits = Arc::new(Mutex::new(0usize));
     let upstream_hits_clone = Arc::clone(&upstream_hits);
     let upstream = Router::new().route(
@@ -2857,14 +2831,12 @@ async fn gateway_handles_admin_usage_replay_with_ref_backed_request_body() {
         0.37,
         DAY_1_UNIX_SECS,
     );
-    usage.request_body = Some(json!({
+    usage.request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5",
         "messages": [{"role": "user", "content": "replay from ref"}],
         "stream": false,
-    }));
-    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed_with_detached_bodies(
-        vec![usage],
-    ));
+    })));
+    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
         vec![sample_provider("provider-1", "OpenAI", 10)],
         vec![sample_endpoint(
@@ -2911,13 +2883,9 @@ async fn gateway_handles_admin_usage_replay_with_ref_backed_request_body() {
     assert_eq!(payload["request_body_available"], true);
     assert_eq!(
         payload["body_capture"]["request"]["capture_source"],
-        "stored_reference"
+        "stored_original"
     );
-    assert_eq!(payload["body_capture"]["request"]["storage"], "reference");
-    assert_eq!(
-        payload["body_capture"]["request"]["body_ref"],
-        "usage://request/req-ref-replay/request_body"
-    );
+    assert_eq!(payload["body_capture"]["request"]["storage"], "inline");
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();
@@ -3000,20 +2968,20 @@ async fn gateway_handles_admin_usage_curl_locally_with_trusted_admin_principal()
         0.36,
         DAY_1_UNIX_SECS,
     );
-    usage.request_body = Some(json!({
+    usage.request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5",
         "messages": [{"role": "user", "content": "client body"}],
         "stream": false,
-    }));
+    })));
     usage.provider_request_headers = Some(json!({
         "Content-Type": "application/json",
         "Authorization": "Bearer provider-real",
     }));
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5-target",
         "stream": false,
         "temperature": 0.2,
-    }));
+    })));
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
         vec![sample_provider("provider-1", "openai", 10)],
@@ -3088,7 +3056,7 @@ async fn gateway_handles_admin_usage_curl_locally_with_trusted_admin_principal()
 }
 
 #[tokio::test]
-async fn gateway_handles_admin_usage_curl_with_ref_backed_provider_request_body() {
+async fn gateway_handles_admin_usage_curl_with_stored_provider_request_body() {
     let (_upstream_url, upstream_hits, upstream_handle) =
         start_unreachable_upstream("/api/admin/usage/usage-ref-curl/curl").await;
 
@@ -3107,23 +3075,21 @@ async fn gateway_handles_admin_usage_curl_with_ref_backed_provider_request_body(
         0.36,
         DAY_1_UNIX_SECS,
     );
-    usage.request_body = Some(json!({
+    usage.request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5",
         "messages": [{"role": "user", "content": "client body"}],
         "stream": false,
-    }));
+    })));
     usage.provider_request_headers = Some(json!({
         "Content-Type": "application/json",
         "Authorization": "Bearer provider-real",
     }));
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5-target",
         "stream": false,
         "temperature": 0.2,
-    }));
-    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed_with_detached_bodies(
-        vec![usage],
-    ));
+    })));
+    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
         vec![sample_provider("provider-1", "openai", 10)],
         vec![sample_endpoint(
@@ -3165,18 +3131,14 @@ async fn gateway_handles_admin_usage_curl_with_ref_backed_provider_request_body(
     assert_eq!(payload["body"]["temperature"], 0.2);
     assert_eq!(payload["captured_request_body_available"], true);
     assert_eq!(payload["body_capture"]["body_source"], "provider_request");
-    assert_eq!(payload["body_capture"]["request"]["storage"], "reference");
+    assert_eq!(payload["body_capture"]["request"]["storage"], "inline");
     assert_eq!(
         payload["body_capture"]["request"]["capture_source"],
-        "stored_reference"
+        "stored_original"
     );
     assert_eq!(
         payload["body_capture"]["provider_request"]["storage"],
-        "reference"
-    );
-    assert_eq!(
-        payload["body_capture"]["provider_request"]["body_ref"],
-        "usage://request/req-ref-curl/provider_request_body"
+        "inline"
     );
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
@@ -3205,10 +3167,10 @@ async fn local_admin_usage_curl_attaches_explicit_audit() {
         "Content-Type": "application/json",
         "Authorization": "Bearer provider-real",
     }));
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5-target",
         "stream": false,
-    }));
+    })));
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
         vec![sample_provider("provider-1", "openai", 10)],

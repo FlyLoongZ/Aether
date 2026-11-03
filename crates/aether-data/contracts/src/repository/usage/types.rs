@@ -2468,12 +2468,6 @@ impl UsageBodyField {
 
 pub const MAX_USAGE_BODY_BYTES: usize = 64 * 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredUsageBodyPayload {
-    pub bytes: Vec<u8>,
-    pub encoding: BodyEncoding,
-}
-
 #[async_trait]
 pub trait UsageReadRepository: Send + Sync {
     async fn query_dashboard_summary(

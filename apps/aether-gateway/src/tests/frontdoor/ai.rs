@@ -2019,9 +2019,15 @@ async fn run_codex_live_oauth_frontdoor_scenario(dialect: CodexLiveWebRtcTestDia
     assert_eq!(call_create_usage.total_cost_usd, 0.0);
     assert_eq!(call_create_usage.actual_total_cost_usd, 0.0);
     assert!(call_create_usage.request_headers.is_none());
-    assert!(call_create_usage.request_body.is_none());
+    assert!(!call_create_usage
+        .request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     assert!(call_create_usage.provider_request_headers.is_none());
-    assert!(call_create_usage.provider_request_body.is_none());
+    assert!(!call_create_usage
+        .provider_request_body
+        .as_ref()
+        .is_some_and(|body| body.is_present()));
     let serialized_call_create_usage =
         serde_json::to_string(&call_create_usage).expect("Live call-create usage should serialize");
     for sentinel in [

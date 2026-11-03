@@ -101,6 +101,7 @@ export { geminiParser, GeminiParser } from './gemini'
 // 导出注册表和统一入口
 export {
   parserRegistry,
+  parseRawSseResponse,
   parseRequest,
   parseResponse,
   detectApiFormat,

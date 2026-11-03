@@ -28,7 +28,8 @@ use aether_data_contracts::repository::provider_catalog::{
 use aether_data_contracts::repository::settlement::{StoredUsageSettlement, UsageSettlementInput};
 use aether_data_contracts::repository::usage::UsageReadRepository;
 use aether_data_contracts::repository::usage::{
-    StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
+    BodyEncoding, CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
+    UsageBodyField,
 };
 use aether_data_contracts::DataLayerError;
 use aether_usage_runtime::{
@@ -994,12 +995,16 @@ async fn prefetch_handoff_keeps_audit_usage_and_private_conversion() {
         assert_eq!(usage.status, "completed", "{:?}", usage.error_message);
         assert_eq!(usage.input_tokens, 1234);
         assert_eq!(usage.output_tokens, 567);
-        let captured = usage.response_body.as_ref().expect("provider capture");
+        let captured = usage
+            .body(UsageBodyField::ResponseBody)
+            .expect("provider capture");
+        assert_eq!(captured.encoding(), Some(BodyEncoding::Sse));
+        let stored = String::from_utf8(captured.bytes().expect("captured bytes").to_vec())
+            .expect("sse body is utf-8");
         assert!(
-            captured["metadata"].get("dropped_chunks").is_none(),
-            "{captured}"
+            stored.contains(&payload.to_string()),
+            "the stored stream keeps the provider event verbatim"
         );
-        assert_eq!(captured["chunks"].as_array().unwrap(), &vec![payload]);
     }
 }
 
@@ -3258,9 +3263,11 @@ fn stream_capture_policy_hard_caps_full_and_basic_analysis_buffers() {
     );
     assert_eq!(full_buffer, oversized_chunk);
     assert!(!full_truncated);
-    let (full_body, full_state) = super::build_stream_body_capture(&full_buffer, full_truncated);
+    let full_body = super::build_stream_body_capture(&full_buffer, full_truncated)
+        .0
+        .map(|encoded| decode_stream_capture(&encoded, full_truncated));
     assert!(full_body.is_some());
-    assert_eq!(full_state, Some(UsageBodyCaptureState::Inline));
+    assert!(!full_body.as_ref().expect("capture").truncated());
     drop(full_body);
 
     let basic_limit =
@@ -3276,10 +3283,11 @@ fn stream_capture_policy_hard_caps_full_and_basic_analysis_buffers() {
     );
     assert_eq!(basic_buffer.len(), basic_limit);
     assert!(basic_truncated);
-    let (basic_body, basic_state) =
-        super::build_stream_body_capture(&basic_buffer, basic_truncated);
+    let basic_body = super::build_stream_body_capture(&basic_buffer, basic_truncated)
+        .0
+        .map(|encoded| decode_stream_capture(&encoded, basic_truncated));
     assert!(basic_body.is_some());
-    assert_eq!(basic_state, Some(UsageBodyCaptureState::Truncated));
+    assert!(basic_body.as_ref().expect("capture").truncated());
 
     let mut event = UsageEvent::new(
         UsageEventType::Completed,
@@ -3287,10 +3295,12 @@ fn stream_capture_policy_hard_caps_full_and_basic_analysis_buffers() {
         UsageEventData {
             provider_name: "provider".to_string(),
             model: "model".to_string(),
-            response_body: basic_body.map(Value::String),
-            response_body_state: basic_state,
-            client_response_body: Some(json!("captured client body")),
-            client_response_body_state: Some(UsageBodyCaptureState::Truncated),
+            response_body: basic_body,
+            client_response_body: Some(CapturedBody::from_bytes(
+                b"captured client body".to_vec(),
+                BodyEncoding::Text,
+                true,
+            )),
             ..UsageEventData::default()
         },
     );
@@ -3302,16 +3312,21 @@ fn stream_capture_policy_hard_caps_full_and_basic_analysis_buffers() {
         &mut event,
     );
 
-    assert_eq!(event.data.response_body, None);
+    assert_eq!(event.data.response_body, Some(CapturedBody::Disabled));
     assert_eq!(
-        event.data.response_body_state,
-        Some(UsageBodyCaptureState::Disabled)
+        event.data.client_response_body,
+        Some(CapturedBody::Disabled)
     );
-    assert_eq!(event.data.client_response_body, None);
-    assert_eq!(
-        event.data.client_response_body_state,
-        Some(UsageBodyCaptureState::Disabled)
-    );
+}
+
+/// Decodes the base64 a stream report carries on the wire back into the bytes
+/// the row will store.
+fn decode_stream_capture(encoded: &str, truncated: bool) -> CapturedBody {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .expect("stream capture is base64");
+    let encoding = CapturedBody::detect_encoding(&bytes);
+    CapturedBody::from_bytes(bytes, encoding, truncated)
 }
 
 #[test]
@@ -7121,7 +7136,10 @@ async fn execute_execution_runtime_stream_rewrites_redirect_to_structured_failur
         usage.response_body.is_none(),
         "upstream redirect did not include a body"
     );
-    assert_eq!(usage.client_response_body.as_ref(), Some(&body_json));
+    assert_eq!(
+        usage.client_response_body.as_ref(),
+        Some(&CapturedBody::json(body_json))
+    );
     let candidates = request_candidate_repository
         .list_by_request_id("req-remote-runtime-stream-redirect")
         .await

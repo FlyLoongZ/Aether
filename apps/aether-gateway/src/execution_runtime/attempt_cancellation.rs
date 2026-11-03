@@ -21,8 +21,8 @@ use aether_contracts::ExecutionPlan;
 use aether_data_contracts::repository::candidates::RequestCandidateStatus;
 use aether_scheduler_core::SchedulerRequestCandidateStatusUpdate;
 use aether_usage_runtime::{
-    build_usage_event_data_seed_describing_request_bodies, UsageEvent, UsageEventData,
-    UsageEventType,
+    build_usage_event_data_seed_describing_request_bodies, captured_body_from_value, UsageEvent,
+    UsageEventData, UsageEventType,
 };
 use serde_json::{json, Value};
 use tracing::warn;
@@ -199,9 +199,9 @@ async fn settle_cancelled_attempt(
         }
     });
     usage_data.response_headers = Some(json!({"content-type": "application/json"}));
-    usage_data.response_body = Some(error_body.clone());
+    usage_data.response_body = captured_body_from_value(error_body.clone());
     usage_data.client_response_headers = Some(json!({"content-type": "application/json"}));
-    usage_data.client_response_body = Some(error_body);
+    usage_data.client_response_body = captured_body_from_value(error_body);
 
     state
         .usage_runtime
@@ -256,7 +256,7 @@ mod tests {
     use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::candidates::RequestCandidateReadRepository;
     use aether_data_contracts::repository::usage::{
-        StoredRequestUsageAudit, UsageBodyCaptureState, UsageReadRepository, UsageWriteRepository,
+        CapturedBody, StoredRequestUsageAudit, UsageReadRepository, UsageWriteRepository,
     };
     use aether_usage_runtime::{
         build_lifecycle_usage_seed, build_pending_usage_record, UsageRuntimeConfig,
@@ -323,6 +323,29 @@ mod tests {
                     Arc::clone(request_candidate_repository),
                     Arc::clone(usage_repository),
                 ),
+            )
+            .with_usage_runtime_for_tests(UsageRuntimeConfig {
+                enabled: true,
+                ..UsageRuntimeConfig::default()
+            })
+    }
+
+    fn test_state_with_record_level(
+        usage_repository: &Arc<InMemoryUsageReadRepository>,
+        request_candidate_repository: &Arc<InMemoryRequestCandidateRepository>,
+        record_level: serde_json::Value,
+    ) -> AppState {
+        AppState::new()
+            .expect("gateway state should build")
+            .with_data_state_for_tests(
+                crate::data::GatewayDataState::with_request_candidate_and_usage_repository_for_tests(
+                    Arc::clone(request_candidate_repository),
+                    Arc::clone(usage_repository),
+                )
+                .with_system_config_values_for_tests([(
+                    "request_record_level".to_string(),
+                    record_level,
+                )]),
             )
             .with_usage_runtime_for_tests(UsageRuntimeConfig {
                 enabled: true,
@@ -438,7 +461,13 @@ mod tests {
     async fn settling_a_dropped_attempt_respects_disabled_request_body_capture() {
         let usage_repository = Arc::new(InMemoryUsageReadRepository::default());
         let request_candidate_repository = Arc::new(InMemoryRequestCandidateRepository::default());
-        let state = test_state(&usage_repository, &request_candidate_repository);
+        // `basic` is the level that withdraws bodies, so the settlement under
+        // test has to run at it rather than at the full-capture default.
+        let state = test_state_with_record_level(
+            &usage_repository,
+            &request_candidate_repository,
+            json!("basic"),
+        );
         let mut plan = test_stream_plan("stream-cancel-guard-capture");
         let mut report_context = test_report_context();
         let candidate_started_unix_ms = current_request_candidate_unix_ms();
@@ -456,8 +485,7 @@ mod tests {
             current_request_candidate_unix_ms() / 1_000,
         )
         .expect("pending usage record should build");
-        capture.provider_request_body = Some(captured_body.clone());
-        capture.provider_request_body_state = Some(UsageBodyCaptureState::Inline);
+        capture.provider_request_body = Some(CapturedBody::json(captured_body.clone()));
         usage_repository
             .upsert(capture)
             .await
@@ -482,11 +510,9 @@ mod tests {
         )
         .await
         .expect("cancelled usage should be recorded");
-        assert_eq!(usage.provider_request_body, None);
-        assert_eq!(
-            usage.provider_request_body_state,
-            Some(UsageBodyCaptureState::Disabled)
-        );
+        // The cancel path applies the `basic` policy, which withdraws the bytes
+        // and records why instead of them.
+        assert_eq!(usage.provider_request_body, Some(CapturedBody::Disabled));
     }
 
     #[tokio::test]

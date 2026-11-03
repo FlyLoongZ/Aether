@@ -1,4 +1,4 @@
-import { renderRequest, renderResponse, type RenderBlock, type RenderResult } from '../conversation'
+import { parseRawSseResponse, renderRequest, renderResponse, type RenderBlock, type RenderResult } from '../conversation'
 import { getRawTextChunk, JsonPageReader, JSON_PAGE_SIZE, JSON_TEXT_CHUNK_SIZE } from './json-viewer'
 import {
   BodyDocumentError, MAX_BODY_BYTES, MAX_ENCODED_BODY_BYTES,
@@ -51,6 +51,12 @@ export async function decodeBody(bytes: ArrayBuffer, encoding: BodyEncoding = 'j
         // whole document.
         return { value: text as unknown, byteLength }
       }
+    }
+    if (encoding === 'sse') {
+      // The stored stream is reassembled into the chunk document the JSON
+      // viewer and the conversation renderers both speak; a stream that yields
+      // no events (comments only, empty capture) stays the raw text.
+      return { value: parseRawSseResponse(text) ?? (text as unknown), byteLength }
     }
     return { value: text as unknown, byteLength }
   } catch (error) {

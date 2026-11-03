@@ -9,7 +9,8 @@ use aether_data_contracts::repository::candidates::{
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
 use aether_data_contracts::repository::usage::ROUTING_CANDIDATE_SKIP_REASON_METADATA_KEY;
 use aether_usage_runtime::{
-    build_usage_event_data_seed, UsageEvent, UsageEventData, UsageEventType,
+    build_usage_event_data_seed, captured_body_from_value, UsageEvent, UsageEventData,
+    UsageEventType,
 };
 use axum::body::Body;
 use axum::body::Bytes;
@@ -184,9 +185,9 @@ async fn write_deferred_usage_event(
     data.error_category = error_category_for_failed_status(status_code)
         .or_else(|| Some("upstream_error".to_string()));
     data.response_headers = Some(context.provider_headers.unwrap_or_else(json_header_map));
-    data.response_body = context.provider_body;
+    data.response_body = context.provider_body.and_then(captured_body_from_value);
     data.client_response_headers = Some(context.client_headers.unwrap_or_else(json_header_map));
-    data.client_response_body = context.client_body;
+    data.client_response_body = context.client_body.and_then(captured_body_from_value);
 
     state
         .usage_runtime
@@ -407,7 +408,7 @@ pub(crate) async fn record_failed_usage_for_exhausted_request(
     data.error_category = error_category_for_failed_status(status_code);
     data.response_time_ms = Some(started_at.elapsed().as_millis() as u64);
     data.response_headers = Some(json_header_map());
-    data.response_body = Some(json!({
+    data.response_body = captured_body_from_value(json!({
         "error": {
             "type": upstream_error_type
                 .as_deref()
@@ -434,7 +435,7 @@ pub(crate) async fn record_failed_usage_for_exhausted_request(
     data.client_response_headers = Some(Value::Object(client_headers));
     let client_message =
         beautify_local_execution_client_error_message(local_execution_runtime_miss_detail);
-    data.client_response_body = Some(runtime_miss_client_error_body(
+    data.client_response_body = captured_body_from_value(runtime_miss_client_error_body(
         data.api_format.as_deref(),
         &client_message,
     ));
@@ -585,11 +586,12 @@ pub(crate) async fn record_failed_usage_for_runtime_miss_request(
         error_category: error_category_for_failed_status(status_code),
         response_time_ms: Some(started_at.elapsed().as_millis() as u64),
         request_headers: Some(runtime_miss_original_headers_json(request_headers)),
-        request_body: runtime_miss_original_request_body_json(request_headers, request_body),
+        request_body: runtime_miss_original_request_body_json(request_headers, request_body)
+            .and_then(captured_body_from_value),
         response_headers: Some(json_header_map()),
-        response_body: Some(client_body.clone()),
+        response_body: captured_body_from_value(client_body.clone()),
         client_response_headers: Some(Value::Object(client_headers)),
-        client_response_body: Some(client_body),
+        client_response_body: captured_body_from_value(client_body),
         ..UsageEventData::default()
     };
     if let Some(candidate) = routing_candidate {

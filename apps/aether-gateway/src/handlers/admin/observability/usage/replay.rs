@@ -6,7 +6,7 @@ use aether_admin::observability::usage::{
 };
 use aether_data_contracts::repository::{
     provider_catalog::StoredProviderCatalogEndpoint,
-    usage::{StoredRequestUsageAudit, UsageBodyCaptureState, UsageBodyField},
+    usage::{StoredRequestUsageAudit, UsageBodyField},
 };
 use axum::{
     body::Body,
@@ -47,59 +47,28 @@ pub(super) fn admin_usage_resolve_request_capture_body(
     )
 }
 
-pub(super) async fn admin_usage_resolve_body_value(
-    state: &AdminAppState<'_>,
+/// Resolves the body an admin view shows for one side.
+///
+/// Bodies live in the accounting row itself, so this is a local read: there is no
+/// external reference to follow and no second storage to fall back to.
+pub(super) fn admin_usage_resolve_body_value(
     item: &StoredRequestUsageAudit,
-    inline_body: Option<&Value>,
     field: UsageBodyField,
-) -> Result<Option<Value>, GatewayError> {
-    match item.body_state(field) {
-        Some(UsageBodyCaptureState::Disabled)
-        | Some(UsageBodyCaptureState::Unavailable)
-        | Some(UsageBodyCaptureState::None) => return Ok(None),
-        Some(UsageBodyCaptureState::Inline) | Some(UsageBodyCaptureState::Truncated) => {
-            if inline_body.is_some() {
-                return Ok(inline_body.cloned());
-            }
-        }
-        Some(UsageBodyCaptureState::Reference) | None => {}
-    }
-    let resolved_ref_body = match item.body_ref(field) {
-        Some(body_ref) => state.resolve_request_usage_body_ref(&body_ref).await?,
-        None => None,
-    };
-    Ok(admin_usage_body_value_from_sources(
-        resolved_ref_body,
-        inline_body,
-    ))
-}
-
-fn admin_usage_body_value_from_sources(
-    resolved_ref_body: Option<Value>,
-    inline_body: Option<&Value>,
 ) -> Option<Value> {
-    resolved_ref_body.or_else(|| inline_body.cloned())
+    item.body_value(field)
 }
 
-pub(super) async fn admin_usage_resolve_request_capture_body_for_item(
-    state: &AdminAppState<'_>,
+pub(super) fn admin_usage_resolve_request_capture_body_for_item(
     item: &StoredRequestUsageAudit,
     body_override: Option<serde_json::Value>,
-) -> Result<Option<serde_json::Value>, GatewayError> {
+) -> Option<serde_json::Value> {
     if let Some(body_override) = body_override {
-        return Ok(Some(body_override));
+        return Some(body_override);
     }
-    if let Some(body) = admin_usage_resolve_body_value(
-        state,
-        item,
-        item.request_body.as_ref(),
-        UsageBodyField::RequestBody,
-    )
-    .await?
-    {
-        return Ok(Some(body));
+    if let Some(body) = admin_usage_resolve_body_value(item, UsageBodyField::RequestBody) {
+        return Some(body);
     }
-    Ok(admin_usage_resolve_request_capture_body(item, None))
+    admin_usage_resolve_request_capture_body(item, None)
 }
 
 pub(super) fn build_admin_usage_curl_response(
@@ -317,8 +286,7 @@ pub(super) async fn build_admin_usage_replay_response(
     let same_provider = item.provider_id.as_deref() == Some(target_provider.id.as_str());
     let same_endpoint = item.provider_endpoint_id.as_deref() == Some(target_endpoint.id.as_str());
     let request_body =
-        admin_usage_resolve_request_capture_body_for_item(state, &item, payload.body_override)
-            .await?;
+        admin_usage_resolve_request_capture_body_for_item(&item, payload.body_override);
 
     let url = admin_usage_curl_url(state, &target_endpoint, &item);
     let headers = admin_usage_curl_headers();
@@ -387,34 +355,14 @@ pub(super) fn admin_usage_curl_url(
 
 #[cfg(test)]
 mod tests {
-    use super::admin_usage_body_value_from_sources;
+    use aether_data_contracts::repository::usage::{BodyEncoding, CapturedBody};
     use serde_json::json;
 
     #[test]
-    fn resolved_reference_body_wins_over_inline_fallback() {
-        let inline_body = json!({
-            "truncated": true,
-            "reason": "usage_capture_limits_exceeded"
-        });
-        let ref_body = json!({
-            "messages": [{"role": "user", "content": "real request body"}]
-        });
+    fn stored_bytes_are_read_back_without_a_second_storage_lookup() {
+        let body =
+            CapturedBody::from_bytes(b"{\"messages\":[]}".to_vec(), BodyEncoding::Json, false);
 
-        assert_eq!(
-            admin_usage_body_value_from_sources(Some(ref_body.clone()), Some(&inline_body)),
-            Some(ref_body)
-        );
-    }
-
-    #[test]
-    fn inline_body_is_used_when_reference_body_is_unavailable() {
-        let inline_body = json!({
-            "messages": [{"role": "user", "content": "fallback inline body"}]
-        });
-
-        assert_eq!(
-            admin_usage_body_value_from_sources(None, Some(&inline_body)),
-            Some(inline_body)
-        );
+        assert_eq!(body.as_json_value(), Some(json!({"messages": []})));
     }
 }

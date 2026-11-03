@@ -166,6 +166,7 @@ async function loadBody(usageId: string, field: RequestBodyField, signal: AbortS
       }
     })
     if (response.bytes.byteLength > MAX_SOURCE_BYTES) throw new Error('too_large')
+    if (response.encoding === 'sse') return new TextDecoder().decode(response.bytes)
     return (await decodeBody(response.bytes, response.encoding, MAX_SOURCE_BYTES)).value
   } catch (error) {
     if (tooLarge) throw new Error('too_large', { cause: error })
@@ -211,7 +212,7 @@ export async function prepareDiagnosticExport(
         status: 'captured',
         origin: inline !== undefined ? 'candidate_inline' : 'stored_body',
         usage_id: usageId ?? null,
-        sample: sse ?? body,
+        sample: sse ?? (typeof body === 'string' ? `[REDACTED_TEXT length=${body.length}]` : body),
         field_samples: samples,
       }
       if (field === primary && stage === 'stream' && (!sse || sse.failure_frame_index === null)) missing.push('failed_stream_event')

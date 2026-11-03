@@ -6,9 +6,7 @@ use crate::data::GatewayDataState;
 use crate::tests::DEV_FERNET_KEY;
 use crate::AppState;
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data_contracts::repository::{
-    candidates::RequestCandidateStatus, usage::UsageBodyCaptureState,
-};
+use aether_data_contracts::repository::{candidates::RequestCandidateStatus, usage::CapturedBody};
 use axum::body::to_bytes;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde_json::json;
@@ -121,12 +119,11 @@ async fn admin_monitoring_trace_request_resolves_usage_id_to_header_trace_id() {
         100,
     );
     usage.id = "usage-row-1".to_string();
-    usage.request_body_state = Some(UsageBodyCaptureState::Reference);
-    usage.response_body_state = Some(UsageBodyCaptureState::Reference);
     usage.candidate_id = Some("cand-used".to_string());
     usage.request_headers = Some(json!({
         "x-trace-id": "trace-1"
     }));
+    usage.response_body = Some(CapturedBody::json(json!({"id": "resp-trace-1"})));
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let data_state =
         crate::data::GatewayDataState::with_request_candidate_and_usage_repository_for_tests(
@@ -161,7 +158,7 @@ async fn admin_monitoring_trace_request_resolves_usage_id_to_header_trace_id() {
     assert_eq!(
         payload["candidates"][0]["extra_data"]["diagnostic_context"]["body_states"]
             ["response_body"],
-        "reference"
+        "inline"
     );
     assert!(payload["candidates"][1]["extra_data"]["diagnostic_context"].is_null());
     assert_eq!(payload["candidates"][0]["id"], json!("cand-used"));
@@ -729,14 +726,14 @@ async fn admin_monitoring_trace_request_exposes_failed_candidate_response_payloa
     usage.client_response_headers = Some(json!({
         "content-type": "application/json"
     }));
-    usage.client_response_body = Some(json!({
+    usage.client_response_body = Some(CapturedBody::json(json!({
         "error": {
             "type": "execution_runtime_non_success_status",
             "message": "execution runtime stream returned non-success status 302",
             "upstream_status": 302,
             "location": "/"
         }
-    }));
+    })));
     usage.request_metadata = Some(json!({
         "client_response_status_code": 502
     }));
@@ -816,7 +813,6 @@ async fn admin_monitoring_trace_request_does_not_replace_attempt_status_with_usa
             100,
         );
         usage.candidate_id = Some("cand-used".to_string());
-        usage.response_body_state = Some(UsageBodyCaptureState::Reference);
         let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
         let data_state =
             crate::data::GatewayDataState::with_request_candidate_and_usage_repository_for_tests(
@@ -902,17 +898,14 @@ async fn admin_monitoring_trace_request_keeps_candidate_errors_without_hydrating
         "content-type": "application/json",
         "x-request-id": "req_usage-cyber-risk-demo"
     }));
-    usage.response_body = Some(json!({
+    usage.response_body = Some(CapturedBody::json(json!({
         "error": {
             "type": "invalid_request",
             "message": "This content was flagged for possible cybersecurity risk.",
             "code": 400
         }
-    }));
-    usage.response_body_state = Some(UsageBodyCaptureState::Reference);
-    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed_with_detached_bodies(
-        vec![usage],
-    ));
+    })));
+    let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let data_state =
         crate::data::GatewayDataState::with_request_candidate_and_usage_repository_for_tests(
             request_candidates,
@@ -940,7 +933,7 @@ async fn admin_monitoring_trace_request_keeps_candidate_errors_without_hydrating
     let upstream_response = &payload["candidates"][0]["extra_data"]["upstream_response"];
     assert_eq!(upstream_response["status_code"], json!(400));
     assert_eq!(upstream_response["source"], json!("upstream_response"));
-    assert_eq!(upstream_response["body_state"], json!("reference"));
+    assert_eq!(upstream_response["body_state"], json!("inline"));
     assert_eq!(
         upstream_response["headers"]["content-type"],
         "text/event-stream"
@@ -990,8 +983,7 @@ async fn admin_monitoring_trace_request_does_not_expose_inline_connect_json_resp
     let payload = br#"{"error":{"code":"resource_exhausted","message":"quota exhausted"}}"#;
     framed.extend_from_slice(&(payload.len() as u32).to_be_bytes());
     framed.extend_from_slice(payload);
-    usage.response_body = Some(json!(BASE64_STANDARD.encode(framed)));
-    usage.response_body_state = Some(UsageBodyCaptureState::Inline);
+    usage.response_body = Some(CapturedBody::json(json!(BASE64_STANDARD.encode(framed))));
     let usage_repository = Arc::new(InMemoryUsageReadRepository::seed(vec![usage]));
     let data_state =
         crate::data::GatewayDataState::with_request_candidate_and_usage_repository_for_tests(

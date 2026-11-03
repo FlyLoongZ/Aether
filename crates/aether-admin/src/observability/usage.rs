@@ -8,8 +8,8 @@ use aether_data::repository::users::StoredUserSummary;
 use aether_data_contracts::repository::{
     provider_catalog::{StoredProviderCatalogEndpoint, StoredProviderCatalogProvider},
     usage::{
-        StoredRequestUsageAudit, StoredUsageAuditSummary, UsageBodyField,
-        LIVE_SESSION_METADATA_KEY, REALTIME_SESSION_METADATA_KEY,
+        BodyEncoding, CapturedBody, StoredRequestUsageAudit, StoredUsageAuditSummary,
+        UsageBodyField, LIVE_SESSION_METADATA_KEY, REALTIME_SESSION_METADATA_KEY,
     },
 };
 use axum::{
@@ -313,19 +313,20 @@ pub fn admin_usage_matches_status(item: &StoredRequestUsageAudit, status: Option
     }
 }
 
-fn admin_usage_has_body_value(
-    item: &StoredRequestUsageAudit,
-    body: Option<&Value>,
-    field: UsageBodyField,
-) -> bool {
-    item.body_capture_result(field, body).available
+fn admin_usage_has_body_value(item: &StoredRequestUsageAudit, field: UsageBodyField) -> bool {
+    item.body_capture_result(field).available
 }
 
+/// Drops the retired `*_body_ref` keys a legacy row may still carry.
 fn admin_usage_strip_body_ref_metadata(metadata: &mut serde_json::Map<String, Value>) {
-    metadata.remove(UsageBodyField::RequestBody.as_ref_key());
-    metadata.remove(UsageBodyField::ProviderRequestBody.as_ref_key());
-    metadata.remove(UsageBodyField::ResponseBody.as_ref_key());
-    metadata.remove(UsageBodyField::ClientResponseBody.as_ref_key());
+    for key in [
+        "request_body_ref",
+        "provider_request_body_ref",
+        "response_body_ref",
+        "client_response_body_ref",
+    ] {
+        metadata.remove(key);
+    }
 }
 
 fn admin_usage_strip_routing_metadata(metadata: &mut serde_json::Map<String, Value>) {
@@ -638,10 +639,7 @@ fn admin_usage_scheduling_failure_json(
         "no_upstream_attempt": item.candidate_id.is_none()
             && item.provider_api_key_id.is_none()
             && item.provider_request_headers.is_none()
-            && item.provider_request_body.is_none()
-            && item
-                .body_ref(UsageBodyField::ProviderRequestBody)
-                .is_none(),
+            && item.provider_request_body.is_none(),
     })
 }
 
@@ -739,14 +737,13 @@ fn admin_usage_error_domains_json(item: &StoredRequestUsageAudit) -> Value {
     let has_upstream_attempt = item.candidate_id.is_some()
         || item.provider_api_key_id.is_some()
         || item.provider_request_headers.is_some()
-        || item.provider_request_body.is_some()
-        || item.body_ref(UsageBodyField::ProviderRequestBody).is_some();
+        || item.provider_request_body.is_some();
     let upstream_error = if has_upstream_attempt {
         admin_usage_error_domain_json(
             "upstream_response",
             item.status_code,
             item.response_headers.as_ref(),
-            item.response_body.as_ref(),
+            item.body_value(UsageBodyField::ResponseBody).as_ref(),
             item.error_category.as_deref(),
             item.error_message.as_deref(),
         )
@@ -758,7 +755,7 @@ fn admin_usage_error_domains_json(item: &StoredRequestUsageAudit) -> Value {
         "client_response",
         item.status_code,
         item.client_response_headers.as_ref(),
-        item.client_response_body.as_ref(),
+        item.body_value(UsageBodyField::ClientResponseBody).as_ref(),
         item.error_category.as_deref(),
         client_error_fallback_message.as_deref(),
     );
@@ -1038,11 +1035,8 @@ pub fn admin_usage_provider_key_name(
 }
 
 fn admin_usage_request_body_stream_flag(item: &StoredRequestUsageAudit) -> Option<bool> {
-    item.request_body
-        .as_ref()
-        .and_then(Value::as_object)
-        .and_then(|body| body.get("stream"))
-        .and_then(Value::as_bool)
+    item.body_value(UsageBodyField::RequestBody)
+        .and_then(|body| body.get("stream").and_then(Value::as_bool))
 }
 
 fn admin_usage_api_format_defaults_to_non_stream(item: &StoredRequestUsageAudit) -> bool {
@@ -1059,10 +1053,13 @@ fn admin_usage_api_format_defaults_to_non_stream(item: &StoredRequestUsageAudit)
 }
 
 fn admin_usage_request_body_implies_default_non_stream(item: &StoredRequestUsageAudit) -> bool {
-    let Some(body) = item.request_body.as_ref().and_then(Value::as_object) else {
+    let Some(body) = item.body_value(UsageBodyField::RequestBody) else {
         return false;
     };
-    !body.contains_key("stream") && admin_usage_api_format_defaults_to_non_stream(item)
+    !body
+        .as_object()
+        .is_some_and(|body| body.contains_key("stream"))
+        && admin_usage_api_format_defaults_to_non_stream(item)
 }
 
 fn admin_usage_headers_stream_flag(headers: Option<&Value>) -> Option<bool> {
@@ -1088,24 +1085,16 @@ fn admin_usage_headers_stream_flag(headers: Option<&Value>) -> Option<bool> {
     )
 }
 
-fn admin_usage_body_is_sse_capture(value: Option<&Value>) -> bool {
-    let Some(object) = value.and_then(Value::as_object) else {
-        return false;
-    };
-    object.get("chunks").and_then(Value::as_array).is_some()
-        && object
-            .get("metadata")
-            .and_then(Value::as_object)
-            .and_then(|metadata| metadata.get("stream"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
+fn admin_usage_body_is_sse_capture(body: Option<&CapturedBody>) -> bool {
+    body.and_then(CapturedBody::encoding) == Some(BodyEncoding::Sse)
 }
 
 fn admin_usage_infer_client_stream_from_captured_bodies(
     item: &StoredRequestUsageAudit,
 ) -> Option<bool> {
-    let provider_stream = admin_usage_body_is_sse_capture(item.response_body.as_ref());
-    let client_stream = admin_usage_body_is_sse_capture(item.client_response_body.as_ref());
+    let provider_stream = admin_usage_body_is_sse_capture(item.body(UsageBodyField::ResponseBody));
+    let client_stream =
+        admin_usage_body_is_sse_capture(item.body(UsageBodyField::ClientResponseBody));
     if client_stream {
         Some(true)
     } else if provider_stream && item.client_response_body.is_some() {
@@ -1118,8 +1107,9 @@ fn admin_usage_infer_client_stream_from_captured_bodies(
 fn admin_usage_infer_upstream_stream_from_captured_bodies(
     item: &StoredRequestUsageAudit,
 ) -> Option<bool> {
-    let provider_stream = admin_usage_body_is_sse_capture(item.response_body.as_ref());
-    let client_stream = admin_usage_body_is_sse_capture(item.client_response_body.as_ref());
+    let provider_stream = admin_usage_body_is_sse_capture(item.body(UsageBodyField::ResponseBody));
+    let client_stream =
+        admin_usage_body_is_sse_capture(item.body(UsageBodyField::ClientResponseBody));
     if provider_stream {
         Some(true)
     } else if client_stream && item.response_body.is_some() {
@@ -2239,7 +2229,8 @@ pub fn admin_usage_resolve_request_capture_body(
 ) -> Option<Value> {
     let resolved_model = item.model.clone();
     let client_is_stream = admin_usage_client_is_stream(item);
-    let mut request_body = body_override.or_else(|| item.request_body.clone())?;
+    let mut request_body =
+        body_override.or_else(|| item.body_value(UsageBodyField::RequestBody))?;
     if let Some(body) = request_body.as_object_mut() {
         body.entry("model".to_string())
             .or_insert_with(|| json!(resolved_model));
@@ -2484,16 +2475,8 @@ pub fn build_admin_usage_curl_response(
         "body": body.cloned().unwrap_or(Value::Null),
         "curl": curl,
         "body_capture": admin_usage_curl_body_capture_json(item),
-        "captured_request_body_available": admin_usage_has_body_value(
-            item,
-            item.request_body.as_ref(),
-            UsageBodyField::RequestBody
-        )
-            || admin_usage_has_body_value(
-                item,
-                item.provider_request_body.as_ref(),
-                UsageBodyField::ProviderRequestBody
-            ),
+        "captured_request_body_available": admin_usage_has_body_value(item, UsageBodyField::RequestBody)
+            || admin_usage_has_body_value(item, UsageBodyField::ProviderRequestBody),
     }))
     .into_response()
 }
@@ -2594,31 +2577,32 @@ pub fn build_admin_usage_detail_payload(
     payload["error_flow"] = error_flow;
     payload["has_request_body"] = json!(admin_usage_has_body_value(
         item,
-        item.request_body.as_ref(),
         UsageBodyField::RequestBody
     ));
     payload["has_provider_request_body"] = json!(admin_usage_has_body_value(
         item,
-        item.provider_request_body.as_ref(),
         UsageBodyField::ProviderRequestBody
     ));
     payload["has_response_body"] = json!(admin_usage_has_body_value(
         item,
-        item.response_body.as_ref(),
         UsageBodyField::ResponseBody
     ));
     payload["has_client_response_body"] = json!(admin_usage_has_body_value(
         item,
-        item.client_response_body.as_ref(),
         UsageBodyField::ClientResponseBody
     ));
     payload["tiered_pricing"] = Value::Null;
     if include_bodies {
         payload["request_body"] = request_body.unwrap_or(Value::Null);
-        payload["provider_request_body"] =
-            item.provider_request_body.clone().unwrap_or(Value::Null);
-        payload["response_body"] = item.response_body.clone().unwrap_or(Value::Null);
-        payload["client_response_body"] = item.client_response_body.clone().unwrap_or(Value::Null);
+        payload["provider_request_body"] = item
+            .body_value(UsageBodyField::ProviderRequestBody)
+            .unwrap_or(Value::Null);
+        payload["response_body"] = item
+            .body_value(UsageBodyField::ResponseBody)
+            .unwrap_or(Value::Null);
+        payload["client_response_body"] = item
+            .body_value(UsageBodyField::ClientResponseBody)
+            .unwrap_or(Value::Null);
     } else {
         payload["request_body"] = Value::Null;
         payload["provider_request_body"] = Value::Null;
@@ -2661,11 +2645,7 @@ pub fn build_admin_usage_replay_plan_response(
         "request_headers": headers,
         "request_body": request_body.clone().unwrap_or(Value::Null),
         "body_capture": admin_usage_replay_body_capture_json(item),
-        "captured_request_body_available": admin_usage_has_body_value(
-            item,
-            item.request_body.as_ref(),
-            UsageBodyField::RequestBody
-        ),
+        "captured_request_body_available": admin_usage_has_body_value(item, UsageBodyField::RequestBody),
         "request_body_available": request_body.is_some(),
         "note": "Rust local replay currently exposes a dry-run plan and does not dispatch upstream",
         "curl": curl,

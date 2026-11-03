@@ -15,7 +15,8 @@ use aether_scheduler_core::{
 };
 use aether_usage_runtime::{
     build_lifecycle_usage_seed, build_sync_terminal_usage_payload_seed,
-    build_terminal_usage_context_seed, build_usage_event_data_seed, UsageEvent, UsageEventType,
+    build_terminal_usage_context_seed, build_usage_event_data_seed, captured_body_from_value,
+    UsageEvent, UsageEventType,
 };
 use async_stream::stream;
 use axum::body::{to_bytes, Body, Bytes};
@@ -371,9 +372,9 @@ async fn record_sync_attempt_forced_terminal_state(
         }
     });
     usage_data.response_headers = Some(json!({"content-type": "application/json"}));
-    usage_data.response_body = Some(error_body.clone());
+    usage_data.response_body = captured_body_from_value(error_body.clone());
     usage_data.client_response_headers = Some(json!({"content-type": "application/json"}));
-    usage_data.client_response_body = Some(error_body);
+    usage_data.client_response_body = captured_body_from_value(error_body);
 
     state
         .usage_runtime

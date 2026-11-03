@@ -10,9 +10,8 @@ use std::time::{Duration, Instant};
 use aether_ai_serving::{AiStreamAttempt, AiSyncAttempt};
 use aether_contracts::ExecutionPlan;
 use aether_data_contracts::repository::usage::{
-    UsageBodyCaptureState, LIVE_SESSION_METADATA_KEY, USAGE_AVAILABLE_METADATA_KEY,
-    USAGE_PRICING_AVAILABLE_METADATA_KEY, WEBSOCKET_MODE_METADATA_KEY,
-    WEBSOCKET_TRANSPORT_METADATA_KEY,
+    LIVE_SESSION_METADATA_KEY, USAGE_AVAILABLE_METADATA_KEY, USAGE_PRICING_AVAILABLE_METADATA_KEY,
+    WEBSOCKET_MODE_METADATA_KEY, WEBSOCKET_TRANSPORT_METADATA_KEY,
 };
 use aether_usage_runtime::build_usage_event_data_seed;
 use serde_json::{json, Map, Value};
@@ -461,25 +460,20 @@ fn clear_live_call_create_http_capture(data: &mut UsageEventData) {
     // needs none of that material, so do not rely on downstream masking alone.
     data.request_headers = None;
     data.request_body = None;
-    data.request_body_ref = None;
-    data.request_body_state = Some(UsageBodyCaptureState::None);
     data.provider_request_headers = None;
     data.provider_request_body = None;
-    data.provider_request_body_ref = None;
-    data.provider_request_body_state = Some(UsageBodyCaptureState::None);
     data.response_headers = None;
     data.response_body = None;
-    data.response_body_ref = None;
-    data.response_body_state = Some(UsageBodyCaptureState::None);
     data.client_response_headers = None;
     data.client_response_body = None;
-    data.client_response_body_ref = None;
-    data.client_response_body_state = Some(UsageBodyCaptureState::None);
     if let Some(metadata) = data
         .request_metadata
         .as_mut()
         .and_then(Value::as_object_mut)
     {
+        // Legacy rows may still carry the retired external-reference keys. The
+        // scrubber owns the whole HTTP surface, not just the current storage
+        // shape, so it keeps removing them.
         for key in [
             "request_body_ref",
             "provider_request_body_ref",
@@ -730,6 +724,7 @@ impl LiveSessionTerminal {
 
 #[cfg(test)]
 mod tests {
+    use aether_data_contracts::repository::usage::CapturedBody;
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
@@ -903,7 +898,6 @@ mod tests {
     #[test]
     fn call_create_capture_scrubber_removes_every_http_surface() {
         let secret = json!({"secret": "live-http-capture-sentinel"});
-        let secret_ref = Some("usage://live-http-capture-sentinel".to_string());
         let mut data = UsageEventData {
             provider_name: "Codex".to_string(),
             model: "gpt-live".to_string(),
@@ -911,21 +905,13 @@ mod tests {
             api_format: Some("codex:live".to_string()),
             status_code: Some(201),
             request_headers: Some(secret.clone()),
-            request_body: Some(secret.clone()),
-            request_body_ref: secret_ref.clone(),
-            request_body_state: Some(UsageBodyCaptureState::Inline),
+            request_body: Some(CapturedBody::json(secret.clone())),
             provider_request_headers: Some(secret.clone()),
-            provider_request_body: Some(secret.clone()),
-            provider_request_body_ref: secret_ref.clone(),
-            provider_request_body_state: Some(UsageBodyCaptureState::Reference),
+            provider_request_body: Some(CapturedBody::json(secret.clone())),
             response_headers: Some(secret.clone()),
-            response_body: Some(secret.clone()),
-            response_body_ref: secret_ref.clone(),
-            response_body_state: Some(UsageBodyCaptureState::Truncated),
+            response_body: Some(CapturedBody::json(secret.clone())),
             client_response_headers: Some(secret.clone()),
-            client_response_body: Some(secret),
-            client_response_body_ref: secret_ref,
-            client_response_body_state: Some(UsageBodyCaptureState::Unavailable),
+            client_response_body: Some(CapturedBody::json(secret)),
             request_metadata: Some(json!({
                 "request_body_ref": "usage://live-http-capture-sentinel/request",
                 "provider_request_body_ref": "usage://live-http-capture-sentinel/provider-request",
@@ -942,42 +928,36 @@ mod tests {
 
         clear_live_call_create_http_capture(&mut data);
 
-        for value in [
+        for headers in [
             data.request_headers.as_ref(),
-            data.request_body.as_ref(),
             data.provider_request_headers.as_ref(),
-            data.provider_request_body.as_ref(),
             data.response_headers.as_ref(),
-            data.response_body.as_ref(),
             data.client_response_headers.as_ref(),
+        ] {
+            assert!(headers.is_none());
+        }
+        for body in [
+            data.request_body.as_ref(),
+            data.provider_request_body.as_ref(),
+            data.response_body.as_ref(),
             data.client_response_body.as_ref(),
         ] {
-            assert!(value.is_none());
+            assert!(body.is_none());
         }
-        assert!(data.request_body_ref.is_none());
-        assert!(data.provider_request_body_ref.is_none());
-        assert!(data.response_body_ref.is_none());
-        assert!(data.client_response_body_ref.is_none());
-        assert_eq!(data.request_body_state, Some(UsageBodyCaptureState::None));
-        assert_eq!(
-            data.provider_request_body_state,
-            Some(UsageBodyCaptureState::None)
-        );
-        assert_eq!(data.response_body_state, Some(UsageBodyCaptureState::None));
-        assert_eq!(
-            data.client_response_body_state,
-            Some(UsageBodyCaptureState::None)
-        );
+        for body in [
+            data.request_body.as_ref(),
+            data.provider_request_body.as_ref(),
+            data.response_body.as_ref(),
+            data.client_response_body.as_ref(),
+        ] {
+            assert_eq!(body, None);
+        }
         let metadata = data
             .request_metadata
             .as_ref()
             .and_then(Value::as_object)
             .expect("capture metadata should remain an object");
         for key in [
-            "request_body_ref",
-            "provider_request_body_ref",
-            "response_body_ref",
-            "client_response_body_ref",
             "provider_request_body_base64_bytes",
             "provider_response_body_base64_bytes",
             "client_response_body_base64_bytes",
@@ -996,16 +976,12 @@ mod tests {
         assert!(!serialized_record.contains("live-http-capture-sentinel"));
         assert!(record.request_headers.is_none());
         assert!(record.request_body.is_none());
-        assert!(record.request_body_ref.is_none());
         assert!(record.provider_request_headers.is_none());
         assert!(record.provider_request_body.is_none());
-        assert!(record.provider_request_body_ref.is_none());
         assert!(record.response_headers.is_none());
         assert!(record.response_body.is_none());
-        assert!(record.response_body_ref.is_none());
         assert!(record.client_response_headers.is_none());
         assert!(record.client_response_body.is_none());
-        assert!(record.client_response_body_ref.is_none());
     }
 
     #[test]

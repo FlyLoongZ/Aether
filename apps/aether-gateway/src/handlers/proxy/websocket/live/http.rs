@@ -1343,9 +1343,15 @@ mod tests {
         assert_eq!(usage.total_cost_usd, 0.0);
         assert_eq!(usage.actual_total_cost_usd, 0.0);
         assert!(usage.request_headers.is_none());
-        assert!(usage.request_body.is_none());
+        assert!(!usage
+            .request_body
+            .as_ref()
+            .is_some_and(|body| body.is_present()));
         assert!(usage.provider_request_headers.is_none());
-        assert!(usage.provider_request_body.is_none());
+        assert!(!usage
+            .provider_request_body
+            .as_ref()
+            .is_some_and(|body| body.is_present()));
         assert!(!serde_json::to_string(&usage)
             .expect("usage should serialize")
             .contains("unmapped-live-offer"));

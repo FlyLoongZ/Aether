@@ -72,6 +72,27 @@ describe('diagnostic export', () => {
     expect(result.reproduction).toMatchObject({ status: 'insufficient_context', missing_context: ['failed_stream_event'] })
   })
 
+  it('recovers the failure window when the stored capture is loaded as text', async () => {
+    const raw = [
+      ['message_start', { type: 'message_start', message: { id: 'msg-1' } }],
+      ['content_block_delta', { type: 'content_block_delta', delta: { type: 'text_delta', text: 'confidential content' } }],
+      ['message_delta', { type: 'message_delta', delta: { stop_reason: 'error' } }],
+      ['message_stop', { type: 'message_stop' }],
+    ].map(([event, payload]) => `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`).join('')
+    const loader = vi.fn(async (_usageId: string, field: string) => field === 'request_body' ? { messages: [] } : raw)
+    const result = await prepareDiagnosticExport(bundle('stream', '$.delta.stop_reason', 'error'), candidate({ diagnostic_context: context }), trace, new AbortController().signal, loader)
+    expect(result.reproduction).toMatchObject({ status: 'sanitized_context', sources: {
+      response_body: { origin: 'stored_body', sample: { captured_frames: 4, failure_frame_index: 2, selection: 'matched_failure' } },
+    } })
+    expect(JSON.stringify(result)).not.toContain('confidential content')
+  })
+
+  it('cannot recover stream evidence from an already parsed chunk document', async () => {
+    const loader = vi.fn(async () => ({ metadata: { stream: true }, chunks: [{ type: 'message_start' }] }))
+    const result = await prepareDiagnosticExport(bundle('stream', '$.delta.stop_reason', 'error'), candidate({ diagnostic_context: context }), trace, new AbortController().signal, loader)
+    expect(result.reproduction).toMatchObject({ status: 'insufficient_context', missing_context: ['failed_stream_event'] })
+  })
+
   it('cancels instead of copying another candidate after navigation', async () => {
     const controller = new AbortController()
     const loader = vi.fn(async () => { controller.abort(); return {} })

@@ -6,7 +6,9 @@ use std::sync::{
 };
 
 use aether_contracts::ExecutionErrorKind;
-use aether_usage_runtime::{build_usage_event_data_seed, UsageEvent, UsageEventType};
+use aether_usage_runtime::{
+    build_usage_event_data_seed, captured_body_from_value, UsageEvent, UsageEventType,
+};
 use axum::body::Body;
 use axum::http::{Response, StatusCode};
 use serde_json::{json, Value};
@@ -221,7 +223,7 @@ pub(crate) async fn build_transport_error_stop_response(
         usage_data.response_headers = None;
         usage_data.response_body = None;
         usage_data.client_response_headers = Some(json!({"content-type": "application/json"}));
-        usage_data.client_response_body = Some(client_body);
+        usage_data.client_response_body = captured_body_from_value(client_body);
         let mut request_metadata = match usage_data.request_metadata.take() {
             Some(Value::Object(object)) => object,
             Some(other) => serde_json::Map::from_iter([("seed".to_string(), other)]),

@@ -5,9 +5,9 @@ use aether_billing::normalize_input_tokens_for_billing;
 use aether_data_contracts::repository::{
     candidates::{RequestCandidateStatus, StoredRequestCandidate},
     usage::{
-        StoredRequestUsageAudit, StoredUsageBreakdownSummaryRow, StoredUsageDailySummary,
-        UsageAuditKeywordSearchQuery, UsageAuditListQuery, UsageBreakdownGroupBy,
-        UsageBreakdownSummaryQuery, UsageCacheAffinityIntervalGroupBy,
+        BodyEncoding, CapturedBody, StoredRequestUsageAudit, StoredUsageBreakdownSummaryRow,
+        StoredUsageDailySummary, UsageAuditKeywordSearchQuery, UsageAuditListQuery, UsageBodyField,
+        UsageBreakdownGroupBy, UsageBreakdownSummaryQuery, UsageCacheAffinityIntervalGroupBy,
         UsageCacheAffinityIntervalQuery, UsageDashboardSummaryQuery,
     },
 };
@@ -279,11 +279,8 @@ fn build_users_me_usage_api_key_payload(
 }
 
 fn users_me_usage_request_body_stream_flag(item: &StoredRequestUsageAudit) -> Option<bool> {
-    item.request_body
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .and_then(|body| body.get("stream"))
-        .and_then(serde_json::Value::as_bool)
+    item.body_value(UsageBodyField::RequestBody)
+        .and_then(|body| body.get("stream").and_then(serde_json::Value::as_bool))
 }
 
 fn users_me_usage_api_format_defaults_to_non_stream(item: &StoredRequestUsageAudit) -> bool {
@@ -300,14 +297,13 @@ fn users_me_usage_api_format_defaults_to_non_stream(item: &StoredRequestUsageAud
 }
 
 fn users_me_usage_request_body_implies_default_non_stream(item: &StoredRequestUsageAudit) -> bool {
-    let Some(body) = item
-        .request_body
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-    else {
+    let Some(body) = item.body_value(UsageBodyField::RequestBody) else {
         return false;
     };
-    !body.contains_key("stream") && users_me_usage_api_format_defaults_to_non_stream(item)
+    !body
+        .as_object()
+        .is_some_and(|body| body.contains_key("stream"))
+        && users_me_usage_api_format_defaults_to_non_stream(item)
 }
 
 fn users_me_usage_headers_stream_flag(headers: Option<&serde_json::Value>) -> Option<bool> {
@@ -333,30 +329,20 @@ fn users_me_usage_headers_stream_flag(headers: Option<&serde_json::Value>) -> Op
     )
 }
 
-fn users_me_usage_body_is_sse_capture(value: Option<&serde_json::Value>) -> bool {
-    let Some(object) = value.and_then(serde_json::Value::as_object) else {
-        return false;
-    };
-    object
-        .get("chunks")
-        .and_then(serde_json::Value::as_array)
-        .is_some()
-        && object
-            .get("metadata")
-            .and_then(serde_json::Value::as_object)
-            .and_then(|metadata| metadata.get("stream"))
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false)
+fn users_me_usage_body_is_sse_capture(body: Option<&CapturedBody>) -> bool {
+    body.and_then(CapturedBody::encoding) == Some(BodyEncoding::Sse)
 }
 
 fn users_me_usage_infer_client_stream_from_captured_bodies(
     item: &StoredRequestUsageAudit,
 ) -> Option<bool> {
-    let provider_stream = users_me_usage_body_is_sse_capture(item.response_body.as_ref());
-    let client_stream = users_me_usage_body_is_sse_capture(item.client_response_body.as_ref());
+    let provider_stream =
+        users_me_usage_body_is_sse_capture(item.body(UsageBodyField::ResponseBody));
+    let client_stream =
+        users_me_usage_body_is_sse_capture(item.body(UsageBodyField::ClientResponseBody));
     if client_stream {
         Some(true)
-    } else if provider_stream && item.client_response_body.is_some() {
+    } else if provider_stream && item.body(UsageBodyField::ClientResponseBody).is_some() {
         Some(false)
     } else {
         None
@@ -366,11 +352,13 @@ fn users_me_usage_infer_client_stream_from_captured_bodies(
 fn users_me_usage_infer_upstream_stream_from_captured_bodies(
     item: &StoredRequestUsageAudit,
 ) -> Option<bool> {
-    let provider_stream = users_me_usage_body_is_sse_capture(item.response_body.as_ref());
-    let client_stream = users_me_usage_body_is_sse_capture(item.client_response_body.as_ref());
+    let provider_stream =
+        users_me_usage_body_is_sse_capture(item.body(UsageBodyField::ResponseBody));
+    let client_stream =
+        users_me_usage_body_is_sse_capture(item.body(UsageBodyField::ClientResponseBody));
     if provider_stream {
         Some(true)
-    } else if client_stream && item.response_body.is_some() {
+    } else if client_stream && item.body(UsageBodyField::ResponseBody).is_some() {
         Some(false)
     } else {
         None
@@ -1614,7 +1602,7 @@ mod tests {
 
     use aether_data_contracts::repository::{
         candidates::{RequestCandidateStatus, StoredRequestCandidate},
-        usage::{StoredRequestUsageAudit, UsageBodyCaptureState},
+        usage::{BodyEncoding, CapturedBody, StoredRequestUsageAudit},
     };
     use serde_json::json;
 
@@ -1895,12 +1883,12 @@ mod tests {
     #[test]
     fn user_usage_payloads_expose_requested_and_provider_reasoning_mapping() {
         let item = StoredRequestUsageAudit {
-            request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({
                 "reasoning": { "effort": "xhigh" }
-            })),
-            provider_request_body: Some(json!({
+            }))),
+            provider_request_body: Some(CapturedBody::json(json!({
                 "reasoning": { "effort": "max" }
-            })),
+            }))),
             ..sample_usage("completed")
         };
 
@@ -1916,14 +1904,14 @@ mod tests {
     #[test]
     fn user_usage_payloads_expose_gemini_thinking_config_reasoning_mapping() {
         let item = StoredRequestUsageAudit {
-            request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({
                 "generationConfig": {
                     "thinkingConfig": { "includeThoughts": true, "thinkingLevel": "HIGH" }
                 }
-            })),
-            provider_request_body: Some(json!({
+            }))),
+            provider_request_body: Some(CapturedBody::json(json!({
                 "generationConfig": { "thinkingConfig": { "thinkingBudget": 8192 } }
-            })),
+            }))),
             ..sample_usage("completed")
         };
 
@@ -2134,10 +2122,10 @@ mod tests {
     fn user_usage_stream_inference_falls_back_to_request_body_stream_flag() {
         let item = StoredRequestUsageAudit {
             is_stream: true,
-            request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({
                 "model": "gpt-5.4",
                 "stream": false
-            })),
+            }))),
             ..sample_usage("completed")
         };
 
@@ -2156,11 +2144,11 @@ mod tests {
         let item = StoredRequestUsageAudit {
             is_stream: true,
             api_format: Some("openai:responses".to_string()),
-            request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({
                 "model": "gpt-5.4",
                 "input": [{"role": "user", "content": "hi"}],
                 "store": false
-            })),
+            }))),
             ..sample_usage("completed")
         };
 
@@ -2185,11 +2173,11 @@ mod tests {
         let item = StoredRequestUsageAudit {
             is_stream: false,
             api_format: Some("openai:search".to_string()),
-            request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({
                 "id": "session-search-1",
                 "model": "gpt-5.6-sol",
                 "input": "current documentation"
-            })),
+            }))),
             ..sample_usage("completed")
         };
 
@@ -2231,23 +2219,24 @@ mod tests {
     ) {
         let item = StoredRequestUsageAudit {
             is_stream: true,
-            response_body: Some(json!({
-                "chunks": [
-                    {"type": "response.created"},
-                    {"type": "response.output_text.delta", "delta": "Hello"}
-                ],
-                "metadata": {
-                    "stream": true,
-                    "stored_chunks": 2,
-                    "total_chunks": 2
-                }
-            })),
-            client_response_body: Some(json!({
+            // A stream is recognised by its encoding, so the capture is the
+            // bytes that crossed the wire rather than a chunk view.
+            response_body: Some(CapturedBody::from_bytes(
+                concat!(
+                    "data: {\"type\":\"response.created\"}\n\n",
+                    "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello\"}\n\n"
+                )
+                .as_bytes()
+                .to_vec(),
+                BodyEncoding::Sse,
+                false,
+            )),
+            client_response_body: Some(CapturedBody::json(json!({
                 "id": "resp-1",
                 "object": "response",
                 "status": "completed",
                 "output": []
-            })),
+            }))),
             ..sample_usage("completed")
         };
 
@@ -2278,8 +2267,6 @@ mod tests {
             client_response_headers: Some(json!({
                 "content-type": "application/json"
             })),
-            response_body_state: Some(UsageBodyCaptureState::Reference),
-            client_response_body_state: Some(UsageBodyCaptureState::Reference),
             request_metadata: Some(json!({"chat_pii_redaction": true})),
             ..sample_usage("completed")
         };

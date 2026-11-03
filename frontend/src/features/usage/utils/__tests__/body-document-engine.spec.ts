@@ -50,8 +50,23 @@ describe('body document decoding', () => {
 })
 
 describe('body encodings', () => {
-  it('keeps an SSE stream as the text that arrived, for the stream renderers', async () => {
+  it('reassembles an SSE stream into the chunk document the viewers speak', async () => {
     const stream = 'event: response.created\ndata: {"type":"response.created"}\n\ndata: [DONE]\n\n'
+    const decoded = await decodeBody(bytes(stream), 'sse')
+    expect(decoded.value).toEqual({
+      metadata: { stream: true },
+      chunks: [{ type: 'response.created' }],
+    })
+  })
+
+  it('joins multi-line SSE data fields and tolerates CRLF line endings', async () => {
+    const stream = 'data: {"a":\r\ndata: 1}\r\n\r\n'
+    const decoded = await decodeBody(bytes(stream), 'sse')
+    expect(decoded.value).toEqual({ metadata: { stream: true }, chunks: [{ a: 1 }] })
+  })
+
+  it('keeps an SSE capture without parseable events as the text that arrived', async () => {
+    const stream = ': keep-alive comment\n\n'
     const decoded = await decodeBody(bytes(stream), 'sse')
     expect(decoded.value).toBe(stream)
   })
