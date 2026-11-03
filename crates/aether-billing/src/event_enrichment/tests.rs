@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use aether_data_contracts::repository::billing::StoredBillingModelContext;
-use aether_data_contracts::repository::usage::UsageBodyCaptureState;
+use aether_data_contracts::repository::usage::{BodyEncoding, CapturedBody, UsageBodyCaptureState};
 use aether_runtime_state::{MemoryRuntimeStateConfig, RuntimeState};
 use aether_usage_runtime::{
     UsageEvent, UsageEventData, UsageEventType, UsageQueue, UsageRuntimeConfig,
@@ -95,10 +95,10 @@ fn wire_billing_event(request_id: &str) -> UsageEvent {
             provider_request_headers: Some(json!({"x-audit": "provider request"})),
             response_headers: Some(json!({"x-audit": "provider response"})),
             client_response_headers: Some(json!({"x-audit": "client response"})),
-            provider_request_body: Some(json!({"model": "gpt-5.6-sol"})),
-            provider_request_body_state: Some(UsageBodyCaptureState::Inline),
-            response_body: Some(json!({"service_tier": "default", "output": "x".repeat(8192)})),
-            response_body_state: Some(UsageBodyCaptureState::Inline),
+            provider_request_body: Some(CapturedBody::json(json!({"model": "gpt-5.6-sol"}))),
+            response_body: Some(CapturedBody::json(
+                json!({"service_tier": "default", "output": "x".repeat(8192)}),
+            )),
             request_metadata: Some(json!({
                 "usage_available": true,
                 "usage_pricing_available": true,
@@ -174,7 +174,7 @@ async fn assert_wire_billing_equivalent(lookup: &TestLookup, original: UsageEven
         .data
         .provider_request_body
         .as_ref()
-        .is_some_and(|body| !body.is_null());
+        .is_some_and(CapturedBody::is_present);
     let queue = UsageQueue::new(
         Arc::new(RuntimeState::memory(MemoryRuntimeStateConfig::default())),
         UsageRuntimeConfig {
@@ -202,17 +202,21 @@ async fn assert_wire_billing_equivalent(lookup: &TestLookup, original: UsageEven
     let mut queued = UsageEvent::from_stream_fields(&entries[0].fields).expect("projected event");
     assert!(original.data.response_body.is_some());
     assert_eq!(
-        original.data.provider_request_body.is_some(),
+        original
+            .data
+            .provider_request_body
+            .as_ref()
+            .is_some_and(CapturedBody::is_present),
         provider_body_present
     );
-    assert!(queued.data.response_body.is_none());
+    assert_eq!(queued.data.response_body, Some(CapturedBody::Unavailable));
     assert!(queued.data.request_headers.is_none());
     assert!(queued.data.provider_request_headers.is_none());
     assert!(queued.data.response_headers.is_none());
     assert!(queued.data.client_response_headers.is_none());
     assert_eq!(
-        queued.data.response_body_state,
-        Some(UsageBodyCaptureState::Truncated)
+        queued.data.response_body_state(),
+        Some(UsageBodyCaptureState::Unavailable)
     );
 
     enrich_usage_event_with_billing(lookup, &mut original)
@@ -240,9 +244,9 @@ async fn wire_projection_preserves_openai_requested_tier_and_effective_cache_ttl
     );
     let mut event = wire_billing_event("wire-openai-tier");
     event.data.cache_creation_input_tokens = Some(100);
-    event.data.provider_request_body = Some(json!({
+    event.data.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5.6-sol", "service_tier": "priority", "reasoning": {"effort": "high"}
-    }));
+    })));
     event.data.request_metadata.as_mut().unwrap()["provider_service_tier"] = json!("flex");
     event.data.request_metadata.as_mut().unwrap()["provider_actual_service_tier"] = json!("flex");
     let queued = assert_wire_billing_equivalent(&lookup, event).await;
@@ -259,7 +263,7 @@ async fn wire_projection_preserves_openai_requested_tier_and_effective_cache_ttl
 }
 
 #[tokio::test]
-async fn wire_projection_preserves_non_object_body_authority_and_null_decode_semantics() {
+async fn wire_projection_keeps_billing_facts_for_non_object_request_bodies() {
     let lookup = wire_billing_lookup(
         Some(json!({
             "tiers": [{"up_to": null, "input_price_per_1m": 5.0,
@@ -278,68 +282,49 @@ async fn wire_projection_preserves_non_object_body_authority_and_null_decode_sem
         ("boolean", json!(false)),
         ("null", Value::Null),
     ] {
-        for state in [
-            Some(UsageBodyCaptureState::Inline),
-            Some(UsageBodyCaptureState::Reference),
-            None,
-        ] {
-            let mut event = wire_billing_event(&format!("wire-{kind}-{state:?}"));
-            event.data.input_tokens = Some(1_000_000);
-            event.data.output_tokens = Some(0);
-            event.data.total_tokens = Some(1_000_000);
-            event.data.cache_creation_input_tokens = Some(1_000_000);
-            event.data.provider_request_body = Some(body.clone());
-            event.data.provider_request_body_state = state;
-            let metadata = event.data.request_metadata.as_mut().unwrap();
-            metadata["provider_service_tier"] = json!("priority");
-            metadata["provider_reasoning_effort"] = json!("high");
-            metadata["provider_cache_ttl_minutes"] = json!(60);
+        let mut event = wire_billing_event(&format!("wire-{kind}"));
+        event.data.input_tokens = Some(1_000_000);
+        event.data.output_tokens = Some(0);
+        event.data.total_tokens = Some(1_000_000);
+        event.data.cache_creation_input_tokens = Some(1_000_000);
+        event.data.provider_request_body = CapturedBody::from_json_value(body.clone()).ok();
+        let metadata = event.data.request_metadata.as_mut().unwrap();
+        metadata["provider_service_tier"] = json!("priority");
+        metadata["provider_reasoning_effort"] = json!("high");
+        metadata["provider_cache_ttl_minutes"] = json!(60);
 
-            let queued = assert_wire_billing_equivalent(&lookup, event).await;
-            let metadata = queued.data.request_metadata.as_ref().unwrap();
-            assert!(queued.data.provider_request_body.is_none());
-            assert_eq!(metadata["provider_cache_ttl_minutes"], 60);
-            assert_eq!(metadata["billing_dimensions"]["cache_ttl_minutes"], 60);
-            let expected_tier = if body.is_null() && state.is_some() {
-                Some("priority")
-            } else {
-                None
-            };
-            assert_eq!(
-                usage_event_processing_tiers(&queued.data)
-                    .requested
-                    .as_deref(),
-                expected_tier,
-                "{kind} with {state:?}"
-            );
-            assert_eq!(
-                queued.data.total_cost_usd,
-                Some(if expected_tier.is_some() {
-                    200.0
-                } else {
-                    100.0
-                }),
-                "{kind} with {state:?}"
-            );
-            if body.is_null() {
-                // Option<Value> decodes JSON null as absent, so the old capture marker remains.
-                assert_eq!(queued.data.provider_request_body_state, state);
-                assert_eq!(metadata["provider_service_tier"], "priority");
-                assert_eq!(metadata["provider_reasoning_effort"], "high");
-            } else {
-                assert_eq!(
-                    queued.data.provider_request_body_state,
-                    Some(UsageBodyCaptureState::Truncated)
-                );
-                assert!(metadata.get("provider_service_tier").is_none());
-                assert!(metadata.get("provider_reasoning_effort").is_none());
-            }
-        }
+        let queued = assert_wire_billing_equivalent(&lookup, event).await;
+        let metadata = queued.data.request_metadata.as_ref().unwrap();
+        // The projection dropped the body: the derived facts (tier and TTL) are
+        // what the billing pass still has to work with.
+        assert_eq!(
+            queued.data.provider_request_body,
+            Some(CapturedBody::Unavailable),
+            "{kind}"
+        );
+        assert_eq!(metadata["provider_cache_ttl_minutes"], 60, "{kind}");
+        assert_eq!(
+            metadata["billing_dimensions"]["cache_ttl_minutes"], 60,
+            "{kind}"
+        );
+        // A non-object body is authoritative but carries no tier or reasoning,
+        // so those derived values are cleared while the TTL fallback survives.
+        assert!(metadata.get("provider_service_tier").is_none(), "{kind}");
+        assert!(
+            metadata.get("provider_reasoning_effort").is_none(),
+            "{kind}"
+        );
+        assert_eq!(
+            usage_event_processing_tiers(&queued.data).requested,
+            None,
+            "{kind}"
+        );
+        assert_eq!(queued.data.total_cost_usd, Some(100.0), "{kind}");
     }
 }
 
 #[tokio::test]
-async fn wire_projection_preserves_raw_body_ttl_with_non_authoritative_capture_states() {
+async fn wire_projection_preserves_raw_body_ttl_when_the_body_is_omitted() {
     let lookup = wire_billing_lookup(
         Some(json!({
             "tiers": [{"up_to": null, "input_price_per_1m": 5.0,
@@ -350,36 +335,47 @@ async fn wire_projection_preserves_raw_body_ttl_with_non_authoritative_capture_s
         })),
         None,
     );
-    for state in [
-        UsageBodyCaptureState::Disabled,
-        UsageBodyCaptureState::Unavailable,
-        UsageBodyCaptureState::Truncated,
+    for (body, expected, expected_cost, expected_ttl) in [
+        // A side that was never captured stays absent on the wire: the metadata
+        // carries the reason, and its TTL still drives billing.
+        (CapturedBody::Disabled, None, 100.0, 60),
+        (CapturedBody::Unavailable, None, 100.0, 60),
+        // A body that was captured and dropped keeps the marker. Its own bytes
+        // could not be read, so the TTL falls back to the body's absence.
+        (
+            CapturedBody::from_bytes(
+                b"{\"model\":\"gpt-5.6-sol\"}".to_vec(),
+                BodyEncoding::Json,
+                true,
+            ),
+            Some(CapturedBody::Unavailable),
+            6.25,
+            30,
+        ),
     ] {
-        let mut event = wire_billing_event(&format!("wire-capture-state-{state:?}"));
+        let mut event = wire_billing_event(&format!("wire-capture-state-{body:?}"));
         event.data.input_tokens = Some(1_000_000);
         event.data.output_tokens = Some(0);
         event.data.total_tokens = Some(1_000_000);
         event.data.cache_creation_input_tokens = Some(1_000_000);
-        event.data.provider_request_body = Some(json!({
-            "model": "gpt-5.6-sol", "prompt_cache_options": {"ttl": "30m"}
-        }));
-        event.data.provider_request_body_state = Some(state);
+        event.data.provider_request_body = Some(body);
         event.data.request_metadata.as_mut().unwrap()["provider_cache_ttl_minutes"] = json!(60);
 
         let queued = assert_wire_billing_equivalent(&lookup, event).await;
-        assert_eq!(queued.data.provider_request_body_state, Some(state));
-        assert!(queued.data.provider_request_body.is_none());
-        assert_eq!(queued.data.total_cost_usd, Some(6.25));
+        // Nothing the body could have said survived the wire, so it keeps the
+        // reason and the TTL the report already knew.
+        assert_eq!(queued.data.provider_request_body, expected);
+        assert_eq!(queued.data.total_cost_usd, Some(expected_cost));
         assert_eq!(
             queued.data.request_metadata.as_ref().unwrap()["billing_dimensions"]
                 ["cache_ttl_minutes"],
-            30
+            expected_ttl
         );
     }
 }
 
 #[tokio::test]
-async fn wire_projection_rejects_typed_none_when_omitting_raw_ttl_would_change_billing() {
+async fn wire_projection_keeps_raw_body_ttl_when_the_body_is_omitted() {
     let lookup = wire_billing_lookup(
         Some(json!({
             "tiers": [{"up_to": null, "input_price_per_1m": 5.0,
@@ -395,58 +391,24 @@ async fn wire_projection_rejects_typed_none_when_omitting_raw_ttl_would_change_b
     event.data.output_tokens = Some(0);
     event.data.total_tokens = Some(1_000_000);
     event.data.cache_creation_input_tokens = Some(1_000_000);
-    event.data.provider_request_body = Some(json!({
+    event.data.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5.6-sol", "prompt_cache_options": {"ttl": "30m"}
-    }));
-    event.data.provider_request_body_state = Some(UsageBodyCaptureState::None);
+    })));
     event.data.request_metadata.as_mut().unwrap()["provider_cache_ttl_minutes"] = json!(60);
-    let original_fields = event.to_stream_fields().expect("legacy full envelope");
-    assert!(original_fields["payload"].len() > 4096);
-    let mut legacy = UsageEvent::from_stream_fields(&original_fields).expect("legacy consumer");
+
+    let queued = assert_wire_billing_equivalent(&lookup, event).await;
+
+    // The body did not fit, so the projection carries the reason and keeps the
+    // TTL it derived, which is what billing still reads.
     assert_eq!(
-        legacy.data.provider_request_body_state,
-        Some(UsageBodyCaptureState::None)
+        queued.data.provider_request_body,
+        Some(CapturedBody::Unavailable)
     );
-    assert!(legacy.data.provider_request_body.is_some());
-    assert!(legacy
-        .data
-        .request_metadata
-        .as_ref()
-        .unwrap()
-        .get("provider_cache_ttl_minutes")
-        .is_none());
-    enrich_usage_event_with_billing(&lookup, &mut legacy)
-        .await
-        .expect("legacy billing");
-    assert_eq!(legacy.data.total_cost_usd, Some(6.25));
-
-    let queue = UsageQueue::new(
-        Arc::new(RuntimeState::memory(MemoryRuntimeStateConfig::default())),
-        UsageRuntimeConfig {
-            enabled: true,
-            queue_payload_max_bytes: 4096,
-            consumer_block_ms: 1,
-            ..UsageRuntimeConfig::default()
-        },
-    )
-    .expect("bounded billing queue");
-    queue.ensure_consumer_group().await.expect("billing group");
-    assert!(matches!(
-        queue.enqueue(&event).await,
-        Err(aether_data_contracts::DataLayerError::InvalidInput(_))
-    ));
-    assert_eq!(event.to_stream_fields().unwrap(), original_fields);
-    assert!(queue
-        .read_group("typed-none-reader")
-        .await
-        .unwrap()
-        .is_empty());
-
-    // The unchanged source event remains usable by the terminal direct-write fallback.
-    enrich_usage_event_with_billing(&lookup, &mut event)
-        .await
-        .expect("direct fallback billing");
-    assert_eq!(wire_billing_result(&event), wire_billing_result(&legacy));
+    assert_eq!(queued.data.total_cost_usd, Some(6.25));
+    assert_eq!(
+        queued.data.request_metadata.as_ref().unwrap()["billing_dimensions"]["cache_ttl_minutes"],
+        30
+    );
 }
 
 #[tokio::test]
@@ -467,7 +429,6 @@ async fn wire_projection_preserves_claude_cache_ttl_and_explicit_zero_segments()
     event.data.api_format = Some("claude:messages".to_string());
     event.data.endpoint_api_format = Some("claude:messages".to_string());
     event.data.provider_request_body = None;
-    event.data.provider_request_body_state = Some(UsageBodyCaptureState::Disabled);
     event.data.cache_creation_input_tokens = Some(200);
     event.data.cache_creation_ephemeral_5m_input_tokens = Some(0);
     event.data.cache_creation_ephemeral_1h_input_tokens = Some(100);
@@ -640,8 +601,8 @@ async fn authoritative_realtime_audio_tokens_are_visible_but_not_text_priced() {
 #[test]
 fn processing_tier_fact_uses_final_provider_request_body() {
     let data = UsageEventData {
-        provider_request_body: Some(json!({"service_tier": "Priority"})),
-        response_body: Some(json!({"service_tier": "priority"})),
+        provider_request_body: Some(CapturedBody::json(json!({"service_tier": "Priority"}))),
+        response_body: Some(CapturedBody::json(json!({"service_tier": "priority"}))),
         request_metadata: Some(json!({
             "provider_service_tier": "batch",
             "provider_actual_service_tier": "Default"
@@ -657,10 +618,10 @@ fn processing_tier_fact_uses_final_provider_request_body() {
 #[test]
 fn processing_tier_facts_recognize_anthropic_fast_speed() {
     let data = UsageEventData {
-        provider_request_body: Some(json!({"speed": "fast"})),
-        response_body: Some(json!({
+        provider_request_body: Some(CapturedBody::json(json!({"speed": "fast"}))),
+        response_body: Some(CapturedBody::json(json!({
             "usage": {"speed": "fast", "service_tier": "standard"}
-        })),
+        }))),
         ..UsageEventData::default()
     };
 
@@ -672,8 +633,8 @@ fn processing_tier_facts_recognize_anthropic_fast_speed() {
 #[test]
 fn processing_tier_does_not_fall_back_to_stale_metadata_when_body_is_present() {
     let data = UsageEventData {
-        provider_request_body: Some(json!({"model": "gpt-5"})),
-        response_body: Some(json!({"service_tier": "priority"})),
+        provider_request_body: Some(CapturedBody::json(json!({"model": "gpt-5"}))),
+        response_body: Some(CapturedBody::json(json!({"service_tier": "priority"}))),
         request_metadata: Some(json!({
             "provider_service_tier": "priority",
             "provider_actual_service_tier": "priority"
@@ -683,6 +644,8 @@ fn processing_tier_does_not_fall_back_to_stale_metadata_when_body_is_present() {
 
     let tiers = usage_event_processing_tiers(&data);
 
+    // A complete request body answers for itself: it carries no tier, so the
+    // stale metadata value does not survive, and the response is no substitute.
     assert_eq!(tiers.requested, None);
 }
 
@@ -690,8 +653,7 @@ fn processing_tier_does_not_fall_back_to_stale_metadata_when_body_is_present() {
 fn processing_tier_uses_request_derived_metadata_when_body_capture_was_disabled() {
     let data = UsageEventData {
         provider_request_body: None,
-        provider_request_body_state: Some(UsageBodyCaptureState::Disabled),
-        response_body: Some(json!({"service_tier": "flex"})),
+        response_body: Some(CapturedBody::json(json!({"service_tier": "flex"}))),
         request_metadata: Some(json!({
             "provider_service_tier": "priority",
             "provider_actual_service_tier": "flex"
@@ -705,11 +667,10 @@ fn processing_tier_uses_request_derived_metadata_when_body_capture_was_disabled(
 }
 
 #[test]
-fn processing_tier_does_not_use_metadata_or_response_when_final_request_body_is_missing() {
+fn processing_tier_falls_back_to_derived_metadata_when_the_request_body_is_missing() {
     let data = UsageEventData {
         provider_request_body: None,
-        provider_request_body_state: Some(UsageBodyCaptureState::None),
-        response_body: Some(json!({"service_tier": "priority"})),
+        response_body: Some(CapturedBody::json(json!({"service_tier": "priority"}))),
         request_metadata: Some(json!({
             "provider_service_tier": "priority",
             "provider_actual_service_tier": "priority"
@@ -719,21 +680,20 @@ fn processing_tier_does_not_use_metadata_or_response_when_final_request_body_is_
 
     let tiers = usage_event_processing_tiers(&data);
 
-    assert_eq!(tiers.requested, None);
+    // Without a captured request body the tier recorded when it was derived is
+    // the only remaining source; the response body is never a substitute.
+    assert_eq!(tiers.requested.as_deref(), Some("priority"));
 }
 
 #[test]
 fn processing_tier_uses_request_derived_metadata_when_body_capture_was_truncated() {
     let data = UsageEventData {
-        provider_request_body: Some(json!({
-            "truncated": true,
-            "reason": "body_capture_limit_exceeded",
-            "max_bytes": 128,
-            "source_bytes": 4096,
-            "value_kind": "object"
-        })),
-        provider_request_body_state: Some(UsageBodyCaptureState::Truncated),
-        response_body: Some(json!({"service_tier": "default"})),
+        provider_request_body: Some(CapturedBody::from_bytes(
+            b"{\"truncated\":true}".to_vec(),
+            BodyEncoding::Json,
+            true,
+        )),
+        response_body: Some(CapturedBody::json(json!({"service_tier": "default"}))),
         request_metadata: Some(json!({
             "provider_service_tier": "priority",
             "provider_actual_service_tier": "default"
@@ -809,7 +769,8 @@ async fn settlement_uses_effective_gpt_5_6_cache_ttl_after_body_capture() {
                 request_type: Some("chat".to_string()),
                 api_format: Some("openai:responses".to_string()),
                 endpoint_api_format: Some("openai:responses".to_string()),
-                provider_request_body,
+                provider_request_body: provider_request_body
+                    .and_then(|body| CapturedBody::from_json_value(body).ok()),
                 request_metadata,
                 input_tokens: Some(1_000_000),
                 cache_creation_input_tokens: Some(1_000_000),
@@ -950,10 +911,10 @@ async fn openai_fast_usage_without_overlay_inherits_global_model_pricing() {
             api_format: Some("openai:responses".to_string()),
             endpoint_api_format: Some("openai:responses".to_string()),
             // OpenAI calls the Fast request tier `priority` on the wire.
-            provider_request_body: Some(json!({
+            provider_request_body: Some(CapturedBody::json(json!({
                 "model": "gpt-5.6-sol",
                 "service_tier": "priority"
-            })),
+            }))),
             input_tokens: Some(1_000_000),
             status_code: Some(200),
             ..UsageEventData::default()
@@ -1027,8 +988,8 @@ async fn settlement_uses_requested_processing_tier_catalog_and_ignores_response_
             request_type: Some("chat".to_string()),
             api_format: Some("openai:responses".to_string()),
             endpoint_api_format: Some("openai:responses".to_string()),
-            provider_request_body: Some(json!({"service_tier": "priority"})),
-            response_body: Some(json!({"service_tier": "priority"})),
+            provider_request_body: Some(CapturedBody::json(json!({"service_tier": "priority"}))),
+            response_body: Some(CapturedBody::json(json!({"service_tier": "priority"}))),
             request_metadata: Some(json!({
                 "provider_service_tier": "priority",
                 "provider_actual_service_tier": "flex"
@@ -1129,7 +1090,7 @@ async fn requested_processing_catalog_controls_image_price_with_independent_fixe
             request_type: Some("image".to_string()),
             api_format: Some("openai:image".to_string()),
             endpoint_api_format: Some("openai:image".to_string()),
-            provider_request_body: Some(json!({"service_tier": "priority"})),
+            provider_request_body: Some(CapturedBody::json(json!({"service_tier": "priority"}))),
             request_metadata: Some(json!({
                 "provider_actual_service_tier": "flex",
                 "dimensions": {"image_count": 2}

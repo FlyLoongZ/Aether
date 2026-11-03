@@ -7,7 +7,7 @@ use aether_data_contracts::repository::usage::{
     sanitize_usage_request_metadata as project_usage_request_metadata,
     sanitize_usage_request_metadata_object as project_usage_request_metadata_object,
     sanitize_usage_request_metadata_ref as project_usage_request_metadata_ref,
-    usage_body_capture_is_authoritative, UsageBodyCaptureState,
+    usage_body_capture_is_authoritative, CapturedBody, UsageBodyCaptureState,
     BILLING_MULTIPLIER_SNAPSHOT_METADATA_KEY, CHAT_PII_REDACTION_METADATA_KEY,
     PROVIDER_ACTUAL_SERVICE_TIER_METADATA_KEY, PROVIDER_CACHE_TTL_MINUTES_METADATA_KEY,
     PROVIDER_REASONING_EFFORT_METADATA_KEY, PROVIDER_RESPONSE_MODEL_METADATA_KEY,
@@ -25,7 +25,7 @@ pub(crate) enum RequestBodyDerivedFactsAction {
 }
 
 pub(crate) fn request_body_derived_facts_action(
-    request_body: Option<&Value>,
+    request_body: Option<&CapturedBody>,
     state: Option<UsageBodyCaptureState>,
 ) -> RequestBodyDerivedFactsAction {
     // A typed `none` marker is produced by the final capture attempt. It must take precedence over
@@ -36,17 +36,15 @@ pub(crate) fn request_body_derived_facts_action(
     }
 
     if let Some(request_body) = request_body {
-        if matches!(
-            state,
-            Some(
-                UsageBodyCaptureState::Truncated
-                    | UsageBodyCaptureState::Disabled
-                    | UsageBodyCaptureState::Unavailable
-            )
-        ) || request_body.as_object().is_some_and(|body| {
-            body.get("truncated").and_then(Value::as_bool) == Some(true)
-                && body.get("reason").and_then(Value::as_str) == Some("body_capture_limit_exceeded")
-        }) {
+        // A truncated or unavailable body still describes the request, but its
+        // derived facts are incomplete, so the ones already recorded stand.
+        if !matches!(
+            request_body,
+            CapturedBody::Bytes {
+                truncated: false,
+                ..
+            }
+        ) {
             return RequestBodyDerivedFactsAction::Preserve;
         }
         return RequestBodyDerivedFactsAction::Refresh;
@@ -55,7 +53,6 @@ pub(crate) fn request_body_derived_facts_action(
     match state {
         Some(
             UsageBodyCaptureState::Inline
-            | UsageBodyCaptureState::Reference
             | UsageBodyCaptureState::Truncated
             | UsageBodyCaptureState::Disabled
             | UsageBodyCaptureState::Unavailable,
@@ -139,10 +136,11 @@ fn projected_metadata_object(value: Option<&Value>) -> Map<String, Value> {
 
 pub(crate) fn attach_client_request_body_metadata(
     metadata: Option<Value>,
-    request_body: Option<&Value>,
+    request_body: Option<&CapturedBody>,
 ) -> Option<Value> {
-    let request_body_is_object = request_body.and_then(Value::as_object).is_some();
-    let reasoning_effort = extract_provider_reasoning_effort_from_body(request_body);
+    let request_body = request_body.and_then(CapturedBody::as_json_value);
+    let request_body_is_object = request_body.as_ref().and_then(Value::as_object).is_some();
+    let reasoning_effort = extract_provider_reasoning_effort_from_body(request_body.as_ref());
     if !request_body_is_object && reasoning_effort.is_none() {
         return metadata;
     }
@@ -168,16 +166,21 @@ pub(crate) fn attach_provider_request_body_metadata(
     provider_api_format: Option<&str>,
     provider_model: Option<&str>,
     source_model: Option<&str>,
-    provider_request_body: Option<&Value>,
+    provider_request_body: Option<&CapturedBody>,
 ) -> Option<Value> {
-    let provider_body_is_object = provider_request_body.and_then(Value::as_object).is_some();
-    let reasoning_effort = extract_provider_reasoning_effort_from_body(provider_request_body);
-    let service_tier = extract_provider_service_tier_from_body(provider_request_body);
+    let provider_request_body = provider_request_body.and_then(CapturedBody::as_json_value);
+    let provider_body_is_object = provider_request_body
+        .as_ref()
+        .and_then(Value::as_object)
+        .is_some();
+    let reasoning_effort =
+        extract_provider_reasoning_effort_from_body(provider_request_body.as_ref());
+    let service_tier = extract_provider_service_tier_from_body(provider_request_body.as_ref());
     let cache_ttl_minutes = resolve_provider_cache_ttl_minutes(
         provider_api_format,
         provider_model,
         source_model,
-        provider_request_body,
+        provider_request_body.as_ref(),
     );
     if !provider_body_is_object
         && reasoning_effort.is_none()
@@ -243,8 +246,9 @@ fn clear_request_metadata_fields(metadata: Option<Value>, keys: &[&str]) -> Opti
 
 pub(crate) fn attach_provider_response_body_metadata(
     metadata: Option<Value>,
-    provider_response_body: Option<&Value>,
+    provider_response_body: Option<&CapturedBody>,
 ) -> Option<Value> {
+    let provider_response_body = provider_response_body.and_then(CapturedBody::as_json_value);
     if metadata
         .as_ref()
         .and_then(Value::as_object)
@@ -256,27 +260,32 @@ pub(crate) fn attach_provider_response_body_metadata(
         return metadata;
     }
     let actual_service_tier =
-        extract_provider_actual_service_tier_from_response(provider_response_body);
+        extract_provider_actual_service_tier_from_response(provider_response_body.as_ref());
     attach_provider_actual_service_tier_metadata(metadata, actual_service_tier.as_deref())
 }
 
 pub(crate) fn attach_provider_response_model_metadata(
     metadata: Option<Value>,
-    request_body: Option<&Value>,
-    request_body_state: Option<UsageBodyCaptureState>,
+    request_body: Option<&CapturedBody>,
     request_api_format: Option<&str>,
-    response_body: Option<&Value>,
-    response_body_state: Option<UsageBodyCaptureState>,
+    response_body: Option<&CapturedBody>,
     provider_api_format: Option<&str>,
 ) -> Option<Value> {
+    let request_body_value = request_body.and_then(CapturedBody::as_json_value);
+    let response_body_value = response_body.and_then(CapturedBody::as_json_value);
+    let request_body_state = request_body.and_then(CapturedBody::state_label);
+    let response_body_state = response_body.and_then(CapturedBody::state_label);
     let both_bodies_are_authoritative =
-        usage_body_capture_is_authoritative(request_body, request_body_state)
-            && usage_body_capture_is_authoritative(response_body, response_body_state);
+        usage_body_capture_is_authoritative(request_body_value.as_ref(), request_body_state)
+            && usage_body_capture_is_authoritative(
+                response_body_value.as_ref(),
+                response_body_state,
+            );
     let response_model = extract_provider_response_model_from_bodies(
-        request_body,
+        request_body_value.as_ref(),
         request_body_state,
         request_api_format,
-        response_body,
+        response_body_value.as_ref(),
         response_body_state,
         provider_api_format,
     );
@@ -304,11 +313,9 @@ pub(crate) fn attach_provider_response_model_metadata(
 /// 终态候选无法完成比较时，显式清除旧响应模型，避免重试/故障转移残留。
 pub(crate) fn refresh_provider_response_model_metadata(
     metadata: Option<Value>,
-    request_body: Option<&Value>,
-    request_body_state: Option<UsageBodyCaptureState>,
+    request_body: Option<&CapturedBody>,
     request_api_format: Option<&str>,
-    response_body: Option<&Value>,
-    response_body_state: Option<UsageBodyCaptureState>,
+    response_body: Option<&CapturedBody>,
     provider_api_format: Option<&str>,
 ) -> Option<Value> {
     let mut object = match metadata {
@@ -317,14 +324,18 @@ pub(crate) fn refresh_provider_response_model_metadata(
     };
     object.remove(PROVIDER_RESPONSE_MODEL_METADATA_KEY);
 
-    if usage_body_capture_is_authoritative(request_body, request_body_state)
-        && usage_body_capture_is_authoritative(response_body, response_body_state)
+    let request_body_value = request_body.and_then(CapturedBody::as_json_value);
+    let response_body_value = response_body.and_then(CapturedBody::as_json_value);
+    let request_body_state = request_body.and_then(CapturedBody::state_label);
+    let response_body_state = response_body.and_then(CapturedBody::state_label);
+    if usage_body_capture_is_authoritative(request_body_value.as_ref(), request_body_state)
+        && usage_body_capture_is_authoritative(response_body_value.as_ref(), response_body_state)
     {
         if let Some(response_model) = extract_provider_response_model_from_bodies(
-            request_body,
+            request_body_value.as_ref(),
             request_body_state,
             request_api_format,
-            response_body,
+            response_body_value.as_ref(),
             response_body_state,
             provider_api_format,
         ) {
@@ -343,18 +354,20 @@ pub(crate) fn refresh_provider_response_model_metadata(
 /// metadata is preserved for those cases.
 pub(crate) fn refresh_provider_response_body_metadata(
     metadata: Option<Value>,
-    provider_response_body: Option<&Value>,
+    provider_response_body: Option<&CapturedBody>,
 ) -> Option<Value> {
-    let is_capture_placeholder = provider_response_body
-        .and_then(Value::as_object)
-        .is_some_and(|body| {
-            body.get("truncated").and_then(Value::as_bool) == Some(true)
-                && body.get("reason").and_then(Value::as_str) == Some("body_capture_limit_exceeded")
-        });
-    let body_is_complete_object =
-        provider_response_body.and_then(Value::as_object).is_some() && !is_capture_placeholder;
+    // Only a complete capture can authoritatively clear a stale tier: a
+    // truncated one still describes the response, but not all of it.
+    let body_is_complete_object = matches!(
+        provider_response_body,
+        Some(CapturedBody::Bytes {
+            truncated: false,
+            ..
+        })
+    );
+    let provider_response_body = provider_response_body.and_then(CapturedBody::as_json_value);
     let actual_service_tier =
-        extract_provider_actual_service_tier_from_response(provider_response_body)
+        extract_provider_actual_service_tier_from_response(provider_response_body.as_ref())
             .and_then(|value| normalize_provider_service_tier(&value));
     let Some(actual_service_tier) = actual_service_tier else {
         if !body_is_complete_object {
@@ -400,7 +413,7 @@ pub(crate) fn attach_provider_actual_service_tier_metadata(
 #[cfg(test)]
 mod tests {
     use aether_contracts::{ExecutionPlan, RequestBody};
-    use aether_data_contracts::repository::usage::UsageBodyCaptureState;
+    use aether_data_contracts::repository::usage::CapturedBody;
     use serde_json::{json, Value};
     use std::collections::BTreeMap;
 
@@ -773,17 +786,19 @@ mod tests {
                 "trace_id": "trace-1",
                 "requested_reasoning_effort": "low"
             })),
-            Some(&json!({
+            Some(&CapturedBody::json(json!({
                 "reasoning": { "effort": "XHigh" }
-            })),
+            }))),
         )
         .expect("metadata should remain");
 
         assert_eq!(updated["requested_reasoning_effort"], "xhigh");
 
-        let cleared =
-            attach_client_request_body_metadata(Some(updated), Some(&json!({ "model": "gpt-5" })))
-                .expect("trace metadata should remain");
+        let cleared = attach_client_request_body_metadata(
+            Some(updated),
+            Some(&CapturedBody::json(json!({ "model": "gpt-5" }))),
+        )
+        .expect("trace metadata should remain");
         assert!(cleared.get("requested_reasoning_effort").is_none());
     }
 
@@ -802,7 +817,7 @@ mod tests {
 
         let metadata = attach_client_request_body_metadata(
             Some(json!({ "trace_id": "trace-1" })),
-            Some(&client_body),
+            Some(&CapturedBody::json(client_body)),
         )
         .expect("metadata should remain");
         assert_eq!(metadata["requested_reasoning_effort"], "high");
@@ -812,7 +827,7 @@ mod tests {
             Some("gemini:generate_content"),
             Some("gemini-3.8-flash"),
             Some("gemini-3.8-flash"),
-            Some(&provider_body),
+            Some(&CapturedBody::json(provider_body)),
         )
         .expect("metadata should remain");
 
@@ -833,11 +848,11 @@ mod tests {
             Some("openai:responses"),
             Some("gpt-5.6-sol"),
             Some("gpt-5.6-sol"),
-            Some(&json!({
+            Some(&CapturedBody::json(json!({
                 "model": "gpt-5.6-sol",
                 "reasoning": { "effort": "low" },
                 "service_tier": "standard"
-            })),
+            }))),
         )
         .expect("metadata should remain");
 
@@ -856,9 +871,9 @@ mod tests {
             Some("openai:responses"),
             Some("gpt-5"),
             Some("gpt-5"),
-            Some(&json!({
+            Some(&CapturedBody::json(json!({
                 "model": "gpt-5"
-            })),
+            }))),
         )
         .expect("metadata should retain unrelated fields");
 
@@ -881,13 +896,16 @@ mod tests {
             "reasoning": { "effort": "max" },
             "service_tier": "priority"
         });
-        let request_metadata = attach_client_request_body_metadata(None, Some(&request_body));
+        let request_metadata = attach_client_request_body_metadata(
+            None,
+            Some(&CapturedBody::json(request_body.clone())),
+        );
         let request_metadata = attach_provider_request_body_metadata(
             request_metadata,
             Some("openai:responses"),
             Some("gpt-5"),
             Some("gpt-5"),
-            Some(&provider_request_body),
+            Some(&CapturedBody::json(provider_request_body.clone())),
         );
         let mut event = UsageEvent::new(
             UsageEventType::Completed,
@@ -895,8 +913,8 @@ mod tests {
             UsageEventData {
                 provider_name: "OpenAI".to_string(),
                 model: "gpt-5".to_string(),
-                request_body: Some(request_body),
-                provider_request_body: Some(provider_request_body),
+                request_body: Some(CapturedBody::json(request_body.clone())),
+                provider_request_body: Some(CapturedBody::json(provider_request_body.clone())),
                 request_metadata,
                 ..UsageEventData::default()
             },
@@ -910,8 +928,11 @@ mod tests {
             &mut event,
         );
 
-        assert_eq!(event.data.request_body, None);
-        assert_eq!(event.data.provider_request_body, None);
+        assert_eq!(event.data.request_body, Some(CapturedBody::Disabled));
+        assert_eq!(
+            event.data.provider_request_body,
+            Some(CapturedBody::Disabled)
+        );
         assert_eq!(
             event
                 .data
@@ -942,12 +963,12 @@ mod tests {
     fn provider_response_metadata_preserves_terminal_actual_service_tier() {
         let metadata = attach_provider_response_body_metadata(
             Some(json!({"provider_service_tier": "priority"})),
-            Some(&json!({
+            Some(&CapturedBody::json(json!({
                 "chunks": [
                     {"service_tier": "priority"},
                     {"service_tier": "Default", "usage": {"total_tokens": 12}}
                 ]
-            })),
+            }))),
         )
         .expect("requested and actual provider tiers should be preserved");
 
@@ -964,11 +985,9 @@ mod tests {
     fn response_model_metadata_is_independent_from_mapping_and_clears_stale_values() {
         let metadata = attach_provider_response_model_metadata(
             Some(json!({"provider_response_model": "old-model", "trace_id": "trace-1"})),
-            Some(&json!({"model": "gpt-5"})),
-            Some(UsageBodyCaptureState::Inline),
+            Some(&CapturedBody::json(json!({"model": "gpt-5"}))),
             Some("openai:chat"),
-            Some(&json!({"model": "gpt-5.1"})),
-            Some(UsageBodyCaptureState::Inline),
+            Some(&CapturedBody::json(json!({"model": "gpt-5.1"}))),
             Some("openai:chat"),
         )
         .expect("response model should be attached");
@@ -977,11 +996,9 @@ mod tests {
 
         let metadata = refresh_provider_response_model_metadata(
             Some(json!({"provider_response_model": "gpt-5.1"})),
-            Some(&json!({"model": "gpt-5"})),
-            Some(UsageBodyCaptureState::Inline),
+            Some(&CapturedBody::json(json!({"model": "gpt-5"}))),
             Some("openai:chat"),
-            Some(&json!({"model": "gpt-5"})),
-            Some(UsageBodyCaptureState::Inline),
+            Some(&CapturedBody::json(json!({"model": "gpt-5"}))),
             Some("openai:chat"),
         );
         assert!(metadata.is_none());
@@ -989,10 +1006,8 @@ mod tests {
         let metadata = refresh_provider_response_model_metadata(
             Some(json!({"provider_response_model": "gpt-5.1"})),
             None,
-            Some(UsageBodyCaptureState::Disabled),
             Some("openai:chat"),
-            Some(&json!({"model": "gpt-5.2"})),
-            Some(UsageBodyCaptureState::Inline),
+            Some(&CapturedBody::json(json!({"model": "gpt-5.2"}))),
             Some("openai:chat"),
         );
         assert!(metadata.is_none());
@@ -1002,7 +1017,7 @@ mod tests {
     fn terminal_response_refresh_replaces_stale_actual_tier() {
         let metadata = refresh_provider_response_body_metadata(
             Some(json!({"provider_actual_service_tier": "priority"})),
-            Some(&json!({"service_tier": "Default"})),
+            Some(&CapturedBody::json(json!({"service_tier": "Default"}))),
         )
         .expect("actual tier should remain");
         assert_eq!(metadata["provider_actual_service_tier"], "default");
@@ -1012,7 +1027,7 @@ mod tests {
                 "trace_id": "trace-1",
                 "provider_actual_service_tier": "priority"
             })),
-            Some(&json!({"id": "response-without-tier"})),
+            Some(&CapturedBody::json(json!({"id": "response-without-tier"}))),
         )
         .expect("un-tiered complete response should remain auditable");
         assert_eq!(metadata, json!({"trace_id": "trace-1"}));
@@ -1022,10 +1037,11 @@ mod tests {
     fn terminal_response_refresh_preserves_summary_over_capture_placeholder() {
         let metadata = refresh_provider_response_body_metadata(
             Some(json!({"provider_actual_service_tier": "priority"})),
-            Some(&json!({
-                "truncated": true,
-                "reason": "body_capture_limit_exceeded"
-            })),
+            Some(&CapturedBody::from_bytes(
+                b"{\"truncated\":true}".to_vec(),
+                aether_data_contracts::repository::usage::BodyEncoding::Json,
+                true,
+            )),
         )
         .expect("summary should survive placeholder capture");
         assert_eq!(metadata["provider_actual_service_tier"], "priority");
@@ -1052,7 +1068,9 @@ mod tests {
     fn terminal_summary_tier_precedes_truncated_response_capture() {
         let metadata = attach_provider_response_body_metadata(
             Some(json!({"provider_actual_service_tier": "default"})),
-            Some(&json!({"chunks": [{"service_tier": "priority"}]})),
+            Some(&CapturedBody::json(
+                json!({"chunks": [{"service_tier": "priority"}]}),
+            )),
         )
         .expect("terminal summary tier should remain");
 

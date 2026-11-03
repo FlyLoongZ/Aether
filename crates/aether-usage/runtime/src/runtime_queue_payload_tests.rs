@@ -58,17 +58,13 @@ fn payload_event(request_id: &str, oversized: bool) -> UsageEvent {
             provider_request_headers: Some(json!({"x-provider-request": "original"})),
             response_headers: Some(json!({"x-provider-response": "original"})),
             client_response_headers: Some(json!({"x-client-response": "original"})),
-            request_body: Some(json!({"reasoning": {"effort": "high"}, "input": "original"})),
-            request_body_state: Some(UsageBodyCaptureState::Inline),
-            provider_request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({"reasoning": {"effort": "high"}, "input": "original"}))),
+            provider_request_body: Some(CapturedBody::json(json!({
                 "model": "gpt-5", "service_tier": "priority",
                 "prompt_cache_retention": "24h", "input": "original provider input"
-            })),
-            provider_request_body_state: Some(UsageBodyCaptureState::Inline),
-            response_body: Some(json!({"service_tier": "default", "output": "original output"})),
-            response_body_state: Some(UsageBodyCaptureState::Inline),
-            client_response_body: Some(json!({"output": "original client output"})),
-            client_response_body_state: Some(UsageBodyCaptureState::Inline),
+            }))),
+            response_body: Some(CapturedBody::json(json!({"service_tier": "default", "output": "original output"}))),
+            client_response_body: Some(CapturedBody::json(json!({"output": "original client output"}))),
             request_metadata: Some(json!({
                 "api_key_is_standalone": true,
                 "plan_usage_reservation_token": "550e8400-e29b-41d4-a716-446655440000",
@@ -123,10 +119,7 @@ async fn terminal_oversize_uses_original_event_for_direct_fallback_without_openi
         assert_eq!(records.as_slice(), &[expected]);
         assert_eq!(records[0].cache_read_input_tokens, Some(0));
         assert_eq!(records[0].cache_creation_ephemeral_5m_input_tokens, Some(0));
-        assert_eq!(
-            records[0].request_body_state,
-            Some(UsageBodyCaptureState::Inline)
-        );
+        assert!(records[0].request_body.is_some());
         assert!(records[0].provider_request_body.is_some());
         assert!(records[0].request_headers.is_some());
     }

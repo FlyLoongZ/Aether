@@ -1,3 +1,5 @@
+use aether_data_contracts::repository::usage::{BodyEncoding, CapturedBody};
+
 use super::{
     build_pending_usage_event_from_owned_seed, build_pending_usage_record,
     build_pending_usage_record_from_seed, build_stream_terminal_usage_event,
@@ -7,9 +9,9 @@ use super::{
     build_terminal_usage_event_from_seed, build_usage_event_data_seed,
     build_usage_event_data_seed_describing_request_bodies, extract_token_counts_from_json,
     extract_token_counts_from_value, headers_to_json, mask_sensitive_body_fields,
-    parse_sse_body_for_storage, resolve_error_message, validate_usage_headers_in_json_value,
-    LifecycleUsageSeed, TerminalUsageSeed, UsageBodyRefsSeed, UsageBodyStatesSeed,
-    UsageRoutingSeed, UsageTerminalState, MAX_USAGE_CAPTURE_BYTES, MAX_USAGE_CAPTURE_DEPTH,
+    resolve_error_message, validate_usage_headers_in_json_value, LifecycleUsageSeed,
+    TerminalUsageSeed, UsageRoutingSeed, UsageTerminalState, MAX_USAGE_CAPTURE_BYTES,
+    MAX_USAGE_CAPTURE_DEPTH,
 };
 
 fn default_test_plan() -> ExecutionPlan {
@@ -602,10 +604,11 @@ fn sync_terminal_usage_preserves_overdeep_request_payloads_for_repo_body_storage
             .as_ref()
             .and_then(|value| value.get("original_request_body"))
             .cloned()
+            .map(CapturedBody::json)
     );
     assert_eq!(
         event.data.provider_request_body,
-        Some(json!({"input": "safe"}))
+        Some(CapturedBody::json(json!({"input": "safe"})))
     );
 }
 
@@ -752,6 +755,7 @@ fn sync_terminal_usage_redacts_provider_request_body_secrets_from_context() {
         .data
         .provider_request_body
         .as_ref()
+        .and_then(CapturedBody::as_json_value)
         .expect("provider request body should be captured");
 
     assert_ne!(
@@ -823,30 +827,23 @@ fn builds_stream_terminal_usage_from_provider_body_and_preserves_client_body() {
     assert_eq!(event.data.total_tokens, Some(8));
     assert_eq!(
         event.data.response_body,
-        Some(json!({
+        Some(CapturedBody::json(json!({
             "usage": {
                 "prompt_tokens": 3,
                 "completion_tokens": 5,
                 "total_tokens": 8
             }
-        }))
+        })))
     );
+    let client_body = event
+        .data
+        .client_response_body
+        .as_ref()
+        .expect("client response should be captured");
+    assert_eq!(client_body.encoding(), Some(BodyEncoding::Sse));
     assert_eq!(
-        event.data.client_response_body,
-        Some(json!({
-            "chunks": [
-                {
-                    "id": "chatcmpl_123"
-                }
-            ],
-            "metadata": {
-                "stream": true,
-                "total_chunks": 1,
-                "stored_chunks": 1,
-                "content_length": 42,
-                "has_completion": true
-            }
-        }))
+        client_body.bytes(),
+        Some("data: {\"id\":\"chatcmpl_123\"}\n\ndata: [DONE]\n".as_bytes())
     );
 }
 
@@ -1161,8 +1158,10 @@ fn builds_stream_terminal_usage_from_terminal_summary_usage_without_decoding_bod
     assert_eq!(event.data.total_tokens, Some(34));
     assert_eq!(event.data.cache_creation_input_tokens, Some(2));
     assert_eq!(event.data.cache_read_input_tokens, Some(3));
-    assert!(event.data.response_body.is_none());
-    assert!(event.data.client_response_body.is_none());
+    // "captured nothing" is a zero-byte capture, not an absent direction.
+    for body in [&event.data.response_body, &event.data.client_response_body] {
+        assert_eq!(body.as_ref().and_then(CapturedBody::bytes), Some(&[][..]));
+    }
     assert_eq!(
         event
             .data
@@ -1270,14 +1269,12 @@ fn stream_terminal_usage_marks_empty_openai_responses_capture_as_missing_termina
             .data
             .client_response_body
             .as_ref()
-            .and_then(|body| body.get("error"))
-            .and_then(|error| error.get("type"))
-            .and_then(Value::as_str),
-        Some("stream_missing_terminal_event")
-    );
-    assert_eq!(
-        event.data.client_response_body_state,
-        Some(UsageBodyCaptureState::Inline)
+            .and_then(CapturedBody::as_json_value)
+            .and_then(|body| body
+                .get("error")
+                .and_then(|error| error.get("type"))
+                .cloned()),
+        Some(json!("stream_missing_terminal_event"))
     );
 }
 
@@ -1443,20 +1440,24 @@ fn stream_terminal_usage_marks_http_200_response_failed_as_stream_terminal_error
             .data
             .client_response_body
             .as_ref()
-            .and_then(|body| body.get("error"))
-            .and_then(|error| error.get("code"))
-            .and_then(Value::as_str),
-        Some("cyber_policy")
+            .and_then(CapturedBody::as_json_value)
+            .and_then(|body| body
+                .get("error")
+                .and_then(|error| error.get("code"))
+                .cloned()),
+        Some(json!("cyber_policy"))
     );
     assert_eq!(
         event
             .data
             .client_response_body
             .as_ref()
-            .and_then(|body| body.get("error"))
-            .and_then(|error| error.get("type"))
-            .and_then(Value::as_str),
-        Some("stream_terminal_error")
+            .and_then(CapturedBody::as_json_value)
+            .and_then(|body| body
+                .get("error")
+                .and_then(|error| error.get("type"))
+                .cloned()),
+        Some(json!("stream_terminal_error"))
     );
 }
 
@@ -1790,66 +1791,13 @@ fn builds_stream_terminal_usage_from_sse_chunks_and_extracts_usage() {
     assert_eq!(event.data.total_tokens, Some(8));
     assert_eq!(event.data.cache_creation_input_tokens, Some(1));
     assert_eq!(event.data.cache_read_input_tokens, Some(2));
-    assert_eq!(
-        event.data.response_body,
-        Some(json!({
-            "chunks": [
-                {
-                    "type": "response.created",
-                    "response": {
-                        "id": "resp_123",
-                        "object": "response",
-                        "model": "gpt-5.4",
-                        "status": "in_progress"
-                    }
-                },
-                {
-                    "type": "response.output_text.delta",
-                    "delta": "Hello from Responses stream"
-                },
-                {
-                    "type": "response.completed",
-                    "response": {
-                        "id": "resp_123",
-                        "object": "response",
-                        "model": "gpt-5.4",
-                        "status": "completed",
-                        "output": [
-                            {
-                                "type": "message",
-                                "role": "assistant",
-                                "content": [
-                                    {
-                                        "type": "output_text",
-                                        "text": "Hello from Responses stream"
-                                    }
-                                ]
-                            }
-                        ],
-                        "usage": {
-                            "input_tokens": 3,
-                            "input_tokens_details": {
-                                "cached_tokens": 2,
-                                "cached_creation_tokens": 1
-                            },
-                            "output_tokens": 5,
-                            "output_tokens_details": {
-                                "reasoning_tokens": 1
-                            },
-                            "total_tokens": 8
-                        }
-                    }
-                }
-            ],
-            "metadata": {
-                "stream": true,
-                "total_chunks": 3,
-                "stored_chunks": 3,
-                "content_length": sse_body.len(),
-                "has_completion": true
-            }
-        }))
-    );
+    let response_body = event
+        .data
+        .response_body
+        .as_ref()
+        .expect("provider response should be captured");
+    assert_eq!(response_body.encoding(), Some(BodyEncoding::Sse));
+    assert_eq!(response_body.bytes(), Some(sse_body.as_bytes()));
 }
 
 #[test]
@@ -1963,20 +1911,20 @@ fn builds_sync_terminal_usage_from_provider_body_and_preserves_client_body() {
     );
     assert_eq!(
         event.data.response_body,
-        Some(json!({
+        Some(CapturedBody::json(json!({
             "usageMetadata": {
                 "promptTokenCount": 4,
                 "candidatesTokenCount": 6,
                 "totalTokenCount": 10
             }
-        }))
+        })))
     );
     assert_eq!(
         event.data.client_response_body,
-        Some(json!({
+        Some(CapturedBody::json(json!({
             "id": "chatcmpl_456",
             "object": "chat.completion"
-        }))
+        })))
     );
 }
 
@@ -2050,31 +1998,38 @@ fn sync_terminal_usage_prefers_upstream_stream_body_over_aggregated_sync_body() 
     assert_eq!(event.data.input_tokens, Some(3));
     assert_eq!(event.data.output_tokens, Some(5));
     assert_eq!(event.data.total_tokens, Some(8));
+    // The stream is kept exactly as it arrived: the reader parses it, the row
+    // does not rewrite it into a synthetic chunk array.
+    let response_body = event
+        .data
+        .response_body
+        .as_ref()
+        .expect("provider response should be captured");
+    assert_eq!(response_body.encoding(), Some(BodyEncoding::Sse));
+    assert_eq!(
+        response_body.bytes(),
+        Some(sse_body.as_bytes()),
+        "the stored stream must be byte-for-byte the one that arrived"
+    );
     assert_eq!(
         event
             .data
-            .response_body
+            .client_response_body
             .as_ref()
-            .and_then(|value| value.get("chunks"))
-            .and_then(Value::as_array)
-            .and_then(|chunks| chunks.get(1))
-            .and_then(|chunk| chunk.get("type"))
-            .and_then(Value::as_str),
-        Some("response.output_text.delta")
-    );
-    assert_eq!(
-        event.data.client_response_body.as_ref().and_then(|value| {
-            value
-                .get("output")
-                .and_then(Value::as_array)
-                .and_then(|output| output.first())
-                .and_then(|item| item.get("content"))
-                .and_then(Value::as_array)
-                .and_then(|content| content.first())
-                .and_then(|part| part.get("text"))
-                .and_then(Value::as_str)
-        }),
-        Some("Hello from upstream stream")
+            .and_then(CapturedBody::as_json_value)
+            .and_then(|value| {
+                value
+                    .get("output")
+                    .and_then(Value::as_array)
+                    .and_then(|output| output.first())
+                    .and_then(|item| item.get("content"))
+                    .and_then(Value::as_array)
+                    .and_then(|content| content.first())
+                    .and_then(|part| part.get("text"))
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+            }),
+        Some("Hello from upstream stream".to_string())
     );
 }
 
@@ -2136,9 +2091,9 @@ fn sync_terminal_usage_prefers_error_body_over_partial_upstream_stream_body() {
             .data
             .response_body
             .as_ref()
-            .and_then(|value| value.pointer("/error/type"))
-            .and_then(Value::as_str),
-        Some("internal")
+            .and_then(CapturedBody::as_json_value)
+            .and_then(|value| value.pointer("/error/type").cloned()),
+        Some(json!("internal"))
     );
 }
 
@@ -2235,11 +2190,8 @@ fn sync_terminal_usage_exposes_provider_request_body_ref_as_typed_field() {
         .expect("usage event should build");
 
     assert!(event.data.request_body.is_none());
+    // A body that only exists as plan bytes has no capture the row can store.
     assert!(event.data.provider_request_body.is_none());
-    assert_eq!(
-        event.data.provider_request_body_ref.as_deref(),
-        Some("blob://provider-request-1")
-    );
     assert!(event
         .data
         .request_metadata
@@ -2425,17 +2377,17 @@ fn stream_terminal_usage_preserves_large_sse_response_for_repo_body_storage() {
     assert_eq!(event.data.total_tokens, Some(8));
     assert_eq!(event.data.cache_creation_input_tokens, Some(1));
     assert_eq!(event.data.cache_read_input_tokens, Some(2));
-    assert_eq!(
-        event
-            .data
-            .response_body
-            .as_ref()
-            .and_then(|value| value.get("chunks"))
-            .and_then(Value::as_array)
-            .and_then(|chunks| chunks.get(1))
-            .and_then(|value| value.get("delta"))
-            .and_then(Value::as_str),
-        Some(large_delta.as_str())
+    let response_body = event
+        .data
+        .response_body
+        .as_ref()
+        .expect("provider response should be captured");
+    assert_eq!(response_body.encoding(), Some(BodyEncoding::Sse));
+    let stored = String::from_utf8(response_body.bytes().expect("bytes").to_vec())
+        .expect("sse body is utf-8");
+    assert!(
+        stored.contains(large_delta.as_str()),
+        "the stored stream must keep every delta verbatim"
     );
 }
 
@@ -2474,10 +2426,10 @@ fn sync_terminal_usage_does_not_fallback_request_body_to_plan_when_client_echo_i
     assert!(event.data.request_body.is_none());
     assert_eq!(
         event.data.provider_request_body,
-        Some(json!({
+        Some(CapturedBody::json(json!({
             "model": "gpt-5.4",
             "input": [{"role": "user", "content": "provider-side compiled body"}],
-        }))
+        })))
     );
     let body_size = event
         .data
@@ -2564,6 +2516,7 @@ fn openai_image_sync_terminal_usage_captures_request_and_response_bodies() {
             .as_ref()
             .and_then(|value| value.get("original_request_body"))
             .cloned()
+            .map(CapturedBody::json)
     );
     assert_eq!(
         event.data.provider_request_body,
@@ -2572,21 +2525,13 @@ fn openai_image_sync_terminal_usage_captures_request_and_response_bodies() {
             .as_ref()
             .and_then(|value| value.get("provider_request_body"))
             .cloned()
+            .map(CapturedBody::json)
     );
-    assert_eq!(event.data.response_body, payload.body_json);
+    assert_eq!(
+        event.data.response_body,
+        payload.body_json.clone().map(CapturedBody::json)
+    );
     assert!(event.data.client_response_body.is_none());
-    assert_eq!(
-        event.data.request_body_state,
-        Some(UsageBodyCaptureState::Inline)
-    );
-    assert_eq!(
-        event.data.provider_request_body_state,
-        Some(UsageBodyCaptureState::Inline)
-    );
-    assert_eq!(
-        event.data.response_body_state,
-        Some(UsageBodyCaptureState::Inline)
-    );
 }
 
 #[test]
@@ -2737,8 +2682,6 @@ fn manual_terminal_seed_event_builder_sanitizes_metadata_but_preserves_headers_a
         request_type: "chat".to_string(),
         has_format_conversion: false,
         is_stream: false,
-        body_refs: UsageBodyRefsSeed::default(),
-        body_states: UsageBodyStatesSeed::default(),
         routing: UsageRoutingSeed {
             candidate_id: Some("cand-1".to_string()),
             ..UsageRoutingSeed::default()
@@ -2752,9 +2695,9 @@ fn manual_terminal_seed_event_builder_sanitizes_metadata_but_preserves_headers_a
             "authorization": "Bearer very-secret-token",
             "accept": "application/json"
         })),
-        request_body: Some(json!({
+        request_body: Some(CapturedBody::json(json!({
             "payload": "x".repeat(MAX_USAGE_CAPTURE_BYTES + 1)
-        })),
+        }))),
         provider_request_headers: Some(json!({
             "x-api-key": "sk-proj-super-secret"
         })),
@@ -2762,13 +2705,13 @@ fn manual_terminal_seed_event_builder_sanitizes_metadata_but_preserves_headers_a
         provider_response_headers: Some(json!({
             "set-cookie": "session=extremely-secret-cookie"
         })),
-        provider_response: Some(json!({
+        provider_response: Some(CapturedBody::json(json!({
             "usage": {
                 "input_tokens": 1,
                 "output_tokens": 2,
                 "total_tokens": 3
             }
-        })),
+        }))),
         client_response_headers: Some(json!({
             "authorization": "Bearer client-secret"
         })),
@@ -2811,9 +2754,9 @@ fn manual_terminal_seed_event_builder_sanitizes_metadata_but_preserves_headers_a
     );
     assert_eq!(
         event.data.request_body,
-        Some(json!({
+        Some(CapturedBody::json(json!({
             "payload": "x".repeat(MAX_USAGE_CAPTURE_BYTES + 1)
-        }))
+        })))
     );
     assert_eq!(event.data.input_tokens, Some(1));
     assert_eq!(event.data.output_tokens, Some(2));
@@ -2863,7 +2806,6 @@ fn lifecycle_seed_builder_sanitizes_manual_request_metadata() {
             provider_endpoint_kind: Some("chat".to_string()),
             has_format_conversion: Some(false),
             is_stream: false,
-            body_states: UsageBodyStatesSeed::default(),
             routing: UsageRoutingSeed {
                 candidate_id: Some("cand-1".to_string()),
                 ..UsageRoutingSeed::default()
@@ -2917,9 +2859,9 @@ fn usage_event_data_seed_preserves_headers_before_outcome_paths_use_it() {
     );
     assert_eq!(
         data.request_body,
-        Some(json!({
+        Some(CapturedBody::json(json!({
             "payload": "x".repeat(MAX_USAGE_CAPTURE_BYTES + 1)
-        }))
+        })))
     );
 }
 
@@ -3001,27 +2943,10 @@ fn describing_request_bodies_matches_the_capturing_seed_apart_from_the_bodies() 
     assert_eq!(described.request_body, None);
     assert_eq!(described.provider_request_body, None);
 
-    // Everything a terminal write reads to decide what to do with the stored
-    // capture is identical, so the described seed preserves it rather than
-    // clearing it.
-    assert_eq!(
-        described.request_body_state,
-        Some(UsageBodyCaptureState::Inline)
-    );
-    assert_eq!(
-        described.provider_request_body_state,
-        Some(UsageBodyCaptureState::Inline)
-    );
-    assert_eq!(described.request_body_state, captured.request_body_state);
-    assert_eq!(
-        described.provider_request_body_state,
-        captured.provider_request_body_state
-    );
-    assert_eq!(described.request_body_ref, captured.request_body_ref);
-    assert_eq!(
-        described.provider_request_body_ref,
-        captured.provider_request_body_ref
-    );
+    // A described seed carries no body, so it says nothing about the stored
+    // capture: the terminal write keeps whatever an earlier write recorded.
+    assert_eq!(described.request_body_state(), None);
+    assert_eq!(described.provider_request_body_state(), None);
     assert_eq!(described.request_type, captured.request_type);
     assert_eq!(described.request_metadata, captured.request_metadata);
     assert_eq!(
@@ -3047,10 +2972,7 @@ fn describing_request_bodies_keeps_the_unavailable_marker_for_raw_bodies() {
 
     let described = build_usage_event_data_seed_describing_request_bodies(&plan, None);
 
-    assert_eq!(
-        described.provider_request_body_state,
-        Some(UsageBodyCaptureState::Unavailable)
-    );
+    assert_eq!(described.provider_request_body_state(), None);
 }
 
 #[test]
@@ -3143,48 +3065,6 @@ fn resolve_error_message_extracts_generic_message_from_base64_body() {
         resolve_error_message(500, None, Some(body_base64.as_str())),
         Some("upstream exploded".to_string()),
     );
-}
-
-#[test]
-fn parse_sse_body_for_storage_handles_crlf_and_cr_line_endings() {
-    let sse_body = concat!(
-        "data: {\"id\":\"chunk-1\"}\r\n",
-        "\r\n",
-        "data: {\"id\":\"chunk-2\"}\r",
-        "\r",
-        "data: [DONE]\r",
-    );
-
-    assert_eq!(
-        parse_sse_body_for_storage(sse_body),
-        Some(json!({
-            "chunks": [
-                {"id": "chunk-1"},
-                {"id": "chunk-2"}
-            ],
-            "metadata": {
-                "stream": true,
-                "total_chunks": 2,
-                "stored_chunks": 2,
-                "content_length": sse_body.len(),
-                "has_completion": true
-            }
-        })),
-    );
-}
-
-#[test]
-fn parse_sse_body_for_storage_reports_bad_event_before_valid_terminal() {
-    let body = concat!(
-        "data: {\"tools\":[}\n\n",
-        "data: {\"type\":\"response.completed\"}\n\n",
-    );
-    let parsed = parse_sse_body_for_storage(body).unwrap();
-    assert_eq!(parsed["metadata"]["dropped_chunks"], 1);
-    assert_eq!(parsed["metadata"]["first_parse_error"]["chunk_index"], 0);
-    assert!(parsed["metadata"]["first_parse_error"]["message"].is_string());
-    assert_eq!(parsed["chunks"][0]["type"], "response.completed");
-    assert!(parsed.get("raw_response").is_none());
 }
 
 #[test]

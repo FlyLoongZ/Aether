@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::io::{self, Write};
 
 use aether_data_contracts::repository::usage::{
-    resolve_provider_cache_ttl_minutes, UsageBodyCaptureState,
+    resolve_provider_cache_ttl_minutes, CapturedBody, UsageBodyCaptureState,
     PROVIDER_CACHE_TTL_MINUTES_METADATA_KEY, PROVIDER_REASONING_EFFORT_METADATA_KEY,
     PROVIDER_SERVICE_TIER_METADATA_KEY, REQUESTED_REASONING_EFFORT_METADATA_KEY,
 };
@@ -29,12 +29,6 @@ const DIAGNOSTIC_FIELDS: [&str; 8] = [
     "provider_request_headers",
     "response_headers",
     "client_response_headers",
-];
-const BODY_STATE_FIELDS: [&str; 4] = [
-    "request_body_state",
-    "provider_request_body_state",
-    "response_body_state",
-    "client_response_body_state",
 ];
 const BODY_METADATA_KEYS: [&str; 4] =
     ["request", "provider_request", "response", "client_response"];
@@ -159,28 +153,30 @@ impl Write for BoundedJsonWriter {
 }
 
 struct WireOverrides {
-    truncated: [bool; 4],
+    omitted: [bool; 4],
     metadata: Option<Value>,
 }
 
 impl WireOverrides {
     fn new(data: &UsageEventData) -> Result<Self, DataLayerError> {
-        // The full v1 consumer decodes a JSON null Option<Value> as no body.
-        let request_body = data.request_body.as_ref().filter(|body| !body.is_null());
+        let request_body = data.request_body.as_ref().filter(|body| body.is_present());
         let provider_request_body = data
             .provider_request_body
             .as_ref()
-            .filter(|body| !body.is_null());
+            .filter(|body| body.is_present());
+        let request_body_value = request_body.and_then(CapturedBody::as_json_value);
+        let provider_request_body_value =
+            provider_request_body.and_then(CapturedBody::as_json_value);
         let body_cache_ttl = resolve_provider_cache_ttl_minutes(
             data.endpoint_api_format
                 .as_deref()
                 .or(data.api_format.as_deref()),
             data.target_model.as_deref().or(Some(data.model.as_str())),
             Some(data.model.as_str()),
-            provider_request_body,
+            provider_request_body_value.as_ref(),
         );
         if body_cache_ttl.is_some()
-            && data.provider_request_body_state == Some(UsageBodyCaptureState::None)
+            && data.provider_request_body_state() == Some(UsageBodyCaptureState::None)
         {
             return Err(DataLayerError::InvalidInput(
                 "usage event cannot omit a provider request body whose cache TTL would be cleared by its explicit none capture state"
@@ -188,9 +184,12 @@ impl WireOverrides {
             ));
         }
         let mut metadata = data.request_metadata.clone();
-        match request_body_derived_facts_action(request_body, data.request_body_state) {
+        match request_body_derived_facts_action(request_body, data.request_body_state()) {
             RequestBodyDerivedFactsAction::Refresh => {
-                if request_body.is_some_and(|body| !body.is_object()) {
+                if request_body_value
+                    .as_ref()
+                    .is_some_and(|body| !body.is_object())
+                {
                     if let Some(Value::Object(object)) = metadata.as_mut() {
                         object.remove(REQUESTED_REASONING_EFFORT_METADATA_KEY);
                     }
@@ -199,7 +198,7 @@ impl WireOverrides {
                 }
             }
             RequestBodyDerivedFactsAction::Clear
-                if request_body.is_some() || data.request_body_state.is_some() =>
+                if request_body.is_some() || data.request_body_state().is_some() =>
             {
                 metadata = clear_client_request_body_metadata(metadata);
             }
@@ -207,10 +206,13 @@ impl WireOverrides {
         }
         match request_body_derived_facts_action(
             provider_request_body,
-            data.provider_request_body_state,
+            data.provider_request_body_state(),
         ) {
             RequestBodyDerivedFactsAction::Refresh => {
-                if provider_request_body.is_some_and(|body| !body.is_object()) {
+                if provider_request_body_value
+                    .as_ref()
+                    .is_some_and(|body| !body.is_object())
+                {
                     // An authoritative scalar/array has no tier or reasoning,
                     // but billing still falls back to the metadata's cache TTL.
                     if let Some(Value::Object(object)) = metadata.as_mut() {
@@ -231,7 +233,7 @@ impl WireOverrides {
             }
             RequestBodyDerivedFactsAction::Clear
                 if provider_request_body.is_some()
-                    || data.provider_request_body_state.is_some() =>
+                    || data.provider_request_body_state().is_some() =>
             {
                 metadata = clear_provider_request_body_metadata(metadata);
             }
@@ -241,10 +243,8 @@ impl WireOverrides {
         metadata = attach_provider_response_model_metadata(
             metadata,
             request_body,
-            data.request_body_state,
             data.api_format.as_deref(),
             data.response_body.as_ref(),
-            data.response_body_state,
             data.endpoint_api_format.as_deref(),
         );
         // Billing reads raw-body TTL before metadata regardless of capture state.
@@ -264,31 +264,15 @@ impl WireOverrides {
                 Value::Number(cache_ttl.into()),
             );
         }
-        let truncated = [
-            (data.request_body.as_ref(), data.request_body_state),
-            (
-                data.provider_request_body.as_ref(),
-                data.provider_request_body_state,
-            ),
-            (data.response_body.as_ref(), data.response_body_state),
-            (
-                data.client_response_body.as_ref(),
-                data.client_response_body_state,
-            ),
+        let omitted = [
+            data.request_body.as_ref(),
+            data.provider_request_body.as_ref(),
+            data.response_body.as_ref(),
+            data.client_response_body.as_ref(),
         ]
-        .map(|(body, state)| {
-            body.is_some_and(|body| !body.is_null())
-                && !matches!(
-                    state,
-                    Some(
-                        UsageBodyCaptureState::None
-                            | UsageBodyCaptureState::Disabled
-                            | UsageBodyCaptureState::Unavailable
-                    )
-                )
-        });
-        for (truncated, key) in truncated.into_iter().zip(BODY_METADATA_KEYS) {
-            if !truncated {
+        .map(|body| body.is_some_and(CapturedBody::is_present));
+        for (omitted, key) in omitted.into_iter().zip(BODY_METADATA_KEYS) {
+            if !omitted {
                 continue;
             }
             mark_usage_event_capture_truncated(&mut metadata, key);
@@ -304,10 +288,7 @@ impl WireOverrides {
                 );
             }
         }
-        Ok(Self {
-            truncated,
-            metadata,
-        })
+        Ok(Self { omitted, metadata })
     }
 }
 
@@ -346,10 +327,11 @@ impl<M: SerializeMap> SerializeStruct for FieldProjectionSerializer<'_, M> {
         }
         if let Some(overrides) = self.overrides {
             if key == "request_metadata"
-                || BODY_STATE_FIELDS
+                || DIAGNOSTIC_FIELDS
                     .iter()
-                    .zip(overrides.truncated)
-                    .any(|(state, truncated)| *state == key && truncated)
+                    .take(4)
+                    .zip(overrides.omitted)
+                    .any(|(body, omitted)| *body == key && omitted)
             {
                 return Ok(());
             }
@@ -359,10 +341,12 @@ impl<M: SerializeMap> SerializeStruct for FieldProjectionSerializer<'_, M> {
 
     fn end(mut self) -> Result<Self::Ok, Self::Error> {
         if let Some(overrides) = self.overrides {
-            for (key, truncated) in BODY_STATE_FIELDS.into_iter().zip(overrides.truncated) {
-                if truncated {
+            // An omitted body still happened, so the consumer keeps the marker
+            // rather than decoding a plain absence.
+            for (key, omitted) in DIAGNOSTIC_FIELDS.into_iter().take(4).zip(overrides.omitted) {
+                if omitted {
                     self.map
-                        .serialize_entry(key, &UsageBodyCaptureState::Truncated)?;
+                        .serialize_entry(key, &Some(CapturedBody::Unavailable))?;
                 }
             }
             if let Some(metadata) = overrides.metadata.as_ref() {
@@ -611,20 +595,20 @@ mod tests {
     fn event_wire_omission_preserves_billing_facts_refs_and_source_ownership() {
         let mut event = event();
         let padding = "x".repeat(16_384);
-        event.data.request_body = Some(json!({"reasoning": {"effort": "high"}, "input": padding}));
-        event.data.provider_request_body = Some(
+        event.data.request_body = Some(CapturedBody::json(
+            json!({"reasoning": {"effort": "high"}, "input": padding}),
+        ));
+        event.data.provider_request_body = Some(CapturedBody::json(
             json!({"model": "gpt-5.6-sol", "reasoning": {"effort": "medium"}, "service_tier": "priority", "input": padding}),
-        );
-        event.data.response_body = Some(json!({"service_tier": "Default", "output": padding}));
-        event.data.client_response_body = Some(json!({"output": padding}));
+        ));
+        event.data.response_body = Some(CapturedBody::json(
+            json!({"service_tier": "Default", "output": padding}),
+        ));
+        event.data.client_response_body = Some(CapturedBody::json(json!({"output": padding})));
         event.data.request_headers = Some(json!({"x-request": padding}));
         event.data.provider_request_headers = Some(json!({"x-provider": padding}));
         event.data.response_headers = Some(json!({"x-response": padding}));
         event.data.client_response_headers = Some(json!({"x-client": padding}));
-        event.data.request_body_ref = Some("usage://wire-request/request_body".to_string());
-        event.data.request_body_state = Some(UsageBodyCaptureState::Inline);
-        event.data.provider_request_body_state = Some(UsageBodyCaptureState::Inline);
-        event.data.response_body_state = Some(UsageBodyCaptureState::Inline);
         event.data.request_metadata.as_mut().unwrap()["body_capture"] = json!({
             "response": {"state": "inline", "source_bytes": 123_456}
         });
@@ -640,7 +624,7 @@ mod tests {
         assert!(encoded.diagnostics_omitted);
         assert!(encoded.fields["payload"].len() <= 8_192);
         let value = wire_value(&encoded);
-        for field in DIAGNOSTIC_FIELDS {
+        for field in DIAGNOSTIC_FIELDS.into_iter().skip(4) {
             assert!(
                 value["data"].get(field).is_none(),
                 "{field} must be omitted"
@@ -648,21 +632,21 @@ mod tests {
         }
         for (field, original) in original_wire["data"].as_object().unwrap() {
             if !DIAGNOSTIC_FIELDS.contains(&field.as_str())
-                && !BODY_STATE_FIELDS.contains(&field.as_str())
+                && !DIAGNOSTIC_FIELDS.contains(&field.as_str())
                 && field != "request_metadata"
             {
                 assert_eq!(&value["data"][field], original, "core field {field}");
             }
         }
-        for (field, key) in BODY_STATE_FIELDS.into_iter().zip(BODY_METADATA_KEYS) {
-            assert_eq!(value["data"][field], "truncated");
+        for (field, key) in DIAGNOSTIC_FIELDS
+            .into_iter()
+            .take(4)
+            .zip(BODY_METADATA_KEYS)
+        {
+            assert_eq!(value["data"][field], "unavailable");
             assert_eq!(
                 value["data"]["request_metadata"]["body_capture"][key]["reason"],
                 "wire_limit_exceeded"
-            );
-            assert_eq!(
-                value["data"]["request_metadata"]["body_capture"][key]["stored_bytes"],
-                0
             );
         }
         let metadata = &value["data"]["request_metadata"];
@@ -691,10 +675,11 @@ mod tests {
         assert_eq!(record.cache_creation_ephemeral_5m_input_tokens, Some(0));
         assert_eq!(record.cache_creation_ephemeral_1h_input_tokens, Some(25));
         assert_eq!(record.error_message.as_deref(), Some(""));
-        assert_eq!(record.request_body_ref, event.data.request_body_ref);
+        // The wire dropped the bytes and kept the marker, so the record says the
+        // body was unavailable rather than pretending the direction had none.
         assert_eq!(
-            record.request_body_state,
-            Some(UsageBodyCaptureState::Truncated)
+            record.request_body_state(),
+            Some(UsageBodyCaptureState::Unavailable)
         );
         let metadata = record.request_metadata.expect("record billing metadata");
         assert_eq!(metadata["provider_cache_ttl_minutes"], 30);
@@ -704,108 +689,39 @@ mod tests {
     }
 
     #[test]
-    fn event_wire_preserves_explicit_capture_states_and_legacy_metadata() {
-        for state in [
-            None,
-            Some(UsageBodyCaptureState::None),
-            Some(UsageBodyCaptureState::Disabled),
-            Some(UsageBodyCaptureState::Unavailable),
-            Some(UsageBodyCaptureState::Reference),
-        ] {
-            let mut event = event();
-            event.data.request_body_state = state;
-            event.data.provider_request_body_state = state;
-            event.data.response_body_state = state;
-            event.data.client_response_body_state = state;
-            event.data.request_body_ref = Some("usage://wire-request/request_body".to_string());
-            event.data.response_headers = Some(json!({"large-header": "x".repeat(16_384)}));
-            event.data.request_metadata = Some(json!({
-                "requested_reasoning_effort": "high",
-                "provider_reasoning_effort": "medium",
-                "provider_service_tier": "priority",
-                "provider_cache_ttl_minutes": 60,
-                "provider_actual_service_tier": "flex"
-            }));
-            let before = serde_json::to_value(&event).unwrap();
-            let encoded = event
-                .to_bounded_stream_fields(4_096)
-                .expect("headers omitted");
-            let value = wire_value(&encoded);
-            for field in BODY_STATE_FIELDS {
-                assert_eq!(value["data"].get(field), before["data"].get(field));
-            }
-            let metadata = &value["data"]["request_metadata"];
-            if state == Some(UsageBodyCaptureState::None) {
-                assert!(metadata.get("requested_reasoning_effort").is_none());
-                assert!(metadata.get("provider_cache_ttl_minutes").is_none());
-            } else {
-                assert_eq!(metadata["requested_reasoning_effort"], "high");
-                assert_eq!(metadata["provider_cache_ttl_minutes"], 60);
-            }
-            assert_eq!(metadata["provider_actual_service_tier"], "flex");
-            assert_eq!(
-                value["data"]["request_body_ref"],
-                before["data"]["request_body_ref"]
-            );
-            assert_eq!(serde_json::to_value(&event).unwrap(), before);
-            if matches!(
-                state,
-                Some(
-                    UsageBodyCaptureState::None
-                        | UsageBodyCaptureState::Disabled
-                        | UsageBodyCaptureState::Unavailable
-                )
-            ) {
-                event.data.endpoint_api_format = Some("claude:messages".to_string());
-                event.data.request_body = Some(json!({"reasoning": {"effort": "low"}}));
-                event.data.provider_request_body =
-                    Some(json!({"reasoning": {"effort": "low"}, "service_tier": "default"}));
-                event.data.response_body = Some(json!({"service_tier": "priority"}));
-                event.data.client_response_body = Some(json!({"stale": true}));
-                let baseline = UsageEvent::from_stream_fields_with_capture_budget(
-                    &event.to_stream_fields().expect("full v1 fields"),
-                    Arc::new(EventCaptureMemoryBudget::new(usize::MAX)),
-                )
-                .expect("full v1 consumer baseline");
-                let with_stale_bodies = wire_value(
-                    &event
-                        .to_bounded_stream_fields(4_096)
-                        .expect("explicit capture states override stale bodies"),
-                );
-                for field in BODY_STATE_FIELDS {
-                    assert_eq!(
-                        with_stale_bodies["data"].get(field),
-                        value["data"].get(field)
-                    );
-                }
-                assert_eq!(
-                    with_stale_bodies["data"]["request_metadata"],
-                    serde_json::to_value(&baseline.data.request_metadata).unwrap(),
-                    "wire omission must preserve the full v1 consumer's billing facts"
-                );
-            }
-        }
+    fn event_wire_preserves_capture_facts_when_headers_are_omitted() {
+        let mut event = event();
+        event.data.response_headers = Some(json!({"large-header": "x".repeat(16_384)}));
+        event.data.request_metadata = Some(json!({
+            "requested_reasoning_effort": "high",
+            "provider_reasoning_effort": "medium",
+            "provider_service_tier": "priority",
+            "provider_cache_ttl_minutes": 60,
+            "provider_actual_service_tier": "flex"
+        }));
+        let before = serde_json::to_value(&event).unwrap();
+        let encoded = event
+            .to_bounded_stream_fields(4_096)
+            .expect("headers omitted");
+        let value = wire_value(&encoded);
+        let metadata = &value["data"]["request_metadata"];
+        assert_eq!(metadata["requested_reasoning_effort"], "high");
+        assert_eq!(metadata["provider_cache_ttl_minutes"], 60);
+        assert_eq!(metadata["provider_actual_service_tier"], "flex");
+        assert_eq!(serde_json::to_value(&event).unwrap(), before);
     }
 
     #[test]
     fn event_wire_preserves_raw_body_cache_ttl_across_capture_states() {
         use aether_data_contracts::repository::usage::extract_provider_cache_ttl_minutes_from_metadata;
 
-        for state in [
-            None,
-            Some(UsageBodyCaptureState::Inline),
-            Some(UsageBodyCaptureState::Reference),
-            Some(UsageBodyCaptureState::Truncated),
-            Some(UsageBodyCaptureState::Disabled),
-            Some(UsageBodyCaptureState::Unavailable),
-        ] {
+        {
             let mut event = event();
-            event.data.provider_request_body_state = state;
-            event.data.provider_request_body = Some(json!({
+            event.data.provider_request_body = Some(CapturedBody::json(json!({
                 "prompt_cache_options": {"ttl": "30m"},
                 "service_tier": "default",
                 "reasoning": {"effort": "low"}
-            }));
+            })));
             event.data.response_headers = Some(json!({"large": "x".repeat(16_384)}));
             event.data.request_metadata = Some(json!({
                 "provider_cache_ttl_minutes": 60,
@@ -825,19 +741,22 @@ mod tests {
                 Arc::new(EventCaptureMemoryBudget::new(usize::MAX)),
             )
             .expect("projected consumer event");
-            assert!(decoded.data.provider_request_body.is_none());
+            assert_eq!(
+                decoded.data.provider_request_body,
+                Some(CapturedBody::Unavailable)
+            );
             assert_eq!(
                 extract_provider_cache_ttl_minutes_from_metadata(
                     decoded.data.request_metadata.as_ref()
                 ),
                 Some(30),
-                "raw body TTL must win over stale metadata for {state:?}"
+                "raw body TTL must win over stale metadata"
             );
             for field in ["provider_service_tier", "provider_reasoning_effort"] {
                 assert_eq!(
                     decoded.data.request_metadata.as_ref().unwrap().get(field),
                     baseline.data.request_metadata.as_ref().unwrap().get(field),
-                    "TTL preservation must not change {field} authority for {state:?}"
+                    "TTL preservation must not change {field} authority"
                 );
             }
             assert_eq!(serde_json::to_value(&event).unwrap(), before);
@@ -858,20 +777,10 @@ mod tests {
             json!(42),
             json!(true),
         ] {
-            for state in [
-                None,
-                Some(UsageBodyCaptureState::None),
-                Some(UsageBodyCaptureState::Inline),
-                Some(UsageBodyCaptureState::Reference),
-                Some(UsageBodyCaptureState::Truncated),
-                Some(UsageBodyCaptureState::Disabled),
-                Some(UsageBodyCaptureState::Unavailable),
-            ] {
+            {
                 let mut event = event();
-                event.data.request_body = Some(body.clone());
-                event.data.provider_request_body = Some(body.clone());
-                event.data.request_body_state = state;
-                event.data.provider_request_body_state = state;
+                event.data.request_body = Some(CapturedBody::json(body.clone()));
+                event.data.provider_request_body = Some(CapturedBody::json(body.clone()));
                 event.data.response_headers = Some(json!({"large": "x".repeat(16_384)}));
                 event.data.request_metadata = Some(json!({
                     "requested_reasoning_effort": "medium",
@@ -896,79 +805,84 @@ mod tests {
                 )
                 .expect("projected consumer event");
                 let tier = |data: &UsageEventData| {
+                    let provider_request_body = data
+                        .provider_request_body
+                        .as_ref()
+                        .and_then(CapturedBody::as_json_value);
                     resolve_provider_service_tier_from_request_capture(
-                        data.provider_request_body.as_ref(),
-                        data.provider_request_body_state,
+                        provider_request_body.as_ref(),
+                        data.provider_request_body_state(),
                         data.request_metadata.as_ref(),
                     )
                 };
                 assert_eq!(
                     tier(&decoded.data),
                     tier(&baseline.data),
-                    "provider tier for {body:?}, {state:?}"
+                    "provider tier for {body:?}"
                 );
                 let metadata = decoded.data.request_metadata.as_ref().unwrap();
                 let baseline_metadata = baseline.data.request_metadata.as_ref().unwrap();
                 assert_eq!(
                     extract_provider_cache_ttl_minutes_from_metadata(Some(metadata)),
                     extract_provider_cache_ttl_minutes_from_metadata(Some(baseline_metadata)),
-                    "metadata TTL fallback for {body:?}, {state:?}"
+                    "metadata TTL fallback for {body:?}"
                 );
-                let authoritative = !body.is_null()
-                    && matches!(
-                        state,
-                        None | Some(
-                            UsageBodyCaptureState::Inline | UsageBodyCaptureState::Reference
-                        )
-                    );
+                // Every shape the client can send is a body it really sent, so
+                // the captured request answers for the reasoning facts even when
+                // it carries none of them.
                 for field in [
                     REQUESTED_REASONING_EFFORT_METADATA_KEY,
                     PROVIDER_REASONING_EFFORT_METADATA_KEY,
                 ] {
                     assert_eq!(
                         metadata.get(field),
-                        if authoritative {
-                            None
-                        } else {
-                            baseline_metadata.get(field)
-                        },
-                        "reasoning authority for {body:?}, {state:?}, {field}"
+                        None,
+                        "reasoning authority for {body:?}, {field}"
                     );
                 }
                 assert_eq!(metadata["unrelated"], baseline_metadata["unrelated"]);
-                if body.is_null() {
-                    assert_eq!(
-                        decoded.data.request_body_state,
-                        baseline.data.request_body_state
-                    );
-                    assert_eq!(
-                        decoded.data.provider_request_body_state,
-                        baseline.data.provider_request_body_state
-                    );
-                }
                 assert_eq!(event.to_stream_fields().unwrap(), original);
             }
         }
     }
 
     #[test]
-    fn event_wire_rejects_cache_ttl_loss_from_explicit_none_capture_state() {
+    fn event_wire_projects_body_derived_cache_ttl_before_dropping_the_body() {
+        use aether_data_contracts::repository::usage::extract_provider_cache_ttl_minutes_from_metadata;
+
         let mut event = event();
-        event.data.provider_request_body_state = Some(UsageBodyCaptureState::None);
-        event.data.provider_request_body = Some(json!({
+        event.data.provider_request_body = Some(CapturedBody::json(json!({
             "prompt_cache_options": {"ttl": "30m"},
             "large": "x".repeat(16_384)
-        }));
+        })));
         let original = event.to_stream_fields().expect("full v1 fields");
         let full = event
             .to_bounded_stream_fields(original["payload"].len())
             .expect("complete diagnostics remain representable");
         assert_eq!(full.fields, original);
         assert!(!full.diagnostics_omitted);
-        assert!(matches!(
-            event.to_bounded_stream_fields(4_096),
-            Err(DataLayerError::InvalidInput(_))
-        ));
+
+        // The body cannot fit, so the projection carries what it said instead of
+        // dropping the fact with the bytes.
+        let encoded = event
+            .to_bounded_stream_fields(4_096)
+            .expect("omitted body must still carry its TTL");
+        assert!(encoded.diagnostics_omitted);
+        let decoded = UsageEvent::from_stream_fields_with_capture_budget(
+            &encoded.fields,
+            Arc::new(EventCaptureMemoryBudget::new(usize::MAX)),
+        )
+        .expect("projected consumer event");
+        assert_eq!(
+            decoded.data.provider_request_body,
+            Some(CapturedBody::Unavailable)
+        );
+        assert_eq!(
+            extract_provider_cache_ttl_minutes_from_metadata(
+                decoded.data.request_metadata.as_ref()
+            ),
+            Some(30)
+        );
         assert_eq!(event.to_stream_fields().unwrap(), original);
     }
 
@@ -991,7 +905,7 @@ mod tests {
             );
         }
         let mut event = event();
-        event.data.response_body = Some(json!({"large": "x".repeat(8_192)}));
+        event.data.response_body = Some(CapturedBody::json(json!({"large": "x".repeat(8_192)})));
         let core = ProjectedData {
             data: &event.data,
             overrides: None,

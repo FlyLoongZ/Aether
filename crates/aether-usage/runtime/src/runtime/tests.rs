@@ -14,7 +14,7 @@ use std::time::Instant;
 use aether_contracts::{ExecutionPlan, ExecutionTelemetry, RequestBody};
 use aether_data_contracts::repository::settlement::{StoredUsageSettlement, UsageSettlementInput};
 use aether_data_contracts::repository::usage::{
-    StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
+    CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
 };
 use aether_data_contracts::DataLayerError;
 use aether_runtime_state::{MemoryRuntimeStateConfig, RuntimeQueueStore, RuntimeState};
@@ -75,10 +75,8 @@ fn sync_terminal_test_seeds(
             first_byte_time_ms: None,
             provider_response_headers: None,
             client_response_headers: None,
-            provider_response_full: Some(json!({"id": request_id})),
-            provider_response_body_state: None,
-            client_response: Some(json!({"id": request_id})),
-            client_response_body_state: None,
+            provider_response: Some(CapturedBody::json(json!({"id": request_id}))),
+            client_response: Some(CapturedBody::json(json!({"id": request_id}))),
             standardized_usage: None,
             capture_metadata: None,
         },
@@ -102,12 +100,12 @@ fn terminal_seed_capture_test_seeds(
         "provider_request_body": provider_request,
     });
     let context = build_terminal_usage_context_seed(&plan, Some(&report_context));
-    payload.provider_response_full = Some(json!({
+    payload.provider_response = Some(CapturedBody::json(json!({
         "id": request_id,
         "output": "x".repeat(padding_bytes),
         "service_tier": "default",
         "usage": {"input_tokens": 100, "output_tokens": 500, "total_tokens": 600}
-    }));
+    })));
     (context, payload)
 }
 
@@ -115,9 +113,15 @@ fn terminal_seed_capture_test_seeds(
 async fn terminal_seed_capture_budget_zero_preserves_sync_facts_and_explicit_zero() {
     for tokens in [0, 100] {
         let (context, mut payload) = terminal_seed_capture_test_seeds("seed-budget-sync", 4096);
-        payload.provider_response_full.as_mut().unwrap()["usage"] = json!({
+        let mut provider_response = payload
+            .provider_response
+            .as_ref()
+            .and_then(CapturedBody::as_json_value)
+            .expect("provider response");
+        provider_response["usage"] = json!({
             "input_tokens": tokens, "output_tokens": tokens, "total_tokens": 2 * tokens
         });
+        payload.provider_response = Some(CapturedBody::json(provider_response));
         let mut expected = crate::build_terminal_usage_event_from_seed(
             crate::build_sync_terminal_usage_seed(context.clone(), payload.clone()),
         )
@@ -143,14 +147,14 @@ async fn terminal_seed_capture_budget_zero_preserves_sync_facts_and_explicit_zer
         assert_eq!(event.data.input_tokens, Some(tokens));
         assert_eq!(event.data.output_tokens, Some(tokens));
         assert_eq!(event.data.total_tokens, Some(2 * tokens));
-        assert!(event.data.request_body.is_none());
-        assert!(event.data.provider_request_body.is_none());
-        assert!(event.data.response_body.is_none());
-        assert!(event.data.client_response_body.is_none());
-        assert_eq!(
-            event.data.response_body_state,
-            Some(UsageBodyCaptureState::Truncated)
-        );
+        for body in [
+            &event.data.request_body,
+            &event.data.provider_request_body,
+            &event.data.response_body,
+            &event.data.client_response_body,
+        ] {
+            assert_eq!(body.as_ref(), Some(&CapturedBody::Unavailable));
+        }
         let metadata = event.data.request_metadata.as_ref().expect("billing facts");
         assert_eq!(metadata["requested_reasoning_effort"], "high");
         assert_eq!(metadata["provider_reasoning_effort"], "medium");
@@ -167,13 +171,13 @@ async fn terminal_seed_capture_budget_zero_preserves_image_estimates_and_dimensi
     context.client_contract = "openai:image".to_string();
     context.provider_contract = "openai:image".to_string();
     context.request_type = "image".to_string();
-    context.provider_request = Some(json!({
+    context.provider_request = Some(CapturedBody::json(json!({
         "model": "gpt-image-2", "prompt": "Draw a red kite", "n": 1,
         "size": "1024x1024", "quality": "high", "output_format": "png"
-    }));
-    payload.provider_response_full = Some(json!({
+    })));
+    payload.provider_response = Some(CapturedBody::json(json!({
         "data": [{"b64_json": "x".repeat(4096)}, {"b64_json": "y".repeat(4096)}]
-    }));
+    })));
     let expected = crate::build_terminal_usage_event_from_seed(
         crate::build_sync_terminal_usage_seed(context.clone(), payload.clone()),
     )
@@ -201,8 +205,11 @@ async fn terminal_seed_capture_budget_zero_preserves_image_estimates_and_dimensi
     assert_eq!(metadata["dimensions"]["image_size"], "1024x1024");
     assert_eq!(metadata["dimensions"]["image_quality"], "high");
     assert_eq!(metadata["dimensions"]["image_output_format"], "png");
-    assert!(event.data.response_body.is_none());
-    assert!(event.data.provider_request_body.is_none());
+    assert_eq!(event.data.response_body, Some(CapturedBody::Unavailable));
+    assert_eq!(
+        event.data.provider_request_body,
+        Some(CapturedBody::Unavailable)
+    );
     assert_eq!(budget.retained_bytes(), 0);
 }
 
@@ -211,7 +218,7 @@ async fn terminal_seed_capture_budget_zero_preserves_stream_terminal_evidence() 
     for (failed, cancelled) in [(false, false), (true, false), (false, true)] {
         let (mut context, _) = terminal_seed_capture_test_seeds("seed-budget-stream", 0);
         context.is_stream = true;
-        let provider_response_full = Some(json!({
+        let provider_response = Some(CapturedBody::json(json!({
             "chunks": [{
                 "type": if failed { "response.failed" } else { "response.completed" },
                 "response": {
@@ -221,7 +228,7 @@ async fn terminal_seed_capture_budget_zero_preserves_stream_terminal_evidence() 
                     "error": if failed { json!({"message": "provider refused"}) } else { json!(null) }
                 }
             }]
-        }));
+        })));
         let payload = crate::StreamTerminalUsagePayloadSeed {
             report_kind: "openai_responses_stream_success".to_string(),
             status_code: if cancelled { 499 } else { 200 },
@@ -229,10 +236,8 @@ async fn terminal_seed_capture_budget_zero_preserves_stream_terminal_evidence() 
             first_byte_time_ms: Some(3),
             provider_response_headers: None,
             client_response_headers: None,
-            provider_response_full,
-            provider_response_body_state: Some(UsageBodyCaptureState::Inline),
+            provider_response,
             client_response: None,
-            client_response_body_state: Some(UsageBodyCaptureState::None),
             standardized_usage: None,
             provider_actual_service_tier: Some("default".to_string()),
             observed_stream_finish: Some(true),
@@ -276,7 +281,7 @@ async fn terminal_seed_capture_budget_zero_preserves_stream_terminal_evidence() 
                 Some("provider refused")
             );
         }
-        assert!(event.data.response_body.is_none());
+        assert_eq!(event.data.response_body, Some(CapturedBody::Unavailable));
         assert_eq!(budget.retained_bytes(), 0);
     }
 }
@@ -347,8 +352,9 @@ async fn terminal_seed_capture_budget_bounds_concurrent_seeds_and_transfers_to_e
 async fn terminal_seed_capture_budget_cancellation_keeps_running_blocking_build_reserved() {
     let budget = Arc::new(super::EventCaptureMemoryBudget::new(64 * 1024));
     let body = json!({"diagnostic": "x".repeat(4096)});
+    let captured = CapturedBody::json(body.clone());
     let capture = super::TerminalSeedCaptureRetention::try_reserve(
-        [Some(&body), None, None, None],
+        [Some(&captured), None, None, None],
         Arc::clone(&budget),
     );
     let retained = budget.retained_bytes();
@@ -366,7 +372,7 @@ async fn terminal_seed_capture_budget_cancellation_keeps_running_blocking_build_
                 UsageEventType::Completed,
                 "seed-budget-cancel",
                 UsageEventData {
-                    response_body: Some(body),
+                    response_body: Some(CapturedBody::json(body)),
                     ..UsageEventData::default()
                 },
             ))
@@ -396,8 +402,9 @@ async fn terminal_seed_capture_budget_cancellation_keeps_running_blocking_build_
     .expect("detached blocking result drops its body and reservation");
 
     let body = json!({"diagnostic": "x".repeat(4096)});
+    let captured = CapturedBody::json(body.clone());
     let capture = super::TerminalSeedCaptureRetention::try_reserve(
-        [Some(&body), None, None, None],
+        [Some(&captured), None, None, None],
         Arc::clone(&budget),
     );
     let result = super::build_terminal_usage_event_offthread(capture, move || {
@@ -490,8 +497,9 @@ async fn terminal_seed_capture_budget_bounds_admission_backlog_and_preserves_fai
             assert_eq!(record.input_tokens, Some(100));
             assert_eq!(record.output_tokens, Some(500));
             assert_eq!(record.total_tokens, Some(600));
-            assert!(
-                record.response_body.is_none(),
+            assert_eq!(
+                record.response_body,
+                Some(CapturedBody::Disabled),
                 "default Basic policy still applies at its original position"
             );
         }
@@ -5132,13 +5140,12 @@ async fn first_byte_append_failure_is_retried_locally() {
                     status_code: Some(200),
                     first_byte_time_ms: Some(12),
                     request_headers: Some(json!({"x-request-id": "full-event"})),
-                    request_body: Some(json!({"messages": [{"content": "hello"}]})),
-                    request_body_state: Some(UsageBodyCaptureState::Inline),
+                    request_body: Some(CapturedBody::json(
+                        json!({"messages": [{"content": "hello"}]}),
+                    )),
                     provider_request_headers: Some(json!({"x-provider": "full-event"})),
-                    provider_request_body: Some(json!({"model": "gpt-5"})),
-                    provider_request_body_state: Some(UsageBodyCaptureState::Inline),
+                    provider_request_body: Some(CapturedBody::json(json!({"model": "gpt-5"}))),
                     response_headers: Some(json!({"content-type": "text/event-stream"})),
-                    response_body_state: Some(UsageBodyCaptureState::Unavailable),
                     request_metadata: Some(request_metadata.clone()),
                     ..UsageEventData::default()
                 },
@@ -5168,11 +5175,9 @@ async fn first_byte_append_failure_is_retried_locally() {
     );
     assert_eq!(
         event.data.request_body,
-        Some(json!({"messages": [{"content": "hello"}]}))
-    );
-    assert_eq!(
-        event.data.request_body_state,
-        Some(UsageBodyCaptureState::Inline)
+        Some(CapturedBody::json(
+            json!({"messages": [{"content": "hello"}]})
+        ))
     );
     assert_eq!(
         event.data.provider_request_headers,
@@ -5180,20 +5185,15 @@ async fn first_byte_append_failure_is_retried_locally() {
     );
     assert_eq!(
         event.data.provider_request_body,
-        Some(json!({"model": "gpt-5"}))
-    );
-    assert_eq!(
-        event.data.provider_request_body_state,
-        Some(UsageBodyCaptureState::Inline)
+        Some(CapturedBody::json(json!({"model": "gpt-5"})))
     );
     assert_eq!(
         event.data.response_headers,
         Some(json!({"content-type": "text/event-stream"}))
     );
-    assert_eq!(
-        event.data.response_body_state,
-        Some(UsageBodyCaptureState::Unavailable)
-    );
+    // The event never captured a response body, and the wire keeps that apart
+    // from "captured but dropped".
+    assert_eq!(event.data.response_body, None);
     assert_eq!(event.data.request_metadata, Some(request_metadata));
 }
 
@@ -5739,8 +5739,7 @@ fn event_capture_budget_retry_event(
             status_code: Some(502),
             error_category: Some("upstream_error".to_string()),
             error_message: Some("upstream failed".to_string()),
-            response_body: Some(json!({"diagnostic": "x".repeat(1000)})),
-            response_body_state: Some(UsageBodyCaptureState::Inline),
+            response_body: Some(CapturedBody::json(json!({"diagnostic": "x".repeat(1000)}))),
             request_metadata: Some(json!({
                 "plan_usage_reservation_token": "550e8400-e29b-41d4-a716-446655440000",
                 "provider_service_tier": "priority",
@@ -5774,7 +5773,7 @@ async fn event_capture_budget_bounds_blocked_policy_waiters_and_releases_on_canc
                     UsageEventData {
                         input_tokens: Some(100),
                         output_tokens: Some(500),
-                        response_body: Some(json!("x".repeat(40 * 1024))),
+                        response_body: Some(CapturedBody::json(json!("x".repeat(40 * 1024)))),
                         ..UsageEventData::default()
                     },
                 );
@@ -5825,11 +5824,7 @@ async fn event_capture_budget_bounds_blocked_policy_waiters_and_releases_on_canc
             .await
             .expect("Basic policy completes")
             .expect("policy task completion");
-        assert!(event.data.response_body.is_none());
-        assert_eq!(
-            event.data.response_body_state,
-            Some(UsageBodyCaptureState::Disabled)
-        );
+        assert_eq!(event.data.response_body, Some(CapturedBody::Disabled));
         assert_eq!(event.data.input_tokens, Some(100));
         assert_eq!(event.data.output_tokens, Some(500));
         assert_eq!(
@@ -6114,10 +6109,10 @@ fn oversized_full_terminal_event(max_bytes: usize) -> (serde_json::Value, UsageE
             model: "gpt-5".to_string(),
             status_code: Some(200),
             total_tokens: Some(12),
-            request_body: Some(body.clone()),
-            provider_request_body: Some(body.clone()),
-            response_body: Some(body.clone()),
-            client_response_body: Some(body.clone()),
+            request_body: Some(CapturedBody::json(body.clone())),
+            provider_request_body: Some(CapturedBody::json(body.clone())),
+            response_body: Some(CapturedBody::json(body.clone())),
+            client_response_body: Some(CapturedBody::json(body.clone())),
             ..UsageEventData::default()
         },
     );
@@ -6172,7 +6167,7 @@ async fn oversized_full_terminal_capture_is_persisted_without_queue_truncation()
         &records[0].response_body,
         &records[0].client_response_body,
     ] {
-        assert_eq!(captured.as_ref(), Some(&body));
+        assert_eq!(captured.as_ref(), Some(&CapturedBody::json(body.clone())));
     }
 }
 
@@ -6239,19 +6234,22 @@ async fn oversized_full_terminal_capture_keeps_bounded_queue_fallback() {
         let queued = UsageEvent::from_stream_fields(&entries[0].fields).unwrap();
         assert_eq!(queued.data.total_tokens, Some(12));
         for (body, state) in [
-            (&queued.data.request_body, queued.data.request_body_state),
+            (&queued.data.request_body, queued.data.request_body_state()),
             (
                 &queued.data.provider_request_body,
-                queued.data.provider_request_body_state,
+                queued.data.provider_request_body_state(),
             ),
-            (&queued.data.response_body, queued.data.response_body_state),
+            (
+                &queued.data.response_body,
+                queued.data.response_body_state(),
+            ),
             (
                 &queued.data.client_response_body,
-                queued.data.client_response_body_state,
+                queued.data.client_response_body_state(),
             ),
         ] {
-            assert!(body.is_none());
-            assert_eq!(state, Some(UsageBodyCaptureState::Truncated));
+            assert_eq!(body.as_ref(), Some(&CapturedBody::Unavailable));
+            assert_eq!(state, Some(UsageBodyCaptureState::Unavailable));
         }
         assert_eq!(runtime.metrics_snapshot().terminal_enqueue_failed_total, 0);
         drop((worker_permit, fallback_permit));
@@ -7691,10 +7689,11 @@ async fn body_capture_policy_read_failure_is_short_cached_as_default() {
 
 #[test]
 fn preserve_request_facts_ignores_post_capture_truncation_placeholders() {
-    let truncated = json!({
-        "truncated": true,
-        "reason": "body_capture_limit_exceeded"
-    });
+    let truncated = CapturedBody::from_bytes(
+        b"{\"truncated\":true}".to_vec(),
+        aether_data_contracts::repository::usage::BodyEncoding::Json,
+        true,
+    );
     let mut event = UsageEvent::new(
         UsageEventType::Completed,
         "req-truncated-preserve",
@@ -7702,9 +7701,7 @@ fn preserve_request_facts_ignores_post_capture_truncation_placeholders() {
             provider_name: "OpenAI".to_string(),
             model: "gpt-5".to_string(),
             request_body: Some(truncated.clone()),
-            request_body_state: Some(UsageBodyCaptureState::Truncated),
             provider_request_body: Some(truncated),
-            provider_request_body_state: Some(UsageBodyCaptureState::Truncated),
             request_metadata: Some(json!({
                 "requested_reasoning_effort": "xhigh",
                 "provider_reasoning_effort": "max",
@@ -7734,8 +7731,6 @@ fn preserve_request_facts_clears_stale_facts_when_final_bodies_are_missing() {
         UsageEventData {
             provider_name: "OpenAI".to_string(),
             model: "gpt-5".to_string(),
-            request_body_state: Some(UsageBodyCaptureState::None),
-            provider_request_body_state: Some(UsageBodyCaptureState::None),
             request_metadata: Some(json!({
                 "requested_reasoning_effort": "xhigh",
                 "provider_reasoning_effort": "max",
@@ -7773,12 +7768,12 @@ fn event_capture_budget_full_policy_preserves_facts_before_zero_budget_and_datab
             total_tokens: Some(600),
             cache_creation_input_tokens: Some(25),
             cache_read_input_tokens: Some(0),
-            request_body: Some(json!({"reasoning": {"effort": "high"}})),
-            provider_request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({"reasoning": {"effort": "high"}}))),
+            provider_request_body: Some(CapturedBody::json(json!({
                 "model": "gpt-5.6-sol", "reasoning": {"effort": "medium"},
                 "service_tier": "priority"
-            })),
-            response_body: Some(json!({"service_tier": "Default"})),
+            }))),
+            response_body: Some(CapturedBody::json(json!({"service_tier": "Default"}))),
             request_metadata: Some(json!({
                 "plan_usage_reservation_token": "550e8400-e29b-41d4-a716-446655440000"
             })),
@@ -7803,12 +7798,15 @@ fn event_capture_budget_full_policy_preserves_facts_before_zero_budget_and_datab
     assert_eq!(record.output_tokens, Some(500));
     assert_eq!(record.cache_creation_input_tokens, Some(25));
     assert_eq!(record.cache_read_input_tokens, Some(0));
-    assert!(record.request_body.is_none());
-    assert!(record.provider_request_body.is_none());
-    assert!(record.response_body.is_none());
+    assert_eq!(record.request_body, Some(CapturedBody::Unavailable));
     assert_eq!(
-        record.provider_request_body_state,
-        Some(UsageBodyCaptureState::Truncated)
+        record.provider_request_body,
+        Some(CapturedBody::Unavailable)
+    );
+    assert_eq!(record.response_body, Some(CapturedBody::Unavailable));
+    assert_eq!(
+        record.provider_request_body_state(),
+        Some(UsageBodyCaptureState::Unavailable)
     );
     let metadata = record.request_metadata.expect("preserved billing facts");
     assert_eq!(metadata["requested_reasoning_effort"], "high");
@@ -7833,28 +7831,20 @@ fn basic_request_record_level_strips_body_capture_but_preserves_derived_fields()
             model: "gpt-5".to_string(),
             total_tokens: Some(42),
             error_message: Some("upstream failed".to_string()),
-            request_body: Some(json!({
+            request_body: Some(CapturedBody::json(json!({
                 "messages":[{"role":"user","content":"hello"}],
                 "reasoning": {"effort": "xhigh"}
-            })),
-            request_body_ref: Some("usage://request/req-basic-1/request_body".to_string()),
-            provider_request_body: Some(json!({
+            }))),
+            provider_request_body: Some(CapturedBody::json(json!({
                 "model":"gpt-5",
                 "reasoning": {"effort": "max"},
                 "service_tier": "priority"
-            })),
-            provider_request_body_ref: Some(
-                "usage://request/req-basic-1/provider_request_body".to_string(),
-            ),
-            response_body: Some(json!({
+            }))),
+            response_body: Some(CapturedBody::json(json!({
                 "error":{"message":"bad gateway"},
                 "service_tier": "Default"
-            })),
-            response_body_ref: Some("usage://request/req-basic-1/response_body".to_string()),
-            client_response_body: Some(json!({"detail":"bad gateway"})),
-            client_response_body_ref: Some(
-                "usage://request/req-basic-1/client_response_body".to_string(),
-            ),
+            }))),
+            client_response_body: Some(CapturedBody::json(json!({"detail":"bad gateway"}))),
             request_metadata: Some(json!({
                 "requested_reasoning_effort": "low",
                 "provider_reasoning_effort": "medium",
@@ -7876,14 +7866,16 @@ fn basic_request_record_level_strips_body_capture_but_preserves_derived_fields()
 
     assert_eq!(event.data.total_tokens, Some(42));
     assert_eq!(event.data.error_message.as_deref(), Some("upstream failed"));
-    assert!(event.data.request_body.is_none());
-    assert!(event.data.request_body_ref.is_none());
-    assert!(event.data.provider_request_body.is_none());
-    assert!(event.data.provider_request_body_ref.is_none());
-    assert!(event.data.response_body.is_none());
-    assert!(event.data.response_body_ref.is_none());
-    assert!(event.data.client_response_body.is_none());
-    assert!(event.data.client_response_body_ref.is_none());
+    // A `basic` record keeps no bytes at all: each side collapses to the reason
+    // it was skipped, which is what the row stores.
+    for body in [
+        &event.data.request_body,
+        &event.data.provider_request_body,
+        &event.data.response_body,
+        &event.data.client_response_body,
+    ] {
+        assert_eq!(body.as_ref(), Some(&CapturedBody::Disabled));
+    }
     assert_eq!(
         event
             .data

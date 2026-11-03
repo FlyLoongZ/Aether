@@ -1,14 +1,13 @@
 use std::sync::{Arc, LazyLock};
 
 #[cfg(test)]
+use aether_data_contracts::repository::usage::usage_json_heap_estimate as json_heap_estimate;
+#[cfg(test)]
 use serde_json::Value;
 
+pub(crate) use aether_data_contracts::repository::usage::UsageCaptureMemoryBudget as EventCaptureMemoryBudget;
 #[doc(hidden)]
 pub use aether_data_contracts::repository::usage::UsageCaptureRetention as UsageEventCaptureRetention;
-pub(crate) use aether_data_contracts::repository::usage::{
-    usage_json_heap_estimate as json_heap_estimate,
-    UsageCaptureMemoryBudget as EventCaptureMemoryBudget,
-};
 
 const DEFAULT_CAPTURE_MEMORY_BUDGET_BYTES: usize = 128 * 1024 * 1024;
 

@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex as StdMutex, Weak};
 use std::time::{Duration, Instant};
 
 use aether_contracts::ExecutionTelemetry;
-use aether_data_contracts::repository::usage::UpsertUsageRecord;
+use aether_data_contracts::repository::usage::{CapturedBody, UpsertUsageRecord};
 use aether_data_contracts::DataLayerError;
 use aether_runtime_state::{RuntimeQueueStats, RuntimeQueueStore};
 use async_trait::async_trait;
@@ -14,9 +14,7 @@ use futures_util::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-use crate::event_capture_budget::{
-    json_heap_estimate, EventCaptureMemoryBudget, UsageEventCaptureRetention,
-};
+use crate::event_capture_budget::{EventCaptureMemoryBudget, UsageEventCaptureRetention};
 use crate::executor::spawn_on_usage_background_runtime;
 use crate::queue::is_permanent_enqueue_error;
 use crate::request_metadata::{
@@ -1271,13 +1269,11 @@ struct TerminalSeedCaptureRetention {
 
 impl TerminalSeedCaptureRetention {
     fn try_reserve(
-        bodies: [Option<&serde_json::Value>; 4],
+        bodies: [Option<&CapturedBody>; 4],
         budget: Arc<EventCaptureMemoryBudget>,
     ) -> Option<Self> {
         let bytes = bodies.into_iter().flatten().fold(0usize, |bytes, body| {
-            bytes
-                .saturating_add(std::mem::size_of::<serde_json::Value>())
-                .saturating_add(json_heap_estimate(body))
+            bytes.saturating_add(body.retained_bytes_estimate())
         });
         let mut retention = UsageEventCaptureRetention::default();
         retention
@@ -1305,7 +1301,7 @@ impl LifecycleTerminalUsageSeed {
                     [
                         context.request_body.as_ref(),
                         context.provider_request.as_ref(),
-                        payload.provider_response_full.as_ref(),
+                        payload.provider_response.as_ref(),
                         payload.client_response.as_ref(),
                     ],
                     Arc::clone(&budget),
@@ -1336,7 +1332,7 @@ impl LifecycleTerminalUsageSeed {
                     [
                         context.request_body.as_ref(),
                         context.provider_request.as_ref(),
-                        payload.provider_response_full.as_ref(),
+                        payload.provider_response.as_ref(),
                         payload.client_response.as_ref(),
                     ],
                     Arc::clone(&budget),
@@ -5233,7 +5229,7 @@ fn preserve_request_facts_with_legacy_missing(
     preserve_implicit_missing: bool,
 ) {
     let data = &mut event.data;
-    match request_body_derived_facts_action(data.request_body.as_ref(), data.request_body_state) {
+    match request_body_derived_facts_action(data.request_body.as_ref(), data.request_body_state()) {
         RequestBodyDerivedFactsAction::Refresh => {
             data.request_metadata = attach_client_request_body_metadata(
                 data.request_metadata.take(),
@@ -5245,7 +5241,7 @@ fn preserve_request_facts_with_legacy_missing(
             // An explicit typed `none` still authoritatively clears those facts.
             if !preserve_implicit_missing
                 || data.request_body.is_some()
-                || data.request_body_state.is_some()
+                || data.request_body_state().is_some()
             {
                 data.request_metadata =
                     clear_client_request_body_metadata(data.request_metadata.take());
@@ -5255,7 +5251,7 @@ fn preserve_request_facts_with_legacy_missing(
     }
     match request_body_derived_facts_action(
         data.provider_request_body.as_ref(),
-        data.provider_request_body_state,
+        data.provider_request_body_state(),
     ) {
         RequestBodyDerivedFactsAction::Refresh => {
             data.request_metadata = attach_provider_request_body_metadata(
@@ -5271,7 +5267,7 @@ fn preserve_request_facts_with_legacy_missing(
         RequestBodyDerivedFactsAction::Clear => {
             if !preserve_implicit_missing
                 || data.provider_request_body.is_some()
-                || data.provider_request_body_state.is_some()
+                || data.provider_request_body_state().is_some()
             {
                 data.request_metadata =
                     clear_provider_request_body_metadata(data.request_metadata.take());
@@ -5288,10 +5284,8 @@ fn preserve_provider_response_facts(event: &mut UsageEvent) {
     event.data.request_metadata = attach_provider_response_model_metadata(
         metadata,
         event.data.request_body.as_ref(),
-        event.data.request_body_state,
         event.data.api_format.as_deref(),
         event.data.response_body.as_ref(),
-        event.data.response_body_state,
         event.data.endpoint_api_format.as_deref(),
     );
 }

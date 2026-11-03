@@ -6,13 +6,13 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::write::captured_body_from_value;
+
 use aether_data_contracts::repository::settlement::{
     ReconcileUsagePolicyCostInput, StoredUsagePolicyCostReservation, StoredUsageSettlement,
     UsageSettlementInput,
 };
-use aether_data_contracts::repository::usage::{
-    StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
-};
+use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UpsertUsageRecord};
 use aether_data_contracts::DataLayerError;
 use aether_runtime_state::{
     MemoryRuntimeStateConfig, RuntimeQueueEntry, RuntimeQueueReclaimConfig,
@@ -100,7 +100,12 @@ impl UsageEventRecorder for CaptureBudgetRecorder {
         assert_eq!(metadata["requested_reasoning_effort"], "high");
         assert_eq!(metadata["provider_service_tier"], "priority");
         assert_eq!(metadata["provider_actual_service_tier"], "default");
-        if event.data.response_body.is_some() {
+        if event
+            .data
+            .response_body
+            .as_ref()
+            .is_some_and(|body| body.is_present())
+        {
             let retained = self.budget.retained_bytes();
             assert!(retained > 0);
             let recorder_copy = event.clone();
@@ -109,11 +114,13 @@ impl UsageEventRecorder for CaptureBudgetRecorder {
             drop(recorder_copy);
             assert_eq!(self.budget.retained_bytes(), retained);
         } else {
+            // A side the budget dropped keeps its marker but costs nothing.
             assert_eq!(self.budget.retained_bytes(), 0);
-            assert_eq!(
-                event.data.response_body_state,
-                Some(UsageBodyCaptureState::Truncated)
-            );
+            assert!(!event
+                .data
+                .response_body
+                .as_ref()
+                .is_some_and(|body| body.is_present()));
         }
         self.entered.notify_one();
         match self.outcome {
@@ -177,13 +184,22 @@ fn captured_worker_event() -> UsageEvent {
     let mut event = sample_event();
     event.data.model = "gpt-5.6-sol".to_string();
     event.data.endpoint_api_format = Some("openai:responses".to_string());
-    event.data.request_body = Some(serde_json::json!({"reasoning": {"effort": "high"}}));
-    event.data.provider_request_body = Some(serde_json::json!({
-        "model": "gpt-5.6-sol", "service_tier": "priority"
-    }));
-    event.data.response_body = Some(serde_json::json!({
-        "service_tier": "Default", "output": "x".repeat(1024)
-    }));
+    event.data.request_body = Some(
+        captured_body_from_value(serde_json::json!({"reasoning": {"effort": "high"}}))
+            .expect("captured body"),
+    );
+    event.data.provider_request_body = Some(
+        captured_body_from_value(serde_json::json!({
+            "model": "gpt-5.6-sol", "service_tier": "priority"
+        }))
+        .expect("captured body"),
+    );
+    event.data.response_body = Some(
+        captured_body_from_value(serde_json::json!({
+            "service_tier": "Default", "output": "x".repeat(1024)
+        }))
+        .expect("captured body"),
+    );
     event.data.cache_read_input_tokens = Some(0);
     event.data.actual_total_cost_usd = Some(0.123);
     event
@@ -1545,7 +1561,10 @@ async fn usage_worker_read_budget_processes_oversized_historical_payload() {
     worker.capture_memory_budget = Arc::new(EventCaptureMemoryBudget::new(128 * 1024));
     let queue = worker.queue.clone();
     let mut event = sample_event();
-    event.data.response_body = Some(serde_json::json!({"legacy": "x".repeat(8192)}));
+    event.data.response_body = Some(
+        captured_body_from_value(serde_json::json!({"legacy": "x".repeat(8192)}))
+            .expect("captured body"),
+    );
     let fields = event.to_stream_fields().expect("historical envelope");
     assert!(fields.values().map(String::len).sum::<usize>() > 4096);
     runner

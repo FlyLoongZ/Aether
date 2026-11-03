@@ -1,8 +1,9 @@
 use aether_data_contracts::repository::billing::StoredBillingModelContext;
 use aether_data_contracts::repository::usage::{
     extract_provider_cache_ttl_minutes_from_metadata, resolve_provider_cache_ttl_minutes,
-    resolve_provider_service_tier_from_request_capture, CANCELLED_REQUEST_FEE_METADATA_KEY,
-    USAGE_AVAILABLE_METADATA_KEY, USAGE_PRICING_AVAILABLE_METADATA_KEY,
+    resolve_provider_service_tier_from_request_capture, CapturedBody,
+    CANCELLED_REQUEST_FEE_METADATA_KEY, USAGE_AVAILABLE_METADATA_KEY,
+    USAGE_PRICING_AVAILABLE_METADATA_KEY,
 };
 use aether_data_contracts::DataLayerError;
 use aether_usage_runtime::{UsageEvent, UsageEventType};
@@ -281,9 +282,13 @@ struct UsageEventProcessingTiers {
 fn usage_event_processing_tiers(
     data: &aether_usage_runtime::UsageEventData,
 ) -> UsageEventProcessingTiers {
+    let provider_request_body = data
+        .provider_request_body
+        .as_ref()
+        .and_then(CapturedBody::as_json_value);
     let requested = resolve_provider_service_tier_from_request_capture(
-        data.provider_request_body.as_ref(),
-        data.provider_request_body_state,
+        provider_request_body.as_ref(),
+        data.provider_request_body_state(),
         data.request_metadata.as_ref(),
     );
 
@@ -299,7 +304,10 @@ fn usage_event_provider_cache_ttl_minutes(
             .or(data.api_format.as_deref()),
         data.target_model.as_deref().or(Some(data.model.as_str())),
         Some(data.model.as_str()),
-        data.provider_request_body.as_ref(),
+        data.provider_request_body
+            .as_ref()
+            .and_then(CapturedBody::as_json_value)
+            .as_ref(),
     )
     .or_else(|| extract_provider_cache_ttl_minutes_from_metadata(data.request_metadata.as_ref()))
 }

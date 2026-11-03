@@ -1,40 +1,20 @@
-use std::io::{self, Write};
-
 use aether_data_contracts::repository::usage::{
-    UpsertUsageRecord, UsageBodyCaptureState, UsageBodyField,
+    BodyEncoding, CapturedBody, UpsertUsageRecord, UsageBodyCaptureState,
 };
-use serde::Serialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value};
 
 use crate::event::UsageEvent;
 use crate::runtime::{UsageBodyCapturePolicy, UsageRequestRecordLevel};
 
-const TRUNCATED_BODY_STRING_SUFFIX: &str = "...[truncated]";
 const BASE64_IMAGE_DATA_URL_PREFIX: &str = "data:image/";
 const BASE64_DATA_URL_MARKER: &str = ";base64,";
 
-#[derive(Debug)]
-struct LimitedUsageBodyCapture {
-    value: Value,
-    source_bytes: Option<u64>,
-    stored_bytes: Option<u64>,
-    truncated: bool,
-    reason: Option<&'static str>,
-}
-
+/// The four capture slots a policy pass may rewrite.
 struct UsageBodyCapturePayloadMut<'a> {
-    request_body: &'a mut Option<Value>,
-    request_body_ref: &'a mut Option<String>,
-    request_body_state: &'a mut Option<UsageBodyCaptureState>,
-    provider_request_body: &'a mut Option<Value>,
-    provider_request_body_ref: &'a mut Option<String>,
-    provider_request_body_state: &'a mut Option<UsageBodyCaptureState>,
-    response_body: &'a mut Option<Value>,
-    response_body_ref: &'a mut Option<String>,
-    response_body_state: &'a mut Option<UsageBodyCaptureState>,
-    client_response_body: &'a mut Option<Value>,
-    client_response_body_ref: &'a mut Option<String>,
-    client_response_body_state: &'a mut Option<UsageBodyCaptureState>,
+    request_body: &'a mut Option<CapturedBody>,
+    provider_request_body: &'a mut Option<CapturedBody>,
+    response_body: &'a mut Option<CapturedBody>,
+    client_response_body: &'a mut Option<CapturedBody>,
     request_metadata: &'a mut Option<Value>,
 }
 
@@ -42,17 +22,9 @@ impl<'a> UsageBodyCapturePayloadMut<'a> {
     fn from_event(event: &'a mut UsageEvent) -> Self {
         Self {
             request_body: &mut event.data.request_body,
-            request_body_ref: &mut event.data.request_body_ref,
-            request_body_state: &mut event.data.request_body_state,
             provider_request_body: &mut event.data.provider_request_body,
-            provider_request_body_ref: &mut event.data.provider_request_body_ref,
-            provider_request_body_state: &mut event.data.provider_request_body_state,
             response_body: &mut event.data.response_body,
-            response_body_ref: &mut event.data.response_body_ref,
-            response_body_state: &mut event.data.response_body_state,
             client_response_body: &mut event.data.client_response_body,
-            client_response_body_ref: &mut event.data.client_response_body_ref,
-            client_response_body_state: &mut event.data.client_response_body_state,
             request_metadata: &mut event.data.request_metadata,
         }
     }
@@ -60,17 +32,9 @@ impl<'a> UsageBodyCapturePayloadMut<'a> {
     fn from_record(record: &'a mut UpsertUsageRecord) -> Self {
         Self {
             request_body: &mut record.request_body,
-            request_body_ref: &mut record.request_body_ref,
-            request_body_state: &mut record.request_body_state,
             provider_request_body: &mut record.provider_request_body,
-            provider_request_body_ref: &mut record.provider_request_body_ref,
-            provider_request_body_state: &mut record.provider_request_body_state,
             response_body: &mut record.response_body,
-            response_body_ref: &mut record.response_body_ref,
-            response_body_state: &mut record.response_body_state,
             client_response_body: &mut record.client_response_body,
-            client_response_body_ref: &mut record.client_response_body_ref,
-            client_response_body_state: &mut record.client_response_body_state,
             request_metadata: &mut record.request_metadata,
         }
     }
@@ -79,39 +43,6 @@ impl<'a> UsageBodyCapturePayloadMut<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct UsageBodyCaptureEngine {
     policy: UsageBodyCapturePolicy,
-}
-
-#[derive(Default)]
-struct CountingWriter {
-    bytes: u64,
-}
-
-impl Write for CountingWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.bytes = self.bytes.saturating_add(buf.len() as u64);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RuntimeBodyCaptureStates {
-    pub request: UsageBodyCaptureState,
-    pub provider_request: UsageBodyCaptureState,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct RuntimeBodyCaptureMetadataInput<'a> {
-    pub request_has_inline_body: bool,
-    pub request_body_ref: Option<&'a str>,
-    pub provider_request_has_inline_body: bool,
-    pub provider_request_body_ref: Option<&'a str>,
-    pub provider_request_source_bytes: Option<u64>,
-    pub provider_request_unavailable: bool,
-    pub provider_request_unavailable_reason: Option<&'a str>,
 }
 
 impl UsageBodyCaptureEngine {
@@ -142,221 +73,138 @@ impl UsageBodyCaptureEngine {
     }
 
     fn apply_to_payload(self, payload: UsageBodyCapturePayloadMut<'_>, force_disabled: bool) {
-        if force_disabled || matches!(self.policy.record_level, UsageRequestRecordLevel::Basic) {
-            let reason = if force_disabled {
-                "sensitive_oauth_exchange"
-            } else {
-                "request_record_level_basic"
-            };
-            disable_usage_body_capture_field(
-                UsageBodyField::RequestBody,
-                "request",
-                payload.request_body,
-                payload.request_body_ref,
-                payload.request_body_state,
+        let disabled_reason = if force_disabled {
+            Some("sensitive_oauth_exchange")
+        } else if matches!(self.policy.record_level, UsageRequestRecordLevel::Basic) {
+            Some("request_record_level_basic")
+        } else {
+            None
+        };
+        for (key, body) in [
+            ("request", payload.request_body),
+            ("provider_request", payload.provider_request_body),
+            ("response", payload.response_body),
+            ("client_response", payload.client_response_body),
+        ] {
+            apply_captured_body_policy(
+                self.policy,
+                key,
+                body,
                 payload.request_metadata,
-                reason,
+                disabled_reason,
             );
-            disable_usage_body_capture_field(
-                UsageBodyField::ProviderRequestBody,
-                "provider_request",
-                payload.provider_request_body,
-                payload.provider_request_body_ref,
-                payload.provider_request_body_state,
-                payload.request_metadata,
-                reason,
-            );
-            disable_usage_body_capture_field(
-                UsageBodyField::ResponseBody,
-                "response",
-                payload.response_body,
-                payload.response_body_ref,
-                payload.response_body_state,
-                payload.request_metadata,
-                reason,
-            );
-            disable_usage_body_capture_field(
-                UsageBodyField::ClientResponseBody,
-                "client_response",
-                payload.client_response_body,
-                payload.client_response_body_ref,
-                payload.client_response_body_state,
-                payload.request_metadata,
-                reason,
-            );
-            return;
         }
-
-        apply_usage_body_capture_limit(
-            UsageBodyField::RequestBody,
-            "request",
-            self.policy,
-            payload.request_body,
-            payload.request_body_ref,
-            payload.request_body_state,
-            payload.request_metadata,
-        );
-        apply_usage_body_capture_limit(
-            UsageBodyField::ProviderRequestBody,
-            "provider_request",
-            self.policy,
-            payload.provider_request_body,
-            payload.provider_request_body_ref,
-            payload.provider_request_body_state,
-            payload.request_metadata,
-        );
-        apply_usage_body_capture_limit(
-            UsageBodyField::ResponseBody,
-            "response",
-            self.policy,
-            payload.response_body,
-            payload.response_body_ref,
-            payload.response_body_state,
-            payload.request_metadata,
-        );
-        apply_usage_body_capture_limit(
-            UsageBodyField::ClientResponseBody,
-            "client_response",
-            self.policy,
-            payload.client_response_body,
-            payload.client_response_body_ref,
-            payload.client_response_body_state,
-            payload.request_metadata,
-        );
     }
 }
 
+/// Applies the record-level and size policies to one captured side.
+///
+/// The stored payload is bytes, so every policy has to be expressed on bytes:
+/// disabling replaces the side with its reason, compaction only applies to JSON
+/// (a data URL lives inside a JSON document), and a size limit truncates on a
+/// character boundary for textual encodings so the value stays readable.
+/// OAuth token exchanges carry credentials on both sides, so they are never
+/// captured even at the `full` record level.
 fn is_sensitive_oauth_exchange(
     api_format: Option<&str>,
     endpoint_api_format: Option<&str>,
 ) -> bool {
-    [api_format, endpoint_api_format]
-        .into_iter()
-        .flatten()
-        .map(str::trim)
-        .any(|format| {
-            format.eq_ignore_ascii_case("oauth:exchange")
-                || format.eq_ignore_ascii_case("provider_oauth:exchange")
-                || format.eq_ignore_ascii_case("provider_oauth:local_refresh")
-                || format.eq_ignore_ascii_case("vertex_ai:service_account_token")
+    let is_oauth = |value: Option<&str>| {
+        value.is_some_and(|value| {
+            let value = value.trim().to_ascii_lowercase().replace('-', "_");
+            value.contains("oauth") || value.contains("token_exchange")
         })
+    };
+    is_oauth(api_format) || is_oauth(endpoint_api_format)
 }
 
-pub fn apply_usage_body_capture_policy_to_event(
+fn apply_captured_body_policy(
     policy: UsageBodyCapturePolicy,
-    event: &mut UsageEvent,
-) {
-    UsageBodyCaptureEngine::new(policy).apply_to_event(event);
-}
-
-pub fn apply_usage_body_capture_policy_to_record(
-    policy: UsageBodyCapturePolicy,
-    record: &mut UpsertUsageRecord,
-) {
-    UsageBodyCaptureEngine::new(policy).apply_to_record(record);
-}
-
-fn disable_usage_body_capture_field(
-    field: UsageBodyField,
     metadata_key: &str,
-    body: &mut Option<Value>,
-    body_ref: &mut Option<String>,
-    state: &mut Option<UsageBodyCaptureState>,
+    body: &mut Option<CapturedBody>,
     request_metadata: &mut Option<Value>,
-    reason: &'static str,
+    disabled_reason: Option<&'static str>,
 ) {
-    *body = None;
-    *body_ref = None;
-    *state = Some(UsageBodyCaptureState::Disabled);
-    sync_usage_body_ref_metadata(request_metadata, field, None);
-    upsert_body_capture_metadata_value_entry(
-        request_metadata,
-        metadata_key,
-        Some(UsageBodyCaptureState::Disabled),
-        None,
-        None,
-        Some(reason),
-    );
-}
-
-fn apply_usage_body_capture_limit(
-    field: UsageBodyField,
-    metadata_key: &str,
-    policy: UsageBodyCapturePolicy,
-    body: &mut Option<Value>,
-    body_ref: &mut Option<String>,
-    state: &mut Option<UsageBodyCaptureState>,
-    request_metadata: &mut Option<Value>,
-) {
-    *body_ref = sanitize_usage_body_ref(body_ref.take());
-    if body.is_some() && body_ref.is_some() {
-        *body = None;
-    }
-
-    if let Some(body_ref_value) = body_ref.as_ref() {
-        *state = Some(UsageBodyCaptureState::Reference);
-        sync_usage_body_ref_metadata(request_metadata, field, Some(body_ref_value));
+    if let Some(reason) = disabled_reason {
+        *body = Some(CapturedBody::Disabled);
         upsert_body_capture_metadata_value_entry(
             request_metadata,
             metadata_key,
-            Some(UsageBodyCaptureState::Reference),
+            Some(UsageBodyCaptureState::Disabled),
             None,
             None,
-            None,
+            Some(reason),
         );
         return;
     }
 
-    let Some(mut value) = body.take() else {
-        if matches!(state, Some(UsageBodyCaptureState::Unavailable)) {
-            upsert_body_capture_metadata_value_entry(
-                request_metadata,
-                metadata_key,
-                *state,
-                None,
-                None,
-                None,
-            );
-        } else if state.is_none() {
-            *state = Some(UsageBodyCaptureState::None);
-        }
-        sync_usage_body_ref_metadata(request_metadata, field, None);
+    let Some(CapturedBody::Bytes {
+        bytes,
+        encoding,
+        truncated,
+    }) = body.as_mut()
+    else {
         return;
     };
 
-    let original_source_bytes = policy
-        .compact_base64_images
-        .then(|| json_serialized_len(&value))
-        .flatten();
-    let compacted_image_count = if policy.compact_base64_images {
-        compact_base64_image_data_urls(&mut value)
-    } else {
-        0
-    };
-    let mut limited = limit_usage_body_capture_value(value, policy.max_body_bytes);
-    if compacted_image_count > 0 {
-        limited.source_bytes = original_source_bytes.or(limited.source_bytes);
-        limited.truncated = true;
-        if limited.reason.is_none() {
-            limited.reason = Some("base64_image_data_url_compacted");
+    let source_bytes = bytes.len() as u64;
+    let mut reason = None;
+    if policy.compact_base64_images && *encoding == BodyEncoding::Json {
+        if let Some(compacted) = compact_captured_json_images(bytes) {
+            *bytes = compacted;
+            *truncated = true;
+            reason = Some("base64_image_data_url_compacted");
         }
     }
-    let next_state = if limited.truncated {
+    if let Some(limit) = policy.max_body_bytes {
+        if bytes.len() > limit {
+            let keep = truncate_on_char_boundary(bytes, limit, *encoding);
+            bytes.truncate(keep);
+            *truncated = true;
+            reason = reason.or(Some("body_capture_limit_exceeded"));
+        }
+    }
+    let state = if *truncated {
         UsageBodyCaptureState::Truncated
     } else {
         UsageBodyCaptureState::Inline
     };
-    *state = Some(next_state);
-    *body = Some(limited.value);
-    sync_usage_body_ref_metadata(request_metadata, field, None);
     upsert_body_capture_metadata_value_entry(
         request_metadata,
         metadata_key,
-        Some(next_state),
-        limited.stored_bytes,
-        limited.source_bytes,
-        limited.reason,
+        Some(state),
+        Some(bytes.len() as u64),
+        Some(source_bytes),
+        reason,
     );
+}
+
+/// Compacts base64 image data URLs inside a JSON document, returning the new
+/// bytes when anything changed.
+fn compact_captured_json_images(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut value: Value = serde_json::from_slice(bytes).ok()?;
+    if compact_base64_image_data_urls(&mut value) == 0 {
+        return None;
+    }
+    serde_json::to_vec(&value).ok()
+}
+
+/// Truncates at a UTF-8 boundary for textual encodings; binary is cut wherever
+/// the limit falls.
+fn truncate_on_char_boundary(bytes: &[u8], limit: usize, encoding: BodyEncoding) -> usize {
+    if limit >= bytes.len() {
+        return bytes.len();
+    }
+    match encoding {
+        BodyEncoding::Binary => limit,
+        BodyEncoding::Json | BodyEncoding::Text | BodyEncoding::Sse => {
+            let mut end = limit;
+            while end > 0 && std::str::from_utf8(&bytes[..end]).is_err() {
+                end -= 1;
+            }
+            end
+        }
+    }
 }
 
 fn compact_base64_image_data_urls(value: &mut Value) -> usize {
@@ -452,288 +300,6 @@ fn format_base64_image_size(bytes: u64) -> String {
     }
 }
 
-fn limit_usage_body_capture_value(
-    value: Value,
-    max_bytes: Option<usize>,
-) -> LimitedUsageBodyCapture {
-    let source_bytes = json_serialized_len(&value);
-    let Some(limit) = max_bytes.filter(|value| *value > 0) else {
-        return LimitedUsageBodyCapture {
-            stored_bytes: source_bytes,
-            source_bytes,
-            value,
-            truncated: false,
-            reason: None,
-        };
-    };
-    let Some(source_len) = source_bytes else {
-        return LimitedUsageBodyCapture {
-            stored_bytes: None,
-            source_bytes: None,
-            value,
-            truncated: false,
-            reason: None,
-        };
-    };
-    if source_len <= limit as u64 {
-        return LimitedUsageBodyCapture {
-            stored_bytes: Some(source_len),
-            source_bytes: Some(source_len),
-            value,
-            truncated: false,
-            reason: None,
-        };
-    }
-
-    let truncated_value = match value {
-        Value::String(text) => Value::String(truncate_usage_body_string(&text, limit)),
-        other => json!({
-            "truncated": true,
-            "reason": "body_capture_limit_exceeded",
-            "max_bytes": limit,
-            "source_bytes": source_len,
-            "value_kind": usage_value_kind(&other),
-        }),
-    };
-    let stored_bytes = json_serialized_len(&truncated_value);
-    LimitedUsageBodyCapture {
-        value: truncated_value,
-        source_bytes: Some(source_len),
-        stored_bytes,
-        truncated: true,
-        reason: Some("body_capture_limit_exceeded"),
-    }
-}
-
-fn truncate_usage_body_string(value: &str, max_bytes: usize) -> String {
-    let mut end = value.len();
-    while end > 0 {
-        while end > 0 && !value.is_char_boundary(end) {
-            end -= 1;
-        }
-        let mut candidate = value[..end].to_string();
-        candidate.push_str(TRUNCATED_BODY_STRING_SUFFIX);
-        if json_serialized_len(&candidate).is_some_and(|bytes| bytes <= max_bytes as u64) {
-            return candidate;
-        }
-        end = value[..end]
-            .char_indices()
-            .last()
-            .map(|(index, _)| index)
-            .unwrap_or(0);
-        if end == 0 {
-            break;
-        }
-    }
-
-    json!({
-        "truncated": true,
-        "reason": "body_capture_limit_exceeded",
-        "max_bytes": max_bytes,
-        "value_kind": "string",
-    })
-    .to_string()
-}
-
-fn json_serialized_len<T: Serialize>(value: &T) -> Option<u64> {
-    let mut writer = CountingWriter::default();
-    serde_json::to_writer(&mut writer, value).ok()?;
-    Some(writer.bytes)
-}
-
-pub(crate) fn sync_usage_body_ref_metadata(
-    metadata: &mut Option<Value>,
-    field: UsageBodyField,
-    body_ref: Option<&str>,
-) {
-    let key = field.as_ref_key();
-    let Some(body_ref) = body_ref.map(str::trim).filter(|value| !value.is_empty()) else {
-        let clear_metadata = match metadata.as_mut() {
-            Some(Value::Object(object)) => {
-                object.remove(key);
-                object.is_empty()
-            }
-            _ => false,
-        };
-        if clear_metadata {
-            *metadata = None;
-        }
-        return;
-    };
-    if let Some(Value::Object(object)) = metadata.as_mut() {
-        if object.get(key).and_then(Value::as_str) == Some(body_ref) {
-            return;
-        }
-        object.insert(key.to_owned(), Value::String(body_ref.to_owned()));
-        return;
-    }
-    let object = metadata
-        .get_or_insert_with(|| Value::Object(Map::new()))
-        .as_object_mut();
-    let Some(object) = object else {
-        return;
-    };
-    object.insert(key.to_owned(), Value::String(body_ref.to_owned()));
-}
-
-pub(crate) fn build_payload_body_capture_metadata(
-    provider_body_base64: Option<&str>,
-    client_body_base64: Option<&str>,
-    provider_body_state: Option<UsageBodyCaptureState>,
-    client_body_state: Option<UsageBodyCaptureState>,
-) -> Option<Value> {
-    let provider_decoded_len = provider_body_base64.and_then(decoded_base64_len_hint);
-    let client_decoded_len = client_body_base64.and_then(decoded_base64_len_hint);
-    let body_capture_capacity =
-        usize::from(provider_body_state.is_some()) + usize::from(client_body_state.is_some());
-    let mut metadata = Map::with_capacity(
-        usize::from(provider_decoded_len.is_some())
-            + usize::from(client_decoded_len.is_some())
-            + usize::from(body_capture_capacity > 0),
-    );
-    if let Some(decoded_len) = provider_decoded_len {
-        metadata.insert(
-            "provider_response_body_base64_bytes".to_string(),
-            Value::Number(decoded_len.into()),
-        );
-    }
-    if let Some(decoded_len) = client_decoded_len {
-        metadata.insert(
-            "client_response_body_base64_bytes".to_string(),
-            Value::Number(decoded_len.into()),
-        );
-    }
-
-    if body_capture_capacity > 0 {
-        let mut body_capture = Map::with_capacity(body_capture_capacity);
-        append_body_capture_metadata_entry(
-            &mut body_capture,
-            "response",
-            provider_body_state,
-            provider_decoded_len,
-            provider_decoded_len,
-        );
-        append_body_capture_metadata_entry(
-            &mut body_capture,
-            "client_response",
-            client_body_state,
-            client_decoded_len,
-            client_decoded_len,
-        );
-        metadata.insert("body_capture".to_string(), Value::Object(body_capture));
-    }
-
-    (!metadata.is_empty()).then_some(Value::Object(metadata))
-}
-
-pub(crate) fn build_runtime_body_capture_states(
-    request_has_inline_body: bool,
-    request_body_ref: Option<&str>,
-    provider_request_has_inline_body: bool,
-    provider_request_body_ref: Option<&str>,
-    provider_request_unavailable: bool,
-) -> RuntimeBodyCaptureStates {
-    RuntimeBodyCaptureStates {
-        request: UsageBodyCaptureState::from_capture_parts(
-            request_has_inline_body,
-            request_body_ref.is_some(),
-            false,
-        ),
-        provider_request: UsageBodyCaptureState::from_capture_parts(
-            provider_request_has_inline_body,
-            provider_request_body_ref.is_some(),
-            provider_request_unavailable,
-        ),
-    }
-}
-
-pub(crate) fn append_runtime_body_capture_metadata(
-    metadata: &mut Map<String, Value>,
-    input: RuntimeBodyCaptureMetadataInput<'_>,
-) {
-    let states = build_runtime_body_capture_states(
-        input.request_has_inline_body,
-        input.request_body_ref,
-        input.provider_request_has_inline_body,
-        input.provider_request_body_ref,
-        input.provider_request_unavailable,
-    );
-    let Some(body_capture_object) = body_capture_object_mut(metadata, 2) else {
-        return;
-    };
-    body_capture_object.insert(
-        "request".to_string(),
-        build_body_capture_metadata_entry(states.request, None, None, None),
-    );
-    body_capture_object.insert(
-        "provider_request".to_string(),
-        build_body_capture_metadata_entry(
-            states.provider_request,
-            input.provider_request_source_bytes,
-            input.provider_request_source_bytes,
-            input.provider_request_unavailable_reason,
-        ),
-    );
-}
-
-pub(crate) fn build_plan_body_capture_metadata(
-    provider_request_body_base64: Option<&str>,
-) -> Option<Value> {
-    provider_request_body_base64?;
-    let mut metadata = Map::with_capacity(2);
-    append_plan_body_capture_metadata(&mut metadata, provider_request_body_base64);
-    (!metadata.is_empty()).then_some(Value::Object(metadata))
-}
-
-pub(crate) fn append_plan_body_capture_metadata(
-    metadata: &mut Map<String, Value>,
-    provider_request_body_base64: Option<&str>,
-) {
-    if let Some(body_bytes_b64) = provider_request_body_base64 {
-        let decoded_len = decoded_base64_len_hint(body_bytes_b64);
-        if let Some(decoded_len) = decoded_len {
-            metadata.insert(
-                "provider_request_body_base64_bytes".to_string(),
-                Value::Number(decoded_len.into()),
-            );
-        }
-        let Some(body_capture_object) = body_capture_object_mut(metadata, 1) else {
-            return;
-        };
-        body_capture_object.insert(
-            "provider_request".to_string(),
-            build_body_capture_metadata_entry(
-                UsageBodyCaptureState::Unavailable,
-                decoded_len,
-                decoded_len,
-                Some("body_bytes_base64_only"),
-            ),
-        );
-    }
-}
-
-fn append_body_capture_metadata_entry(
-    target: &mut Map<String, Value>,
-    key: &str,
-    state: Option<UsageBodyCaptureState>,
-    stored_bytes: Option<u64>,
-    source_bytes: Option<u64>,
-) {
-    let Some(state) = state else {
-        return;
-    };
-    target.insert(
-        key.to_string(),
-        build_body_capture_metadata_entry(
-            state,
-            stored_bytes,
-            source_bytes,
-            matches!(state, UsageBodyCaptureState::Truncated)
-                .then_some("body_capture_limit_exceeded"),
-        ),
-    );
-}
-
 pub(crate) fn mark_usage_event_capture_truncated(metadata: &mut Option<Value>, key: &str) {
     aether_data_contracts::repository::usage::mark_usage_capture_memory_omitted(metadata, key);
 }
@@ -758,6 +324,38 @@ fn upsert_body_capture_metadata_value_entry(
     );
 }
 
+fn build_body_capture_metadata_entry(
+    state: UsageBodyCaptureState,
+    stored_bytes: Option<u64>,
+    source_bytes: Option<u64>,
+    reason: Option<&str>,
+) -> Value {
+    let mut entry = Map::with_capacity(4);
+    entry.insert(
+        "state".to_string(),
+        Value::String(
+            match state {
+                UsageBodyCaptureState::None => "none",
+                UsageBodyCaptureState::Inline => "inline",
+                UsageBodyCaptureState::Truncated => "truncated",
+                UsageBodyCaptureState::Disabled => "disabled",
+                UsageBodyCaptureState::Unavailable => "unavailable",
+            }
+            .to_string(),
+        ),
+    );
+    if let Some(stored_bytes) = stored_bytes {
+        entry.insert("stored_bytes".to_string(), Value::from(stored_bytes));
+    }
+    if let Some(source_bytes) = source_bytes {
+        entry.insert("source_bytes".to_string(), Value::from(source_bytes));
+    }
+    if let Some(reason) = reason {
+        entry.insert("reason".to_string(), Value::String(reason.to_string()));
+    }
+    Value::Object(entry)
+}
+
 fn body_capture_object_mut(
     metadata: &mut Map<String, Value>,
     capacity: usize,
@@ -777,33 +375,6 @@ fn body_capture_value_object_mut(
         .as_object_mut();
     let metadata_object = metadata_object?;
     body_capture_object_mut(metadata_object, capacity)
-}
-
-fn build_body_capture_metadata_entry(
-    state: UsageBodyCaptureState,
-    stored_bytes: Option<u64>,
-    source_bytes: Option<u64>,
-    reason: Option<&str>,
-) -> Value {
-    let mut entry = Map::with_capacity(
-        1 + usize::from(stored_bytes.is_some())
-            + usize::from(source_bytes.is_some())
-            + usize::from(reason.is_some()),
-    );
-    entry.insert(
-        "state".to_string(),
-        Value::String(state.as_str().to_owned()),
-    );
-    if let Some(bytes) = stored_bytes {
-        entry.insert("stored_bytes".to_string(), json!(bytes));
-    }
-    if let Some(bytes) = source_bytes {
-        entry.insert("source_bytes".to_string(), json!(bytes));
-    }
-    if let Some(reason) = reason {
-        entry.insert("reason".to_string(), Value::String(reason.to_owned()));
-    }
-    Value::Object(entry)
 }
 
 pub(crate) fn decoded_base64_len_hint(body_base64: &str) -> Option<u64> {
@@ -838,443 +409,246 @@ pub(crate) fn decoded_base64_len_hint(body_base64: &str) -> Option<u64> {
     Some(decoded_len as u64)
 }
 
-fn sanitize_usage_body_ref(value: Option<String>) -> Option<String> {
-    value.and_then(trim_owned_non_empty_string)
+pub fn apply_usage_body_capture_policy_to_event(
+    policy: UsageBodyCapturePolicy,
+    event: &mut UsageEvent,
+) {
+    UsageBodyCaptureEngine::new(policy).apply_to_event(event);
 }
 
-fn trim_owned_non_empty_string(value: String) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    if trimmed.len() == value.len() {
-        return Some(value);
-    }
-    Some(trimmed.to_string())
-}
-
-fn usage_value_kind(value: &Value) -> &'static str {
-    match value {
-        Value::Null => "null",
-        Value::Bool(_) => "bool",
-        Value::Number(_) => "number",
-        Value::String(_) => "string",
-        Value::Array(_) => "array",
-        Value::Object(_) => "object",
-    }
+pub fn apply_usage_body_capture_policy_to_record(
+    policy: UsageBodyCapturePolicy,
+    record: &mut UpsertUsageRecord,
+) {
+    UsageBodyCaptureEngine::new(policy).apply_to_record(record);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        apply_usage_body_capture_policy_to_event, apply_usage_body_capture_policy_to_record,
-        build_plan_body_capture_metadata, compact_base64_image_data_urls,
-        sync_usage_body_ref_metadata, trim_owned_non_empty_string, truncate_usage_body_string,
-        upsert_body_capture_metadata_value_entry,
-    };
-    use aether_data_contracts::repository::usage::UsageBodyCaptureState;
-    use aether_data_contracts::repository::usage::UsageBodyField;
-    use base64::Engine as _;
-    use serde_json::{json, Map, Value};
+    use super::*;
+    use crate::event::UsageEventType;
+    use aether_data_contracts::repository::usage::BodyEncoding;
+    use serde_json::json;
 
-    use crate::{
-        UsageBodyCapturePolicy, UsageEvent, UsageEventData, UsageEventType, UsageRequestRecordLevel,
-    };
-    fn sensitive_oauth_event(api_format: &str) -> UsageEvent {
-        UsageEvent::new(
-            UsageEventType::Completed,
-            "oauth-sensitive-request",
-            UsageEventData {
-                provider_name: "oauth".to_string(),
-                model: "oauth-exchange".to_string(),
-                api_format: Some(api_format.to_string()),
-                endpoint_api_format: Some(api_format.to_string()),
-                request_body: Some(json!({"client_secret":"request-secret"})),
-                request_body_ref: Some("usage://oauth/request".to_string()),
-                provider_request_body: Some(json!({"refresh_token":"refresh-secret"})),
-                provider_request_body_ref: Some("usage://oauth/provider-request".to_string()),
-                response_body: Some(json!({
-                    "access_token":"access-secret",
-                    "refresh_token":"rotated-refresh-secret"
-                })),
-                response_body_ref: Some("usage://oauth/response".to_string()),
-                client_response_body: Some(json!({"access_token":"client-access-secret"})),
-                client_response_body_ref: Some("usage://oauth/client-response".to_string()),
-                ..UsageEventData::default()
-            },
-        )
+    fn body(bytes: &[u8], encoding: BodyEncoding) -> CapturedBody {
+        CapturedBody::from_bytes(bytes.to_vec(), encoding, false)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn assert_sensitive_bodies_disabled(
-        request_body: &Option<Value>,
-        request_body_ref: &Option<String>,
-        request_body_state: Option<UsageBodyCaptureState>,
-        provider_request_body: &Option<Value>,
-        provider_request_body_ref: &Option<String>,
-        provider_request_body_state: Option<UsageBodyCaptureState>,
-        response_body: &Option<Value>,
-        response_body_ref: &Option<String>,
-        response_body_state: Option<UsageBodyCaptureState>,
-        client_response_body: &Option<Value>,
-        client_response_body_ref: &Option<String>,
-        client_response_body_state: Option<UsageBodyCaptureState>,
-        request_metadata: &Option<Value>,
-    ) {
-        assert!(request_body.is_none());
-        assert!(request_body_ref.is_none());
-        assert_eq!(request_body_state, Some(UsageBodyCaptureState::Disabled));
-        assert!(provider_request_body.is_none());
-        assert!(provider_request_body_ref.is_none());
-        assert_eq!(
-            provider_request_body_state,
-            Some(UsageBodyCaptureState::Disabled)
-        );
-        assert!(response_body.is_none());
-        assert!(response_body_ref.is_none());
-        assert_eq!(response_body_state, Some(UsageBodyCaptureState::Disabled));
-        assert!(client_response_body.is_none());
-        assert!(client_response_body_ref.is_none());
-        assert_eq!(
-            client_response_body_state,
-            Some(UsageBodyCaptureState::Disabled)
-        );
-        let body_capture = request_metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get("body_capture"))
-            .and_then(Value::as_object)
-            .expect("body capture metadata should exist");
-        for field in ["request", "provider_request", "response", "client_response"] {
-            assert_eq!(
-                body_capture
-                    .get(field)
-                    .and_then(|entry| entry.get("reason"))
-                    .and_then(Value::as_str),
-                Some("sensitive_oauth_exchange")
-            );
+    fn full_policy() -> UsageBodyCapturePolicy {
+        UsageBodyCapturePolicy {
+            record_level: UsageRequestRecordLevel::Full,
+            max_body_bytes: None,
+            compact_base64_images: false,
         }
     }
 
-    #[test]
-    fn build_plan_body_capture_metadata_returns_none_without_base64_body() {
-        assert!(build_plan_body_capture_metadata(None).is_none());
-    }
-
-    #[test]
-    fn full_policy_never_captures_sensitive_oauth_event_bodies() {
-        let mut event = sensitive_oauth_event("oauth:exchange");
-
-        apply_usage_body_capture_policy_to_event(
-            UsageBodyCapturePolicy {
-                record_level: UsageRequestRecordLevel::Full,
-                ..UsageBodyCapturePolicy::default()
-            },
-            &mut event,
-        );
-
-        assert_sensitive_bodies_disabled(
-            &event.data.request_body,
-            &event.data.request_body_ref,
-            event.data.request_body_state,
-            &event.data.provider_request_body,
-            &event.data.provider_request_body_ref,
-            event.data.provider_request_body_state,
-            &event.data.response_body,
-            &event.data.response_body_ref,
-            event.data.response_body_state,
-            &event.data.client_response_body,
-            &event.data.client_response_body_ref,
-            event.data.client_response_body_state,
-            &event.data.request_metadata,
-        );
-    }
-
-    #[test]
-    fn full_policy_never_captures_sensitive_oauth_record_bodies() {
-        let event = sensitive_oauth_event("provider_oauth:exchange");
-        let mut record = crate::record::build_upsert_usage_record_from_event(&event)
-            .expect("usage record should build");
-
-        apply_usage_body_capture_policy_to_record(
-            UsageBodyCapturePolicy {
-                record_level: UsageRequestRecordLevel::Full,
-                ..UsageBodyCapturePolicy::default()
-            },
-            &mut record,
-        );
-
-        assert_sensitive_bodies_disabled(
-            &record.request_body,
-            &record.request_body_ref,
-            record.request_body_state,
-            &record.provider_request_body,
-            &record.provider_request_body_ref,
-            record.provider_request_body_state,
-            &record.response_body,
-            &record.response_body_ref,
-            record.response_body_state,
-            &record.client_response_body,
-            &record.client_response_body_ref,
-            record.client_response_body_state,
-            &record.request_metadata,
-        );
-    }
-
-    #[test]
-    fn full_policy_never_captures_refresh_or_service_account_token_bodies() {
-        for api_format in [
-            "provider_oauth:local_refresh",
-            "vertex_ai:service_account_token",
-        ] {
-            let mut event = sensitive_oauth_event(api_format);
-
-            apply_usage_body_capture_policy_to_event(
-                UsageBodyCapturePolicy {
-                    record_level: UsageRequestRecordLevel::Full,
-                    ..UsageBodyCapturePolicy::default()
-                },
-                &mut event,
-            );
-
-            assert_sensitive_bodies_disabled(
-                &event.data.request_body,
-                &event.data.request_body_ref,
-                event.data.request_body_state,
-                &event.data.provider_request_body,
-                &event.data.provider_request_body_ref,
-                event.data.provider_request_body_state,
-                &event.data.response_body,
-                &event.data.response_body_ref,
-                event.data.response_body_state,
-                &event.data.client_response_body,
-                &event.data.client_response_body_ref,
-                event.data.client_response_body_state,
-                &event.data.request_metadata,
-            );
+    fn test_record() -> UpsertUsageRecord {
+        UpsertUsageRecord {
+            request_id: "req".to_string(),
+            provider_name: "provider".to_string(),
+            model: "model".to_string(),
+            status: "completed".to_string(),
+            billing_status: "pending".to_string(),
+            updated_at_unix_secs: 1,
+            ..test_record_defaults()
         }
     }
 
-    #[test]
-    fn trim_owned_non_empty_string_preserves_clean_values_and_drops_blank_ones() {
-        assert_eq!(
-            trim_owned_non_empty_string("blob://body-ref-1".to_string()),
-            Some("blob://body-ref-1".to_string()),
-        );
-        assert_eq!(
-            trim_owned_non_empty_string("  blob://body-ref-1  ".to_string()),
-            Some("blob://body-ref-1".to_string()),
-        );
-        assert_eq!(trim_owned_non_empty_string("   ".to_string()), None);
+    fn test_record_defaults() -> UpsertUsageRecord {
+        // `UpsertUsageRecord` has no `Default`: every field is meaningful, so the
+        // fixture spells out the ones a capture test reads.
+        UpsertUsageRecord {
+            request_id: String::new(),
+            user_id: None,
+            api_key_id: None,
+            username: None,
+            api_key_name: None,
+            provider_name: String::new(),
+            model: String::new(),
+            target_model: None,
+            provider_id: None,
+            provider_endpoint_id: None,
+            provider_api_key_id: None,
+            request_type: None,
+            api_format: None,
+            api_family: None,
+            endpoint_kind: None,
+            endpoint_api_format: None,
+            provider_api_family: None,
+            provider_endpoint_kind: None,
+            has_format_conversion: None,
+            is_stream: None,
+            input_tokens: None,
+            output_tokens: None,
+            total_tokens: None,
+            cache_creation_input_tokens: None,
+            cache_creation_ephemeral_5m_input_tokens: None,
+            cache_creation_ephemeral_1h_input_tokens: None,
+            cache_read_input_tokens: None,
+            cache_creation_cost_usd: None,
+            cache_read_cost_usd: None,
+            output_price_per_1m: None,
+            total_cost_usd: None,
+            actual_total_cost_usd: None,
+            status_code: None,
+            error_message: None,
+            error_category: None,
+            response_time_ms: None,
+            first_byte_time_ms: None,
+            status: String::new(),
+            billing_status: String::new(),
+            request_headers: None,
+            request_body: None,
+            provider_request_headers: None,
+            provider_request_body: None,
+            response_headers: None,
+            response_body: None,
+            client_response_headers: None,
+            client_response_body: None,
+            candidate_id: None,
+            candidate_index: None,
+            key_name: None,
+            planner_kind: None,
+            route_family: None,
+            route_kind: None,
+            execution_path: None,
+            local_execution_runtime_miss_reason: None,
+            request_metadata: None,
+            finalized_at_unix_secs: None,
+            created_at_unix_ms: None,
+            updated_at_unix_secs: 0,
+            capture_retention: Default::default(),
+        }
     }
 
-    #[test]
-    fn upsert_body_capture_metadata_value_entry_ignores_none_state() {
-        let mut metadata = Some(Value::Object(Map::<String, Value>::new()));
-        upsert_body_capture_metadata_value_entry(&mut metadata, "response", None, None, None, None);
-        assert_eq!(metadata, Some(Value::Object(Map::new())));
-    }
-
-    #[test]
-    fn upsert_body_capture_metadata_value_entry_preserves_existing_metadata_fields() {
-        let mut metadata = Some(Value::Object(Map::from_iter([(
-            "request_body_ref".to_string(),
-            Value::String("blob://body-ref-1".to_string()),
-        )])));
-
-        upsert_body_capture_metadata_value_entry(
-            &mut metadata,
-            "response",
-            Some(UsageBodyCaptureState::Reference),
-            None,
-            None,
-            None,
-        );
-
-        assert_eq!(
-            metadata,
-            Some(Value::Object(Map::from_iter([
-                (
-                    "request_body_ref".to_string(),
-                    Value::String("blob://body-ref-1".to_string()),
-                ),
-                (
-                    "body_capture".to_string(),
-                    Value::Object(Map::from_iter([(
-                        "response".to_string(),
-                        Value::Object(Map::from_iter([(
-                            "state".to_string(),
-                            Value::String("reference".to_string()),
-                        )])),
-                    )])),
-                ),
-            ]))),
-        );
-    }
-
-    #[test]
-    fn sync_usage_body_ref_metadata_clears_empty_metadata_object() {
-        let mut metadata = Some(Value::Object(Map::from_iter([(
-            "request_body_ref".to_string(),
-            Value::String("blob://body-ref-1".to_string()),
-        )])));
-
-        sync_usage_body_ref_metadata(&mut metadata, UsageBodyField::RequestBody, None);
-
-        assert!(metadata.is_none());
-    }
-
-    #[test]
-    fn sync_usage_body_ref_metadata_preserves_existing_ref_value() {
-        let mut metadata = Some(Value::Object(Map::from_iter([(
-            "request_body_ref".to_string(),
-            Value::String("blob://body-ref-1".to_string()),
-        )])));
-
-        sync_usage_body_ref_metadata(
-            &mut metadata,
-            UsageBodyField::RequestBody,
-            Some("blob://body-ref-1"),
-        );
-
-        assert_eq!(
-            metadata,
-            Some(Value::Object(Map::from_iter([(
-                "request_body_ref".to_string(),
-                Value::String("blob://body-ref-1".to_string()),
-            )]))),
-        );
-    }
-
-    #[test]
-    fn truncate_usage_body_string_respects_json_byte_limit() {
-        let limit = 32usize;
-        let truncated = truncate_usage_body_string("x".repeat(256).as_str(), limit);
-
-        assert!(truncated.ends_with("...[truncated]"));
-        assert!(serde_json::to_vec(&truncated)
-            .ok()
-            .is_some_and(|bytes| bytes.len() <= limit));
+    fn metadata_state(metadata: Option<&Value>, key: &str) -> Option<String> {
+        metadata?
+            .get("body_capture")?
+            .get(key)?
+            .get("state")?
+            .as_str()
+            .map(ToOwned::to_owned)
     }
 
     #[test]
     fn compact_base64_images_replaces_nested_data_urls_with_size_placeholders() {
-        let mut body = json!({
-            "messages": [{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_image",
-                        "image_url": "data:image/png;base64,aGVsbG8="
-                    },
-                    {
-                        "type": "input_text",
-                        "text": "preview: data:image/jpeg;base64,d29ybGQ= end"
-                    }
-                ]
-            }],
-            "remote_image": "https://example.com/image.png",
-            "other_data_url": "data:text/plain;base64,aGVsbG8="
+        let mut value = json!({
+            "image": format!("data:image/png;base64,{}", "A".repeat(64)),
+            "nested": [{"other": "data:image/jpeg;base64,QUJD"}],
+            "text": "keep me",
         });
+        let compacted = compact_base64_image_data_urls(&mut value);
 
-        let compacted_count = compact_base64_image_data_urls(&mut body);
-
-        assert_eq!(compacted_count, 2);
-        assert_eq!(
-            body["messages"][0]["content"][0]["image_url"],
-            "<base64 image omitted; original size: 5 B>"
-        );
-        assert_eq!(
-            body["messages"][0]["content"][1]["text"],
-            "preview: <base64 image omitted; original size: 5 B> end"
-        );
-        assert_eq!(body["remote_image"], "https://example.com/image.png");
-        assert_eq!(body["other_data_url"], "data:text/plain;base64,aGVsbG8=");
+        assert_eq!(compacted, 2);
+        assert_eq!(value["text"], json!("keep me"));
+        let image = value["image"].as_str().expect("image placeholder");
+        assert!(image.starts_with("<base64 image omitted;"));
+        assert!(!image.contains("AAAAAAAA"));
+        let nested = value["nested"][0]["other"]
+            .as_str()
+            .expect("nested placeholder");
+        assert!(nested.starts_with("<base64 image omitted;"));
     }
 
     #[test]
-    fn body_capture_policy_compacts_images_before_enforcing_the_size_limit() {
-        let encoded_image = base64::engine::general_purpose::STANDARD.encode(vec![0u8; 1536]);
-        let mut event = UsageEvent::new(
-            UsageEventType::Completed,
-            "req-compact-images",
-            UsageEventData {
-                provider_name: "OpenAI".to_string(),
-                model: "gpt-image".to_string(),
-                request_body: Some(json!({
-                    "input": [{
-                        "type": "input_image",
-                        "image_url": format!("data:image/png;base64,{encoded_image}")
-                    }]
-                })),
-                response_body: Some(json!({"status": "ok"})),
-                ..UsageEventData::default()
-            },
-        );
+    fn policy_truncates_text_bodies_on_a_character_boundary() {
+        let policy = UsageBodyCapturePolicy {
+            max_body_bytes: Some(5),
+            ..full_policy()
+        };
+        let mut event = UsageEvent::new(UsageEventType::Completed, "req", Default::default());
+        // "汉字" is 6 bytes in UTF-8, so a 5-byte cut would split the last glyph.
+        event.data.response_body = Some(body("汉字".as_bytes(), BodyEncoding::Json));
 
-        apply_usage_body_capture_policy_to_event(
-            UsageBodyCapturePolicy {
-                record_level: UsageRequestRecordLevel::Full,
-                compact_base64_images: true,
-                max_body_bytes: Some(1024),
-            },
-            &mut event,
-        );
+        UsageBodyCaptureEngine::new(policy).apply_to_event(&mut event);
 
+        let CapturedBody::Bytes {
+            bytes, truncated, ..
+        } = event.data.response_body.as_ref().expect("captured body")
+        else {
+            panic!("expected bytes");
+        };
+        assert!(truncated);
+        assert_eq!(bytes, "汉".as_bytes());
+        assert!(std::str::from_utf8(bytes).is_ok());
+    }
+
+    #[test]
+    fn policy_cuts_binary_bodies_at_the_limit() {
+        let policy = UsageBodyCapturePolicy {
+            max_body_bytes: Some(2),
+            ..full_policy()
+        };
+        let mut record = test_record();
+        record.response_body = Some(body(&[0xff, 0xfe, 0xfd], BodyEncoding::Binary));
+
+        UsageBodyCaptureEngine::new(policy).apply_to_record(&mut record);
+
+        let CapturedBody::Bytes { bytes, .. } = record.response_body.as_ref().expect("body") else {
+            panic!("expected bytes");
+        };
+        assert_eq!(bytes, &[0xff, 0xfe]);
+    }
+
+    #[test]
+    fn policy_records_source_and_stored_bytes_in_metadata() {
+        let mut event = UsageEvent::new(UsageEventType::Completed, "req", Default::default());
+        event.data.request_body = Some(body(&[b'a'; 8], BodyEncoding::Text));
+
+        UsageBodyCaptureEngine::new(full_policy()).apply_to_event(&mut event);
+
+        let entry =
+            &event.data.request_metadata.as_ref().expect("metadata")["body_capture"]["request"];
+        assert_eq!(entry["state"], json!("inline"));
+        assert_eq!(entry["stored_bytes"], json!(8));
+        assert_eq!(entry["source_bytes"], json!(8));
+    }
+
+    #[test]
+    fn policy_marks_disabled_sides_without_touching_bytes() {
+        let policy = UsageBodyCapturePolicy {
+            record_level: UsageRequestRecordLevel::Basic,
+            ..full_policy()
+        };
+        let mut event = UsageEvent::new(UsageEventType::Completed, "req", Default::default());
+        event.data.response_body = Some(body(b"{}", BodyEncoding::Json));
+
+        UsageBodyCaptureEngine::new(policy).apply_to_event(&mut event);
+
+        assert_eq!(event.data.response_body, Some(CapturedBody::Disabled));
         assert_eq!(
-            event.data.request_body_state,
-            Some(UsageBodyCaptureState::Truncated)
-        );
-        assert_eq!(
-            event.data.request_body.as_ref().unwrap()["input"][0]["image_url"],
-            "<base64 image omitted; original size: 1.50 KiB>"
-        );
-        assert_eq!(
-            event.data.response_body_state,
-            Some(UsageBodyCaptureState::Inline)
-        );
-        let request_capture =
-            &event.data.request_metadata.as_ref().unwrap()["body_capture"]["request"];
-        assert_eq!(request_capture["reason"], "base64_image_data_url_compacted");
-        assert!(
-            request_capture["source_bytes"].as_u64().unwrap()
-                > request_capture["stored_bytes"].as_u64().unwrap()
+            metadata_state(event.data.request_metadata.as_ref(), "response").as_deref(),
+            Some("disabled")
         );
     }
 
     #[test]
-    fn body_capture_policy_replaces_oversized_json_with_truncation_metadata() {
-        let mut event = UsageEvent::new(
-            UsageEventType::Completed,
-            "req-body-limit",
-            UsageEventData {
-                provider_name: "OpenAI".to_string(),
-                model: "gpt-5".to_string(),
-                request_body: Some(json!({"prompt": "x".repeat(2048)})),
-                ..UsageEventData::default()
-            },
+    fn sensitive_oauth_exchange_forces_disabled_even_for_full_policy() {
+        let mut event = UsageEvent::new(UsageEventType::Completed, "req", Default::default());
+        event.data.api_format = Some("kiro_oauth_exchange".to_string());
+        event.data.request_body = Some(body(b"{}", BodyEncoding::Json));
+
+        UsageBodyCaptureEngine::new(full_policy()).apply_to_event(&mut event);
+
+        assert_eq!(event.data.request_body, Some(CapturedBody::Disabled));
+    }
+
+    #[test]
+    fn upsert_body_capture_metadata_value_entry_preserves_existing_metadata_fields() {
+        let mut metadata = Some(json!({"body_capture": {"request": {"state": "inline"}}}));
+        upsert_body_capture_metadata_value_entry(
+            &mut metadata,
+            "request",
+            Some(UsageBodyCaptureState::Truncated),
+            Some(4),
+            Some(9),
+            Some("body_capture_limit_exceeded"),
         );
 
-        apply_usage_body_capture_policy_to_event(
-            UsageBodyCapturePolicy {
-                record_level: UsageRequestRecordLevel::Full,
-                compact_base64_images: false,
-                max_body_bytes: Some(1024),
-            },
-            &mut event,
-        );
-
-        assert_eq!(
-            event.data.request_body_state,
-            Some(UsageBodyCaptureState::Truncated)
-        );
-        assert_eq!(
-            event.data.request_body.as_ref().unwrap()["reason"],
-            "body_capture_limit_exceeded"
-        );
-        assert_eq!(
-            event.data.request_metadata.as_ref().unwrap()["body_capture"]["request"]
-                ["source_bytes"],
-            2061
-        );
+        let entry = &metadata.as_ref().expect("metadata")["body_capture"]["request"];
+        assert_eq!(entry["state"], json!("truncated"));
+        assert_eq!(entry["stored_bytes"], json!(4));
+        assert_eq!(entry["source_bytes"], json!(9));
+        assert_eq!(entry["reason"], json!("body_capture_limit_exceeded"));
     }
 }

@@ -53,7 +53,7 @@ pub fn build_upsert_usage_record_from_event(
     // truncation/disabled placeholder clear those facts while converting the queued event into a
     // database record. Inline (or ref-loaded) bodies remain authoritative and may clear stale
     // metadata when the final upstream request no longer contains a value.
-    match request_body_derived_facts_action(data.request_body.as_ref(), data.request_body_state) {
+    match request_body_derived_facts_action(data.request_body.as_ref(), data.request_body_state()) {
         RequestBodyDerivedFactsAction::Refresh => {
             data.request_metadata = attach_client_request_body_metadata(
                 data.request_metadata,
@@ -67,7 +67,7 @@ pub fn build_upsert_usage_record_from_event(
     }
     match request_body_derived_facts_action(
         data.provider_request_body.as_ref(),
-        data.provider_request_body_state,
+        data.provider_request_body_state(),
     ) {
         RequestBodyDerivedFactsAction::Refresh => {
             data.request_metadata = attach_provider_request_body_metadata(
@@ -89,10 +89,8 @@ pub fn build_upsert_usage_record_from_event(
     data.request_metadata = attach_provider_response_model_metadata(
         data.request_metadata,
         data.request_body.as_ref(),
-        data.request_body_state,
         data.api_format.as_deref(),
         data.response_body.as_ref(),
-        data.response_body_state,
         data.endpoint_api_format.as_deref(),
     );
     let now_unix_secs = event.timestamp_ms / 1_000;
@@ -139,26 +137,12 @@ pub fn build_upsert_usage_record_from_event(
         billing_status: billing_status.to_string(),
         request_headers: data.request_headers,
         request_body: data.request_body,
-        request_body_ref: empty_to_none(data.request_body_ref)
-            .or_else(|| metadata_string(data.request_metadata.as_ref(), "request_body_ref")),
-        request_body_state: data.request_body_state,
         provider_request_headers: data.provider_request_headers,
         provider_request_body: data.provider_request_body,
-        provider_request_body_ref: empty_to_none(data.provider_request_body_ref).or_else(|| {
-            metadata_string(data.request_metadata.as_ref(), "provider_request_body_ref")
-        }),
-        provider_request_body_state: data.provider_request_body_state,
         response_headers: data.response_headers,
         response_body: data.response_body,
-        response_body_ref: empty_to_none(data.response_body_ref)
-            .or_else(|| metadata_string(data.request_metadata.as_ref(), "response_body_ref")),
-        response_body_state: data.response_body_state,
         client_response_headers: data.client_response_headers,
         client_response_body: data.client_response_body,
-        client_response_body_ref: empty_to_none(data.client_response_body_ref).or_else(|| {
-            metadata_string(data.request_metadata.as_ref(), "client_response_body_ref")
-        }),
-        client_response_body_state: data.client_response_body_state,
         candidate_id: data
             .candidate_id
             .or_else(|| metadata_string(data.request_metadata.as_ref(), "candidate_id")),
@@ -267,7 +251,7 @@ fn empty_to_none(value: Option<String>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use aether_data_contracts::repository::usage::UsageBodyCaptureState;
+    use aether_data_contracts::repository::usage::CapturedBody;
 
     use crate::{UsageEvent, UsageEventData, UsageEventType};
 
@@ -275,14 +259,13 @@ mod tests {
 
     #[test]
     fn capture_retention_follows_event_bodies_into_record_and_its_clones() {
-        use aether_data_contracts::repository::usage::{
-            usage_json_heap_estimate, UsageCaptureMemoryBudget,
-        };
+        use aether_data_contracts::repository::usage::UsageCaptureMemoryBudget;
         use std::sync::Arc;
 
         let body = serde_json::Value::String("retained diagnostic".repeat(8));
-        let estimate =
-            4 * (std::mem::size_of::<serde_json::Value>() + usage_json_heap_estimate(&body));
+        // Every side weighs the bytes it retains, and all four sides carry the
+        // same body in this fixture.
+        let estimate = 4 * CapturedBody::json(body.clone()).retained_bytes_estimate();
         let budget = Arc::new(UsageCaptureMemoryBudget::new(3 * estimate));
         let mut event = UsageEvent::new(
             UsageEventType::Completed,
@@ -293,10 +276,10 @@ mod tests {
                 input_tokens: Some(5),
                 output_tokens: Some(7),
                 cache_read_input_tokens: Some(0),
-                request_body: Some(body.clone()),
-                provider_request_body: Some(body.clone()),
-                response_body: Some(body.clone()),
-                client_response_body: Some(body),
+                request_body: Some(CapturedBody::json(body.clone())),
+                provider_request_body: Some(CapturedBody::json(body.clone())),
+                response_body: Some(CapturedBody::json(body.clone())),
+                client_response_body: Some(CapturedBody::json(body)),
                 ..UsageEventData::default()
             },
         );
@@ -333,13 +316,13 @@ mod tests {
                 output_tokens: Some(20),
                 total_tokens: Some(30),
                 status_code: Some(200),
-                request_body: Some(serde_json::json!({
+                request_body: Some(CapturedBody::json(serde_json::json!({
                     "reasoning": { "effort": "xhigh" }
-                })),
-                provider_request_body: Some(serde_json::json!({
+                }))),
+                provider_request_body: Some(CapturedBody::json(serde_json::json!({
                     "reasoning": { "effort": "max" },
                     "service_tier": "priority"
-                })),
+                }))),
                 request_metadata: Some(serde_json::json!({
                     "provider_actual_service_tier": "default"
                 })),
@@ -389,13 +372,11 @@ mod tests {
 
     #[test]
     fn truncated_request_placeholders_preserve_pre_capture_request_facts() {
-        let truncated = serde_json::json!({
-            "truncated": true,
-            "reason": "body_capture_limit_exceeded",
-            "max_bytes": 128,
-            "source_bytes": 2048,
-            "value_kind": "object"
-        });
+        let truncated = CapturedBody::from_bytes(
+            b"{\"truncated\":true}".to_vec(),
+            aether_data_contracts::repository::usage::BodyEncoding::Json,
+            true,
+        );
         let record = build_upsert_usage_record_from_event(&UsageEvent {
             event_type: UsageEventType::Completed,
             request_id: "req-truncated-request-facts".to_string(),
@@ -406,9 +387,7 @@ mod tests {
                 api_format: Some("openai:responses".to_string()),
                 endpoint_api_format: Some("openai:responses".to_string()),
                 request_body: Some(truncated.clone()),
-                request_body_state: Some(UsageBodyCaptureState::Truncated),
                 provider_request_body: Some(truncated),
-                provider_request_body_state: Some(UsageBodyCaptureState::Truncated),
                 request_metadata: Some(serde_json::json!({
                     "requested_reasoning_effort": "xhigh",
                     "provider_reasoning_effort": "max",
@@ -429,21 +408,17 @@ mod tests {
     }
 
     #[test]
-    fn disabled_reference_and_unavailable_bodies_preserve_pre_capture_request_facts() {
-        for state in [
-            UsageBodyCaptureState::Disabled,
-            UsageBodyCaptureState::Reference,
-            UsageBodyCaptureState::Unavailable,
-        ] {
+    fn disabled_and_unavailable_bodies_preserve_pre_capture_request_facts() {
+        for body in [CapturedBody::Disabled, CapturedBody::Unavailable] {
             let record = build_upsert_usage_record_from_event(&UsageEvent {
                 event_type: UsageEventType::Completed,
-                request_id: format!("req-preserved-{state:?}"),
+                request_id: format!("req-preserved-{body:?}"),
                 timestamp_ms: 1_700_000_000_000,
                 data: UsageEventData {
                     provider_name: "OpenAI".to_string(),
                     model: "gpt-5".to_string(),
-                    request_body_state: Some(state),
-                    provider_request_body_state: Some(state),
+                    request_body: Some(body.clone()),
+                    provider_request_body: Some(body),
                     request_metadata: Some(serde_json::json!({
                         "requested_reasoning_effort": "xhigh",
                         "provider_reasoning_effort": "max",
@@ -467,24 +442,14 @@ mod tests {
     #[test]
     fn missing_or_complete_factless_final_bodies_clear_stale_request_facts() {
         let cases = [
-            ("typed-missing", Some(UsageBodyCaptureState::None), None),
+            ("missing", None),
             (
-                "typed-missing-with-stale-body",
-                Some(UsageBodyCaptureState::None),
-                Some(serde_json::json!({
-                    "reasoning_effort": "xhigh",
-                    "service_tier": "priority"
-                })),
-            ),
-            ("untyped-missing", None, None),
-            (
-                "inline-without-facts",
-                Some(UsageBodyCaptureState::Inline),
-                Some(serde_json::json!({"model": "gpt-5"})),
+                "complete-without-facts",
+                Some(CapturedBody::json(serde_json::json!({"model": "gpt-5"}))),
             ),
         ];
 
-        for (name, state, body) in cases {
+        for (name, body) in cases {
             let record = build_upsert_usage_record_from_event(&UsageEvent {
                 event_type: UsageEventType::Completed,
                 request_id: format!("req-clear-{name}"),
@@ -493,9 +458,7 @@ mod tests {
                     provider_name: "OpenAI".to_string(),
                     model: "gpt-5".to_string(),
                     request_body: body.clone(),
-                    request_body_state: state,
                     provider_request_body: body,
-                    provider_request_body_state: state,
                     request_metadata: Some(serde_json::json!({
                         "trace_id": "trace-1",
                         "requested_reasoning_effort": "xhigh",
