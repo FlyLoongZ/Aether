@@ -328,6 +328,86 @@ fn empty_database_snapshot_uses_jsonb_for_all_usage_headers() {
     }
 }
 
+/// The split capture tables are one row per request each, are retired by a
+/// plain DELETE on their own `created_at`, and never let a payload exist
+/// without its encoding. All three are structural, so the snapshot has to carry
+/// them.
+#[test]
+fn empty_database_snapshot_sql_includes_split_http_capture_tables() {
+    let normalized = EMPTY_DATABASE_SNAPSHOT_SQL.replace("\r\n", "\n");
+
+    assert!(normalized.contains("CREATE TABLE IF NOT EXISTS public.usage_http_headers"));
+    assert!(normalized.contains("CREATE TABLE IF NOT EXISTS public.usage_http_bodies"));
+    for column in [
+        "client_request bytea",
+        "client_response bytea",
+        "provider_request bytea",
+        "provider_response bytea",
+    ] {
+        assert!(normalized.contains(&format!("    {column},")), "{column}");
+    }
+    for column in [
+        "client_request_encoding character varying(8)",
+        "client_response_encoding character varying(8)",
+        "provider_request_encoding character varying(8)",
+        "provider_response_encoding character varying(8)",
+    ] {
+        assert!(normalized.contains(&format!("    {column},")), "{column}");
+    }
+    for index in [
+        "ix_usage_http_headers_created_at",
+        "ix_usage_http_bodies_created_at",
+    ] {
+        assert!(normalized.contains(index), "{index}");
+    }
+    // No payload column may lean on PostgreSQL compression for space.
+    for column in [
+        "client_request",
+        "client_response",
+        "provider_request",
+        "provider_response",
+    ] {
+        assert!(
+            normalized.contains(&format!("ALTER COLUMN {column} SET STORAGE EXTERNAL;")),
+            "{column}"
+        );
+    }
+    // A body without an encoding, or the reverse, is rejected by the engine.
+    for column in [
+        "client_request",
+        "client_response",
+        "provider_request",
+        "provider_response",
+    ] {
+        assert!(
+            normalized.contains(&format!(
+                "CHECK (({column} IS NULL) = ({column}_encoding IS NULL))"
+            )),
+            "{column}"
+        );
+        assert!(
+            normalized.contains(&format!(
+                "CHECK ({column}_encoding IN ('json', 'text', 'sse', 'binary'))"
+            )),
+            "{column}"
+        );
+    }
+    // The retired state machine must not come back through the new tables. The
+    // legacy tables still carry it in the snapshot (a migration older than this
+    // one alters them), so the check is scoped to the new table bodies.
+    for table_body in [
+        normalized.split("public.usage_http_headers (").nth(1),
+        normalized.split("public.usage_http_bodies (").nth(1),
+    ] {
+        let body = table_body
+            .and_then(|rest| rest.split(");").next())
+            .expect("capture table definition");
+        for retired in ["_body_state", "body_capture_mode", "provider_attempts"] {
+            assert!(!body.contains(retired), "{retired} in capture table");
+        }
+    }
+}
+
 #[test]
 fn empty_database_snapshot_sql_includes_usage_body_blobs_and_audit_admin_role() {
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("'audit_admin'"));
@@ -1717,6 +1797,7 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20261009000000,
             20261011000000,
             20261019010000,
+            20261102000000,
         ]
     );
 }

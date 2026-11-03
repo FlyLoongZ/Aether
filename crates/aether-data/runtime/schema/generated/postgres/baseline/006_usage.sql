@@ -193,6 +193,23 @@ CREATE INDEX IF NOT EXISTS ix_usage_counter_deltas_unprocessed ON public.usage_c
 CREATE INDEX IF NOT EXISTS ix_usage_counter_deltas_processed ON public.usage_counter_deltas USING btree (processed_at, created_at, id);
 CREATE INDEX IF NOT EXISTS ix_usage_counter_deltas_request_kind ON public.usage_counter_deltas USING btree (request_id, kind, target_id);
 
+CREATE TABLE IF NOT EXISTS public.usage_http_headers (
+    request_id character varying(128) NOT NULL,
+    client_request jsonb,
+    client_response jsonb,
+    provider_request jsonb,
+    provider_response jsonb,
+    created_at timestamp with time zone NOT NULL
+);
+
+ALTER TABLE ONLY public.usage_http_headers ALTER COLUMN client_request SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_headers ALTER COLUMN client_response SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_headers ALTER COLUMN provider_request SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_headers ALTER COLUMN provider_response SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_headers ADD CONSTRAINT usage_http_headers_pkey PRIMARY KEY (request_id);
+CREATE INDEX IF NOT EXISTS ix_usage_http_headers_created_at ON public.usage_http_headers USING btree (created_at);
+ALTER TABLE ONLY public.usage_http_headers ADD CONSTRAINT usage_http_headers_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.usage(request_id) ON DELETE CASCADE;
+
 CREATE TABLE IF NOT EXISTS public.usage_settlement_snapshots (
     request_id character varying(128) NOT NULL,
     billing_status character varying(64) NOT NULL,
@@ -271,6 +288,43 @@ CREATE INDEX IF NOT EXISTS usage_cost_reservations_subject_admitted_at_idx ON pu
 CREATE INDEX IF NOT EXISTS usage_cost_reservations_reservation_expires_at_idx ON public.usage_cost_reservations USING btree (reservation_expires_at);
 CREATE INDEX IF NOT EXISTS usage_cost_reservations_retain_until_token_idx ON public.usage_cost_reservations USING btree (retain_until, reservation_token);
 ALTER TABLE ONLY public.usage_cost_reservations ADD CONSTRAINT usage_cost_reservations_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+CREATE TABLE IF NOT EXISTS public.usage_http_bodies (
+    request_id character varying(128) NOT NULL,
+    client_request bytea,
+    client_request_encoding character varying(8),
+    client_request_truncated boolean NOT NULL DEFAULT false,
+    client_response bytea,
+    client_response_encoding character varying(8),
+    client_response_truncated boolean NOT NULL DEFAULT false,
+    provider_request bytea,
+    provider_request_encoding character varying(8),
+    provider_request_truncated boolean NOT NULL DEFAULT false,
+    provider_response bytea,
+    provider_response_encoding character varying(8),
+    provider_response_truncated boolean NOT NULL DEFAULT false,
+    created_at timestamp with time zone NOT NULL
+);
+
+ALTER TABLE ONLY public.usage_http_bodies ALTER COLUMN client_request SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_bodies ALTER COLUMN client_response SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_bodies ALTER COLUMN provider_request SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_bodies ALTER COLUMN provider_response SET STORAGE EXTERNAL;
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT client_request_encoding_pair_check CHECK ((client_request IS NULL) = (client_request_encoding IS NULL));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT client_request_truncated_pair_check CHECK (NOT client_request_truncated OR client_request IS NOT NULL);
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT client_request_encoding_check CHECK (client_request_encoding IN ('json', 'text', 'sse', 'binary'));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT client_response_encoding_pair_check CHECK ((client_response IS NULL) = (client_response_encoding IS NULL));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT client_response_truncated_pair_check CHECK (NOT client_response_truncated OR client_response IS NOT NULL);
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT client_response_encoding_check CHECK (client_response_encoding IN ('json', 'text', 'sse', 'binary'));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT provider_request_encoding_pair_check CHECK ((provider_request IS NULL) = (provider_request_encoding IS NULL));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT provider_request_truncated_pair_check CHECK (NOT provider_request_truncated OR provider_request IS NOT NULL);
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT provider_request_encoding_check CHECK (provider_request_encoding IN ('json', 'text', 'sse', 'binary'));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT provider_response_encoding_pair_check CHECK ((provider_response IS NULL) = (provider_response_encoding IS NULL));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT provider_response_truncated_pair_check CHECK (NOT provider_response_truncated OR provider_response IS NOT NULL);
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT provider_response_encoding_check CHECK (provider_response_encoding IN ('json', 'text', 'sse', 'binary'));
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT usage_http_bodies_pkey PRIMARY KEY (request_id);
+CREATE INDEX IF NOT EXISTS ix_usage_http_bodies_created_at ON public.usage_http_bodies USING btree (created_at);
+ALTER TABLE ONLY public.usage_http_bodies ADD CONSTRAINT usage_http_bodies_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.usage(request_id) ON DELETE CASCADE;
 
 CREATE TABLE IF NOT EXISTS public.usage_request_admissions (
     request_id character varying(128) NOT NULL,

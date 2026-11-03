@@ -39,7 +39,8 @@ fn pending_backfills_from_applied_returns_all_versions_when_none_applied() {
             20260505120000,
             20260517012000,
             20260716010000,
-            20260722140744
+            20260722140744,
+            20261102010000
         ]
     );
 }
@@ -61,7 +62,8 @@ fn pending_backfills_from_applied_skips_versions_already_applied() {
             20260505120000,
             20260517012000,
             20260716010000,
-            20260722140744
+            20260722140744,
+            20261102010000
         ]
     );
 }
@@ -215,7 +217,7 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
     let pending_before = pending_backfills(&pool)
         .await
         .expect("pending backfills should load");
-    assert_eq!(pending_before.len(), 7);
+    assert_eq!(pending_before.len(), 8);
     assert_eq!(pending_before[0].version, 20260422110000);
     assert_eq!(pending_before[1].version, 20260422120000);
     assert_eq!(pending_before[2].version, 20260504120000);
@@ -223,6 +225,7 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
     assert_eq!(pending_before[4].version, 20260517012000);
     assert_eq!(pending_before[5].version, 20260716010000);
     assert_eq!(pending_before[6].version, 20260722140744);
+    assert_eq!(pending_before[7].version, 20261102010000);
 
     run_backfills(&pool)
         .await
@@ -247,7 +250,8 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
             20260505120000,
             20260517012000,
             20260716010000,
-            20260722140744
+            20260722140744,
+            20261102010000
         ]
     );
 
@@ -921,5 +925,5 @@ ORDER BY total_tokens
         .fetch_one(&pool)
         .await
         .expect("backfill count should load");
-    assert_eq!(applied_count, 7);
+    assert_eq!(applied_count, 8);
 }

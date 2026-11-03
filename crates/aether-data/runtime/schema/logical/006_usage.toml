@@ -1294,3 +1294,193 @@ columns = ["subject_id"]
 references_table = "users"
 references_columns = ["id"]
 on_delete = "cascade"
+
+[table.usage_http_headers]
+domain = "usage"
+order = 20
+primary_key = ["request_id"]
+
+[[table.usage_http_headers.columns]]
+name = "request_id"
+type = "text"
+length = 128
+
+[[table.usage_http_headers.columns]]
+name = "client_request"
+type = "json"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_headers.columns]]
+name = "client_response"
+type = "json"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_headers.columns]]
+name = "provider_request"
+type = "json"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_headers.columns]]
+name = "provider_response"
+type = "json"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_headers.columns]]
+name = "created_at"
+type = "timestamp"
+
+[[table.usage_http_headers.indexes]]
+name = "ix_usage_http_headers_created_at"
+columns = ["created_at"]
+
+[[table.usage_http_headers.foreign_keys]]
+name = "usage_http_headers_request_id_fkey"
+columns = ["request_id"]
+references_table = "usage"
+references_columns = ["request_id"]
+on_delete = "cascade"
+
+[table.usage_http_bodies]
+domain = "usage"
+order = 21
+primary_key = ["request_id"]
+
+[[table.usage_http_bodies.columns]]
+name = "request_id"
+type = "text"
+length = 128
+
+[[table.usage_http_bodies.columns]]
+name = "client_request"
+type = "bytes"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_bodies.columns]]
+name = "client_request_encoding"
+type = "text"
+length = 8
+nullable = true
+
+[[table.usage_http_bodies.columns]]
+name = "client_request_truncated"
+type = "bool"
+default = false
+
+[[table.usage_http_bodies.checks]]
+name = "client_request_encoding_pair_check"
+expression = "(client_request IS NULL) = (client_request_encoding IS NULL)"
+
+[[table.usage_http_bodies.checks]]
+name = "client_request_truncated_pair_check"
+expression = "NOT client_request_truncated OR client_request IS NOT NULL"
+
+[[table.usage_http_bodies.checks]]
+name = "client_request_encoding_check"
+expression = "client_request_encoding IN ('json', 'text', 'sse', 'binary')"
+
+[[table.usage_http_bodies.columns]]
+name = "client_response"
+type = "bytes"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_bodies.columns]]
+name = "client_response_encoding"
+type = "text"
+length = 8
+nullable = true
+
+[[table.usage_http_bodies.columns]]
+name = "client_response_truncated"
+type = "bool"
+default = false
+
+[[table.usage_http_bodies.checks]]
+name = "client_response_encoding_pair_check"
+expression = "(client_response IS NULL) = (client_response_encoding IS NULL)"
+
+[[table.usage_http_bodies.checks]]
+name = "client_response_truncated_pair_check"
+expression = "NOT client_response_truncated OR client_response IS NOT NULL"
+
+[[table.usage_http_bodies.checks]]
+name = "client_response_encoding_check"
+expression = "client_response_encoding IN ('json', 'text', 'sse', 'binary')"
+
+[[table.usage_http_bodies.columns]]
+name = "provider_request"
+type = "bytes"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_bodies.columns]]
+name = "provider_request_encoding"
+type = "text"
+length = 8
+nullable = true
+
+[[table.usage_http_bodies.columns]]
+name = "provider_request_truncated"
+type = "bool"
+default = false
+
+[[table.usage_http_bodies.checks]]
+name = "provider_request_encoding_pair_check"
+expression = "(provider_request IS NULL) = (provider_request_encoding IS NULL)"
+
+[[table.usage_http_bodies.checks]]
+name = "provider_request_truncated_pair_check"
+expression = "NOT provider_request_truncated OR provider_request IS NOT NULL"
+
+[[table.usage_http_bodies.checks]]
+name = "provider_request_encoding_check"
+expression = "provider_request_encoding IN ('json', 'text', 'sse', 'binary')"
+
+[[table.usage_http_bodies.columns]]
+name = "provider_response"
+type = "bytes"
+nullable = true
+driver.postgres.storage = "external"
+
+[[table.usage_http_bodies.columns]]
+name = "provider_response_encoding"
+type = "text"
+length = 8
+nullable = true
+
+[[table.usage_http_bodies.columns]]
+name = "provider_response_truncated"
+type = "bool"
+default = false
+
+[[table.usage_http_bodies.checks]]
+name = "provider_response_encoding_pair_check"
+expression = "(provider_response IS NULL) = (provider_response_encoding IS NULL)"
+
+[[table.usage_http_bodies.checks]]
+name = "provider_response_truncated_pair_check"
+expression = "NOT provider_response_truncated OR provider_response IS NOT NULL"
+
+[[table.usage_http_bodies.checks]]
+name = "provider_response_encoding_check"
+expression = "provider_response_encoding IN ('json', 'text', 'sse', 'binary')"
+
+[[table.usage_http_bodies.columns]]
+name = "created_at"
+type = "timestamp"
+
+[[table.usage_http_bodies.indexes]]
+name = "ix_usage_http_bodies_created_at"
+columns = ["created_at"]
+
+[[table.usage_http_bodies.foreign_keys]]
+name = "usage_http_bodies_request_id_fkey"
+columns = ["request_id"]
+references_table = "usage"
+references_columns = ["request_id"]
+on_delete = "cascade"
