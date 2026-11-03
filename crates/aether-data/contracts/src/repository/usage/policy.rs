@@ -1,4 +1,6 @@
-use super::{StoredRequestUsageAudit, UpsertUsageRecord};
+use super::{
+    CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState, UsageBodyField,
+};
 use serde_json::{Map, Value};
 
 const MAX_USAGE_CANDIDATE_INDEX: u64 = i32::MAX as u64;
@@ -287,26 +289,19 @@ pub fn sanitize_usage_for_persistence(usage: UpsertUsageRecord) -> UpsertUsageRe
     let mut usage = sanitize_usage_record_metadata(usage);
     usage.request_headers = None;
     usage.request_body = None;
-    usage.request_body_ref = None;
-    usage.request_body_state = None;
     usage.provider_request_headers = None;
     usage.provider_request_body = None;
-    usage.provider_request_body_ref = None;
-    usage.provider_request_body_state = None;
     usage.response_headers = None;
     usage.response_body = None;
-    usage.response_body_ref = None;
-    usage.response_body_state = None;
     usage.client_response_headers = None;
     usage.client_response_body = None;
-    usage.client_response_body_ref = None;
-    usage.client_response_body_state = None;
     usage
 }
 
 pub fn sanitize_usage_capture_controls_for_persistence(
     mut usage: UpsertUsageRecord,
 ) -> UpsertUsageRecord {
+    usage = record_usage_body_capture_states(usage);
     let metadata = usage
         .request_metadata
         .as_ref()
@@ -322,49 +317,117 @@ pub fn sanitize_usage_capture_controls_for_persistence(
     ] {
         *headers = sanitize_usage_headers_for_persistence(headers.take());
     }
-    for (field, body, body_ref, state) in [
-        (
-            super::UsageBodyField::RequestBody,
-            &mut usage.request_body,
-            &mut usage.request_body_ref,
-            usage.request_body_state,
-        ),
-        (
-            super::UsageBodyField::ProviderRequestBody,
-            &mut usage.provider_request_body,
-            &mut usage.provider_request_body_ref,
-            usage.provider_request_body_state,
-        ),
-        (
-            super::UsageBodyField::ResponseBody,
-            &mut usage.response_body,
-            &mut usage.response_body_ref,
-            usage.response_body_state,
-        ),
-        (
-            super::UsageBodyField::ClientResponseBody,
-            &mut usage.client_response_body,
-            &mut usage.client_response_body_ref,
-            usage.client_response_body_state,
-        ),
+    // A side without bytes keeps its marker: the marker is what tells a
+    // repository to withdraw whatever an earlier write had captured, and the
+    // state it carries is the reason the empty side is explainable at all.
+    usage
+}
+
+/// Writes `body_capture.<key>.state` for every side that carries no bytes.
+/// Stamps `body_capture.<key>` for every side of the record.
+///
+/// The ledger is the read model's only answer to "was this side captured, and
+/// how completely": list reads never load the payload tables, so a side with
+/// bytes has to say so here or a captured body shows up as never captured. A
+/// byte-carrying side records its state and stored size; a side without bytes
+/// records the reason it is empty.
+fn record_usage_body_capture_states(mut usage: UpsertUsageRecord) -> UpsertUsageRecord {
+    for field in [
+        UsageBodyField::RequestBody,
+        UsageBodyField::ProviderRequestBody,
+        UsageBodyField::ResponseBody,
+        UsageBodyField::ClientResponseBody,
     ] {
-        if matches!(
-            state,
-            Some(
-                super::UsageBodyCaptureState::None
-                    | super::UsageBodyCaptureState::Disabled
-                    | super::UsageBodyCaptureState::Unavailable
-            )
-        ) {
-            *body = None;
-            *body_ref = None;
-        } else {
-            *body_ref = body_ref.as_deref().and_then(|value| {
-                super::canonical_usage_body_ref_for(value, &usage.request_id, field)
-            });
+        match usage.body(field) {
+            Some(body @ CapturedBody::Bytes { .. }) => {
+                // Extract the payload facts before taking the metadata: the
+                // body borrows the record the metadata field is mutated in.
+                let state = body.state_label();
+                let stored_bytes = body.bytes().map(|bytes| bytes.len() as u64);
+                usage.request_metadata = record_body_capture_payload_entry(
+                    usage.request_metadata.take(),
+                    field,
+                    state,
+                    stored_bytes,
+                );
+            }
+            _ => {
+                let Some(state) = usage.body(field).and_then(CapturedBody::state_label) else {
+                    continue;
+                };
+                usage.request_metadata =
+                    record_body_capture_state(usage.request_metadata.take(), field, state);
+            }
         }
     }
     usage
+}
+
+/// Stamps the ledger entry of a side that carries bytes.
+///
+/// `state` and `stored_bytes` are facts of the payload itself, so they are
+/// written even when a capture pass already created the entry; `source_bytes`
+/// and `reason` describe the capture pass and are left untouched, so a
+/// stamping pass never erases why a side was truncated.
+fn record_body_capture_payload_entry(
+    metadata: Option<Value>,
+    field: UsageBodyField,
+    state: Option<UsageBodyCaptureState>,
+    stored_bytes: Option<u64>,
+) -> Option<Value> {
+    let (state, stored_bytes) = (state?, stored_bytes?);
+    let mut metadata = metadata
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    let capture = metadata
+        .entry("body_capture".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let Some(capture) = capture.as_object_mut() else {
+        return Some(Value::Object(metadata));
+    };
+    let entry = capture
+        .entry(field.as_capture_key().to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if let Some(entry) = entry.as_object_mut() {
+        entry.insert(
+            "state".to_string(),
+            Value::String(state.as_str().to_string()),
+        );
+        entry.insert("stored_bytes".to_string(), Value::from(stored_bytes));
+    }
+    Some(Value::Object(metadata))
+}
+
+/// Records `body_capture.<key>.state` without disturbing what a producer
+/// already wrote there.
+fn record_body_capture_state(
+    metadata: Option<Value>,
+    field: UsageBodyField,
+    state: UsageBodyCaptureState,
+) -> Option<Value> {
+    let mut metadata = metadata
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    let capture = metadata
+        .entry("body_capture".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let Some(capture) = capture.as_object_mut() else {
+        return Some(Value::Object(metadata));
+    };
+    let entry = capture
+        .entry(field.as_capture_key().to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if let Some(entry) = entry.as_object_mut() {
+        // The marker is the latest word on this side, so it replaces whatever a
+        // producer recorded when the side still had bytes.
+        entry.insert(
+            "state".to_string(),
+            Value::String(state.as_str().to_string()),
+        );
+        entry.remove("encoding");
+        entry.remove("stored_bytes");
+    }
+    Some(Value::Object(metadata))
 }
 
 pub fn sanitize_usage_headers_for_persistence(value: Option<Value>) -> Option<Value> {
@@ -669,7 +732,9 @@ mod tests {
         sanitize_usage_for_persistence, usage_error_category_for_status_code,
         usage_lifecycle_update_allowed,
     };
-    use crate::repository::usage::{UpsertUsageRecord, UsageBodyCaptureState};
+    use crate::repository::usage::{
+        BodyEncoding, CapturedBody, UpsertUsageRecord, UsageBodyCaptureStorage, UsageBodyField,
+    };
 
     fn usage_with_http_capture() -> UpsertUsageRecord {
         UpsertUsageRecord {
@@ -714,21 +779,13 @@ mod tests {
             status: "completed".to_string(),
             billing_status: "settled".to_string(),
             request_headers: Some(json!({"authorization": "Bearer secret"})),
-            request_body: Some(json!({"prompt": "private"})),
-            request_body_ref: Some("usage://request/body".to_string()),
-            request_body_state: Some(UsageBodyCaptureState::Reference),
+            request_body: Some(CapturedBody::json(json!({"prompt": "private"}))),
             provider_request_headers: Some(json!({"x-api-key": "secret"})),
-            provider_request_body: Some(json!({"prompt": "private"})),
-            provider_request_body_ref: Some("usage://provider/body".to_string()),
-            provider_request_body_state: Some(UsageBodyCaptureState::Inline),
+            provider_request_body: Some(CapturedBody::json(json!({"prompt": "private"}))),
             response_headers: Some(json!({"set-cookie": "secret"})),
-            response_body: Some(json!({"output": "private"})),
-            response_body_ref: Some("usage://response/body".to_string()),
-            response_body_state: Some(UsageBodyCaptureState::Truncated),
+            response_body: Some(CapturedBody::json(json!({"output": "private"}))),
             client_response_headers: Some(json!({"x-private": "secret"})),
-            client_response_body: Some(json!({"output": "private"})),
-            client_response_body_ref: Some("usage://client/body".to_string()),
-            client_response_body_state: Some(UsageBodyCaptureState::Disabled),
+            client_response_body: Some(CapturedBody::json(json!({"output": "private"}))),
             candidate_id: Some("candidate-1".to_string()),
             candidate_index: Some(0),
             key_name: None,
@@ -789,20 +846,16 @@ mod tests {
         assert!(usage.error_message.is_none());
         assert!(usage.request_headers.is_none());
         assert!(usage.request_body.is_none());
-        assert!(usage.request_body_ref.is_none());
-        assert!(usage.request_body_state.is_none());
+        assert!(usage.request_body_state().is_none());
         assert!(usage.provider_request_headers.is_none());
         assert!(usage.provider_request_body.is_none());
-        assert!(usage.provider_request_body_ref.is_none());
-        assert!(usage.provider_request_body_state.is_none());
+        assert!(usage.provider_request_body_state().is_none());
         assert!(usage.response_headers.is_none());
         assert!(usage.response_body.is_none());
-        assert!(usage.response_body_ref.is_none());
-        assert!(usage.response_body_state.is_none());
+        assert!(usage.response_body_state().is_none());
         assert!(usage.client_response_headers.is_none());
         assert!(usage.client_response_body.is_none());
-        assert!(usage.client_response_body_ref.is_none());
-        assert!(usage.client_response_body_state.is_none());
+        assert!(usage.client_response_body_state().is_none());
         assert_eq!(usage.error_category.as_deref(), Some("provider_error"));
         assert_eq!(usage.candidate_id.as_deref(), Some("candidate-1"));
         assert_eq!(
@@ -841,10 +894,8 @@ mod tests {
     }
 
     #[test]
-    fn auxiliary_capture_projection_preserves_captures_and_honors_disabled_states() {
-        let mut input = usage_with_http_capture();
-        input.request_body_state = Some(UsageBodyCaptureState::None);
-        input.response_body_state = Some(UsageBodyCaptureState::Disabled);
+    fn auxiliary_capture_projection_keeps_bodies_and_their_markers() {
+        let input = usage_with_http_capture();
 
         let usage = sanitize_usage_capture_controls_for_persistence(input);
 
@@ -852,72 +903,36 @@ mod tests {
             usage.request_headers,
             Some(json!({"authorization": "Bearer secret"}))
         );
-        assert!(usage.request_body.is_none());
-        assert!(usage.request_body_ref.is_none());
-        assert_eq!(usage.request_body_state, Some(UsageBodyCaptureState::None));
+        // The projection only normalizes capture controls; it never rewrites the
+        // captured bytes, including the sides a policy marked as skipped.
+        assert_eq!(
+            usage.request_body,
+            Some(CapturedBody::json(json!({"prompt": "private"})))
+        );
         assert_eq!(
             usage.provider_request_body,
-            Some(json!({"prompt": "private"}))
+            Some(CapturedBody::json(json!({"prompt": "private"})))
         );
         assert_eq!(
-            usage.provider_request_body_state,
-            Some(UsageBodyCaptureState::Inline)
+            usage.response_body,
+            Some(CapturedBody::json(json!({"output": "private"})))
         );
-        assert!(usage.response_body.is_none());
-        assert!(usage.response_body_ref.is_none());
         assert_eq!(
-            usage.response_body_state,
-            Some(UsageBodyCaptureState::Disabled)
-        );
-        assert!(usage.client_response_body.is_none());
-        assert_eq!(
-            usage.client_response_body_state,
-            Some(UsageBodyCaptureState::Disabled)
+            usage.client_response_body,
+            Some(CapturedBody::json(json!({"output": "private"})))
         );
     }
 
     #[test]
-    fn auxiliary_capture_projection_preserves_all_body_directions_and_scopes_references() {
+    fn auxiliary_capture_projection_preserves_all_body_directions() {
         let mut input = usage_with_http_capture();
         input.request_headers =
             Some(json!({"Content-Type": "application/json", "Authorization": "Bearer secret"}));
-        input.request_body_state = Some(UsageBodyCaptureState::Inline);
-        input.client_response_body_state = Some(UsageBodyCaptureState::Inline);
-        input.request_body_ref = Some(super::super::usage_body_ref(
-            &input.request_id,
-            super::super::UsageBodyField::RequestBody,
-        ));
-        input.provider_request_body_ref = input.request_body_ref.clone();
-        input.response_body_ref = Some(super::super::usage_body_ref(
-            "another-request",
-            super::super::UsageBodyField::ResponseBody,
-        ));
         let captured = sanitize_usage_capture_controls_for_persistence(input.clone());
         assert_eq!(captured.request_body, input.request_body);
         assert_eq!(captured.provider_request_body, input.provider_request_body);
         assert_eq!(captured.response_body, input.response_body);
         assert_eq!(captured.client_response_body, input.client_response_body);
-        assert_eq!(captured.request_body_ref, input.request_body_ref);
-        assert!(captured.provider_request_body_ref.is_none());
-        assert!(captured.response_body_ref.is_none());
-        assert!(captured.client_response_body_ref.is_none());
-        assert_eq!(
-            captured.request_headers,
-            Some(json!({"Content-Type": "application/json", "Authorization": "Bearer secret"}))
-        );
-        assert_eq!(
-            captured.provider_request_headers,
-            Some(json!({"x-api-key": "secret"}))
-        );
-        assert_eq!(
-            captured.response_headers,
-            Some(json!({"set-cookie": "secret"}))
-        );
-        assert_eq!(
-            captured.client_response_headers,
-            input.client_response_headers
-        );
-        assert!(captured.error_message.is_none());
     }
 
     #[test]
@@ -1182,5 +1197,74 @@ mod tests {
         assert_eq!(downstream.total_requests, 1);
         assert_eq!(downstream.total_tokens, 160);
         assert_eq!(downstream.total_cost_usd, 0.0);
+    }
+
+    #[test]
+    fn capture_control_ledger_stamps_byte_carrying_sides() {
+        let mut usage = usage_with_http_capture();
+        usage.provider_request_body = Some(CapturedBody::from_bytes(
+            b"{\"model\": \"gpt".to_vec(),
+            BodyEncoding::Json,
+            true,
+        ));
+        usage.response_body = Some(CapturedBody::Disabled);
+        usage.request_metadata = Some(json!({
+            // A capture pass may already have explained the truncation; the
+            // stamp must not erase it.
+            "body_capture": {
+                "provider_request": {
+                    "state": "truncated",
+                    "source_bytes": 4096,
+                    "reason": "body_capture_limit_exceeded"
+                }
+            }
+        }));
+
+        let usage = sanitize_usage_capture_controls_for_persistence(usage);
+        let capture = usage.request_metadata.as_ref().unwrap()["body_capture"]
+            .as_object()
+            .unwrap();
+
+        let request = &capture["request"];
+        assert_eq!(request["state"], json!("inline"));
+        assert_eq!(
+            request["stored_bytes"].as_u64(),
+            Some(usage.request_body.as_ref().and_then(CapturedBody::bytes).map(|b| b.len() as u64).unwrap_or(0))
+        );
+
+        let provider_request = &capture["provider_request"];
+        assert_eq!(provider_request["state"], json!("truncated"));
+        assert_eq!(provider_request["source_bytes"], json!(4096));
+        assert_eq!(provider_request["reason"], json!("body_capture_limit_exceeded"));
+
+        assert_eq!(capture["response"]["state"], json!("disabled"));
+    }
+
+    #[test]
+    fn body_state_reads_the_ledger_when_payload_bytes_are_not_loaded() {
+        // List reads never load the payload tables: the ledger alone has to
+        // describe a captured side, including one whose capture stopped early.
+        let mut usage = usage_with_http_capture();
+        usage.request_body = None;
+        usage.request_metadata = Some(json!({
+            "body_capture": {
+                "request": {"state": "truncated", "stored_bytes": 128, "source_bytes": 4096,
+                            "reason": "body_capture_limit_exceeded"}
+            }
+        }));
+
+        let result = usage.body_capture_result(UsageBodyField::RequestBody);
+        assert!(result.available);
+        assert_eq!(result.storage, UsageBodyCaptureStorage::Truncated);
+        assert_eq!(result.state_label(), "truncated");
+
+        // A side retired by retention keeps saying "captured" as well.
+        usage.request_metadata = Some(json!({
+            "body_capture": {"response": {"state": "inline", "stored_bytes": 64}}
+        }));
+        usage.response_body = None;
+        let result = usage.body_capture_result(UsageBodyField::ResponseBody);
+        assert!(result.available);
+        assert_eq!(result.storage, UsageBodyCaptureStorage::Inline);
     }
 }

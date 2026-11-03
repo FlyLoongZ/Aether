@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use crate::repository::candidates::sanitize_request_candidate_skip_reason;
 
 use super::{
-    billing_multiplier_snapshot, normalize_provider_response_model,
+    billing_multiplier_snapshot, normalize_provider_response_model, UsageBodyCaptureState,
     BILLING_MULTIPLIER_SNAPSHOT_METADATA_KEY, CHAT_PII_REDACTION_METADATA_KEY,
     LIVE_SESSION_METADATA_KEY, PLAN_USAGE_RESERVATION_DEFERRED_METADATA_KEY,
     PROVIDER_ACTUAL_SERVICE_TIER_METADATA_KEY, PROVIDER_CACHE_TTL_MINUTES_METADATA_KEY,
@@ -141,6 +141,45 @@ pub fn sanitize_usage_request_metadata_object(source: &Map<String, Value>) -> Op
             "analytics_measurement".into(),
             serde_json::json!({"source":source}),
         );
+    }
+    // The capture record is the single place a missing body is explained, so it
+    // survives persistence in the same bounded shape the writers produce.
+    if let Some(capture) = source.get("body_capture").and_then(Value::as_object) {
+        let allowed = capture
+            .iter()
+            .filter_map(|(key, entry)| {
+                let entry = entry.as_object()?;
+                let mut target_entry = Map::new();
+                if let Some(state) = entry
+                    .get("state")
+                    .and_then(Value::as_str)
+                    .and_then(UsageBodyCaptureState::from_label)
+                {
+                    target_entry.insert("state".into(), Value::String(state.as_str().into()));
+                }
+                for key in ["source_bytes", "stored_bytes"] {
+                    if let Some(value) = entry.get(key).and_then(Value::as_u64) {
+                        target_entry.insert(key.to_string(), Value::from(value));
+                    }
+                }
+                if let Some(reason) = entry.get("reason").and_then(Value::as_str) {
+                    let reason = reason.trim();
+                    if !reason.is_empty() && reason.len() <= 120 {
+                        target_entry.insert("reason".into(), Value::String(reason.into()));
+                    }
+                }
+                if let Some(encoding) = entry.get("encoding").and_then(Value::as_str) {
+                    target_entry.insert("encoding".into(), Value::String(encoding.into()));
+                }
+                if !target_entry.is_empty() {
+                    return Some((key.clone(), Value::Object(target_entry)));
+                }
+                None
+            })
+            .collect::<Map<String, Value>>();
+        if !allowed.is_empty() {
+            target.insert("body_capture".into(), Value::Object(allowed));
+        }
     }
     for (key, fields) in [
         (

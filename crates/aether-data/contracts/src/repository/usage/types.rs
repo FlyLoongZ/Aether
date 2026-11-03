@@ -1,5 +1,7 @@
 use aether_ai_formats::normalize_api_format_alias;
 use async_trait::async_trait;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
@@ -349,19 +351,8 @@ pub fn resolve_provider_service_tier_from_request_capture(
         return extract_provider_service_tier_from_body(provider_request_body);
     }
 
-    if !matches!(
-        provider_request_body_state,
-        Some(
-            UsageBodyCaptureState::Inline
-                | UsageBodyCaptureState::Reference
-                | UsageBodyCaptureState::Truncated
-                | UsageBodyCaptureState::Disabled
-                | UsageBodyCaptureState::Unavailable
-        )
-    ) {
-        return None;
-    }
-
+    // The capture cannot answer (absent, truncated, withdrawn): the tier derived
+    // when it was written is the only remaining source.
     request_metadata
         .and_then(Value::as_object)
         .and_then(|metadata| metadata.get(PROVIDER_SERVICE_TIER_METADATA_KEY))
@@ -515,33 +506,25 @@ pub struct StoredRequestUsageAudit {
     // Settlement state prefers `public.usage_settlement_snapshots` and only falls back to the
     // deprecated `public.usage.billing_status` mirror for older rows.
     pub billing_status: String,
-    // HTTP capture read model. Canonical owners are `public.usage_http_audits` plus
-    // `public.usage_body_blobs`; deprecated `public.usage.*headers/*body*` columns are historical
+    // HTTP capture read model. Canonical owners are `public.usage_http_headers` and
+    // `public.usage_http_bodies`; deprecated `public.usage.*headers/*body*` columns are historical
     // fallback only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_headers: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub request_body: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub request_body_state: Option<UsageBodyCaptureState>,
+    pub request_body: Option<CapturedBody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_request_headers: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_request_body: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider_request_body_state: Option<UsageBodyCaptureState>,
+    pub provider_request_body: Option<CapturedBody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_headers: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub response_body: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub response_body_state: Option<UsageBodyCaptureState>,
+    pub response_body: Option<CapturedBody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_response_headers: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_response_body: Option<Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_response_body_state: Option<UsageBodyCaptureState>,
+    pub client_response_body: Option<CapturedBody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -685,16 +668,12 @@ impl StoredRequestUsageAudit {
             billing_status,
             request_headers: None,
             request_body: None,
-            request_body_state: None,
             provider_request_headers: None,
             provider_request_body: None,
-            provider_request_body_state: None,
             response_headers: None,
             response_body: None,
-            response_body_state: None,
             client_response_headers: None,
             client_response_body: None,
-            client_response_body_state: None,
             candidate_id: None,
             candidate_index: None,
             key_name: None,
@@ -902,34 +881,38 @@ impl StoredRequestUsageAudit {
     }
 
     pub fn provider_reasoning_effort(&self) -> Option<String> {
+        let body = self.body_value(UsageBodyField::ProviderRequestBody);
         resolve_reasoning_effort_from_request_capture(
-            self.provider_request_body.as_ref(),
-            self.provider_request_body_state,
+            body.as_ref(),
+            self.body_state(UsageBodyField::ProviderRequestBody),
             self.request_metadata.as_ref(),
             PROVIDER_REASONING_EFFORT_METADATA_KEY,
         )
     }
 
     pub fn requested_reasoning_effort(&self) -> Option<String> {
+        let body = self.body_value(UsageBodyField::RequestBody);
         resolve_reasoning_effort_from_request_capture(
-            self.request_body.as_ref(),
-            self.request_body_state,
+            body.as_ref(),
+            self.body_state(UsageBodyField::RequestBody),
             self.request_metadata.as_ref(),
             REQUESTED_REASONING_EFFORT_METADATA_KEY,
         )
     }
 
     pub fn provider_service_tier(&self) -> Option<String> {
+        let body = self.body_value(UsageBodyField::ProviderRequestBody);
+        let state = self.body_state(UsageBodyField::ProviderRequestBody);
         resolve_provider_service_tier_from_request_capture(
-            self.provider_request_body.as_ref(),
-            self.provider_request_body_state,
+            body.as_ref(),
+            state,
             self.request_metadata.as_ref(),
         )
         .or_else(|| {
             // Lightweight list queries intentionally omit bodies and typed capture state. Their
             // request metadata was normalized before persistence and is the only available copy
             // of the final provider-request fact.
-            if self.provider_request_body.is_none() && self.provider_request_body_state.is_none() {
+            if body.is_none() && state.is_none() {
                 self.request_metadata_string(PROVIDER_SERVICE_TIER_METADATA_KEY)
                     .and_then(normalize_provider_service_tier)
             } else {
@@ -942,7 +925,8 @@ impl StoredRequestUsageAudit {
         self.request_metadata_string(PROVIDER_ACTUAL_SERVICE_TIER_METADATA_KEY)
             .and_then(normalize_provider_service_tier)
             .or_else(|| {
-                extract_provider_actual_service_tier_from_response(self.response_body.as_ref())
+                let body = self.body_value(UsageBodyField::ResponseBody);
+                extract_provider_actual_service_tier_from_response(body.as_ref())
             })
     }
 
@@ -958,25 +942,15 @@ impl StoredRequestUsageAudit {
                 .or(self.api_format.as_deref()),
             self.target_model.as_deref().or(Some(self.model.as_str())),
             Some(self.model.as_str()),
-            self.provider_request_body.as_ref(),
+            self.body_value(UsageBodyField::ProviderRequestBody)
+                .as_ref(),
         )
         .or_else(|| {
             extract_provider_cache_ttl_minutes_from_metadata(self.request_metadata.as_ref())
         })
     }
 
-    /// The stored reference is always `usage://request/{request_id}/{field}`, so it is derived
-    /// from the row identity instead of being persisted on the audit row. Only a reference-backed
-    /// capture has one: an inline or truncated body is not behind a reference.
-    pub fn body_ref(&self, field: UsageBodyField) -> Option<String> {
-        matches!(
-            self.body_state(field),
-            Some(UsageBodyCaptureState::Reference)
-        )
-        .then(|| usage_body_ref(&self.request_id, field))
-    }
-
-    pub fn body_value(&self, field: UsageBodyField) -> Option<&Value> {
+    pub fn body(&self, field: UsageBodyField) -> Option<&CapturedBody> {
         match field {
             UsageBodyField::RequestBody => self.request_body.as_ref(),
             UsageBodyField::ProviderRequestBody => self.provider_request_body.as_ref(),
@@ -985,46 +959,42 @@ impl StoredRequestUsageAudit {
         }
     }
 
+    /// The body decoded into the JSON value the read paths speak.
+    pub fn body_value(&self, field: UsageBodyField) -> Option<Value> {
+        self.body(field)?.as_json_value()
+    }
+
     pub fn body_state(&self, field: UsageBodyField) -> Option<UsageBodyCaptureState> {
-        match field {
-            UsageBodyField::RequestBody => self.request_body_state,
-            UsageBodyField::ProviderRequestBody => self.provider_request_body_state,
-            UsageBodyField::ResponseBody => self.response_body_state,
-            UsageBodyField::ClientResponseBody => self.client_response_body_state,
+        self.body(field)
+            .and_then(CapturedBody::state_label)
+            .or_else(|| body_capture_metadata_state(self.request_metadata.as_ref(), field))
+    }
+
+    pub fn body_capture_result(&self, field: UsageBodyField) -> UsageBodyCaptureResult {
+        resolve_usage_body_capture_result(self.body_state(field))
+    }
+
+    pub fn body_capture_json_entry(&self, field: UsageBodyField) -> serde_json::Map<String, Value> {
+        let result = self.body_capture_result(field);
+        let mut entry = result.as_json_entry();
+        if let Some(encoding) = self.body(field).and_then(CapturedBody::encoding) {
+            entry.insert(
+                "encoding".to_string(),
+                Value::String(encoding.as_str().to_string()),
+            );
         }
-    }
-
-    pub fn body_capture_result(
-        &self,
-        field: UsageBodyField,
-        body: Option<&Value>,
-    ) -> UsageBodyCaptureResult {
-        resolve_usage_body_capture_result(
-            self.body_state(field),
-            body.is_some(),
-            matches!(
-                self.body_state(field),
-                Some(UsageBodyCaptureState::Reference)
-            ),
-        )
-    }
-
-    pub fn body_capture_json_entry(
-        &self,
-        field: UsageBodyField,
-        body: Option<&Value>,
-    ) -> serde_json::Map<String, Value> {
-        self.body_capture_result(field, body)
-            .as_json_entry(self.body_ref(field).as_deref())
+        if let Some(bytes) = self.body(field).and_then(CapturedBody::bytes) {
+            entry.insert("stored_bytes".to_string(), Value::from(bytes.len() as u64));
+        }
+        entry
     }
 
     pub fn request_body_capture_json_entry(&self) -> serde_json::Map<String, Value> {
-        let mut entry =
-            self.body_capture_json_entry(UsageBodyField::RequestBody, self.request_body.as_ref());
+        let mut entry = self.body_capture_json_entry(UsageBodyField::RequestBody);
         entry.insert(
             "capture_source".to_string(),
             Value::String(
-                self.body_capture_result(UsageBodyField::RequestBody, self.request_body.as_ref())
+                self.body_capture_result(UsageBodyField::RequestBody)
                     .request_capture_source()
                     .to_string(),
             ),
@@ -1040,7 +1010,7 @@ impl StoredRequestUsageAudit {
         for field in fields {
             let entry = match field {
                 UsageBodyField::RequestBody => self.request_body_capture_json_entry(),
-                other => self.body_capture_json_entry(*other, self.body_value(*other)),
+                other => self.body_capture_json_entry(*other),
             };
             object.insert(field.as_capture_key().to_string(), Value::Object(entry));
         }
@@ -1053,18 +1023,12 @@ impl StoredRequestUsageAudit {
 
     pub fn preferred_request_body_source_field(&self) -> Option<UsageBodyField> {
         if self
-            .body_capture_result(
-                UsageBodyField::ProviderRequestBody,
-                self.body_value(UsageBodyField::ProviderRequestBody),
-            )
+            .body_capture_result(UsageBodyField::ProviderRequestBody)
             .available
         {
             Some(UsageBodyField::ProviderRequestBody)
         } else if self
-            .body_capture_result(
-                UsageBodyField::RequestBody,
-                self.body_value(UsageBodyField::RequestBody),
-            )
+            .body_capture_result(UsageBodyField::RequestBody)
             .available
         {
             Some(UsageBodyField::RequestBody)
@@ -1876,42 +1840,481 @@ pub struct StoredUsageDailySummary {
     pub actual_total_cost_usd: f64,
 }
 
+/// How the stored bytes of one captured body must be read.
+///
+/// A `bytea` column cannot say this by itself, and the answer cannot be guessed
+/// on read: SSE frames and plain text are both valid UTF-8, and a body may be
+/// binary at all. The marker is captured from the direction's `Content-Type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum BodyEncoding {
+    Json,
+    Text,
+    Sse,
+    Binary,
+}
+
+impl BodyEncoding {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Text => "text",
+            Self::Sse => "sse",
+            Self::Binary => "binary",
+        }
+    }
+
+    pub fn from_label(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "json" => Some(Self::Json),
+            "text" => Some(Self::Text),
+            "sse" => Some(Self::Sse),
+            "binary" => Some(Self::Binary),
+            _ => None,
+        }
+    }
+
+    /// Classifies one direction's body from its `Content-Type`.
+    ///
+    /// The header is the authority; the byte-level sniffing in
+    /// [`CapturedBody::detect_encoding`] only covers a missing or unhelpful one.
+    pub fn from_content_type(content_type: Option<&str>) -> Option<Self> {
+        let content_type = content_type?.trim().to_ascii_lowercase();
+        if content_type.is_empty() {
+            return None;
+        }
+        let essence = content_type
+            .split(';')
+            .next()
+            .unwrap_or(content_type.as_str())
+            .trim();
+        if essence == "text/event-stream" {
+            return Some(Self::Sse);
+        }
+        if essence == "application/json" || essence.ends_with("/json") || essence.ends_with("+json")
+        {
+            return Some(Self::Json);
+        }
+        if essence.starts_with("text/")
+            || essence.ends_with("/xml")
+            || essence.ends_with("+xml")
+            || essence.ends_with("/yaml")
+            || essence.ends_with("+yaml")
+            || essence == "application/x-www-form-urlencoded"
+            || content_type.contains("charset=")
+        {
+            return Some(Self::Text);
+        }
+        Some(Self::Binary)
+    }
+}
+
+/// One side of the captured exchange.
+///
+/// The payload and its encoding live in the same value, so "bytes without an
+/// encoding" is not representable. Absence carries its reason instead of being a
+/// bare `None`, because the bodies row is only written when something was
+/// captured: a request whose bodies were all skipped keeps the reason in
+/// `request_metadata` and nothing here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CapturedBody {
+    Bytes {
+        bytes: Vec<u8>,
+        encoding: BodyEncoding,
+        truncated: bool,
+    },
+    /// Capture was turned off by policy.
+    Disabled,
+    /// The direction never produced a body the gateway could keep.
+    Unavailable,
+}
+
+impl CapturedBody {
+    pub fn from_bytes(bytes: Vec<u8>, encoding: BodyEncoding, truncated: bool) -> Self {
+        Self::Bytes {
+            bytes,
+            encoding,
+            truncated,
+        }
+    }
+
+    /// Wraps a `serde_json::Value` body, which is the shape most call sites hold.
+    pub fn from_json_value(value: Value) -> Result<Self, crate::DataLayerError> {
+        let bytes = serde_json::to_vec(&value).map_err(|err| {
+            crate::DataLayerError::UnexpectedValue(format!(
+                "failed to serialize usage body json: {err}"
+            ))
+        })?;
+        Ok(Self::from_bytes(bytes, BodyEncoding::Json, false))
+    }
+
+    pub fn is_present(&self) -> bool {
+        matches!(self, Self::Bytes { .. })
+    }
+
+    pub fn bytes(&self) -> Option<&[u8]> {
+        match self {
+            Self::Bytes { bytes, .. } => Some(bytes),
+            Self::Disabled | Self::Unavailable => None,
+        }
+    }
+
+    pub fn encoding(&self) -> Option<BodyEncoding> {
+        match self {
+            Self::Bytes { encoding, .. } => Some(*encoding),
+            Self::Disabled | Self::Unavailable => None,
+        }
+    }
+
+    pub fn truncated(&self) -> bool {
+        matches!(
+            self,
+            Self::Bytes {
+                truncated: true,
+                ..
+            }
+        )
+    }
+
+    pub fn as_json_value(&self) -> Option<Value> {
+        match self {
+            Self::Bytes {
+                bytes, encoding, ..
+            } => Some(decode_captured_body(bytes, *encoding)),
+            Self::Disabled | Self::Unavailable => None,
+        }
+    }
+
+    /// Classifies bytes that arrived without a usable `Content-Type`.
+    pub fn detect_encoding(bytes: &[u8]) -> BodyEncoding {
+        if serde_json::from_slice::<Value>(bytes).is_ok() {
+            return BodyEncoding::Json;
+        }
+        if looks_like_sse(bytes) {
+            return BodyEncoding::Sse;
+        }
+        if std::str::from_utf8(bytes).is_ok() {
+            return BodyEncoding::Text;
+        }
+        BodyEncoding::Binary
+    }
+
+    /// A JSON body, which is what most fixtures and in-process producers hold.
+    pub fn json(value: Value) -> Self {
+        Self::from_json_value(value).expect("usage body json serialization cannot fail")
+    }
+
+    /// Rough heap footprint, used by the gateway's capture memory budget.
+    pub fn retained_bytes_estimate(&self) -> usize {
+        match self {
+            Self::Bytes { bytes, .. } => bytes.len(),
+            Self::Disabled | Self::Unavailable => 0,
+        }
+    }
+
+    /// The label the admin payload has always reported for this side.
+    pub fn state_label(&self) -> Option<UsageBodyCaptureState> {
+        match self {
+            Self::Bytes {
+                truncated: true, ..
+            } => Some(UsageBodyCaptureState::Truncated),
+            Self::Bytes { .. } => Some(UsageBodyCaptureState::Inline),
+            Self::Disabled => Some(UsageBodyCaptureState::Disabled),
+            Self::Unavailable => Some(UsageBodyCaptureState::Unavailable),
+        }
+    }
+}
+
+/// Bodies travel as themselves while remaining typed.
+///
+/// A JSON body is written as the JSON it is, text and SSE as their text, and only
+/// binary pays the one-third base64 cost -- so a serialized event or row is no
+/// larger than the payload that produced it, while still recording the encoding
+/// a reader needs.
+impl serde::Serialize for CapturedBody {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        match self {
+            Self::Disabled => serializer.serialize_str("disabled"),
+            Self::Unavailable => serializer.serialize_str("unavailable"),
+            Self::Bytes {
+                bytes,
+                encoding,
+                truncated,
+            } => {
+                let mut map = serializer.serialize_map(None)?;
+                match encoding {
+                    BodyEncoding::Json => match serde_json::from_slice::<Value>(bytes) {
+                        Ok(value) => map.serialize_entry("json", &value)?,
+                        // A byte-truncated JSON body is no longer valid JSON. It
+                        // still travels, as the raw text with its encoding label:
+                        // `Deserialize` reconstructs the exact bytes from that
+                        // shape, so a truncated capture survives the wire whole
+                        // instead of failing the whole event.
+                        Err(_) => {
+                            map.serialize_entry("text", &String::from_utf8_lossy(bytes))?;
+                            map.serialize_entry("encoding", encoding.as_str())?;
+                        }
+                    },
+                    BodyEncoding::Text | BodyEncoding::Sse => {
+                        let text = std::str::from_utf8(bytes).map_err(|_| {
+                            serde::ser::Error::custom("text body is not valid utf-8")
+                        })?;
+                        map.serialize_entry("text", text)?;
+                        map.serialize_entry("encoding", encoding.as_str())?;
+                    }
+                    BodyEncoding::Binary => {
+                        map.serialize_entry("base64", &BASE64_STANDARD.encode(bytes))?;
+                    }
+                }
+                if *truncated {
+                    map.serialize_entry("truncated", &true)?;
+                }
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for CapturedBody {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = Value::deserialize(deserializer)?;
+        match value {
+            Value::String(state) if state == "disabled" => Ok(Self::Disabled),
+            Value::String(state) if state == "unavailable" => Ok(Self::Unavailable),
+            Value::Object(mut object) => {
+                let truncated = object
+                    .remove("truncated")
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false);
+                if let Some(value) = object.remove("json") {
+                    let bytes = serde_json::to_vec(&value)
+                        .map_err(|error| serde::de::Error::custom(error.to_string()))?;
+                    return Ok(Self::from_bytes(bytes, BodyEncoding::Json, truncated));
+                }
+                if let Some(Value::String(text)) = object.remove("text") {
+                    let encoding = object
+                        .remove("encoding")
+                        .and_then(|value| value.as_str().and_then(BodyEncoding::from_label))
+                        .unwrap_or(BodyEncoding::Text);
+                    return Ok(Self::from_bytes(text.into_bytes(), encoding, truncated));
+                }
+                if let Some(Value::String(encoded)) = object.remove("base64") {
+                    let bytes = BASE64_STANDARD
+                        .decode(encoded.as_bytes())
+                        .map_err(|error| serde::de::Error::custom(error.to_string()))?;
+                    return Ok(Self::from_bytes(bytes, BodyEncoding::Binary, truncated));
+                }
+                let bytes = serde_json::to_vec(&Value::Object(object))
+                    .map_err(|error| serde::de::Error::custom(error.to_string()))?;
+                Ok(Self::from_bytes(bytes, BodyEncoding::Json, truncated))
+            }
+            other => {
+                let bytes = serde_json::to_vec(&other)
+                    .map_err(|error| serde::de::Error::custom(error.to_string()))?;
+                Ok(Self::from_bytes(bytes, BodyEncoding::Json, false))
+            }
+        }
+    }
+}
+
+fn looks_like_sse(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    text.lines()
+        .take(16)
+        .any(|line| line.trim_start().starts_with("data:"))
+}
+
+/// Walks the `data:` payloads of a stored SSE stream, in order.
+///
+/// The row keeps the stream exactly as it arrived, so every reader that needs the
+/// events parses them here instead of the writer having stored a parsed copy.
+pub fn for_each_sse_data_payload(mut text: &str, mut on_payload: impl FnMut(&str)) {
+    while let Some((event, rest)) = split_sse_event(text) {
+        let mut payload = String::new();
+        for line in split_sse_lines(event) {
+            if let Some(data) = line.strip_prefix("data:") {
+                // The spec removes exactly one leading space after the colon;
+                // anything beyond it belongs to the payload, so indentation in
+                // multi-line text payloads survives the round trip.
+                let data = data.strip_prefix(' ').unwrap_or(data);
+                if !payload.is_empty() {
+                    payload.push('\n');
+                }
+                payload.push_str(data);
+            }
+        }
+        if !payload.is_empty() {
+            on_payload(&payload);
+        }
+        text = rest;
+    }
+}
+
+/// Splits one event into lines, accepting CRLF, LF and bare CR terminators.
+fn split_sse_lines(event: &str) -> Vec<&str> {
+    let mut lines = Vec::new();
+    let bytes = event.as_bytes();
+    let mut start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'\r' => {
+                lines.push(&event[start..index]);
+                index += usize::from(bytes.get(index + 1) == Some(&b'\n')) + 1;
+                start = index;
+            }
+            b'\n' => {
+                lines.push(&event[start..index]);
+                index += 1;
+                start = index;
+            }
+            _ => index += 1,
+        }
+    }
+    if start < event.len() {
+        lines.push(&event[start..]);
+    }
+    lines
+}
+
+/// Splits off the next complete event block, accepting CRLF, LF and bare CR.
+fn split_sse_event(text: &str) -> Option<(&str, &str)> {
+    const SEPARATORS: [&str; 3] = ["\r\n\r\n", "\n\n", "\r\r"];
+    let boundary = SEPARATORS
+        .iter()
+        .filter_map(|separator| text.find(separator).map(|index| (index, separator.len())))
+        .min();
+    match boundary {
+        Some((index, width)) => Some((&text[..index], &text[index + width..])),
+        None if !text.trim().is_empty() => Some((text, "")),
+        None => None,
+    }
+}
+
+/// Turns stored bytes back into the JSON value the read paths speak.
+///
+/// `text` and `binary` cannot be represented as themselves in JSON, so they keep
+/// the shapes the API has always used: text becomes a JSON string, binary a
+/// base64 string. `sse` is parsed here, at read time, into the chunk view every
+/// derived-fact reader expects.
+pub fn decode_captured_body(bytes: &[u8], encoding: BodyEncoding) -> Value {
+    match encoding {
+        BodyEncoding::Json => serde_json::from_slice::<Value>(bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(bytes).into_owned())),
+        BodyEncoding::Text => Value::String(String::from_utf8_lossy(bytes).into_owned()),
+        BodyEncoding::Sse => {
+            let text = String::from_utf8_lossy(bytes);
+            parse_sse_stream(&text, bytes.len()).unwrap_or(Value::String(text.into_owned()))
+        }
+        BodyEncoding::Binary => Value::String(BASE64_STANDARD.encode(bytes)),
+    }
+}
+
+/// The chunk view of a stored SSE stream: the shape the derived-fact readers and
+/// the JSON viewer have always consumed.
+fn parse_sse_stream(text: &str, content_length: usize) -> Option<Value> {
+    let mut chunks = Vec::new();
+    let mut total_chunks = 0_u64;
+    let mut saw_done = false;
+    let mut first_parse_error = None;
+    for_each_sse_data_payload(text, |payload| {
+        if payload == "[DONE]" {
+            saw_done = true;
+            return;
+        }
+        total_chunks += 1;
+        match serde_json::from_str::<Value>(payload) {
+            Ok(chunk) => chunks.push(chunk),
+            Err(error) if first_parse_error.is_none() => {
+                // A later valid event must not hide an earlier broken one.
+                first_parse_error = Some(serde_json::json!({
+                    "chunk_index": total_chunks - 1,
+                    "line": error.line(),
+                    "column": error.column(),
+                    "message": error.to_string(),
+                }));
+            }
+            Err(_) => {}
+        }
+    });
+    if total_chunks == 0 && !saw_done {
+        return None;
+    }
+
+    let stored_chunks = chunks.len() as u64;
+    let mut metadata = serde_json::Map::from_iter([
+        ("stream".to_string(), Value::Bool(true)),
+        ("total_chunks".to_string(), serde_json::json!(total_chunks)),
+        (
+            "stored_chunks".to_string(),
+            serde_json::json!(stored_chunks),
+        ),
+        (
+            "content_length".to_string(),
+            serde_json::json!(content_length),
+        ),
+    ]);
+    if saw_done {
+        metadata.insert("has_completion".to_string(), Value::Bool(true));
+    }
+    if let Some(error) = first_parse_error {
+        metadata.insert("first_parse_error".to_string(), error);
+    }
+    if stored_chunks < total_chunks {
+        metadata.insert(
+            "dropped_chunks".to_string(),
+            serde_json::json!(total_chunks - stored_chunks),
+        );
+    }
+    if chunks.is_empty() {
+        metadata.insert(
+            "parse_error".to_string(),
+            Value::String("Failed to parse response as SSE JSON format".to_string()),
+        );
+        return Some(serde_json::json!({
+            "chunks": [],
+            "raw_response": text,
+            "metadata": metadata,
+        }));
+    }
+    Some(serde_json::json!({
+        "chunks": chunks,
+        "metadata": metadata,
+    }))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum UsageBodyCaptureState {
     None,
     Inline,
-    Reference,
     Truncated,
     Disabled,
     Unavailable,
 }
 
 impl UsageBodyCaptureState {
+    /// Parses the label written into `request_metadata.body_capture`.
+    pub fn from_label(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "none" => Some(Self::None),
+            "inline" => Some(Self::Inline),
+            "truncated" => Some(Self::Truncated),
+            "disabled" => Some(Self::Disabled),
+            "unavailable" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
             Self::Inline => "inline",
-            Self::Reference => "reference",
             Self::Truncated => "truncated",
             Self::Disabled => "disabled",
             Self::Unavailable => "unavailable",
-        }
-    }
-
-    pub fn from_capture_parts(
-        has_inline_body: bool,
-        has_reference: bool,
-        unavailable: bool,
-    ) -> Self {
-        if has_inline_body {
-            Self::Inline
-        } else if has_reference {
-            Self::Reference
-        } else if unavailable {
-            Self::Unavailable
-        } else {
-            Self::None
         }
     }
 }
@@ -1919,7 +2322,6 @@ impl UsageBodyCaptureState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageBodyCaptureStorage {
     Inline,
-    Reference,
     Truncated,
     Disabled,
     Unavailable,
@@ -1931,7 +2333,6 @@ impl UsageBodyCaptureStorage {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Inline => "inline",
-            Self::Reference => "reference",
             Self::Truncated => "truncated",
             Self::Disabled => "disabled",
             Self::Unavailable => "unavailable",
@@ -1955,7 +2356,7 @@ impl UsageBodyCaptureResult {
             .unwrap_or("legacy_unknown")
     }
 
-    pub fn as_json_entry(self, body_ref: Option<&str>) -> serde_json::Map<String, Value> {
+    pub fn as_json_entry(self) -> serde_json::Map<String, Value> {
         let mut entry = serde_json::Map::new();
         entry.insert("available".to_string(), Value::Bool(self.available));
         entry.insert(
@@ -1966,22 +2367,17 @@ impl UsageBodyCaptureResult {
             "state".to_string(),
             Value::String(self.state_label().to_string()),
         );
-        if let Some(body_ref) = body_ref {
-            entry.insert("body_ref".to_string(), Value::String(body_ref.to_string()));
-        }
         entry
     }
 
     pub fn request_capture_source(self) -> &'static str {
         match self.state {
-            Some(UsageBodyCaptureState::Reference) => "stored_reference",
             Some(UsageBodyCaptureState::Inline) => "stored_original",
             Some(UsageBodyCaptureState::Truncated) => "stored_truncated",
             Some(UsageBodyCaptureState::Disabled) => "disabled",
             Some(UsageBodyCaptureState::Unavailable) => "unavailable",
             Some(UsageBodyCaptureState::None) => "not_captured",
             None => match self.storage {
-                UsageBodyCaptureStorage::Reference => "stored_reference",
                 UsageBodyCaptureStorage::Inline => "stored_original",
                 _ => "legacy_unknown",
             },
@@ -1989,20 +2385,38 @@ impl UsageBodyCaptureResult {
     }
 }
 
+/// The state a side was last recorded with.
+///
+/// The payload tables hold bytes, so a side that was skipped or withdrawn keeps
+/// its reason in `request_metadata.body_capture` instead. Only non-byte states
+/// are read back: a metadata entry that still says `inline` describes capture
+/// that has since been swept, and claiming it would misreport availability.
+fn body_capture_metadata_state(
+    metadata: Option<&Value>,
+    field: UsageBodyField,
+) -> Option<UsageBodyCaptureState> {
+    // The ledger entry is the authority for sides whose bytes are not loaded:
+    // list reads never touch the payload tables, and a payload retired by
+    // retention still says "captured" here. Inline and truncated therefore come
+    // through as themselves instead of collapsing into "the payload will
+    // explain it".
+    metadata?
+        .get("body_capture")?
+        .get(field.as_capture_key())?
+        .get("state")?
+        .as_str()
+        .and_then(UsageBodyCaptureState::from_label)
+}
+
 pub fn resolve_usage_body_capture_result(
     state: Option<UsageBodyCaptureState>,
-    has_inline_body: bool,
-    has_reference: bool,
 ) -> UsageBodyCaptureResult {
     let (available, storage) = match state {
         Some(UsageBodyCaptureState::Inline) => (true, UsageBodyCaptureStorage::Inline),
-        Some(UsageBodyCaptureState::Reference) => (true, UsageBodyCaptureStorage::Reference),
         Some(UsageBodyCaptureState::Truncated) => (true, UsageBodyCaptureStorage::Truncated),
         Some(UsageBodyCaptureState::Disabled) => (false, UsageBodyCaptureStorage::Disabled),
         Some(UsageBodyCaptureState::Unavailable) => (false, UsageBodyCaptureStorage::Unavailable),
         Some(UsageBodyCaptureState::None) => (false, UsageBodyCaptureStorage::None),
-        None if has_reference => (true, UsageBodyCaptureStorage::Reference),
-        None if has_inline_body => (true, UsageBodyCaptureStorage::Inline),
         None => (false, UsageBodyCaptureStorage::Missing),
     };
 
@@ -2032,15 +2446,6 @@ impl UsageBodyField {
         }
     }
 
-    pub fn as_ref_key(&self) -> &'static str {
-        match self {
-            Self::RequestBody => "request_body_ref",
-            Self::ProviderRequestBody => "provider_request_body_ref",
-            Self::ResponseBody => "response_body_ref",
-            Self::ClientResponseBody => "client_response_body_ref",
-        }
-    }
-
     pub fn as_storage_field(&self) -> &'static str {
         match self {
             Self::RequestBody => "request_body",
@@ -2061,39 +2466,13 @@ impl UsageBodyField {
     }
 }
 
-pub fn usage_body_ref(request_id: &str, field: UsageBodyField) -> String {
-    format!("usage://request/{request_id}/{}", field.as_storage_field())
-}
-
-pub fn parse_usage_body_ref(body_ref: &str) -> Option<(String, UsageBodyField)> {
-    let body_ref = body_ref.trim();
-    let prefix = "usage://request/";
-    let suffix = body_ref.strip_prefix(prefix)?;
-    let (request_id, field) = suffix.rsplit_once('/')?;
-    let request_id = request_id.trim();
-    if request_id.is_empty() {
-        return None;
-    }
-    Some((
-        request_id.to_string(),
-        UsageBodyField::from_storage_field(field.trim())?,
-    ))
-}
-
-pub fn canonical_usage_body_ref_for(
-    body_ref: &str,
-    expected_request_id: &str,
-    expected_field: UsageBodyField,
-) -> Option<String> {
-    parse_usage_body_ref(body_ref)
-        .filter(|(request_id, field)| request_id == expected_request_id && *field == expected_field)
-        .map(|(request_id, field)| usage_body_ref(&request_id, field))
-}
-
 pub const MAX_USAGE_BODY_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredUsageBodyPayload(pub Vec<u8>);
+pub struct StoredUsageBodyPayload {
+    pub bytes: Vec<u8>,
+    pub encoding: BodyEncoding,
+}
 
 #[async_trait]
 pub trait UsageReadRepository: Send + Sync {
@@ -2153,25 +2532,6 @@ pub trait UsageReadRepository: Send + Sync {
         request_id: &str,
     ) -> Result<Option<StoredRequestUsageAudit>, crate::DataLayerError> {
         self.find_by_request_id(request_id).await
-    }
-
-    async fn resolve_body_ref(
-        &self,
-        body_ref: &str,
-    ) -> Result<Option<Value>, crate::DataLayerError>;
-
-    async fn read_body_payload(
-        &self,
-        body_ref: &str,
-    ) -> Result<Option<StoredUsageBodyPayload>, crate::DataLayerError> {
-        self.resolve_body_ref(body_ref)
-            .await?
-            .map(|value| {
-                serde_json::to_vec(&value)
-                    .map(StoredUsageBodyPayload)
-                    .map_err(|error| crate::DataLayerError::UnexpectedValue(error.to_string()))
-            })
-            .transpose()
     }
 
     async fn list_usage_audits(
@@ -2433,21 +2793,13 @@ pub struct UpsertUsageRecord {
     // HTTP capture payload. Canonical persistence goes through `usage_http_audits` and
     // `usage_body_blobs`; any remaining `public.usage` body/header columns are compatibility-only.
     pub request_headers: Option<Value>,
-    pub request_body: Option<Value>,
-    pub request_body_ref: Option<String>,
-    pub request_body_state: Option<UsageBodyCaptureState>,
+    pub request_body: Option<CapturedBody>,
     pub provider_request_headers: Option<Value>,
-    pub provider_request_body: Option<Value>,
-    pub provider_request_body_ref: Option<String>,
-    pub provider_request_body_state: Option<UsageBodyCaptureState>,
+    pub provider_request_body: Option<CapturedBody>,
     pub response_headers: Option<Value>,
-    pub response_body: Option<Value>,
-    pub response_body_ref: Option<String>,
-    pub response_body_state: Option<UsageBodyCaptureState>,
+    pub response_body: Option<CapturedBody>,
     pub client_response_headers: Option<Value>,
-    pub client_response_body: Option<Value>,
-    pub client_response_body_ref: Option<String>,
-    pub client_response_body_state: Option<UsageBodyCaptureState>,
+    pub client_response_body: Option<CapturedBody>,
     pub candidate_id: Option<String>,
     pub candidate_index: Option<u64>,
     pub key_name: Option<String>,
@@ -2477,9 +2829,7 @@ impl Clone for UpsertUsageRecord {
             .into_iter()
             .flatten()
             .fold(0usize, |bytes, body| {
-                bytes
-                    .saturating_add(std::mem::size_of::<Value>())
-                    .saturating_add(super::usage_json_heap_estimate(body))
+                bytes.saturating_add(body.retained_bytes_estimate())
             })
         });
         let mut cloned = Self {
@@ -2524,24 +2874,16 @@ impl Clone for UpsertUsageRecord {
             billing_status: self.billing_status.clone(),
             request_headers: self.request_headers.clone(),
             request_body: retain_bodies.then(|| self.request_body.clone()).flatten(),
-            request_body_ref: self.request_body_ref.clone(),
-            request_body_state: self.request_body_state,
             provider_request_headers: self.provider_request_headers.clone(),
             provider_request_body: retain_bodies
                 .then(|| self.provider_request_body.clone())
                 .flatten(),
-            provider_request_body_ref: self.provider_request_body_ref.clone(),
-            provider_request_body_state: self.provider_request_body_state,
             response_headers: self.response_headers.clone(),
             response_body: retain_bodies.then(|| self.response_body.clone()).flatten(),
-            response_body_ref: self.response_body_ref.clone(),
-            response_body_state: self.response_body_state,
             client_response_headers: self.client_response_headers.clone(),
             client_response_body: retain_bodies
                 .then(|| self.client_response_body.clone())
                 .flatten(),
-            client_response_body_ref: self.client_response_body_ref.clone(),
-            client_response_body_state: self.client_response_body_state,
             candidate_id: self.candidate_id.clone(),
             candidate_index: self.candidate_index,
             key_name: self.key_name.clone(),
@@ -2557,39 +2899,16 @@ impl Clone for UpsertUsageRecord {
             capture_retention,
         };
         if !retain_bodies {
-            for (present, key, state) in [
-                (
-                    self.request_body.is_some(),
-                    "request",
-                    &mut cloned.request_body_state,
-                ),
-                (
-                    self.provider_request_body.is_some(),
-                    "provider_request",
-                    &mut cloned.provider_request_body_state,
-                ),
-                (
-                    self.response_body.is_some(),
-                    "response",
-                    &mut cloned.response_body_state,
-                ),
-                (
-                    self.client_response_body.is_some(),
-                    "client_response",
-                    &mut cloned.client_response_body_state,
-                ),
+            // The clone dropped the bytes to stay inside the event memory
+            // budget. Say so once per side: the row keeps the reason, and the
+            // bodies table simply has nothing for that direction.
+            for (present, key) in [
+                (self.request_body.is_some(), "request"),
+                (self.provider_request_body.is_some(), "provider_request"),
+                (self.response_body.is_some(), "response"),
+                (self.client_response_body.is_some(), "client_response"),
             ] {
-                if present
-                    && !matches!(
-                        state,
-                        Some(
-                            UsageBodyCaptureState::None
-                                | UsageBodyCaptureState::Disabled
-                                | UsageBodyCaptureState::Unavailable
-                        )
-                    )
-                {
-                    *state = Some(UsageBodyCaptureState::Truncated);
+                if present {
                     super::mark_usage_capture_memory_omitted(&mut cloned.request_metadata, key);
                 }
             }
@@ -2599,6 +2918,45 @@ impl Clone for UpsertUsageRecord {
 }
 
 impl UpsertUsageRecord {
+    pub fn body(&self, field: UsageBodyField) -> Option<&CapturedBody> {
+        match field {
+            UsageBodyField::RequestBody => self.request_body.as_ref(),
+            UsageBodyField::ProviderRequestBody => self.provider_request_body.as_ref(),
+            UsageBodyField::ResponseBody => self.response_body.as_ref(),
+            UsageBodyField::ClientResponseBody => self.client_response_body.as_ref(),
+        }
+    }
+
+    pub fn body_value(&self, field: UsageBodyField) -> Option<Value> {
+        self.body(field)?.as_json_value()
+    }
+
+    pub fn body_state(&self, field: UsageBodyField) -> Option<UsageBodyCaptureState> {
+        self.body(field)
+            .and_then(CapturedBody::state_label)
+            .or_else(|| body_capture_metadata_state(self.request_metadata.as_ref(), field))
+    }
+
+    pub fn body_capture_result(&self, field: UsageBodyField) -> UsageBodyCaptureResult {
+        resolve_usage_body_capture_result(self.body_state(field))
+    }
+
+    pub fn request_body_state(&self) -> Option<UsageBodyCaptureState> {
+        self.body_state(UsageBodyField::RequestBody)
+    }
+
+    pub fn provider_request_body_state(&self) -> Option<UsageBodyCaptureState> {
+        self.body_state(UsageBodyField::ProviderRequestBody)
+    }
+
+    pub fn response_body_state(&self) -> Option<UsageBodyCaptureState> {
+        self.body_state(UsageBodyField::ResponseBody)
+    }
+
+    pub fn client_response_body_state(&self) -> Option<UsageBodyCaptureState> {
+        self.body_state(UsageBodyField::ClientResponseBody)
+    }
+
     pub fn validate(&self) -> Result<(), crate::DataLayerError> {
         if self.request_id.trim().is_empty() {
             return Err(crate::DataLayerError::InvalidInput(

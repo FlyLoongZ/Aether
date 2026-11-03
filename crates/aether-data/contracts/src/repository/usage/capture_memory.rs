@@ -199,7 +199,7 @@ pub fn mark_usage_capture_memory_omitted(metadata: &mut Option<Value>, key: &str
 
 #[cfg(test)]
 mod tests {
-    use super::super::types::UpsertUsageRecord;
+    use super::super::types::{CapturedBody, UpsertUsageRecord};
     use super::*;
     use serde_json::json;
 
@@ -264,7 +264,7 @@ mod tests {
         ]
         .into_iter()
         .flatten()
-        .map(|body| std::mem::size_of::<Value>() + usage_json_heap_estimate(body))
+        .map(CapturedBody::retained_bytes_estimate)
         .sum()
     }
 
@@ -314,8 +314,8 @@ mod tests {
             (&source.response_body, &cloned.response_body),
             (&source.client_response_body, &cloned.client_response_body),
         ] {
-            let source_text = source_body.as_ref().unwrap()["text"].as_str().unwrap();
-            let cloned_text = cloned_body.as_ref().unwrap()["text"].as_str().unwrap();
+            let source_text = source_body.as_ref().unwrap().bytes().unwrap();
+            let cloned_text = cloned_body.as_ref().unwrap().bytes().unwrap();
             assert_eq!(source_text, cloned_text);
             assert_ne!(source_text.as_ptr(), cloned_text.as_ptr());
         }
@@ -342,24 +342,13 @@ mod tests {
         assert_eq!(serde_json::to_value(&source).unwrap(), original);
 
         let mut expected = original;
-        for (body, state, key, source_bytes) in [
-            ("request_body", "request_body_state", "request", 100),
-            (
-                "provider_request_body",
-                "provider_request_body_state",
-                "provider_request",
-                200,
-            ),
-            ("response_body", "response_body_state", "response", 300),
-            (
-                "client_response_body",
-                "client_response_body_state",
-                "client_response",
-                400,
-            ),
+        for (body, key, source_bytes) in [
+            ("request_body", "request", 100),
+            ("provider_request_body", "provider_request", 200),
+            ("response_body", "response", 300),
+            ("client_response_body", "client_response", 400),
         ] {
             expected[body] = Value::Null;
-            expected[state] = json!("truncated");
             expected["request_metadata"]["body_capture"][key] = json!({
                 "state": "truncated",
                 "stored_bytes": 0,
@@ -380,42 +369,38 @@ mod tests {
     }
 
     #[test]
-    fn usage_capture_memory_upsert_clone_preserves_explicit_clearing_states() {
-        for state in [
-            UsageBodyCaptureState::None,
-            UsageBodyCaptureState::Disabled,
-            UsageBodyCaptureState::Unavailable,
+    fn usage_capture_memory_upsert_clone_drops_bodies_under_pressure() {
+        let mut source = upsert_with_diagnostic_bodies();
+        let original = serde_json::to_value(&source).unwrap();
+        let weight = upsert_body_estimate(&source);
+        let budget = Arc::new(UsageCaptureMemoryBudget::new(weight));
+        assert!(source
+            .capture_retention
+            .reserve(Arc::clone(&budget), weight));
+        let cloned = source.clone();
+        let mut expected = original.clone();
+        for (body, key, source_bytes) in [
+            ("request_body", "request", 100),
+            ("provider_request_body", "provider_request", 200),
+            ("response_body", "response", 300),
+            ("client_response_body", "client_response", 400),
         ] {
-            let mut source = upsert_with_diagnostic_bodies();
-            source.request_body_state = Some(state);
-            source.provider_request_body_state = Some(state);
-            source.response_body_state = Some(state);
-            source.client_response_body_state = Some(state);
-            let original = serde_json::to_value(&source).unwrap();
-            let weight = upsert_body_estimate(&source);
-            let budget = Arc::new(UsageCaptureMemoryBudget::new(weight));
-            assert!(source
-                .capture_retention
-                .reserve(Arc::clone(&budget), weight));
-            let cloned = source.clone();
-            let mut expected = original.clone();
-            for body in [
-                "request_body",
-                "provider_request_body",
-                "response_body",
-                "client_response_body",
-            ] {
-                expected[body] = Value::Null;
-            }
-            assert_eq!(serde_json::to_value(&cloned).unwrap(), expected);
-            assert_eq!(serde_json::to_value(&source).unwrap(), original);
-            assert_eq!(budget.retained_bytes(), weight);
-            assert_eq!(budget.downgraded_total(), 1);
-            drop(cloned);
-            assert_eq!(budget.retained_bytes(), weight);
-            drop(source);
-            assert_eq!(budget.retained_bytes(), 0);
+            expected[body] = Value::Null;
+            expected["request_metadata"]["body_capture"][key] = json!({
+                "state": "truncated",
+                "stored_bytes": 0,
+                "source_bytes": source_bytes,
+                "reason": "usage_event_memory_budget_exceeded"
+            });
         }
+        assert_eq!(serde_json::to_value(&cloned).unwrap(), expected);
+        assert_eq!(serde_json::to_value(&source).unwrap(), original);
+        assert_eq!(budget.retained_bytes(), weight);
+        assert_eq!(budget.downgraded_total(), 1);
+        drop(cloned);
+        assert_eq!(budget.retained_bytes(), weight);
+        drop(source);
+        assert_eq!(budget.retained_bytes(), 0);
     }
 
     #[test]

@@ -1,8 +1,9 @@
 use super::{
-    canonical_usage_body_ref_for, extract_provider_actual_service_tier_from_response,
+    extract_provider_actual_service_tier_from_response,
     extract_provider_response_model_from_bodies, extract_provider_service_tier_from_body,
-    normalize_provider_reasoning_effort, normalize_provider_response_model,
-    normalize_provider_service_tier, resolve_provider_cache_ttl_minutes, usage_body_ref,
+    for_each_sse_data_payload, normalize_provider_reasoning_effort,
+    normalize_provider_response_model, normalize_provider_service_tier,
+    resolve_provider_cache_ttl_minutes, BodyEncoding, CapturedBody,
     StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState, UsageBodyCaptureStorage,
     UsageBodyField, UsageProviderPerformanceQuery, REALTIME_SESSION_METADATA_KEY,
     USAGE_AVAILABLE_METADATA_KEY, USAGE_PRICING_AVAILABLE_METADATA_KEY,
@@ -213,38 +214,6 @@ fn sample_usage() -> StoredRequestUsageAudit {
 }
 
 #[test]
-fn canonical_body_ref_requires_matching_request_and_field() {
-    assert_eq!(
-        canonical_usage_body_ref_for(
-            "  usage://request/req-1/request_body  ",
-            "req-1",
-            UsageBodyField::RequestBody,
-        ),
-        Some(usage_body_ref("req-1", UsageBodyField::RequestBody))
-    );
-    assert_eq!(
-        canonical_usage_body_ref_for(
-            "usage://request/req-2/request_body",
-            "req-1",
-            UsageBodyField::RequestBody,
-        ),
-        None
-    );
-    assert_eq!(
-        canonical_usage_body_ref_for(
-            "usage://request/req-1/response_body",
-            "req-1",
-            UsageBodyField::RequestBody,
-        ),
-        None
-    );
-    assert_eq!(
-        canonical_usage_body_ref_for("blob://opaque", "req-1", UsageBodyField::RequestBody),
-        None
-    );
-}
-
-#[test]
 fn provider_performance_query_defaults_timeline_on_for_legacy_payloads() {
     let mut payload = json!({
         "created_from_unix_secs": 1,
@@ -401,21 +370,13 @@ fn rejects_invalid_upsert_payload() {
         status: "completed".to_string(),
         billing_status: "pending".to_string(),
         request_headers: Some(json!({"authorization": "Bearer test"})),
-        request_body: Some(json!({"model": "gpt-5"})),
-        request_body_ref: None,
+        request_body: Some(CapturedBody::json(json!({"model": "gpt-5"}))),
         provider_request_headers: None,
         provider_request_body: None,
-        provider_request_body_ref: None,
         response_headers: None,
         response_body: None,
-        response_body_ref: None,
         client_response_headers: None,
         client_response_body: None,
-        client_response_body_ref: None,
-        request_body_state: None,
-        provider_request_body_state: None,
-        response_body_state: None,
-        client_response_body_state: None,
         candidate_id: None,
         candidate_index: None,
         key_name: None,
@@ -587,12 +548,8 @@ fn settlement_accessors_fall_back_to_billing_snapshot_and_legacy_output_price() 
 }
 
 #[test]
-fn body_ref_is_derived_from_capture_state_and_routing_accessors_prefer_typed_fields() {
+fn routing_accessors_prefer_typed_fields() {
     let mut usage = sample_usage();
-    usage.request_body_state = Some(UsageBodyCaptureState::Reference);
-    usage.provider_request_body_state = Some(UsageBodyCaptureState::Reference);
-    usage.response_body_state = Some(UsageBodyCaptureState::Reference);
-    usage.client_response_body_state = Some(UsageBodyCaptureState::Reference);
     usage.candidate_id = Some("cand-typed".to_string());
     usage.key_name = Some("primary-typed".to_string());
     usage.planner_kind = Some("claude_cli_sync".to_string());
@@ -601,10 +558,6 @@ fn body_ref_is_derived_from_capture_state_and_routing_accessors_prefer_typed_fie
     usage.execution_path = Some("local_execution_runtime_miss".to_string());
     usage.local_execution_runtime_miss_reason = Some("all_candidates_skipped".to_string());
     usage.request_metadata = Some(json!({
-        "request_body_ref": "blob://legacy-request",
-        "provider_request_body_ref": "blob://legacy-provider",
-        "response_body_ref": "blob://legacy-response",
-        "client_response_body_ref": "blob://legacy-client-response",
         "candidate_id": "cand-legacy",
         "key_name": "primary-legacy",
         "routing_candidate_skip_reason": "provider_request_body_build_failed",
@@ -613,27 +566,6 @@ fn body_ref_is_derived_from_capture_state_and_routing_accessors_prefer_typed_fie
             "message": "invalid reasoning summary"
         }
     }));
-
-    assert_eq!(
-        usage.body_ref(UsageBodyField::RequestBody).as_deref(),
-        Some("usage://request/req-1/request_body")
-    );
-    assert_eq!(
-        usage
-            .body_ref(UsageBodyField::ProviderRequestBody)
-            .as_deref(),
-        Some("usage://request/req-1/provider_request_body")
-    );
-    assert_eq!(
-        usage.body_ref(UsageBodyField::ResponseBody).as_deref(),
-        Some("usage://request/req-1/response_body")
-    );
-    assert_eq!(
-        usage
-            .body_ref(UsageBodyField::ClientResponseBody)
-            .as_deref(),
-        Some("usage://request/req-1/client_response_body")
-    );
     assert_eq!(usage.routing_candidate_id(), Some("cand-typed"));
     assert_eq!(usage.routing_key_name(), Some("primary-typed"));
     assert_eq!(usage.routing_planner_kind(), Some("claude_cli_sync"));
@@ -660,57 +592,36 @@ fn body_ref_is_derived_from_capture_state_and_routing_accessors_prefer_typed_fie
 }
 
 #[test]
-fn body_ref_accessor_ignores_legacy_metadata_compatibility_keys() {
+fn body_capture_result_reports_inline_for_stored_bytes() {
     let mut usage = sample_usage();
-    usage.request_metadata = Some(json!({
-        "request_body_ref": "blob://legacy-request",
-        "provider_request_body_ref": "blob://legacy-provider",
-        "response_body_ref": "blob://legacy-response",
-        "client_response_body_ref": "blob://legacy-client-response"
-    }));
+    usage.request_body = Some(CapturedBody::json(json!({"model": "gpt-5"})));
 
-    assert_eq!(usage.body_ref(UsageBodyField::RequestBody), None);
-    assert_eq!(usage.body_ref(UsageBodyField::ProviderRequestBody), None);
-    assert_eq!(usage.body_ref(UsageBodyField::ResponseBody), None);
-    assert_eq!(usage.body_ref(UsageBodyField::ClientResponseBody), None);
-}
-
-#[test]
-fn body_capture_result_prefers_typed_state_over_inline_body_presence() {
-    let mut usage = sample_usage();
-    usage.request_body = Some(json!({"model": "gpt-5"}));
-    usage.request_body_state = Some(UsageBodyCaptureState::Disabled);
-
-    let result =
-        usage.body_capture_result(UsageBodyField::RequestBody, usage.request_body.as_ref());
-
-    assert!(!result.available);
-    assert_eq!(result.storage, UsageBodyCaptureStorage::Disabled);
-    assert_eq!(result.state_label(), "disabled");
-    assert_eq!(result.request_capture_source(), "disabled");
-}
-
-#[test]
-fn body_capture_result_infers_legacy_inline_storage_when_typed_state_is_missing() {
-    let mut usage = sample_usage();
-    usage.request_body = Some(json!({"model": "gpt-5"}));
-
-    let result =
-        usage.body_capture_result(UsageBodyField::RequestBody, usage.request_body.as_ref());
+    let result = usage.body_capture_result(UsageBodyField::RequestBody);
 
     assert!(result.available);
     assert_eq!(result.storage, UsageBodyCaptureStorage::Inline);
-    assert_eq!(result.state_label(), "legacy_unknown");
+    assert_eq!(result.state_label(), "inline");
     assert_eq!(result.request_capture_source(), "stored_original");
+}
+
+#[test]
+fn body_capture_result_reports_missing_for_absent_bodies() {
+    let usage = sample_usage();
+
+    let result = usage.body_capture_result(UsageBodyField::ResponseBody);
+
+    assert!(!result.available);
+    assert_eq!(result.storage, UsageBodyCaptureStorage::Missing);
+    assert_eq!(result.state_label(), "legacy_unknown");
 }
 
 #[test]
 fn provider_reasoning_effort_prefers_provider_request_body_over_metadata() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "reasoning": { "effort": "XHigh" },
         "service_tier": "Priority"
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("xhigh"));
     assert_eq!(usage.provider_service_tier().as_deref(), Some("priority"));
@@ -728,17 +639,17 @@ fn provider_reasoning_effort_prefers_provider_request_body_over_metadata() {
     assert_eq!(usage.provider_service_tier().as_deref(), Some("standard"));
 
     usage.request_metadata = None;
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "output_config": { "effort": "High" },
         "service_tier": "priority"
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("high"));
     assert_eq!(usage.provider_service_tier().as_deref(), Some("priority"));
 
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "reasoning_effort": "medium"
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("medium"));
 
@@ -746,9 +657,9 @@ fn provider_reasoning_effort_prefers_provider_request_body_over_metadata() {
         "provider_reasoning_effort": "max",
         "provider_service_tier": "standard"
     }));
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5"
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort(), None);
     assert_eq!(usage.provider_service_tier(), None);
@@ -757,29 +668,29 @@ fn provider_reasoning_effort_prefers_provider_request_body_over_metadata() {
 #[test]
 fn gemini_thinking_level_supplies_reasoning_effort_for_both_body_spellings() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generationConfig": {
             "thinkingConfig": { "includeThoughts": true, "thinkingLevel": "HIGH" }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("high"));
 
     // The converted provider body keeps snake_case keys, and the client body may carry the
     // protobuf enum spelling. Both must land on the same badge vocabulary.
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generation_config": {
             "thinking_config": { "thinking_level": "thinking_level_medium" }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("medium"));
 
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generationConfig": {
             "thinkingConfig": { "thinkingLevel": "  low  " }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("low"));
 }
@@ -787,23 +698,23 @@ fn gemini_thinking_level_supplies_reasoning_effort_for_both_body_spellings() {
 #[test]
 fn gemini_thinking_budget_supplies_reasoning_effort_without_collapsing_zero() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generationConfig": { "thinkingConfig": { "thinkingBudget": 8192 } }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("xhigh"));
 
     // `0` disables reasoning. The shared budget ladder maps 0..=1664 to `low`, which would
     // report an explicitly disabled request as shallow, so the Gemini path reports `none`.
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generationConfig": { "thinkingConfig": { "thinkingBudget": 0 } }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("none"));
 
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generation_config": { "thinking_config": { "thinking_budget": 1280 } }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("low"));
 }
@@ -811,9 +722,9 @@ fn gemini_thinking_budget_supplies_reasoning_effort_without_collapsing_zero() {
 #[test]
 fn gemini_thinking_config_without_level_or_budget_yields_no_reasoning_effort() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generationConfig": { "thinkingConfig": { "includeThoughts": true } }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort(), None);
 
@@ -824,11 +735,11 @@ fn gemini_thinking_config_without_level_or_budget_yields_no_reasoning_effort() {
 
     // `THINKING_LEVEL_UNSPECIFIED` is the enum's "no explicit level" member, not a depth.
     usage.request_metadata = None;
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "generationConfig": {
             "thinkingConfig": { "thinkingLevel": "THINKING_LEVEL_UNSPECIFIED" }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort(), None);
 }
@@ -839,7 +750,7 @@ fn gemini_thinking_config_without_level_or_budget_yields_no_reasoning_effort() {
 #[test]
 fn gemini_thinking_config_is_read_from_the_v1internal_envelope() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gemini-3.8-flash-tiered",
         "project": "aicode-consumers",
         "requestId": "req-1",
@@ -852,27 +763,27 @@ fn gemini_thinking_config_is_read_from_the_v1internal_envelope() {
                 "thinkingConfig": { "includeThoughts": true, "thinkingLevel": "high" }
             }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("high"));
 
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gemini-3.8-flash-tiered",
         "request": {
             "generation_config": {
                 "thinking_config": { "include_thoughts": true, "thinking_budget": 32768 }
             }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("xhigh"));
 
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gemini-3.8-flash-tiered",
         "request": {
             "generationConfig": { "thinkingConfig": { "thinkingBudget": 0 } }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("none"));
 }
@@ -882,14 +793,14 @@ fn gemini_thinking_config_is_read_from_the_v1internal_envelope() {
 #[test]
 fn v1internal_envelope_without_thinking_config_yields_no_reasoning_effort() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gemini-3.8-flash-tiered",
         "project": "aicode-consumers",
         "request": {
             "contents": [{ "role": "user", "parts": [{ "text": "hi" }] }],
             "generationConfig": { "maxOutputTokens": 65536 }
         }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort(), None);
 }
@@ -897,10 +808,10 @@ fn v1internal_envelope_without_thinking_config_yields_no_reasoning_effort() {
 #[test]
 fn gemini_thinking_config_does_not_shadow_explicit_effort_fields() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "reasoning_effort": "max",
         "generationConfig": { "thinkingConfig": { "thinkingLevel": "low" } }
-    }));
+    })));
 
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("max"));
 }
@@ -908,12 +819,12 @@ fn gemini_thinking_config_does_not_shadow_explicit_effort_fields() {
 #[test]
 fn requested_and_provider_reasoning_efforts_remain_independent() {
     let mut usage = sample_usage();
-    usage.request_body = Some(json!({
+    usage.request_body = Some(CapturedBody::json(json!({
         "reasoning": { "effort": "XHigh" }
-    }));
-    usage.provider_request_body = Some(json!({
+    })));
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "reasoning_effort": "max"
-    }));
+    })));
     usage.request_metadata = Some(json!({
         "requested_reasoning_effort": "low",
         "provider_reasoning_effort": "medium"
@@ -922,34 +833,11 @@ fn requested_and_provider_reasoning_efforts_remain_independent() {
     assert_eq!(usage.requested_reasoning_effort().as_deref(), Some("xhigh"));
     assert_eq!(usage.provider_reasoning_effort().as_deref(), Some("max"));
 
-    usage.request_body = Some(json!({ "model": "gpt-5" }));
+    usage.request_body = Some(CapturedBody::json(json!({ "model": "gpt-5" })));
     assert_eq!(usage.requested_reasoning_effort(), None);
 
     usage.request_body = None;
     assert_eq!(usage.requested_reasoning_effort().as_deref(), Some("low"));
-}
-
-#[test]
-fn explicit_none_capture_ignores_stale_request_bodies_and_metadata() {
-    let mut usage = sample_usage();
-    usage.request_body = Some(json!({
-        "reasoning": { "effort": "xhigh" }
-    }));
-    usage.request_body_state = Some(UsageBodyCaptureState::None);
-    usage.provider_request_body = Some(json!({
-        "reasoning_effort": "max",
-        "service_tier": "priority"
-    }));
-    usage.provider_request_body_state = Some(UsageBodyCaptureState::None);
-    usage.request_metadata = Some(json!({
-        "requested_reasoning_effort": "high",
-        "provider_reasoning_effort": "medium",
-        "provider_service_tier": "priority"
-    }));
-
-    assert_eq!(usage.requested_reasoning_effort(), None);
-    assert_eq!(usage.provider_reasoning_effort(), None);
-    assert_eq!(usage.provider_service_tier(), None);
 }
 
 #[test]
@@ -959,10 +847,8 @@ fn reasoning_mapping_uses_derived_metadata_after_request_bodies_are_truncated() 
         "reason": "body_capture_limit_exceeded"
     });
     let mut usage = sample_usage();
-    usage.request_body = Some(truncated.clone());
-    usage.request_body_state = Some(UsageBodyCaptureState::Truncated);
-    usage.provider_request_body = Some(truncated);
-    usage.provider_request_body_state = Some(UsageBodyCaptureState::Truncated);
+    usage.request_body = Some(CapturedBody::json(truncated.clone()));
+    usage.provider_request_body = Some(CapturedBody::json(truncated));
     usage.request_metadata = Some(json!({
         "requested_reasoning_effort": "xhigh",
         "provider_reasoning_effort": "max"
@@ -975,16 +861,16 @@ fn reasoning_mapping_uses_derived_metadata_after_request_bodies_are_truncated() 
 #[test]
 fn provider_service_tier_does_not_infer_fast_from_response_or_stale_metadata() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "model": "gpt-5"
-    }));
+    })));
     usage.request_metadata = Some(json!({
         "provider_service_tier": "priority",
         "provider_actual_service_tier": "priority"
     }));
-    usage.response_body = Some(json!({
+    usage.response_body = Some(CapturedBody::json(json!({
         "service_tier": "priority"
-    }));
+    })));
 
     assert_eq!(usage.provider_service_tier(), None);
 }
@@ -993,13 +879,12 @@ fn provider_service_tier_does_not_infer_fast_from_response_or_stale_metadata() {
 fn provider_service_tier_uses_derived_metadata_after_final_body_is_stripped() {
     let mut usage = sample_usage();
     usage.provider_request_body = None;
-    usage.provider_request_body_state = Some(UsageBodyCaptureState::Disabled);
     usage.request_metadata = Some(json!({
         "provider_service_tier": "priority"
     }));
-    usage.response_body = Some(json!({
+    usage.response_body = Some(CapturedBody::json(json!({
         "service_tier": "default"
-    }));
+    })));
 
     assert_eq!(usage.provider_service_tier().as_deref(), Some("priority"));
 }
@@ -1007,20 +892,19 @@ fn provider_service_tier_uses_derived_metadata_after_final_body_is_stripped() {
 #[test]
 fn provider_service_tier_uses_request_derived_metadata_after_body_truncation() {
     let mut usage = sample_usage();
-    usage.provider_request_body = Some(json!({
+    usage.provider_request_body = Some(CapturedBody::json(json!({
         "truncated": true,
         "reason": "body_capture_limit_exceeded",
         "max_bytes": 128,
         "source_bytes": 4096,
         "value_kind": "object"
-    }));
-    usage.provider_request_body_state = Some(UsageBodyCaptureState::Truncated);
+    })));
     usage.request_metadata = Some(json!({
         "provider_service_tier": "priority"
     }));
-    usage.response_body = Some(json!({
+    usage.response_body = Some(CapturedBody::json(json!({
         "service_tier": "default"
-    }));
+    })));
 
     assert_eq!(usage.provider_service_tier().as_deref(), Some("priority"));
 }
@@ -1030,7 +914,7 @@ fn provider_cache_ttl_uses_final_openai_contract_then_preserved_metadata() {
     let mut usage = sample_usage();
     usage.model = "gpt-5.6-sol".to_string();
     usage.target_model = Some("gpt-5.6-sol".to_string());
-    usage.provider_request_body = Some(json!({"model": "gpt-5.6-sol"}));
+    usage.provider_request_body = Some(CapturedBody::json(json!({"model": "gpt-5.6-sol"})));
     usage.request_metadata = Some(json!({"provider_cache_ttl_minutes": 60}));
 
     assert_eq!(usage.provider_cache_ttl_minutes(), Some(30));
@@ -1076,7 +960,7 @@ fn actual_service_tier_is_independent_from_requested_tier() {
         Some("default")
     );
 
-    usage.response_body = Some(json!({"service_tier": "flex"}));
+    usage.response_body = Some(CapturedBody::json(json!({"service_tier": "flex"})));
     assert_eq!(
         usage.provider_actual_service_tier().as_deref(),
         Some("default")
@@ -1158,38 +1042,36 @@ fn extracts_anthropic_fast_speed_as_its_own_processing_tier() {
 }
 
 #[test]
-fn request_body_capture_json_entry_includes_capture_source_and_body_ref() {
+fn request_body_capture_json_entry_reports_the_stored_encoding() {
     let mut usage = sample_usage();
-    usage.request_body_state = Some(UsageBodyCaptureState::Reference);
+    usage.request_body = Some(CapturedBody::json(json!({"model": "gpt-5"})));
 
     let entry = usage.request_body_capture_json_entry();
 
     assert_eq!(entry.get("available"), Some(&Value::Bool(true)));
     assert_eq!(
         entry.get("storage"),
-        Some(&Value::String("reference".to_string()))
+        Some(&Value::String("inline".to_string()))
     );
     assert_eq!(
         entry.get("state"),
-        Some(&Value::String("reference".to_string()))
+        Some(&Value::String("inline".to_string()))
     );
     assert_eq!(
-        entry.get("body_ref"),
-        Some(&Value::String(
-            "usage://request/req-1/request_body".to_string()
-        ))
+        entry.get("encoding"),
+        Some(&Value::String("json".to_string()))
     );
     assert_eq!(
         entry.get("capture_source"),
-        Some(&Value::String("stored_reference".to_string()))
+        Some(&Value::String("stored_original".to_string()))
     );
 }
 
 #[test]
 fn curl_body_source_prefers_provider_request_body_over_request_body() {
     let mut usage = sample_usage();
-    usage.request_body = Some(json!({"client": true}));
-    usage.provider_request_body = Some(json!({"provider": true}));
+    usage.request_body = Some(CapturedBody::json(json!({"client": true})));
+    usage.provider_request_body = Some(CapturedBody::json(json!({"provider": true})));
 
     assert_eq!(
         usage.preferred_request_body_source_field(),
@@ -1207,4 +1089,38 @@ fn curl_body_source_prefers_provider_request_body_over_request_body() {
     usage.request_body = None;
     assert_eq!(usage.preferred_request_body_source_field(), None);
     assert_eq!(usage.curl_body_source(), "unavailable");
+}
+
+#[test]
+fn sse_data_payloads_keep_content_indentation() {
+    let mut payloads = Vec::new();
+    for_each_sse_data_payload(
+        "data: YHOO\r\ndata:second\r\n\r\ndata:  third event\n\rdata:\ttabbed\n\n",
+        |payload| payloads.push(payload.to_string()),
+    );
+    // The spec removes exactly one optional space after the colon; everything
+    // beyond it, including further spaces and tabs, is payload content.
+    assert_eq!(payloads, vec!["YHOO", "second", " third event", "\ttabbed"]);
+}
+
+#[test]
+fn truncated_json_bodies_survive_the_wire_as_text() {
+    let truncated = CapturedBody::from_bytes(b"{\"model\": \"gpt".to_vec(), BodyEncoding::Json, true);
+    let encoded = serde_json::to_value(&truncated).expect("truncated json serializes");
+    assert_eq!(encoded["encoding"], "json");
+    assert_eq!(encoded["truncated"], true);
+    assert_eq!(encoded["text"], "{\"model\": \"gpt");
+
+    let round_tripped: CapturedBody =
+        serde_json::from_value(encoded).expect("text+encoding deserializes");
+    assert_eq!(round_tripped, truncated);
+}
+
+#[test]
+fn complete_json_bodies_still_serialize_as_json() {
+    let body = CapturedBody::from_bytes(b"{\"a\": 1}".to_vec(), BodyEncoding::Json, false);
+    let encoded = serde_json::to_value(&body).expect("json serializes");
+    assert_eq!(encoded["json"], json!({"a": 1}));
+    let round_tripped: CapturedBody = serde_json::from_value(encoded).expect("json round trips");
+    assert_eq!(round_tripped, body);
 }
