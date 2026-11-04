@@ -338,6 +338,22 @@ export function groupRenderBlocksIntoTurns(
       } else {
         currentTurn.assistant = renderBlockToMessage(messageBlock)
       }
+    } else if (messageBlock.role === 'tool') {
+      const toolContent = renderBlockToMessage(messageBlock).content
+      if (currentTurn?.assistant) {
+        currentTurn.assistant = {
+          role: 'assistant',
+          content: [...currentTurn.assistant.content, ...toolContent],
+        }
+      } else {
+        currentTurn = {
+          user: undefined,
+          assistant: {
+            role: 'assistant',
+            content: toolContent,
+          },
+        }
+      }
     }
   }
 

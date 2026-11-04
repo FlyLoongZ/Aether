@@ -763,8 +763,17 @@ export class OpenAIParser implements ApiFormatParser {
     const role = this.mapRole(String(msg.role))
     const contentBlocks: ContentBlock[] = []
 
-    // 文本内容
-    if (typeof msg.content === 'string') {
+    // 工具结果（tool 消息）
+    if (role === 'tool' || msg.tool_call_id) {
+      const content = typeof msg.content === 'string'
+        ? msg.content
+        : JSON.stringify(msg.content, null, 2)
+      contentBlocks.push(createToolResultBlock(
+        String(msg.tool_call_id || ''),
+        content
+      ))
+    } else if (typeof msg.content === 'string') {
+      // 文本内容
       contentBlocks.push(createTextBlock(msg.content))
     } else if (Array.isArray(msg.content)) {
       // Vision API 格式
@@ -793,17 +802,6 @@ export class OpenAIParser implements ApiFormatParser {
           String(fn?.arguments || '{}')
         ))
       }
-    }
-
-    // 工具结果（tool 消息）
-    if (msg.tool_call_id) {
-      const content = typeof msg.content === 'string'
-        ? msg.content
-        : JSON.stringify(msg.content, null, 2)
-      contentBlocks.push(createToolResultBlock(
-        String(msg.tool_call_id),
-        content
-      ))
     }
 
     if (contentBlocks.length === 0) return null
@@ -1203,8 +1201,15 @@ export class OpenAIParser implements ApiFormatParser {
     const contentBlocks: RenderBlock[] = []
     const badges: BadgeRenderBlock[] = []
 
-    // 文本内容
-    if (typeof msg.content === 'string') {
+    // 工具结果（tool 消息）
+    if (role === 'tool' || msg.tool_call_id) {
+      badges.push(createBadgeBlock('工具结果', 'outline'))
+      const content = typeof msg.content === 'string'
+        ? msg.content
+        : JSON.stringify(msg.content, null, 2)
+      contentBlocks.push(createToolResultRenderBlock(content))
+    } else if (typeof msg.content === 'string') {
+      // 文本内容
       contentBlocks.push(createTextRenderBlock(msg.content))
     } else if (Array.isArray(msg.content)) {
       // Vision API 格式
@@ -1235,15 +1240,6 @@ export class OpenAIParser implements ApiFormatParser {
           typeof call.id === 'string' ? call.id : undefined
         ))
       }
-    }
-
-    // 工具结果（tool 消息）
-    if (msg.tool_call_id) {
-      badges.push(createBadgeBlock('工具结果', 'outline'))
-      const content = typeof msg.content === 'string'
-        ? msg.content
-        : JSON.stringify(msg.content, null, 2)
-      contentBlocks.push(createToolResultRenderBlock(content))
     }
 
     if (contentBlocks.length === 0) return null

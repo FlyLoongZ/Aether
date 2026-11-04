@@ -1,48 +1,78 @@
 <template>
-  <div class="flex flex-col gap-2">
+  <div class="flex flex-col gap-2.5">
     <template
       v-for="(block, index) in blocks"
       :key="index"
     >
       <!-- 文本块 -->
       <pre
-        v-if="block.type === 'text'"
-        class="m-0 text-sm leading-relaxed whitespace-pre-wrap break-words"
+        v-if="block.type === 'text' && block.content && block.content.trim()"
+        class="m-0 text-sm leading-relaxed whitespace-pre-wrap break-words font-sans text-foreground/90"
         :class="block.className"
-      >{{ block.content }}</pre>
+      >{{ block.content.trim() }}</pre>
 
-      <!-- 可折叠块 -->
+      <!-- 思考过程块 (Reasoning) -->
+      <ReasoningCard
+        v-else-if="block.type === 'collapsible' && isThinkingBlock(block)"
+        :title="block.title"
+        :content="extractThinkingContent(block)"
+        :default-open="block.defaultOpen"
+        :class="block.className"
+      />
+
+      <!-- 常规可折叠块 -->
       <details
         v-else-if="block.type === 'collapsible'"
-        class="group cursor-pointer bg-muted/30 rounded-lg px-3 py-2"
+        class="group cursor-pointer bg-muted/30 rounded-lg px-3 py-2 border border-border/60"
         :class="block.className"
         :open="block.defaultOpen"
       >
-        <summary class="flex items-center gap-2 list-none select-none [&::-webkit-details-marker]:hidden">
+        <summary class="flex items-center gap-2 list-none select-none [&::-webkit-details-marker]:hidden text-xs text-muted-foreground font-medium">
           <ChevronRight class="w-4 h-4 text-muted-foreground transition-transform duration-200 group-open:rotate-90" />
-          <span class="text-xs text-muted-foreground">{{ block.title }}</span>
+          <span>{{ block.title }}</span>
         </summary>
-        <div class="mt-2 p-3 bg-muted/50 rounded-lg">
+        <div class="mt-2 p-3 bg-muted/40 rounded-lg border border-border/40">
           <BlockRenderer :blocks="block.content" />
         </div>
       </details>
 
       <!-- 代码块 -->
-      <div
+      <CodeBlockCard
         v-else-if="block.type === 'code'"
-        class="bg-muted/50 rounded-lg overflow-hidden"
-      >
-        <div
-          v-if="block.language"
-          class="px-3 py-2 text-xs font-medium bg-muted/50 text-muted-foreground border-b border-border"
+        :code="block.code"
+        :language="block.language"
+      />
+
+      <!-- 工具调用块 (AI Tool Call) -->
+      <ToolCard
+        v-else-if="block.type === 'tool_use'"
+        :tool-name="block.toolName"
+        :tool-id="block.toolId"
+        :input="block.input"
+      />
+
+      <!-- 工具结果块 (AI Tool Result) -->
+      <ToolCard
+        v-else-if="block.type === 'tool_result'"
+        :output="block.content"
+        :is-error="block.isError"
+      />
+
+      <!-- 消息块 (AI Message) -->
+      <template v-else-if="block.type === 'message'">
+        <!-- 若为 tool 角色且子项全为工具结果，直接平铺渲染工具卡片，避免外层套娃双重标题 -->
+        <template v-if="block.role === 'tool' && isAllToolBlocks(block.content)">
+          <BlockRenderer :blocks="block.content" />
+        </template>
+        <MessageCard
+          v-else
+          :role="block.role"
+          :role-label="block.roleLabel"
+          :badges="block.badges"
         >
-          {{ block.language }}
-        </div>
-        <pre
-          class="m-0 p-3 font-mono text-xs max-h-[300px] overflow-auto whitespace-pre-wrap break-words"
-          :style="block.maxHeight ? { maxHeight: `${block.maxHeight}px` } : {}"
-        >{{ block.code }}</pre>
-      </div>
+          <BlockRenderer :blocks="block.content" />
+        </MessageCard>
+      </template>
 
       <!-- 徽章块 -->
       <Badge
@@ -56,13 +86,13 @@
       <!-- 图片块 -->
       <div
         v-else-if="block.type === 'image'"
-        class="bg-muted/30 p-3 rounded-lg"
+        class="bg-muted/30 p-3 rounded-lg border border-border/50"
       >
         <img
           v-if="block.src"
           :src="block.src"
           :alt="block.alt || '图片'"
-          class="max-w-full max-h-[400px] rounded-lg"
+          class="max-w-full max-h-[400px] rounded-lg object-contain"
         >
         <div
           v-else
@@ -101,71 +131,6 @@
         <BlockRenderer :blocks="block.children" />
       </div>
 
-      <!-- 消息块 -->
-      <div
-        v-else-if="block.type === 'message'"
-        class="rounded-lg overflow-hidden"
-        :class="messageBlockClasses[block.role] || messageBlockClasses.default"
-      >
-        <div
-          class="flex items-center gap-2 px-3 py-2 text-xs font-medium"
-          :class="messageHeaderClasses[block.role] || messageHeaderClasses.default"
-        >
-          <component
-            :is="getRoleIcon(block.role)"
-            class="w-4 h-4"
-          />
-          <span>{{ block.roleLabel || getRoleLabel(block.role) }}</span>
-          <template v-if="block.badges">
-            <Badge
-              v-for="(badge, badgeIndex) in block.badges"
-              :key="badgeIndex"
-              :variant="badge.variant || 'secondary'"
-            >
-              {{ badge.label }}
-            </Badge>
-          </template>
-        </div>
-        <div class="px-3 pb-3 text-sm leading-relaxed">
-          <BlockRenderer :blocks="block.content" />
-        </div>
-      </div>
-
-      <!-- 工具调用块 -->
-      <div
-        v-else-if="block.type === 'tool_use'"
-        class="bg-muted/30 rounded-lg overflow-hidden"
-      >
-        <div class="flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground">
-          <Wrench class="w-4 h-4" />
-          <span>{{ block.toolName }}</span>
-          <span
-            v-if="block.toolId"
-            class="font-mono text-xs opacity-60"
-          >{{ block.toolId }}</span>
-        </div>
-        <pre class="m-0 p-3 bg-muted/50 font-mono text-xs max-h-[200px] overflow-y-auto whitespace-pre-wrap break-words">{{ block.input }}</pre>
-      </div>
-
-      <!-- 工具结果块 -->
-      <div
-        v-else-if="block.type === 'tool_result'"
-        class="rounded-lg overflow-hidden"
-        :class="block.isError ? 'bg-destructive/10 border border-destructive/20' : 'bg-muted/30'"
-      >
-        <div class="flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground">
-          <FileText class="w-4 h-4" />
-          <span>工具结果</span>
-          <Badge
-            v-if="block.isError"
-            variant="destructive"
-          >
-            错误
-          </Badge>
-        </div>
-        <pre class="m-0 p-3 bg-muted/50 font-mono text-xs max-h-[200px] overflow-y-auto whitespace-pre-wrap break-words">{{ block.content }}</pre>
-      </div>
-
       <!-- 分隔符块 -->
       <hr
         v-else-if="block.type === 'divider'"
@@ -185,47 +150,29 @@
 </template>
 
 <script setup lang="ts">
-import { User, Bot, Settings, Wrench, AlertCircle, ChevronRight, FileText, Image as ImageIcon } from '@lucide/vue'
+import { AlertCircle, ChevronRight, Image as ImageIcon } from '@lucide/vue'
 import Badge from '@/components/ui/badge.vue'
-import type { RenderBlock } from '../../conversation'
+import { ToolCard, ReasoningCard, MessageCard, CodeBlockCard } from '@/components/ai-elements'
+import type { RenderBlock, CollapsibleRenderBlock, CodeRenderBlock, TextRenderBlock } from '../../conversation'
 
 defineProps<{
   blocks: RenderBlock[]
 }>()
 
-const messageBlockClasses: Record<string, string> = {
-  user: 'bg-primary/[0.08] border border-primary/20',
-  assistant: 'bg-muted/50 border border-border',
-  system: 'bg-muted/30 border border-dashed border-border',
-  tool: 'bg-muted/30 border border-border',
-  default: 'bg-muted/30 border border-border',
+function isThinkingBlock(block: CollapsibleRenderBlock): boolean {
+  return block.title?.includes('思考') || block.className?.includes('thinking') || false
 }
 
-const messageHeaderClasses: Record<string, string> = {
-  user: 'text-primary',
-  assistant: 'text-foreground',
-  system: 'text-muted-foreground',
-  tool: 'text-muted-foreground',
-  default: 'text-foreground',
+function extractThinkingContent(block: CollapsibleRenderBlock): string {
+  const codeChild = block.content.find((b): b is CodeRenderBlock => b.type === 'code')
+  if (codeChild) return codeChild.code
+  const textChild = block.content.find((b): b is TextRenderBlock => b.type === 'text')
+  if (textChild) return textChild.content
+  return ''
 }
 
-const getRoleIcon = (role: string) => {
-  switch (role) {
-    case 'user': return User
-    case 'assistant': return Bot
-    case 'system': return Settings
-    case 'tool': return Wrench
-    default: return User
-  }
-}
-
-const getRoleLabel = (role: string) => {
-  switch (role) {
-    case 'user': return 'User'
-    case 'assistant': return 'Assistant'
-    case 'system': return 'System'
-    case 'tool': return 'Tool'
-    default: return role
-  }
+function isAllToolBlocks(blocks: RenderBlock[]): boolean {
+  if (!blocks || blocks.length === 0) return false
+  return blocks.every(b => b.type === 'tool_result' || b.type === 'tool_use')
 }
 </script>
