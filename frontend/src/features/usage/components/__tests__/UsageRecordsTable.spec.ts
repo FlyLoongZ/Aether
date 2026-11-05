@@ -88,7 +88,7 @@ vi.mock('@lucide/vue', async () => {
   })
 
   return {
-    RefreshCcw: Icon,
+    RefreshCw: Icon,
     EyeOff: Icon,
     Search: Icon,
     Shuffle: Icon,

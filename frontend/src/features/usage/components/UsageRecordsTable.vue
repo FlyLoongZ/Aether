@@ -46,9 +46,11 @@
         class="absolute right-4 top-2.5 h-8 w-8 shrink-0 md:hidden"
         :class="autoRefresh ? 'text-primary' : ''"
         :title="autoRefresh ? '点击关闭自动刷新' : '点击开启自动刷新'"
+        :aria-label="autoRefresh ? '关闭自动刷新' : '开启自动刷新'"
+        :aria-pressed="autoRefresh"
         @click="$emit('update:autoRefresh', !autoRefresh)"
       >
-        <RefreshCcw
+        <RefreshCw
           class="w-3.5 h-3.5"
           :class="autoRefresh ? 'animate-spin' : ''"
         />
@@ -199,9 +201,11 @@
         class="hidden h-8 w-8 shrink-0 md:inline-flex"
         :class="autoRefresh ? 'text-primary' : ''"
         :title="autoRefresh ? '点击关闭自动刷新' : '点击开启自动刷新'"
+        :aria-label="autoRefresh ? '关闭自动刷新' : '开启自动刷新'"
+        :aria-pressed="autoRefresh"
         @click="$emit('update:autoRefresh', !autoRefresh)"
       >
-        <RefreshCcw
+        <RefreshCw
           class="w-3.5 h-3.5"
           :class="autoRefresh ? 'animate-spin' : ''"
         />
@@ -353,7 +357,7 @@
             :title="skippedCandidateTooltip(record)"
             :aria-label="skippedCandidateAriaLabel(record)"
           />
-          <RefreshCcw
+          <RefreshCw
             v-if="record.has_retry"
             data-usage-attempt-marker="retry"
             class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0"
@@ -800,7 +804,7 @@
                 :title="skippedCandidateTooltip(record)"
                 :aria-label="skippedCandidateAriaLabel(record)"
               />
-              <RefreshCcw
+              <RefreshCw
                 v-if="record.has_retry"
                 data-usage-attempt-marker="retry"
                 class="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 flex-shrink-0"
@@ -1078,7 +1082,7 @@ import {
   SortableTableHead,
   TableFilterMenu,
 } from '@/components/ui'
-import { Ban, EyeOff, RefreshCcw, Search, ShieldCheck, Shuffle } from '@lucide/vue'
+import { Ban, EyeOff, RefreshCw, Search, ShieldCheck, Shuffle } from '@lucide/vue'
 import { formatTokens } from '@/utils/format'
 import { getCacheCreationTokens, getCacheReadTokens, getEffectiveInputTokens } from '../token-normalization'
 import {

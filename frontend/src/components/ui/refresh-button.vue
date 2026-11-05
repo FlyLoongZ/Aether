@@ -9,7 +9,7 @@
     :title="title"
     @click="handleClick"
   >
-    <RefreshCcw
+    <RefreshCw
       class="w-3.5 h-3.5"
       :class="loading || active ? 'animate-spin' : ''"
     />
@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import { Button } from '@/components/ui'
-import { RefreshCcw } from '@lucide/vue'
+import { RefreshCw } from '@lucide/vue'
 
 interface Props {
   loading?: boolean
