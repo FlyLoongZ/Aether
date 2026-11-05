@@ -151,7 +151,6 @@
       @update:page-size="handlePageSizeChange"
       @update:auto-refresh="handleAutoRefreshChange"
       @update:hide-unknown-records="handleHideUnknownRecordsChange"
-      @refresh="handleManualRefresh"
       @prefetch-detail="prefetchRequestDetail"
       @show-detail="showRequestDetail"
     />
@@ -1233,11 +1232,6 @@ async function refreshData() {
   } finally {
     refreshInFlight = null
   }
-}
-
-async function handleManualRefresh() {
-  if (!isPageVisible.value) return
-  await refreshData()
 }
 
 // 显示请求详情

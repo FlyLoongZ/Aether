@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 const source = readSource('src/views/shared/Usage.vue')
 
 function functionBlock(name: string, nextName: string): string {
-  return source.split(`async function ${name}`)[1]?.split(`async function ${nextName}`)[0] ?? ''
+  return source.split(`function ${name}`)[1]?.split(`function ${nextName}`)[0] ?? ''
 }
 
 describe('usage record server filters', () => {
@@ -23,7 +23,7 @@ describe('usage record server filters', () => {
   it('keeps filtered normal-user pagination and refreshes on the server', () => {
     const pageHandler = functionBlock('handlePageChange', 'handlePageSizeChange')
     const pageSizeHandler = functionBlock('handlePageSizeChange', 'handleFilterSearchChange')
-    const refreshHandler = functionBlock('refreshData', 'handleManualRefresh')
+    const refreshHandler = functionBlock('refreshData', 'showRequestDetail')
 
     expect(pageHandler).toContain('isAdminPage.value || userUsesServerRecordFilters.value')
     expect(pageSizeHandler).toContain('isAdminPage.value || userUsesServerRecordFilters.value')

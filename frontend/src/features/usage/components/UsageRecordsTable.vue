@@ -1192,7 +1192,6 @@ const emit = defineEmits<{
   'update:pageSize': [value: number]
   'update:autoRefresh': [value: boolean]
   'update:hideUnknownRecords': [value: boolean]
-  'refresh': []
   'showDetail': [id: string]
   'prefetchDetail': [id: string]
 }>()
