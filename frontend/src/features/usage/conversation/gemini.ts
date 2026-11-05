@@ -13,6 +13,7 @@ import {
   createEmptyConversation,
   createMessage,
   createTextBlock,
+  createThinkingBlock,
   createToolUseBlock,
   createToolResultBlock,
   createImageBlock,
@@ -22,6 +23,8 @@ import type { RenderResult, RenderBlock, BadgeRenderBlock } from './render'
 import {
   createTextBlock as createTextRenderBlock,
   createBadgeBlock,
+  createCollapsibleBlock,
+  createCodeBlock,
   createImageBlock as createImageRenderBlock,
   createMessageBlock,
   createToolUseBlock as createToolUseRenderBlock,
@@ -169,6 +172,7 @@ export class GeminiParser implements ApiFormatParser {
       }
 
       const textParts: string[] = []
+      const thinkingParts: string[] = []
       const toolCalls: { name: string; args: Record<string, unknown> }[] = []
 
       for (const rawChunk of chunks) {
@@ -179,7 +183,9 @@ export class GeminiParser implements ApiFormatParser {
         const parts = candidateContent?.parts as RawObject[] | undefined
         if (parts) {
           for (const part of parts) {
-            if (typeof part.text === 'string') {
+            if (part.thought === true && typeof part.text === 'string') {
+              thinkingParts.push(part.text)
+            } else if (typeof part.text === 'string') {
               textParts.push(part.text)
             } else if (part.functionCall) {
               const fc = part.functionCall as RawObject
@@ -193,6 +199,11 @@ export class GeminiParser implements ApiFormatParser {
       }
 
       const contentBlocks: ContentBlock[] = []
+
+      // 思考内容 (Gemini thought)
+      if (thinkingParts.length > 0) {
+        contentBlocks.push(createThinkingBlock(thinkingParts.join('')))
+      }
 
       // 文本内容
       if (textParts.length > 0) {
@@ -254,6 +265,11 @@ export class GeminiParser implements ApiFormatParser {
    */
   private parsePart(part: RawObject): ContentBlock | null {
     if (!part) return null
+
+    // 思考过程 (Gemini thinking / thought)
+    if (part.thought === true && typeof part.text === 'string') {
+      return createThinkingBlock(part.text)
+    }
 
     // 文本
     if (part.text !== undefined) {
@@ -469,6 +485,15 @@ export class GeminiParser implements ApiFormatParser {
   private renderPart(part: RawObject): RenderBlock | null {
     if (!part) return null
 
+    // 思考过程 (Gemini thinking / thought)
+    if (part.thought === true && typeof part.text === 'string') {
+      return createCollapsibleBlock(
+        `思考过程 (${part.text.length} 字符)`,
+        [createCodeBlock(part.text)],
+        { defaultOpen: false, className: 'thinking-block' }
+      )
+    }
+
     // 文本
     if (part.text !== undefined) {
       return createTextRenderBlock(String(part.text))
@@ -527,6 +552,13 @@ export class GeminiParser implements ApiFormatParser {
       case 'text':
         return createTextRenderBlock(block.text)
 
+      case 'thinking':
+        return createCollapsibleBlock(
+          `思考过程 (${block.thinking.length} 字符)`,
+          [createCodeBlock(block.thinking)],
+          { defaultOpen: false, className: 'thinking-block' }
+        )
+
       case 'tool_use':
         return createToolUseRenderBlock(
           block.toolName || '函数调用',
@@ -575,7 +607,11 @@ export class GeminiParser implements ApiFormatParser {
     const hasImage = parts.some((p: RawObject) => p.inlineData)
     const hasToolCall = parts.some((p: RawObject) => p.functionCall)
     const hasToolResult = parts.some((p: RawObject) => p.functionResponse)
+    const hasThinking = parts.some((p: RawObject) => p.thought === true)
 
+    if (hasThinking) {
+      badges.push(createBadgeBlock('思考', 'secondary'))
+    }
     if (hasToolCall) {
       badges.push(createBadgeBlock('函数调用', 'outline'))
     }
@@ -707,6 +743,9 @@ export class GeminiParser implements ApiFormatParser {
     const badges: BadgeRenderBlock[] = []
     const types = new Set(content.map(b => b.type))
 
+    if (types.has('thinking')) {
+      badges.push(createBadgeBlock('思考', 'secondary'))
+    }
     if (types.has('tool_use')) {
       badges.push(createBadgeBlock('函数调用', 'outline'))
     }

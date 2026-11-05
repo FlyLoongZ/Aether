@@ -206,6 +206,12 @@ export class ClaudeParser implements ApiFormatParser {
               parts: [String(block.thinking || '')],
               metadata: { signature: String(block.signature || '') },
             })
+          } else if (block?.type === 'redacted_thinking') {
+            blocks.set(index, {
+              type: 'thinking',
+              parts: ['（思考内容已被 Anthropic 加密隐藏）'],
+              metadata: { data: String(block.data || '') },
+            })
           } else if (block?.type === 'tool_use') {
             blocks.set(index, {
               type: 'tool_use',
@@ -345,6 +351,12 @@ export class ClaudeParser implements ApiFormatParser {
         return createThinkingBlock(
           String(block.thinking || ''),
           typeof block.signature === 'string' ? block.signature : undefined
+        )
+
+      case 'redacted_thinking':
+        return createThinkingBlock(
+          '（思考内容已被 Anthropic 加密隐藏）',
+          typeof block.data === 'string' ? block.data : undefined
         )
 
       case 'tool_use':
@@ -599,6 +611,13 @@ export class ClaudeParser implements ApiFormatParser {
           { defaultOpen: false, className: 'thinking-block' }
         )
 
+      case 'redacted_thinking':
+        return createCollapsibleBlock(
+          '思考过程 (已加密隐藏)',
+          [createCodeBlock('思考内容因安全策略已被 Anthropic 加密脱敏，但上下文转发时必须原样携带以保证数字签名校验有效。')],
+          { defaultOpen: false, className: 'thinking-block' }
+        )
+
       case 'tool_use':
         return createToolUseRenderBlock(
           String(block.name || '工具调用'),
@@ -729,7 +748,7 @@ export class ClaudeParser implements ApiFormatParser {
     const badges: BadgeRenderBlock[] = []
     const types = new Set(content.map((b: RawObject) => b.type))
 
-    if (types.has('thinking')) {
+    if (types.has('thinking') || types.has('redacted_thinking')) {
       badges.push(createBadgeBlock('思考', 'secondary'))
     }
     if (types.has('tool_use')) {

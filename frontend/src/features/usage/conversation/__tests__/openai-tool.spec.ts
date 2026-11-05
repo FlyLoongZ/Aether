@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRequest, renderRequest } from '../registry'
+import { parseRequest, renderRequest, renderResponse } from '../registry'
 import { groupRenderBlocksIntoTurns } from '../grouper'
 import type { MessageRenderBlock } from '../render'
 
@@ -79,5 +79,77 @@ describe('OpenAI Tool Message Parsing & Rendering', () => {
     const assistantBlocks = firstTurn?.assistant?.content ?? []
     expect(assistantBlocks.some(b => b.type === 'tool_use')).toBe(true)
     expect(assistantBlocks.some(b => b.type === 'tool_result')).toBe(true)
+  })
+
+  it('renders reasoning from reasoning_content in OpenAI response', () => {
+    const responseBody = {
+      model: 'o1-preview',
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            reasoning_content: 'I need to check the file system first.',
+            content: 'Done!',
+          },
+        },
+      ],
+    }
+
+    const rendered = renderResponse(responseBody, undefined, 'openai')
+    const assistantMsg = rendered.blocks[0] as MessageRenderBlock
+    expect(assistantMsg).toBeDefined()
+    expect(assistantMsg.role).toBe('assistant')
+    expect(assistantMsg.badges?.some(b => b.label === '思考')).toBe(true)
+
+    const reasoningBlock = assistantMsg.content.find(b => b.type === 'collapsible')
+    expect(reasoningBlock).toBeDefined()
+    if (reasoningBlock && reasoningBlock.type === 'collapsible') {
+      expect(reasoningBlock.title).toContain('思考过程')
+    }
+  })
+
+  it('renders reasoning from streaming delta in OpenAI response', () => {
+    const streamPayload = {
+      metadata: { stream: true },
+      chunks: [
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { reasoning_content: 'Reasoning step 1... ' },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { reasoning_content: 'Reasoning step 2.' },
+            },
+          ],
+        },
+        {
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'Actual response.' },
+            },
+          ],
+        },
+      ],
+    }
+
+    const rendered = renderResponse(streamPayload, undefined, 'openai')
+    const assistantMsg = rendered.blocks[0] as MessageRenderBlock
+    expect(assistantMsg).toBeDefined()
+    expect(assistantMsg.badges?.some(b => b.label === '思考')).toBe(true)
+
+    const reasoningBlock = assistantMsg.content.find(b => b.type === 'collapsible')
+    expect(reasoningBlock).toBeDefined()
+
+    const textBlock = assistantMsg.content.find(b => b.type === 'text')
+    if (textBlock && textBlock.type === 'text') {
+      expect(textBlock.content).toBe('Actual response.')
+    }
   })
 })

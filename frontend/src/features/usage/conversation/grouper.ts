@@ -397,7 +397,11 @@ function renderBlockToMessage(block: MessageRenderBlock): ParsedMessage {
       }
       case 'collapsible': {
         const collapsibleBlock = child as CollapsibleRenderBlock
-        if (collapsibleBlock.title?.includes('思考')) {
+        if (
+          collapsibleBlock.title?.includes('思考') ||
+          collapsibleBlock.title?.toLowerCase().includes('thinking') ||
+          collapsibleBlock.className?.includes('thinking')
+        ) {
           const codeBlock = collapsibleBlock.content.find(
             (b): b is CodeRenderBlock => b.type === 'code'
           )

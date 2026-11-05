@@ -12,10 +12,10 @@
         <div class="flex items-center gap-2 min-w-0">
           <Brain class="w-4 h-4 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
           <span class="text-xs font-semibold text-muted-foreground group-hover:text-foreground transition-colors">
-            {{ title }}
+            {{ cleanTitle }}
           </span>
           <span
-            v-if="charCount > 0"
+            v-if="showCharCount"
             class="text-[11px] text-muted-foreground/80 font-mono"
           >
             ({{ charCount }} 字符)
@@ -49,9 +49,7 @@
 
     <!-- 思考过程内容 (ReasoningContent) -->
     <CollapsibleContent class="border-t border-border/50 bg-muted/15 p-3">
-      <div class="relative border-l-2 border-primary/40 pl-3">
-        <pre class="m-0 font-mono text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">{{ content }}</pre>
-      </div>
+      <pre class="m-0 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-foreground/90">{{ content }}</pre>
     </CollapsibleContent>
   </Collapsible>
 </template>
@@ -79,6 +77,13 @@ const copied = ref(false)
 const { copyToClipboard } = useClipboard()
 
 const charCount = computed(() => props.content?.length || 0)
+
+const cleanTitle = computed(() => props.title || '思考过程')
+
+const showCharCount = computed(() => {
+  if (charCount.value <= 0) return false
+  return !/\(\d+\s*字符\)/.test(cleanTitle.value)
+})
 
 async function handleCopy() {
   if (!props.content) return

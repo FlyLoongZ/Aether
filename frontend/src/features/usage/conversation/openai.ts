@@ -13,6 +13,7 @@ import {
   createEmptyConversation,
   createMessage,
   createTextBlock,
+  createThinkingBlock,
   createToolUseBlock,
   createToolResultBlock,
   createImageBlock,
@@ -22,6 +23,8 @@ import type { RenderResult, RenderBlock, BadgeRenderBlock } from './render'
 import {
   createTextBlock as createTextRenderBlock,
   createBadgeBlock,
+  createCollapsibleBlock,
+  createCodeBlock,
   createImageBlock as createImageRenderBlock,
   createMessageBlock,
   createToolUseBlock as createToolUseRenderBlock,
@@ -374,6 +377,12 @@ export class OpenAIParser implements ApiFormatParser {
       if (message) {
         const contentBlocks: ContentBlock[] = []
 
+        // 思考内容
+        const rawReasoning = message.reasoning_content ?? message.reasoning
+        if (typeof rawReasoning === 'string' && rawReasoning.trim().length > 0) {
+          contentBlocks.push(createThinkingBlock(rawReasoning.trim()))
+        }
+
         // 文本内容
         if (typeof message.content === 'string') {
           contentBlocks.push(createTextBlock(message.content))
@@ -424,7 +433,21 @@ export class OpenAIParser implements ApiFormatParser {
 
       for (const rawItem of output) {
         const item = rawItem as RawObject
-        if (item?.type === 'message') {
+        if (item?.type === 'reasoning') {
+          let reasoningText = ''
+          if (Array.isArray(item.summary)) {
+            reasoningText = item.summary.map((s: RawObject) => String(s.text || '')).join('')
+          } else if (Array.isArray(item.content)) {
+            reasoningText = item.content.map((c: RawObject) => String(c.text || '')).join('')
+          } else if (typeof item.text === 'string') {
+            reasoningText = item.text
+          }
+          if (reasoningText.trim().length > 0) {
+            result.messages.push(createMessage('assistant', [
+              createThinkingBlock(reasoningText.trim()),
+            ]))
+          }
+        } else if (item?.type === 'message') {
           const contentBlocks: ContentBlock[] = []
 
           if (Array.isArray(item.content)) {
@@ -486,6 +509,7 @@ export class OpenAIParser implements ApiFormatParser {
       }
 
       const textParts: string[] = []
+      const reasoningParts: string[] = []
       const toolCalls = new Map<number, { name: string; id: string; args: string[] }>()
 
       for (const rawChunk of chunks) {
@@ -498,6 +522,11 @@ export class OpenAIParser implements ApiFormatParser {
         const choices = chunk.choices as RawObject[] | undefined
         const firstChoice = choices?.[0] as RawObject | undefined
         const delta = firstChoice?.delta as RawObject | undefined
+        if (typeof delta?.reasoning_content === 'string') {
+          reasoningParts.push(delta.reasoning_content)
+        } else if (typeof delta?.reasoning === 'string') {
+          reasoningParts.push(delta.reasoning)
+        }
         if (typeof delta?.content === 'string') {
           textParts.push(delta.content)
         }
@@ -530,6 +559,12 @@ export class OpenAIParser implements ApiFormatParser {
       }
 
       const contentBlocks: ContentBlock[] = []
+
+      // 显式 reasoning 增量
+      const streamReasoning = reasoningParts.join('').trim()
+      if (streamReasoning.length > 0) {
+        contentBlocks.push(createThinkingBlock(streamReasoning))
+      }
 
       // 文本内容
       if (textParts.length > 0) {
@@ -573,6 +608,7 @@ export class OpenAIParser implements ApiFormatParser {
       }
 
       const textParts: string[] = []
+      const reasoningParts: string[] = []
       const toolCalls = new Map<string, { name: string; id: string; args: string[] }>()
       const outputIndexToToolKey = new Map<number, string>()
       let currentToolKey = ''
@@ -630,6 +666,24 @@ export class OpenAIParser implements ApiFormatParser {
             const deltaObj = delta as RawObject
             if (typeof deltaObj.text === 'string') {
               textParts.push(deltaObj.text)
+            }
+          }
+          continue
+        }
+
+        // 处理推理过程增量: response.reasoning_text.delta / response.reasoning_summary_text.delta
+        if (
+          eventType === 'response.reasoning_text.delta' ||
+          eventType === 'response.reasoning_summary_text.delta' ||
+          eventType === 'response.reasoning_content.delta'
+        ) {
+          const delta = chunk.delta
+          if (typeof delta === 'string') {
+            reasoningParts.push(delta)
+          } else if (delta && typeof delta === 'object') {
+            const deltaObj = delta as RawObject
+            if (typeof deltaObj.text === 'string') {
+              reasoningParts.push(deltaObj.text)
             }
           }
           continue
@@ -730,6 +784,12 @@ export class OpenAIParser implements ApiFormatParser {
 
       const contentBlocks: ContentBlock[] = []
 
+      // 显式推理过程 (Responses API reasoning)
+      const cliReasoning = reasoningParts.join('').trim()
+      if (cliReasoning.length > 0) {
+        contentBlocks.push(createThinkingBlock(cliReasoning))
+      }
+
       // 文本内容
       if (textParts.length > 0) {
         contentBlocks.push(createTextBlock(textParts.join('')))
@@ -762,6 +822,17 @@ export class OpenAIParser implements ApiFormatParser {
 
     const role = this.mapRole(String(msg.role))
     const contentBlocks: ContentBlock[] = []
+
+    // 思考过程
+    const msgReasoning = typeof msg.reasoning_content === 'string'
+      ? msg.reasoning_content
+      : typeof msg.reasoning === 'string'
+        ? msg.reasoning
+        : undefined
+
+    if (msgReasoning && msgReasoning.trim().length > 0) {
+      contentBlocks.push(createThinkingBlock(msgReasoning.trim()))
+    }
 
     // 工具结果（tool 消息）
     if (role === 'tool' || msg.tool_call_id) {
@@ -1072,6 +1143,17 @@ export class OpenAIParser implements ApiFormatParser {
         const contentBlocks: RenderBlock[] = []
         const badges: BadgeRenderBlock[] = []
 
+        // 思考内容
+        const rawReasoning = message.reasoning_content ?? message.reasoning
+        if (typeof rawReasoning === 'string' && rawReasoning.trim().length > 0) {
+          badges.push(createBadgeBlock('思考', 'secondary'))
+          contentBlocks.push(createCollapsibleBlock(
+            `思考过程 (${rawReasoning.trim().length} 字符)`,
+            [createCodeBlock(rawReasoning.trim())],
+            { defaultOpen: false, className: 'thinking-block' }
+          ))
+        }
+
         // 文本内容
         if (typeof message.content === 'string') {
           contentBlocks.push(createTextRenderBlock(message.content))
@@ -1119,7 +1201,28 @@ export class OpenAIParser implements ApiFormatParser {
 
       for (const rawItem of output) {
         const item = rawItem as RawObject
-        if (item?.type === 'message') {
+        if (item?.type === 'reasoning') {
+          let reasoningText = ''
+          if (Array.isArray(item.summary)) {
+            reasoningText = item.summary.map((s: RawObject) => String(s.text || '')).join('')
+          } else if (Array.isArray(item.content)) {
+            reasoningText = item.content.map((c: RawObject) => String(c.text || '')).join('')
+          } else if (typeof item.text === 'string') {
+            reasoningText = item.text
+          }
+          if (reasoningText.trim().length > 0) {
+            blocks.push(createMessageBlock('assistant', [
+              createCollapsibleBlock(
+                `思考过程 (${reasoningText.trim().length} 字符)`,
+                [createCodeBlock(reasoningText.trim())],
+                { defaultOpen: false, className: 'thinking-block' }
+              ),
+            ], {
+              roleLabel: 'Assistant',
+              badges: [createBadgeBlock('思考', 'secondary')],
+            }))
+          }
+        } else if (item?.type === 'message') {
           const contentBlocks: RenderBlock[] = []
 
           if (Array.isArray(item.content)) {
@@ -1201,6 +1304,22 @@ export class OpenAIParser implements ApiFormatParser {
     const contentBlocks: RenderBlock[] = []
     const badges: BadgeRenderBlock[] = []
 
+    // 思考过程
+    const msgReasoning = typeof msg.reasoning_content === 'string'
+      ? msg.reasoning_content
+      : typeof msg.reasoning === 'string'
+        ? msg.reasoning
+        : undefined
+
+    if (msgReasoning && msgReasoning.trim().length > 0) {
+      badges.push(createBadgeBlock('思考', 'secondary'))
+      contentBlocks.push(createCollapsibleBlock(
+        `思考过程 (${msgReasoning.trim().length} 字符)`,
+        [createCodeBlock(msgReasoning.trim())],
+        { defaultOpen: false, className: 'thinking-block' }
+      ))
+    }
+
     // 工具结果（tool 消息）
     if (role === 'tool' || msg.tool_call_id) {
       badges.push(createBadgeBlock('工具结果', 'outline'))
@@ -1274,6 +1393,13 @@ export class OpenAIParser implements ApiFormatParser {
       case 'text':
         return createTextRenderBlock(block.text)
 
+      case 'thinking':
+        return createCollapsibleBlock(
+          `思考过程 (${block.thinking.length} 字符)`,
+          [createCodeBlock(block.thinking)],
+          { defaultOpen: false, className: 'thinking-block' }
+        )
+
       case 'tool_use':
         return createToolUseRenderBlock(
           block.toolName || '工具调用',
@@ -1322,6 +1448,9 @@ export class OpenAIParser implements ApiFormatParser {
     const badges: BadgeRenderBlock[] = []
     const types = new Set(content.map(b => b.type))
 
+    if (types.has('thinking')) {
+      badges.push(createBadgeBlock('思考', 'secondary'))
+    }
     if (types.has('tool_use')) {
       badges.push(createBadgeBlock('工具调用', 'outline'))
     }

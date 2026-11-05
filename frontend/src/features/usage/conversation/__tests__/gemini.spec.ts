@@ -49,4 +49,103 @@ describe('Gemini conversation parser', () => {
       content: 'Hello!',
     })
   })
+
+  it('parses and renders Gemini parts with thought: true', () => {
+    const rawGeminiResponse = {
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [
+              {
+                text: 'Thinking through the answer...',
+                thought: true,
+              },
+              {
+                text: 'Here is the answer.',
+              },
+            ],
+          },
+        },
+      ],
+    }
+
+    const rendered = renderResponse(rawGeminiResponse, undefined, 'gemini')
+    expect(rendered.blocks).toHaveLength(1)
+    const modelMsg = rendered.blocks[0]
+    if (!modelMsg || modelMsg.type !== 'message') throw new Error('expected message block')
+    expect(modelMsg.role).toBe('assistant')
+    expect(modelMsg.badges?.some(b => b.label === '思考')).toBe(true)
+
+    const thinkingBlock = modelMsg.content.find(b => b.type === 'collapsible')
+    expect(thinkingBlock).toBeDefined()
+    if (thinkingBlock && thinkingBlock.type === 'collapsible') {
+      expect(thinkingBlock.title).toContain('思考过程')
+    }
+
+    const textBlock = modelMsg.content.find(b => b.type === 'text')
+    expect(textBlock).toBeDefined()
+    if (textBlock && textBlock.type === 'text') {
+      expect(textBlock.content).toBe('Here is the answer.')
+    }
+  })
+
+  it('parses Gemini streaming chunks with thought: true', () => {
+    const streamPayload = {
+      metadata: { stream: true },
+      chunks: [
+        {
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [{ text: 'Thinking chunk 1...', thought: true }],
+              },
+            },
+          ],
+        },
+        {
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [{ text: 'Thinking chunk 2...', thought: true }],
+              },
+            },
+          ],
+        },
+        {
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [{ text: 'Final response.' }],
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const rendered = renderResponse(streamPayload, undefined, 'gemini')
+    const modelMsg = rendered.blocks[0]
+    if (!modelMsg || modelMsg.type !== 'message') throw new Error('expected message block')
+    expect(modelMsg.role).toBe('assistant')
+    expect(modelMsg.badges?.some(b => b.label === '思考')).toBe(true)
+
+    const thinkingBlock = modelMsg.content.find(b => b.type === 'collapsible')
+    expect(thinkingBlock).toBeDefined()
+    if (thinkingBlock && thinkingBlock.type === 'collapsible') {
+      expect(thinkingBlock.title).toContain('思考过程')
+      const firstCode = thinkingBlock.content[0]
+      if (firstCode && firstCode.type === 'code') {
+        expect(firstCode.code).toBe('Thinking chunk 1...Thinking chunk 2...')
+      }
+    }
+
+    const textBlock = modelMsg.content.find(b => b.type === 'text')
+    if (textBlock && textBlock.type === 'text') {
+      expect(textBlock.content).toBe('Final response.')
+    }
+  })
 })
