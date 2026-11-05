@@ -1,9 +1,9 @@
 <template>
-  <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2">
+  <div class="pointer-events-none fixed inset-x-0 top-4 z-[100] flex justify-center px-4 max-lg:top-20">
     <TransitionGroup
       name="toast"
       tag="div"
-      class="flex flex-col items-center gap-2"
+      class="pointer-events-auto flex flex-col items-center gap-2"
     >
       <ToastWithProgress
         v-for="toast in toasts"
@@ -56,15 +56,5 @@ const { toasts, removeToast } = useToast()
 /* 移动动画 */
 .toast-move {
   transition: all 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
-}
-
-/* 响应式调整 */
-@media (max-width: 640px) {
-  div.fixed {
-    top: 1rem;
-    left: 1rem;
-    right: 1rem;
-    transform: none;
-  }
 }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div
     role="alert"
-    class="flex items-start gap-4 px-6 py-3 rounded-lg border shadow-sm max-w-md"
+    class="flex items-start gap-4 px-6 py-3 rounded-lg border shadow-sm max-w-md max-lg:w-full"
     :class="variantClasses"
   >
     <!-- 图标带圆形进度环 -->
