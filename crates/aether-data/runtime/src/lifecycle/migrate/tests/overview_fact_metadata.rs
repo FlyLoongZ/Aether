@@ -174,12 +174,27 @@ VALUES('employee-key','owner',repeat('e',64),false),
     assert_eq!(stored_rows(&pool).await, before_rows);
 
     // The maintained bootstrap fragment must install the same read model.
-    let bootstrap =
-        include_str!("../../../../schema/bootstrap/postgres/190_overview_analytics.sql");
-    let view_start = bootstrap
+    let bootstrap = EMPTY_DATABASE_SNAPSHOT_SQL;
+    let function_start = bootstrap
         .find("CREATE OR REPLACE FUNCTION public.usage_customer_billable_amount(")
         .unwrap();
-    sqlx::raw_sql(&bootstrap[view_start..])
+    let function_end = bootstrap[function_start..]
+        .find("END $_$;")
+        .map(|offset| function_start + offset + "END $_$;".len())
+        .unwrap();
+    let view_start = bootstrap
+        .find("CREATE OR REPLACE VIEW public.usage_billing_facts")
+        .unwrap();
+    let view_end = bootstrap[view_start..]
+        .find(";\n\n")
+        .map(|offset| view_start + offset + 2)
+        .unwrap();
+    let bootstrap_sql = format!(
+        "{}\n{}",
+        &bootstrap[function_start..function_end],
+        &bootstrap[view_start..view_end]
+    );
+    sqlx::raw_sql(sqlx::AssertSqlSafe(bootstrap_sql))
         .execute(&pool)
         .await
         .unwrap();

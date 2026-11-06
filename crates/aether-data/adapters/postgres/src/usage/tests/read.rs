@@ -216,15 +216,22 @@ fn usage_billing_facts_total_tokens_uses_canonical_effective_input() {
     let migration =
         include_str!("../../../migrations/20260716000000_fix_usage_billing_facts_total_tokens.sql");
     let bootstrap =
-        include_str!("../../../../../runtime/schema/bootstrap/postgres/100_usage_capture.sql");
+        include_str!("../../../../../runtime/schema/bootstrap/postgres/000_snapshot.sql");
 
-    for sql in [migration, bootstrap] {
-        assert!(sql.contains("WHEN settlement.billing_effective_input_tokens IS NOT NULL"));
-        assert!(sql.contains("GREATEST(settlement.billing_effective_input_tokens, 0)"));
-        assert!(sql.contains("WHEN settlement.billing_total_input_context IS NOT NULL"));
-        assert!(sql.contains("NULLIF(GREATEST(COALESCE(usage_rows.total_tokens, 0), 0), 0)"));
-        assert!(!sql.contains("THEN COALESCE(settlement.billing_input_tokens, 0)"));
-    }
+    // The executable migration is hand-written; keep exact guards on it.
+    assert!(migration.contains("WHEN settlement.billing_effective_input_tokens IS NOT NULL"));
+    assert!(migration.contains("GREATEST(settlement.billing_effective_input_tokens, 0)"));
+    assert!(migration.contains("WHEN settlement.billing_total_input_context IS NOT NULL"));
+    assert!(migration.contains("NULLIF(GREATEST(COALESCE(usage_rows.total_tokens, 0), 0), 0)"));
+    assert!(!migration.contains("THEN COALESCE(settlement.billing_input_tokens, 0)"));
+
+    // The snapshot is a pg_dump re-render: extra parentheses and explicit casts
+    // are expected, but the canonical-input guard must still be spelled out.
+    assert!(bootstrap.contains("WHEN (settlement.billing_effective_input_tokens IS NOT NULL)"));
+    assert!(bootstrap.contains("GREATEST(settlement.billing_effective_input_tokens, (0)::bigint)"));
+    assert!(bootstrap.contains("WHEN (settlement.billing_total_input_context IS NOT NULL)"));
+    assert!(bootstrap.contains("NULLIF(GREATEST(COALESCE(usage_rows.total_tokens, 0), 0), 0)"));
+    assert!(!bootstrap.contains("THEN COALESCE(settlement.billing_input_tokens, 0)"));
 }
 
 #[test]

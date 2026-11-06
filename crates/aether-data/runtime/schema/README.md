@@ -100,17 +100,15 @@ by logical schema or the normal driver fragments. Keep it small and explicit.
 | Postgres baseline | `../../adapters/postgres/migrations/20260403000000_baseline.sql` | `drivers/postgres/baseline/manifest.txt` |
 | Postgres empty-database snapshot | `aether-data` build output (`OUT_DIR/empty_database_snapshot.sql`) | `bootstrap/postgres/manifest.txt` |
 
-Driver baseline source manifests are kept as a small set of numbered SQL
-fragments. Postgres uses execution-phase fragments so the pg_dump ordering
-remains byte-for-byte stable when composed:
+The Postgres baseline is composed from `drivers/postgres/baseline/` (001–006).
 
-- `001_types_and_tables.sql`
-- `002_defaults.sql`
-- `003_constraints.sql`
-- `004_indexes.sql`
-- `005_foreign_keys.sql`
-- `006_footer.sql`
-- `100_*` extension files for empty-database snapshot-only additions
+The empty-database snapshot is composed from three files:
+
+- `000_snapshot.sql` — schema dump at the snapshot cutoff
+- `001_seed.sql` — rows required by a fresh install
+- `002_footer.sql` — SQLx `search_path` footer
+
+`000_snapshot.sql` is post-processed, not a raw dump. Regenerate it from a reference database with all migrations through `EMPTY_DATABASE_SNAPSHOT_CUTOFF_VERSION`. It requires **PostgreSQL 18 or newer**: it is `pg_dump` output from an 18.x server, which is not guaranteed to restore into an older major version. Its DDL has no `IF NOT EXISTS` guards, so bootstrap applies it only when the `public` schema contains no user objects; databases with pre-existing public objects use the normal, idempotent migration path. The post-processing must keep `usage_customer_billable_amount` marked `PARALLEL SAFE` (restored by migration `20261103000000`): regenerating from a reference database that has not run that migration would silently reintroduce the `PARALLEL UNSAFE` downgrade from `20261008000000`.
 
 The Rust migration tests compose these manifests too, so fragment drift is
 caught during `cargo test -p aether-data split_baseline_sources_match_executable_migrations`.
