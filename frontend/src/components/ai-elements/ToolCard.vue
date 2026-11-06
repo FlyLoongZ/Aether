@@ -41,7 +41,7 @@
             v-if="lineCount > 1"
             class="text-[11px] text-muted-foreground shrink-0 hidden sm:inline"
           >
-            ({{ lineCount }} 行)
+            {{ t('ui.aiLineCountParen', { count: lineCount }) }}
           </span>
         </div>
 
@@ -51,7 +51,7 @@
             role="button"
             tabindex="0"
             class="p-1 rounded text-muted-foreground/70 hover:text-foreground hover:bg-muted/60 transition-colors flex items-center justify-center cursor-pointer"
-            :title="copied ? '已复制' : '复制内容'"
+            :title="copied ? t('ui.aiCopied') : t('ui.aiCopyContent')"
             @click.stop="handleCopy"
             @keydown.enter.stop="handleCopy"
           >
@@ -79,7 +79,7 @@
         class="p-3 bg-muted/20 border-b border-border/40 text-xs"
       >
         <div class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1">
-          <span>输入参数</span>
+          <span>{{ t('ui.aiToolInput') }}</span>
         </div>
         <pre class="m-0 p-2.5 rounded bg-muted/60 font-mono text-xs overflow-x-auto whitespace-pre-wrap break-words leading-relaxed text-foreground/90 border border-border/40">{{ formattedInput }}</pre>
       </div>
@@ -91,12 +91,12 @@
         :class="isError ? 'bg-destructive/[0.04]' : 'bg-muted/10'"
       >
         <div class="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center justify-between">
-          <span>{{ isError ? '错误信息' : '执行结果' }}</span>
+          <span>{{ isError ? t('ui.errorMessage') : t('ui.aiExecutionResult') }}</span>
           <span
             v-if="charCount > 0"
             class="text-[11px] font-mono text-muted-foreground/80 lowercase"
           >
-            {{ charCount }} 字符
+            {{ t('ui.aiCharCount', { count: charCount }) }}
           </span>
         </div>
 
@@ -119,7 +119,7 @@
               class="px-2.5 py-1 text-xs font-medium text-primary bg-background/90 hover:bg-background border border-border/80 rounded-md shadow-xs transition-colors flex items-center gap-1"
               @click="expanded = true"
             >
-              <span>展开全部内容 (共 {{ lineCount }} 行)</span>
+              <span>{{ t('ui.aiExpandAllContent', { count: lineCount }) }}</span>
             </button>
           </div>
         </div>
@@ -133,7 +133,7 @@
             class="text-xs text-muted-foreground hover:text-foreground transition-colors"
             @click="expanded = false"
           >
-            收起内容
+            {{ t('ui.aiCollapseContent') }}
           </button>
         </div>
       </div>
@@ -146,6 +146,8 @@ import { ref, computed } from 'vue'
 import { Wrench, Check, Copy, ChevronRight, AlertCircle, CheckCircle2 } from '@lucide/vue'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Badge } from '@/components/ui'
 import { useClipboard } from '@/composables/useClipboard'
+import { useI18n } from '@/i18n'
+
 
 const props = withDefaults(defineProps<{
   /** 工具名称或标题 */
@@ -168,6 +170,8 @@ const props = withDefaults(defineProps<{
   isError: false,
   defaultOpen: true,
 })
+
+const { t } = useI18n()
 
 const isOpen = ref(props.defaultOpen)
 const expanded = ref(false)

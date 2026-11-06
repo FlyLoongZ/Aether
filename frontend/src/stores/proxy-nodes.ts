@@ -1,3 +1,4 @@
+import { translate } from '@/i18n'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
@@ -26,7 +27,7 @@ export const useProxyNodesStore = defineStore('proxy-nodes', () => {
       total.value = data.total
       fetched.value = true
     } catch (err: unknown) {
-      error.value = parseApiError(err, '获取代理节点列表失败')
+      error.value = parseApiError(err, translate('ui.failedToLoadProxyNodes'))
     } finally {
       loading.value = false
     }
@@ -46,7 +47,7 @@ export const useProxyNodesStore = defineStore('proxy-nodes', () => {
       await fetchNodes()
       return result
     } catch (err: unknown) {
-      error.value = parseApiError(err, '创建手动代理节点失败')
+      error.value = parseApiError(err, translate('ui.failedToCreateManualProxyNode'))
       throw err
     } finally {
       loading.value = false
@@ -61,7 +62,7 @@ export const useProxyNodesStore = defineStore('proxy-nodes', () => {
       await fetchNodes()
       return result
     } catch (err: unknown) {
-      error.value = parseApiError(err, '更新手动代理节点失败')
+      error.value = parseApiError(err, translate('ui.failedToUpdateManualProxyNode'))
       throw err
     } finally {
       loading.value = false
@@ -76,7 +77,7 @@ export const useProxyNodesStore = defineStore('proxy-nodes', () => {
       nodes.value = nodes.value.filter(node => node.id !== nodeId)
       total.value = Math.max(0, total.value - 1)
     } catch (err: unknown) {
-      error.value = parseApiError(err, '删除代理节点失败')
+      error.value = parseApiError(err, translate('ui.failedToDeleteProxyNode'))
       throw err
     } finally {
       loading.value = false

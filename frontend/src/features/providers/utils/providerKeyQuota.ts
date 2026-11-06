@@ -1,0 +1,231 @@
+import { translate as t } from '@/i18n'
+import type {
+  ProviderKeyStatusSnapshot,
+  QuotaStatusSnapshot,
+  QuotaWindowSnapshot,
+} from '@/api/endpoints/types/statusSnapshot'
+import type { UpstreamMetadata } from '@/api/endpoints/types/provider'
+import { getCodexQuotaWindowPresentation } from '@/features/providers/utils/codexQuotaWindow'
+
+export interface ProviderKeyQuotaCarrier {
+  account_quota?: string | null
+  status_snapshot?: ProviderKeyStatusSnapshot | null
+  upstream_metadata?: UpstreamMetadata | null
+}
+
+function normalizeText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const text = value.trim()
+  return text || null
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  if (value < 0) return 0
+  if (value > 100) return 100
+  return value
+}
+
+function formatPercent(value: number): string {
+  return `${clampPercent(value).toFixed(1)}%`
+}
+
+function getQuotaSnapshot(
+  input: ProviderKeyQuotaCarrier,
+): QuotaStatusSnapshot | null {
+  return input.status_snapshot?.quota ?? null
+}
+
+function getQuotaProviderType(
+  quota: QuotaStatusSnapshot | null | undefined,
+  fallbackProviderType?: string | null,
+): string {
+  const snapshotProviderType = normalizeText(quota?.provider_type)?.toLowerCase()
+  if (snapshotProviderType) return snapshotProviderType
+  return normalizeText(fallbackProviderType)?.toLowerCase() || ''
+}
+
+function getQuotaWindows(
+  quota: QuotaStatusSnapshot | null | undefined,
+): QuotaWindowSnapshot[] {
+  return Array.isArray(quota?.windows) ? quota.windows : []
+}
+
+function getQuotaWindowRemainingPercent(
+  window: QuotaWindowSnapshot | null | undefined,
+): number | null {
+  if (!window) return null
+  if (typeof window.remaining_ratio === 'number') {
+    return clampPercent(window.remaining_ratio * 100)
+  }
+  if (typeof window.used_ratio === 'number') {
+    return clampPercent((1 - window.used_ratio) * 100)
+  }
+  if (typeof window.limit_value === 'number' && window.limit_value > 0) {
+    if (typeof window.remaining_value === 'number') {
+      return clampPercent((window.remaining_value / window.limit_value) * 100)
+    }
+    if (typeof window.used_value === 'number') {
+      return clampPercent((1 - (window.used_value / window.limit_value)) * 100)
+    }
+  }
+  return null
+}
+
+function getQuotaWindow(
+  quota: QuotaStatusSnapshot | null | undefined,
+  code: string,
+): QuotaWindowSnapshot | null {
+  const normalizedCode = code.trim().toLowerCase()
+  return getQuotaWindows(quota).find(window => normalizeText(window.code)?.toLowerCase() === normalizedCode) ?? null
+}
+
+function getQuotaWindowsByScope(
+  quota: QuotaStatusSnapshot | null | undefined,
+  scope: string,
+): QuotaWindowSnapshot[] {
+  const normalizedScope = scope.trim().toLowerCase()
+  return getQuotaWindows(quota).filter(window => normalizeText(window.scope)?.toLowerCase() === normalizedScope)
+}
+
+function formatQuotaValue(value: number | null | undefined): string {
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized)) return '0'
+  const rounded = Math.round(normalized)
+  if (Math.abs(normalized - rounded) < 1e-6) {
+    return String(rounded)
+  }
+  return normalized.toFixed(1)
+}
+
+function getQuotaWindowValueText(window: QuotaWindowSnapshot | null | undefined): string | null {
+  if (!window || typeof window.limit_value !== 'number' || window.limit_value <= 0) return null
+  if (typeof window.remaining_value === 'number') {
+    return `${formatQuotaValue(window.remaining_value)}/${formatQuotaValue(window.limit_value)}`
+  }
+  if (typeof window.used_value === 'number') {
+    return `${formatQuotaValue(Math.max(window.limit_value - window.used_value, 0))}/${formatQuotaValue(window.limit_value)}`
+  }
+  return null
+}
+
+function getCodexQuotaText(quota: QuotaStatusSnapshot): string | null {
+  const parts: string[] = []
+  for (const window of getQuotaWindows(quota)) {
+    const presentation = getCodexQuotaWindowPresentation(window)
+    const remainingPercent = getQuotaWindowRemainingPercent(window)
+    if (!presentation || remainingPercent == null) continue
+    parts.push(t('providers.migration.remaining9f01ec', { value: String(presentation.label), value_2: String(formatPercent(remainingPercent)) }))
+  }
+  if (parts.length > 0) return parts.join(' | ')
+
+  if (quota.credits?.has_credits === true && typeof quota.credits.balance === 'number') {
+    return t('providers.migration.credits57495d', { value: String(quota.credits.balance.toFixed(2)) })
+  }
+  if (quota.credits?.has_credits === true) return t('providers.migration.creditsAvailable02d50c')
+  if (quota.credits?.has_credits === false) return t('providers.migration.noCreditsAvailable2c5d3a')
+
+  return normalizeText(quota.label)
+}
+
+function getKiroQuotaText(quota: QuotaStatusSnapshot): string | null {
+  const code = normalizeText(quota.code)?.toLowerCase()
+  if (code === 'banned') {
+    return normalizeText(quota.label) || t('ui.accountBanned210dc8d')
+  }
+
+  const window = getQuotaWindow(quota, 'usage') ?? getQuotaWindowsByScope(quota, 'account')[0] ?? null
+  const remainingPercent = getQuotaWindowRemainingPercent(window)
+  if (typeof window?.remaining_value === 'number' && typeof window.limit_value === 'number' && window.limit_value > 0 && window.remaining_value <= 0) {
+    return t('providers.migration.remaining3e9a48', { value: String(formatQuotaValue(window.remaining_value)), value_2: String(formatQuotaValue(window.limit_value)) })
+  }
+  if (remainingPercent != null) {
+    if (typeof window?.used_value === 'number' && typeof window.limit_value === 'number' && window.limit_value > 0) {
+      return t('providers.migration.remaining40a2ab', { value: String(formatPercent(remainingPercent)), value_2: String(formatQuotaValue(window.used_value)), value_3: String(formatQuotaValue(window.limit_value)) })
+    }
+    return t('providers.migration.remaining43f955', { value: String(formatPercent(remainingPercent)) })
+  }
+
+  if (typeof window?.remaining_value === 'number' && typeof window.limit_value === 'number' && window.limit_value > 0) {
+    return t('providers.migration.remaining3e9a48', { value: String(formatQuotaValue(window.remaining_value)), value_2: String(formatQuotaValue(window.limit_value)) })
+  }
+
+  return normalizeText(quota.label)
+}
+
+function getXaiQuotaText(quota: QuotaStatusSnapshot): string | null {
+  const parts: string[] = []
+  const usageText = getKiroQuotaText(quota)
+  if (usageText) parts.push(usageText)
+
+  const prepaid = getQuotaWindow(quota, 'prepaid')
+  if (typeof prepaid?.remaining_value === 'number') {
+    parts.push(t('providers.migration.prepaidRemaining925e85', { value: String(formatQuotaValue(prepaid.remaining_value)) }))
+  }
+
+  const onDemand = getQuotaWindow(quota, 'on_demand')
+  const onDemandRemaining = getQuotaWindowRemainingPercent(onDemand)
+  if (onDemandRemaining != null) {
+    const valueText = getQuotaWindowValueText(onDemand)
+    parts.push(t('providers.migration.onDemandRemainingee3571', { value: String(formatPercent(onDemandRemaining)), value_2: String(valueText ? ` (${valueText})` : '') }))
+  } else if (typeof onDemand?.remaining_value === 'number') {
+    parts.push(t('providers.migration.onDemandRemaining91ba64', { value: String(formatQuotaValue(onDemand.remaining_value)) }))
+  }
+
+  if (parts.length > 0) return parts.join(' | ')
+  return normalizeText(quota.label)
+}
+
+function getAntigravityQuotaText(quota: QuotaStatusSnapshot): string | null {
+  const code = normalizeText(quota.code)?.toLowerCase()
+  if (code === 'forbidden') {
+    return normalizeText(quota.label) || t('ui.accessRestricted')
+  }
+
+  const remainingList = getQuotaWindowsByScope(quota, 'model')
+    .map(getQuotaWindowRemainingPercent)
+    .filter((value): value is number => value != null)
+
+  if (remainingList.length === 0) return normalizeText(quota.label)
+
+  const minimumRemaining = Math.min(...remainingList)
+  if (remainingList.length === 1) {
+    return t('providers.migration.remaining43f955', { value: String(formatPercent(minimumRemaining)) })
+  }
+  return t('providers.migration.lowestRemainingModelsb37cfc', { value: String(formatPercent(minimumRemaining)), value_2: String(remainingList.length) })
+}
+
+export function getLegacyAccountQuotaText(
+  input: ProviderKeyQuotaCarrier,
+): string | null {
+  return normalizeText(input.account_quota)
+}
+
+export function getQuotaSnapshotFallbackText(
+  input: ProviderKeyQuotaCarrier,
+  fallbackProviderType?: string | null,
+): string | null {
+  const quota = getQuotaSnapshot(input)
+  if (!quota) return null
+
+  const providerType = getQuotaProviderType(quota, fallbackProviderType)
+  switch (providerType) {
+    case 'codex':
+      return getCodexQuotaText(quota)
+    case 'kiro':
+      return getKiroQuotaText(quota)
+    case 'xai':
+      return getXaiQuotaText(quota)
+    case 'antigravity':
+      return getAntigravityQuotaText(quota)
+    default:
+      return normalizeText(quota.label)
+  }
+}
+
+export function getQuotaDisplayText(
+  input: ProviderKeyQuotaCarrier,
+  fallbackProviderType?: string | null,
+): string | null {
+  return getQuotaSnapshotFallbackText(input, fallbackProviderType) || getLegacyAccountQuotaText(input)
+}

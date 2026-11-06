@@ -91,7 +91,7 @@
         <img
           v-if="block.src"
           :src="block.src"
-          :alt="block.alt || '图片'"
+          :alt="block.alt || t('ui.image')"
           class="max-w-full max-h-[400px] rounded-lg object-contain"
         >
         <div
@@ -99,7 +99,7 @@
           class="flex items-center gap-2 text-muted-foreground text-xs"
         >
           <ImageIcon class="w-4 h-4" />
-          <span>{{ block.mimeType || block.alt || '图片' }}</span>
+          <span>{{ block.mimeType || block.alt || t('ui.image') }}</span>
         </div>
       </div>
 
@@ -150,6 +150,8 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from '@/i18n'
+
 import { AlertCircle, ChevronRight, Image as ImageIcon } from '@lucide/vue'
 import Badge from '@/components/ui/badge.vue'
 import { ToolCard, ReasoningCard, MessageCard, CodeBlockCard } from '@/components/ai-elements'
@@ -158,6 +160,8 @@ import type { RenderBlock, CollapsibleRenderBlock, CodeRenderBlock, TextRenderBl
 defineProps<{
   blocks: RenderBlock[]
 }>()
+
+const { t } = useI18n()
 
 function isThinkingBlock(block: CollapsibleRenderBlock): boolean {
   return block.title?.includes('思考') || block.className?.includes('thinking') || false
@@ -175,4 +179,5 @@ function isAllToolBlocks(blocks: RenderBlock[]): boolean {
   if (!blocks || blocks.length === 0) return false
   return blocks.every(b => b.type === 'tool_result' || b.type === 'tool_use')
 }
+
 </script>

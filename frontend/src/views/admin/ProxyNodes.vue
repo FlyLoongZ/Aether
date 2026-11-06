@@ -4,16 +4,16 @@
       <div class="flex flex-wrap items-center justify-between gap-3 border-b p-4">
         <div>
           <h2 class="text-lg font-semibold">
-            手动代理节点
+            {{ t('ui.manualProxyNodes') }}
           </h2>
           <p class="text-sm text-muted-foreground">
-            管理 HTTP/SOCKS 代理出口；请求由网关直接转发到该代理。
+            {{ t('ui.manualProxyNodesDescription') }}
           </p>
         </div>
         <div class="flex items-center gap-2">
           <Input
             v-model="searchQuery"
-            placeholder="搜索名称或地址"
+            :placeholder="t('ui.searchProxyNodePlaceholder')"
             class="w-56"
           />
           <Button
@@ -21,10 +21,10 @@
             :disabled="store.loading"
             @click="refresh"
           >
-            刷新
+            {{ t('ui.refresh') }}
           </Button>
           <Button @click="openCreate">
-            添加节点
+            {{ t('ui.addNode') }}
           </Button>
         </div>
       </div>
@@ -32,15 +32,15 @@
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>名称</TableHead>
-            <TableHead>代理地址</TableHead>
-            <TableHead>地区</TableHead>
-            <TableHead>状态</TableHead>
-            <TableHead>最后使用</TableHead>
-            <TableHead>请求</TableHead>
-            <TableHead>失败</TableHead>
+            <TableHead>{{ t('ui.nodeNameLabel') }}</TableHead>
+            <TableHead>{{ t('ui.nodeProxyAddress') }}</TableHead>
+            <TableHead>{{ t('ui.nodeRegion') }}</TableHead>
+            <TableHead>{{ t('ui.nodeStatus') }}</TableHead>
+            <TableHead>{{ t('ui.nodeLastUsed') }}</TableHead>
+            <TableHead>{{ t('ui.nodeRequests') }}</TableHead>
+            <TableHead>{{ t('ui.nodeFailures') }}</TableHead>
             <TableHead class="text-right">
-              操作
+              {{ t('ui.nodeActions') }}
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -72,21 +72,21 @@
                   :disabled="testingId === node.id"
                   @click="testNode(node)"
                 >
-                  {{ testingId === node.id ? '测试中' : '测试' }}
+                  {{ testingId === node.id ? t('ui.testing') : t('ui.test') }}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   @click="openEdit(node)"
                 >
-                  编辑
+                  {{ t('ui.nodeEdit') }}
                 </Button>
                 <Button
                   variant="destructive"
                   size="sm"
                   @click="removeNode(node)"
                 >
-                  删除
+                  {{ t('ui.nodeDelete') }}
                 </Button>
               </div>
             </TableCell>
@@ -96,14 +96,14 @@
               colspan="8"
               class="py-10 text-center text-muted-foreground"
             >
-              暂无代理节点
+              {{ t('ui.noProxyNodes') }}
             </TableCell>
           </TableRow>
         </TableBody>
       </Table>
 
       <div class="flex items-center justify-between border-t p-4 text-sm text-muted-foreground">
-        <span>共 {{ filteredNodes.length }} 个节点</span>
+        <span>{{ t('ui.totalNodes', { count: filteredNodes.length }) }}</span>
         <div class="flex items-center gap-2">
           <Button
             variant="outline"
@@ -111,7 +111,7 @@
             :disabled="currentPage <= 1"
             @click="currentPage -= 1"
           >
-            上一页
+            {{ t('ui.pagePrevious') }}
           </Button>
           <span>{{ currentPage }} / {{ totalPages }}</span>
           <Button
@@ -120,7 +120,7 @@
             :disabled="currentPage >= totalPages"
             @click="currentPage += 1"
           >
-            下一页
+            {{ t('ui.pageNext') }}
           </Button>
         </div>
       </div>
@@ -132,12 +132,12 @@
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{{ editingNode ? '编辑手动代理节点' : '添加手动代理节点' }}</DialogTitle>
-          <DialogDescription>代理密码不会通过接口返回；留空表示不修改。</DialogDescription>
+          <DialogTitle>{{ editingNode ? t('ui.editManualProxyNode') : t('ui.addManualProxyNode') }}</DialogTitle>
+          <DialogDescription>{{ t('ui.proxyNodePasswordHint') }}</DialogDescription>
         </DialogHeader>
         <div class="space-y-4">
           <div class="space-y-2">
-            <Label for="proxy-node-name">名称</Label>
+            <Label for="proxy-node-name">{{ t('ui.nodeNameLabel') }}</Label>
             <Input
               id="proxy-node-name"
               v-model="form.name"
@@ -145,16 +145,16 @@
             />
           </div>
           <div class="space-y-2">
-            <Label for="proxy-node-url">代理地址</Label>
+            <Label for="proxy-node-url">{{ t('ui.nodeProxyAddress') }}</Label>
             <Input
               id="proxy-node-url"
               v-model="form.proxy_url"
-              placeholder="http://127.0.0.1:8080 或 socks5://..."
+              :placeholder="t('ui.proxyNodeUrlPlaceholder')"
             />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="space-y-2">
-              <Label for="proxy-node-username">用户名</Label>
+              <Label for="proxy-node-username">{{ t('ui.nodeUsername') }}</Label>
               <Input
                 id="proxy-node-username"
                 v-model="form.username"
@@ -162,7 +162,7 @@
               />
             </div>
             <div class="space-y-2">
-              <Label for="proxy-node-password">密码</Label>
+              <Label for="proxy-node-password">{{ t('ui.nodePassword') }}</Label>
               <Input
                 id="proxy-node-password"
                 v-model="form.password"
@@ -172,7 +172,7 @@
             </div>
           </div>
           <div class="space-y-2">
-            <Label for="proxy-node-region">地区</Label>
+            <Label for="proxy-node-region">{{ t('ui.nodeRegion') }}</Label>
             <Input
               id="proxy-node-region"
               v-model="form.region"
@@ -186,13 +186,13 @@
             :disabled="saving"
             @click="dialogOpen = false"
           >
-            取消
+            {{ t('ui.nodeCancel') }}
           </Button>
           <Button
             :disabled="saving"
             @click="saveNode"
           >
-            {{ saving ? '保存中' : '保存' }}
+            {{ saving ? t('ui.saving') : t('ui.save') }}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -223,10 +223,12 @@ import {
 } from '@/components/ui'
 import { proxyNodesApi, type ProxyNode } from '@/api/proxy-nodes'
 import { useProxyNodesStore } from '@/stores/proxy-nodes'
+import { useI18n } from '@/i18n'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
 import { parseApiError } from '@/utils/errorParser'
 
+const { t } = useI18n()
 const store = useProxyNodesStore()
 const { confirm } = useConfirm()
 const { success, error: toastError } = useToast()
@@ -288,7 +290,7 @@ async function refresh() {
 
 async function saveNode() {
   if (!form.value.name.trim() || !form.value.proxy_url.trim()) {
-    toastError('名称和代理地址不能为空')
+    toastError(t('ui.proxyNodeNameRequired'))
     return
   }
   saving.value = true
@@ -302,15 +304,15 @@ async function saveNode() {
     }
     if (editingNode.value) {
       await store.updateManualNode(editingNode.value.id, payload)
-      success('手动代理节点已更新')
+      success(t('ui.proxyNodeUpdated'))
     } else {
       await store.createManualNode(payload)
-      success('手动代理节点已创建')
+      success(t('ui.proxyNodeAdded'))
     }
     dialogOpen.value = false
     resetForm()
   } catch (err) {
-    toastError(parseApiError(err, '保存代理节点失败'))
+    toastError(parseApiError(err, t('ui.failedToSaveProxyNode')))
   } finally {
     saving.value = false
   }
@@ -318,15 +320,15 @@ async function saveNode() {
 
 async function removeNode(node: ProxyNode) {
   const ok = await confirm({
-    title: '删除代理节点',
-    message: `确定删除「${node.name}」？引用该节点的 provider / endpoint / key 配置会被清空。`,
+    title: t('ui.deleteProxyNodeTitle'),
+    message: t('ui.confirmDeleteProxyNode', { name: node.name }),
   })
   if (!ok) return
   try {
     await store.deleteNode(node.id)
-    success('代理节点已删除')
+    success(t('ui.proxyNodeDeleted'))
   } catch (err) {
-    toastError(parseApiError(err, '删除代理节点失败'))
+    toastError(parseApiError(err, t('ui.failedToDeleteProxyNode')))
   }
 }
 
@@ -335,12 +337,12 @@ async function testNode(node: ProxyNode) {
   try {
     const result = await proxyNodesApi.testNode(node.id)
     if (result.success) {
-      success(`连通性正常${result.latency_ms != null ? `（${result.latency_ms}ms）` : ''}`)
+      success(`${t('ui.connectivityOk')}${result.latency_ms != null ? ` (${result.latency_ms}ms)` : ''}`)
     } else {
-      toastError(result.error || '连通性测试失败')
+      toastError(result.error || t('ui.connectivityFailed'))
     }
   } catch (err) {
-    toastError(parseApiError(err, '连通性测试失败'))
+    toastError(parseApiError(err, t('ui.connectivityFailed')))
   } finally {
     testingId.value = null
   }

@@ -13,7 +13,7 @@
         v-if="showCopy"
         type="button"
         class="flex items-center gap-1 text-[11px] hover:text-foreground transition-colors p-1 rounded"
-        :title="copied ? '已复制' : '复制代码'"
+        :title="copied ? t('ui.aiCopied') : t('ui.aiCopyCode')"
         @click="handleCopy"
       >
         <Check
@@ -24,7 +24,7 @@
           v-else
           class="w-3.5 h-3.5"
         />
-        <span>{{ copied ? '已复制' : '复制' }}</span>
+        <span>{{ copied ? t('ui.aiCopied') : t('ui.aiCopy') }}</span>
       </button>
     </div>
 
@@ -44,7 +44,7 @@
           class="px-2.5 py-1 text-xs font-medium text-primary bg-background/90 hover:bg-background border border-border/80 rounded-md shadow-xs transition-colors"
           @click="expanded = true"
         >
-          展开全部代码 (共 {{ lineCount }} 行)
+          {{ t('ui.aiExpandAllCode', { count: lineCount }) }}
         </button>
       </div>
     </div>
@@ -58,7 +58,7 @@
         class="text-xs text-muted-foreground hover:text-foreground transition-colors"
         @click="expanded = false"
       >
-        收起代码
+        {{ t('ui.aiCollapseCode') }}
       </button>
     </div>
   </div>
@@ -68,6 +68,8 @@
 import { ref, computed } from 'vue'
 import { Check, Copy } from '@lucide/vue'
 import { useClipboard } from '@/composables/useClipboard'
+import { useI18n } from '@/i18n'
+
 
 const props = withDefaults(defineProps<{
   code: string
@@ -77,6 +79,8 @@ const props = withDefaults(defineProps<{
   language: '',
   showCopy: true,
 })
+
+const { t } = useI18n()
 
 const expanded = ref(false)
 const copied = ref(false)

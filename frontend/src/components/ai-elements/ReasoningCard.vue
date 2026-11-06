@@ -18,7 +18,7 @@
             v-if="showCharCount"
             class="text-[11px] text-muted-foreground/80 font-mono"
           >
-            ({{ charCount }} 字符)
+            {{ t('ui.aiCharCountParen', { count: charCount }) }}
           </span>
         </div>
 
@@ -27,7 +27,7 @@
             role="button"
             tabindex="0"
             class="p-1 rounded text-muted-foreground/70 hover:text-foreground hover:bg-muted/60 transition-colors flex items-center justify-center cursor-pointer"
-            :title="copied ? '已复制' : '复制思考过程'"
+            :title="copied ? t('ui.aiCopied') : t('ui.aiCopyReasoning')"
             @click.stop="handleCopy"
             @keydown.enter.stop="handleCopy"
           >
@@ -59,6 +59,8 @@ import { ref, computed } from 'vue'
 import { Brain, Check, Copy, ChevronRight } from '@lucide/vue'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui'
 import { useClipboard } from '@/composables/useClipboard'
+import { useI18n } from '@/i18n'
+
 
 const props = withDefaults(defineProps<{
   /** 思考内容 */
@@ -71,6 +73,8 @@ const props = withDefaults(defineProps<{
   title: '思考过程',
   defaultOpen: false,
 })
+
+const { t } = useI18n()
 
 const isOpen = ref(props.defaultOpen)
 const copied = ref(false)
