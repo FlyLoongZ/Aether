@@ -10,7 +10,7 @@ APP_DOCKERFILE="${REPO_ROOT}/Dockerfile.app"
 source "$(dirname "${BASH_SOURCE[0]}")/test_helpers.sh"
 
 assert_line "${COMPOSE_FILE}" \
-    "    image: postgres:15.19@sha256:5f72c7b5bd616308ccfd2e74d6be16fb06364e5eecbb815fe9dc6ab9761d2111"
+    "    image: postgres:18.6@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583"
 assert_line "${COMPOSE_FILE}" \
     "    image: redis:7.4.11-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf"
 

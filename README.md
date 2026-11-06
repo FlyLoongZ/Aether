@@ -35,6 +35,9 @@ Aether 是一个自托管的 AI API 网关，为团队和个人提供多租户�
 
 ## 部署
 
+> [!IMPORTANT]
+> Aether 需要 **PostgreSQL 18 或更高版本**。
+
 ### Docker Compose（推荐：预构建镜像）
 
 ```bash
