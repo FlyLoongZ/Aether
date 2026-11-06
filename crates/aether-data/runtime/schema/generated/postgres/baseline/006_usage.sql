@@ -108,39 +108,6 @@ CREATE INDEX IF NOT EXISTS usage_request_id_idx ON public.usage USING btree (req
 CREATE INDEX IF NOT EXISTS usage_user_id_idx ON public.usage USING btree (user_id);
 CREATE INDEX IF NOT EXISTS usage_wallet_id_idx ON public.usage USING btree (wallet_id);
 
-CREATE TABLE IF NOT EXISTS public.usage_body_blobs (
-    body_ref character varying(160) NOT NULL,
-    request_id character varying(128) NOT NULL,
-    body_field character varying(50) NOT NULL,
-    payload bytea NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL
-);
-
-ALTER TABLE ONLY public.usage_body_blobs ADD CONSTRAINT usage_body_blobs_pkey PRIMARY KEY (body_ref);
-ALTER TABLE ONLY public.usage_body_blobs ADD CONSTRAINT usage_body_blobs_request_id_field_key UNIQUE (request_id, body_field);
-CREATE INDEX IF NOT EXISTS ix_usage_body_blobs_request_id ON public.usage_body_blobs USING btree (request_id);
-ALTER TABLE ONLY public.usage_body_blobs ADD CONSTRAINT usage_body_blobs_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.usage(request_id) ON DELETE CASCADE;
-
-CREATE TABLE IF NOT EXISTS public.usage_http_audits (
-    request_id character varying(128) NOT NULL,
-    request_headers jsonb,
-    provider_request_headers jsonb,
-    response_headers jsonb,
-    client_response_headers jsonb,
-    request_body_state character varying(32),
-    provider_request_body_state character varying(32),
-    response_body_state character varying(32),
-    client_response_body_state character varying(32),
-    body_capture_mode character varying(32) DEFAULT 'none' NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL
-);
-
-ALTER TABLE ONLY public.usage_http_audits ADD CONSTRAINT usage_http_audits_pkey PRIMARY KEY (request_id);
-CREATE INDEX IF NOT EXISTS ix_usage_http_audits_updated_at ON public.usage_http_audits USING btree (updated_at);
-ALTER TABLE ONLY public.usage_http_audits ADD CONSTRAINT usage_http_audits_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.usage(request_id) ON DELETE CASCADE;
-
 CREATE TABLE IF NOT EXISTS public.usage_routing_snapshots (
     request_id character varying(128) NOT NULL,
     candidate_id character varying(160),
@@ -293,16 +260,16 @@ CREATE TABLE IF NOT EXISTS public.usage_http_bodies (
     request_id character varying(128) NOT NULL,
     client_request bytea,
     client_request_encoding character varying(8),
-    client_request_truncated boolean NOT NULL DEFAULT false,
+    client_request_truncated boolean DEFAULT false NOT NULL,
     client_response bytea,
     client_response_encoding character varying(8),
-    client_response_truncated boolean NOT NULL DEFAULT false,
+    client_response_truncated boolean DEFAULT false NOT NULL,
     provider_request bytea,
     provider_request_encoding character varying(8),
-    provider_request_truncated boolean NOT NULL DEFAULT false,
+    provider_request_truncated boolean DEFAULT false NOT NULL,
     provider_response bytea,
     provider_response_encoding character varying(8),
-    provider_response_truncated boolean NOT NULL DEFAULT false,
+    provider_response_truncated boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone NOT NULL
 );
 

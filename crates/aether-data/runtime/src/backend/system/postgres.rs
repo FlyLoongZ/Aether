@@ -601,28 +601,7 @@ WHERE request_count <> 0
             pg_delete_table(tx, "audit_logs", summary).await?;
         }
         AdminSystemPurgeTarget::RequestBodies => {
-            pg_delete_table(tx, "usage_body_blobs", summary).await?;
-            pg_execute_if_table(
-                tx,
-                "usage_http_audits",
-                "usage_http_audit_body_states_cleaned",
-                r#"
-UPDATE public.usage_http_audits
-SET request_body_state = NULL,
-    provider_request_body_state = NULL,
-    response_body_state = NULL,
-    client_response_body_state = NULL,
-    body_capture_mode = 'none',
-    updated_at = NOW()
-WHERE request_body_state IS NOT NULL
-   OR provider_request_body_state IS NOT NULL
-   OR response_body_state IS NOT NULL
-   OR client_response_body_state IS NOT NULL
-   OR body_capture_mode <> 'none'
-"#,
-                summary,
-            )
-            .await?;
+            pg_delete_table(tx, "usage_http_bodies", summary).await?;
         }
         AdminSystemPurgeTarget::Stats => {
             for table in ADMIN_STATS_PURGE_TABLES {
@@ -816,48 +795,18 @@ async fn purge_postgres_request_bodies_batch(
     let limit = i64::try_from(batch_size).unwrap_or(i64::MAX);
     pg_execute_batch_if_table(
         tx,
-        "usage_body_blobs",
-        "usage_body_blobs",
+        "usage_http_bodies",
+        "usage_http_bodies",
         r#"
 WITH doomed AS (
-    SELECT body_ref
-    FROM public.usage_body_blobs
-    ORDER BY body_ref ASC
-    LIMIT $1
-)
-DELETE FROM public.usage_body_blobs AS blobs
-USING doomed
-WHERE blobs.body_ref = doomed.body_ref
-"#,
-        summary,
-        limit,
-    )
-    .await?;
-    pg_execute_batch_if_table(
-        tx,
-        "usage_http_audits",
-        "usage_http_audit_body_states_cleaned",
-        r#"
-WITH batch AS (
     SELECT request_id
-    FROM public.usage_http_audits
-    WHERE request_body_state IS NOT NULL
-       OR provider_request_body_state IS NOT NULL
-       OR response_body_state IS NOT NULL
-       OR client_response_body_state IS NOT NULL
-       OR body_capture_mode <> 'none'
+    FROM public.usage_http_bodies
     ORDER BY request_id ASC
     LIMIT $1
 )
-UPDATE public.usage_http_audits AS audits
-SET request_body_state = NULL,
-    provider_request_body_state = NULL,
-    response_body_state = NULL,
-    client_response_body_state = NULL,
-    body_capture_mode = 'none',
-    updated_at = NOW()
-FROM batch
-WHERE audits.request_id = batch.request_id
+DELETE FROM public.usage_http_bodies AS bodies
+USING doomed
+WHERE bodies.request_id = doomed.request_id
 "#,
         summary,
         limit,
