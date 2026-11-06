@@ -13,12 +13,14 @@ async fn postgres_provider_expense_ledger_migration_preserves_exact_sums_idempot
     };
     let pool = PgPool::connect(server.database_url()).await.unwrap();
     // Exercise only this self-contained migration against an isolated database.
-    sqlx::raw_sql(include_str!(
-        "../../../../schema/bootstrap/postgres/210_provider_expenses.sql"
-    ))
-    .execute(&pool)
-    .await
-    .unwrap();
+    let migration = POSTGRES_MIGRATOR
+        .iter()
+        .find(|migration| migration.version == 20260920120000)
+        .expect("provider expense migration should be embedded");
+    sqlx::raw_sql(migration.sql.as_ref())
+        .execute(&pool)
+        .await
+        .unwrap();
     let repository = crate::repository::billing::SqlxBillingReadRepository::new(pool.clone());
     let input = ProviderExpenseInput {
         client_request_id: uuid::Uuid::new_v4().to_string(),

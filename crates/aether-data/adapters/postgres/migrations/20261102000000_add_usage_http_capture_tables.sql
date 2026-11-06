@@ -18,10 +18,9 @@
 --
 -- Bodies are the bytes that crossed the wire, plus a `*_encoding` marker saying
 -- how to read them (json / text / sse / binary) and a `*_truncated` marker
--- saying the capture stopped early. SEE
--- `crates/aether-data/runtime/schema/bootstrap/postgres/220_usage_http_capture.sql`
--- for why the markers are columns and why both tables ask PostgreSQL not to
--- compress their payload columns.
+-- saying the capture stopped early. Both tables ask PostgreSQL not to
+-- compress their payload columns; the same shape is captured in
+-- `crates/aether-data/runtime/schema/bootstrap/postgres/000_snapshot.sql`.
 --
 -- Both tables carry `created_at` from the request itself, so a plain
 -- `DELETE ... WHERE created_at < cutoff` retires them with an index that

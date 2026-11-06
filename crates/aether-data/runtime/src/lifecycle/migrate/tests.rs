@@ -27,6 +27,15 @@ use crate::lifecycle::bootstrap::postgres::{
     EMPTY_DATABASE_SNAPSHOT_CUTOFF_VERSION, EMPTY_DATABASE_SNAPSHOT_SQL,
 };
 
+// Stamped migrations still create these; the snapshot and follow-up cleanup retire them.
+const SNAPSHOT_RETIRED_TABLES: &[&str] = &[
+    "proxy_node_events",
+    "proxy_node_metrics_1h",
+    "proxy_node_metrics_1m",
+    "usage_body_blobs",
+    "usage_http_audits",
+];
+
 mod customer_billing_upgrade;
 mod dashboard_chart_billing;
 mod dashboard_chart_history;
@@ -42,11 +51,7 @@ mod proxy_tunnel_removal;
 mod scoped_provider_creation;
 mod user_preferences;
 
-/// A clean PostgreSQL database is bootstrapped from the schema snapshot first;
-/// migrations after the privacy/security frontier are intentionally left
-/// pending so their data-preserving changes still execute. Exercise the same
-/// prepare-then-run sequence used by gateway startup before asserting that the
-/// database is current.
+/// Exercise the same bootstrap-then-migrate sequence used by gateway startup.
 async fn prepare_and_apply_clean_postgres_database(pool: &PgPool) {
     let pending = prepare_database_for_startup(pool)
         .await
@@ -181,70 +186,26 @@ fn empty_database_snapshot_covers_current_cutoff_versions() {
         .into_iter()
         .map(|migration| migration.version)
         .collect::<Vec<_>>();
+    // Hard-coded anchors: neither the cutoff nor the stamped range may drift
+    // without an explicit snapshot regeneration.
+    assert_eq!(EMPTY_DATABASE_SNAPSHOT_CUTOFF_VERSION, 20261103000000);
+    assert_eq!(versions.first().copied(), Some(20260403000000));
+    assert_eq!(versions.last().copied(), Some(20261103000000));
+    assert!(
+        versions.windows(2).all(|pair| pair[0] < pair[1]),
+        "stamped migrations must be strictly ordered"
+    );
 
+    // Stamp set is exactly the migrations up to the cutoff. Adding a newer
+    // migration leaves both sides unchanged.
+    let expected = all_up_migrations()
+        .into_iter()
+        .filter(|migration| migration.version <= EMPTY_DATABASE_SNAPSHOT_CUTOFF_VERSION)
+        .map(|migration| migration.version)
+        .collect::<Vec<_>>();
     assert_eq!(
-        versions,
-        vec![
-            20260403000000,
-            20260406000000,
-            20260410000000,
-            20260413020000,
-            20260413030000,
-            20260415000000,
-            20260418000000,
-            20260421000000,
-            20260422110000,
-            20260422120000,
-            20260423000000,
-            20260424000000,
-            20260428000000,
-            20260502000000,
-            20260505000000,
-            20260505130000,
-            20260507000000,
-            20260507120000,
-            20260508000000,
-            20260509000000,
-            20260509120000,
-            20260510000000,
-            20260510120000,
-            20260511000000,
-            20260511120000,
-            20260511130000,
-            20260512000000,
-            20260512090000,
-            20260512110000,
-            20260515000000,
-            20260516000000,
-            20260518000000,
-            20260519000000,
-            20260519120000,
-            20260519130000,
-            20260520000000,
-            20260520010000,
-            20260522000000,
-            20260524000000,
-            20260527000000,
-            20260528000000,
-            20260528010000,
-            20260528020000,
-            20260711000000,
-            20260715000000,
-            20260715130000,
-            20260715130100,
-            20260716000000,
-            20260718000000,
-            20260718010000,
-            20260720000000,
-            20260727000000,
-            20260731000000,
-            20260814000000,
-            20260815000000,
-            20260816000000,
-            20260821000000,
-            20260821120000,
-            20260821130000,
-        ]
+        versions, expected,
+        "snapshot must stamp exactly the pre-cutoff migrations"
     );
 }
 
@@ -256,6 +217,7 @@ fn empty_database_snapshot_includes_tables_created_by_stamped_migrations() {
         .into_iter()
         .flat_map(|migration| create_table_names(migration.sql.as_ref()))
         .filter(|table| !snapshot_tables.contains(table.as_str()))
+        .filter(|table| !SNAPSHOT_RETIRED_TABLES.contains(&table.as_str()))
         .collect::<BTreeSet<_>>();
 
     assert!(
@@ -318,7 +280,7 @@ fn empty_database_snapshot_uses_jsonb_for_all_usage_headers() {
             EMPTY_DATABASE_SNAPSHOT_SQL
                 .matches(&format!("    {field} jsonb,"))
                 .count(),
-            2,
+            1,
             "{field}"
         );
         assert!(
@@ -328,16 +290,13 @@ fn empty_database_snapshot_uses_jsonb_for_all_usage_headers() {
     }
 }
 
-/// The split capture tables are one row per request each, are retired by a
-/// plain DELETE on their own `created_at`, and never let a payload exist
-/// without its encoding. All three are structural, so the snapshot has to carry
-/// them.
+/// Split capture tables carry raw payloads alongside their encoding markers.
 #[test]
 fn empty_database_snapshot_sql_includes_split_http_capture_tables() {
     let normalized = EMPTY_DATABASE_SNAPSHOT_SQL.replace("\r\n", "\n");
 
-    assert!(normalized.contains("CREATE TABLE IF NOT EXISTS public.usage_http_headers"));
-    assert!(normalized.contains("CREATE TABLE IF NOT EXISTS public.usage_http_bodies"));
+    assert!(normalized.contains("CREATE TABLE public.usage_http_headers"));
+    assert!(normalized.contains("CREATE TABLE public.usage_http_bodies"));
     for column in [
         "client_request bytea",
         "client_response bytea",
@@ -392,9 +351,7 @@ fn empty_database_snapshot_sql_includes_split_http_capture_tables() {
             "{column}"
         );
     }
-    // The retired state machine must not come back through the new tables. The
-    // legacy tables still carry it in the snapshot (a migration older than this
-    // one alters them), so the check is scoped to the new table bodies.
+    // The retired state machine must not come back through the new tables.
     for table_body in [
         normalized.split("public.usage_http_headers (").nth(1),
         normalized.split("public.usage_http_bodies (").nth(1),
@@ -408,28 +365,17 @@ fn empty_database_snapshot_sql_includes_split_http_capture_tables() {
     }
 }
 
+/// The snapshot is current schema, so the retired capture tables are absent.
 #[test]
-fn empty_database_snapshot_sql_includes_usage_body_blobs_and_audit_admin_role() {
+fn empty_database_snapshot_omits_retired_http_capture_tables_and_keeps_audit_admin_role() {
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("'audit_admin'"));
-    assert!(
-        EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE IF NOT EXISTS public.usage_body_blobs")
-    );
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("ix_usage_body_blobs_request_id"));
-    assert!(
-        EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE IF NOT EXISTS public.usage_http_audits")
-    );
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("request_body_state character varying(32)"));
-    assert!(
-        EMPTY_DATABASE_SNAPSHOT_SQL.contains("provider_request_body_state character varying(32)")
-    );
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("response_body_state character varying(32)"));
-    assert!(
-        EMPTY_DATABASE_SNAPSHOT_SQL.contains("client_response_body_state character varying(32)")
-    );
+    assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("usage_body_blobs"));
+    assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("usage_http_audits"));
+    assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("request_body_state character varying(32)"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.usage_routing_snapshots"));
+        .contains("CREATE TABLE public.usage_routing_snapshots"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.usage_settlement_snapshots"));
+        .contains("CREATE TABLE public.usage_settlement_snapshots"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("billing_snapshot_schema_version"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("price_per_request"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("settlement_snapshot_schema_version"));
@@ -442,29 +388,29 @@ fn empty_database_snapshot_sql_includes_usage_body_blobs_and_audit_admin_role() 
     );
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("candidate_index integer"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.stats_user_summary"));
+        .contains("CREATE TABLE public.stats_user_summary"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.stats_user_daily_model"));
+        .contains("CREATE TABLE public.stats_user_daily_model"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.stats_hourly_user_model"));
+        .contains("CREATE TABLE public.stats_hourly_user_model"));
     assert!(
-        EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE IF NOT EXISTS public.schema_backfills")
+        EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.schema_backfills")
     );
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_schema_backfills_applied_at"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("ALTER TABLE public.stats_hourly"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.stats_hourly"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("response_time_sum_ms double precision"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE IF NOT EXISTS public.api_keys"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.api_keys"));
     assert!(
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("total_tokens bigint DEFAULT '0'::bigint NOT NULL")
     );
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.stats_user_daily_provider"));
+        .contains("CREATE TABLE public.stats_user_daily_provider"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.stats_user_daily_api_format"));
+        .contains("CREATE TABLE public.stats_user_daily_api_format"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.stats_daily_cost_savings_model_provider"));
+        .contains("CREATE TABLE public.stats_daily_cost_savings_model_provider"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains(
-        "CREATE TABLE IF NOT EXISTS public.stats_user_daily_cost_savings_model_provider"
+        "CREATE TABLE public.stats_user_daily_cost_savings_model_provider"
     ));
     assert!(
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("successful_response_time_sum_ms double precision")
@@ -472,12 +418,14 @@ fn empty_database_snapshot_sql_includes_usage_body_blobs_and_audit_admin_role() 
     assert!(
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("cache_hit_total_requests bigint DEFAULT 0 NOT NULL")
     );
-    let normalized_snapshot_sql = EMPTY_DATABASE_SNAPSHOT_SQL.replace("\r\n", "\n");
-    assert!(normalized_snapshot_sql.contains(
-        "ALTER TABLE public.stats_daily_model\n    ADD COLUMN IF NOT EXISTS cache_creation_ephemeral_5m_tokens bigint DEFAULT '0'::bigint NOT NULL,"
-    ));
+    let stats_daily_model = EMPTY_DATABASE_SNAPSHOT_SQL
+        .split("CREATE TABLE public.stats_daily_model (")
+        .nth(1)
+        .and_then(|rest| rest.split(");").next())
+        .expect("stats_daily_model definition");
+    assert!(stats_daily_model.contains("cache_creation_ephemeral_5m_tokens bigint"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.usage_counter_deltas"));
+        .contains("CREATE TABLE public.usage_counter_deltas"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("ix_usage_counter_deltas_unprocessed"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_entitlement_usage_entitlement_date"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_provider_api_keys_provider_default_sort"));
@@ -493,7 +441,7 @@ fn empty_database_snapshot_sql_includes_usage_body_blobs_and_audit_admin_role() 
     assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_legacy_body_ref_cleanup_created_at"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_settlement_dashboard_cover"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_stale_pending_created_request"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("autovacuum_analyze_scale_factor = 0.02"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("autovacuum_analyze_scale_factor='0.02'"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("request_count bigint DEFAULT 0"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("usage_count bigint DEFAULT 0 NOT NULL"));
 }
@@ -571,12 +519,12 @@ fn stats_daily_api_key_identity_is_decoupled_for_historical_reaggregation() {
 fn empty_database_snapshot_sql_includes_payment_gateway_and_plans() {
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("payment_provider character varying(64)"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.payment_gateway_configs"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE IF NOT EXISTS public.billing_plans"));
+        .contains("CREATE TABLE public.payment_gateway_configs"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.billing_plans"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
         .contains("purchase_limit_scope character varying(32) DEFAULT 'active_period'"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE IF NOT EXISTS public.user_plan_entitlements"));
+        .contains("CREATE TABLE public.user_plan_entitlements"));
 }
 
 #[test]
@@ -633,7 +581,6 @@ fn every_json_column_is_declared_jsonb_and_normalized_by_migration() {
         "api_formats jsonb,",
         "status_snapshot jsonb,",
         "header_rules jsonb,",
-        "remote_config jsonb,",
         "client_hints jsonb,",
         "model_capability_settings jsonb,",
         "original_request_body jsonb,",
@@ -649,6 +596,8 @@ fn every_json_column_is_declared_jsonb_and_normalized_by_migration() {
             "empty-database snapshot should declare `{declaration}`"
         );
     }
+
+    assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("remote_config jsonb,"));
 
     for column in [
         "allowed_providers",
@@ -690,12 +639,6 @@ fn management_tokens_json_columns_are_normalized_to_jsonb_in_postgres_schema_pat
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("permissions jsonb,"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("jsonb_array_length(allowed_ips)"));
 
-    let bootstrap_schema =
-        include_str!("../../../schema/bootstrap/postgres/001_types_and_tables.sql");
-    assert!(bootstrap_schema.contains("allowed_ips jsonb,"));
-    assert!(bootstrap_schema.contains("permissions jsonb,"));
-    assert!(bootstrap_schema.contains("jsonb_array_length(allowed_ips)"));
-
     let driver_schema =
         include_str!("../../../schema/drivers/postgres/baseline/001_types_and_tables.sql");
     assert!(driver_schema.contains("allowed_ips jsonb,"));
@@ -724,10 +667,6 @@ fn api_key_ip_rules_is_jsonb_in_postgres_schema_paths() {
         .contains("ALTER COLUMN ip_rules TYPE jsonb USING ip_rules::jsonb"));
 
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("ip_rules jsonb,"));
-
-    let bootstrap_schema =
-        include_str!("../../../schema/bootstrap/postgres/001_types_and_tables.sql");
-    assert!(bootstrap_schema.contains("ip_rules jsonb,"));
 
     let generated_identity =
         include_str!("../../../schema/generated/postgres/baseline/001_identity.sql");
@@ -1798,6 +1737,7 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20261011000000,
             20261019010000,
             20261102000000,
+            20261103000000,
         ]
     );
 }
@@ -2289,6 +2229,31 @@ async fn prepare_database_for_startup_bootstraps_clean_database() {
     assert!(column_exists(&pool, "api_keys", "total_tokens")
         .await
         .expect("api_keys.total_tokens lookup should succeed"));
+
+    let default_group_count: i64 = query_scalar("SELECT COUNT(*)::BIGINT FROM public.user_groups")
+        .fetch_one(&pool)
+        .await
+        .expect("default user group count should load");
+    assert_eq!(default_group_count, 1);
+    let default_group_config: i64 = query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM public.system_configs WHERE key = 'default_user_group_id'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("default user group config should load");
+    assert_eq!(default_group_config, 1);
+    let dashboard_total_shards: i64 =
+        query_scalar("SELECT COUNT(*)::BIGINT FROM public.dashboard_stats_total")
+            .fetch_one(&pool)
+            .await
+            .expect("dashboard total shards should load");
+    assert_eq!(dashboard_total_shards, 16);
+    let dashboard_state_count: i64 =
+        query_scalar("SELECT COUNT(*)::BIGINT FROM public.dashboard_stats_state")
+            .fetch_one(&pool)
+            .await
+            .expect("dashboard state should load");
+    assert_eq!(dashboard_state_count, 1);
 
     let audit_admin_exists: bool = query_scalar(
         "SELECT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'public.userrole'::regtype AND enumlabel = 'audit_admin')",

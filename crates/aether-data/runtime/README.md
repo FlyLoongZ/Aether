@@ -27,7 +27,7 @@ task crates live in the sibling `../contracts` crate (`aether-data-contracts`).
 | `schema` | Schema maintenance workspace for logical definitions, driver fragments, and generated output. |
 | `schema/logical` | Human-maintained logical table definitions used by `aether-data-schema`. |
 | `schema/drivers/postgres` | Human-maintained driver fragments that compose back into executable SQL while generation is being promoted. |
-| `schema/bootstrap/postgres` | Human-maintained source fragments for the Postgres bootstrap snapshot. `build.rs` composes them into the runtime embedded artifact during crate builds. |
+| `schema/bootstrap/postgres` | Post-processed Postgres bootstrap snapshot, seed rows, and SQLx search-path footer. `build.rs` composes them into the runtime embedded artifact. |
 | `schema/generated` | Machine-written SQL generated from logical schema for audit and drift detection only. |
 | `schema/overrides` | Rare driver-specific SQL escape hatch. Keep README-only until a real override is needed. |
 | `backfills/postgres` | Executable backfill SQL grouped by driver. |
