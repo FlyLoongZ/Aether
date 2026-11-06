@@ -173,27 +173,18 @@ VALUES('employee-key','owner',repeat('e',64),false),
     assert_eq!(read_facts(&pool).await, before_facts);
     assert_eq!(stored_rows(&pool).await, before_rows);
 
-    // The maintained bootstrap fragment must install the same read model.
+    // The maintained bootstrap fragment must install the same read model. The
+    // fragments are located by pg_dump's `-- Name: ...; Type: ...` object
+    // headers instead of statement terminators: the dollar-quote tag it picks
+    // for a function body is content dependent, so an `END $_$;` search breaks
+    // as soon as the body gains or loses a `$$` sequence.
     let bootstrap = EMPTY_DATABASE_SNAPSHOT_SQL;
-    let function_start = bootstrap
-        .find("CREATE OR REPLACE FUNCTION public.usage_customer_billable_amount(")
-        .unwrap();
-    let function_end = bootstrap[function_start..]
-        .find("END $_$;")
-        .map(|offset| function_start + offset + "END $_$;".len())
-        .unwrap();
-    let view_start = bootstrap
-        .find("CREATE OR REPLACE VIEW public.usage_billing_facts")
-        .unwrap();
-    let view_end = bootstrap[view_start..]
-        .find(";\n\n")
-        .map(|offset| view_start + offset + 2)
-        .unwrap();
-    let bootstrap_sql = format!(
-        "{}\n{}",
-        &bootstrap[function_start..function_end],
-        &bootstrap[view_start..view_end]
+    let function_sql = pg_dump_object_sql(
+        bootstrap,
+        "usage_customer_billable_amount(jsonb, numeric, numeric); Type: FUNCTION;",
     );
+    let view_sql = pg_dump_object_sql(bootstrap, "usage_billing_facts; Type: VIEW;");
+    let bootstrap_sql = format!("{function_sql}\n{view_sql}");
     sqlx::raw_sql(sqlx::AssertSqlSafe(bootstrap_sql))
         .execute(&pool)
         .await
@@ -201,4 +192,48 @@ VALUES('employee-key','owner',repeat('e',64),false),
     assert_eq!(read_facts(&pool).await, before_facts);
     assert_eq!(stored_rows(&pool).await, before_rows);
     pool.close().await;
+}
+
+const PG_DUMP_OBJECT_HEADER: &str = "--\n-- Name: ";
+
+/// Split a plain `pg_dump` schema dump into `(header, body)` object blocks.
+///
+/// `header` is everything after `-- Name: ` up to the end of that line, e.g.
+/// `usage_billing_facts; Type: VIEW; Schema: public; Owner: -`. The header
+/// separator is the only stable delimiter in a dump: statement terminators are
+/// not, because function bodies are dollar quoted with a tag chosen from their
+/// own content.
+fn pg_dump_objects(snapshot: &str) -> Vec<(&str, &str)> {
+    let mut blocks = Vec::new();
+    let mut rest = snapshot;
+    while let Some(start) = rest.find(PG_DUMP_OBJECT_HEADER) {
+        let after_header = &rest[start + PG_DUMP_OBJECT_HEADER.len()..];
+        let Some(header_end) = after_header.find('\n') else {
+            break;
+        };
+        let header = &after_header[..header_end];
+        let body = after_header[header_end..]
+            .strip_prefix("\n--\n")
+            .unwrap_or(&after_header[header_end..]);
+        let body_end = body.find(PG_DUMP_OBJECT_HEADER).unwrap_or(body.len());
+        blocks.push((header, &body[..body_end]));
+        rest = &body[body_end..];
+    }
+    blocks
+}
+
+/// Return the executable SQL of the single dump block whose header starts with
+/// `header_prefix`.
+fn pg_dump_object_sql<'a>(snapshot: &'a str, header_prefix: &str) -> &'a str {
+    let found = pg_dump_objects(snapshot)
+        .into_iter()
+        .filter(|(header, _)| header.starts_with(header_prefix))
+        .map(|(_, sql)| sql)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        found.len(),
+        1,
+        "pg_dump block `{header_prefix}` must appear exactly once"
+    );
+    found[0]
 }
