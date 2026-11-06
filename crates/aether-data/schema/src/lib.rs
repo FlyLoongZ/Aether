@@ -1152,6 +1152,26 @@ ALTER TABLE users ADD COLUMN ldap_dn VARCHAR(1024);
     }
 
     #[test]
+    fn retired_usage_capture_tables_are_absent_from_logical_schema() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace = manifest_dir
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+            .expect("crate should live under workspace/crates/aether-data");
+        let loaded =
+            load_schema_sources(workspace.join("crates/aether-data/runtime/schema/logical"))
+                .expect("workspace logical schema should load");
+
+        for table in ["usage_body_blobs", "usage_http_audits"] {
+            assert!(
+                !loaded.schema.tables.contains_key(table),
+                "retired capture table {table} must not be part of the current logical schema"
+            );
+        }
+    }
+
+    #[test]
     fn retired_baseline_shapes_only_survive_in_the_historical_baseline() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let workspace = manifest_dir

@@ -7,6 +7,71 @@ use crate::lifecycle::postgres_test_support::ManagedPostgresServer;
 const LEGACY_SYNC_ENABLED_ACTIVE_FLAGS_VERSION: i64 = 20260517012000;
 const LEGACY_SYNC_ENABLED_ACTIVE_FLAGS_SQL: &str =
     include_str!("../../../backfills/postgres/20260517012000_sync_legacy_enabled_active_flags.sql");
+const USAGE_HTTP_CAPTURE_BACKFILL_SQL: &str =
+    include_str!("../../../backfills/postgres/20261102010000_migrate_usage_http_capture.sql");
+
+#[test]
+fn capture_backfill_skips_missing_legacy_tables_before_dropping_them() {
+    assert!(
+        USAGE_HTTP_CAPTURE_BACKFILL_SQL.contains("to_regclass('public.usage_http_audits')"),
+        "the copy must tolerate a database that never created the retired table"
+    );
+    assert!(
+        USAGE_HTTP_CAPTURE_BACKFILL_SQL.contains("to_regclass('public.usage_http_headers')"),
+        "the copy must check the split header table before dropping legacy headers"
+    );
+    assert!(
+        USAGE_HTTP_CAPTURE_BACKFILL_SQL.contains("RAISE EXCEPTION"),
+        "a missing split table must abort the backfill instead of losing legacy headers"
+    );
+    assert!(
+        USAGE_HTTP_CAPTURE_BACKFILL_SQL.contains("information_schema.columns"),
+        "column comments must be guarded for databases that already dropped the compatibility columns"
+    );
+    assert!(
+        USAGE_HTTP_CAPTURE_BACKFILL_SQL.contains("DROP TABLE IF EXISTS public.usage_body_blobs")
+    );
+    assert!(
+        USAGE_HTTP_CAPTURE_BACKFILL_SQL.contains("DROP TABLE IF EXISTS public.usage_http_audits")
+    );
+}
+
+#[tokio::test]
+async fn capture_backfill_runs_when_legacy_tables_never_existed() {
+    let Some(server) = ManagedPostgresServer::try_start()
+        .await
+        .expect("postgres backfill test should start or skip")
+    else {
+        return;
+    };
+
+    let pool = PgPool::connect(server.database_url())
+        .await
+        .expect("pool should connect");
+    prepare_database_for_startup(&pool)
+        .await
+        .expect("schema should prepare");
+
+    let legacy_exists: bool = query_scalar(
+        "SELECT to_regclass('public.usage_body_blobs') IS NOT NULL OR to_regclass('public.usage_http_audits') IS NOT NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("legacy table presence should load");
+    assert!(!legacy_exists);
+
+    run_backfills(&pool)
+        .await
+        .expect("capture backfill should tolerate absent legacy tables");
+
+    let legacy_exists: bool = query_scalar(
+        "SELECT to_regclass('public.usage_body_blobs') IS NOT NULL OR to_regclass('public.usage_http_audits') IS NOT NULL",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("legacy table presence should load");
+    assert!(!legacy_exists);
+}
 
 #[test]
 fn legacy_enabled_backfill_preserves_canonical_active_flags() {

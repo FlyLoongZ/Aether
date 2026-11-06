@@ -62,8 +62,8 @@ const ADMIN_STATS_PURGE_TABLES: &[&str] = &[
 
 const ADMIN_USAGE_CHILD_TABLES: &[&str] = &[
     "usage_counter_deltas",
-    "usage_body_blobs",
-    "usage_http_audits",
+    "usage_http_bodies",
+    "usage_http_headers",
     "usage_routing_snapshots",
     "usage_settlement_snapshots",
     "user_model_usage_counts",

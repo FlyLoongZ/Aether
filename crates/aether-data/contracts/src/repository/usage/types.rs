@@ -454,8 +454,8 @@ pub fn extract_provider_cache_ttl_minutes_from_metadata(value: Option<&Value>) -
 /// Joined usage read model assembled from the accounting row plus the newer audit/snapshot
 /// satellite tables.
 ///
-/// The canonical owners are split across `public.usage`, `public.usage_http_audits`,
-/// `public.usage_body_blobs`, `public.usage_routing_snapshots`, and
+/// The canonical owners are split across `public.usage`, `public.usage_http_headers`,
+/// `public.usage_http_bodies`, `public.usage_routing_snapshots`, and
 /// `public.usage_settlement_snapshots`. Fallback reads from deprecated `public.usage.*` mirror
 /// columns still exist for historical rows, but those columns are compatibility-only.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -2784,8 +2784,8 @@ pub struct UpsertUsageRecord {
     // Settlement state is also projected into `public.usage_settlement_snapshots`; the base usage
     // row mirror exists for compatibility and indexing until a later schema cleanup.
     pub billing_status: String,
-    // HTTP capture payload. Canonical persistence goes through `usage_http_audits` and
-    // `usage_body_blobs`; any remaining `public.usage` body/header columns are compatibility-only.
+    // HTTP capture payload. Canonical persistence goes through `usage_http_headers` and
+    // `usage_http_bodies`; any remaining `public.usage` body/header columns are compatibility-only.
     pub request_headers: Option<Value>,
     pub request_body: Option<CapturedBody>,
     pub provider_request_headers: Option<Value>,
