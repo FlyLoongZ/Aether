@@ -379,23 +379,6 @@ type = "unix_seconds"
 nullable = true
 
 [[table.usage.columns]]
-name = "candidate_id"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "candidate_index"
-type = "int64"
-nullable = true
-
-[[table.usage.columns]]
-name = "key_name"
-type = "text"
-length = 255
-nullable = true
-
-[[table.usage.columns]]
 name = "username"
 type = "text"
 length = 255
@@ -403,36 +386,6 @@ nullable = true
 
 [[table.usage.columns]]
 name = "api_key_name"
-type = "text"
-length = 255
-nullable = true
-
-[[table.usage.columns]]
-name = "planner_kind"
-type = "text"
-length = 64
-nullable = true
-
-[[table.usage.columns]]
-name = "route_family"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "route_kind"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "execution_path"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "local_execution_runtime_miss_reason"
 type = "text"
 length = 255
 nullable = true
