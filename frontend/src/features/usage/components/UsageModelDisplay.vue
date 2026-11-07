@@ -81,6 +81,7 @@ import { computed } from 'vue'
 import { Badge } from '@/components/ui'
 import { isCyberPolicyError } from '../utils/cyberError'
 import { formatServiceTierFact } from '../utils/service-tier'
+import { resolveModelFacts } from '../utils/usageRecordDisplay'
 
 type ModelBadgeKey = 'compact' | 'reasoning' | 'fast' | 'service-tier' | 'cyber' | 'reasoning_tokens'
 
@@ -128,17 +129,9 @@ const props = withDefaults(defineProps<{
 
 const { t } = useI18n()
 
-const mappingModel = computed(() => {
-  const targetModel = normalizeText(props.record.target_model)
-  if (targetModel && targetModel !== normalizeText(props.record.model)) return targetModel
-  return null
-})
-
-const responseModel = computed(() => {
-  const response = normalizeText(props.record.response_model)
-  if (response && response !== normalizeText(props.record.model)) return response
-  return null
-})
+const modelFacts = computed(() => resolveModelFacts(props.record))
+const mappingModel = computed(() => modelFacts.value.mappingModel)
+const responseModel = computed(() => modelFacts.value.responseModel)
 
 const hasModelFacts = computed(() => mappingModel.value !== null || responseModel.value !== null)
 
