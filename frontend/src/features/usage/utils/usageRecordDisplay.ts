@@ -272,6 +272,38 @@ export function getServiceTierTitle(record: UsageRecord): string {
   ].filter((line): line is string => Boolean(line)).join('\n')
 }
 
+export interface ModelFactsInput {
+  model: string
+  target_model?: string | null
+  response_model?: string | null
+}
+
+export interface ModelFacts {
+  requestModel: string
+  mappingModel: string | null
+  responseModel: string | null
+}
+
+function normalizeModelFact(value: string | null | undefined): string | null {
+  const normalized = value?.trim()
+  return normalized || null
+}
+
+// 模型列的展示事实：请求模型恒显示；映射模型仅在与请求模型不同时显示；
+// 响应模型在与请求模型或映射模型完全一致时视为无信息量，不再重复展示。
+export function resolveModelFacts(record: ModelFactsInput): ModelFacts {
+  const requestModel = record.model.trim()
+  const targetModel = normalizeModelFact(record.target_model)
+  const mappingModel = targetModel && targetModel !== requestModel ? targetModel : null
+  const response = normalizeModelFact(record.response_model)
+  const responseModel = response
+    && response !== requestModel
+    && response !== mappingModel
+    ? response
+    : null
+  return { requestModel, mappingModel, responseModel }
+}
+
 // 获取模型列的 tooltip
 export function getModelTooltip(record: UsageRecord): string {
   const reasoningEffort = getReasoningEffort(record)
@@ -279,12 +311,10 @@ export function getModelTooltip(record: UsageRecord): string {
   const tierSuffix = serviceTierTitle ? `\n${serviceTierTitle}` : ''
   const cyberSuffix = hasCyberPolicyError(record) ? '\nCyber Policy: blocked' : ''
   const suffix = `${reasoningEffort ? `\nReasoning: ${reasoningEffort}` : ''}${tierSuffix}${cyberSuffix}`
-  const requestModel = record.model.trim()
-  const mappingModel = record.target_model?.trim()
-  const responseModel = record.response_model?.trim()
+  const { requestModel, mappingModel, responseModel } = resolveModelFacts(record)
   return [
     requestModel,
-    mappingModel && mappingModel !== requestModel ? `映射模型: ${mappingModel}` : null,
-    responseModel && responseModel !== requestModel ? `响应模型: ${responseModel}` : null,
+    mappingModel ? `映射模型: ${mappingModel}` : null,
+    responseModel ? `响应模型: ${responseModel}` : null,
   ].filter((line): line is string => Boolean(line)).join('\n') + suffix
 }
