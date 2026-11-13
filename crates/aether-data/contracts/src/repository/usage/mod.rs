@@ -23,15 +23,16 @@ pub use health::*;
 pub use metadata_policy::*;
 pub use policy::*;
 pub use types::{
-    decode_captured_body, extract_provider_actual_service_tier_from_response,
+    body_capture_metadata_storage, decode_captured_body,
+    extract_provider_actual_service_tier_from_response,
     extract_provider_cache_ttl_minutes_from_metadata, extract_provider_reasoning_effort_from_body,
     extract_provider_response_model_from_bodies, extract_provider_service_tier_from_body,
     for_each_sse_data_payload, normalize_provider_response_model, normalize_provider_service_tier,
     resolve_provider_cache_ttl_minutes, resolve_provider_service_tier_from_request_capture,
-    resolve_usage_body_capture_result, usage_body_capture_is_authoritative,
-    usage_request_metadata_client_family, ApiKeyLastUsedDelta, BodyEncoding, CapturedBody,
-    ManagementTokenCounterDelta, PendingUsageCleanupSummary, ProviderApiKeyWindowUsageRequest,
-    ProxyNodeCounterDelta, StoredProviderApiKeyUsageSummary,
+    resolve_usage_body_capture_result, resolve_usage_body_capture_result_with_storage,
+    usage_body_capture_is_authoritative, usage_request_metadata_client_family, ApiKeyLastUsedDelta,
+    BodyEncoding, CapturedBody, ManagementTokenCounterDelta, PendingUsageCleanupSummary,
+    ProviderApiKeyWindowUsageRequest, ProxyNodeCounterDelta, StoredProviderApiKeyUsageSummary,
     StoredProviderApiKeyWindowUsageSummary, StoredProviderUsageSummary, StoredProviderUsageWindow,
     StoredRequestUsageAudit, StoredUsageAuditAggregation, StoredUsageAuditSummary,
     StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,

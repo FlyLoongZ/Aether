@@ -971,7 +971,10 @@ impl StoredRequestUsageAudit {
     }
 
     pub fn body_capture_result(&self, field: UsageBodyField) -> UsageBodyCaptureResult {
-        resolve_usage_body_capture_result(self.body_state(field))
+        resolve_usage_body_capture_result_with_storage(
+            self.body_state(field),
+            body_capture_metadata_storage(self.request_metadata.as_ref(), field),
+        )
     }
 
     pub fn body_capture_json_entry(&self, field: UsageBodyField) -> serde_json::Map<String, Value> {
@@ -1864,12 +1867,34 @@ impl BodyEncoding {
         }
     }
 
+    /// File extension used by the body file store. The extension is the
+    /// encoding marker: a body file has no in-band metadata.
+    pub const fn ext(self) -> &'static str {
+        match self {
+            Self::Json => "json",
+            Self::Text => "txt",
+            Self::Sse => "sse",
+            Self::Binary => "bin",
+        }
+    }
+
     pub fn from_label(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {
             "json" => Some(Self::Json),
             "text" => Some(Self::Text),
             "sse" => Some(Self::Sse),
             "binary" => Some(Self::Binary),
+            _ => None,
+        }
+    }
+
+    /// Parses the file extension used by the body file store.
+    pub fn from_ext(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "json" => Some(Self::Json),
+            "txt" | "text" => Some(Self::Text),
+            "sse" => Some(Self::Sse),
+            "bin" | "binary" => Some(Self::Binary),
             _ => None,
         }
     }
@@ -1923,6 +1948,15 @@ pub enum CapturedBody {
         encoding: BodyEncoding,
         truncated: bool,
     },
+    /// The bytes were written to the body file store. The path is derived from
+    /// the request time, request id and side; only the encoding and capture
+    /// facts travel on the wire.
+    File {
+        encoding: BodyEncoding,
+        truncated: bool,
+        stored_bytes: u64,
+        source_bytes: Option<u64>,
+    },
     /// Capture was turned off by policy.
     Disabled,
     /// The direction never produced a body the gateway could keep.
@@ -1948,20 +1982,34 @@ impl CapturedBody {
         Ok(Self::from_bytes(bytes, BodyEncoding::Json, false))
     }
 
+    pub fn from_file(
+        encoding: BodyEncoding,
+        truncated: bool,
+        stored_bytes: u64,
+        source_bytes: Option<u64>,
+    ) -> Self {
+        Self::File {
+            encoding,
+            truncated,
+            stored_bytes,
+            source_bytes,
+        }
+    }
+
     pub fn is_present(&self) -> bool {
-        matches!(self, Self::Bytes { .. })
+        matches!(self, Self::Bytes { .. } | Self::File { .. })
     }
 
     pub fn bytes(&self) -> Option<&[u8]> {
         match self {
             Self::Bytes { bytes, .. } => Some(bytes),
-            Self::Disabled | Self::Unavailable => None,
+            Self::File { .. } | Self::Disabled | Self::Unavailable => None,
         }
     }
 
     pub fn encoding(&self) -> Option<BodyEncoding> {
         match self {
-            Self::Bytes { encoding, .. } => Some(*encoding),
+            Self::Bytes { encoding, .. } | Self::File { encoding, .. } => Some(*encoding),
             Self::Disabled | Self::Unavailable => None,
         }
     }
@@ -1970,6 +2018,9 @@ impl CapturedBody {
         matches!(
             self,
             Self::Bytes {
+                truncated: true,
+                ..
+            } | Self::File {
                 truncated: true,
                 ..
             }
@@ -1981,7 +2032,7 @@ impl CapturedBody {
             Self::Bytes {
                 bytes, encoding, ..
             } => Some(decode_captured_body(bytes, *encoding)),
-            Self::Disabled | Self::Unavailable => None,
+            Self::File { .. } | Self::Disabled | Self::Unavailable => None,
         }
     }
 
@@ -2008,7 +2059,7 @@ impl CapturedBody {
     pub fn retained_bytes_estimate(&self) -> usize {
         match self {
             Self::Bytes { bytes, .. } => bytes.len(),
-            Self::Disabled | Self::Unavailable => 0,
+            Self::File { .. } | Self::Disabled | Self::Unavailable => 0,
         }
     }
 
@@ -2017,8 +2068,11 @@ impl CapturedBody {
         match self {
             Self::Bytes {
                 truncated: true, ..
+            }
+            | Self::File {
+                truncated: true, ..
             } => Some(UsageBodyCaptureState::Truncated),
-            Self::Bytes { .. } => Some(UsageBodyCaptureState::Inline),
+            Self::Bytes { .. } | Self::File { .. } => Some(UsageBodyCaptureState::Inline),
             Self::Disabled => Some(UsageBodyCaptureState::Disabled),
             Self::Unavailable => Some(UsageBodyCaptureState::Unavailable),
         }
@@ -2037,6 +2091,24 @@ impl serde::Serialize for CapturedBody {
         match self {
             Self::Disabled => serializer.serialize_str("disabled"),
             Self::Unavailable => serializer.serialize_str("unavailable"),
+            Self::File {
+                encoding,
+                truncated,
+                stored_bytes,
+                source_bytes,
+            } => {
+                let mut map = serializer.serialize_map(None)?;
+                map.serialize_entry("file", &true)?;
+                map.serialize_entry("encoding", encoding.as_str())?;
+                if *truncated {
+                    map.serialize_entry("truncated", &true)?;
+                }
+                map.serialize_entry("stored_bytes", stored_bytes)?;
+                if let Some(source_bytes) = source_bytes {
+                    map.serialize_entry("source_bytes", source_bytes)?;
+                }
+                map.end()
+            }
             Self::Bytes {
                 bytes,
                 encoding,
@@ -2087,6 +2159,29 @@ impl<'de> serde::Deserialize<'de> for CapturedBody {
                     .remove("truncated")
                     .and_then(|value| value.as_bool())
                     .unwrap_or(false);
+                if object
+                    .remove("file")
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false)
+                {
+                    let encoding = object
+                        .remove("encoding")
+                        .and_then(|value| value.as_str().and_then(BodyEncoding::from_label))
+                        .unwrap_or(BodyEncoding::Binary);
+                    let stored_bytes = object
+                        .remove("stored_bytes")
+                        .and_then(|value| value.as_u64())
+                        .unwrap_or(0);
+                    let source_bytes = object
+                        .remove("source_bytes")
+                        .and_then(|value| value.as_u64());
+                    return Ok(Self::File {
+                        encoding,
+                        truncated,
+                        stored_bytes,
+                        source_bytes,
+                    });
+                }
                 if let Some(value) = object.remove("json") {
                     let bytes = serde_json::to_vec(&value)
                         .map_err(|error| serde::de::Error::custom(error.to_string()))?;
@@ -2323,6 +2418,7 @@ impl UsageBodyCaptureState {
 pub enum UsageBodyCaptureStorage {
     Inline,
     Truncated,
+    File,
     Disabled,
     Unavailable,
     None,
@@ -2334,6 +2430,7 @@ impl UsageBodyCaptureStorage {
         match self {
             Self::Inline => "inline",
             Self::Truncated => "truncated",
+            Self::File => "file",
             Self::Disabled => "disabled",
             Self::Unavailable => "unavailable",
             Self::None => "none",
@@ -2427,7 +2524,40 @@ pub fn resolve_usage_body_capture_result(
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// The storage location recorded by the capture ledger, if any.
+///
+/// Only file-backed sides carry a `storage` key; its absence means the bytes
+/// live in `usage_http_bodies` (or the row predates the file store).
+pub fn body_capture_metadata_storage(
+    metadata: Option<&Value>,
+    field: UsageBodyField,
+) -> Option<UsageBodyCaptureStorage> {
+    match metadata?
+        .get("body_capture")?
+        .get(field.as_capture_key())?
+        .get("storage")?
+        .as_str()?
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "file" => Some(UsageBodyCaptureStorage::File),
+        _ => None,
+    }
+}
+
+pub fn resolve_usage_body_capture_result_with_storage(
+    state: Option<UsageBodyCaptureState>,
+    storage: Option<UsageBodyCaptureStorage>,
+) -> UsageBodyCaptureResult {
+    let mut result = resolve_usage_body_capture_result(state);
+    if let Some(storage) = storage {
+        result.storage = storage;
+    }
+    result
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UsageBodyField {
     RequestBody,
@@ -2462,6 +2592,18 @@ impl UsageBodyField {
             "response_body" => Some(Self::ResponseBody),
             "client_response_body" => Some(Self::ClientResponseBody),
             _ => None,
+        }
+    }
+
+    /// File name used by the body file store. These names mirror the
+    /// `usage_http_bodies` columns so a file and a DB row describe the same
+    /// direction.
+    pub fn file_stem(&self) -> &'static str {
+        match self {
+            Self::RequestBody => "client_request",
+            Self::ProviderRequestBody => "provider_request",
+            Self::ResponseBody => "provider_response",
+            Self::ClientResponseBody => "client_response",
         }
     }
 }
@@ -2932,7 +3074,10 @@ impl UpsertUsageRecord {
     }
 
     pub fn body_capture_result(&self, field: UsageBodyField) -> UsageBodyCaptureResult {
-        resolve_usage_body_capture_result(self.body_state(field))
+        resolve_usage_body_capture_result_with_storage(
+            self.body_state(field),
+            body_capture_metadata_storage(self.request_metadata.as_ref(), field),
+        )
     }
 
     pub fn request_body_state(&self) -> Option<UsageBodyCaptureState> {
