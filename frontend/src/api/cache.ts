@@ -185,17 +185,6 @@ export const cacheApi = {
   }
 }
 
-// 导出便捷函数
-export const {
-  getStats,
-  getConfig,
-  getUserAffinity,
-  clearUserCache,
-  clearAllCache,
-  clearProviderCache,
-  listAffinities
-} = cacheApi
-
 // ==================== Redis 缓存分类管理 API ====================
 
 export interface RedisCacheCategory {

@@ -36,26 +36,6 @@ export const isPoolParticipatedCandidate = (candidate: CandidateRecord): boolean
   return TIMELINE_STATUS.includes(candidate.status)
 }
 
-export const isAttemptedCandidate = (
-  candidate: Pick<CandidateRecord, 'status' | 'started_at'>,
-): boolean => {
-  switch (candidate.status) {
-    case 'streaming':
-    case 'success':
-    case 'failed':
-    case 'cancelled':
-    case 'stream_interrupted':
-      return true
-    case 'pending':
-      return Boolean(candidate.started_at)
-    case 'available':
-    case 'unused':
-    case 'skipped':
-    default:
-      return false
-  }
-}
-
 export function buildPoolGroupVisibleAttempts(
   attempts: CandidateRecord[],
 ): CandidateRecord[] {

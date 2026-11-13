@@ -6,7 +6,7 @@ import AdminDashboard from '@/views/admin/AdminDashboard.vue'
 import type { OverviewDashboardCharts, OverviewDashboardChartMetrics } from '@/api/overview'
 import type { DateRangeParams } from '@/features/usage/types'
 import { setI18nLocale } from '@/i18n'
-import { dashboardChartRange, dayRange, modelDatasets, providerSlices } from '../dashboard/charts'
+import { dashboardChartRange, modelDatasets, providerSlices } from '../dashboard/charts'
 import { dashboardSummary } from './fixtures/dashboardSummary'
 import { useAnnouncementStore } from '@/stores/announcements'
 
@@ -432,14 +432,4 @@ describe('dashboard chart accounting', () => {
     expect(modelDatasets(data, 'Unknown model', 'Others')[0]!.data).toEqual([5, null, 0])
   })
 
-  it('uses a 23-hour local day during daylight saving and clips it to report boundaries', () => {
-    const dstRange = { from: '2026-03-07T05:00:00Z', to: '2026-03-10T04:00:00Z', timezone: 'America/New_York' }
-    expect(dayRange('2026-03-08T05:00:00Z', dstRange)).toEqual({ from: '2026-03-08T05:00:00.000Z', to: '2026-03-09T04:00:00.000Z', timezone: dstRange.timezone })
-    expect(dayRange('2026-03-08T05:00:00Z', { ...dstRange, to: '2026-03-08T18:00:00Z' }).to).toBe('2026-03-08T18:00:00.000Z')
-  })
-
-  it('uses the first valid local minute when a timezone skips midnight', () => {
-    const santiago = { from: '2026-09-05T04:00:00Z', to: '2026-09-08T03:00:00Z', timezone: 'America/Santiago' }
-    expect(dayRange('2026-09-05T04:00:00Z', santiago).to).toBe('2026-09-06T04:00:00.000Z')
-  })
 })

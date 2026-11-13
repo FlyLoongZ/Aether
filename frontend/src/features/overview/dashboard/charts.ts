@@ -49,18 +49,6 @@ export function providerSlices(rows: Pick<OverviewDashboardCharts['providers'][n
   return visible
 }
 
-export function dayRange(bucket: string, range: OverviewRange): OverviewRange {
-  const date = zonedInput(bucket, range.timezone).slice(0, 10)
-  const nextDate = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
-  const from = localDayStart(date, range.timezone)
-  const to = localDayStart(nextDate, range.timezone)
-  return {
-    from: new Date(Math.max(Date.parse(from), Date.parse(range.from))).toISOString(),
-    to: new Date(Math.min(Date.parse(to), Date.parse(range.to))).toISOString(),
-    timezone: range.timezone,
-  }
-}
-
 /** The dashboard picker uses inclusive calendar dates, not rolling 24-hour periods. */
 export function dashboardChartRange(params: DateRangeParams, now = new Date()): OverviewRange {
   const timezone = params.timezone || browserTimezone()

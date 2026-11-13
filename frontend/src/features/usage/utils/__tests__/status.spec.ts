@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatUsageStreamLabel,
   hasUsageFallback,
-  hasUsageRetry,
-  hasUsageSkippedCandidate,
   isUsageRecordFailed,
-  isUsageRecordSuccessful,
   isUsageWebSocket,
   mapRequestStatusToTimelineStatus,
   normalizeRequestStatus,
@@ -31,39 +28,6 @@ function buildUsageRecord(overrides: Partial<UsageRecord> = {}): UsageRecord {
 }
 
 describe('usage status helpers', () => {
-  it('treats explicit completed status as authoritative over stale legacy failure fields', () => {
-    const record = buildUsageRecord({
-      status: 'completed',
-      status_code: 429,
-      error_message: 'rate limited on first attempt'
-    })
-
-    expect(isUsageRecordFailed(record)).toBe(false)
-    expect(isUsageRecordSuccessful(record)).toBe(true)
-  })
-
-  it('falls back to legacy failure signals when status is missing', () => {
-    const record = buildUsageRecord({
-      status: undefined,
-      status_code: 429,
-      error_message: 'rate limited'
-    })
-
-    expect(isUsageRecordFailed(record)).toBe(true)
-    expect(isUsageRecordSuccessful(record)).toBe(false)
-  })
-
-  it('treats explicit failed status as authoritative over a 2xx transport code', () => {
-    const record = buildUsageRecord({
-      status: 'failed',
-      status_code: 200,
-      error_message: 'stream terminal error'
-    })
-
-    expect(isUsageRecordFailed(record)).toBe(true)
-    expect(isUsageRecordSuccessful(record)).toBe(false)
-  })
-
   it('normalizes request status strings before mapping timeline status', () => {
     expect(normalizeRequestStatus(' Completed ')).toBe('completed')
     expect(mapRequestStatusToTimelineStatus('completed')).toBe('success')
@@ -171,25 +135,6 @@ describe('usage status helpers', () => {
     expect(hasUsageFallback(buildUsageRecord({ has_fallback: true }))).toBe(true)
     expect(hasUsageFallback(buildUsageRecord({ has_fallback: false }))).toBe(false)
     expect(hasUsageFallback(buildUsageRecord({ has_fallback: undefined }))).toBe(false)
-  })
-
-  it('uses explicit has_retry flag for retry filtering', () => {
-    expect(hasUsageRetry(buildUsageRecord({ has_retry: true }))).toBe(true)
-    expect(hasUsageRetry(buildUsageRecord({ has_retry: false }))).toBe(false)
-    expect(hasUsageRetry(buildUsageRecord({ has_retry: undefined }))).toBe(false)
-  })
-
-  it('uses explicit has_skipped_candidate flag for scheduling-skip filtering', () => {
-    expect(hasUsageSkippedCandidate(buildUsageRecord({ has_skipped_candidate: true }))).toBe(true)
-    expect(hasUsageSkippedCandidate(buildUsageRecord({ has_skipped_candidate: false }))).toBe(false)
-    expect(hasUsageSkippedCandidate(buildUsageRecord({ has_skipped_candidate: undefined }))).toBe(false)
-  })
-
-  it('keeps skipped-candidate signal independent from fallback signal', () => {
-    // 被调度跳过 ≠ 故障转移：前者请求从未发出，因此不应被 hasUsageFallback 认领
-    const skippedOnly = buildUsageRecord({ has_skipped_candidate: true, has_fallback: false })
-    expect(hasUsageSkippedCandidate(skippedOnly)).toBe(true)
-    expect(hasUsageFallback(skippedOnly)).toBe(false)
   })
 
   it('recognizes persisted WebSocket usage records', () => {

@@ -1,4 +1,3 @@
-import apiClient from './client'
 import {
   findMetricSamples,
   findMetricValueNumber,
@@ -6,33 +5,6 @@ import {
   sumMetricValues,
   type PrometheusSample,
 } from '@/utils/prometheus'
-
-export interface AdminMonitoringSystemStatus {
-  timestamp: string
-  users: {
-    total: number
-    active: number
-  }
-  providers: {
-    total: number
-    active: number
-  }
-  api_keys: {
-    total: number
-    active: number
-  }
-  today_stats: {
-    requests: number
-    tokens: number
-    cost_usd: string
-  }
-  internal_gateway: {
-    status: string
-    path_prefixes: string[]
-  }
-  recent_errors: number
-}
-
 export interface AdminMonitoringCircuitBreakerSummary {
   state: string
   provider_id?: string
@@ -77,24 +49,6 @@ export interface AdminMonitoringResilienceStatus {
   recent_errors: AdminMonitoringRecentError[]
   recommendations: string[]
 }
-
-export interface AdminMonitoringCircuitHistoryItem {
-  event: string
-  key_id: string
-  provider_id: string
-  provider_name?: string | null
-  key_name?: string | null
-  api_format?: string | null
-  reason?: string | null
-  recovery_seconds?: number | null
-  timestamp?: string | null
-}
-
-export interface AdminMonitoringCircuitHistoryResponse {
-  items: AdminMonitoringCircuitHistoryItem[]
-  count: number
-}
-
 export interface GatewayGateMetrics {
   inFlight: number | null
   availablePermits: number | null
@@ -838,44 +792,4 @@ export function buildGatewayMetricsSummary(text: string): GatewayMetricsSummary 
     fallbackTotal: fallbacks.reduce((total, item) => total + item.total, 0),
     fallbacks,
   }
-}
-
-async function fetchGatewayMetricsText(): Promise<string> {
-  const response = await apiClient.get<string>('/_gateway/metrics', {
-    responseType: 'text',
-    transformResponse: [(data: string) => data],
-  })
-  return typeof response.data === 'string' ? response.data : String(response.data ?? '')
-}
-
-export const monitoringApi = {
-  async getSystemStatus(): Promise<AdminMonitoringSystemStatus> {
-    const response = await apiClient.get<AdminMonitoringSystemStatus>(
-      '/api/admin/monitoring/system-status'
-    )
-    return response.data
-  },
-
-  async getResilienceStatus(): Promise<AdminMonitoringResilienceStatus> {
-    const response = await apiClient.get<AdminMonitoringResilienceStatus>(
-      '/api/admin/monitoring/resilience-status'
-    )
-    return response.data
-  },
-
-  async getCircuitHistory(limit = 10): Promise<AdminMonitoringCircuitHistoryResponse> {
-    const response = await apiClient.get<AdminMonitoringCircuitHistoryResponse>(
-      '/api/admin/monitoring/resilience/circuit-history',
-      { params: { limit } }
-    )
-    return response.data
-  },
-
-  async getGatewayMetricsText(): Promise<string> {
-    return fetchGatewayMetricsText()
-  },
-
-  async getGatewayMetricsSummary(): Promise<GatewayMetricsSummary> {
-    return buildGatewayMetricsSummary(await fetchGatewayMetricsText())
-  },
 }

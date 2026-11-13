@@ -239,11 +239,6 @@ export interface ProviderEndpoint {
  */
 export type AllowedModels = string[] | null
 
-// AllowedModels 类型守卫函数
-export function isAllowedModelsList(value: AllowedModels): value is string[] {
-  return Array.isArray(value)
-}
-
 export interface EndpointAPIKey {
   id: string
   provider_id: string
@@ -857,39 +852,6 @@ export interface ProviderWithEndpointsSummary {
   updated_at: string
 }
 
-export interface HealthStatus {
-  endpoint_id?: string
-  endpoint_health_score?: number
-  endpoint_consecutive_failures?: number
-  endpoint_last_failure_at?: string
-  endpoint_is_active?: boolean
-  key_id?: string
-  key_health_score?: number
-  key_consecutive_failures?: number
-  key_last_failure_at?: string
-  key_is_active?: boolean
-  key_statistics?: Record<string, unknown>
-}
-
-export interface HealthSummary {
-  endpoints: {
-    total: number
-    active: number
-    unhealthy: number
-  }
-  keys: {
-    total: number
-    active: number
-    unhealthy: number
-  }
-}
-
-export interface KeyRpmStatus {
-  key_id: string
-  current_rpm: number
-  rpm_limit?: number
-}
-
 export interface ProviderModelMapping {
   name: string
   priority: number  // 优先级（数字越小优先级越高）
@@ -900,21 +862,3 @@ export interface ProviderModelMapping {
 
 // 保留别名以保持向后兼容
 export type ProviderModelAlias = ProviderModelMapping
-
-export interface AdaptiveStatsResponse {
-  adaptive_mode: boolean
-  current_limit: number | null
-  learned_limit: number | null
-  concurrent_429_count: number
-  rpm_429_count: number
-  last_429_at: string | null
-  last_429_type: string | null
-  adjustment_count: number
-  recent_adjustments: Array<{
-    timestamp: string
-    old_limit: number
-    new_limit: number
-    reason: string
-    [key: string]: unknown
-  }>
-}

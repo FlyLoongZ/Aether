@@ -1,13 +1,4 @@
-/**
- * 应用全局常量配置
- */
 
-// 应用配置
-export const APP_CONFIG = {
-  NAME: 'Aether',
-  VERSION: '9.1.0',
-  DESCRIPTION: 'Claude API 代理服务管理平台',
-} as const
 
 // 网络配置
 export const NETWORK_CONFIG = {
@@ -38,31 +29,5 @@ export const LogLevel = {
 
 export type LogLevel = typeof LogLevel[keyof typeof LogLevel]
 
-// 业务相关常量
-export const BUSINESS_CONSTANTS = {
-  // Provider 相关
-  PROVIDER_DEFAULT_PRIORITY: 100,
-  PROVIDER_MIN_PRIORITY: 0,
-  PROVIDER_MAX_PRIORITY: 999,
-
-  // API Key 相关（不限制长度）
-
-  // 分页配置
-  DEFAULT_PAGE_SIZE: 20,
-  MAX_PAGE_SIZE: 100,
-} as const
-
-// 错误消息
-export const ERROR_MESSAGES = {
-  NETWORK_ERROR: '无法连接到服务器,请检查网络连接',
-  AUTH_FAILED: '认证失败,请重新登录',
-  PERMISSION_DENIED: '权限不足',
-  SERVER_ERROR: '服务器错误,请稍后重试',
-  INVALID_INPUT: '输入数据无效',
-  OPERATION_FAILED: '操作失败',
-} as const
-
 // 环境判断
 export const isDev = import.meta.env.DEV
-export const isProd = import.meta.env.PROD
-export const isTest = import.meta.env.MODE === 'test'

@@ -39,9 +39,6 @@ export type ActionStatus =
   | 'already_done'
   | 'unknown_error'
 
-/** 连接状态 */
-export type ConnectorStatus = 'disconnected' | 'connecting' | 'connected' | 'expired' | 'error'
-
 /** 架构信息 */
 export interface ArchitectureInfo {
   architecture_id: string
@@ -60,27 +57,7 @@ export interface ArchitectureInfo {
     config_schema: Record<string, unknown>
   }>
   default_connector: string | null
-}
-
-/** 连接状态响应 */
-export interface ConnectionStatusResponse {
-  status: ConnectorStatus
-  auth_type: ConnectorAuthType
-  connected_at: string | null
-  expires_at: string | null
-  last_error: string | null
-}
-
-/** Provider 操作状态响应 */
-export interface ProviderOpsStatusResponse {
-  provider_id: string
-  is_configured: boolean
-  architecture_id: string | null
-  connection_status: ConnectionStatusResponse
-  enabled_actions: string[]
-}
-
-/** 余额信息 */
+}/** 余额信息 */
 export interface BalanceInfo {
   total_granted: number | null
   total_used: number | null
@@ -143,11 +120,6 @@ export interface SaveConfigRequest {
   quota_alert?: QuotaAlertConfig
 }
 
-/** 连接请求 */
-export interface ConnectRequest {
-  credentials?: Record<string, unknown>
-}
-
 /** 执行操作请求 */
 export interface ExecuteActionRequest {
   config?: Record<string, unknown>
@@ -162,28 +134,6 @@ const BASE_URL = '/api/admin/provider-ops'
  */
 export async function getArchitectures(): Promise<ArchitectureInfo[]> {
   const response = await client.get<ArchitectureInfo[]>(`${BASE_URL}/architectures`)
-  return response.data
-}
-
-/**
- * 获取指定架构的详情
- */
-export async function getArchitecture(architectureId: string): Promise<ArchitectureInfo> {
-  const response = await client.get<ArchitectureInfo>(
-    `${BASE_URL}/architectures/${architectureId}`
-  )
-  return response.data
-}
-
-/**
- * 获取 Provider 的操作状态
- */
-export async function getProviderOpsStatus(
-  providerId: string
-): Promise<ProviderOpsStatusResponse> {
-  const response = await client.get<ProviderOpsStatusResponse>(
-    `${BASE_URL}/providers/${providerId}/status`
-  )
   return response.data
 }
 
@@ -240,32 +190,6 @@ export async function deleteProviderOpsConfig(
 }
 
 /**
- * 建立与 Provider 的连接
- */
-export async function connectProvider(
-  providerId: string,
-  request?: ConnectRequest
-): Promise<{ success: boolean; message: string }> {
-  const response = await client.post<{ success: boolean; message: string }>(
-    `${BASE_URL}/providers/${providerId}/connect`,
-    request || {}
-  )
-  return response.data
-}
-
-/**
- * 断开与 Provider 的连接
- */
-export async function disconnectProvider(
-  providerId: string
-): Promise<{ success: boolean; message: string }> {
-  const response = await client.post<{ success: boolean; message: string }>(
-    `${BASE_URL}/providers/${providerId}/disconnect`
-  )
-  return response.data
-}
-
-/**
  * 执行指定操作
  */
 export async function executeAction(
@@ -292,16 +216,6 @@ export async function getBalance(
   const response = await client.get<ActionResultResponse>(
     `${BASE_URL}/providers/${providerId}/balance`,
     { params: { refresh } }
-  )
-  return response.data
-}
-
-/**
- * 立即刷新余额（同步等待结果）
- */
-export async function refreshBalance(providerId: string): Promise<ActionResultResponse> {
-  const response = await client.post<ActionResultResponse>(
-    `${BASE_URL}/providers/${providerId}/balance`
   )
   return response.data
 }

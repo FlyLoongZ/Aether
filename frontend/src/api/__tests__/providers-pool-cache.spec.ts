@@ -4,7 +4,7 @@ const { getMock, patchMock } = vi.hoisted(() => ({ getMock: vi.fn(), patchMock: 
 
 vi.mock('@/api/client', () => ({ default: { get: getMock, patch: patchMock } }))
 
-import { getPoolOverview, listPoolKeys, listPoolScores } from '@/api/endpoints/pool'
+import { listPoolKeys } from '@/api/endpoints/pool'
 import { getProvider, updateProvider } from '@/api/endpoints/providers'
 import { cache } from '@/utils/cache'
 
@@ -25,24 +25,6 @@ beforeEach(() => {
 })
 
 describe('provider pool settings cache invalidation', () => {
-  it('refreshes every cached key page, score page and overview after changing pool settings', async () => {
-    getMock.mockResolvedValue({ data: { version: 'old' } })
-    await getPoolOverview(options)
-    await listPoolKeys('codex', {}, options)
-    await listPoolKeys('codex', { page: 2, status: 'quota_exhausted' }, options)
-    await listPoolScores('codex', {}, options)
-    await listPoolKeys('codex-other', {}, options)
-    await updateProvider('codex', { pool_advanced: { reserve_minimum_quota: false } })
-    getMock.mockResolvedValue({ data: { version: 'new' } })
-
-    await expect(getPoolOverview(options)).resolves.toEqual({ version: 'new' })
-    await expect(listPoolKeys('codex', {}, options)).resolves.toEqual({ version: 'new' })
-    await expect(listPoolKeys('codex', { page: 2, status: 'quota_exhausted' }, options))
-      .resolves.toEqual({ version: 'new' })
-    await expect(listPoolScores('codex', {}, options)).resolves.toEqual({ version: 'new' })
-    await expect(listPoolKeys('codex-other', {}, options)).resolves.toEqual({ version: 'old' })
-  })
-
   it('does not reuse or cache a key request started before the settings were saved', async () => {
     const oldResponse = deferred<{ data: { version: string } }>()
     const newResponse = deferred<{ data: { version: string } }>()

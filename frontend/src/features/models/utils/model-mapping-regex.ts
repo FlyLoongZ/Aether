@@ -123,30 +123,3 @@ export function getCompiledModelMappingRegex(
 
   return regex
 }
-
-export function safeTestModelMappingPattern(
-  pattern: string,
-  modelName: string,
-  cache: LRURegexCache,
-): boolean {
-  if (!pattern) return false
-
-  if (pattern.toLowerCase() === modelName.toLowerCase()) {
-    return true
-  }
-
-  if (pattern.length > MAX_MAPPING_LENGTH || modelName.length > MAX_MODEL_NAME_LENGTH) {
-    return false
-  }
-
-  const regex = getCompiledModelMappingRegex(pattern, cache)
-  if (regex === null) {
-    return false
-  }
-
-  try {
-    return regex.test(modelName)
-  } catch {
-    return false
-  }
-}

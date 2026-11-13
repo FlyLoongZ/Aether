@@ -401,13 +401,6 @@ export interface CleanupTaskResponse {
   task: CleanupRunRecord
 }
 
-export interface ManualUsageCleanupSummary {
-  body_cleaned: number
-  header_cleaned: number
-  keys_cleaned: number
-  records_deleted: number
-}
-
 export type ManualUsageCleanupMode = 'policy' | 'older_than_days' | 'before_now'
 export type ManualUsageCleanupTarget = 'body' | 'headers' | 'records'
 
@@ -848,7 +841,6 @@ export interface ComparisonResponse {
   comparison_start: string
   comparison_end: string
 }
-
 
 export interface ApiKeyToggleResponse {
   id: string // UUID

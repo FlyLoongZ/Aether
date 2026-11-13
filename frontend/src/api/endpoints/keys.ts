@@ -10,54 +10,6 @@ interface KeyRequestOptions {
 }
 
 /**
- * 能力定义类型
- */
-export interface CapabilityDefinition {
-  name: string
-  display_name: string
-  description: string
-  match_mode: 'exclusive' | 'compatible'
-  config_mode?: 'user_configurable' | 'auto_detect' | 'request_param'
-  short_name?: string
-}
-
-/**
- * 模型支持的能力响应类型
- */
-export interface ModelCapabilitiesResponse {
-  model: string
-  global_model_id?: string
-  global_model_name?: string
-  supported_capabilities: string[]
-  capability_details: CapabilityDefinition[]
-  error?: string
-}
-
-/**
- * 获取所有能力定义
- */
-export async function getAllCapabilities(): Promise<CapabilityDefinition[]> {
-  const response = await client.get<{ capabilities: CapabilityDefinition[] }>('/api/capabilities')
-  return response.data.capabilities
-}
-
-/**
- * 获取用户可配置的能力列表
- */
-export async function getUserConfigurableCapabilities(): Promise<CapabilityDefinition[]> {
-  const response = await client.get<{ capabilities: CapabilityDefinition[] }>('/api/capabilities/user-configurable')
-  return response.data.capabilities
-}
-
-/**
- * 获取指定模型支持的能力列表
- */
-export async function getModelCapabilities(modelName: string): Promise<ModelCapabilitiesResponse> {
-  const response = await client.get<ModelCapabilitiesResponse>(`/api/capabilities/model/${encodeURIComponent(modelName)}`)
-  return response.data
-}
-
-/**
  * 获取完整的 API Key（用于查看和复制）
  */
 export interface RevealKeyResult {
@@ -88,23 +40,7 @@ export async function deleteEndpointKey(keyId: string): Promise<{ message: strin
   return response.data
 }
 
-/**
- * 批量删除 Keys
- */
-export interface BatchDeleteKeysResult {
-  success_count: number
-  failed_count: number
-  failed: Array<{ id: string; error: string }>
-}
-
-export async function batchDeleteEndpointKeys(ids: string[]): Promise<BatchDeleteKeysResult> {
-  const response = await client.post<BatchDeleteKeysResult>('/api/admin/endpoints/keys/batch-delete', { ids })
-  return response.data
-}
-
-
 // ========== Provider 级别的 Keys API ==========
-
 
 /**
  * 获取 Provider 的所有 Keys
@@ -359,37 +295,5 @@ export async function consumeCodexResetCredit(
     payload,
     { timeout: 5 * 60 * 1000 },
   )
-  return response.data
-}
-
-/**
- * 批量导入 OAuth 凭据（通用）
- * 支持的 Provider 类型：Codex、Antigravity、ClaudeCode、Kiro
- */
-export interface BatchImportResultItem {
-  index: number
-  status: 'success' | 'error'
-  key_id?: string
-  key_name?: string
-  auth_method?: string
-  error?: string
-}
-
-export interface BatchImportResult {
-  total: number
-  success: number
-  failed: number
-  results: BatchImportResultItem[]
-}
-
-export async function batchImportOAuth(
-  providerId: string,
-  credentials: string,
-  proxyNodeId?: string
-): Promise<BatchImportResult> {
-  const response = await client.post<BatchImportResult>(`/api/admin/provider-oauth/providers/${providerId}/batch-import`, {
-    credentials,
-    proxy_node_id: proxyNodeId || undefined,
-  })
   return response.data
 }

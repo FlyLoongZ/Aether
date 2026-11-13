@@ -3,7 +3,11 @@ import { createApp, defineComponent, h, nextTick, ref, type App } from 'vue'
 import { createMemoryHistory, createRouter, RouterView, type LocationQueryRaw } from 'vue-router'
 import ProviderSchedulingView from '../ProviderSchedulingView.vue'
 import ProviderTableHeader from '../ProviderTableHeader.vue'
-import { createEmptyRoutingGroupConfig, setDefaultProviderPriorityOverrides, type RoutingGroupConfig } from '@/features/routing/utils/routingPolicy'
+import {
+  createEmptyRoutingGroupConfig,
+  setDefaultProviderPriorityOverrides,
+  type RoutingGroupConfig,
+} from '@/features/routing/utils/routingPolicy'
 import type { RoutingGroupRecord, RoutingGroupUpdateRequest } from '@/api/routing-profiles'
 
 const routingApi = vi.hoisted(() => ({ listRoutingGroups: vi.fn(), updateRoutingGroup: vi.fn(), createRoutingGroup: vi.fn(), deleteRoutingGroup: vi.fn() }))
@@ -17,7 +21,6 @@ vi.mock('@/api/global-models', () => ({ getGlobalModels: vi.fn().mockResolvedVal
 vi.mock('@/composables/useToast', () => ({ useToast: () => toast }))
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ confirm }) }))
 vi.mock('@/utils/logger', () => ({ log: { error: vi.fn(), warn: vi.fn() } }))
-vi.mock('@/features/providers/composables/useSchedulingProviderBalance', () => ({ provideSchedulingProviderBalance: vi.fn() }))
 vi.mock('@/features/routing/components/RoutingFailoverPolicyEditor.vue', async () => {
   const { defineComponent } = await import('vue')
   return { default: defineComponent({ setup(_, { expose }) { expose({ commitJsonDrafts: commitFailoverDrafts }); return () => null } }) }

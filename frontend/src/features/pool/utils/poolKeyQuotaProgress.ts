@@ -78,21 +78,6 @@ export function getQuotaProgressCountdown(item: QuotaProgressItem, tick: number)
   )
 }
 
-export function getQuotaProgressCountdownText(item: QuotaProgressItem, tick: number): string {
-  const status = getQuotaProgressCountdown(item, tick)
-  if (!status) return ''
-  return status.isExpired ? '' : translate('feedback.pool.resetsAfter', { time: status.text })
-}
-
-export function formatCompactQuotaCountdownText(text: string): string {
-  const normalized = text.trim()
-  const dayMatch = normalized.match(/^(\d+)天\s+(.+?)(?:\s+后重置)?$/)
-  if (dayMatch) {
-    return translate('time.countdownDays', { days: dayMatch[1], time: dayMatch[2] })
-  }
-  return normalized.replace(/\s+后重置$/, '').replace(/^Resets in\s+/i, '')
-}
-
 export function shouldHideQuotaProgressDetailText(text: string | null | undefined): boolean {
   const normalized = (text ?? '').trim()
   return normalized.includes('已重置') || /^reset(?:\b|$)/i.test(normalized)

@@ -5,7 +5,6 @@ import {
   apiFormatPermissionCovers,
   formatApiFormat,
   formatApiFormatShort,
-  groupApiFormats,
   normalizeApiFormatAlias,
   sortApiFormats,
 } from '@/api/endpoints/types'
@@ -59,26 +58,6 @@ describe('api format display helpers', () => {
     expect(apiFormatPermissionCovers('OPENAI_RESPONSES', 'openai:responses:compact')).toBe(true)
     expect(apiFormatPermissionCovers('openai:search', 'openai:responses')).toBe(false)
     expect(apiFormatPermissionCovers('openai:responses:compact', 'openai:responses')).toBe(false)
-  })
-
-  it('presents the private Codex Live protocol as OpenAI Live while keeping formats distinct', () => {
-    expect(formatApiFormat(API_FORMATS.OPENAI_REALTIME)).toBe('OpenAI Realtime')
-    expect(formatApiFormatShort(API_FORMATS.OPENAI_REALTIME)).toBe('ORT')
-    expect(formatApiFormat(API_FORMATS.CODEX_LIVE)).toBe('OpenAI Live')
-    expect(formatApiFormatShort(API_FORMATS.CODEX_LIVE)).toBe('OL')
-    expect(apiFormatPermissionCovers('openai:realtime', 'openai:realtime')).toBe(true)
-    expect(apiFormatPermissionCovers('codex:live', 'codex:live')).toBe(true)
-    expect(apiFormatPermissionCovers('openai:responses', 'openai:realtime')).toBe(false)
-    expect(apiFormatPermissionCovers('openai:responses', 'codex:live')).toBe(false)
-    expect(apiFormatPermissionCovers('openai:realtime', 'codex:live')).toBe(false)
-    expect(apiFormatPermissionCovers('codex:live', 'openai:realtime')).toBe(false)
-    expect(groupApiFormats([
-      API_FORMATS.CODEX_LIVE,
-      API_FORMATS.OPENAI_REALTIME,
-    ])).toEqual([
-      { family: 'openai', label: 'OpenAI', formats: [API_FORMATS.OPENAI_REALTIME] },
-      { family: 'codex', label: 'Codex', formats: [API_FORMATS.CODEX_LIVE] },
-    ])
   })
 
   it('formats embedding api format ids distinctly from chat formats', () => {
@@ -162,29 +141,4 @@ describe('api format display helpers', () => {
     ])
   })
 
-  it('groups embedding api formats by provider family', () => {
-    expect(groupApiFormats([
-      API_FORMATS.DOUBAO_EMBEDDING,
-      API_FORMATS.ALIYUN_MULTIMODAL_EMBEDDING,
-      API_FORMATS.JINA_RERANK,
-      API_FORMATS.JINA_EMBEDDING,
-      API_FORMATS.GEMINI_EMBEDDING,
-      API_FORMATS.OPENAI_EMBEDDING,
-      API_FORMATS.OPENAI_RERANK,
-    ])).toEqual([
-      { family: 'openai', label: 'OpenAI', formats: [API_FORMATS.OPENAI_EMBEDDING, API_FORMATS.OPENAI_RERANK] },
-      { family: 'gemini', label: 'Gemini', formats: [API_FORMATS.GEMINI_EMBEDDING] },
-      { family: 'jina', label: 'Jina', formats: [API_FORMATS.JINA_EMBEDDING, API_FORMATS.JINA_RERANK] },
-      { family: 'doubao', label: 'Doubao', formats: [API_FORMATS.DOUBAO_EMBEDDING] },
-      { family: 'aliyun', label: 'Aliyun', formats: [API_FORMATS.ALIYUN_MULTIMODAL_EMBEDDING] },
-    ])
-  })
-
-  it('groups retired enum-style aliases as unknown raw families', () => {
-    expect(groupApiFormats(['OPENAI_CLI'])).toEqual([{
-      family: 'openai_cli',
-      label: 'openai_cli',
-      formats: ['OPENAI_CLI'],
-    }])
-  })
 })

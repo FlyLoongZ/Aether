@@ -40,12 +40,3 @@ export function formatDateTime(dateStr: string): string {
 
   return `${hours}:${minutes}:${seconds}`
 }
-
-/**
- * 获取成功率颜色类名
- */
-export function getSuccessRateColor(rate: number): string {
-  if (rate >= 95) return 'text-green-600 dark:text-green-400'
-  if (rate >= 90) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-red-600 dark:text-red-400'
-}

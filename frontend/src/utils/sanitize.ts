@@ -58,15 +58,6 @@ export function sanitizeHtml(dirty: string): string {
 }
 
 /**
- * 严格模式：只允许纯文本
- * @param dirty - 原始字符串
- * @returns 纯文本（所有HTML标签被移除）
- */
-export function sanitizeText(dirty: string): string {
-  return DOMPurify.sanitize(dirty, { ALLOWED_TAGS: [] })
-}
-
-/**
  * 为 Markdown 内容提供特殊配置
  * @param dirty - Markdown 渲染后的 HTML
  * @returns 清理后的安全 HTML

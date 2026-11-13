@@ -5,7 +5,6 @@ import {
   normalizeApiFormatAlias,
 } from '@/api/endpoints/types/api-format'
 import type { ProviderModelMapping } from '@/api/endpoints/types'
-import type { TestModelRequest } from '@/api/endpoints/providers'
 import {
   modelSupportsImageGeneration,
   normalizeModelTestStringList,
@@ -143,20 +142,6 @@ export function syncModelTestRequestBodyDraft(
       ? setModelTestRequestBodyModel(draft, modelName.trim())
       : draft,
     resetValue: nextReset,
-  }
-}
-
-export function buildExactModelMappingTestRequest(
-  providerId: string,
-  modelName: string,
-  apiFormat: string | null | undefined,
-): TestModelRequest {
-  return {
-    provider_id: providerId,
-    model_name: modelName,
-    mode: 'direct',
-    apply_model_mapping: false,
-    api_format: apiFormat || undefined,
   }
 }
 

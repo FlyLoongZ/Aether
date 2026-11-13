@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick, reactive, type App, type ComponentPublicInstance } from 'vue'
 import ProviderSchedulingView from '@/features/providers/components/ProviderSchedulingView.vue'
-import { createEmptyModelPolicy, createEmptyRoutingGroupConfig, getModelScheduling, savePerModelRoutingConfig, type RoutingModelPolicy } from '@/features/routing/utils/routingPolicy'
-import { createSchedulingPolicy, readSchedulingPolicies, writeSchedulingPolicies } from '@/features/routing/utils/schedulingPolicies'
+import {
+  createEmptyModelPolicy,
+  createEmptyRoutingGroupConfig,
+  getModelScheduling,
+  savePerModelRoutingConfig,
+  type RoutingModelPolicy,
+} from '@/features/routing/utils/routingPolicy'
+import {
+  createSchedulingPolicy,
+  readSchedulingPolicies,
+  writeSchedulingPolicies,
+} from '@/features/routing/utils/schedulingPolicies'
 import type { RoutingGroupRecord, RoutingGroupUpdateRequest } from '@/api/routing-profiles'
 
 const routingApi = vi.hoisted(() => ({
@@ -20,7 +30,6 @@ vi.mock('@/api/routing-profiles', () => routingApi)
 vi.mock('@/api/global-models', () => globalModelsApi)
 vi.mock('@/composables/useToast', () => ({ useToast: () => toast }))
 vi.mock('vue-router', () => ({ useRoute: () => route, useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), onBeforeRouteLeave: vi.fn(), onBeforeRouteUpdate: vi.fn() }))
-vi.mock('@/features/providers/composables/useSchedulingProviderBalance', () => ({ provideSchedulingProviderBalance: vi.fn() }))
 vi.mock('@/utils/logger', () => ({ log: { error: vi.fn(), warn: vi.fn() } }))
 vi.mock('@/features/routing/components/RoutingPriorityPolicyEditor.vue', () => ({ default: { render: () => null } }))
 

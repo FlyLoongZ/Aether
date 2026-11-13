@@ -10,11 +10,6 @@ export const EMBEDDING_API_FORMATS = [
   'aliyun:multimodal_embedding',
 ] as const
 
-export const RERANK_API_FORMATS = [
-  'openai:rerank',
-  'jina:rerank',
-] as const
-
 export interface GlobalModelFormPayloadState {
   name: string
   display_name: string

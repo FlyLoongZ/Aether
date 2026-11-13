@@ -159,14 +159,6 @@ export interface ModelUpdate {
   config?: ModelConfig | null
 }
 
-export interface ModelCapabilities {
-  supports_vision: boolean
-  supports_function_calling: boolean
-  supports_streaming: boolean
-  supports_embedding: boolean
-  [key: string]: boolean
-}
-
 export interface OpenAiImageModelTestCapability {
   max_generation_count?: number | null
   supports_generation?: boolean | null
@@ -176,14 +168,6 @@ export interface OpenAiImageModelTestCapability {
 export interface ModelTestCapabilities {
   'openai:image'?: OpenAiImageModelTestCapability | null
   [apiFormat: string]: OpenAiImageModelTestCapability | Record<string, unknown> | null | undefined
-}
-
-export interface ProviderModelPriceInfo {
-  input_price_per_1m?: number | null
-  output_price_per_1m?: number | null
-  cache_creation_price_per_1m?: number | null
-  cache_read_price_per_1m?: number | null
-  price_per_request?: number | null  // 按次计费价格
 }
 
 export interface ModelPriceRange {
@@ -212,46 +196,7 @@ export interface ModelCatalogProviderDetail {
   supports_embedding?: boolean | null
   is_active: boolean
   mapping_id?: string | null
-}
-
-export interface ModelCatalogItem {
-  global_model_name: string  // GlobalModel.name（原 source_model）
-  display_name: string  // GlobalModel.display_name
-  description?: string | null  // GlobalModel.description
-  providers: ModelCatalogProviderDetail[]  // 支持该模型的 Provider 列表
-  price_range: ModelPriceRange  // 价格区间
-  total_providers: number
-  capabilities: ModelCapabilities  // 能力聚合
-}
-
-export interface ModelCatalogResponse {
-  models: ModelCatalogItem[]
-  total: number
-}
-
-export interface ProviderAvailableSourceModel {
-  global_model_name: string  // GlobalModel.name（原 source_model）
-  display_name: string  // GlobalModel.display_name
-  provider_model_name: string  // Model.provider_model_name（Provider 侧的模型名）
-  model_id?: string | null  // Model.id
-  price: ProviderModelPriceInfo
-  capabilities: ModelCapabilities
-  is_active: boolean
-}
-
-export interface ProviderAvailableSourceModelsResponse {
-  models: ProviderAvailableSourceModel[]
-  total: number
-}
-
-export interface BatchAssignProviderConfig {
-  provider_id: string
-  create_model?: boolean
-  model_config?: ModelCreate
-  model_id?: string
-}
-
-// ========== GlobalModel 类型 ==========
+}// ========== GlobalModel 类型 ==========
 
 export interface GlobalModelCreate {
   name: string
@@ -327,31 +272,4 @@ export interface UpstreamModel {
   supported_in_api?: boolean
   api_formats: string[]  // 该模型支持的所有 API 格式（后端保证返回数组）
   model_test_capabilities?: ModelTestCapabilities | null
-}
-
-/**
- * 导入成功的模型信息
- */
-export interface ImportFromUpstreamSuccessItem {
-  model_id: string
-  provider_model_id: string
-  global_model_id: string
-  global_model_name: string
-  created_global_model: boolean  // 始终为 false（不再自动创建 GlobalModel）
-}
-
-/**
- * 导入失败的模型信息
- */
-export interface ImportFromUpstreamErrorItem {
-  model_id: string
-  error: string
-}
-
-/**
- * 从上游提供商导入模型响应
- */
-export interface ImportFromUpstreamResponse {
-  success: ImportFromUpstreamSuccessItem[]
-  errors: ImportFromUpstreamErrorItem[]
 }

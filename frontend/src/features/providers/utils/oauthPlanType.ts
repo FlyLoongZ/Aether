@@ -67,11 +67,3 @@ export function getOAuthPlanTypeClass(planType?: string | null): string {
   }
   return PLAN_TYPE_CLASS_NAMES[normalized] || ''
 }
-
-export function isNonFreeOAuthPlan(planType?: string | null): boolean {
-  const normalized = normalizeOAuthPlanType(planType)
-  if (!normalized) {
-    return false
-  }
-  return normalized !== 'free'
-}
