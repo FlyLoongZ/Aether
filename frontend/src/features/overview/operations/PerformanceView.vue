@@ -6,10 +6,10 @@
     >
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-sm font-semibold">
-          {{ t('请求分析', 'Request analysis') }}
+          {{ t('overview.requestAnalysis') }}
         </h2>
         <p class="text-xs text-muted-foreground">
-          {{ t('所选时段 · 失败请求多的优先展示', 'Selected range · Most failures first') }}
+          {{ t('overview.selectedRangeMostFailuresFirst') }}
         </p>
       </div>
       <OverviewStatus
@@ -22,7 +22,7 @@
         class="grid grid-cols-1 items-start gap-4 min-[1920px]:grid-cols-2"
       >
         <PerformanceAnalysisCard
-          :title="t('提供商分析', 'Provider analysis')"
+          :title="t('overview.providerAnalysis')"
           dimension="provider"
           :rows="providerRows"
           :total-requests="data.data.summary.request_count"
@@ -30,7 +30,7 @@
           :live-window-seconds="activity?.observed_window_seconds"
         />
         <PerformanceAnalysisCard
-          :title="t('模型分析', 'Model analysis')"
+          :title="t('overview.modelAnalysis')"
           dimension="model"
           :rows="modelRows"
           :total-requests="data.data.summary.request_count"
@@ -45,12 +45,12 @@
       data-operations-charts
     >
       <h2 class="text-sm font-semibold">
-        {{ t('趋势与分布', 'Trends and distribution') }}
+        {{ t('overview.trendsAndDistribution') }}
       </h2>
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card class="min-w-0 space-y-3 p-4 sm:p-5">
           <h3 class="text-sm font-semibold">
-            {{ t('请求与失败趋势', 'Request and failure trend') }}
+            {{ t('overview.requestAndFailureTrend') }}
           </h3>
           <div
             v-if="data.data.timeseries.length"
@@ -62,12 +62,12 @@
             v-else
             class="flex h-64 items-center justify-center text-sm text-muted-foreground"
           >
-            {{ t('此时间范围暂无请求', 'No requests in this range') }}
+            {{ t('overview.noRequestsInTimeRange') }}
           </p>
         </Card>
         <Card class="min-w-0 space-y-3 p-4 sm:p-5">
           <h3 class="text-sm font-semibold">
-            {{ t('响应时间趋势', 'Response latency trend') }}
+            {{ t('overview.responseLatencyTrend') }}
           </h3>
           <div
             v-if="data.data.timeseries.length"
@@ -79,19 +79,19 @@
             v-else
             class="flex h-64 items-center justify-center text-sm text-muted-foreground"
           >
-            {{ t('此时间范围暂无时延样本', 'No latency samples in this range') }}
+            {{ t('overview.noLatencySamplesInThisRange') }}
           </p>
         </Card>
         <Card class="min-w-0 space-y-3 p-4 sm:p-5 lg:col-span-2">
           <div class="flex items-center justify-between gap-3">
             <h3 class="text-sm font-semibold">
-              {{ t('失败原因分布', 'Failure reasons') }}
+              {{ t('overview.failureReasons') }}
             </h3>
             <RouterLink
               :to="link('/admin/usage', { status: 'failed' })"
               class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
             >
-              {{ t('失败请求', 'Failed requests') }}<ArrowUpRight class="h-3.5 w-3.5" />
+              {{ t('overview.failedRequests') }}<ArrowUpRight class="h-3.5 w-3.5" />
             </RouterLink>
           </div>
           <div
@@ -109,7 +109,7 @@
             v-else
             class="flex h-32 items-center justify-center text-sm text-muted-foreground"
           >
-            {{ t('此时间范围未记录失败请求', 'No failed requests recorded in this range') }}
+            {{ t('overview.noFailedRequestsRecordedInThisRange') }}
           </p>
         </Card>
       </div>
@@ -119,7 +119,7 @@
       data-operations-diagnostics
     >
       <summary class="cursor-pointer px-4 py-3 text-sm font-medium sm:px-5">
-        {{ t('技术诊断', 'Technical diagnostics') }}
+        {{ t('overview.technicalDiagnostics') }}
       </summary>
       <div class="space-y-6 border-t p-4 sm:p-5">
         <section
@@ -128,10 +128,10 @@
         >
           <div class="flex items-center justify-between gap-3">
             <h3 class="text-sm font-semibold">
-              {{ t('性能诊断', 'Performance diagnostics') }}
+              {{ t('overview.performanceDiagnostics') }}
             </h3>
             <Badge variant="outline">
-              {{ t('所选时段', 'Selected range') }}
+              {{ t('overview.selectedRange') }}
             </Badge>
           </div>
           <OverviewMetrics
@@ -161,11 +161,11 @@ import PerformanceAnalysisCard from './PerformanceAnalysisCard.vue'
 import { mergeLiveAnalysis, type AnalysisRow } from './analysisHelpers'
 import { useOverviewQuery } from '../query'
 import { useOverviewRequest } from '../useOverviewRequest'
-import { useOverviewI18n } from '../i18n'
 import { timestamp } from '../format'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{ revision: number; activity?: OverviewExecutionActivity | null }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const { range, relativePreset, link } = useOverviewQuery('today')
 // This overview always analyses all requests. Old diagnostic filters in links
 // must not silently hide providers or models from the automatic reports.
@@ -183,7 +183,7 @@ const { data, loading, error, refresh } = useOverviewRequest(
 )
 const historicalProviders = computed<AnalysisRow[] | null>(() => data.value?.data.providers?.providers.map(row => ({
   id: row.provider_id || null,
-  label: row.provider || t('未归属提供商', 'Unattributed provider'),
+  label: row.provider || t('overview.unattributedProvider'),
   requestCount: row.request_count,
   failedCount: row.error_count ?? null,
   successRate: row.success_rate ?? null,
@@ -192,7 +192,7 @@ const historicalProviders = computed<AnalysisRow[] | null>(() => data.value?.dat
 })) ?? null)
 const historicalModels = computed<AnalysisRow[] | null>(() => data.value?.data.models?.map(row => ({
   id: row.model || null,
-  label: row.model || t('未记录模型', 'Unrecorded model'),
+  label: row.model || t('overview.unrecordedModel'),
   requestCount: row.request_count,
   failedCount: row.error_count ?? null,
   successRate: row.success_rate ?? null,
@@ -201,15 +201,15 @@ const historicalModels = computed<AnalysisRow[] | null>(() => data.value?.data.m
 })) ?? null)
 const completeActivity = computed(() => props.activity?.coverage === 'complete' && props.activity.scope.kind === 'node' ? props.activity : null)
 const providerRows = computed(() => mergeLiveAnalysis(historicalProviders.value,
-  completeActivity.value?.providers.map(row => ({ id: row.provider_id || null, label: row.provider || row.provider_id || t('未归属提供商', 'Unattributed provider'), concurrency: row.current_concurrency, rpm: row.requests_per_minute })) ?? null))
+  completeActivity.value?.providers.map(row => ({ id: row.provider_id || null, label: row.provider || row.provider_id || t('overview.unattributedProvider'), concurrency: row.current_concurrency, rpm: row.requests_per_minute })) ?? null))
 const modelRows = computed(() => mergeLiveAnalysis(historicalModels.value,
-  completeActivity.value?.models.map(row => ({ id: row.model || null, label: row.model || t('未记录模型', 'Unrecorded model'), concurrency: row.current_concurrency, rpm: row.requests_per_minute })) ?? null))
+  completeActivity.value?.models.map(row => ({ id: row.model || null, label: row.model || t('overview.unrecordedModel'), concurrency: row.current_concurrency, rpm: row.requests_per_minute })) ?? null))
 const chartLabels = computed(() => data.value?.data.timeseries.map(point => timestamp(point.bucket_start, range.value.timezone)) || [])
 const requestChart = computed(() => ({
   labels: chartLabels.value,
   datasets: [
-    { label: t('请求数', 'Requests'), data: data.value?.data.timeseries.map(point => point.request_count) || [], borderColor: '#0d9488', pointRadius: 1, borderWidth: 2, tension: 0.1 },
-    { label: t('失败请求', 'Failed requests'), data: data.value?.data.timeseries.map(point => point.failed_request_count) || [], borderColor: '#db7d60', pointRadius: 1, borderWidth: 2, tension: 0.1 },
+    { label: t('stats.metric.requests'), data: data.value?.data.timeseries.map(point => point.request_count) || [], borderColor: '#0d9488', pointRadius: 1, borderWidth: 2, tension: 0.1 },
+    { label: t('overview.failedRequests'), data: data.value?.data.timeseries.map(point => point.failed_request_count) || [], borderColor: '#db7d60', pointRadius: 1, borderWidth: 2, tension: 0.1 },
   ],
 }))
 const latencyChart = computed(() => ({
@@ -220,7 +220,7 @@ const failureChart = computed(() => {
   const failures = [...(data.value?.data.errors || [])].sort((a, b) => b.count - a.count)
   return {
     labels: failures.map(row => row.reason),
-    datasets: [{ label: t('失败请求', 'Failed requests'), data: failures.map(row => row.count), backgroundColor: '#db7d60', borderRadius: 4, maxBarThickness: 24 }],
+    datasets: [{ label: t('overview.failedRequests'), data: failures.map(row => row.count), backgroundColor: '#db7d60', borderRadius: 4, maxBarThickness: 24 }],
   }
 })
 const failureChartOptions: ChartOptions<'bar'> = {

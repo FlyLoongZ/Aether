@@ -1,8 +1,8 @@
 <template>
   <Dialog
     :model-value="true"
-    :title="`${user.username} · ${t('账目', 'Account')}`"
-    :description="t('金额与套餐历史 · 余额为当前值', 'Balance and plan history · Balances are current')"
+    :title="`${user.username} · ${t('overview.account')}`"
+    :description="t('overview.balanceAndPlanHistoryBalancesAreCurrent')"
     size="4xl"
     placement="right"
     @update:model-value="value => !value && $emit('close')"
@@ -10,14 +10,14 @@
     <template #header-actions>
       <RefreshButton
         :loading="loading"
-        :title="t('刷新', 'Refresh')"
+        :title="t('ui.refresh')"
         @click="refresh"
       />
       <Button
         ref="closeButton"
         variant="ghost"
         size="icon"
-        :aria-label="t('关闭账目', 'Close account')"
+        :aria-label="t('overview.closeAccount')"
         @click="$emit('close')"
       >
         <X class="h-4 w-4" />
@@ -32,7 +32,7 @@
         data-account-transactions
       >
         <h2 class="text-sm font-semibold">
-          {{ t('金额变动', 'Balance changes') }}
+          {{ t('overview.balanceChanges') }}
         </h2>
         <OverviewStatus
           :error="walletError || transactionsError"
@@ -77,7 +77,7 @@
           v-else-if="!walletError"
           class="py-8 text-center text-sm text-muted-foreground"
         >
-          {{ t('该用户尚无钱包', 'This user has no wallet yet') }}
+          {{ t('overview.thisUserHasNoWalletYet') }}
         </p>
       </section>
       <section
@@ -85,7 +85,7 @@
         data-account-plans
       >
         <h2 class="text-sm font-semibold">
-          {{ t('套餐变动', 'Plan history') }}
+          {{ t('overview.planHistory') }}
         </h2>
         <OverviewStatus
           :error="plansError"
@@ -105,7 +105,7 @@
         variant="outline"
         @click="$emit('close')"
       >
-        {{ t('关闭', 'Close') }}
+        {{ t('ui.close') }}
       </Button>
     </template>
   </Dialog>
@@ -121,12 +121,12 @@ import WalletTransactionsTable from '@/features/wallet/components/WalletTransact
 import UserPlanList from '@/features/users/components/UserPlanList.vue'
 import OverviewStatus from '../components/OverviewStatus.vue'
 import { useOverviewRequest } from '../useOverviewRequest'
-import { useOverviewI18n } from '../i18n'
 import { money } from '../format'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{ user: { user_id: string; username: string }; timezone: string }>()
 defineEmits<{ close: [] }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const closeButton = ref<{ $el: HTMLButtonElement } | null>(null)
 const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
 onMounted(() => closeButton.value?.$el.focus({ preventScroll: true }))
@@ -164,9 +164,9 @@ const {
 )
 const wallet = computed(() => transactions.value?.wallet || wallets.value?.items.find(item => item.user_id === props.user.user_id))
 const balances = computed(() => [
-  { label: t('余额', 'Balance'), value: walletMoney(wallet.value?.balance) },
-  { label: t('充值', 'Recharge balance'), value: walletMoney(wallet.value?.recharge_balance) },
-  { label: t('赠送', 'Gift balance'), value: walletMoney(wallet.value?.gift_balance) },
+  { label: t('ui.balance'), value: walletMoney(wallet.value?.balance) },
+  { label: t('overview.rechargeBalance'), value: walletMoney(wallet.value?.recharge_balance) },
+  { label: t('overview.giftBalance'), value: walletMoney(wallet.value?.gift_balance) },
 ])
 const loading = computed(() => walletLoading.value || transactionsLoading.value || plansLoading.value)
 function walletMoney(value?: number) {

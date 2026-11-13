@@ -4,10 +4,10 @@
       :to="link('/admin/user-stats')"
       class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary"
     >
-      <ArrowLeft class="h-3.5 w-3.5" />{{ t('用户分析', 'User analysis') }}
+      <ArrowLeft class="h-3.5 w-3.5" />{{ t('nav.userStats') }}
     </RouterLink>
     <OverviewToolbar
-      :title="data?.data.user.username || t('用户账目', 'User account')"
+      :title="data?.data.user.username || t('overview.userAccount')"
       :range="range"
       :preset="relativePreset"
       :show-range="false"
@@ -22,7 +22,7 @@
           v-if="data"
           class="mt-1 break-words text-xs text-muted-foreground"
         >
-          {{ data.data.user.email }} · {{ data.data.user.is_active ? t('已启用', 'Enabled') : t('已停用', 'Disabled') }}
+          {{ data.data.user.email }} · {{ data.data.user.is_active ? t('ui.enableddfb8022') : t('ui.disableda8c3698') }}
         </p>
       </template>
     </OverviewToolbar>
@@ -36,7 +36,7 @@
       detail
     />
     <p class="text-xs text-muted-foreground">
-      {{ t('消费与到账按所选时间统计，余额为当前值', 'Consumption and credits follow the selected period; balances are current') }}
+      {{ t('overview.consumptionAndCreditsFollowTheSelectedPeriodBalancesAreCurrent') }}
     </p>
     <UserPayments
       :payments="data?.data.payments"
@@ -72,8 +72,8 @@ import ConsumptionTable from '@/features/overview/users/ConsumptionTable.vue'
 import { useUserAnalysisRefresh } from '@/features/overview/users/useUserAnalysisRefresh'
 import { useOverviewQuery } from '@/features/overview/query'
 import { useOverviewRequest } from '@/features/overview/useOverviewRequest'
-import { useOverviewI18n } from '@/features/overview/i18n'
-const { t } = useOverviewI18n()
+import { useI18n } from '@/i18n'
+const { t } = useI18n()
 const { route, range, relativePreset, refreshRange, setRange, link } = useOverviewQuery('today', { rolling: true })
 const userId = computed(() => String(route.params.userId))
 const { revision, autoRefresh, refreshTitle, refreshAll, toggleAutoRefresh } = useUserAnalysisRefresh(refreshRange)

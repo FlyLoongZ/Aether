@@ -24,12 +24,12 @@
       align="end"
       :side-offset="8"
       :collision-padding="8"
-      :aria-label="text('公告', 'Announcements')"
+      :aria-label="t('overview.announcements')"
       class="w-[22rem] max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border-border bg-card p-0 text-card-foreground shadow-xl shadow-black/10"
     >
       <div class="flex min-w-0 items-center justify-between gap-2 border-b border-border bg-[color-mix(in_srgb,var(--muted)_45%,var(--card))] px-3 py-2">
         <h2 class="min-w-0 text-sm font-semibold">
-          {{ text('公告', 'Announcements') }}
+          {{ t('overview.announcements') }}
         </h2>
         <TooltipProvider :delay-duration="150">
           <div class="flex shrink-0 items-center gap-0.5">
@@ -71,7 +71,7 @@
           :disabled="loading"
           @click="emit('refresh')"
         >
-          {{ text('重试', 'Retry') }}
+          {{ t('ui.retryButton') }}
         </button>
       </div>
 
@@ -91,7 +91,7 @@
               type="button"
               class="flex w-full min-w-0 gap-2.5 px-3 py-3 text-left transition hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               :class="item.announcement.is_read ? 'text-muted-foreground' : 'bg-[color-mix(in_srgb,var(--primary)_5%,var(--card))] text-card-foreground'"
-              :aria-label="`${item.announcement.title}, ${item.announcement.is_read ? text('已读', 'Read') : text('未读', 'Unread')}`"
+              :aria-label="`${item.announcement.title}, ${item.announcement.is_read ? t('ui.read') : t('ui.unread4d0680f')}`"
               @click="emit('select', item.announcement)"
             >
               <span
@@ -121,7 +121,7 @@
           v-else-if="!loading && !error"
           class="px-4 py-10 text-center text-sm text-muted-foreground"
         >
-          {{ text('暂无公告', 'No announcements') }}
+          {{ t('ui.noAnnouncements') }}
         </div>
         <div
           v-if="loading"
@@ -129,7 +129,7 @@
           class="flex items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground"
         >
           <Loader2 class="h-4 w-4 animate-spin" />
-          {{ text('加载中', 'Loading') }}
+          {{ t('overview.loading') }}
         </div>
       </div>
       <button
@@ -139,7 +139,7 @@
         :disabled="loading"
         @click="emit('loadMore')"
       >
-        {{ text('加载更多', 'Load more') }}
+        {{ t('overview.loadMore') }}
         <ChevronDown class="h-3.5 w-3.5" />
       </button>
     </PopoverContent>
@@ -153,7 +153,7 @@ import { marked } from 'marked'
 import type { Announcement } from '@/api/announcements'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { getI18nLocale } from '@/i18n'
+import { getI18nLocale, useI18n } from '@/i18n'
 import { sanitizeMarkdown } from '@/utils/sanitize'
 
 const props = defineProps<{
@@ -176,15 +176,16 @@ const emit = defineEmits<{
   create: []
 }>()
 
-const text = (zh: string, en: string) => getI18nLocale() === 'zh-CN' ? zh : en
+const { t } = useI18n()
+
 const bellLabel = computed(() => props.unreadCount !== null && props.unreadCount > 0
-  ? text(`公告，${props.unreadCount} 条未读`, `Announcements, ${props.unreadCount} unread`)
-  : text('公告', 'Announcements'))
+  ? t('overview.announcementsUnread', { count: props.unreadCount })
+  : t('overview.announcements'))
 const actions = computed(() => [
-  { name: 'refresh', label: text('刷新公告', 'Refresh announcements'), icon: RefreshCw, disabled: props.loading, spinning: props.loading, run: () => emit('refresh') },
-  { name: 'readAll', label: text('全部标为已读', 'Mark all as read'), icon: props.markingAll ? Loader2 : CheckCheck, disabled: props.markingAll || props.unreadCount === null || props.unreadCount === 0, spinning: props.markingAll, run: () => emit('readAll') },
+  { name: 'refresh', label: t('overview.refreshAnnouncements'), icon: RefreshCw, disabled: props.loading, spinning: props.loading, run: () => emit('refresh') },
+  { name: 'readAll', label: t('overview.markAllAsRead'), icon: props.markingAll ? Loader2 : CheckCheck, disabled: props.markingAll || props.unreadCount === null || props.unreadCount === 0, spinning: props.markingAll, run: () => emit('readAll') },
   ...(props.canManage ? [
-    { name: 'create', label: text('发布公告', 'Publish announcement'), icon: Plus, disabled: false, spinning: false, run: () => emit('create') },
+    { name: 'create', label: t('overview.publishAnnouncement'), icon: Plus, disabled: false, spinning: false, run: () => emit('create') },
   ] : []),
 ])
 const displayItems = computed(() => props.items.map(announcement => {

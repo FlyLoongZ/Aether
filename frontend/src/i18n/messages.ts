@@ -2,10 +2,12 @@ import { userMessages } from './user-messages'
 import { providerMessages } from './provider-messages'
 import { uiMessages } from './ui-messages'
 import { feedbackMessages } from './feedback-messages'
+import { overviewMessages } from './overview-messages'
 
 export const messages = {
   'zh-CN': {
     ...uiMessages['zh-CN'],
+    ...overviewMessages['zh-CN'],
     ...feedbackMessages['zh-CN'],
     ...providerMessages['zh-CN'],
     ...userMessages['zh-CN'],
@@ -480,6 +482,7 @@ export const messages = {
   },
   'en-US': {
     ...uiMessages['en-US'],
+    ...overviewMessages['en-US'],
     ...feedbackMessages['en-US'],
     ...providerMessages['en-US'],
     ...userMessages['en-US'],

@@ -1,8 +1,8 @@
 <template>
   <Dialog
     :open="open"
-    :title="t('登记提供商支出', 'Record provider expense')"
-    :description="t('记录已支付的充值、套餐或其他费用', 'Record a paid recharge, subscription or other expense')"
+    :title="t('overview.recordProviderExpense')"
+    :description="t('overview.recordAPaidRechargeSubscriptionOrOtherExpense')"
     size="lg"
     :persistent="saving"
     @update:open="value => !saving && emit('update:open', value)"
@@ -13,7 +13,7 @@
       @submit.prevent="submit"
     >
       <label class="grid gap-2 text-sm sm:col-span-2">
-        {{ t('提供商', 'Provider') }}
+        {{ t('overview.provider') }}
         <select
           v-model="draft.provider_id"
           required
@@ -23,7 +23,7 @@
           <option
             value=""
             disabled
-          >{{ t('选择提供商', 'Select a provider') }}</option>
+          >{{ t('overview.selectAProvider') }}</option>
           <option
             v-for="provider in providers"
             :key="provider.provider_id"
@@ -32,19 +32,19 @@
         </select>
       </label>
       <label class="grid gap-2 text-sm">
-        {{ t('支出类型', 'Expense type') }}
+        {{ t('overview.expenseType') }}
         <select
           v-model="draft.kind"
           class="h-10 rounded-lg border bg-background px-3"
           :disabled="saving"
         >
-          <option value="recharge">{{ t('余额充值', 'Balance recharge') }}</option>
-          <option value="subscription">{{ t('套餐 / 续费', 'Subscription / renewal') }}</option>
-          <option value="other">{{ t('其他支出', 'Other expense') }}</option>
+          <option value="recharge">{{ t('overview.balanceRecharge') }}</option>
+          <option value="subscription">{{ t('overview.subscriptionRenewal') }}</option>
+          <option value="other">{{ t('overview.otherExpense') }}</option>
         </select>
       </label>
       <label class="grid gap-2 text-sm">
-        {{ t('币种', 'Currency') }}
+        {{ t('overview.currency') }}
         <input
           v-model="draft.currency"
           maxlength="3"
@@ -55,7 +55,7 @@
         >
       </label>
       <label class="grid gap-2 text-sm">
-        {{ t('实付金额', 'Amount paid') }}
+        {{ t('overview.amountPaid') }}
         <input
           v-model="draft.amount"
           inputmode="decimal"
@@ -66,7 +66,7 @@
         >
       </label>
       <label class="grid gap-2 text-sm">
-        {{ t('付款时间', 'Paid at') }} · {{ timezone }}
+        {{ t('overview.paidAt') }} · {{ timezone }}
         <input
           v-model="draft.paid_at"
           type="datetime-local"
@@ -77,7 +77,7 @@
       </label>
       <template v-if="draft.kind === 'subscription'">
         <label class="grid gap-2 text-sm">
-          {{ t('套餐开始（选填）', 'Plan starts (optional)') }}
+          {{ t('overview.planStartsOptional') }}
           <input
             v-model="draft.period_start"
             type="date"
@@ -86,7 +86,7 @@
           >
         </label>
         <label class="grid gap-2 text-sm">
-          {{ t('套餐到期（选填）', 'Plan expires (optional)') }}
+          {{ t('overview.planExpiresOptional') }}
           <input
             v-model="draft.period_end"
             type="date"
@@ -96,7 +96,7 @@
         </label>
       </template>
       <label class="grid gap-2 text-sm sm:col-span-2">
-        {{ t('账单 / 交易号（选填）', 'Invoice / reference (optional)') }}
+        {{ t('overview.invoiceReferenceOptional') }}
         <input
           v-model="draft.external_reference"
           maxlength="200"
@@ -105,7 +105,7 @@
         >
       </label>
       <label class="grid gap-2 text-sm sm:col-span-2">
-        {{ t('备注（选填）', 'Note (optional)') }}
+        {{ t('overview.noteOptional') }}
         <textarea
           v-model="draft.note"
           maxlength="1000"
@@ -128,14 +128,14 @@
         form="provider-expense-form"
         :disabled="saving || !providers.length"
       >
-        {{ saving ? t('保存中…', 'Saving…') : t('保存记录', 'Save record') }}
+        {{ saving ? t('overview.saving') : t('overview.saveRecord') }}
       </Button>
       <Button
         variant="outline"
         :disabled="saving"
         @click="emit('update:open', false)"
       >
-        {{ t('取消', 'Cancel') }}
+        {{ t('common.cancel') }}
       </Button>
     </template>
   </Dialog>
@@ -145,12 +145,12 @@
 import { reactive, ref, watch } from 'vue'
 import { Button, Dialog } from '@/components/ui'
 import { providerFinanceApi, type ProviderAccount, type ProviderExpenseKind } from '@/api/providerFinance'
-import { useOverviewI18n } from '../i18n'
 import { zonedInput, zonedInstant } from '../query'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{ open: boolean; providers: ProviderAccount[]; timezone: string }>()
 const emit = defineEmits<{ 'update:open': [value: boolean]; saved: [] }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const saving = ref(false)
 const error = ref('')
 const draft = reactive({ provider_id: '', kind: 'recharge' as ProviderExpenseKind, amount: '', currency: 'USD', paid_at: '', period_start: '', period_end: '', note: '', external_reference: '' })
@@ -165,11 +165,11 @@ async function submit() {
   const start = draft.kind === 'subscription' && draft.period_start ? zonedInstant(`${draft.period_start}T00:00`, props.timezone) : null
   const end = draft.kind === 'subscription' && draft.period_end ? zonedInstant(`${draft.period_end}T00:00`, props.timezone) : null
   if (!draft.provider_id || !paidAt || !/^\d{1,12}(\.\d{1,8})?$/.test(draft.amount.trim()) || Number(draft.amount) <= 0 || !/^[A-Za-z]{3}$/.test(draft.currency)) {
-    error.value = t('请填写提供商、有效付款时间、正数金额及三位币种代码。', 'Enter a provider, valid payment time, positive amount and three-letter currency code.')
+    error.value = t('overview.enterAProviderValidPaymentTimePositiveAmountAndThreeLetterCurrencyCode')
     return
   }
   if (draft.kind === 'subscription' && ((Boolean(start) !== Boolean(end)) || (draft.period_start && !start) || (draft.period_end && !end) || (start && end && start >= end))) {
-    error.value = t('请同时填写套餐开始和到期时间，且到期时间晚于开始时间。', 'Enter both plan dates, with expiry after the start.')
+    error.value = t('overview.enterBothPlanDatesWithExpiryAfterTheStart')
     return
   }
   const input = { provider_id: draft.provider_id, kind: draft.kind, amount: draft.amount.trim(), currency: draft.currency.toUpperCase(), paid_at: paidAt, period_start: start, period_end: end, note: draft.note.trim() || null, external_reference: draft.external_reference.trim() || null }
@@ -184,7 +184,7 @@ async function submit() {
     emit('update:open', false)
   } catch (cause) {
     const failure = cause as { response?: { data?: { detail?: string; message?: string } }; message?: string }
-    error.value = failure.response?.data?.detail || failure.response?.data?.message || failure.message || t('保存失败，请重试', 'Save failed; try again')
+    error.value = failure.response?.data?.detail || failure.response?.data?.message || failure.message || t('overview.saveFailedTryAgain')
   } finally { saving.value = false }
 }
 </script>

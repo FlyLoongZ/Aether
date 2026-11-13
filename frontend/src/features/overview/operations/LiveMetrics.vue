@@ -2,22 +2,22 @@
   <section class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-sm font-semibold">
-        {{ resources ? t('资源诊断', 'Resource diagnostics') : t('实时运行', 'Live runtime') }}
+        {{ resources ? t('overview.resourceDiagnostics') : t('overview.liveRuntime') }}
       </h2><p class="min-w-0 break-words text-xs text-muted-foreground">
-        {{ snapshot.scope.kind === 'cluster' ? t('已知节点集合', 'Known nodes') : t('当前节点', 'Current node') }} · {{ snapshot.node_id || t('节点标识未知', 'Unknown node ID') }} · {{ timestamp(snapshot.observed_at) }}
+        {{ snapshot.scope.kind === 'cluster' ? t('overview.knownNodes') : t('overview.currentNode') }} · {{ snapshot.node_id || t('overview.unknownNodeId') }} · {{ timestamp(snapshot.observed_at) }}
       </p>
     </div>
     <p
       v-if="snapshot.unavailable_sections.length"
       class="break-words rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
     >
-      {{ t('未采集', 'Unavailable') }}: {{ snapshot.unavailable_sections.join(', ') }}
+      {{ t('overview.notCollected') }}: {{ snapshot.unavailable_sections.join(', ') }}
     </p>
     <p
       v-if="!metrics"
       class="py-8 text-center text-sm text-muted-foreground"
     >
-      {{ t('暂无资源采样', 'No resource samples') }}
+      {{ t('overview.noResourceSamples') }}
     </p>
     <template v-else>
       <div class="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -65,17 +65,17 @@
               class="h-4 w-4 text-muted-foreground"
               aria-hidden="true"
             />
-            {{ t('服务韧性', 'Resilience') }}
+            {{ t('overview.resilience') }}
           </h3><RouterLink
             :to="link('/admin/health-monitor')"
             class="text-xs text-primary hover:underline"
           >
-            {{ t('健康监控', 'Health monitor') }}
+            {{ t('nav.healthMonitor') }}
           </RouterLink>
         </div><dl class="grid grid-cols-2 gap-5">
           <div class="min-w-0">
             <dt class="text-xs text-muted-foreground">
-              {{ t('已打开熔断器', 'Open circuits') }}
+              {{ t('overview.openCircuits') }}
             </dt><dd class="mt-2 font-semibold tabular-nums">
               <MetricValue
                 :value="count(snapshot.resilience.error_statistics.open_circuit_breakers)"
@@ -84,7 +84,7 @@
             </dd>
           </div><div class="min-w-0">
             <dt class="text-xs text-muted-foreground">
-              {{ t('降级凭据', 'Degraded credentials') }}
+              {{ t('overview.degradedCredentials') }}
             </dt><dd class="mt-2 font-semibold tabular-nums">
               <MetricValue
                 :value="count(snapshot.resilience.error_statistics.degraded_keys)"
@@ -120,19 +120,19 @@
             class="h-4 w-4 text-muted-foreground"
             aria-hidden="true"
           />
-          {{ t('上游准入', 'Upstream admission') }}
+          {{ t('overview.upstreamAdmission') }}
         </h3><div class="overflow-x-auto">
           <table class="w-full min-w-[420px] text-sm">
             <thead>
               <tr class="border-b text-xs text-muted-foreground">
                 <th class="py-2 text-left">
-                  {{ t('目标', 'Target') }}
+                  {{ t('ui.target') }}
                 </th><th class="px-3 text-right">
-                  {{ t('处理中', 'In flight') }}
+                  {{ t('overview.inFlight') }}
                 </th><th class="px-3 text-right">
-                  {{ t('可用许可', 'Available permits') }}
+                  {{ t('overview.availablePermits') }}
                 </th><th class="px-3 text-right">
-                  {{ t('拒绝累计', 'Rejected total') }}
+                  {{ t('overview.rejectedTotal') }}
                 </th>
               </tr>
             </thead><tbody>
@@ -168,10 +168,10 @@ import { buildGatewayMetricsSummary } from '@/api/monitoring'
 import type { OverviewLive } from '@/api/overview'
 import MetricValue from '../components/MetricValue.vue'
 import { useOverviewQuery } from '../query'
-import { useOverviewI18n } from '../i18n'
 import { count, timestamp } from '../format'
+import { useI18n } from '@/i18n'
 const props = defineProps<{ snapshot: OverviewLive; resources?: boolean }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const { link } = useOverviewQuery()
 const metrics = computed(() => props.snapshot.metrics || (props.snapshot.metrics_text ? buildGatewayMetricsSummary(props.snapshot.metrics_text) : null))
 function bytes(value: number | null | undefined) { return value == null ? '-' : `${count(value / 1024 / 1024)} MiB` }
@@ -180,16 +180,16 @@ const groups = computed(() => {
   const m = metrics.value
   if (!m) return []
   const runtime = [
-    { title: t('请求准入', 'Request admission'), icon: Activity, items: [{ label: t('本机处理中', 'Node in flight'), value: count(m.local.inFlight) }, { label: t('本机可用许可', 'Node available permits'), value: count(m.local.availablePermits) }, { label: t('全局处理中', 'Global in flight'), value: count(m.distributed.inFlight) }, { label: t('全局可用许可', 'Global available permits'), value: count(m.distributed.availablePermits) }] },
-    { title: t('用量写入', 'Usage writes'), icon: ListTodo, items: [{ label: t('待确认', 'Awaiting acknowledgement'), value: count(m.usageQueue.groupPending) }, { label: t('待消费', 'Awaiting delivery'), value: count(m.usageQueue.groupLag) }, { label: t('死信', 'Dead letters'), value: count(m.usageQueue.dlqLength) }, { label: t('最旧待处理 (ms)', 'Oldest pending (ms)'), value: count(m.usageQueue.oldestPendingIdleMs) }] },
+    { title: t('overview.requestAdmission'), icon: Activity, items: [{ label: t('overview.nodeInFlight'), value: count(m.local.inFlight) }, { label: t('overview.nodeAvailablePermits'), value: count(m.local.availablePermits) }, { label: t('overview.globalInFlight'), value: count(m.distributed.inFlight) }, { label: t('overview.globalAvailablePermits'), value: count(m.distributed.availablePermits) }] },
+    { title: t('overview.usageWrites'), icon: ListTodo, items: [{ label: t('overview.awaitingAcknowledgement'), value: count(m.usageQueue.groupPending) }, { label: t('overview.awaitingDelivery'), value: count(m.usageQueue.groupLag) }, { label: t('overview.deadLetters'), value: count(m.usageQueue.dlqLength) }, { label: t('overview.oldestPendingMs'), value: count(m.usageQueue.oldestPendingIdleMs) }] },
   ]
   if (!props.resources) return runtime
   return [
-    { title: t('进程与主机', 'Process and host'), icon: Cpu, items: [{ label: t('进程 CPU', 'Process CPU'), value: basis(m.process.processCpuUsageBasisPoints) }, { label: t('主机 CPU', 'Host CPU'), value: basis(m.process.systemCpuUsageBasisPoints) }, { label: t('进程内存', 'Process memory'), value: bytes(m.process.processMemoryBytes) }, { label: t('主机内存', 'Host memory'), value: basis(m.process.systemMemoryUsageBasisPoints) }, { label: t('打开文件', 'Open file descriptors'), value: count(m.process.openFds) }] },
-    { title: 'PostgreSQL', icon: Database, items: [{ label: t('连接池占用', 'Pool checked out'), value: `${count(m.databasePool.checkedOut)} / ${count(m.databasePool.max)}` }, { label: t('数据库等待', 'Database waits'), value: count(m.postgres.waitingConnections) }, { label: t('等待锁', 'Lock waits'), value: count(m.postgres.lockWaitingConnections) }, { label: t('最长查询 (ms)', 'Oldest query (ms)'), value: count(m.postgres.oldestActiveQueryAgeMs) }, { label: t('块缓存命中', 'Block cache hit'), value: basis(m.postgres.blockCacheHitRateBasisPoints) }] },
-    { title: 'Redis', icon: Radio, items: [{ label: t('已用内存', 'Used memory'), value: bytes(m.redisRuntime.usedMemoryBytes) }, { label: t('阻塞客户端', 'Blocked clients'), value: count(m.redisRuntime.blockedClients) }, { label: t('命中率', 'Hit rate'), value: basis(m.redisRuntime.keyspaceHitRateBasisPoints) }, { label: t('操作 / 秒', 'Operations / second'), value: count(m.redisRuntime.instantaneousOpsPerSec) }, { label: t('淘汰累计', 'Evictions total'), value: count(m.redisRuntime.evictedKeysTotal) }] },
-    { title: t('后台任务与调度', 'Tasks and scheduling'), icon: Layers, items: [{ label: t('活跃任务', 'Active tasks'), value: count(m.backgroundTasks.active) }, { label: t('异常退出累计', 'Unexpected exits total'), value: count(m.backgroundTasks.unexpectedExitsTotal) }, { label: t('异步任务', 'Async tasks'), value: count(m.tokioRuntime.aliveTasks) }, { label: t('调度队列', 'Scheduling queue'), value: count(m.tokioRuntime.globalQueueDepth) }] },
-    { title: t('审计计数', 'Audit counters'), icon: ListChecks, items: [{ label: t('待刷新', 'Pending flush'), value: count(m.usageCounter.pendingRows) }, { label: t('最旧待处理 (s)', 'Oldest pending (s)'), value: count(m.usageCounter.oldestPendingAgeSeconds) }, { label: t('失败批次累计', 'Failed batches total'), value: count(m.usageCounter.flushFailedBatchesTotal) }, { label: t('候选队列', 'Candidate queue'), value: count(m.requestCandidateQueue.depth) }] },
+    { title: t('overview.processAndHost'), icon: Cpu, items: [{ label: t('overview.processCpu'), value: basis(m.process.processCpuUsageBasisPoints) }, { label: t('overview.hostCpu'), value: basis(m.process.systemCpuUsageBasisPoints) }, { label: t('overview.processMemory'), value: bytes(m.process.processMemoryBytes) }, { label: t('overview.hostMemory'), value: basis(m.process.systemMemoryUsageBasisPoints) }, { label: t('overview.openFileDescriptors'), value: count(m.process.openFds) }] },
+    { title: 'PostgreSQL', icon: Database, items: [{ label: t('overview.poolCheckedOut'), value: `${count(m.databasePool.checkedOut)} / ${count(m.databasePool.max)}` }, { label: t('overview.databaseWaits'), value: count(m.postgres.waitingConnections) }, { label: t('overview.lockWaits'), value: count(m.postgres.lockWaitingConnections) }, { label: t('overview.oldestQueryMs'), value: count(m.postgres.oldestActiveQueryAgeMs) }, { label: t('overview.blockCacheHit'), value: basis(m.postgres.blockCacheHitRateBasisPoints) }] },
+    { title: 'Redis', icon: Radio, items: [{ label: t('overview.usedMemory'), value: bytes(m.redisRuntime.usedMemoryBytes) }, { label: t('overview.blockedClients'), value: count(m.redisRuntime.blockedClients) }, { label: t('overview.hitRate'), value: basis(m.redisRuntime.keyspaceHitRateBasisPoints) }, { label: t('overview.operationsSecond'), value: count(m.redisRuntime.instantaneousOpsPerSec) }, { label: t('overview.evictionsTotal'), value: count(m.redisRuntime.evictedKeysTotal) }] },
+    { title: t('overview.tasksAndScheduling'), icon: Layers, items: [{ label: t('overview.activeTasks'), value: count(m.backgroundTasks.active) }, { label: t('overview.unexpectedExitsTotal'), value: count(m.backgroundTasks.unexpectedExitsTotal) }, { label: t('nav.asyncTasks'), value: count(m.tokioRuntime.aliveTasks) }, { label: t('overview.schedulingQueue'), value: count(m.tokioRuntime.globalQueueDepth) }] },
+    { title: t('overview.auditCounters'), icon: ListChecks, items: [{ label: t('overview.pendingFlush'), value: count(m.usageCounter.pendingRows) }, { label: t('overview.oldestPendingS'), value: count(m.usageCounter.oldestPendingAgeSeconds) }, { label: t('overview.failedBatchesTotal'), value: count(m.usageCounter.flushFailedBatchesTotal) }, { label: t('overview.candidateQueue'), value: count(m.requestCandidateQueue.depth) }] },
   ]
 })
 </script>

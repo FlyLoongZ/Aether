@@ -28,7 +28,7 @@
         v-if="!sidebarCollapsed"
         role="separator"
         aria-orientation="vertical"
-        :aria-label="locale === 'zh-CN' ? t('ui.resizeNavigationSidebar') : 'Resize navigation sidebar'"
+        :aria-label="t('ui.resizeNavigationSidebar')"
         :aria-valuenow="sidebarWidth"
         :aria-valuemin="sidebarMinWidth"
         :aria-valuemax="sidebarMaxWidth"
@@ -563,7 +563,7 @@ useNavigationModules(() => authStore.canAccessAdmin)
 const announcementStore = useAnnouncementStore()
 const { siteName, siteSubtitle } = useSiteInfo()
 const { success, error: showError } = useToast()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const isDemo = computed(() => isDemoMode())
 const isAdmin = computed(() => authStore.user?.role === 'admin')
 
@@ -574,7 +574,6 @@ const {
   sidebarWidth, sidebarMinWidth, sidebarMaxWidth, sidebarResizing,
   startSidebarResize, handleSidebarResizeKey,
 } = useSidebarResize()
-const announcementText = (zh: string, en: string) => locale.value === 'zh-CN' ? zh : en
 const announcementPanel = ref<'desktop' | 'mobile' | null>(null)
 const manualAnnouncement = ref<Announcement | null>(null)
 const announcementReadError = ref('')
@@ -1188,7 +1187,7 @@ async function markAllAnnouncementsRead() {
   try {
     await announcementStore.markAllRead()
   } catch (err) {
-    showError(parseApiError(err, announcementText('标记已读失败', 'Could not mark announcements as read')))
+    showError(parseApiError(err, t('overview.couldNotMarkAnnouncementsAsRead')))
   }
 }
 
@@ -1206,7 +1205,7 @@ async function acknowledgeRequiredAnnouncement() {
     }
   } catch (err) {
     if (requestId === announcementReadRequestId) {
-      announcementReadError.value = parseApiError(err, announcementText('标记已读失败，请重试', 'Could not mark as read. Please retry.'))
+      announcementReadError.value = parseApiError(err, t('overview.couldNotMarkAsReadPleaseRetry'))
     }
   } finally {
     if (requestId === announcementReadRequestId) acknowledgingRequiredAnnouncement.value = false

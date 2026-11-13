@@ -18,13 +18,13 @@
       >
         <div class="flex items-center justify-between gap-3">
           <h2 class="text-sm font-semibold">
-            {{ t('硬件性能', 'Hardware performance') }}
+            {{ t('overview.hardwarePerformance') }}
           </h2>
           <Badge
             variant="outline"
             class="text-[10px]"
           >
-            {{ t('当前节点', 'Current node') }}
+            {{ t('overview.currentNode') }}
           </Badge>
         </div>
         <div class="grid flex-1 grid-cols-2 gap-3 sm:gap-4">
@@ -41,13 +41,13 @@
       >
         <div class="flex items-center justify-between gap-3">
           <h2 class="text-sm font-semibold">
-            {{ t('网关指标', 'Gateway metrics') }}
+            {{ t('overview.gatewayMetrics') }}
           </h2>
           <Badge
             variant="outline"
             class="text-[10px]"
           >
-            {{ t('实时', 'Live') }}
+            {{ t('overview.live') }}
           </Badge>
         </div>
         <div class="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
@@ -72,11 +72,11 @@ import { Badge } from '@/components/ui'
 import OverviewStatus from '../components/OverviewStatus.vue'
 import OperationsMetricCard from './OperationsMetricCard.vue'
 import { useOverviewRequest } from '../useOverviewRequest'
-import { useOverviewI18n } from '../i18n'
 import { count, percent } from '../format'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{ revision: number }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const { data, loading, error, refresh } = useOverviewRequest(() => props.revision, signal => overviewApi.live(signal), { scopeKey: () => 'live' })
 const runtime = computed(() => {
   const snapshot = data.value?.data
@@ -94,24 +94,24 @@ const hardwareMetrics = computed(() => {
   const process = runtime.value?.process
   const memoryNote = process?.systemMemoryUsedBytes != null && process.systemMemoryTotalBytes != null && process.systemMemoryTotalBytes > 0
     ? `${memory(process.systemMemoryUsedBytes)} / ${memory(process.systemMemoryTotalBytes)}`
-    : t('内存使用率', 'Memory usage')
+    : t('overview.memoryUsage')
   return [
-    { label: t('主机 CPU', 'Host CPU'), value: basis(process?.systemCpuUsageBasisPoints), icon: Cpu, note: t('CPU 使用率', 'CPU usage') },
-    { label: t('主机内存', 'Host memory'), value: process?.systemMemoryTotalBytes === 0 ? '-' : basis(process?.systemMemoryUsageBasisPoints), icon: MemoryStick, note: memoryNote },
-    { label: t('进程 CPU', 'Process CPU'), value: basis(process?.processCpuUsageBasisPoints), icon: Cpu, note: t('100% = 1 核', '100% = 1 core') },
-    { label: t('进程内存', 'Process memory'), value: memory(process?.processMemoryBytes), icon: MemoryStick, note: t('网关进程', 'Gateway process') },
+    { label: t('overview.hostCpu'), value: basis(process?.systemCpuUsageBasisPoints), icon: Cpu, note: t('overview.cpuUsage') },
+    { label: t('overview.hostMemory'), value: process?.systemMemoryTotalBytes === 0 ? '-' : basis(process?.systemMemoryUsageBasisPoints), icon: MemoryStick, note: memoryNote },
+    { label: t('overview.processCpu'), value: basis(process?.processCpuUsageBasisPoints), icon: Cpu, note: t('overview.1001Core') },
+    { label: t('overview.processMemory'), value: memory(process?.processMemoryBytes), icon: MemoryStick, note: t('overview.gatewayProcess') },
   ]
 })
 const coreMetrics = computed(() => {
   const metrics = data.value?.data.recent_activity?.data
-  const recentNote = t('最近 60 秒', 'Last 60 seconds')
-  const nodeNote = t('当前节点', 'Current node')
+  const recentNote = t('overview.last60Seconds')
+  const nodeNote = t('overview.currentNode')
   return [
     { label: 'RPM', value: count(metrics?.requests_per_minute), icon: Activity, note: recentNote },
     { label: 'TPM', value: count(metrics?.tokens_per_minute), icon: Hash, note: recentNote },
-    { label: t('请求成功率', 'Success rate'), value: percent(metrics?.success_rate?.value), icon: CheckCircle2, note: recentNote },
-    { label: t('失败请求', 'Failed requests'), value: count(metrics?.failed_request_count), icon: TriangleAlert, note: recentNote },
-    { label: t('当前并发', 'Concurrent requests'), value: count(runtime.value?.local.inFlight), icon: Gauge, note: nodeNote },
+    { label: t('overview.requestSuccessRate'), value: percent(metrics?.success_rate?.value), icon: CheckCircle2, note: recentNote },
+    { label: t('overview.failedRequests'), value: count(metrics?.failed_request_count), icon: TriangleAlert, note: recentNote },
+    { label: t('overview.concurrentRequests'), value: count(runtime.value?.local.inFlight), icon: Gauge, note: nodeNote },
   ]
 })
 </script>

@@ -9,7 +9,7 @@
       <div class="flex items-start justify-between gap-3 sm:items-center">
         <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <h3 class="text-sm font-medium text-foreground">
-            {{ t('连续活跃', 'Activity streak') }}
+            {{ t('overview.activityStreak') }}
           </h3>
           <Skeleton
             v-if="loading"
@@ -18,21 +18,21 @@
           <p
             v-else
             class="flex shrink-0 items-baseline gap-1.5"
-            :title="t('连续活跃天数 / 总活跃天数。今天尚无请求时，从昨天向前计算；有请求的日期计为一个活跃日。', 'Consecutive active days / total active days. If today has no requests yet, the streak ends yesterday. Each date with requests counts as one active day.')"
+            :title="t('overview.consecutiveActiveDaysTotalActiveDaysIfTodayHasNoRequestsYetTheStreakEndsYesterdayEachDateWithRequestsCountsAsOneActiveDay')"
           >
             <span class="text-[28px] font-semibold leading-8 tabular-nums text-foreground">{{ count(consecutiveActiveDays) }} / {{ count(activeDays) }}</span>
-            <span class="text-xs text-muted-foreground">{{ t('天', 'days') }}</span>
+            <span class="text-xs text-muted-foreground">{{ t('ui.days') }}</span>
           </p>
         </div>
         <div class="flex shrink-0 items-center gap-1 pt-1 text-[10px] text-muted-foreground sm:pt-0">
-          <span class="mr-0.5">{{ t('少', 'Less') }}</span>
+          <span class="mr-0.5">{{ t('heatmap.less') }}</span>
           <span
             v-for="level in legendLevels"
             :key="level"
             class="h-3 w-3 rounded-[4px]"
             :style="{ backgroundColor: `rgba(var(--color-primary-rgb), ${level})` }"
           />
-          <span class="ml-0.5">{{ t('多', 'More') }}</span>
+          <span class="ml-0.5">{{ t('heatmap.more') }}</span>
         </div>
       </div>
       <Skeleton
@@ -50,11 +50,11 @@
         v-else
         class="mt-4 flex h-24 items-center justify-center text-xs text-muted-foreground"
       >
-        {{ t('暂无活跃数据', 'No activity yet') }}
+        {{ t('overview.noActivityYet') }}
       </div>
     </Card>
     <IntervalTimelineCard
-      :title="t('全站请求间隔（最近24小时）', 'Site-wide request intervals (last 24 hours)')"
+      :title="t('overview.siteWideRequestIntervalsLast24Hours')"
       :is-admin="true"
       :hours="24"
       :refresh-interval-ms="0"
@@ -69,10 +69,10 @@ import ActivityHeatmap from '@/components/stats/ActivityHeatmap.vue'
 import IntervalTimelineCard from '@/features/usage/components/IntervalTimelineCard.vue'
 import type { ActivityHeatmap as ActivityHeatmapData } from '@/types/activity'
 import type { IntervalTimelineResponse } from '@/api/cache'
-import { useOverviewI18n } from '../i18n'
 import { count } from '../format'
+import { useI18n } from '@/i18n'
 
 defineProps<{ data: ActivityHeatmapData | null; consecutiveActiveDays: number | null; activeDays: number | null; scopeHint: string; loading: boolean; error: boolean; timelineData?: IntervalTimelineResponse | null }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const legendLevels = [0.08, 0.25, 0.45, 0.65, 0.85]
 </script>

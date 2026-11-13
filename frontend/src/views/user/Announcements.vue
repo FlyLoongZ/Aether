@@ -536,7 +536,6 @@
 import { useI18n } from '@/i18n'
 const { t } = useI18n()
 
-import { getI18nLocale } from '@/i18n'
 import { formatTimeAgo } from '@/utils/format'
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -578,7 +577,7 @@ const announcementStore = useAnnouncementStore()
 const route = useRoute()
 const router = useRouter()
 const isAdmin = computed(() => authStore.isAdmin)
-const popupReminderLabel = computed(() => getI18nLocale() === 'zh-CN' ? '弹窗提醒' : 'Popup reminder')
+const popupReminderLabel = computed(() => t('overview.popupReminder'))
 
 const announcements = ref<Announcement[]>([])
 const loading = ref(false)

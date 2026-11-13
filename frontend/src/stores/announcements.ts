@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { announcementApi, type Announcement } from '@/api/announcements'
-import { getI18nLocale } from '@/i18n'
+import { translate } from '@/i18n'
 
 export const useAnnouncementStore = defineStore('announcements', () => {
   const items = ref<Announcement[]>([])
@@ -22,8 +22,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   let listLoaded = false
   let statusPromise: Promise<void> | null = null
   const reads = new Map<string, Promise<void>>()
-  const message = (zh: string, en: string) => getI18nLocale() === 'zh-CN' ? zh : en
-
+  
   function resetSession(userId: string | null) {
     sessionId = userId
     sessionVersion += 1
@@ -58,7 +57,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
         requiredItems.value = required.value.items.filter(item => item.requires_ack && !item.is_read)
       }
       statusError.value = count.status === 'rejected' || required.status === 'rejected'
-        ? message('公告暂时无法更新', 'Announcements could not be refreshed') : null
+        ? translate('overview.announcementsCouldNotBeRefreshed') : null
     })()
     statusPromise = request
     try {
@@ -87,7 +86,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
       listLoaded = true
     } catch {
       if (requestId === listRequestId && version === revision) {
-        listError.value = message('公告加载失败，请重试', 'Announcements could not be loaded. Please retry.')
+        listError.value = translate('overview.announcementsCouldNotBeLoadedPleaseRetry')
       }
     } finally {
       if (requestId === listRequestId) loading.value = false

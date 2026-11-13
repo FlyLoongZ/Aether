@@ -55,6 +55,17 @@ describe('explicit message migration', () => {
     }
   })
 
+  it('keeps inline bilingual pairs out of components and modules', () => {
+    // t('中文', 'English') 这类内联写法绕过了词表：既没有中英文对齐检查，
+    // 也无法复用同一文案。文案必须先进 i18n 词表再以 key 引用。
+    // 单引号、双引号与反引号都要覆盖：仓库没有 quotes 规则兜底，只认单引号会漏
+    const inlinePair = /\b(?:t|kt|overviewT|text|message|announcementText)\(\s*['"`][^'"`]*[\u4e00-\u9fff][^'"`]*['"`]\s*,\s*['"`][^'"`]*['"`]\s*\)/u
+    const offenders = sourceFiles(resolve(root, 'src'))
+      .filter(file => !file.includes('i18n'))
+      .filter(file => inlinePair.test(readFileSync(file, 'utf8')))
+    expect(offenders).toEqual([])
+  })
+
   it('uses explicit translations for static template copy while preserving code and editable content', () => {
     const remaining: string[] = []
     for (const file of sourceFiles(resolve(root, 'src')).filter(file => file.endsWith('.vue'))) {

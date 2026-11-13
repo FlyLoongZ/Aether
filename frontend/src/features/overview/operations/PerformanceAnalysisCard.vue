@@ -11,7 +11,7 @@
         v-if="rows !== null"
         class="text-xs text-muted-foreground"
       >
-        {{ count(rows.length) }} {{ dimension === 'provider' ? t('个提供商', 'providers') : t('个模型', 'models') }}
+        {{ count(rows.length) }} {{ dimension === 'provider' ? t('overview.providers') : t('ui.models') }}
       </p>
     </div>
 
@@ -24,7 +24,7 @@
       >
         <p class="text-xs text-muted-foreground">
           {{ insight.label }}
-          <span v-if="insight.value.partial"> · {{ t('已知数据', 'Known data') }}</span>
+          <span v-if="insight.value.partial"> · {{ t('overview.knownData') }}</span>
         </p>
         <p
           class="mt-1 truncate text-sm font-semibold"
@@ -35,12 +35,12 @@
         <p class="mt-1 text-xs tabular-nums text-muted-foreground">
           <template v-if="insight.value.row">
             <template v-if="insight.key === 'failures'">
-              {{ count(insight.value.row.failedCount) }} {{ t('次', 'failures') }} ·
+              {{ count(insight.value.row.failedCount) }} {{ t('overview.failures') }} ·
             </template>
-            {{ insight.key === 'traffic' ? t('占总请求', 'Of requests') : t('占总失败', 'Of failures') }} {{ percentage(insight.value.share) }}
+            {{ insight.key === 'traffic' ? t('overview.ofRequests') : t('overview.ofFailures') }} {{ percentage(insight.value.share) }}
           </template>
           <template v-else>
-            {{ t('所选时段', 'Selected range') }}
+            {{ t('overview.selectedRange') }}
           </template>
         </p>
       </div>
@@ -51,33 +51,33 @@
         <thead class="sticky top-0 z-10 bg-card text-xs text-muted-foreground">
           <tr class="border-b">
             <th class="w-[22%] py-3 pr-3 text-left font-medium">
-              {{ dimension === 'provider' ? t('提供商', 'Provider') : t('模型', 'Model') }}
+              {{ dimension === 'provider' ? t('overview.provider') : t('ui.model') }}
             </th>
             <th class="w-[16%] px-2 py-3 text-right font-medium">
-              {{ t('请求量', 'Requests') }}
+              {{ t('overview.requests') }}
             </th>
             <th class="w-[16%] px-2 py-3 text-right font-medium">
-              {{ t('成功率', 'Success rate') }}
+              {{ t('overview.successRate') }}
             </th>
             <th
               class="w-[10%] px-2 py-3 text-right font-medium"
-              :title="t('当前节点正在执行的 HTTP 与 Responses WebSocket 请求，流式请求计至结束', 'HTTP and Responses WebSocket requests executing on this node; streams count until they end')"
+              :title="t('overview.httpAndResponsesWebsocketRequestsExecutingOnThisNodeStreamsCountUntilTheyEnd')"
             >
-              {{ t('当前并发', 'Concurrency') }}
-              <span class="block text-[10px] font-normal">{{ t('当前节点', 'Current node') }}</span>
+              {{ t('overview.concurrency') }}
+              <span class="block text-[10px] font-normal">{{ t('overview.currentNode') }}</span>
             </th>
             <th
               class="w-[10%] px-2 py-3 text-right font-medium"
               :title="rpmWindowTitle"
             >
               RPM
-              <span class="block text-[10px] font-normal">{{ t('近 60 秒', 'Last 60s') }}</span>
+              <span class="block text-[10px] font-normal">{{ t('overview.last60s') }}</span>
             </th>
             <th class="w-[13%] px-2 py-3 text-right font-medium">
-              {{ t('平均首字节', 'Avg first byte') }}
+              {{ t('overview.avgFirstByte') }}
             </th>
             <th class="w-[13%] py-3 pl-2 text-right font-medium">
-              {{ t('输出速度', 'Output speed') }}
+              {{ t('overview.outputSpeed') }}
               <span class="block text-[10px] font-normal">Tokens/s</span>
             </th>
           </tr>
@@ -122,11 +122,11 @@
                   :to="records(row.id, true)"
                   :data-analysis-failure-link="row.id"
                   class="hover:underline"
-                  :aria-label="`${row.label} ${t('失败请求', 'failed requests')}`"
+                  :aria-label="t('overview.failedRequestsFor', { label: row.label })"
                 >
-                  {{ t('失败', 'Failed') }} {{ count(row.failedCount) }}
+                  {{ t('ui.failed28384d7') }} {{ count(row.failedCount) }}
                 </RouterLink>
-                <span v-else>{{ t('失败', 'Failed') }} {{ count(row.failedCount) }}</span>
+                <span v-else>{{ t('ui.failed28384d7') }} {{ count(row.failedCount) }}</span>
               </div>
             </td>
             <td
@@ -154,7 +154,7 @@
               colspan="7"
               class="py-10 text-center text-xs text-muted-foreground"
             >
-              {{ rows === null ? t('暂未取得分析数据', 'Analysis data unavailable') : totalRequests === 0 ? t('所选时段暂无请求', 'No requests in this range') : t('所选时段暂无分组数据', 'No grouped data in this range') }}
+              {{ rows === null ? t('overview.analysisDataUnavailable') : totalRequests === 0 ? t('overview.noRequestsInThisRange') : t('overview.noGroupedDataInThisRange') }}
             </td>
           </tr>
         </tbody>
@@ -168,9 +168,9 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Card } from '@/components/ui'
 import { count as formatCount } from '../format'
-import { useOverviewI18n } from '../i18n'
 import { useOverviewQuery } from '../query'
 import { analysisShare, analyzeRows, measuredCount, rankAnalysisRows, type AnalysisInsight, type AnalysisRow } from './analysisHelpers'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{
   title: string
@@ -180,16 +180,16 @@ const props = defineProps<{
   totalFailures: number | null
   liveWindowSeconds?: number
 }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const { link } = useOverviewQuery('today')
 const rpmWindowTitle = computed(() => props.liveWindowSeconds !== undefined && props.liveWindowSeconds < 60
-  ? t(`当前节点启动后已观测 ${formatCount(props.liveWindowSeconds)} 秒，按实际请求计数`, `Current node: ${formatCount(props.liveWindowSeconds)} seconds observed since startup; actual request count`)
-  : t('当前节点最近 60 秒进入上游执行的 HTTP 与 Responses WebSocket 请求数，同一请求重试去重', 'HTTP and Responses WebSocket requests entering upstream execution on this node in the last 60 seconds; retries deduplicated'))
+  ? t('overview.nodeObservedForSeconds', { seconds: formatCount(props.liveWindowSeconds) })
+  : t('overview.httpAndResponsesWebsocketRequestsEnteringUpstreamExecutionOnThisNodeInTheLast60SecondsRetriesDeduplicated'))
 const rankedRows = computed(() => rankAnalysisRows(props.rows ?? []))
 const insights = computed(() => analyzeRows(props.rows, props.totalRequests, props.totalFailures))
 const insightCards = computed(() => [
-  { key: 'traffic', label: t('流量最多', 'Most traffic'), value: insights.value.traffic },
-  { key: 'failures', label: t('失败最多', 'Most failures'), value: insights.value.failures },
+  { key: 'traffic', label: t('overview.mostTraffic'), value: insights.value.traffic },
+  { key: 'failures', label: t('overview.mostFailures'), value: insights.value.failures },
 ])
 
 function records(id: string, failed = false) {
@@ -209,8 +209,8 @@ function duration(value: number | null) {
   return measured >= 1000 ? `${count(measured / 1000)} s` : `${count(measured)} ms`
 }
 function insightState(state: AnalysisInsight['state']) {
-  if (state === 'empty') return t('暂无请求', 'No requests')
-  if (state === 'none') return t('无失败请求', 'No failed requests')
-  return t('暂无数据', 'Unavailable')
+  if (state === 'empty') return t('overview.noRequests')
+  if (state === 'none') return t('overview.noFailedRequests')
+  return t('overview.unavailable')
 }
 </script>

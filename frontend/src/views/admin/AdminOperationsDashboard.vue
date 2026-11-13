@@ -1,7 +1,7 @@
 <template>
   <main class="space-y-5 px-4 pb-8 sm:px-6 lg:px-0">
     <OverviewToolbar
-      :title="t('运维总览', 'Operations')"
+      :title="t('nav.operations')"
       :range="range"
       :preset="relativePreset"
       :refresh-active="autoRefresh"
@@ -41,14 +41,14 @@ import RuntimeView from '@/features/overview/operations/RuntimeView.vue'
 import PerformanceView from '@/features/overview/operations/PerformanceView.vue'
 import LiveMetrics from '@/features/overview/operations/LiveMetrics.vue'
 import { useOverviewQuery } from '@/features/overview/query'
-import { useOverviewI18n } from '@/features/overview/i18n'
-const { t } = useOverviewI18n()
+import { useI18n } from '@/i18n'
+const { t } = useI18n()
 const { range, relativePreset, refreshRange, setRange } = useOverviewQuery('today', { rolling: true })
 const revision = ref(0)
 const autoRefresh = ref(false)
 const refreshTitle = computed(() => autoRefresh.value
-  ? t('关闭自动刷新（每 10 秒）', 'Stop auto refresh (every 10 seconds)')
-  : t('开启自动刷新（每 10 秒）', 'Start auto refresh (every 10 seconds)'))
+  ? t('overview.stopAutoRefreshEvery10Seconds')
+  : t('overview.startAutoRefreshEvery10Seconds'))
 let timer: ReturnType<typeof setInterval> | undefined
 function refreshAll() { refreshRange(); revision.value += 1 }
 function stopAutoRefresh() {

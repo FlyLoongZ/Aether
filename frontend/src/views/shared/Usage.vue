@@ -84,14 +84,14 @@
       v-if="hasScopedRecordFilters"
       class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
     >
-      <span>{{ overviewT('请求筛选结果', 'Filtered requests') }}</span>
+      <span>{{ t('overview.filteredRequests') }}</span>
       <Button
         variant="ghost"
         size="sm"
         class="h-8"
         @click="clearRecordFilters"
       >
-        <X class="mr-1 h-3 w-3" />{{ overviewT('清除筛选', 'Clear filters') }}
+        <X class="mr-1 h-3 w-3" />{{ t('ui.clearFilters') }}
       </Button>
     </div>
 
@@ -108,8 +108,8 @@
         <button
           type="button"
           class="flex h-5 w-5 shrink-0 items-center justify-center hover:text-primary"
-          :aria-label="`${overviewT('清除', 'Clear')} ${filter.label}`"
-          :title="`${overviewT('清除', 'Clear')} ${filter.label}`"
+          :aria-label="`${t('ui.clear')} ${filter.label}`"
+          :title="`${t('ui.clear')} ${filter.label}`"
           @click="clearDeepLinkFilter(filter.key)"
         ><X class="h-3 w-3" /></button>
       </span>
@@ -228,13 +228,11 @@ import { log } from '@/utils/logger'
 import type { ActivityHeatmap } from '@/types/activity'
 import { useToast } from '@/composables/useToast'
 import { queryString, rangeFromQuery, presetRange } from '@/features/overview/query'
-import { useOverviewI18n } from '@/features/overview/i18n'
 import { attributionLabel } from '@/features/overview/format'
 import { Button } from '@/components/ui'
 
 const route = useRoute()
 const router = useRouter()
-const { t: overviewT } = useOverviewI18n()
 const { warning } = useToast()
 const authStore = useAuthStore()
 
@@ -282,15 +280,15 @@ function clearRecordFilters() {
   void router.replace({ query: { ...route.query, ...Object.fromEntries(fields.map(key => [key, undefined])) } })
 }
 const deepLinkFilters = computed(() => [
-  { key: 'provider_id', label: overviewT('提供商 ID', 'Provider ID'), value: filterProviderId.value },
-  { key: 'api_key_id', label: overviewT('凭证 ID', 'Credential ID'), value: filterApiKeyId.value },
-  { key: 'request_id', label: overviewT('请求 ID', 'Request ID'), value: filterRequestId.value },
-  { key: 'attribution_kind', label: overviewT('归属', 'Attribution'), value: filterAttribution.value ? attributionLabel(filterAttribution.value) : '' },
-  { key: 'endpoint_kind', label: overviewT('端点类型', 'Endpoint kind'), value: filterEndpointKind.value },
-  { key: 'request_type', label: overviewT('请求类型', 'Request type'), value: filterRequestType.value },
-  { key: 'is_stream', label: overviewT('流式', 'Streaming'), value: filterIsStream.value === undefined ? '' : filterIsStream.value ? overviewT('是', 'Yes') : overviewT('否', 'No') },
-  { key: 'has_format_conversion', label: overviewT('格式转换', 'Format conversion'), value: filterFormatConversion.value === undefined ? '' : filterFormatConversion.value ? overviewT('是', 'Yes') : overviewT('否', 'No') },
-  { key: 'slow_threshold_ms', label: overviewT('响应时间', 'Response time'), value: filterSlowThreshold.value ? `>= ${filterSlowThreshold.value} ms` : '' },
+  { key: 'provider_id', label: t('overview.providerId'), value: filterProviderId.value },
+  { key: 'api_key_id', label: t('overview.credentialId'), value: filterApiKeyId.value },
+  { key: 'request_id', label: t('overview.requestId'), value: filterRequestId.value },
+  { key: 'attribution_kind', label: t('overview.attribution'), value: filterAttribution.value ? attributionLabel(filterAttribution.value) : '' },
+  { key: 'endpoint_kind', label: t('overview.endpointKind'), value: filterEndpointKind.value },
+  { key: 'request_type', label: t('overview.requestType'), value: filterRequestType.value },
+  { key: 'is_stream', label: t('overview.streaming'), value: filterIsStream.value === undefined ? '' : filterIsStream.value ? t('overview.yes') : t('overview.noValue') },
+  { key: 'has_format_conversion', label: t('site.home.feature.cards.format'), value: filterFormatConversion.value === undefined ? '' : filterFormatConversion.value ? t('overview.yes') : t('overview.noValue') },
+  { key: 'slow_threshold_ms', label: t('overview.responseTime'), value: filterSlowThreshold.value ? `>= ${filterSlowThreshold.value} ms` : '' },
 ].filter(filter => filter.value !== ''))
 function clearDeepLinkFilter(key: string) { void router.replace({ query: { ...route.query, [key]: undefined, page: undefined } }) }
 
@@ -317,7 +315,7 @@ const isLoadingHeatmap = ref(false)
 const heatmapError = ref(false)
 const intervalTimelineHours = computed(() => getIntervalTimelineHours(timeRange.value))
 const intervalTimelineTitle = computed(() => {
-  const baseTitle = isAdminPage.value ? overviewT('全站最近请求间隔', 'Site-wide recent request intervals') : '我的请求间隔'
+  const baseTitle = isAdminPage.value ? t('overview.siteWideRecentRequestIntervals') : '我的请求间隔'
   return `${baseTitle}（${formatIntervalTimelineWindow(intervalTimelineHours.value)}）`
 })
 const ADMIN_ANALYTICS_REFRESH_INTERVAL = 60000
