@@ -23,7 +23,7 @@ pub use health::*;
 pub use metadata_policy::*;
 pub use policy::*;
 pub use types::{
-    body_capture_metadata_storage, decode_captured_body,
+    body_capture_metadata_state, body_capture_metadata_storage, decode_captured_body,
     extract_provider_actual_service_tier_from_response,
     extract_provider_cache_ttl_minutes_from_metadata, extract_provider_reasoning_effort_from_body,
     extract_provider_response_model_from_bodies, extract_provider_service_tier_from_body,

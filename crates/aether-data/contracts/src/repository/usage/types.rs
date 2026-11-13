@@ -2484,11 +2484,10 @@ impl UsageBodyCaptureResult {
 
 /// The state a side was last recorded with.
 ///
-/// The payload tables hold bytes, so a side that was skipped or withdrawn keeps
-/// its reason in `request_metadata.body_capture` instead. Only non-byte states
-/// are read back: a metadata entry that still says `inline` describes capture
-/// that has since been swept, and claiming it would misreport availability.
-fn body_capture_metadata_state(
+/// When the body is not loaded, the ledger is the only description left: an
+/// `inline` entry means the side was captured completely at some point and its
+/// bytes are no longer in the current read result.
+pub fn body_capture_metadata_state(
     metadata: Option<&Value>,
     field: UsageBodyField,
 ) -> Option<UsageBodyCaptureState> {
@@ -2532,18 +2531,15 @@ pub fn body_capture_metadata_storage(
     metadata: Option<&Value>,
     field: UsageBodyField,
 ) -> Option<UsageBodyCaptureStorage> {
-    match metadata?
+    let storage = metadata?
         .get("body_capture")?
         .get(field.as_capture_key())?
         .get("storage")?
-        .as_str()?
+        .as_str()?;
+    storage
         .trim()
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "file" => Some(UsageBodyCaptureStorage::File),
-        _ => None,
-    }
+        .eq_ignore_ascii_case("file")
+        .then_some(UsageBodyCaptureStorage::File)
 }
 
 pub fn resolve_usage_body_capture_result_with_storage(
@@ -2652,6 +2648,19 @@ pub trait UsageReadRepository: Send + Sync {
         &self,
         id: &str,
     ) -> Result<Option<StoredRequestUsageAudit>, crate::DataLayerError>;
+
+    /// Loads one usage row and only the requested body side.
+    ///
+    /// `field = None` loads no bodies. Implementations that do not split body
+    /// loading may keep the default, which loads every side via `find_by_id`.
+    async fn find_by_id_with_body(
+        &self,
+        id: &str,
+        field: Option<UsageBodyField>,
+    ) -> Result<Option<StoredRequestUsageAudit>, crate::DataLayerError> {
+        let _ = field;
+        self.find_by_id(id).await
+    }
 
     async fn list_by_ids(
         &self,

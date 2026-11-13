@@ -1,6 +1,5 @@
 use super::{
-    BodyEncoding, CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
-    UsageBodyField,
+    CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState, UsageBodyField,
 };
 use serde_json::{Map, Value};
 
@@ -353,19 +352,17 @@ fn record_usage_body_capture_states(mut usage: UpsertUsageRecord) -> UpsertUsage
                 );
             }
             Some(CapturedBody::File {
-                encoding,
                 truncated,
                 stored_bytes,
                 source_bytes,
+                ..
             }) => {
-                let encoding = *encoding;
                 let truncated = *truncated;
                 let stored_bytes = *stored_bytes;
                 let source_bytes = *source_bytes;
                 usage.request_metadata = record_body_capture_file_entry(
                     usage.request_metadata.take(),
                     field,
-                    encoding,
                     truncated,
                     stored_bytes,
                     source_bytes,
@@ -428,7 +425,6 @@ fn record_body_capture_payload_entry(
 fn record_body_capture_file_entry(
     metadata: Option<Value>,
     field: UsageBodyField,
-    encoding: BodyEncoding,
     truncated: bool,
     stored_bytes: u64,
     source_bytes: Option<u64>,
@@ -459,13 +455,6 @@ fn record_body_capture_file_entry(
             ),
         );
         entry.insert("storage".to_string(), Value::String("file".to_string()));
-        // The extension is the encoding, so the ledger records it too: it is
-        // the only way to tell which file is the current one when a crash left
-        // more than one extension behind.
-        entry.insert(
-            "encoding".to_string(),
-            Value::String(encoding.as_str().to_string()),
-        );
         entry.insert("stored_bytes".to_string(), Value::from(stored_bytes));
         if let Some(source_bytes) = source_bytes {
             entry.insert("source_bytes".to_string(), Value::from(source_bytes));
@@ -1348,7 +1337,7 @@ mod tests {
     /// it, a crash that left two extensions behind has no way to tell which
     /// file is the current one.
     #[test]
-    fn capture_control_ledger_records_file_encoding() {
+    fn capture_control_ledger_records_file_storage() {
         let mut usage = usage_with_http_capture();
         usage.request_body = Some(CapturedBody::File {
             encoding: BodyEncoding::Sse,
@@ -1360,7 +1349,6 @@ mod tests {
         let usage = sanitize_usage_capture_controls_for_persistence(usage);
         let entry = &usage.request_metadata.as_ref().unwrap()["body_capture"]["request"];
         assert_eq!(entry["storage"], json!("file"));
-        assert_eq!(entry["encoding"], json!("sse"));
         assert_eq!(entry["state"], json!("truncated"));
         assert_eq!(entry["stored_bytes"], json!(7));
         assert_eq!(entry["source_bytes"], json!(9));

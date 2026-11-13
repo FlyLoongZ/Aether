@@ -1583,6 +1583,18 @@ impl GatewayDataState {
         }
     }
 
+    /// Loads one usage row and only the body side the raw body route renders.
+    pub(crate) async fn find_request_usage_body_by_id(
+        &self,
+        usage_id: &str,
+        field: aether_data_contracts::repository::usage::UsageBodyField,
+    ) -> Result<Option<StoredRequestUsageAudit>, DataLayerError> {
+        match &self.usage_reader {
+            Some(repository) => repository.find_by_id_with_body(usage_id, Some(field)).await,
+            None => Ok(None),
+        }
+    }
+
     pub(crate) async fn list_request_usage_by_ids(
         &self,
         usage_ids: &[String],

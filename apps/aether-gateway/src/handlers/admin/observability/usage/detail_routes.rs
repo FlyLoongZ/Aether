@@ -346,7 +346,34 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
                     None => None,
                 };
 
-            let Some(item) = state.find_request_usage_by_id(&usage_id).await? else {
+            let body_format = request_context
+                .request_query_string
+                .as_deref()
+                .and_then(|query| {
+                    url::form_urlencoded::parse(query.as_bytes())
+                        .find(|(key, _)| key == "body_format")
+                        .map(|(_, value)| value.into_owned())
+                });
+            let raw_body_field = match (body_format.as_deref(), body_field) {
+                (Some("raw"), Some(field)) => Some(field),
+                (Some(_), _) => {
+                    return Ok(Some(admin_usage_bad_request_response(
+                        "body_format=raw 必须指定 body_field",
+                    )));
+                }
+                (None, _) => None,
+            };
+
+            // The raw body route renders one side, so only that side is loaded.
+            let item = match raw_body_field {
+                Some(field) => {
+                    state
+                        .find_request_usage_body_by_id(&usage_id, field)
+                        .await?
+                }
+                None => state.find_request_usage_by_id(&usage_id).await?,
+            };
+            let Some(item) = item else {
                 return Ok(Some(
                     (
                         http::StatusCode::NOT_FOUND,
@@ -356,23 +383,8 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
                 ));
             };
 
-            let body_format = request_context
-                .request_query_string
-                .as_deref()
-                .and_then(|query| {
-                    url::form_urlencoded::parse(query.as_bytes())
-                        .find(|(key, _)| key == "body_format")
-                        .map(|(_, value)| value.into_owned())
-                });
-            if let Some(format) = body_format {
-                if format != "raw" || body_field.is_none() {
-                    return Ok(Some(admin_usage_bad_request_response(
-                        "body_format=raw 必须指定 body_field",
-                    )));
-                }
-                if let Some(field) = body_field {
-                    return Ok(Some(build_admin_usage_raw_body_response(&item, field)));
-                }
+            if let Some(field) = raw_body_field {
+                return Ok(Some(build_admin_usage_raw_body_response(&item, field)));
             }
 
             let user_ids = item.user_id.clone().into_iter().collect::<Vec<_>>();
