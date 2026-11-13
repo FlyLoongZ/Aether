@@ -308,6 +308,13 @@ async fn run_request_body_cleanup_task(
     batch_size: usize,
 ) {
     let started_at = Instant::now();
+    // Purge files before the table so a body written while the task runs cannot
+    // lose its file after its row is already gone.
+    if let Some(store) = aether_body_store::global() {
+        if let Err(err) = store.purge_all().await {
+            warn!(error = %err, "request body file purge failed");
+        }
+    }
     let mut total = AdminSystemPurgeSummary::default();
     let mut batches = 0usize;
 

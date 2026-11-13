@@ -154,6 +154,26 @@ impl SqlxUsageReadRepository {
         } else {
             0
         };
+        // A body file is unreachable as soon as either the accounting row (the
+        // ledger) or the body row is gone, so sweep it at the earlier of the two
+        // cutoffs. Records-only cleanup still has to run this: deleting the
+        // usage row cascades to `usage_http_bodies`, and without the file sweep
+        // the bytes would leak forever.
+        let file_cutoff = body_file_cleanup_cutoff(targets, window);
+        if let (Some(cutoff), Some(store)) = (file_cutoff, aether_body_store::global()) {
+            match store.cleanup_before(cutoff.date_naive()).await {
+                Ok(stats) if stats.removed_days > 0 => {
+                    tracing::info!(
+                        removed_days = stats.removed_days,
+                        "usage cleanup removed body file date directories"
+                    );
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    warn!(error = %err, "usage cleanup body file sweep failed");
+                }
+            }
+        }
         let keys_cleaned = if targets.expired_keys {
             match cleanup_expired_api_keys(&self.pool, auto_delete_expired_keys).await {
                 Ok(count) => count,
@@ -239,6 +259,11 @@ async fn purge_usage_http_bodies(
     pool: &PostgresPool,
     batch_size: usize,
 ) -> Result<usize, DataLayerError> {
+    if let Some(store) = aether_body_store::global() {
+        if let Err(err) = store.purge_all().await {
+            warn!(error = %err, "usage cleanup body file purge failed");
+        }
+    }
     match truncate_usage_http_bodies(pool).await {
         Ok(()) => Ok(usize::try_from(count_all_usage_http_bodies(pool).await?).unwrap_or(0)),
         Err(err) => {
@@ -411,13 +436,32 @@ async fn cleanup_expired_api_keys(
     Ok(cleaned)
 }
 
+/// The cutoff for the body file sweep.
+///
+/// A file is unreachable once either the accounting row (the ledger in
+/// `usage.request_metadata`) or the body row is gone, so the sweep uses the
+/// earlier of the two selected cutoffs. Records-only cleanup must still sweep
+/// files because deleting the usage row cascades to `usage_http_bodies`.
+fn body_file_cleanup_cutoff(
+    targets: UsageCleanupTargets,
+    window: &UsageCleanupWindow,
+) -> Option<DateTime<Utc>> {
+    match (targets.body, targets.records) {
+        (true, true) => Some(window.body_cutoff.min(window.log_cutoff)),
+        (true, false) => Some(window.body_cutoff),
+        (false, true) => Some(window.log_cutoff),
+        (false, false) => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        UsageCleanupTargets, COUNT_EXPIRED_USAGE_HTTP_BODIES_SQL,
-        COUNT_EXPIRED_USAGE_HTTP_HEADERS_SQL, DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL,
-        DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL,
+        body_file_cleanup_cutoff, UsageCleanupTargets, UsageCleanupWindow,
+        COUNT_EXPIRED_USAGE_HTTP_BODIES_SQL, COUNT_EXPIRED_USAGE_HTTP_HEADERS_SQL,
+        DELETE_EXPIRED_USAGE_HTTP_BODIES_SQL, DELETE_EXPIRED_USAGE_HTTP_HEADERS_SQL,
     };
+    use chrono::{TimeZone, Utc};
 
     #[test]
     fn body_targets_select_only_body_cleanup() {
@@ -484,5 +528,47 @@ mod tests {
             assert!(sql.contains("ORDER BY created_at ASC"), "{sql}");
             assert!(sql.contains("LIMIT $2"), "{sql}");
         }
+    }
+
+    /// Records-only cleanup still has to sweep body files: deleting the usage
+    /// row cascades to `usage_http_bodies`, and the ledger disappears with it.
+    #[test]
+    fn body_file_cleanup_cutoff_follows_the_selected_targets() {
+        let make_window = |body, log| UsageCleanupWindow {
+            body_cutoff: Utc.timestamp_opt(body, 0).unwrap(),
+            header_cutoff: Utc.timestamp_opt(2_000, 0).unwrap(),
+            log_cutoff: Utc.timestamp_opt(log, 0).unwrap(),
+        };
+        let targets = |body, records| UsageCleanupTargets {
+            body,
+            headers: false,
+            records,
+            expired_keys: false,
+        };
+
+        let window = make_window(1_000, 3_000);
+        assert_eq!(
+            body_file_cleanup_cutoff(targets(true, true), &window),
+            Some(window.body_cutoff)
+        );
+        assert_eq!(
+            body_file_cleanup_cutoff(targets(true, false), &window),
+            Some(window.body_cutoff)
+        );
+        assert_eq!(
+            body_file_cleanup_cutoff(targets(false, true), &window),
+            Some(window.log_cutoff)
+        );
+        assert_eq!(
+            body_file_cleanup_cutoff(targets(false, false), &window),
+            None
+        );
+
+        // The earlier cutoff wins: the file is unreachable once either row is gone.
+        let window = make_window(3_000, 1_000);
+        assert_eq!(
+            body_file_cleanup_cutoff(targets(true, true), &window),
+            Some(window.log_cutoff)
+        );
     }
 }
