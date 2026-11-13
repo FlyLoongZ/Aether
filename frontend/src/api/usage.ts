@@ -2,60 +2,12 @@ import apiClient from './client'
 import { cachedRequest, dedupedRequest, buildCacheKey } from '@/utils/cache'
 import type { ActivityHeatmap } from '@/types/activity'
 import type { ImageProgress } from './requestTrace'
-import type { UsageRecord as UsageListRecord } from './usageRecords'
+import type { UsageRecord } from './usageRecords'
+import { CACHE_TTL } from '@/config/constants'
 
-const ACTIVITY_HEATMAP_CACHE_TTL_MS = 30 * 60 * 1000
-const USAGE_ANALYTICS_CACHE_TTL_MS = 30 * 1000
+export type { UsageRecord }
+
 const USAGE_ANALYTICS_REQUEST_TIMEOUT_MS = 120 * 1000
-
-export interface UsageRecord {
-  id: string // UUID
-  user_id: string // UUID
-  username?: string
-  provider_id?: string // UUID
-  provider_name?: string
-  model: string
-  request_type?: string | null
-  requested_reasoning_effort?: string | null
-  reasoning_effort?: string | null
-  service_tier?: string | null
-  actual_service_tier?: string | null
-  response_model?: string | null
-  input_tokens: number
-  effective_input_tokens?: number
-  output_tokens: number
-  cache_creation_input_tokens?: number
-  cache_creation_ephemeral_5m_input_tokens?: number
-  cache_creation_ephemeral_1h_input_tokens?: number
-  cache_read_input_tokens?: number
-  total_tokens: number
-  cost?: number
-  billing_multiplier?: number | null
-  routing_group_id?: string | null
-  routing_group_name?: string | null
-  billing_cost?: number | null
-  response_time?: number
-  response_time_ms?: number | null
-  first_byte_time_ms?: number | null
-  end_to_end_time_ms?: number | null
-  end_to_end_first_byte_time_ms?: number | null
-  is_websocket?: boolean
-  websocket_transport?: string | null
-  usage_available?: boolean
-  usage_pricing_available?: boolean
-  input_audio_tokens?: number | null
-  output_audio_tokens?: number | null
-  created_at: string
-  updated_at?: string | null
-  response_time_updated_at?: string | null
-  has_fallback?: boolean // 🆕 是否发生了 fallback
-  chat_pii_redaction?: boolean // 请求体实际发生过敏感信息脱敏
-  client_family?: string | null
-  client_ip?: string | null
-  user_agent?: string | null
-  request_path?: string | null
-  request_path_and_query?: string | null
-}
 
 export interface UsageStats {
   total_requests: number
@@ -433,7 +385,7 @@ export const usageApi = {
         })
         return response.data
       },
-      options?.skipCache ? 0 : USAGE_ANALYTICS_CACHE_TTL_MS
+      options?.skipCache ? 0 : CACHE_TTL.USAGE_ANALYTICS_MS
     )
   },
 
@@ -457,7 +409,7 @@ export const usageApi = {
         })
         return response.data
       },
-      options?.skipCache ? 0 : USAGE_ANALYTICS_CACHE_TTL_MS
+      options?.skipCache ? 0 : CACHE_TTL.USAGE_ANALYTICS_MS
     )
   },
 
@@ -539,7 +491,7 @@ export const usageApi = {
     limit?: number
     offset?: number
   }): Promise<{
-    records: UsageListRecord[]
+    records: UsageRecord[]
     total: number
     limit: number
     offset: number
@@ -548,7 +500,7 @@ export const usageApi = {
     const key = buildCacheKey('usage:records', params as Record<string, unknown> | undefined)
     return dedupedRequest(key, async () => {
       const response = await apiClient.get<{
-        records: UsageListRecord[]
+        records: UsageRecord[]
         total: number
         limit: number
         offset: number
@@ -753,7 +705,7 @@ export const usageApi = {
         const response = await apiClient.get<ActivityHeatmap | unknown[]>('/api/admin/usage/heatmap')
         return normalizeActivityHeatmapResponse(response.data)
       },
-      ACTIVITY_HEATMAP_CACHE_TTL_MS
+      CACHE_TTL.ACTIVITY_HEATMAP_MS
     )
   }
 }

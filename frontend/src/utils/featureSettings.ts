@@ -1,3 +1,5 @@
+import { isRecord } from './type-guards'
+
 export interface ChatPiiRedactionFeatureSettings {
   enabled: boolean
   inject_model_instruction: boolean
@@ -18,9 +20,6 @@ const DEFAULT_NOTIFICATION_PUSH_SERVICE_FEATURE_SETTINGS: NotificationPushServic
   enabled: false,
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value)
-}
 
 export function readChatPiiRedactionFeatureSettings(
   featureSettings: unknown,

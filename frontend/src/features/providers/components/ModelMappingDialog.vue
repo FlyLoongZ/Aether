@@ -340,7 +340,10 @@ import {
   modelMappingRequestScopeOptions,
   modelMappingRequestScopeValue,
   normalizeModelMappingOperations,
+  getScopeKey,
+  normalizeStringList,
 } from '../utils/modelMappingScope'
+import { toggleSetMember } from '@/utils/set'
 
 export interface AliasGroup {
   model: Model
@@ -607,22 +610,6 @@ function toggleAllUpstreamModels() {
   }
 }
 
-function normalizeStringList(values: string[] | undefined): string[] {
-  const seen = new Set<string>()
-  const result: string[] = []
-  for (const value of values ?? []) {
-    const normalized = value.trim()
-    if (!normalized || seen.has(normalized)) continue
-    seen.add(normalized)
-    result.push(normalized)
-  }
-  return result
-}
-
-function getScopeKey(values: string[] | undefined): string {
-  return normalizeStringList(values).sort().join(',')
-}
-
 function scopesOverlap(left: string[] | undefined, right: string[] | undefined): boolean {
   const leftValues = normalizeStringList(left)
   const rightValues = normalizeStringList(right)
@@ -666,12 +653,7 @@ function findDuplicateNames(
 
 // 切换折叠状态
 function toggleGroupCollapse(group: string) {
-  if (collapsedGroups.value.has(group)) {
-    collapsedGroups.value.delete(group)
-  } else {
-    collapsedGroups.value.add(group)
-  }
-  collapsedGroups.value = new Set(collapsedGroups.value)
+  collapsedGroups.value = toggleSetMember(collapsedGroups.value, group)
 }
 
 // 从提供商获取模型（使用缓存）

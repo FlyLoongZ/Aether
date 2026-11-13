@@ -385,6 +385,8 @@ import {
   formatModelMappingRequestScope,
   modelMappingOperationsKey,
   normalizeModelMappingOperations,
+  getScopeKey,
+  normalizeStringList,
 } from '../../utils/modelMappingScope'
 import {
   buildDefaultModelTestRequestHeaders,
@@ -534,22 +536,6 @@ const expandedItems = ref<Set<string>>(new Set())
 // 生成作用域唯一键
 function getApiFormatsKey(formats: string[] | undefined): string {
   return getScopeKey(formats)
-}
-
-function normalizeStringList(values: string[] | undefined): string[] {
-  const seen = new Set<string>()
-  const result: string[] = []
-  for (const value of values ?? []) {
-    const normalized = value.trim()
-    if (!normalized || seen.has(normalized)) continue
-    seen.add(normalized)
-    result.push(normalized)
-  }
-  return result
-}
-
-function getScopeKey(values: string[] | undefined): string {
-  return normalizeStringList(values).sort().join(',')
 }
 
 function getEndpointIdsKey(endpointIds: string[] | undefined): string {

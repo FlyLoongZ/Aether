@@ -1,4 +1,5 @@
 import type { PricingTier, TieredPricingConfig } from './endpoints/types'
+import { isRecord } from '@/utils/type-guards'
 
 export interface ModelsDevTokenCost {
   input: number
@@ -45,9 +46,6 @@ type ParsedTokenPrices = Pick<
   | 'cache_read_price_per_1m'
 >
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 function isPrice(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0

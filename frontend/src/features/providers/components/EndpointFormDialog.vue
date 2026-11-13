@@ -689,6 +689,7 @@ import {
   endpointConfigWithResponseHeaderRules,
 } from './endpoint-rule-editing'
 import type { EditableRule, BodyRuleAction, EditableBodyRule, BodyRuleEditableField } from './endpoint-rule-editing'
+import { isRecord } from '@/utils/type-guards'
 
 // 端点编辑状态（仅 URL、路径、规则，格式转换是直接保存的）
 interface EndpointEditState {
@@ -1079,9 +1080,6 @@ const BODY_RULE_JSON_ACTIONS = new Set(['set', 'drop', 'rename', 'append', 'inse
 const CONDITION_JSON_OPS = new Set(['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'starts_with', 'ends_with', 'contains', 'matches', 'exists', 'not_exists', 'in', 'type_is'])
 const CONDITION_JSON_SOURCES = new Set(['body', 'current', 'original', 'request_headers', 'headers'])
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
 
 function formatJsonRuleFieldLabel(label: string, index: number, field: string): string {
   return t('providers.migration.entrya26c09', { value: String(label), value_2: String(index + 1), value_3: String(field) })
@@ -1101,7 +1099,7 @@ function readJsonRulesArray(root: Record<string, unknown>, key: keyof EndpointRu
 function validateJsonCondition(rule: Record<string, unknown>, label: string, index: number): string | null {
   const raw = rule.condition
   if (raw === undefined || raw === null) return null
-  if (!isJsonObject(raw)) return formatJsonRuleError(label, index, t('ui.conditionMustBeAnObject'))
+  if (!isRecord(raw)) return formatJsonRuleError(label, index, t('ui.conditionMustBeAnObject'))
   const shapeError = validateJsonConditionShape(raw, formatJsonRuleFieldLabel(label, index, 'condition'))
   if (shapeError) return shapeError
   const editable = conditionToEditable(raw as NonNullable<BodyRule['condition']> & Record<string, unknown>)
@@ -1114,7 +1112,7 @@ function validateJsonConditionShape(condition: Record<string, unknown>, label: s
     if (!Array.isArray(condition.all)) return `${label}.all ${t('ui.mustBeAnArray')}`
     for (let i = 0; i < condition.all.length; i++) {
       const child = condition.all[i]
-      if (!isJsonObject(child)) return `${label}.all[${i}] ${t('ui.mustBeAnObject')}`
+      if (!isRecord(child)) return `${label}.all[${i}] ${t('ui.mustBeAnObject')}`
       const err = validateJsonConditionShape(child, `${label}.all[${i}]`)
       if (err) return err
     }
@@ -1124,7 +1122,7 @@ function validateJsonConditionShape(condition: Record<string, unknown>, label: s
     if (!Array.isArray(condition.any)) return `${label}.any ${t('ui.mustBeAnArray')}`
     for (let i = 0; i < condition.any.length; i++) {
       const child = condition.any[i]
-      if (!isJsonObject(child)) return `${label}.any[${i}] ${t('ui.mustBeAnObject')}`
+      if (!isRecord(child)) return `${label}.any[${i}] ${t('ui.mustBeAnObject')}`
       const err = validateJsonConditionShape(child, `${label}.any[${i}]`)
       if (err) return err
     }
@@ -1190,7 +1188,7 @@ function validateHeaderRuleJson(
   reservedNameError: (raw: string) => string | null = reservedHeaderRuleError,
   validateValue: (raw: string) => string | null = () => null,
 ): string | null {
-  if (!isJsonObject(rule)) return formatJsonRuleError(label, index, t('ui.mustBeAnObject'))
+  if (!isRecord(rule)) return formatJsonRuleError(label, index, t('ui.mustBeAnObject'))
   if (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') {
     return formatJsonRuleError(label, index, t('ui.enabledMustBeABoolean'))
   }
@@ -1218,7 +1216,7 @@ function validateHeaderRuleJson(
 }
 
 function validateBodyRuleJson(rule: unknown, label: string, index: number): string | null {
-  if (!isJsonObject(rule)) return formatJsonRuleError(label, index, t('ui.mustBeAnObject'))
+  if (!isRecord(rule)) return formatJsonRuleError(label, index, t('ui.mustBeAnObject'))
   if (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') {
     return formatJsonRuleError(label, index, t('ui.enabledMustBeABoolean'))
   }
@@ -1276,7 +1274,7 @@ function parseEndpointRulesJsonDraft(draft: string): { value: EndpointRulesJsonP
   } catch (error: unknown) {
     return { value: null, error: error instanceof Error ? error.message : t('ui.invalidJsonFormat') }
   }
-  if (!isJsonObject(parsed)) return { value: null, error: t('ui.rulesJsonMustBeAnObject') }
+  if (!isRecord(parsed)) return { value: null, error: t('ui.rulesJsonMustBeAnObject') }
 
   const header = readJsonRulesArray(parsed, 'header_rules', 'header_rules')
   if (header.error) return { value: null, error: header.error }

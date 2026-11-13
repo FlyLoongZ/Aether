@@ -1,4 +1,5 @@
 import { translate } from '@/i18n'
+import { isRecord } from '@/utils/type-guards'
 import type {
   ImageOutputPriceRange,
   ImageOutputQualityPricing,
@@ -6,7 +7,10 @@ import type {
   ProcessingTierPricingConfig,
   TieredPricingConfig,
 } from '@/api/endpoints/types'
-import { comparePricingUpperBounds } from './tiered-pricing'
+import { comparePricingUpperBounds, valueHasEntries } from './tiered-pricing'
+
+export { isRecord }
+export { valueHasEntries }
 
 // 阶梯定价编辑器的类型、常量与不依赖编辑器状态的纯函数
 
@@ -121,10 +125,6 @@ export function hasOwn(object: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(object, key)
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
 export function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
@@ -140,11 +140,6 @@ export function processingTierHasExplicitPricingData(config: ProcessingTierPrici
       'image_output_price_matrix',
       'image_prices',
     ].some(key => valueHasEntries(config[key]))
-}
-
-export function valueHasEntries(value: unknown): boolean {
-  return (Array.isArray(value) && value.length > 0)
-    || (isRecord(value) && Object.keys(value).length > 0)
 }
 
 export function parseProcessingTierMultiplier(value: string | number): number | null {

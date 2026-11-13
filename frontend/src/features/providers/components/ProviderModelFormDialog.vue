@@ -391,6 +391,12 @@ import {
   mergeProviderTieredPricingForEditing,
   modelSupportsEmbedding,
 } from './provider-model-form-helpers'
+import {
+  normalizeResolutionKey,
+  VIDEO_RESOLUTION_PRICE_PRESETS,
+  type VideoResolutionPricePreset,
+  type VideoResolutionPriceRow,
+} from '@/features/models/utils/video-pricing'
 
 interface Props {
   open: boolean
@@ -463,31 +469,16 @@ const originalProviderTieredPricing = ref<ProviderTieredPricingConfig | null>(nu
 const pricePerRequestModified = ref(false)
 const originalPricePerRequest = ref<number | undefined>(undefined)
 
-type VideoResolutionPriceRow = { resolution: string; price_per_second: number | undefined }
 
 const configTouched = ref(false)
-const videoResolutionPrices = ref<VideoResolutionPriceRow[]>([])
-
-const VIDEO_RESOLUTION_PRICE_PRESETS: Record<
-  'common' | 'sora' | 'veo',
-  VideoResolutionPriceRow[]
-> = {
-  common: [
-    { resolution: '480p', price_per_second: 0 },
-    { resolution: '720p', price_per_second: 0 },
-    { resolution: '1080p', price_per_second: 0 },
-    { resolution: '4k', price_per_second: 0 },
-  ],
-  sora: [
-    { resolution: '720x1080', price_per_second: 0 },
-    { resolution: '1024x1792', price_per_second: 0 },
-  ],
-  veo: [
-    { resolution: '720p', price_per_second: 0 },
-    { resolution: '1080p', price_per_second: 0 },
-    { resolution: '4k', price_per_second: 0 },
-  ],
+function fillVideoResolutionPricePreset(preset: VideoResolutionPricePreset) {
+  videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(row => ({
+    resolution: row.resolution,
+    price_per_second: row.price_per_second,
+  }))
 }
+
+const videoResolutionPrices = ref<VideoResolutionPriceRow[]>([])
 
 const DEFAULT_MANUAL_GLOBAL_MODEL_PRICING: TieredPricingConfig = {
   tiers: [{ up_to: null, input_price_per_1m: 0, output_price_per_1m: 0 }],
@@ -783,19 +774,6 @@ function pruneEmptyBillingConfig(cfg: Record<string, unknown>) {
  * - lowercase, remove spaces, × → x
  * - For WxH format, sort dimensions so smaller comes first (720x1080 = 1080x720)
  */
-function normalizeResolutionKey(raw: string): string {
-  let k = (raw || '').trim().toLowerCase().replace(/\s+/g, '').replace(/×/g, 'x')
-  // Check if it's WxH format (e.g., 1080x720)
-  const match = k.match(/^(\d+)x(\d+)$/)
-  if (match) {
-    const a = parseInt(match[1], 10)
-    const b = parseInt(match[2], 10)
-    // Sort: smaller dimension first
-    k = a <= b ? `${a}x${b}` : `${b}x${a}`
-  }
-  return k
-}
-
 function loadVideoPricingFromConfig(cfg: Record<string, unknown>) {
   const raw = getNested(cfg, 'billing.video.price_per_second_by_resolution')
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
@@ -840,12 +818,6 @@ function removeVideoResolutionPriceRow(idx: number) {
   videoResolutionPrices.value.splice(idx, 1)
 }
 
-function fillVideoResolutionPricePreset(preset: 'common' | 'sora' | 'veo') {
-  videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(r => ({
-    resolution: r.resolution,
-    price_per_second: r.price_per_second,
-  }))
-}
 
 function _copyVideoPricingFromSelectedGlobal() {
   const gm = availableGlobalModels.value.find(m => m.id === form.value.global_model_id)

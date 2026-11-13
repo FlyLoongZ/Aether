@@ -210,6 +210,7 @@ import {
   type EndpointAPIKey,
   type EndpointAPIKeyUpdate,
 } from '@/api/endpoints'
+import { parseModelPatternText } from '../utils/modelPatterns'
 
 const props = defineProps<{
   open: boolean
@@ -341,14 +342,6 @@ const { handleDialogUpdate, handleCancel } = useFormDialog({
 })
 
 // 将逗号分隔的文本解析为数组（去空、去重）
-function parsePatternText(text: string): string[] {
-  if (!text.trim()) return []
-  const patterns = text
-    .split(',')
-    .map(s => s.trim())
-    .filter(s => s.length > 0)
-  return [...new Set(patterns)]
-}
 
 async function handleSave() {
   if (!props.editingKey) {
@@ -369,8 +362,8 @@ async function handleSave() {
       note: form.value.note,
       allowed_models: shouldClearAllowedModels ? null : undefined,
       auto_fetch_models: form.value.auto_fetch_models,
-      model_include_patterns: parsePatternText(form.value.model_include_patterns_text),
-      model_exclude_patterns: parsePatternText(form.value.model_exclude_patterns_text)
+      model_include_patterns: parseModelPatternText(form.value.model_include_patterns_text),
+      model_exclude_patterns: parseModelPatternText(form.value.model_exclude_patterns_text)
     }
 
     const updatedKey = await updateProviderKey(props.editingKey.id, updateData)

@@ -619,6 +619,12 @@ import {
   useModelsDevPricingSources,
   withModelsDevPricingSource,
 } from '../composables/useModelsDevPricingSources'
+import {
+  normalizeResolutionKey,
+  VIDEO_RESOLUTION_PRICE_PRESETS,
+  type VideoResolutionPricePreset,
+  type VideoResolutionPriceRow,
+} from '@/features/models/utils/video-pricing'
 
 const props = defineProps<{
   open: boolean
@@ -716,30 +722,15 @@ function reopenPresetPanel() {
 // 阶梯计费配置
 const tieredPricing = ref<TieredPricingConfig | null>(null)
 
-type VideoResolutionPriceRow = { resolution: string; price_per_second: number | undefined }
+
+function fillVideoResolutionPricePreset(preset: VideoResolutionPricePreset) {
+  videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(row => ({
+    resolution: row.resolution,
+    price_per_second: row.price_per_second,
+  }))
+}
 
 const videoResolutionPrices = ref<VideoResolutionPriceRow[]>([])
-
-const VIDEO_RESOLUTION_PRICE_PRESETS: Record<
-  'common' | 'sora' | 'veo',
-  VideoResolutionPriceRow[]
-> = {
-  common: [
-    { resolution: '480p', price_per_second: 0 },
-    { resolution: '720p', price_per_second: 0 },
-    { resolution: '1080p', price_per_second: 0 },
-    { resolution: '4k', price_per_second: 0 },
-  ],
-  sora: [
-    { resolution: '720x1080', price_per_second: 0 },
-    { resolution: '1024x1792', price_per_second: 0 },
-  ],
-  veo: [
-    { resolution: '720p', price_per_second: 0 },
-    { resolution: '1080p', price_per_second: 0 },
-    { resolution: '4k', price_per_second: 0 },
-  ],
-}
 
 const embeddingApiFormats = [...EMBEDDING_API_FORMATS]
 
@@ -897,19 +888,6 @@ function pruneEmptyBillingConfig() {
  * - lowercase, remove spaces, × → x
  * - For WxH format, sort dimensions so smaller comes first (720x1080 = 1080x720)
  */
-function normalizeResolutionKey(raw: string): string {
-  let k = (raw || '').trim().toLowerCase().replace(/\s+/g, '').replace(/×/g, 'x')
-  // Check if it's WxH format (e.g., 1080x720)
-  const match = k.match(/^(\d+)x(\d+)$/)
-  if (match) {
-    const a = parseInt(match[1], 10)
-    const b = parseInt(match[2], 10)
-    // Sort: smaller dimension first
-    k = a <= b ? `${a}x${b}` : `${b}x${a}`
-  }
-  return k
-}
-
 function loadVideoPricingFromConfig() {
   const cfg = form.value.config || {}
   const raw = getNested(cfg, 'billing.video.price_per_second_by_resolution')
@@ -961,12 +939,6 @@ function removeVideoResolutionPriceRow(idx: number) {
   videoResolutionPrices.value.splice(idx, 1)
 }
 
-function fillVideoResolutionPricePreset(preset: 'common' | 'sora' | 'veo') {
-  videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(r => ({
-    resolution: r.resolution,
-    price_per_second: r.price_per_second,
-  }))
-}
 
 async function loadExistingModels() {
   const models: GlobalModelResponse[] = []

@@ -31,3 +31,11 @@ export type LogLevel = typeof LogLevel[keyof typeof LogLevel]
 
 // 环境判断
 export const isDev = import.meta.env.DEV
+
+// 数据缓存 TTL
+export const CACHE_TTL = {
+  /** 活动热力图：变化慢，允许较长缓存 */
+  ACTIVITY_HEATMAP_MS: 30 * 60 * 1000,
+  /** 用量分析聚合：需要与其他看板保持相对新鲜 */
+  USAGE_ANALYTICS_MS: 30 * 1000,
+} as const

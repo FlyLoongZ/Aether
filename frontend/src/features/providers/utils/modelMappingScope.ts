@@ -165,3 +165,21 @@ function formatModelMappingEndpointDiscriminator(endpoint: ModelMappingEndpoint)
     return baseUrl || endpoint.id.slice(0, 8)
   }
 }
+
+/** 去空白、去重后的字符串列表（保持原始顺序）。 */
+export function normalizeStringList(values: string[] | undefined): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values ?? []) {
+    const normalized = value.trim()
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+  }
+  return result
+}
+
+/** 作用域组合的稳定标识（排序后拼接，用于判等）。 */
+export function getScopeKey(values: string[] | undefined): string {
+  return normalizeStringList(values).sort().join(',')
+}

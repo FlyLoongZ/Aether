@@ -1,5 +1,6 @@
 import { translate } from '@/i18n'
 import { normalizeApiFormatAlias } from '@/api/endpoints/types/api-format'
+import { isRecord } from '@/utils/type-guards'
 
 export interface ReasoningApiFormatConfig {
   [key: string]: unknown
@@ -448,6 +449,3 @@ function modelDirectiveSuffixSupportedForApiFormat(
     || defaultModelDirectiveSuffixesForApiFormat(apiFormat).includes(builtInSuffix)
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
