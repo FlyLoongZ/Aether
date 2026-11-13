@@ -259,39 +259,59 @@ async fn purge_usage_http_bodies(
     pool: &PostgresPool,
     batch_size: usize,
 ) -> Result<usize, DataLayerError> {
+    let started_at = Utc::now();
+    let count = count_all_usage_http_bodies(pool).await?;
     if let Some(store) = aether_body_store::global() {
         if let Err(err) = store.purge_all().await {
             warn!(error = %err, "usage cleanup body file purge failed");
         }
     }
     match truncate_usage_http_bodies(pool).await {
-        Ok(()) => Ok(usize::try_from(count_all_usage_http_bodies(pool).await?).unwrap_or(0)),
+        Ok(()) => Ok(usize::try_from(count).unwrap_or(0)),
         Err(err) => {
             warn!(
                 error = %err,
                 "usage cleanup truncate usage_http_bodies failed or timed out, falling back to batch deletion"
             );
+            let mut deleted_total = 0usize;
             loop {
-                let deleted = sqlx::query("DELETE FROM usage_http_bodies WHERE ctid IN (SELECT ctid FROM usage_http_bodies LIMIT $1)")
-                    .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
-                    .execute(pool)
+                let mut tx = pool.begin().await.map_err(postgres_error)?;
+                sqlx::query("SET LOCAL lock_timeout = '10s'")
+                    .execute(&mut *tx)
                     .await
-                    .map_err(postgres_error)?
-                    .rows_affected();
-                if deleted == 0 {
-                    return Ok(0);
-                }
-                if usize::try_from(deleted).unwrap_or(usize::MAX) < batch_size {
-                    return Ok(usize::try_from(deleted).unwrap_or(usize::MAX));
+                    .map_err(postgres_error)?;
+                sqlx::query("SET LOCAL statement_timeout = '60s'")
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(postgres_error)?;
+                let deleted = sqlx::query(
+                    "DELETE FROM usage_http_bodies WHERE ctid IN (SELECT ctid FROM usage_http_bodies WHERE created_at < $2 LIMIT $1)",
+                )
+                .bind(i64::try_from(batch_size).unwrap_or(i64::MAX))
+                .bind(started_at)
+                .execute(&mut *tx)
+                .await
+                .map_err(postgres_error)?
+                .rows_affected();
+                tx.commit().await.map_err(postgres_error)?;
+                let deleted = usize::try_from(deleted).unwrap_or(usize::MAX);
+                deleted_total = deleted_total.saturating_add(deleted);
+                if deleted < batch_size {
+                    break;
                 }
             }
+            Ok(deleted_total)
         }
     }
 }
 
 async fn truncate_usage_http_bodies(pool: &PostgresPool) -> Result<(), DataLayerError> {
     let mut tx = pool.begin().await.map_err(postgres_error)?;
-    sqlx::query("SET LOCAL lock_timeout = '2s'")
+    sqlx::query("SET LOCAL lock_timeout = '30s'")
+        .execute(&mut *tx)
+        .await
+        .map_err(postgres_error)?;
+    sqlx::query("SET LOCAL statement_timeout = '60s'")
         .execute(&mut *tx)
         .await
         .map_err(postgres_error)?;

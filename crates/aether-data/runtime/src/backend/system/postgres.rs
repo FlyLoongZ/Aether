@@ -954,6 +954,41 @@ impl PostgresBackend {
         Ok(summary)
     }
 
+    /// Clears every captured body in one `TRUNCATE`.
+    ///
+    /// A row-by-row `DELETE` loop cannot finish while the gateway keeps
+    /// inserting new bodies; `TRUNCATE` also avoids the TOAST/WAL cost of
+    /// deleting large `bytea` values one batch at a time.
+    pub async fn purge_admin_request_bodies_all(
+        &self,
+    ) -> Result<AdminSystemPurgeSummary, DataLayerError> {
+        let mut tx = self.pool().begin().await.map_postgres_err()?;
+        if !pg_table_exists(&mut tx, "usage_http_bodies").await? {
+            return Ok(AdminSystemPurgeSummary::default());
+        }
+        sqlx::query("SET LOCAL lock_timeout = '30s'")
+            .execute(&mut *tx)
+            .await
+            .map_postgres_err()?;
+        sqlx::query("SET LOCAL statement_timeout = '60s'")
+            .execute(&mut *tx)
+            .await
+            .map_postgres_err()?;
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*)::bigint FROM public.usage_http_bodies")
+                .fetch_one(&mut *tx)
+                .await
+                .map_postgres_err()?;
+        sqlx::query("TRUNCATE TABLE public.usage_http_bodies")
+            .execute(&mut *tx)
+            .await
+            .map_postgres_err()?;
+        tx.commit().await.map_postgres_err()?;
+        let mut summary = AdminSystemPurgeSummary::default();
+        summary.add("usage_http_bodies", u64::try_from(count).unwrap_or(0));
+        Ok(summary)
+    }
+
     pub async fn find_system_config_value(
         &self,
         key: &str,

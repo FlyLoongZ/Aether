@@ -322,6 +322,15 @@ impl DataBackends {
             None => Ok(AdminSystemPurgeSummary::default()),
         }
     }
+
+    pub async fn purge_admin_request_bodies_all(
+        &self,
+    ) -> Result<AdminSystemPurgeSummary, DataLayerError> {
+        match self.sql_backend() {
+            Some(backend) => backend.purge_admin_request_bodies_all().await,
+            None => Ok(AdminSystemPurgeSummary::default()),
+        }
+    }
 }
 
 impl<'a> SqlBackendRef<'a> {
@@ -616,6 +625,17 @@ impl<'a> SqlBackendRef<'a> {
         match self {
             #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.purge_admin_request_bodies_batch(batch_size).await,
+            #[cfg(not(feature = "postgres"))]
+            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
+        }
+    }
+
+    async fn purge_admin_request_bodies_all(
+        self,
+    ) -> Result<AdminSystemPurgeSummary, DataLayerError> {
+        match self {
+            #[cfg(feature = "postgres")]
+            Self::Postgres(postgres) => postgres.purge_admin_request_bodies_all().await,
             #[cfg(not(feature = "postgres"))]
             Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }

@@ -9,11 +9,10 @@ use tracing::{info, warn};
 use crate::data::GatewayDataState;
 use crate::{AppState, GatewayError};
 
-use super::{now_unix_secs, system_config_usize};
+use super::now_unix_secs;
 
 const CLEANUP_RUN_HISTORY_KEY: &str = "admin_cleanup_run_history";
 const CLEANUP_RUN_HISTORY_LIMIT: usize = 50;
-const REQUEST_BODY_PROGRESS_UPDATE_BATCHES: usize = 10;
 
 const CLEANUP_ERROR_INVALID_CONFIGURATION: &str = "invalid_configuration";
 const CLEANUP_ERROR_INVALID_INPUT: &str = "invalid_input";
@@ -139,14 +138,11 @@ impl AdminCleanupTaskKind {
         }
     }
 
-    fn start_message(self, batch_size: Option<usize>) -> String {
+    fn start_message(self) -> String {
         match self {
             Self::Config => "系统配置后台清空已开始".to_string(),
             Self::Users => "非管理员用户后台清空已开始".to_string(),
-            Self::RequestBodies => format!(
-                "请求/响应体后台清理已开始，每批 {} 条",
-                batch_size.unwrap_or(1)
-            ),
+            Self::RequestBodies => "请求/响应体后台清理已开始".to_string(),
             Self::Usage => "使用记录后台清空已开始".to_string(),
             Self::AuditLogs => "审计日志后台清空已开始".to_string(),
             Self::Stats => "统计聚合后台清空和重建已开始".to_string(),
@@ -193,27 +189,17 @@ pub(crate) async fn start_admin_system_purge_task(
         return Ok(existing);
     }
 
-    let batch_size = if kind == AdminCleanupTaskKind::RequestBodies {
-        Some(
-            system_config_usize(&data, "cleanup_batch_size", 1_000)
-                .await
-                .map_err(|err| GatewayError::Internal(err.to_string()))?
-                .max(1),
-        )
-    } else {
-        None
-    };
     let started_at = now_unix_secs();
     let record = AdminCleanupRunRecord {
         id: uuid::Uuid::new_v4().to_string(),
         kind: kind.record_kind().to_string(),
         trigger: "manual".to_string(),
         status: "processing".to_string(),
-        message: kind.start_message(batch_size),
+        message: kind.start_message(),
         started_at_unix_secs: started_at,
         completed_at_unix_secs: None,
         duration_ms: None,
-        summary: initial_task_summary(kind, batch_size),
+        summary: initial_task_summary(kind),
         error: None,
     };
     record_cleanup_run(&data, record.clone())
@@ -222,11 +208,7 @@ pub(crate) async fn start_admin_system_purge_task(
 
     match kind {
         AdminCleanupTaskKind::RequestBodies => {
-            tokio::spawn(run_request_body_cleanup_task(
-                data,
-                record.clone(),
-                batch_size.unwrap_or(1),
-            ));
+            tokio::spawn(run_request_body_cleanup_task(data, record.clone()));
         }
         AdminCleanupTaskKind::Usage
         | AdminCleanupTaskKind::AuditLogs
@@ -305,9 +287,9 @@ pub(crate) async fn record_failed_cleanup_run(
 async fn run_request_body_cleanup_task(
     data: std::sync::Arc<GatewayDataState>,
     initial_record: AdminCleanupRunRecord,
-    batch_size: usize,
 ) {
     let started_at = Instant::now();
+
     // Purge files before the table so a body written while the task runs cannot
     // lose its file after its row is already gone.
     if let Some(store) = aether_body_store::global() {
@@ -315,81 +297,43 @@ async fn run_request_body_cleanup_task(
             warn!(error = %err, "request body file purge failed");
         }
     }
-    let mut total = AdminSystemPurgeSummary::default();
-    let mut batches = 0usize;
 
-    loop {
-        match data.purge_admin_request_bodies_batch(batch_size).await {
-            Ok(batch) if batch.total() == 0 => break,
-            Ok(batch) => {
-                batches = batches.saturating_add(1);
-                total.merge(&batch);
-                if batches.is_multiple_of(REQUEST_BODY_PROGRESS_UPDATE_BATCHES) {
-                    let progress = request_body_cleanup_record(
-                        &initial_record,
-                        "processing",
-                        format!(
-                            "请求/响应体后台清理中，已处理 {} 批，影响 {} 行",
-                            batches,
-                            total.total()
-                        ),
-                        batches,
-                        batch_size,
-                        &total,
-                        Some(started_at),
-                        None,
-                    );
-                    if let Err(err) = record_cleanup_run(&data, progress).await {
-                        warn!(error = %err, "failed to update request body cleanup progress");
-                    }
-                }
-                tokio::task::yield_now().await;
+    match data.purge_admin_request_bodies_all().await {
+        Ok(total) => {
+            let completed = request_body_cleanup_record(
+                &initial_record,
+                "completed",
+                format!("请求/响应体后台清理完成，影响 {} 行", total.total()),
+                &total,
+                Some(started_at),
+                None,
+            );
+            if let Err(err) = record_cleanup_run(&data, completed).await {
+                warn!(error = %err, "failed to record request body cleanup completion");
             }
-            Err(err) => {
-                let failed = request_body_cleanup_record(
-                    &initial_record,
-                    "failed",
-                    "请求/响应体后台清理失败".to_string(),
-                    batches,
-                    batch_size,
-                    &total,
-                    Some(started_at),
-                    Some(cleanup_data_layer_error_category(&err).to_string()),
-                );
-                if let Err(record_err) = record_cleanup_run(&data, failed).await {
-                    warn!(error = %record_err, "failed to record request body cleanup failure");
-                }
-                warn!(error = %err, "request body cleanup task failed");
-                return;
+            info!(
+                event_name = "request_body_cleanup_task_completed",
+                log_type = "ops",
+                worker = "request_body_cleanup_task",
+                affected = total.total(),
+                "gateway finished request body cleanup task"
+            );
+        }
+        Err(err) => {
+            let failed = request_body_cleanup_record(
+                &initial_record,
+                "failed",
+                "请求/响应体后台清理失败".to_string(),
+                &AdminSystemPurgeSummary::default(),
+                Some(started_at),
+                Some(cleanup_data_layer_error_category(&err).to_string()),
+            );
+            if let Err(record_err) = record_cleanup_run(&data, failed).await {
+                warn!(error = %record_err, "failed to record request body cleanup failure");
             }
+            warn!(error = %err, "request body cleanup task failed");
         }
     }
-
-    let completed = request_body_cleanup_record(
-        &initial_record,
-        "completed",
-        format!(
-            "请求/响应体后台清理完成，影响 {} 行，共 {} 批",
-            total.total(),
-            batches
-        ),
-        batches,
-        batch_size,
-        &total,
-        Some(started_at),
-        None,
-    );
-    if let Err(err) = record_cleanup_run(&data, completed).await {
-        warn!(error = %err, "failed to record request body cleanup completion");
-    }
-    info!(
-        event_name = "request_body_cleanup_task_completed",
-        log_type = "ops",
-        worker = "request_body_cleanup_task",
-        batches,
-        affected = total.total(),
-        "gateway finished request body cleanup task"
-    );
 }
 
 async fn run_admin_system_purge_task(
@@ -491,12 +435,11 @@ async fn run_admin_system_purge_task_once(
     ))
 }
 
-fn initial_task_summary(kind: AdminCleanupTaskKind, batch_size: Option<usize>) -> Value {
+fn initial_task_summary(kind: AdminCleanupTaskKind) -> Value {
     match kind {
         AdminCleanupTaskKind::RequestBodies => json!({
-            "batch_size": batch_size.unwrap_or(1),
-            "batches": 0,
             "cleaned": {},
+            "total": 0,
         }),
         AdminCleanupTaskKind::Stats => json!({
             "deleted": {},
@@ -539,8 +482,6 @@ fn request_body_cleanup_record(
     initial: &AdminCleanupRunRecord,
     status: &str,
     message: String,
-    batches: usize,
-    batch_size: usize,
     total: &AdminSystemPurgeSummary,
     started_at: Option<Instant>,
     error: Option<String>,
@@ -557,8 +498,6 @@ fn request_body_cleanup_record(
         duration_ms: started_at
             .map(|value| value.elapsed().as_millis().try_into().unwrap_or(u64::MAX)),
         summary: json!({
-            "batch_size": batch_size,
-            "batches": batches,
             "cleaned": total.affected,
             "total": total.total(),
         }),
