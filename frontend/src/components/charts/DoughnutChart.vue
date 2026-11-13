@@ -5,43 +5,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useI18n } from '@/i18n'
+import { computed } from 'vue'
 import {
+  ArcElement,
   Chart as ChartJS,
-  ArcElement,
   DoughnutController,
-  Title,
-  Tooltip,
   Legend,
-  type ChartData,
-  type ChartOptions
-} from 'chart.js'
-
-const props = withDefaults(defineProps<Props>(), {
-  height: 300,
-  options: undefined
-})
-
-ChartJS.register(
-  ArcElement,
-  DoughnutController,
   Title,
   Tooltip,
-  Legend
-)
+  type ChartData,
+  type ChartOptions,
+} from 'chart.js'
+import { useChartJs } from './useChartJs'
+import { CHART_LEGEND_COLOR, chartTooltipStyle } from './chart-theme'
 
 interface Props {
   data: ChartData<'doughnut'>
   options?: ChartOptions<'doughnut'>
-  height?: number
 }
 
-const chartRef = ref<HTMLCanvasElement>()
-const { locale } = useI18n()
-let chart: ChartJS<'doughnut'> | null = null
+const props = withDefaults(defineProps<Props>(), {
+  options: undefined,
+})
 
-const defaultOptions: ChartOptions<'doughnut'> = {
+ChartJS.register(ArcElement, DoughnutController, Title, Tooltip, Legend)
+
+const mergedOptions = computed<ChartOptions<'doughnut'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
   cutout: '60%',
@@ -49,68 +38,30 @@ const defaultOptions: ChartOptions<'doughnut'> = {
     legend: {
       position: 'right',
       labels: {
-        color: 'rgb(107, 114, 128)',
+        color: CHART_LEGEND_COLOR,
         usePointStyle: true,
         padding: 16,
-        font: { size: 11 }
-      }
+        font: { size: 11 },
+      },
     },
     tooltip: {
-      backgroundColor: 'rgb(31, 41, 55)',
-      titleColor: 'rgb(243, 244, 246)',
-      bodyColor: 'rgb(243, 244, 246)',
-      borderColor: 'rgb(75, 85, 99)',
-      borderWidth: 1,
+      ...chartTooltipStyle,
       callbacks: {
         label: (context) => {
           const value = context.raw as number
           const total = (context.dataset.data as number[]).reduce((a, b) => a + b, 0)
           const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
           return `${context.label}: $${value.toFixed(4)} (${percentage}%)`
-        }
-      }
-    }
-  }
-}
+        },
+      },
+    },
+  },
+  ...props.options,
+}))
 
-function createChart() {
-  if (!chartRef.value) return
-
-  chart = new ChartJS(chartRef.value, {
-    type: 'doughnut',
-    data: props.data,
-    options: {
-      ...defaultOptions,
-      locale: locale.value,
-      ...props.options
-    }
-  })
-}
-
-function updateChart() {
-  if (chart) {
-    chart.data = props.data
-    chart.update('none')
-  }
-}
-
-onMounted(async () => {
-  await nextTick()
-  createChart()
+const { chartRef } = useChartJs({
+  type: 'doughnut',
+  data: () => props.data,
+  options: () => mergedOptions.value,
 })
-
-onUnmounted(() => {
-  if (chart) {
-    chart.destroy()
-    chart = null
-  }
-})
-
-watch(() => props.data, updateChart, { deep: true })
-watch([() => props.options, locale], () => {
-  if (chart) {
-    chart.options = { ...defaultOptions, locale: locale.value, ...props.options }
-    chart.update()
-  }
-}, { deep: true })
 </script>
