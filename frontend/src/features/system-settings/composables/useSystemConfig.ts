@@ -41,6 +41,7 @@ export interface SystemConfig {
   sensitive_headers: string[]
   request_record_compact_base64_images: boolean
   request_record_max_body_size_kb: number
+  body_file_store_enabled: boolean
   // 请求记录清理
   enable_auto_cleanup: boolean
   detail_log_retention_days: number
@@ -89,6 +90,7 @@ const CONFIG_KEYS = [
   'sensitive_headers',
   'request_record_compact_base64_images',
   'request_record_max_body_size_kb',
+  'body_file_store_enabled',
   // 请求记录清理
   'enable_auto_cleanup',
   'detail_log_retention_days',
@@ -139,6 +141,7 @@ function createDefaultConfig(): SystemConfig {
     sensitive_headers: ['authorization', 'x-api-key', 'api-key', 'cookie', 'set-cookie'],
     request_record_compact_base64_images: false,
     request_record_max_body_size_kb: 0,
+    body_file_store_enabled: false,
     // 请求记录清理
     enable_auto_cleanup: true,
     detail_log_retention_days: 7,
@@ -228,6 +231,8 @@ export function useSystemConfig() {
         originalConfig.value.request_record_compact_base64_images ||
       systemConfig.value.request_record_max_body_size_kb !==
         originalConfig.value.request_record_max_body_size_kb ||
+      systemConfig.value.body_file_store_enabled !==
+        originalConfig.value.body_file_store_enabled ||
       JSON.stringify(systemConfig.value.sensitive_headers) !==
         JSON.stringify(originalConfig.value.sensitive_headers)
     )
@@ -555,6 +560,11 @@ export function useSystemConfig() {
           value: systemConfig.value.request_record_max_body_size_kb,
           description: '请求记录单个 Body 大小上限（KB），0 表示不限制',
         },
+        {
+          key: 'body_file_store_enabled',
+          value: systemConfig.value.body_file_store_enabled,
+          description: 'Body 文件存储开关',
+        },
       ]
 
       await Promise.all(
@@ -569,6 +579,8 @@ export function useSystemConfig() {
           systemConfig.value.request_record_compact_base64_images
         originalConfig.value.request_record_max_body_size_kb =
           systemConfig.value.request_record_max_body_size_kb
+        originalConfig.value.body_file_store_enabled =
+          systemConfig.value.body_file_store_enabled
       }
       success(translate('ui.requestLoggingConfigurationSaved'))
     } catch (err) {

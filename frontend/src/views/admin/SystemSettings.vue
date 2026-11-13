@@ -113,6 +113,7 @@
             :sensitive-headers-str="sensitiveHeadersStr"
             :compact-base64-images="systemConfig.request_record_compact_base64_images"
             :max-body-size-kb="systemConfig.request_record_max_body_size_kb"
+            :body-file-store-enabled="systemConfig.body_file_store_enabled"
             :loading="systemConfigLoading || logConfigLoading"
             :has-changes="hasLogConfigChanges"
             @save="saveLogConfig"
@@ -120,6 +121,7 @@
             @update:sensitive-headers-str="sensitiveHeadersStr = $event"
             @update:compact-base64-images="systemConfig.request_record_compact_base64_images = $event"
             @update:max-body-size-kb="systemConfig.request_record_max_body_size_kb = $event"
+            @update:body-file-store-enabled="systemConfig.body_file_store_enabled = $event"
           />
 
           <!-- 请求记录清理策略 -->
