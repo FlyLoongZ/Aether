@@ -1045,3 +1045,22 @@ fn body_file_deletion_requires_a_resolved_side() {
     };
     assert!(!should_delete_body_file(&file));
 }
+
+/// A detail read must not touch the file store unless the ledger routes a side
+/// there; `usage_http_bodies`-only records have no request directory to list.
+#[test]
+fn file_backed_body_detection_uses_the_ledger_storage_marker() {
+    assert!(super::super::usage_has_file_backed_body(Some(&json!({
+        "body_capture": {
+            "request": {"state": "inline", "storage": "file"},
+            "response": {"state": "inline", "stored_bytes": 12}
+        }
+    }))));
+    assert!(!super::super::usage_has_file_backed_body(Some(&json!({
+        "body_capture": {
+            "request": {"state": "inline", "stored_bytes": 12},
+            "response": {"state": "disabled"}
+        }
+    }))));
+    assert!(!super::super::usage_has_file_backed_body(None));
+}

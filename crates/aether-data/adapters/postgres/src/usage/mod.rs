@@ -10847,22 +10847,29 @@ async fn load_usage_http_bodies(
         .unwrap_or([None, None, None, None]);
 
     let metadata = usage.request_metadata.as_ref();
-    let file_bodies = match (
-        aether_body_store::global(),
-        aether_body_store::day_from_unix_secs(usage.updated_at_unix_secs),
-    ) {
-        (Some(store), Some(day)) => match store.read_request(day, &usage.request_id).await {
-            Ok(bodies) => Some(bodies),
-            Err(error) => {
-                tracing::warn!(
-                    request_id = %usage.request_id,
-                    error = %error,
-                    "usage body file read failed"
-                );
-                None
-            }
-        },
-        _ => None,
+    // Only touch the file store when the ledger actually routes a side there.
+    // A database-backed record would otherwise pay a `read_dir` on every
+    // detail read for a directory that does not exist.
+    let file_bodies = if usage_has_file_backed_body(metadata) {
+        match (
+            aether_body_store::global(),
+            aether_body_store::day_from_unix_secs(usage.updated_at_unix_secs),
+        ) {
+            (Some(store), Some(day)) => match store.read_request(day, &usage.request_id).await {
+                Ok(bodies) => Some(bodies),
+                Err(error) => {
+                    tracing::warn!(
+                        request_id = %usage.request_id,
+                        error = %error,
+                        "usage body file read failed"
+                    );
+                    None
+                }
+            },
+            _ => None,
+        }
+    } else {
+        None
     };
 
     for (index, side) in [
@@ -10884,6 +10891,23 @@ async fn load_usage_http_bodies(
         };
     }
     Ok(bodies)
+}
+
+/// Whether the capture ledger routes any side to the body file store.
+///
+/// Only then does a detail read need to touch the filesystem; a record whose
+/// bodies all live in `usage_http_bodies` has no request directory to list.
+fn usage_has_file_backed_body(metadata: Option<&Value>) -> bool {
+    [
+        UsageBodyField::RequestBody,
+        UsageBodyField::ClientResponseBody,
+        UsageBodyField::ProviderRequestBody,
+        UsageBodyField::ResponseBody,
+    ]
+    .into_iter()
+    .any(|side| {
+        body_capture_metadata_storage(metadata, side) == Some(UsageBodyCaptureStorage::File)
+    })
 }
 
 fn body_capture_metadata_truncated(metadata: Option<&Value>, side: UsageBodyField) -> bool {
