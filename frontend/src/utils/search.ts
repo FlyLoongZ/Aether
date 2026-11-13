@@ -1,26 +1,37 @@
+import { importWithRetry } from './importRetry'
+
 const CHINESE_CHAR_REGEX = /[\u3400-\u9fff]/u
 
 type PinyinModule = typeof import('pinyin-pro')
 
 let pinyinMod: PinyinModule | null = null
-let pinyinLoading: Promise<void> | null = null
+let pinyinLoading: Promise<boolean> | null = null
 
-function loadPinyin(): Promise<void> {
-  if (pinyinMod) return Promise.resolve()
+/** 拼音词典是否已可用（未加载时搜索仍可用，只是不支持拼音/首字母匹配）。 */
+export function isPinyinLoaded(): boolean {
+  return pinyinMod !== null
+}
+
+/**
+ * 按需加载拼音词典。
+ * @returns 加载成功后为 true；加载失败时为 false（匹配逻辑会自动退回纯文本）。
+ */
+export function loadPinyin(): Promise<boolean> {
+  if (pinyinMod) return Promise.resolve(true)
   if (pinyinLoading) return pinyinLoading
 
-  pinyinLoading = import('pinyin-pro')
+  // 复用路由懒加载的同一套机制：有界重试 + 失败后驱逐缓存条目，
+  // 这样一次网络抖动不会让拼音匹配在本会话内永久失效。
+  pinyinLoading = importWithRetry(() => import('pinyin-pro'), 3, 'pinyin-pro')
     .then((mod) => {
       pinyinMod = mod
+      return true
     })
     .catch(() => {
       pinyinLoading = null
+      return false
     })
   return pinyinLoading
-}
-
-export function preloadPinyin(): void {
-  loadPinyin()
 }
 
 function normalizeSearchText(value: string): string {

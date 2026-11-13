@@ -50,18 +50,22 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      minify: true,
       rolldownOptions: {
         output: {
+          // 生产构建压缩并去掉 console/debugger；开发构建保持可读输出。
           minify: mode === 'production'
             ? { compress: { dropConsole: true, dropDebugger: true } }
             : false,
+          // 第三方依赖固定分块，避免内容变化时产生随机的 esm-* 命名使长期缓存失效。
           manualChunks(id: string) {
             if (!id.includes('node_modules')) return undefined
             if (id.includes('chart.js')) return 'chart-vendor'
             if (id.includes('reka-ui') || id.includes('@lucide/vue')) return 'ui-vendor'
             if (id.includes('axios') || id.includes('marked') || id.includes('dompurify')) return 'utils-vendor'
             if (id.includes('/vue/') || id.includes('vue-router') || id.includes('/pinia/')) return 'vue-vendor'
+            if (id.includes('pinyin-pro')) return 'pinyin-vendor'
+            if (id.includes('date-fns')) return 'date-vendor'
+            if (id.includes('highlight.js')) return 'highlight-vendor'
             return undefined
           },
         },

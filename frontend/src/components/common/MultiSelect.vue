@@ -56,6 +56,7 @@
               :placeholder="localizedSearchPlaceholder"
               class="h-9 rounded-xl border-border/60 bg-background/80 pl-9 pr-3 text-sm"
               @keydown.stop
+              @focus="ensurePinyin"
             />
           </div>
         </div>
@@ -132,6 +133,7 @@ import { Input } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import { matchesSearchQuery } from '@/utils/search'
 import { useI18n } from '@/i18n'
+import { useLazyPinyin } from '@/composables/useLazyPinyin'
 
 export interface MultiSelectOption {
   value: string
@@ -244,7 +246,15 @@ const invalidSummaryText = computed(() => {
   return t('feedback.select.invalidSummary', { count })
 })
 
+// 拼音词典按需加载：加载完成后重新过滤一次（track 建立响应式依赖）。
+const { ensureLoaded: ensurePinyin, track: trackPinyin } = useLazyPinyin()
+
+watch(searchQuery, (query) => {
+  if (query.trim()) ensurePinyin()
+})
+
 const filteredInvalidItems = computed(() => {
+  trackPinyin()
   if (!showSearch.value || !searchQuery.value.trim()) {
     return invalidItems.value
   }
@@ -254,6 +264,7 @@ const filteredInvalidItems = computed(() => {
 })
 
 const filteredOptions = computed(() => {
+  trackPinyin()
   if (!showSearch.value || !searchQuery.value.trim()) {
     return props.options
   }
