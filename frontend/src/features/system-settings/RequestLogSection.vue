@@ -69,13 +69,31 @@
           :disabled="loading"
           @update:model-value="$emit('update:compactBase64Images', $event)"
         />
-        <div>
+        <div class="min-w-0 flex-1">
           <Label
             for="compact-base64-images"
             class="text-sm font-medium cursor-pointer"
           > {{ t('ui.compactBase64Images') }} </Label>
-          <p class="mt-1 text-xs text-muted-foreground">
+          <p class="mt-1 text-xs text-muted-foreground break-words">
             {{ t('ui.replaceDataImageBase64ImagesWithPlaceholdersThatShowTheir') }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-start gap-3 pt-1">
+        <Switch
+          id="body-file-store-enabled"
+          :model-value="bodyFileStoreEnabled"
+          :disabled="loading"
+          @update:model-value="$emit('update:bodyFileStoreEnabled', $event)"
+        />
+        <div class="min-w-0 flex-1">
+          <Label
+            for="body-file-store-enabled"
+            class="text-sm font-medium cursor-pointer"
+          > {{ t('ui.bodyFileStore') }} </Label>
+          <p class="mt-1 text-xs text-muted-foreground break-words">
+            {{ t('ui.bodyFileStoreRequiresServerPath') }}
           </p>
         </div>
       </div>
@@ -127,6 +145,7 @@ defineProps<{
   sensitiveHeadersStr: string
   compactBase64Images: boolean
   maxBodySizeKb: number
+  bodyFileStoreEnabled: boolean
   loading: boolean
   hasChanges: boolean
 }>()
@@ -137,6 +156,7 @@ defineEmits<{
   'update:sensitiveHeadersStr': [value: string]
   'update:compactBase64Images': [value: boolean]
   'update:maxBodySizeKb': [value: number]
+  'update:bodyFileStoreEnabled': [value: boolean]
 }>()
 
 const { t } = useI18n()

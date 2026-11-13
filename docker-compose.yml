@@ -69,6 +69,10 @@ services:
       - no-new-privileges:true
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,mode=1777
+    volumes:
+      # Body file store root. The container root is read-only, so
+      # AETHER_GATEWAY_BODY_FILE_STORE_PATH must point at a writable volume.
+      - aether_bodies:/var/lib/aether/bodies
     env_file:
       - .env
     environment:
@@ -99,3 +103,4 @@ services:
 
 volumes:
   postgres_data:
+  aether_bodies:

@@ -1376,6 +1376,11 @@ struct Args {
     #[arg(long, env = "AETHER_GATEWAY_VIDEO_TASK_STORE_PATH")]
     video_task_store_path: Option<String>,
 
+    /// Root directory for the body file store. Unset disables the file store;
+    /// the admin switch cannot be enabled without it.
+    #[arg(long, env = "AETHER_GATEWAY_BODY_FILE_STORE_PATH")]
+    body_file_store_path: Option<String>,
+
     #[arg(long, env = "AETHER_GATEWAY_MAX_IN_FLIGHT_REQUESTS")]
     max_in_flight_requests: Option<usize>,
 
@@ -1910,6 +1915,18 @@ fn validate_deployment_topology(
         ));
     }
 
+    if args
+        .body_file_store_path
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty())
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "AETHER_GATEWAY_BODY_FILE_STORE_PATH must be unset when AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY=multi-node; the body file store is single-node only",
+        ));
+    }
+
     if env_var_trimmed("AETHER_GATEWAY_INSTANCE_ID").is_none() {
         warn!(
             "multi-node deployment started without AETHER_GATEWAY_INSTANCE_ID; task ownership and distributed locks will fall back to HOSTNAME or the process id"
@@ -2165,7 +2182,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut state = AppState::new()?
         .with_runtime_state(runtime_state)
-        .with_data_config_and_background_isolation(data_config, isolate_background_database)?
+        .with_data_config_and_background_isolation(data_config, isolate_background_database)?;
+    if let Some(path) = args
+        .body_file_store_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        state = state.with_body_file_store_path(path)?;
+    }
+    state.validate_body_file_store_config().await?;
+    state = state
         .with_usage_runtime_config(usage_config)?
         .with_video_task_truth_source_mode(args.video_task_truth_source_mode.into());
     if let Some(cors_config) = args.frontdoor.cors_config() {
@@ -2782,6 +2809,7 @@ mod tests {
             video_task_poller_interval_ms: 5_000,
             video_task_poller_batch_size: 32,
             video_task_store_path: None,
+            body_file_store_path: None,
             max_in_flight_requests: None,
             max_http_connections: None,
             max_websocket_connections: None,

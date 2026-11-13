@@ -385,6 +385,7 @@ pub struct AppState {
     pub(crate) runtime_state: Arc<RuntimeState>,
     pub(crate) internal_gateway_auth: Arc<crate::internal_gateway_auth::InternalGatewayAuthConfig>,
     pub(crate) usage_runtime: Arc<usage::UsageRuntime>,
+    pub(crate) body_file_store: Option<Arc<aether_body_store::BodyFileStore>>,
     pub(crate) request_activity: Arc<crate::request_activity::RequestActivity>,
     pub(crate) execution_activity: Arc<crate::execution_activity::ExecutionActivity>,
     pub(crate) video_tasks: Arc<VideoTaskService>,
