@@ -1,7 +1,7 @@
 use aether_data_contracts::repository::usage::{
-    ApiKeyLastUsedDelta, BodyEncoding, CapturedBody, ManagementTokenCounterDelta,
-    ProxyNodeCounterDelta, StoredUsageAuditAggregation, StoredUsageAuditSummary,
-    StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
+    body_capture_metadata_storage, ApiKeyLastUsedDelta, BodyEncoding, CapturedBody,
+    ManagementTokenCounterDelta, ProxyNodeCounterDelta, StoredUsageAuditAggregation,
+    StoredUsageAuditSummary, StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
     StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
     StoredUsageDashboardStatsSummary, StoredUsageDashboardSummary, StoredUsageErrorDistributionRow,
@@ -11,14 +11,14 @@ use aether_data_contracts::repository::usage::{
     StoredUsageProviderPerformanceTimelineRow, StoredUsageSettledCostSummary,
     StoredUsageTimeSeriesBucket, StoredUsageUserTotals, UsageAuditAggregationGroupBy,
     UsageAuditAggregationQuery, UsageAuditKeywordSearchQuery, UsageAuditSummaryQuery,
-    UsageBodyField, UsageBreakdownGroupBy, UsageBreakdownSummaryQuery,
-    UsageCacheAffinityHitSummaryQuery, UsageCacheAffinityIntervalGroupBy,
-    UsageCacheAffinityIntervalQuery, UsageCacheHitSummaryQuery, UsageCleanupExecutionMode,
-    UsageCleanupSummary, UsageCleanupTargets, UsageCleanupWindow, UsageCostSavingsSummaryQuery,
-    UsageDashboardDailyBreakdownQuery, UsageDashboardProviderCountsQuery,
-    UsageDashboardSummaryQuery, UsageErrorDistributionQuery, UsageHealthTimelineGroupBy,
-    UsageHealthTimelineQuery, UsageLeaderboardGroupBy, UsageLeaderboardQuery,
-    UsageMonitoringErrorCountQuery, UsageMonitoringErrorListQuery,
+    UsageBodyCaptureState, UsageBodyCaptureStorage, UsageBodyField, UsageBreakdownGroupBy,
+    UsageBreakdownSummaryQuery, UsageCacheAffinityHitSummaryQuery,
+    UsageCacheAffinityIntervalGroupBy, UsageCacheAffinityIntervalQuery, UsageCacheHitSummaryQuery,
+    UsageCleanupExecutionMode, UsageCleanupSummary, UsageCleanupTargets, UsageCleanupWindow,
+    UsageCostSavingsSummaryQuery, UsageDashboardDailyBreakdownQuery,
+    UsageDashboardProviderCountsQuery, UsageDashboardSummaryQuery, UsageErrorDistributionQuery,
+    UsageHealthTimelineGroupBy, UsageHealthTimelineQuery, UsageLeaderboardGroupBy,
+    UsageLeaderboardQuery, UsageMonitoringErrorCountQuery, UsageMonitoringErrorListQuery,
     UsagePerformancePercentilesQuery, UsageProviderPerformanceQuery, UsageSettledCostSummaryQuery,
     UsageTimeSeriesGranularity, UsageTimeSeriesQuery,
 };
@@ -8708,7 +8708,12 @@ ORDER BY "usage".user_id ASC
         // while preparing them. Stale lifecycle updates still ignore preparation errors below.
         let (usage, prepared) =
             prepare_usage_in_background(move || Ok(prepare_usage_for_persistence(usage))).await?;
-        self.tx_runner
+        // Body files are deleted after the transaction commits, so a rollback
+        // never drops bytes the previous row still points at.
+        let body_file_deletions = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let body_file_deletions_sink = std::sync::Arc::clone(&body_file_deletions);
+        let result = self
+            .tx_runner
             .run_read_write(|tx| {
                 Box::pin(async move {
                     lock_usage_request_id_in_tx(tx, &usage.request_id).await?;
@@ -8883,7 +8888,7 @@ ORDER BY "usage".user_id ASC
                         // preparation sanitized to drop every capture field, so reading
                         // them off the accounting row here would store nothing while the
                         // metadata ledger still claims the sides were captured.
-                        http_capture::sync_usage_http_capture_in_tx(
+                        let deletions = http_capture::sync_usage_http_capture_in_tx(
                             tx,
                             &usage.request_id,
                             http_capture::UsageHttpCapture {
@@ -8897,9 +8902,14 @@ ORDER BY "usage".user_id ASC
                                     &provider_request_body,
                                     &provider_response_body,
                                 ],
+                                updated_at_unix_secs: Some(usage.updated_at_unix_secs),
                             },
                         )
                         .await?;
+                        body_file_deletions_sink
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .extend(deletions);
                     }
                     if capture_update_allowed {
                         sync_usage_routing_snapshot_storage(
@@ -8937,11 +8947,26 @@ ORDER BY "usage".user_id ASC
                         stored.provider_request_headers = provider_request_headers;
                         stored.response_headers = response_headers;
                         stored.client_response_headers = client_response_headers;
-                        let bodies = read_usage_http_bodies_in_tx(tx, &usage.request_id).await?;
-                        stored.request_body = bodies[0].clone();
-                        stored.client_response_body = bodies[1].clone();
-                        stored.provider_request_body = bodies[2].clone();
-                        stored.response_body = bodies[3].clone();
+                        stored.request_body = stored_body_from_prepared(
+                            &client_request_body,
+                            request_metadata_value.as_ref(),
+                            UsageBodyField::RequestBody,
+                        );
+                        stored.client_response_body = stored_body_from_prepared(
+                            &client_response_body,
+                            request_metadata_value.as_ref(),
+                            UsageBodyField::ClientResponseBody,
+                        );
+                        stored.provider_request_body = stored_body_from_prepared(
+                            &provider_request_body,
+                            request_metadata_value.as_ref(),
+                            UsageBodyField::ProviderRequestBody,
+                        );
+                        stored.response_body = stored_body_from_prepared(
+                            &provider_response_body,
+                            request_metadata_value.as_ref(),
+                            UsageBodyField::ResponseBody,
+                        );
                         stored.request_metadata = request_metadata_value;
                     }
 
@@ -9072,7 +9097,18 @@ ORDER BY "usage".user_id ASC
                     Ok(stored)
                 }) as BoxFuture<'_, Result<StoredRequestUsageAudit, DataLayerError>>
             })
-            .await
+            .await;
+        let body_file_deletions = std::mem::take(
+            &mut *body_file_deletions
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
+        if result.is_ok() {
+            // Only a committed row can strand a file; an error means the previous
+            // ledger still routes to it.
+            http_capture::delete_body_files(body_file_deletions).await;
+        }
+        result
     }
 
     pub async fn upsert_pending_many(
@@ -10803,67 +10839,108 @@ async fn read_usage_http_headers_in_tx(
     ))
 }
 
-/// The four captured bodies, in the order the caller stores them:
-/// `[request, client_response, provider_request, provider_response]`.
-async fn read_usage_http_bodies_in_tx(
-    tx: &mut sqlx::Transaction<'_, Postgres>,
-    request_id: &str,
-) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
-    let row = sqlx::query(SELECT_USAGE_HTTP_BODY_PAYLOAD_SQL)
-        .bind(request_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_postgres_err()?;
-    row.as_ref()
-        .map(decode_usage_http_body_row)
-        .transpose()
-        .map(|bodies| bodies.unwrap_or([None, None, None, None]))
-}
-
 /// Loads one request's captured bodies outside a transaction.
 ///
 /// The accounting row and the capture rows are separate tables, so every reader
 /// that needs the bytes asks for them explicitly instead of paying for them on
-/// the bounded list queries.
+/// the bounded list queries. File-backed sides are resolved from the body file
+/// store; the ledger's `storage: "file"` is the routing key.
+///
+/// The file day is the request's **last** write, not its first: a body file is
+/// written under the day of the event that produced it, and the last event
+/// (the terminal one) rewrites every side. Using `created_at` would miss the
+/// response bodies of a request that crossed UTC midnight.
 async fn load_usage_http_bodies(
     pool: &sqlx::PgPool,
-    request_id: &str,
+    usage: &StoredRequestUsageAudit,
 ) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
     let row = sqlx::query(SELECT_USAGE_HTTP_BODY_PAYLOAD_SQL)
-        .bind(request_id)
+        .bind(&usage.request_id)
         .fetch_optional(pool)
         .await
         .map_postgres_err()?;
-    row.as_ref()
+    let mut bodies = row
+        .as_ref()
         .map(decode_usage_http_body_row)
-        .transpose()
-        .map(|bodies| bodies.unwrap_or([None, None, None, None]))
+        .transpose()?
+        .unwrap_or([None, None, None, None]);
+
+    let metadata = usage.request_metadata.as_ref();
+    let file_bodies = match (
+        aether_body_store::global(),
+        aether_body_store::day_from_unix_secs(usage.updated_at_unix_secs),
+    ) {
+        (Some(store), Some(day)) => match store.read_request(day, &usage.request_id).await {
+            Ok(bodies) => Some(bodies),
+            Err(error) => {
+                tracing::warn!(
+                    request_id = %usage.request_id,
+                    error = %error,
+                    "usage body file read failed"
+                );
+                None
+            }
+        },
+        _ => None,
+    };
+
+    for (index, side) in [
+        (0usize, UsageBodyField::RequestBody),
+        (1, UsageBodyField::ClientResponseBody),
+        (2, UsageBodyField::ProviderRequestBody),
+        (3, UsageBodyField::ResponseBody),
+    ] {
+        if body_capture_metadata_storage(metadata, side) != Some(UsageBodyCaptureStorage::File) {
+            continue;
+        }
+        bodies[index] = match file_bodies.as_ref().and_then(|bodies| bodies.get(&side)) {
+            Some(file) => Some(CapturedBody::from_bytes(
+                file.bytes.clone(),
+                file.encoding,
+                body_capture_metadata_truncated(metadata, side),
+            )),
+            None => Some(CapturedBody::Unavailable),
+        };
+    }
+    Ok(bodies)
+}
+
+fn body_capture_metadata_truncated(metadata: Option<&Value>, side: UsageBodyField) -> bool {
+    metadata
+        .and_then(|metadata| metadata.get("body_capture"))
+        .and_then(|body_capture| body_capture.get(side.as_capture_key()))
+        .and_then(|entry| entry.get("state"))
+        .and_then(Value::as_str)
+        .and_then(UsageBodyCaptureState::from_label)
+        == Some(UsageBodyCaptureState::Truncated)
 }
 
 fn decode_usage_http_body_row(row: &PgRow) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
-    let side =
-        |column: &str, encoding_column: &str, truncated_column: &str| -> Result<Option<CapturedBody>, DataLayerError> {
-            let Some(bytes) = row
-                .try_get::<Option<Vec<u8>>, _>(column)
-                .map_postgres_err()?
-            else {
-                return Ok(None);
-            };
-            let encoding = row
-                .try_get::<Option<String>, _>(encoding_column)
-                .map_postgres_err()?
-                .as_deref()
-                .and_then(BodyEncoding::from_label)
-                .unwrap_or(BodyEncoding::Binary);
-            // The truncation cut is a stored column, not a re-derivation: the
-            // reloaded body is the exact value that was written, so the
-            // authority checks and capture labels stay truthful across a
-            // restart.
-            let truncated = row
-                .try_get::<bool, _>(truncated_column)
-                .map_postgres_err()?;
-            Ok(Some(CapturedBody::from_bytes(bytes, encoding, truncated)))
+    let side = |column: &str,
+                encoding_column: &str,
+                truncated_column: &str|
+     -> Result<Option<CapturedBody>, DataLayerError> {
+        let Some(bytes) = row
+            .try_get::<Option<Vec<u8>>, _>(column)
+            .map_postgres_err()?
+        else {
+            return Ok(None);
         };
+        let encoding = row
+            .try_get::<Option<String>, _>(encoding_column)
+            .map_postgres_err()?
+            .as_deref()
+            .and_then(BodyEncoding::from_label)
+            .unwrap_or(BodyEncoding::Binary);
+        // The truncation cut is a stored column, not a re-derivation: the
+        // reloaded body is the exact value that was written, so the
+        // authority checks and capture labels stay truthful across a
+        // restart.
+        let truncated = row
+            .try_get::<bool, _>(truncated_column)
+            .map_postgres_err()?;
+        Ok(Some(CapturedBody::from_bytes(bytes, encoding, truncated)))
+    };
     Ok([
         side(
             "client_request",
@@ -10892,7 +10969,7 @@ async fn attach_usage_http_bodies(
     pool: &sqlx::PgPool,
     usage: &mut StoredRequestUsageAudit,
 ) -> Result<(), DataLayerError> {
-    let bodies = load_usage_http_bodies(pool, &usage.request_id).await?;
+    let bodies = load_usage_http_bodies(pool, usage).await?;
     usage.request_body = bodies[0].clone();
     usage.client_response_body = bodies[1].clone();
     usage.provider_request_body = bodies[2].clone();
@@ -12213,14 +12290,67 @@ struct PreparedUsageUpsert {
 fn prepared_usage_body_storage(
     body: Option<&CapturedBody>,
 ) -> http_capture::PreparedUsageBodyStorage {
+    let file = matches!(body, Some(CapturedBody::File { .. }));
     http_capture::PreparedUsageBodyStorage {
         bytes: body.and_then(CapturedBody::bytes).map(<[u8]>::to_vec),
+        // The encoding is kept even for file-backed sides: the DB columns are
+        // cleared by the `file` withdrawal, but the write path uses this value
+        // to reconstruct the stored `CapturedBody::File` marker.
         encoding: body
             .and_then(CapturedBody::encoding)
             .map(|encoding| encoding.as_str().to_string()),
         truncated: body.is_some_and(CapturedBody::truncated),
         withdrawn: body.is_some_and(|body| !body.is_present()),
+        file,
     }
+}
+
+/// Reconstructs the stored read model from the prepared storage form.
+///
+/// `sanitize_usage_for_persistence` intentionally strips every capture field
+/// from the accounting record before the upsert, so the stored bodies must come
+/// from the prepared row. A file-backed side keeps its `File` marker; the
+/// detail read path resolves it from the body file store.
+fn stored_body_from_prepared(
+    prepared: &http_capture::PreparedUsageBodyStorage,
+    metadata: Option<&Value>,
+    side: UsageBodyField,
+) -> Option<CapturedBody> {
+    let encoding = prepared
+        .encoding
+        .as_deref()
+        .and_then(BodyEncoding::from_label)
+        .unwrap_or(BodyEncoding::Binary);
+    if prepared.file {
+        let (stored_bytes, source_bytes) = body_capture_metadata_sizes(metadata, side);
+        return Some(CapturedBody::File {
+            encoding,
+            truncated: prepared.truncated,
+            stored_bytes,
+            source_bytes,
+        });
+    }
+    prepared
+        .bytes
+        .clone()
+        .map(|bytes| CapturedBody::from_bytes(bytes, encoding, prepared.truncated))
+}
+
+fn body_capture_metadata_sizes(
+    metadata: Option<&Value>,
+    side: UsageBodyField,
+) -> (u64, Option<u64>) {
+    let entry = metadata
+        .and_then(|metadata| metadata.get("body_capture"))
+        .and_then(|body_capture| body_capture.get(side.as_capture_key()));
+    let stored_bytes = entry
+        .and_then(|entry| entry.get("stored_bytes"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let source_bytes = entry
+        .and_then(|entry| entry.get("source_bytes"))
+        .and_then(Value::as_u64);
+    (stored_bytes, source_bytes)
 }
 
 /// Whether a captured body is complete enough to replace the derived facts.
@@ -12230,10 +12360,15 @@ fn prepared_usage_body_storage(
 fn request_body_capture_replaces_derived_facts(body: Option<&CapturedBody>) -> bool {
     matches!(
         body,
-        Some(CapturedBody::Bytes {
-            truncated: false,
-            ..
-        })
+        Some(
+            CapturedBody::Bytes {
+                truncated: false,
+                ..
+            } | CapturedBody::File {
+                truncated: false,
+                ..
+            }
+        )
     )
 }
 

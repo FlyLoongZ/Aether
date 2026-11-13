@@ -84,17 +84,17 @@ INSERT INTO usage_http_bodies (
 VALUES (
   $1,
   $2::bytea,
-  $3::text,
-  $4,
+  CASE WHEN $14 THEN NULL ELSE $3::text END,
+  CASE WHEN $14 THEN false ELSE $4 END,
   $5::bytea,
-  $6::text,
-  $7,
+  CASE WHEN $15 THEN NULL ELSE $6::text END,
+  CASE WHEN $15 THEN false ELSE $7 END,
   $8::bytea,
-  $9::text,
-  $10,
+  CASE WHEN $16 THEN NULL ELSE $9::text END,
+  CASE WHEN $16 THEN false ELSE $10 END,
   $11::bytea,
-  $12::text,
-  $13,
+  CASE WHEN $17 THEN NULL ELSE $12::text END,
+  CASE WHEN $17 THEN false ELSE $13 END,
   COALESCE((SELECT created_at FROM usage WHERE request_id = $1), NOW())
 )
 ON CONFLICT (request_id) DO UPDATE SET
@@ -169,6 +169,9 @@ pub(super) struct PreparedUsageBodyStorage {
     pub encoding: Option<String>,
     pub truncated: bool,
     pub withdrawn: bool,
+    /// The bytes live in the body file store; the DB columns for this side must
+    /// be cleared so a stale row cannot shadow the file.
+    pub file: bool,
 }
 
 /// Everything one usage write contributes to the capture tables.
@@ -184,6 +187,11 @@ pub(super) struct UsageHttpCapture<'a> {
     pub provider_request_headers: Option<&'a str>,
     pub provider_response_headers: Option<&'a str>,
     pub bodies: [&'a PreparedUsageBodyStorage; 4],
+    /// The request's last write time, in whole seconds. A body file is written
+    /// under the day of the event that produced it, and the last event is the
+    /// one that rewrites every side, so this is the day the authoritative copy
+    /// lives in — and therefore the only day a stale file can be in.
+    pub updated_at_unix_secs: Option<u64>,
 }
 
 impl UsageHttpCapture<'_> {
@@ -210,7 +218,50 @@ impl UsageHttpCapture<'_> {
     /// had stored, and the same statement can carry a payload for one side and
     /// a withdrawal for another, so both have to land together.
     fn withdrawals(&self) -> [bool; 4] {
-        std::array::from_fn(|index| self.bodies[index].withdrawn)
+        std::array::from_fn(|index| self.bodies[index].withdrawn || self.bodies[index].file)
+    }
+}
+
+/// Whether this write makes the side's stored file unreachable.
+///
+/// A side that carries bytes is moving back to the database, and an explicitly
+/// withdrawn side is no longer captured at all; both must drop the file. A
+/// `None` side is silent, not a withdrawal: the ledger may still route reads to
+/// the file an earlier write stored, so it keeps it.
+pub(super) fn should_delete_body_file(side: &PreparedUsageBodyStorage) -> bool {
+    !side.file && (side.withdrawn || side.bytes.is_some())
+}
+
+/// A captured body file the committed row no longer routes to.
+///
+/// Collected inside the transaction and deleted after it commits: a delete runs
+/// outside PostgreSQL, so doing it inline would drop bytes a rollback was about
+/// to keep pointing at.
+pub(super) struct DeferredBodyFileDeletion {
+    day: chrono::NaiveDate,
+    request_id: String,
+    side: aether_data_contracts::repository::usage::UsageBodyField,
+}
+
+pub(super) async fn delete_body_files(deletions: Vec<DeferredBodyFileDeletion>) {
+    if deletions.is_empty() {
+        return;
+    }
+    let Some(store) = aether_body_store::global() else {
+        return;
+    };
+    for deletion in deletions {
+        if let Err(error) = store
+            .delete_side(deletion.day, &deletion.request_id, deletion.side)
+            .await
+        {
+            tracing::warn!(
+                request_id = %deletion.request_id,
+                side = deletion.side.file_stem(),
+                error = %error,
+                "usage body file delete failed"
+            );
+        }
     }
 }
 
@@ -218,7 +269,7 @@ pub(super) async fn sync_usage_http_capture_in_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
     request_id: &str,
     capture: UsageHttpCapture<'_>,
-) -> Result<(), DataLayerError> {
+) -> Result<Vec<DeferredBodyFileDeletion>, DataLayerError> {
     if capture.has_header_payload() {
         sqlx::query(UPSERT_HEADERS_SQL)
             .bind(request_id)
@@ -229,6 +280,39 @@ pub(super) async fn sync_usage_http_capture_in_tx(
             .execute(&mut **tx)
             .await
             .map_err(postgres_error)?;
+    }
+
+    // A side that is no longer file-backed must not leave a stale file behind:
+    // the read path routes by the ledger, but the old bytes would still occupy
+    // space until retention. File-backed sides keep the file just written, and
+    // silent sides keep whatever an earlier write stored. The files themselves
+    // are deleted by the caller once this transaction commits.
+    //
+    // Reads route by `updated_at`'s day, so that is the only directory a stale
+    // file can be in; widening it to `created_at` would delete a path that
+    // never held this request's bytes.
+    let mut deletions = Vec::new();
+    if let Some(day) = capture
+        .updated_at_unix_secs
+        .and_then(aether_body_store::day_from_unix_secs)
+    {
+        for (index, side) in [
+            aether_data_contracts::repository::usage::UsageBodyField::RequestBody,
+            aether_data_contracts::repository::usage::UsageBodyField::ClientResponseBody,
+            aether_data_contracts::repository::usage::UsageBodyField::ProviderRequestBody,
+            aether_data_contracts::repository::usage::UsageBodyField::ResponseBody,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if should_delete_body_file(capture.bodies[index]) {
+                deletions.push(DeferredBodyFileDeletion {
+                    day,
+                    request_id: request_id.to_string(),
+                    side,
+                });
+            }
+        }
     }
 
     let withdrawals = capture.withdrawals();
@@ -244,7 +328,7 @@ pub(super) async fn sync_usage_http_capture_in_tx(
                 .await
                 .map_err(postgres_error)?;
         }
-        return Ok(());
+        return Ok(deletions);
     }
 
     let [client_request, client_response, provider_request, provider_response] = capture.bodies;
@@ -270,7 +354,7 @@ pub(super) async fn sync_usage_http_capture_in_tx(
         .await
         .map_err(postgres_error)?;
 
-    Ok(())
+    Ok(deletions)
 }
 
 /// The client-side capture a freshly inserted pending row already knows.
@@ -401,10 +485,16 @@ pub(super) async fn insert_pending_usage_http_capture_batch(
             (
                 *request_id,
                 row.client_request_body.map(<[u8]>::to_vec),
-                row.client_request_body_encoding.map(str::to_string),
+                row.client_request_body
+                    .as_ref()
+                    .and(row.client_request_body_encoding)
+                    .map(str::to_string),
                 row.client_request_body_truncated,
                 row.client_response_body.map(<[u8]>::to_vec),
-                row.client_response_body_encoding.map(str::to_string),
+                row.client_response_body
+                    .as_ref()
+                    .and(row.client_response_body_encoding)
+                    .map(str::to_string),
                 row.client_response_body_truncated,
             )
         })
@@ -414,7 +504,15 @@ pub(super) async fn insert_pending_usage_http_capture_batch(
         builder.push_values(
             &bodies,
             |mut values,
-             (request_id, request, request_encoding, request_truncated, response, response_encoding, response_truncated)| {
+             (
+                request_id,
+                request,
+                request_encoding,
+                request_truncated,
+                response,
+                response_encoding,
+                response_truncated,
+            )| {
                 values
                     .push_bind(*request_id)
                     .push_bind(request.clone())

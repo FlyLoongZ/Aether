@@ -244,7 +244,10 @@ async fn live_mixed_write_withdraws_the_marked_side_in_the_same_statement() {
     .fetch_one(repository.pool())
     .await
     .unwrap();
-    assert!(!request_present, "withdrawn side must lose its stored bytes");
+    assert!(
+        !request_present,
+        "withdrawn side must lose its stored bytes"
+    );
     assert!(
         provider_request_present,
         "a side the write says nothing about keeps its bytes"
@@ -257,7 +260,10 @@ async fn live_mixed_write_withdraws_the_marked_side_in_the_same_statement() {
         .unwrap()
         .unwrap();
     assert_eq!(stored.request_body, None);
-    assert_eq!(stored.body_state(UsageBodyField::RequestBody), Some(UsageBodyCaptureState::Disabled));
+    assert_eq!(
+        stored.body_state(UsageBodyField::RequestBody),
+        Some(UsageBodyCaptureState::Disabled)
+    );
     assert!(stored.body(UsageBodyField::ResponseBody).is_some());
     assert!(stored.body(UsageBodyField::ProviderRequestBody).is_some());
 

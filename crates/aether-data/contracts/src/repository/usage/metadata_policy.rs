@@ -168,9 +168,6 @@ pub fn sanitize_usage_request_metadata_object(source: &Map<String, Value>) -> Op
                         target_entry.insert("reason".into(), Value::String(reason.into()));
                     }
                 }
-                if let Some(encoding) = entry.get("encoding").and_then(Value::as_str) {
-                    target_entry.insert("encoding".into(), Value::String(encoding.into()));
-                }
                 // Only the file store marker is allowed; its absence means the
                 // bytes live in `usage_http_bodies`.
                 if entry
