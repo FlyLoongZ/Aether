@@ -1098,9 +1098,11 @@ fn sse_data_payloads_keep_content_indentation() {
         "data: YHOO\r\ndata:second\r\n\r\ndata:  third event\n\rdata:\ttabbed\n\n",
         |payload| payloads.push(payload.to_string()),
     );
-    // The spec removes exactly one optional space after the colon; everything
-    // beyond it, including further spaces and tabs, is payload content.
-    assert_eq!(payloads, vec!["YHOO", "second", " third event", "\ttabbed"]);
+    // Multiple `data:` lines in one event are joined with `\n` per the SSE
+    // spec. The spec removes exactly one optional space after the colon;
+    // everything beyond it, including further spaces and tabs, is payload
+    // content.
+    assert_eq!(payloads, vec!["YHOO\nsecond", " third event\n\ttabbed"]);
 }
 
 #[test]
@@ -1172,5 +1174,12 @@ fn complete_json_bodies_still_serialize_as_json() {
     let encoded = serde_json::to_value(&body).expect("json serializes");
     assert_eq!(encoded["json"], json!({"a": 1}));
     let round_tripped: CapturedBody = serde_json::from_value(encoded).expect("json round trips");
-    assert_eq!(round_tripped, body);
+    // Complete JSON travels as a JSON value, so whitespace is normalized on
+    // the wire; compare the parsed value rather than the original bytes.
+    assert_eq!(
+        serde_json::from_slice::<Value>(round_tripped.bytes().expect("bytes")).expect("valid json"),
+        json!({"a": 1})
+    );
+    assert_eq!(round_tripped.encoding(), Some(BodyEncoding::Json));
+    assert!(!round_tripped.truncated());
 }

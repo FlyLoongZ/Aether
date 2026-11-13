@@ -1055,7 +1055,24 @@ mod tests {
             usage.local_execution_runtime_miss_reason.as_deref(),
             Some("runtime_busy")
         );
-        assert_eq!(usage.request_metadata, Some(json!({"trace_id": "trace"})));
+        let metadata = usage.request_metadata.expect("projected metadata");
+        assert_eq!(metadata["trace_id"], "trace");
+        // The sanitizer appends the bounded body-capture ledger; it is not
+        // routing metadata, but it must survive alongside it.
+        assert!(metadata["body_capture"].is_object());
+        for key in [
+            "candidate_id",
+            "candidate_index",
+            "key_name",
+            "planner_kind",
+            "route_family",
+            "route_kind",
+            "execution_path",
+            "local_execution_runtime_miss_reason",
+            "authorization",
+        ] {
+            assert!(metadata.get(key).is_none(), "{key} must not persist");
+        }
     }
 
     #[test]

@@ -548,8 +548,16 @@ mod tests {
             metadata["plan_usage_reservation_token"],
             "550e8400-e29b-41d4-a716-446655440000"
         );
-        // Persistence projects billing metadata; capture state remains in typed columns.
-        assert!(metadata.get("body_capture").is_none());
+        // The typed body columns only carry bytes; the budget marks the
+        // diagnostic copy truncated and keeps the reason in the bounded
+        // body_capture ledger, so persistence keeps it.
+        assert_eq!(metadata["body_capture"]["response"]["state"], "truncated");
+        assert_eq!(
+            metadata["body_capture"]["response"]["reason"],
+            "usage_event_memory_budget_exceeded"
+        );
+        assert_eq!(metadata["body_capture"]["response"]["source_bytes"], 1000);
+        assert_eq!(metadata["body_capture"]["response"]["stored_bytes"], 0);
         assert_eq!(budget.retained_bytes(), 0);
         assert_eq!(budget.downgraded_total(), 1);
     }
