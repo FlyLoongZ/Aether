@@ -318,8 +318,7 @@ fn managed_capture_preparation_hands_bodies_to_storage_without_reparsing() {
 /// nothing while the metadata ledger still claims the sides were captured.
 #[test]
 fn terminal_preparation_carries_every_captured_side_for_storage() {
-    let mut usage =
-        fast_clear_usage_record("req-all-sides", "all-sides", 100, true, None, None);
+    let mut usage = fast_clear_usage_record("req-all-sides", "all-sides", 100, true, None, None);
     usage.request_headers = Some(json!({"content-type": "application/json"}));
     usage.provider_request_headers = Some(json!({"authorization": "Bearer upstream"}));
     usage.response_headers = Some(json!({"content-type": "text/event-stream"}));
@@ -371,7 +370,10 @@ fn terminal_preparation_carries_every_captured_side_for_storage() {
         Some(br#"{"output":"client"}"#.as_slice())
     );
     let response = &prepared.provider_response_body;
-    assert_eq!(response.bytes.as_deref(), Some(b"data: chunk\n\n".as_slice()));
+    assert_eq!(
+        response.bytes.as_deref(),
+        Some(b"data: chunk\n\n".as_slice())
+    );
     assert_eq!(response.encoding.as_deref(), Some("sse"));
     assert!(response.truncated);
     for side in [
@@ -386,6 +388,66 @@ fn terminal_preparation_carries_every_captured_side_for_storage() {
 
 /// A side set to `Disabled` or `Unavailable` withdraws the bytes an earlier
 /// write stored; a side the write says nothing about keeps them.
+#[test]
+fn file_backed_preparation_keeps_the_marker_and_clears_the_db_columns() {
+    let mut usage = fast_clear_usage_record("req-file", "file", 100, true, None, None);
+    usage.request_body = Some(CapturedBody::File {
+        encoding: BodyEncoding::Json,
+        truncated: false,
+        stored_bytes: 12,
+        source_bytes: Some(20),
+    });
+    usage.response_body = Some(CapturedBody::File {
+        encoding: BodyEncoding::Sse,
+        truncated: true,
+        stored_bytes: 7,
+        source_bytes: Some(9),
+    });
+    usage.request_metadata = Some(json!({
+        "body_capture": {
+            "request": {
+                "state": "inline",
+                "storage": "file",
+                "stored_bytes": 12,
+                "source_bytes": 20
+            },
+            "response": {
+                "state": "truncated",
+                "storage": "file",
+                "stored_bytes": 7,
+                "source_bytes": 9
+            }
+        }
+    }));
+
+    let (_, prepared) = prepare_usage_for_persistence(usage);
+    let prepared = prepared.expect("usage should prepare");
+
+    assert!(prepared.client_request_body.file);
+    assert!(prepared.client_request_body.bytes.is_none());
+    assert_eq!(
+        prepared.client_request_body.encoding.as_deref(),
+        Some("json")
+    );
+    assert!(prepared.provider_response_body.file);
+    assert!(prepared.provider_response_body.truncated);
+
+    let stored = super::super::stored_body_from_prepared(
+        &prepared.client_request_body,
+        prepared.request_metadata_value.as_ref(),
+        UsageBodyField::RequestBody,
+    );
+    assert_eq!(
+        stored,
+        Some(CapturedBody::File {
+            encoding: BodyEncoding::Json,
+            truncated: false,
+            stored_bytes: 12,
+            source_bytes: Some(20),
+        })
+    );
+}
+
 #[test]
 fn terminal_preparation_marks_disabled_sides_as_withdrawals() {
     let mut usage = fast_clear_usage_record("req-withdraw", "withdraw", 100, true, None, None);
@@ -915,4 +977,71 @@ fn attach_usage_settlement_pricing_snapshot_metadata_adds_missing_values_without
             "price_per_request": 0.02
         })
     );
+}
+
+/// The read model stores `created_at`/`updated_at` as `EXTRACT(EPOCH ...)`
+/// seconds even though the field is named `created_at_unix_ms`. The file day
+/// must therefore come from the seconds helper, or every file-backed side is
+/// looked up under a 1970 directory.
+#[test]
+fn body_file_day_uses_the_read_models_second_timestamp() {
+    let event_ms = 1_763_078_400_000_u64;
+    let updated_at_unix_secs = event_ms / 1_000;
+    assert_eq!(
+        aether_body_store::day_from_unix_secs(updated_at_unix_secs),
+        aether_body_store::day_from_unix_ms(event_ms)
+    );
+    assert_eq!(
+        aether_body_store::day_from_unix_secs(updated_at_unix_secs),
+        chrono::NaiveDate::from_ymd_opt(2025, 11, 14)
+    );
+}
+
+/// A request that crosses UTC midnight has one file copy per day, so a stale
+/// file must be looked for in both.
+#[test]
+fn body_file_days_covers_first_and_last_write_across_midnight() {
+    let days = super::super::http_capture::body_file_days(Some(1_763_078_399), Some(1_763_078_401));
+    assert_eq!(
+        days,
+        vec![
+            chrono::NaiveDate::from_ymd_opt(2025, 11, 13).expect("day"),
+            chrono::NaiveDate::from_ymd_opt(2025, 11, 14).expect("day"),
+        ]
+    );
+    // Same day on both writes must not produce a duplicate delete pass.
+    assert_eq!(
+        super::super::http_capture::body_file_days(Some(1_763_078_400), Some(1_763_078_401)),
+        vec![chrono::NaiveDate::from_ymd_opt(2025, 11, 14).expect("day")]
+    );
+}
+
+/// Only a side this write actually resolves may drop its file. A silent side
+/// (`None`) keeps the file an earlier write stored, otherwise a first-byte
+/// write that carries no bodies would delete the files the full event wrote.
+#[test]
+fn body_file_deletion_requires_a_resolved_side() {
+    use super::super::http_capture::{should_delete_body_file, PreparedUsageBodyStorage};
+
+    assert!(!should_delete_body_file(
+        &PreparedUsageBodyStorage::default()
+    ));
+
+    let bytes = PreparedUsageBodyStorage {
+        bytes: Some(b"{}".to_vec()),
+        ..Default::default()
+    };
+    assert!(should_delete_body_file(&bytes));
+
+    let withdrawn = PreparedUsageBodyStorage {
+        withdrawn: true,
+        ..Default::default()
+    };
+    assert!(should_delete_body_file(&withdrawn));
+
+    let file = PreparedUsageBodyStorage {
+        file: true,
+        ..Default::default()
+    };
+    assert!(!should_delete_body_file(&file));
 }
