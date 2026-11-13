@@ -5,149 +5,76 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useI18n } from '@/i18n'
+import { computed } from 'vue'
 import {
+  BarController,
+  BarElement,
+  CategoryScale,
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  BarController,
-  Title,
-  Tooltip,
   Legend,
-  type ChartData,
-  type ChartOptions
-} from 'chart.js'
-
-const props = withDefaults(defineProps<Props>(), {
-  height: 300,
-  stacked: true,
-  options: undefined
-})
-
-ChartJS.register(
-  CategoryScale,
   LinearScale,
-  BarElement,
-  BarController,
   Title,
   Tooltip,
-  Legend
-)
+  type ChartData,
+  type ChartOptions,
+} from 'chart.js'
+import { useChartJs } from './useChartJs'
+import {
+  CHART_GRID_COLOR,
+  CHART_LEGEND_COLOR,
+  CHART_TICK_COLOR,
+  chartTooltipStyle,
+} from './chart-theme'
 
 interface Props {
   data: ChartData<'bar'>
   options?: ChartOptions<'bar'>
-  height?: number
   stacked?: boolean
 }
 
-const chartRef = ref<HTMLCanvasElement>()
-const { locale } = useI18n()
-let chart: ChartJS<'bar'> | null = null
+const props = withDefaults(defineProps<Props>(), {
+  options: undefined,
+  stacked: true,
+})
 
-const defaultOptions: ChartOptions<'bar'> = {
+ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, Title, Tooltip, Legend)
+
+const mergedOptions = computed<ChartOptions<'bar'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
   interaction: {
     mode: 'index',
-    intersect: false
+    intersect: false,
   },
   scales: {
     x: {
-      stacked: true,
-      grid: {
-        color: 'rgba(156, 163, 175, 0.1)'
-      },
-      ticks: {
-        color: 'rgb(107, 114, 128)'
-      }
+      stacked: props.stacked,
+      grid: { color: CHART_GRID_COLOR },
+      ticks: { color: CHART_TICK_COLOR },
     },
     y: {
-      stacked: true,
-      grid: {
-        color: 'rgba(156, 163, 175, 0.1)'
-      },
-      ticks: {
-        color: 'rgb(107, 114, 128)'
-      }
-    }
+      stacked: props.stacked,
+      grid: { color: CHART_GRID_COLOR },
+      ticks: { color: CHART_TICK_COLOR },
+    },
   },
   plugins: {
     legend: {
       position: 'top',
       labels: {
-        color: 'rgb(107, 114, 128)',
+        color: CHART_LEGEND_COLOR,
         usePointStyle: true,
-        padding: 16
-      }
+        padding: 16,
+      },
     },
-    tooltip: {
-      backgroundColor: 'rgb(31, 41, 55)',
-      titleColor: 'rgb(243, 244, 246)',
-      bodyColor: 'rgb(243, 244, 246)',
-      borderColor: 'rgb(75, 85, 99)',
-      borderWidth: 1
-    }
-  }
-}
+    tooltip: chartTooltipStyle,
+  },
+  ...props.options,
+}))
 
-function buildChartOptions(): ChartOptions<'bar'> {
-  const stackedOptions = props.stacked ? {
-    scales: {
-      x: { ...defaultOptions.scales?.x, stacked: true },
-      y: { ...defaultOptions.scales?.y, stacked: true }
-    }
-  } : {
-    scales: {
-      x: { ...defaultOptions.scales?.x, stacked: false },
-      y: { ...defaultOptions.scales?.y, stacked: false }
-    }
-  }
-
-  return {
-    ...defaultOptions,
-    ...stackedOptions,
-    locale: locale.value,
-    ...props.options
-  }
-}
-
-function createChart() {
-  if (!chartRef.value) return
-
-  chart = new ChartJS(chartRef.value, {
-    type: 'bar',
-    data: props.data,
-    options: buildChartOptions()
-  })
-}
-
-function updateChart() {
-  if (chart) {
-    chart.data = props.data
-    chart.update('none')
-  }
-}
-
-onMounted(async () => {
-  await nextTick()
-  createChart()
+const { chartRef } = useChartJs({
+  type: 'bar',
+  data: () => props.data,
+  options: () => mergedOptions.value,
 })
-
-onUnmounted(() => {
-  if (chart) {
-    chart.destroy()
-    chart = null
-  }
-})
-
-watch(() => props.data, updateChart, { deep: true })
-watch([() => props.options, () => props.stacked, locale], () => {
-  if (chart) {
-    chart.options = buildChartOptions()
-    chart.update()
-  }
-}, { deep: true })
 </script>

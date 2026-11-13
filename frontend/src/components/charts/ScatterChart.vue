@@ -63,6 +63,7 @@ import {
   type Plugin,
   type Scale
 } from 'chart.js'
+import { CHART_GRID_COLOR, CHART_TICK_COLOR, chartTooltipStyle } from './chart-theme'
 import './dateFnsAdapter'
 import { enUS, zhCN } from 'date-fns/locale'
 
@@ -332,10 +333,10 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
         tooltipFormat: 'HH:mm'
       },
       grid: {
-        color: 'rgba(156, 163, 175, 0.1)'
+        color: CHART_GRID_COLOR
       },
       ticks: {
-        color: 'rgb(107, 114, 128)',
+        color: CHART_TICK_COLOR,
         maxRotation: 0,
         autoSkip: true,
         maxTicksLimit: 10
@@ -346,10 +347,10 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
       min: 0,
       max: toDisplayValue(MAX_INTERVAL_MINUTES),
       grid: {
-        color: 'rgba(156, 163, 175, 0.1)'
+        color: CHART_GRID_COLOR
       },
       ticks: {
-        color: 'rgb(107, 114, 128)',
+        color: CHART_TICK_COLOR,
         autoSkip: false,
         callback(this: Scale, value: string | number) {
           const display = Number(value)
@@ -360,7 +361,7 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
       title: {
         display: true,
         text: t('chart.intervalAxis'),
-        color: 'rgb(107, 114, 128)'
+        color: CHART_TICK_COLOR
       },
       afterBuildTicks(scale: Scale) {
         scale.ticks = TARGET_TICKS.map(val => ({ value: toDisplayValue(val) }))
@@ -372,11 +373,7 @@ const defaultOptions = computed<ChartOptions<'scatter'>>(() => ({
       display: false
     },
     tooltip: {
-      backgroundColor: 'rgb(31, 41, 55)',
-      titleColor: 'rgb(243, 244, 246)',
-      bodyColor: 'rgb(243, 244, 246)',
-      borderColor: 'rgb(75, 85, 99)',
-      borderWidth: 1,
+      ...chartTooltipStyle,
       callbacks: {
         title: (contexts) => {
           if (contexts.length === 0) return ''
