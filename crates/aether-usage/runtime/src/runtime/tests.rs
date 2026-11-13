@@ -14,7 +14,8 @@ use std::time::Instant;
 use aether_contracts::{ExecutionPlan, ExecutionTelemetry, RequestBody};
 use aether_data_contracts::repository::settlement::{StoredUsageSettlement, UsageSettlementInput};
 use aether_data_contracts::repository::usage::{
-    CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
+    BodyEncoding, CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
+    UsageBodyField,
 };
 use aether_data_contracts::DataLayerError;
 use aether_runtime_state::{MemoryRuntimeStateConfig, RuntimeQueueStore, RuntimeState};
@@ -7912,4 +7913,77 @@ fn basic_request_record_level_strips_body_capture_but_preserves_derived_fields()
             .and_then(serde_json::Value::as_str),
         Some("default")
     );
+}
+
+#[tokio::test]
+async fn file_store_capture_writes_files_and_marks_the_ledger() {
+    let root = std::env::temp_dir().join(format!(
+        "aether-usage-file-store-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    let store = Arc::new(aether_body_store::BodyFileStore::new(root.clone()));
+    let runtime = UsageRuntime::disabled().with_body_file_store(Arc::clone(&store));
+    let policy = UsageBodyCapturePolicy {
+        record_level: UsageRequestRecordLevel::Full,
+        compact_base64_images: false,
+        max_body_bytes: None,
+        file_store_enabled: true,
+    };
+    let mut event = UsageEvent::new(
+        UsageEventType::Completed,
+        "req-file-store",
+        Default::default(),
+    );
+    event.timestamp_ms = 1_793_966_400_000;
+    event.data.request_body = Some(CapturedBody::from_bytes(
+        br#"{"a":1}"#.to_vec(),
+        BodyEncoding::Json,
+        false,
+    ));
+    event.data.response_body = Some(CapturedBody::from_bytes(
+        b"data: x\n\n".to_vec(),
+        BodyEncoding::Sse,
+        true,
+    ));
+
+    runtime.persist_file_backed_bodies(policy, &mut event).await;
+
+    assert!(matches!(
+        event.data.request_body,
+        Some(CapturedBody::File {
+            encoding: BodyEncoding::Json,
+            truncated: false,
+            ..
+        })
+    ));
+    assert!(matches!(
+        event.data.response_body,
+        Some(CapturedBody::File {
+            encoding: BodyEncoding::Sse,
+            truncated: true,
+            ..
+        })
+    ));
+    let metadata = event.data.request_metadata.as_ref().expect("metadata");
+    assert_eq!(metadata["body_capture"]["request"]["storage"], "file");
+    assert_eq!(metadata["body_capture"]["response"]["storage"], "file");
+
+    let day = aether_body_store::day_from_unix_ms(event.timestamp_ms).expect("day");
+    let files = store
+        .read_request(day, "req-file-store")
+        .await
+        .expect("read files");
+    assert_eq!(
+        files[&UsageBodyField::RequestBody].bytes,
+        br#"{"a":1}"#.to_vec()
+    );
+    assert_eq!(
+        files[&UsageBodyField::ResponseBody].encoding,
+        BodyEncoding::Sse
+    );
+    let _ = tokio::fs::remove_dir_all(root).await;
 }

@@ -2887,6 +2887,40 @@ fn capture_metadata_from_bodies(bodies: [(&'static str, Option<&CapturedBody>); 
                     );
                 }
             }
+            Some(CapturedBody::File {
+                truncated,
+                stored_bytes,
+                source_bytes,
+                ..
+            }) => {
+                entry.insert(
+                    "state".to_string(),
+                    Value::String(if *truncated { "truncated" } else { "inline" }.to_string()),
+                );
+                entry.insert("storage".to_string(), Value::String("file".to_string()));
+                entry.insert("stored_bytes".to_string(), Value::from(*stored_bytes));
+                if let Some(source_bytes) = source_bytes {
+                    entry.insert("source_bytes".to_string(), Value::from(*source_bytes));
+                }
+                if key == "response" {
+                    metadata.insert(
+                        "provider_response_body_base64_bytes".to_string(),
+                        Value::from(*stored_bytes),
+                    );
+                }
+                if key == "client_response" {
+                    metadata.insert(
+                        "client_response_body_base64_bytes".to_string(),
+                        Value::from(*stored_bytes),
+                    );
+                }
+                if *truncated {
+                    entry.insert(
+                        "reason".to_string(),
+                        Value::String("body_capture_limit_exceeded".to_string()),
+                    );
+                }
+            }
             Some(CapturedBody::Disabled) => {
                 entry.insert("state".to_string(), Value::String("disabled".to_string()));
             }

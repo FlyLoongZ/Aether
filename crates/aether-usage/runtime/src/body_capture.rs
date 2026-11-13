@@ -1,5 +1,5 @@
 use aether_data_contracts::repository::usage::{
-    BodyEncoding, CapturedBody, UpsertUsageRecord, UsageBodyCaptureState,
+    BodyEncoding, CapturedBody, UpsertUsageRecord, UsageBodyCaptureState, UsageBodyField,
 };
 use serde_json::{Map, Value};
 
@@ -191,7 +191,11 @@ fn compact_captured_json_images(bytes: &[u8]) -> Option<Vec<u8>> {
 
 /// Truncates at a UTF-8 boundary for textual encodings; binary is cut wherever
 /// the limit falls.
-fn truncate_on_char_boundary(bytes: &[u8], limit: usize, encoding: BodyEncoding) -> usize {
+pub(crate) fn truncate_on_char_boundary(
+    bytes: &[u8],
+    limit: usize,
+    encoding: BodyEncoding,
+) -> usize {
     if limit >= bytes.len() {
         return bytes.len();
     }
@@ -377,6 +381,45 @@ fn body_capture_value_object_mut(
     body_capture_object_mut(metadata_object, capacity)
 }
 
+/// Records that a side's bytes live in the body file store. The absence of
+/// this key means the bytes live in `usage_http_bodies` (or the row predates
+/// the file store).
+pub(crate) fn mark_body_capture_storage_file(metadata: &mut Option<Value>, side: UsageBodyField) {
+    let Some(entry) = body_capture_entry_object_mut(metadata, side) else {
+        return;
+    };
+    entry.insert("storage".to_string(), Value::String("file".to_string()));
+}
+
+/// Degrades a side whose file write failed. The accounting write still lands;
+/// only the diagnostic copy is marked unavailable.
+pub(crate) fn mark_body_capture_unavailable(
+    metadata: &mut Option<Value>,
+    side: UsageBodyField,
+    reason: &str,
+) {
+    let Some(entry) = body_capture_entry_object_mut(metadata, side) else {
+        return;
+    };
+    entry.insert(
+        "state".to_string(),
+        Value::String("unavailable".to_string()),
+    );
+    entry.insert("reason".to_string(), Value::String(reason.to_string()));
+    entry.remove("storage");
+}
+
+fn body_capture_entry_object_mut(
+    metadata: &mut Option<Value>,
+    side: UsageBodyField,
+) -> Option<&mut Map<String, Value>> {
+    let body_capture = body_capture_value_object_mut(metadata, 1)?;
+    let entry = body_capture
+        .entry(side.as_capture_key().to_string())
+        .or_insert_with(|| Value::Object(Map::with_capacity(1)));
+    entry.as_object_mut()
+}
+
 pub(crate) fn decoded_base64_len_hint(body_base64: &str) -> Option<u64> {
     let body_base64 = body_base64.trim();
     if body_base64.is_empty() {
@@ -439,6 +482,7 @@ mod tests {
             record_level: UsageRequestRecordLevel::Full,
             max_body_bytes: None,
             compact_base64_images: false,
+            file_store_enabled: false,
         }
     }
 

@@ -38,6 +38,7 @@ const REQUEST_RECORD_LEVEL_KEY: &str = "request_record_level";
 const LEGACY_REQUEST_LOG_LEVEL_KEY: &str = "request_log_level";
 const REQUEST_RECORD_COMPACT_BASE64_IMAGES_KEY: &str = "request_record_compact_base64_images";
 const REQUEST_RECORD_MAX_BODY_SIZE_KB_KEY: &str = "request_record_max_body_size_kb";
+const BODY_FILE_STORE_ENABLED_KEY: &str = "body_file_store_enabled";
 
 fn usage_request_record_level_from_value(value: Option<&Value>) -> UsageRequestRecordLevel {
     let Some(value) = value.and_then(Value::as_str).map(str::trim) else {
@@ -282,10 +283,17 @@ impl UsageRuntimeAccess for GatewayDataState {
                 .await?
                 .as_ref()
                 .and_then(|value| usage_body_capture_limit_bytes_from_value(Some(value)));
+        let file_store_enabled =
+            GatewayDataState::find_system_config_value(self, BODY_FILE_STORE_ENABLED_KEY)
+                .await?
+                .as_ref()
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
         Ok(UsageBodyCapturePolicy {
             record_level: usage_request_record_level_from_value(value.as_ref()),
             compact_base64_images,
             max_body_bytes,
+            file_store_enabled,
         })
     }
 }
@@ -591,6 +599,7 @@ mod tests {
                 json!(true),
             ),
             ("request_record_max_body_size_kb".to_string(), json!(512)),
+            ("body_file_store_enabled".to_string(), json!(true)),
         ]);
 
         let policy = UsageRuntimeAccess::body_capture_policy(&state)
@@ -599,6 +608,7 @@ mod tests {
 
         assert!(policy.compact_base64_images);
         assert_eq!(policy.max_body_bytes, Some(512 * 1024));
+        assert!(policy.file_store_enabled);
     }
 
     #[tokio::test]
