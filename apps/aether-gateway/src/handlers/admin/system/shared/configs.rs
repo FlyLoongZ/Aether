@@ -160,6 +160,18 @@ pub(crate) async fn apply_admin_system_config_update(
     let normalized_key = update.normalized_key;
     let description = update.description;
 
+    if normalized_key.eq_ignore_ascii_case("body_file_store_enabled")
+        && value.as_bool().unwrap_or(false)
+        && aether_body_store::global().is_none()
+    {
+        return Ok(Err((
+            http::StatusCode::BAD_REQUEST,
+            json!({
+                "error": "AETHER_GATEWAY_BODY_FILE_STORE_PATH is not configured; the body file store cannot be enabled"
+            }),
+        )));
+    }
+
     if crate::AppState::is_referral_settings_key(&normalized_key) {
         state
             .app()

@@ -914,6 +914,7 @@ const REQUEST_RECORD_LEVEL_KEY: &str = "request_record_level";
 const LEGACY_REQUEST_LOG_LEVEL_KEY: &str = "request_log_level";
 const REQUEST_RECORD_COMPACT_BASE64_IMAGES_KEY: &str = "request_record_compact_base64_images";
 const REQUEST_RECORD_MAX_BODY_SIZE_KB_KEY: &str = "request_record_max_body_size_kb";
+const BODY_FILE_STORE_ENABLED_KEY: &str = "body_file_store_enabled";
 const MAX_REQUEST_RECORD_BODY_SIZE_KB: u64 = 1_048_576;
 const DEFAULT_BARK_API_BASE: &str = "https://api.day.app";
 const SENSITIVE_SYSTEM_CONFIG_KEYS: &[&str] = &[
@@ -2213,6 +2214,7 @@ pub fn admin_system_config_default_value(key: &str) -> Option<serde_json::Value>
         REQUEST_RECORD_LEVEL_KEY => Some(json!("basic")),
         REQUEST_RECORD_COMPACT_BASE64_IMAGES_KEY => Some(json!(false)),
         REQUEST_RECORD_MAX_BODY_SIZE_KB_KEY => Some(json!(0)),
+        BODY_FILE_STORE_ENABLED_KEY => Some(json!(false)),
         "max_request_body_size" => Some(json!(0)),
         "max_response_body_size" => Some(json!(0)),
         "sensitive_headers" => Some(json!([
@@ -2766,6 +2768,7 @@ pub fn parse_admin_system_config_update(
         "enable_model_directives"
         | "cyber_continue_failover"
         | REQUEST_RECORD_COMPACT_BASE64_IMAGES_KEY
+        | BODY_FILE_STORE_ENABLED_KEY
         | "module.important_notification.enabled"
         | "module.important_notification.email_enabled"
         | "module.server_chan_push.enabled"
@@ -4107,6 +4110,26 @@ mod tests {
             admin_system_config_default_value("request_record_max_body_size_kb"),
             Some(json!(0))
         );
+        assert_eq!(
+            admin_system_config_default_value("body_file_store_enabled"),
+            Some(json!(false))
+        );
+    }
+
+    /// A non-boolean value must be rejected, not stored verbatim: the capture
+    /// policy reads the key with `as_bool()`, so a string `"true"` would save
+    /// successfully and then silently stay off.
+    #[test]
+    fn body_file_store_switch_requires_a_boolean() {
+        let update =
+            parse_admin_system_config_update("body_file_store_enabled", br#"{"value":true}"#)
+                .expect("boolean body file store switch should parse");
+        assert_eq!(update.value, json!(true));
+        assert!(parse_admin_system_config_update(
+            "body_file_store_enabled",
+            br#"{"value":"true"}"#,
+        )
+        .is_err());
     }
 
     #[test]

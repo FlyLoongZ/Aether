@@ -2012,6 +2012,7 @@ validate_env_file() {
     local jwt_secret_key=""
     local encryption_key=""
     local video_task_store_path=""
+    local body_file_store_path=""
     local static_dir=""
 
     [[ -f "${env_file}" ]] || die "env file not found: ${env_file}"
@@ -2069,6 +2070,9 @@ validate_env_file() {
             AETHER_GATEWAY_VIDEO_TASK_STORE_PATH)
                 video_task_store_path="${value}"
                 ;;
+            AETHER_GATEWAY_BODY_FILE_STORE_PATH)
+                body_file_store_path="${value}"
+                ;;
             AETHER_GATEWAY_STATIC_DIR)
                 static_dir="${value}"
                 ;;
@@ -2118,6 +2122,7 @@ validate_env_file() {
         [[ -n "${redis_url}" ]] || die "multi-node deployment requires REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL"
         [[ "${runtime_backend}" != "memory" ]] || die "multi-node deployment must not use AETHER_RUNTIME_BACKEND=memory"
         [[ -z "${video_task_store_path}" ]] || die "multi-node deployment must not set AETHER_GATEWAY_VIDEO_TASK_STORE_PATH"
+        [[ -z "${body_file_store_path}" ]] || die "multi-node deployment must not set AETHER_GATEWAY_BODY_FILE_STORE_PATH"
     else
         if [[ "${node_role}" != "all" ]]; then
             warn "single-node deployment usually uses AETHER_GATEWAY_NODE_ROLE=all; split roles are not enabled by this installer"

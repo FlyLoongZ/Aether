@@ -358,6 +358,7 @@ impl AppState {
             runtime_state: runtime_state.clone(),
             internal_gateway_auth,
             usage_runtime: Arc::new(usage::UsageRuntime::disabled()),
+            body_file_store: None,
             request_activity: Arc::new(crate::request_activity::RequestActivity::default()),
             execution_activity: Arc::new(crate::execution_activity::ExecutionActivity::default()),
             video_tasks: Arc::new(VideoTaskService::new(
@@ -585,7 +586,11 @@ impl AppState {
         mut self,
         config: usage::UsageRuntimeConfig,
     ) -> Result<Self, aether_data::DataLayerError> {
-        self.usage_runtime = Arc::new(usage::UsageRuntime::new(config)?);
+        let mut runtime = usage::UsageRuntime::new(config)?;
+        if let Some(store) = self.body_file_store.clone() {
+            runtime = runtime.with_body_file_store(store);
+        }
+        self.usage_runtime = Arc::new(runtime);
         Ok(self)
     }
 
@@ -1975,6 +1980,50 @@ impl AppState {
     ) -> Vec<SchedulerAffinitySnapshotEntry> {
         self.scheduler_affinity_cache
             .fresh_entries_for_epoch(ttl, self.scheduler_affinity_epoch())
+    }
+
+    pub fn with_body_file_store_path(
+        mut self,
+        path: impl Into<std::path::PathBuf>,
+    ) -> std::io::Result<Self> {
+        let path = path.into();
+        if !path.is_absolute() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "AETHER_GATEWAY_BODY_FILE_STORE_PATH must be an absolute path",
+            ));
+        }
+        std::fs::create_dir_all(&path)?;
+        let probe = path.join(format!(".aether-body-store-probe-{}", uuid::Uuid::new_v4()));
+        std::fs::write(&probe, b"")?;
+        std::fs::remove_file(&probe)?;
+        let store = Arc::new(aether_body_store::BodyFileStore::new(path));
+        aether_body_store::configure_global(Some(Arc::clone(&store)));
+        self.body_file_store = Some(store);
+        Ok(self)
+    }
+
+    /// Fails startup when the admin switch is on but the process has no body
+    /// file store path. The admin API also refuses to enable the switch in that
+    /// state; this catches a value written directly to the system config.
+    pub async fn validate_body_file_store_config(&self) -> std::io::Result<()> {
+        if self.body_file_store.is_some() {
+            return Ok(());
+        }
+        let enabled = self
+            .data
+            .find_system_config_value("body_file_store_enabled")
+            .await
+            .map_err(|error| std::io::Error::other(error.to_string()))?
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if enabled {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "body_file_store_enabled is on but AETHER_GATEWAY_BODY_FILE_STORE_PATH is not configured",
+            ));
+        }
+        Ok(())
     }
 
     pub fn with_video_task_store_path(
