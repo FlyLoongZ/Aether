@@ -1,7 +1,17 @@
+import type { AxiosProgressEvent } from 'axios'
 import apiClient from './client'
+import { NETWORK_CONFIG } from '@/config/constants'
 import { cachedRequest, buildCacheKey } from '@/utils/cache'
 
 const REQUEST_DETAIL_PREFETCH_TTL_MS = 5_000
+
+// `Content-Length` can be dropped by a proxy or describe the compressed size.
+function bodyDownloadTotal(event: AxiosProgressEvent): number | null {
+  const xhr = event.event?.target as XMLHttpRequest | null | undefined
+  const declared = xhr?.getResponseHeader?.('x-aether-body-size')
+  const size = declared ? Number(declared) : Number.NaN
+  return Number.isFinite(size) && size > 0 ? size : null
+}
 
 export interface DashboardStat {
   name: string
@@ -204,6 +214,14 @@ export class RequestBodyProtocolError extends Error {
   constructor() {
     super('Invalid body response')
     this.name = 'RequestBodyProtocolError'
+  }
+}
+
+/** The body transfer produced no response and no bytes for the idle timeout. */
+export class RequestBodyTimeoutError extends Error {
+  constructor() {
+    super('Body transfer timed out')
+    this.name = 'RequestBodyTimeoutError'
   }
 }
 
@@ -495,24 +513,68 @@ export const dashboardApi = {
     return options.signal ? fetchDetail() : cachedRequest(cacheKey, fetchDetail, cacheTtlMs)
   },
 
-  async getRequestBody(requestId: string, field: RequestBodyField, signal?: AbortSignal, onProgress?: (loaded: number) => void) {
-    const response = await apiClient.get<ArrayBuffer>(`/api/admin/usage/${requestId}`, {
-      params: { include_bodies: true, body_field: field, body_format: 'raw' },
-      responseType: 'arraybuffer',
-      signal,
-      ...(onProgress ? { onDownloadProgress: (event: { loaded: number }) => onProgress(event.loaded) } : {}),
-    })
-    // The row stores the bytes that crossed the wire and the label that says how
-    // to read them, so the reader dispatches on the label instead of assuming
-    // every capture is JSON.
-    const encoding = response.headers['x-aether-body-encoding']
-    if (!isBodyEncoding(encoding) || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
-      throw new RequestBodyProtocolError()
+  async getRequestBody(
+    requestId: string,
+    field: RequestBodyField,
+    signal?: AbortSignal,
+    onProgress?: (loaded: number, total: number | null) => void,
+  ) {
+    // A body can be large and the link slow, so the global total timeout would
+    // abort a transfer that is still making progress. Disable it and reuse the
+    // same 30s as an idle timer instead: 30s without a response or without a
+    // new chunk aborts, while a transfer that keeps delivering bytes is allowed
+    // to finish.
+    const controller = new AbortController()
+    const abortFromCaller = () => controller.abort()
+    if (signal) {
+      if (signal.aborted) controller.abort()
+      else signal.addEventListener('abort', abortFromCaller, { once: true })
     }
-    // A truncated capture is not a protocol error: the viewer flags it instead
-    // of presenting a cut stream as complete.
-    const truncated = response.headers['x-aether-body-truncated'] === 'true'
-    return { bytes: response.data, encoding, truncated }
+    let timedOut = false
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    const armIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        timedOut = true
+        controller.abort()
+      }, NETWORK_CONFIG.API_TIMEOUT)
+    }
+    const clearIdleTimer = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer)
+        idleTimer = undefined
+      }
+    }
+    armIdleTimer()
+    try {
+      const response = await apiClient.get<ArrayBuffer>(`/api/admin/usage/${requestId}`, {
+        params: { include_bodies: true, body_field: field, body_format: 'raw' },
+        responseType: 'arraybuffer',
+        timeout: 0,
+        signal: controller.signal,
+        onDownloadProgress: (event: AxiosProgressEvent) => {
+          armIdleTimer()
+          onProgress?.(event.loaded, bodyDownloadTotal(event))
+        },
+      })
+      // The row stores the bytes that crossed the wire and the label that says how
+      // to read them, so the reader dispatches on the label instead of assuming
+      // every capture is JSON.
+      const encoding = response.headers['x-aether-body-encoding']
+      if (!isBodyEncoding(encoding) || response.headers['x-aether-usage-id'] !== requestId || response.headers['x-aether-body-field'] !== field) {
+        throw new RequestBodyProtocolError()
+      }
+      // A truncated capture is not a protocol error: the viewer flags it instead
+      // of presenting a cut stream as complete.
+      const truncated = response.headers['x-aether-body-truncated'] === 'true'
+      return { bytes: response.data, encoding, truncated }
+    } catch (error) {
+      if (timedOut) throw new RequestBodyTimeoutError()
+      throw error
+    } finally {
+      clearIdleTimer()
+      signal?.removeEventListener('abort', abortFromCaller)
+    }
   },
 
   async prefetchRequestDetail(requestId: string): Promise<void> {

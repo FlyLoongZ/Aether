@@ -1250,3 +1250,21 @@ pre {
   }
 
 }
+
+@keyframes body-progress-slide {
+  from { left: -30%; }
+  to { left: 100%; }
+}
+
+@keyframes body-progress-breathe {
+  0% { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
+
+.animate-body-progress-slide {
+  animation: body-progress-slide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-body-progress-breathe {
+  animation: body-progress-breathe 1.8s ease-in-out infinite;
+}

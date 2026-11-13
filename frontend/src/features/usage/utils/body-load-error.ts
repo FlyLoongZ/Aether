@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { RequestBodyProtocolError, type RequestBodyLoadErrorCode } from '@/api/dashboard'
+import { RequestBodyProtocolError, RequestBodyTimeoutError, type RequestBodyLoadErrorCode } from '@/api/dashboard'
 import { NETWORK_CONFIG } from '@/config/constants'
 import { BodyDocumentError } from './body-document-protocol'
 
@@ -20,6 +20,10 @@ export function formatStoredBodyLoadError(code?: RequestBodyLoadErrorCode): stri
 
 export function formatRequestBodyLoadError(error: unknown): string {
   if (error instanceof RequestBodyProtocolError) return '正文接口响应不匹配，请确认前后端均已更新后刷新页面。'
+  if (error instanceof RequestBodyTimeoutError) {
+    const seconds = Math.ceil(NETWORK_CONFIG.API_TIMEOUT / 1000)
+    return `正文加载超时（${seconds} 秒无响应或传输中断），请检查网络后重试。`
+  }
   if (error instanceof BodyDocumentError) {
     if (error.code === 'too_large' || error.code === 'decode_failed') return formatStoredBodyLoadError(error.code)
     if (error.code === 'unsupported') return '当前浏览器不支持正文后台解析，请升级浏览器后重试。'
