@@ -2,17 +2,17 @@
   <aside
     id="announcements-section"
     class="flex min-h-0 min-w-0 flex-col"
-    :aria-label="text('系统公告', 'System announcements')"
+    :aria-label="t('overview.systemAnnouncements')"
   >
     <div class="mb-4 flex h-5 shrink-0 items-center justify-between gap-2">
       <h3 class="text-sm font-medium text-foreground">
-        {{ text('系统公告', 'System announcements') }}
+        {{ t('overview.systemAnnouncements') }}
       </h3>
       <RouterLink
         :to="authStore.canAccessAdmin ? '/admin/announcements' : '/dashboard/announcements'"
         class="shrink-0 text-[11px] text-muted-foreground transition hover:text-foreground"
       >
-        {{ text('查看全部', 'View all') }}
+        {{ t('overview.viewAll') }}
       </RouterLink>
     </div>
     <Card class="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
@@ -35,7 +35,7 @@
             <button
               type="button"
               class="block w-full min-w-0 text-left transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4"
-              :aria-label="`${item.announcement.title}, ${item.announcement.is_read ? text('已读', 'Read') : text('未读', 'Unread')}`"
+              :aria-label="`${item.announcement.title}, ${item.announcement.is_read ? t('ui.read') : t('ui.unread4d0680f')}`"
               @click="openAnnouncement?.(item.announcement)"
             >
               <time
@@ -61,20 +61,20 @@
         class="flex min-h-28 flex-1 items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground"
       >
         <Loader2 class="h-4 w-4 animate-spin" />
-        {{ text('加载中', 'Loading') }}
+        {{ t('overview.loading') }}
       </div>
       <div
         v-else
         class="flex min-h-28 flex-1 flex-col items-center justify-center gap-2 px-4 py-6 text-xs text-muted-foreground"
       >
-        <p>{{ announcementStore.error ? text('公告暂时无法加载', 'Announcements are unavailable') : text('暂无公告', 'No announcements') }}</p>
+        <p>{{ announcementStore.error ? t('overview.announcementsAreUnavailable') : t('ui.noAnnouncements') }}</p>
         <button
           v-if="announcementStore.error"
           type="button"
           class="underline underline-offset-4 hover:text-foreground"
           @click="announcementStore.loadList()"
         >
-          {{ text('重新加载', 'Reload') }}
+          {{ t('ui.reload') }}
         </button>
       </div>
     </Card>
@@ -96,8 +96,7 @@ import { sanitizeMarkdown } from '@/utils/sanitize'
 const authStore = useAuthStore()
 const announcementStore = useAnnouncementStore()
 const openAnnouncement = inject(openAnnouncementKey, undefined)
-const { locale } = useI18n()
-const text = (zh: string, en: string) => locale.value === 'zh-CN' ? zh : en
+const { locale, t } = useI18n()
 const displayItems = computed(() => announcementStore.items.map(announcement => {
   const template = document.createElement('template')
   template.innerHTML = sanitizeMarkdown(marked.parse(announcement.content, { async: false }))

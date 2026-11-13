@@ -20,27 +20,27 @@
         <select
           v-else
           class="h-9 rounded-md border bg-background px-2 text-sm"
-          :aria-label="t('时间范围', 'Time range')"
+          :aria-label="t('ui.timeRange')"
           :value="selectedPreset"
           @change="selectPreset"
         >
           <option value="custom">
-            {{ t('自定义', 'Custom') }}
+            {{ t('ui.custom4eafa9e') }}
           </option>
           <option value="last1hour">
-            {{ t('最近 1 小时', 'Last hour') }}
+            {{ t('ui.lastHour') }}
           </option>
           <option value="today">
-            {{ t('今天', 'Today') }}
+            {{ t('ui.today') }}
           </option>
           <option value="last24hours">
-            {{ t('最近 24 小时', 'Last 24 hours') }}
+            {{ t('ui.last24Hoursab2c188') }}
           </option>
           <option value="last7days">
-            {{ t('最近 7 天', 'Last 7 days') }}
+            {{ t('overview.last7Days') }}
           </option>
           <option value="last30days">
-            {{ t('最近 30 天', 'Last 30 days') }}
+            {{ t('overview.last30Days') }}
           </option>
         </select>
         <Button
@@ -48,8 +48,8 @@
           variant="outline"
           size="icon"
           class="h-9 w-9"
-          :title="t('精确时间', 'Exact time')"
-          :aria-label="t('精确时间', 'Exact time')"
+          :title="t('overview.exactTime')"
+          :aria-label="t('overview.exactTime')"
           :aria-expanded="editing"
           @click="editing = !editing"
         >
@@ -59,8 +59,8 @@
       <RefreshButton
         :loading="loading"
         :active="refreshActive"
-        :title="refreshTitle || t('刷新', 'Refresh')"
-        :aria-label="refreshTitle || t('刷新', 'Refresh')"
+        :title="refreshTitle || t('ui.refresh')"
+        :aria-label="refreshTitle || t('ui.refresh')"
         @click="$emit('refresh')"
       />
     </div>
@@ -70,19 +70,19 @@
     class="flex flex-wrap items-end gap-3 border-y py-3"
     @submit.prevent="apply"
   >
-    <label class="grid min-w-0 gap-1 text-xs"><span>{{ t('开始', 'From') }}</span><input
+    <label class="grid min-w-0 gap-1 text-xs"><span>{{ t('overview.from') }}</span><input
       v-model="fromInput"
       type="datetime-local"
       required
       class="h-9 max-w-full rounded-md border bg-background px-2 text-sm"
     ></label>
-    <label class="grid min-w-0 gap-1 text-xs"><span>{{ t('结束（不含）', 'To (exclusive)') }}</span><input
+    <label class="grid min-w-0 gap-1 text-xs"><span>{{ t('overview.toExclusive') }}</span><input
       v-model="toInput"
       type="datetime-local"
       required
       class="h-9 max-w-full rounded-md border bg-background px-2 text-sm"
     ></label>
-    <label class="grid min-w-0 gap-1 text-xs"><span>{{ t('报表时区', 'Report timezone') }}</span><input
+    <label class="grid min-w-0 gap-1 text-xs"><span>{{ t('overview.reportTimezone') }}</span><input
       v-model="zoneInput"
       list="overview-timezones"
       required
@@ -96,7 +96,7 @@
       type="submit"
       size="sm"
     >
-      {{ t('应用', 'Apply') }}
+      {{ t('overview.apply') }}
     </Button>
     <p
       v-if="rangeError"
@@ -123,7 +123,7 @@ import type { DateRangeParams } from '@/features/usage/types'
 import type { OverviewRange } from '@/api/overview'
 import { browserTimezone, isTimezone, presetRange, zonedInput, zonedInstant } from '../query'
 import { timestamp } from '../format'
-import { useOverviewI18n } from '../i18n'
+import { useI18n } from '@/i18n'
 
 const props = withDefaults(defineProps<{
   title: string
@@ -136,7 +136,7 @@ const props = withDefaults(defineProps<{
   refreshTitle?: string
 }>(), { preset: undefined, showRange: true, refreshActive: undefined, refreshTitle: undefined })
 const emit = defineEmits<{ 'update:range': [value: OverviewRange, preset?: string]; refresh: [] }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const pickerRange = computed<DateRangeParams>(() => props.preset
   ? { preset: props.preset, timezone: props.range.timezone, granularity: 'day' }
   : { ...props.range, granularity: 'day' })
@@ -169,7 +169,7 @@ function apply() {
   const from = zonedInstant(fromInput.value, zone)
   const to = zonedInstant(toInput.value, zone)
   if (!isTimezone(zone) || !from || !to || from >= to) {
-    rangeError.value = t('请输入有效时区与起止时间；夏令时跳过的时间不可用。', 'Enter a valid timezone and time range. Times skipped by daylight saving are invalid.')
+    rangeError.value = t('overview.enterAValidTimezoneAndTimeRangeTimesSkippedByDaylightSavingAreInvalid')
     return
   }
   rangeError.value = ''

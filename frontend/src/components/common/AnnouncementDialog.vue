@@ -11,14 +11,14 @@
         <div class="flex items-center justify-between gap-3">
           <div class="flex items-center gap-2 text-xs text-muted-foreground">
             <Bell class="h-3.5 w-3.5 text-primary" />
-            <span>{{ text('系统公告', 'Announcement') }}</span>
+            <span>{{ t('overview.announcement') }}</span>
           </div>
           <button
             v-if="!persistent"
             type="button"
             class="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :aria-label="text('关闭', 'Close')"
-            :title="text('关闭', 'Close')"
+            :aria-label="t('ui.close')"
+            :title="t('ui.close')"
             @click="emit('update:modelValue', false)"
           >
             <X class="h-4 w-4" />
@@ -73,7 +73,7 @@
             class="border-border bg-card font-medium"
             @click="emit('update:modelValue', false)"
           >
-            {{ text('关闭', 'Close') }}
+            {{ t('ui.close') }}
           </Button>
           <Button
             v-if="confirmRead"
@@ -122,7 +122,6 @@ const emit = defineEmits<{
 }>()
 
 const { locale, t } = useI18n()
-const text = (zh: string, en: string) => locale.value === 'zh-CN' ? zh : en
 const content = computed(() => sanitizeMarkdown(marked.parse(props.announcement?.content || '', { async: false })))
 const publishedAt = computed(() => {
   const date = new Date(props.announcement?.created_at || '')

@@ -1,7 +1,7 @@
 <template>
   <main class="space-y-6 px-4 pb-8 sm:px-6 lg:px-0">
     <OverviewToolbar
-      :title="t('成本分析', 'Cost analysis')"
+      :title="t('nav.costAnalysis')"
       :range="range"
       :preset="relativePreset"
       :refresh-active="autoRefresh"
@@ -18,7 +18,7 @@
         :disabled="!accounts?.items.length"
         @click="recording = true"
       >
-        <Plus class="mr-1.5 h-3.5 w-3.5" />{{ t('登记支出', 'Record expense') }}
+        <Plus class="mr-1.5 h-3.5 w-3.5" />{{ t('overview.recordExpense') }}
       </Button>
     </OverviewToolbar>
     <div
@@ -27,7 +27,7 @@
     >
       <Card class="min-w-0 space-y-2 p-4 sm:p-5">
         <p class="text-xs text-muted-foreground">
-          {{ t('已登记支出', 'Recorded expenses') }}
+          {{ t('overview.recordedExpenses') }}
         </p>
         <div class="min-h-8 text-xl font-semibold tabular-nums">
           <p
@@ -38,12 +38,12 @@
           </p>
         </div>
         <p class="text-xs text-muted-foreground">
-          {{ t('所选时段', 'Selected range') }} · {{ count(expenses?.total) }} {{ t('笔', 'entries') }}
+          {{ t('overview.selectedRange') }} · {{ count(expenses?.total) }} {{ t('overview.entries') }}
         </p>
       </Card>
       <Card class="min-w-0 space-y-2 p-4 sm:p-5">
         <p class="text-xs text-muted-foreground">
-          {{ t('提供商充值', 'Provider recharges') }}
+          {{ t('overview.providerRecharges') }}
         </p>
         <div class="min-h-8 text-xl font-semibold tabular-nums">
           <p
@@ -54,12 +54,12 @@
           </p>
         </div>
         <p class="text-xs text-muted-foreground">
-          {{ t('已登记的余额充值', 'Recorded balance top-ups') }}
+          {{ t('overview.recordedBalanceTopUps') }}
         </p>
       </Card>
       <Card class="min-w-0 space-y-2 p-4 sm:p-5">
         <p class="text-xs text-muted-foreground">
-          {{ t('套餐与续费', 'Subscriptions and renewals') }}
+          {{ t('overview.subscriptionsAndRenewals') }}
         </p>
         <div class="min-h-8 text-xl font-semibold tabular-nums">
           <p
@@ -70,12 +70,12 @@
           </p>
         </div>
         <p class="text-xs text-muted-foreground">
-          {{ t('已登记的套餐实付金额', 'Recorded subscription payments') }}
+          {{ t('overview.recordedSubscriptionPayments') }}
         </p>
       </Card>
       <Card class="min-w-0 space-y-2 p-4 sm:p-5">
         <p class="text-xs text-muted-foreground">
-          {{ t('提供商调用', 'Provider requests') }}
+          {{ t('overview.providerRequests') }}
         </p>
         <p class="min-h-8 text-xl font-semibold tabular-nums">
           {{ count(costs?.data.summary.request_count) }}
@@ -86,7 +86,7 @@
       </Card>
     </div>
     <p class="text-xs text-muted-foreground">
-      {{ t('支出以登记的付款记录为准，不同币种分别汇总；套餐额度与上游余额单独展示。', 'Expenses reflect recorded payments, grouped by currency. Plan quotas and upstream balances are shown separately.') }}
+      {{ t('overview.expensesReflectRecordedPaymentsGroupedByCurrencyPlanQuotasAndUpstreamBalancesAreShownSeparately') }}
     </p>
 
     <section
@@ -96,9 +96,9 @@
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 class="text-sm font-semibold">
-            {{ t('提供商用量', 'Provider usage') }}
+            {{ t('overview.providerUsage') }}
           </h2><p class="mt-1 text-xs text-muted-foreground">
-            {{ t('所选时段 · 按请求量排序', 'Selected range · Most requests first') }}
+            {{ t('overview.selectedRangeMostRequestsFirst') }}
           </p>
         </div>
         <Button
@@ -107,7 +107,7 @@
           :disabled="exporting || !providers?.data.total"
           @click="exportCsv('breakdown', providerQuery)"
         >
-          <Download class="mr-1.5 h-3.5 w-3.5" />{{ t('导出用量报表', 'Export usage') }}
+          <Download class="mr-1.5 h-3.5 w-3.5" />{{ t('overview.exportUsage') }}
         </Button>
       </div>
       <OverviewStatus
@@ -121,22 +121,22 @@
             <thead class="border-b text-xs text-muted-foreground">
               <tr>
                 <th class="py-3 text-left font-medium">
-                  {{ t('提供商', 'Provider') }}
+                  {{ t('overview.provider') }}
                 </th>
                 <th class="px-3 py-3 text-right font-medium">
-                  {{ t('请求量', 'Requests') }}
+                  {{ t('overview.requests') }}
                 </th>
                 <th class="px-3 py-3 text-right font-medium">
-                  {{ t('输入 Token', 'Input tokens') }}
+                  {{ t('overview.inputTokens') }}
                 </th>
                 <th class="px-3 py-3 text-right font-medium">
-                  {{ t('输出 Token', 'Output tokens') }}
+                  {{ t('overview.outputTokens') }}
                 </th>
                 <th class="px-3 py-3 text-right font-medium">
-                  {{ t('已登记支出', 'Recorded expenses') }}
+                  {{ t('overview.recordedExpenses') }}
                 </th>
                 <th class="py-3 text-right font-medium">
-                  {{ t('使用记录', 'Usage records') }}
+                  {{ t('nav.usageRecords') }}
                 </th>
               </tr>
             </thead>
@@ -146,7 +146,7 @@
                 :key="provider.id || 'unattributed'"
               >
                 <td class="max-w-64 break-words py-4 font-medium">
-                  {{ provider.label || t('未归属提供商', 'Unattributed provider') }}<p class="mt-1 text-xs font-normal text-muted-foreground">
+                  {{ provider.label || t('overview.unattributedProvider') }}<p class="mt-1 text-xs font-normal text-muted-foreground">
                     {{ providerType(provider.id) }}
                   </p>
                 </td>
@@ -174,7 +174,7 @@
                     :to="link('/admin/usage', { provider_id: provider.id })"
                     class="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                   >
-                    {{ t('查看', 'View') }}<ArrowUpRight class="h-3.5 w-3.5" />
+                    {{ t('overview.view') }}<ArrowUpRight class="h-3.5 w-3.5" />
                   </RouterLink><span v-else>-</span>
                 </td>
               </tr>
@@ -183,7 +183,7 @@
                   colspan="6"
                   class="py-12 text-center text-muted-foreground"
                 >
-                  {{ providerLoading ? t('加载提供商用量…', 'Loading provider usage…') : providers ? t('此时段暂无调用记录', 'No requests in this range') : t('暂未取得用量', 'Usage unavailable') }}
+                  {{ providerLoading ? t('overview.loadingProviderUsage') : providers ? t('overview.noCallRecordsInPeriod') : t('overview.usageUnavailable') }}
                 </td>
               </tr>
             </tbody>
@@ -239,7 +239,7 @@
       data-cost-reports
     >
       <h2 class="text-sm font-semibold">
-        {{ t('用量报表', 'Usage reports') }}
+        {{ t('overview.usageReports') }}
       </h2>
       <OverviewStatus
         :loading="costLoading && !costs"
@@ -249,7 +249,7 @@
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card class="min-w-0 space-y-4 p-4 sm:p-5">
           <h3 class="text-sm font-medium">
-            {{ t('调用趋势', 'Request trend') }}
+            {{ t('overview.requestTrend') }}
           </h3><div
             v-if="hasRequests"
             class="h-60"
@@ -259,12 +259,12 @@
             v-else
             class="flex h-60 items-center justify-center text-sm text-muted-foreground"
           >
-            {{ costs ? t('此时段暂无调用', 'No requests in this range') : t('暂无报表数据', 'Report unavailable') }}
+            {{ costs ? t('overview.noCallsInPeriod') : t('overview.reportUnavailable') }}
           </p>
         </Card>
         <Card class="min-w-0 space-y-4 p-4 sm:p-5">
           <h3 class="text-sm font-medium">
-            {{ t('Token 用量趋势', 'Token usage trend') }}
+            {{ t('overview.tokenUsageTrend') }}
           </h3><div
             v-if="hasRequests"
             class="h-60"
@@ -274,7 +274,7 @@
             v-else
             class="flex h-60 items-center justify-center text-sm text-muted-foreground"
           >
-            {{ costs ? t('此时段暂无用量', 'No usage in this range') : t('暂无报表数据', 'Report unavailable') }}
+            {{ costs ? t('overview.noUsageInThisRange') : t('overview.reportUnavailable') }}
           </p>
         </Card>
       </div>
@@ -306,9 +306,9 @@ import { useOverviewQuery } from '@/features/overview/query'
 import { useOverviewAutoRefresh } from '@/features/overview/useOverviewAutoRefresh'
 import { useOverviewRequest } from '@/features/overview/useOverviewRequest'
 import { useOverviewExport } from '@/features/overview/useOverviewExport'
-import { useOverviewI18n } from '@/features/overview/i18n'
 import { count, money, timestamp } from '@/features/overview/format'
-const { t } = useOverviewI18n()
+import { useI18n } from '@/i18n'
+const { t } = useI18n()
 const { range, relativePreset, refreshRange, setRange, link } = useOverviewQuery('last30days', { rolling: true })
 const { revision, autoRefresh, refreshTitle, toggleAutoRefresh } = useOverviewAutoRefresh(refreshRange)
 const recording = ref(false)
@@ -332,21 +332,21 @@ function selectExpensePage(offset: number) { if (expenseOffset.value === offset)
 function amount(value: string, currency: string) { return money({ value, currency, basis: 'provider_expense', status: 'known' }) }
 function totalAmounts(key: keyof Pick<ProviderExpenseTotals, 'amount' | 'recharge_amount' | 'subscription_amount'>) {
   if (!expenses.value) return [{ currency: '', text: '-' }]
-  if (!expenses.value.totals.length) return [{ currency: '', text: t('暂无记录', 'No records') }]
+  if (!expenses.value.totals.length) return [{ currency: '', text: t('ui.noRecords') }]
   return expenses.value.totals.map(row => ({ currency: row.currency, text: `${amount(row[key], row.currency)} ${row.currency}` }))
 }
 function providerAmounts(id: string | null) {
   if (!expenses.value || !id) return [{ currency: '', text: '-' }]
   const amounts = expenses.value.providers.filter(item => item.provider_id === id)
-  return amounts.length ? amounts.map(item => ({ currency: item.currency, text: `${amount(item.amount, item.currency)} ${item.currency}` })) : [{ currency: '', text: t('未登记', 'Unrecorded') }]
+  return amounts.length ? amounts.map(item => ({ currency: item.currency, text: `${amount(item.amount, item.currency)} ${item.currency}` })) : [{ currency: '', text: t('overview.unrecorded') }]
 }
 function providerType(id: string | null) {
   const type = accounts.value?.items.find(account => account.provider_id === id)?.billing_type
-  return type === 'monthly_quota' ? t('周期套餐', 'Period plan') : type === 'free_tier' ? t('免费额度', 'Free tier') : type === 'pay_as_you_go' ? t('按量付费', 'Pay as you go') : ''
+  return type === 'monthly_quota' ? t('overview.periodPlan') : type === 'free_tier' ? t('overview.freeTier') : type === 'pay_as_you_go' ? t('overview.payAsYouGo') : ''
 }
 const points = computed(() => costs.value?.data.timeseries || [])
 const hasRequests = computed(() => points.value.some(point => point.request_count > 0))
 const labels = computed(() => points.value.map(point => timestamp(point.bucket_start, range.value.timezone)))
-const requestChart = computed(() => ({ labels: labels.value, datasets: [{ label: t('请求数', 'Requests'), data: points.value.map(point => point.request_count), borderColor: '#ce6545', backgroundColor: '#ce654518', fill: true, pointRadius: 1, borderWidth: 2, tension: 0.2 }] }))
-const tokenChart = computed(() => ({ labels: labels.value, datasets: [{ label: t('输入 Token', 'Input tokens'), data: points.value.map(point => point.input_tokens), borderColor: '#0d9488', pointRadius: 1, borderWidth: 2, tension: 0.2 }, { label: t('输出 Token', 'Output tokens'), data: points.value.map(point => point.output_tokens), borderColor: '#d97706', pointRadius: 1, borderWidth: 2, tension: 0.2 }] }))
+const requestChart = computed(() => ({ labels: labels.value, datasets: [{ label: t('stats.metric.requests'), data: points.value.map(point => point.request_count), borderColor: '#ce6545', backgroundColor: '#ce654518', fill: true, pointRadius: 1, borderWidth: 2, tension: 0.2 }] }))
+const tokenChart = computed(() => ({ labels: labels.value, datasets: [{ label: t('overview.inputTokens'), data: points.value.map(point => point.input_tokens), borderColor: '#0d9488', pointRadius: 1, borderWidth: 2, tension: 0.2 }, { label: t('overview.outputTokens'), data: points.value.map(point => point.output_tokens), borderColor: '#d97706', pointRadius: 1, borderWidth: 2, tension: 0.2 }] }))
 </script>

@@ -6,10 +6,10 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-sm font-semibold">
-          {{ t('充值与续费记录', 'Recharges and renewals') }}
+          {{ t('overview.rechargesAndRenewals') }}
         </h2>
         <p class="mt-1 text-xs text-muted-foreground">
-          {{ t('按付款时间统计已登记支出，作废记录不计入汇总', 'Recorded expenses by payment date; voided entries excluded') }}
+          {{ t('overview.recordedExpensesByPaymentDateVoidedEntriesExcluded') }}
         </p>
       </div>
       <div class="flex gap-2">
@@ -19,14 +19,14 @@
           :disabled="exporting || !data?.total"
           @click="exportReport"
         >
-          <Download class="mr-1.5 h-3.5 w-3.5" />{{ t('导出支出报表', 'Export expenses') }}
+          <Download class="mr-1.5 h-3.5 w-3.5" />{{ t('overview.exportExpenses') }}
         </Button>
         <Button
           size="sm"
           :disabled="!canRecord"
           @click="emit('record')"
         >
-          <Plus class="mr-1.5 h-3.5 w-3.5" />{{ t('登记支出', 'Record expense') }}
+          <Plus class="mr-1.5 h-3.5 w-3.5" />{{ t('overview.recordExpense') }}
         </Button>
       </div>
     </div>
@@ -43,22 +43,22 @@
           <thead class="border-b text-xs text-muted-foreground">
             <tr>
               <th class="py-3 text-left font-medium">
-                {{ t('提供商 / 类型', 'Provider / type') }}
+                {{ t('overview.providerType') }}
               </th>
               <th class="px-3 py-3 text-right font-medium">
-                {{ t('实付金额', 'Amount paid') }}
+                {{ t('overview.amountPaid') }}
               </th>
               <th class="px-3 py-3 text-left font-medium">
-                {{ t('付款时间', 'Payment date') }}
+                {{ t('overview.paymentDate') }}
               </th>
               <th class="px-3 py-3 text-left font-medium">
-                {{ t('套餐周期', 'Plan period') }}
+                {{ t('ui.planPeriod') }}
               </th>
               <th class="px-3 py-3 text-left font-medium">
-                {{ t('账单与备注', 'Reference and note') }}
+                {{ t('overview.referenceAndNote') }}
               </th>
               <th class="py-3 text-right font-medium">
-                {{ t('操作', 'Action') }}
+                {{ t('overview.action') }}
               </th>
             </tr>
           </thead>
@@ -95,10 +95,10 @@
                 <Button
                   variant="ghost"
                   size="sm"
-                  :aria-label="`${t('作废', 'Void')} ${item.provider_name} ${amount(item)}`"
+                  :aria-label="`${t('ui.void')} ${item.provider_name} ${amount(item)}`"
                   @click="voiding = item"
                 >
-                  {{ t('作废', 'Void') }}
+                  {{ t('ui.void') }}
                 </Button>
               </td>
             </tr>
@@ -107,7 +107,7 @@
                 colspan="6"
                 class="py-12 text-center text-muted-foreground"
               >
-                {{ loading ? t('加载支出记录…', 'Loading expenses…') : data ? t('此时段尚未登记支出', 'No recorded expenses in this range') : t('暂未取得支出记录', 'Expense records unavailable') }}
+                {{ loading ? t('overview.loadingExpenses') : data ? t('overview.noRecordedExpensesInThisRange') : t('overview.expenseRecordsUnavailable') }}
               </td>
             </tr>
           </tbody>
@@ -129,12 +129,12 @@
     </Card>
     <Dialog
       :open="Boolean(voiding)"
-      :title="t('作废支出记录', 'Void expense record')"
+      :title="t('overview.voidExpenseRecord')"
       :persistent="saving"
       @update:open="value => !value && !saving && (voiding = null)"
     >
       <p class="py-3 text-sm">
-        {{ t('确认作废这笔记录？记录会保留用于审计，并从支出汇总中扣除。', 'Void this record? It will remain in the audit history and be excluded from expense totals.') }}
+        {{ t('overview.voidThisRecordItWillRemainInTheAuditHistoryAndBeExcludedFromExpenseTotals') }}
       </p>
       <p
         v-if="voiding"
@@ -155,14 +155,14 @@
           :disabled="saving"
           @click="confirmVoid"
         >
-          {{ saving ? t('处理中…', 'Processing…') : t('确认作废', 'Void record') }}
+          {{ saving ? t('overview.processing') : t('overview.voidRecord') }}
         </Button>
         <Button
           variant="outline"
           :disabled="saving"
           @click="voiding = null"
         >
-          {{ t('取消', 'Cancel') }}
+          {{ t('common.cancel') }}
         </Button>
       </template>
     </Dialog>
@@ -177,10 +177,10 @@ import { providerFinanceApi, type ProviderExpense, type ProviderExpenseKind, typ
 import type { OverviewRange } from '@/api/overview'
 import OverviewPagination from '../components/OverviewPagination.vue'
 import { money, timestamp } from '../format'
-import { useOverviewI18n } from '../i18n'
+import { useI18n } from '@/i18n'
 const props = defineProps<{ data: ProviderExpenses | null; range: OverviewRange; offset: number; loading: boolean; canRecord: boolean }>()
 const emit = defineEmits<{ record: []; page: [offset: number]; size: [limit: number]; changed: [] }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const exporting = ref(false)
 const actionError = ref('')
 const voidError = ref('')
@@ -190,10 +190,10 @@ let controller: AbortController | null = null
 watch(voiding, () => { voidError.value = '' })
 watch(() => JSON.stringify(props.range), () => { actionError.value = '' })
 function amount(item: ProviderExpense) { return money({ value: item.amount, currency: item.currency, basis: 'provider_expense', status: 'known' }) }
-function kindLabel(kind: ProviderExpenseKind) { return kind === 'subscription' ? t('套餐 / 续费', 'Subscription / renewal') : kind === 'recharge' ? t('余额充值', 'Balance recharge') : t('其他支出', 'Other expense') }
+function kindLabel(kind: ProviderExpenseKind) { return kind === 'subscription' ? t('overview.subscriptionRenewal') : kind === 'recharge' ? t('overview.balanceRecharge') : t('overview.otherExpense') }
 function message(cause: unknown) {
   const error = cause as { response?: { data?: { detail?: string; message?: string } }; message?: string }
-  return error.response?.data?.detail || error.response?.data?.message || error.message || t('操作失败，请重试', 'Action failed; try again')
+  return error.response?.data?.detail || error.response?.data?.message || error.message || t('overview.actionFailedTryAgain')
 }
 async function confirmVoid() {
   if (!voiding.value || saving.value) return

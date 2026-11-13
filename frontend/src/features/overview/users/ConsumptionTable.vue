@@ -6,14 +6,14 @@
   >
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-sm font-semibold">
-        {{ t('使用记录', 'Usage records') }}
+        {{ t('nav.usageRecords') }}
       </h2><Button
         variant="outline"
         size="icon"
         class="h-8 w-8"
         :disabled="exporting"
-        :title="t('导出完整筛选结果', 'Export all matching results')"
-        :aria-label="t('导出完整筛选结果', 'Export all matching results')"
+        :title="t('overview.exportAllMatchingResults')"
+        :aria-label="t('overview.exportAllMatchingResults')"
         @click="exportCsv('consumption', requestQuery)"
       >
         <Download class="h-4 w-4" />
@@ -30,11 +30,11 @@
           <thead class="border-y text-xs text-muted-foreground">
             <tr>
               <th class="whitespace-nowrap py-3 text-left font-medium">
-                {{ t('请求 / 时间', 'Request / time') }}
+                {{ t('overview.requestTime') }}
               </th><th class="px-3 py-3 text-left font-medium">
-                {{ t('模型', 'Model') }}
+                {{ t('ui.model') }}
               </th><th class="px-3 py-3 text-left font-medium">
-                {{ t('状态', 'Status') }}
+                {{ t('ui.nodeStatus') }}
               </th><th
                 v-for="label in amountLabels"
                 :key="label"
@@ -71,19 +71,19 @@
                 v-for="key in amounts"
                 :key="key"
                 class="whitespace-nowrap px-3 py-3 text-right tabular-nums"
-                :title="item[key]?.value ?? t('未知', 'Unknown')"
+                :title="item[key]?.value ?? t('chart.unknown')"
               >
                 {{ money(item[key]) }}<span
                   v-if="item[key]?.status === 'known_subtotal'"
                   class="block text-xs text-muted-foreground"
-                >{{ t('已知小计', 'Known subtotal') }}</span>
+                >{{ t('overview.knownSubtotal') }}</span>
               </td>
             </tr><tr v-if="!data.data.items.length">
               <td
                 colspan="6"
                 class="py-12 text-center text-muted-foreground"
               >
-                {{ t('此时间范围暂无消费记录', 'No consumption in this range') }}
+                {{ t('overview.noConsumptionInThisRange') }}
               </td>
             </tr>
           </tbody>
@@ -112,19 +112,19 @@ import OverviewPagination from '../components/OverviewPagination.vue'
 import { useOverviewQuery } from '../query'
 import { useOverviewRequest } from '../useOverviewRequest'
 import { useOverviewExport } from '../useOverviewExport'
-import { useOverviewI18n } from '../i18n'
 import { money, timestamp } from '../format'
+import { useI18n } from '@/i18n'
 const props = defineProps<{ userId: string; revision: number }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 const { query, range, relativePreset, patch, link } = useOverviewQuery()
 const requestQuery = computed(() => ({ ...range.value, user_id: props.userId, limit: Math.max(1, Math.min(100, query.value.limit || 25)), offset: query.value.offset || 0, sort: 'started_at', order: 'desc' as const }))
 const scope = computed(() => JSON.stringify({ ...requestQuery.value, ...(relativePreset.value ? { from: undefined, to: undefined, preset: relativePreset.value } : {}) }))
 const { data, loading, error, refresh } = useOverviewRequest(() => JSON.stringify([requestQuery.value, props.revision]), signal => overviewApi.consumption(requestQuery.value, signal), { scopeKey: scope })
 const { exporting, exportError, exportCsv } = useOverviewExport()
 const amounts = ['billable_amount', 'quota_covered_amount', 'wallet_debit_amount'] as const
-const amountLabels = computed(() => [t('消费', 'Consumption'), t('额度抵扣', 'Quota covered'), t('余额扣款', 'Balance debited')])
+const amountLabels = computed(() => [t('overview.consumption'), t('overview.quotaDeducted'), t('overview.balanceDebited')])
 function statusLabel(status: string) {
-  const labels: Record<string, string> = { success: t('成功', 'Successful'), completed: t('已完成', 'Completed'), failed: t('失败', 'Failed'), cancelled: t('已取消', 'Cancelled'), settled: t('已结算', 'Settled'), pending: t('待结算', 'Pending'), unknown: t('未知', 'Unknown') }
+  const labels: Record<string, string> = { success: t('overview.successful'), completed: t('site.home.status.completed'), failed: t('ui.failed28384d7'), cancelled: t('overview.cancelled'), settled: t('overview.settled'), pending: t('overview.pending'), unknown: t('chart.unknown') }
   return labels[status] || status || '-'
 }
 </script>

@@ -5,10 +5,10 @@
   >
     <div class="mb-4">
       <h2 class="text-sm font-semibold">
-        {{ t('充值与套餐记录', 'Recharge and plan records') }}
+        {{ t('overview.rechargeAndPlanRecords') }}
       </h2>
       <p class="mt-1 text-xs text-muted-foreground">
-        {{ t('按到账时间统计，赠送到账单独列示', 'Reported by credit time; gift credits are listed separately') }}
+        {{ t('overview.reportedByCreditTimeGiftCreditsAreListedSeparately') }}
       </p>
     </div>
     <div
@@ -19,15 +19,15 @@
         <thead class="border-y text-xs text-muted-foreground">
           <tr>
             <th class="py-3 text-left font-medium">
-              {{ t('订单', 'Order') }}
+              {{ t('overview.order') }}
             </th><th class="px-3 py-3 text-left font-medium">
-              {{ t('类型', 'Type') }}
+              {{ t('ui.typeba40014') }}
             </th><th class="px-3 py-3 text-left font-medium">
-              {{ t('支付方式', 'Payment method') }}
+              {{ t('ui.paymentMethod') }}
             </th><th class="px-3 py-3 text-right font-medium">
-              {{ t('到账金额', 'Credited amount') }}
+              {{ t('overview.creditedAmount') }}
             </th><th class="py-3 text-right font-medium">
-              {{ t('到账时间', 'Credited at') }}
+              {{ t('overview.creditedAt') }}
             </th>
           </tr>
         </thead>
@@ -54,7 +54,7 @@
               colspan="5"
               class="py-12 text-center text-muted-foreground"
             >
-              {{ loading ? t('加载中', 'Loading') : !payments ? t('到账记录暂不可用', 'Credit records unavailable') : t('此时间范围暂无到账记录', 'No credited payments in this period') }}
+              {{ loading ? t('overview.loading') : !payments ? t('overview.creditRecordsUnavailable') : t('overview.noCreditedPaymentsInThisPeriod') }}
             </td>
           </tr>
         </tbody>
@@ -76,14 +76,14 @@
 import type { OverviewPage, OverviewUserPayment } from '@/api/overview'
 import OverviewPagination from '../components/OverviewPagination.vue'
 import { money, timestamp } from '../format'
-import { useOverviewI18n } from '../i18n'
+import { useI18n } from '@/i18n'
 defineProps<{ payments?: OverviewPage<OverviewUserPayment> | null; timezone: string; loading: boolean; limit: number; offset: number }>()
 defineEmits<{ page: [value: number]; size: [value: number] }>()
-const { t } = useOverviewI18n()
+const { t } = useI18n()
 function kindLabel(kind: string) {
-  return ({ wallet_recharge: t('钱包充值', 'Wallet recharge'), plan_purchase: t('套餐购买', 'Plan purchase'), gift_credit: t('赠送到账', 'Gift credit') })[kind] || kind
+  return ({ wallet_recharge: t('overview.walletRecharge'), plan_purchase: t('overview.planPurchase'), gift_credit: t('overview.giftCredit') })[kind] || kind
 }
 function methodLabel(method: string) {
-  return ({ alipay: t('支付宝', 'Alipay'), wechat: t('微信支付', 'WeChat Pay'), stripe: 'Stripe', manual: t('人工入账', 'Manual credit'), gift_code: t('兑换码', 'Gift code') })[method] || method || '-'
+  return ({ alipay: t('ui.alipay'), wechat: t('ui.wechatPay'), stripe: 'Stripe', manual: t('overview.manualCredit'), gift_code: t('overview.giftCode') })[method] || method || '-'
 }
 </script>

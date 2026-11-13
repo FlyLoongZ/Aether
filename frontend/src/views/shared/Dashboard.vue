@@ -22,7 +22,7 @@
             :disabled="loading"
             @click="loadDashboardData"
           >
-            {{ getI18nLocale() === 'en-US' ? 'Retry' : kt('ui.retryButton') }}
+            {{ getI18nLocale() === 'en-US' ? 'Retry' : t('ui.retryButton') }}
           </Button>
         </div>
 
@@ -108,11 +108,11 @@
                   >
                     <span
                       class="text-red-600 dark:text-red-400"
-                      :title="t('今日新增', 'Added today')"
+                      :title="t('overview.addedToday')"
                     >+{{ metricCount(stat.userChange.added) }}</span>
                     <span
                       class="text-green-600 dark:text-green-400"
-                      :title="t('今日减少', 'Removed today')"
+                      :title="t('overview.removedToday')"
                     >-{{ metricCount(stat.userChange.removed) }}</span>
                   </span>
                 </p>
@@ -178,7 +178,7 @@
                   class="text-[10px] sm:text-sm text-muted-foreground/50"
                   :class="isAdmin ? 'leading-5' : 'mt-0.5 sm:mt-1'"
                 >
-                  {{ kt('stats.empty.title') }}
+                  {{ t('stats.empty.title') }}
                 </p>
               </div>
             </Card>
@@ -193,13 +193,13 @@
         >
           <div class="mb-3 flex items-center justify-between gap-2">
             <h3 class="text-sm font-medium text-foreground">
-              {{ t('请求概况', 'Request overview') }}
+              {{ t('overview.requestOverview') }}
             </h3>
             <Badge
               variant="outline"
               class="shrink-0 text-[10px]"
             >
-              {{ t('实时', 'Live') }}
+              {{ t('overview.live') }}
             </Badge>
           </div>
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
@@ -238,7 +238,7 @@
         >
           <div class="mb-3 flex items-center justify-between">
             <h3 class="text-sm font-medium text-foreground">
-              {{ " " + kt('ui.monthlyStatistics') + " " }}
+              {{ " " + t('ui.monthlyStatistics') + " " }}
             </h3>
             <Badge
               variant="outline"
@@ -259,7 +259,7 @@
                 <p
                   class="text-xs font-semibold tracking-normal break-words text-muted-foreground"
                 >
-                  {{ " " + kt('ui.cacheHitRate') + " " }}
+                  {{ " " + t('ui.cacheHitRate') + " " }}
                 </p>
                 <p
                   class="mt-1.5 sm:mt-2 text-lg sm:text-xl font-semibold text-foreground"
@@ -279,7 +279,7 @@
                 <p
                   class="text-xs font-semibold tracking-normal break-words text-muted-foreground"
                 >
-                  {{ " " + kt('ui.cacheRead1ded655') + " " }}
+                  {{ " " + t('ui.cacheRead1ded655') + " " }}
                 </p>
                 <p
                   class="mt-1.5 sm:mt-2 text-lg sm:text-xl font-semibold text-foreground"
@@ -299,7 +299,7 @@
                 <p
                   class="text-xs font-semibold tracking-normal break-words text-muted-foreground"
                 >
-                  {{ " " + kt('ui.cacheCreation') + " " }}
+                  {{ " " + t('ui.cacheCreation') + " " }}
                 </p>
                 <p
                   class="mt-1.5 sm:mt-2 text-lg sm:text-xl font-semibold text-foreground"
@@ -319,7 +319,7 @@
                 <p
                   class="text-xs font-semibold tracking-normal break-words text-muted-foreground"
                 >
-                  {{ " " + kt('ui.costThisMonth') + " " }}
+                  {{ " " + t('ui.costThisMonth') + " " }}
                 </p>
                 <p
                   class="mt-1.5 sm:mt-2 text-lg sm:text-xl font-semibold text-foreground"
@@ -352,7 +352,7 @@
       <h3
         class="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
       >
-        {{ " " + kt('ui.statisticsPeriod') + " " }}
+        {{ " " + t('ui.statisticsPeriod') + " " }}
       </h3>
       <TimeRangePicker
         v-model="dailyTimeRange"
@@ -372,7 +372,7 @@
         size="sm"
         @click="loadDailyStats"
       >
-        {{ t('重试', 'Retry') }}
+        {{ t('ui.retryButton') }}
       </Button>
     </div>
 
@@ -389,7 +389,7 @@
         <h4
           class="mb-3 text-xs font-semibold text-foreground uppercase tracking-wider"
         >
-          {{ " " + kt('ui.dailyUsageTrends') + " " }}
+          {{ " " + t('ui.dailyUsageTrends') + " " }}
         </h4>
         <div
           v-if="loadingDaily"
@@ -413,7 +413,7 @@
             v-else
             class="flex h-full items-center justify-center text-xs text-muted-foreground"
           >
-            {{ kt('stats.empty.title') }}
+            {{ t('stats.empty.title') }}
           </div>
         </div>
       </Card>
@@ -426,7 +426,7 @@
         <h4
           class="mb-3 text-xs font-semibold text-foreground uppercase tracking-wider"
         >
-          {{ " " + kt('ui.dailyModelCosts') + " " }}
+          {{ " " + t('ui.dailyModelCosts') + " " }}
         </h4>
         <div
           v-if="loadingDaily"
@@ -463,7 +463,7 @@
         <h4
           class="mb-3 text-xs font-semibold text-foreground uppercase tracking-wider"
         >
-          {{ " " + kt('ui.providerCostDistribution2224786') + " " }}
+          {{ " " + t('ui.providerCostDistribution2224786') + " " }}
         </h4>
         <div
           v-if="loadingDaily"
@@ -500,7 +500,7 @@
         <h4
           class="mb-3 text-xs font-semibold text-foreground uppercase tracking-wider"
         >
-          {{ " " + kt('ui.dailyModelCosts') + " " }}
+          {{ " " + t('ui.dailyModelCosts') + " " }}
         </h4>
         <div
           v-if="loadingDaily"
@@ -524,7 +524,7 @@
             v-else
             class="flex h-full items-center justify-center text-xs text-muted-foreground"
           >
-            {{ kt('stats.empty.title') }}
+            {{ t('stats.empty.title') }}
           </div>
         </div>
       </Card>
@@ -534,7 +534,7 @@
       v-if="dailyCostsPartial && !loadingDaily"
       class="mt-3 text-xs text-amber-700 dark:text-amber-400"
     >
-      {{ t('统计为已知数据小计，分布占比按已知金额计算', 'Statistics are known subtotals; distribution shares use known amounts') }}
+      {{ t('overview.statisticsAreKnownSubtotalsDistributionSharesUseKnownAmounts') }}
     </p>
 
     <!-- 每日统计 -->
@@ -546,7 +546,7 @@
       <div class="sm:hidden">
         <div class="px-4 py-3 border-b border-border/60">
           <h3 class="text-sm font-semibold">
-            {{ " " + kt('ui.dailyStatistics') + " " }}
+            {{ " " + t('ui.dailyStatistics') + " " }}
           </h3>
         </div>
         <div
@@ -554,13 +554,13 @@
           class="flex items-center justify-center py-8"
         >
           <Skeleton class="h-5 w-5 rounded-full" />
-          <span class="ml-2 text-muted-foreground text-xs">{{ kt('common.loading') }}</span>
+          <span class="ml-2 text-muted-foreground text-xs">{{ t('common.loading') }}</span>
         </div>
         <div
           v-else-if="displayDailyStats.length === 0"
           class="py-8 text-center text-muted-foreground text-xs"
         >
-          {{ kt('stats.empty.title') }}
+          {{ t('stats.empty.title') }}
         </div>
         <div
           v-else
@@ -580,12 +580,12 @@
                 class="text-[10px]"
               >
                 {{ formatDailyCost(stat.cost) }}
-                <span v-if="stat.billableAmount">{{ amountStatus(stat.billableAmount, t) }}</span>
+                <span v-if="stat.billableAmount">{{ amountStatus(stat.billableAmount) }}</span>
               </Badge>
             </div>
             <div class="grid grid-cols-2 gap-2 text-xs">
               <div class="flex justify-between">
-                <span class="text-muted-foreground">{{ kt('ui.request') }}</span>
+                <span class="text-muted-foreground">{{ t('ui.request') }}</span>
                 <span>{{ stat.requests.toLocaleString() }}</span>
               </div>
               <div class="flex justify-between">
@@ -593,11 +593,11 @@
                 <span>{{ compactTokens(stat.tokens) }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-muted-foreground">{{ kt('ui.response') }}</span>
+                <span class="text-muted-foreground">{{ t('ui.response') }}</span>
                 <span>{{ formatResponseTime(stat.avg_response_time) }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-muted-foreground">{{ kt('ui.model') }}</span>
+                <span class="text-muted-foreground">{{ t('ui.model') }}</span>
                 <span>{{ stat.unique_models }}</span>
               </div>
             </div>
@@ -610,28 +610,28 @@
         <TableHeader>
           <TableRow>
             <TableHead class="text-left">
-              {{ " " + kt('ui.date') + " " }}
+              {{ " " + t('ui.date') + " " }}
             </TableHead>
             <TableHead class="text-center">
-              {{ " " + kt('ui.requestCount') + " " }}
+              {{ " " + t('ui.requestCount') + " " }}
             </TableHead>
             <TableHead class="text-center">
               Tokens
             </TableHead>
             <TableHead class="text-center">
-              {{ " " + kt('ui.cost7fe8603') + " " }}
+              {{ " " + t('ui.cost7fe8603') + " " }}
             </TableHead>
             <TableHead class="text-center">
-              {{ " " + kt('ui.averageResponse') + " " }}
+              {{ " " + t('ui.averageResponse') + " " }}
             </TableHead>
             <TableHead class="text-center">
-              {{ " " + kt('ui.modelsUsed') + " " }}
+              {{ " " + t('ui.modelsUsed') + " " }}
             </TableHead>
             <TableHead
               v-if="isAdmin"
               class="text-center"
             >
-              {{ " " + kt('ui.providersUsed') + " " }}
+              {{ " " + t('ui.providersUsed') + " " }}
             </TableHead>
           </TableRow>
         </TableHeader>
@@ -643,7 +643,7 @@
             >
               <div class="flex items-center justify-center gap-2">
                 <Skeleton class="h-5 w-5 rounded-full" />
-                <span class="text-muted-foreground text-xs">{{ kt('common.loading') }}</span>
+                <span class="text-muted-foreground text-xs">{{ t('common.loading') }}</span>
               </div>
             </TableCell>
           </TableRow>
@@ -652,7 +652,7 @@
               :colspan="isAdmin ? 7 : 6"
               class="text-center py-8 text-muted-foreground text-xs"
             >
-              {{ kt('stats.empty.title') }}
+              {{ t('stats.empty.title') }}
             </TableCell>
           </TableRow>
           <template v-else>
@@ -681,7 +681,7 @@
                   class="text-[10px]"
                 >
                   {{ formatDailyCost(stat.cost) }}
-                  <span v-if="stat.billableAmount">{{ amountStatus(stat.billableAmount, t) }}</span>
+                  <span v-if="stat.billableAmount">{{ amountStatus(stat.billableAmount) }}</span>
                 </Badge>
               </TableCell>
               <TableCell class="text-center">
@@ -715,7 +715,7 @@
         <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div class="text-center">
             <div class="text-muted-foreground text-[10px]">
-              {{ " " + kt('ui.totalRequests') + " " }}
+              {{ " " + t('ui.totalRequests') + " " }}
             </div>
             <div class="font-semibold text-foreground">
               {{ totalStats.requests.toLocaleString() }}
@@ -723,7 +723,7 @@
           </div>
           <div class="text-center">
             <div class="text-muted-foreground text-[10px]">
-              {{ " " + kt('ui.totalTokens6a53a4d') + " " }}
+              {{ " " + t('ui.totalTokens6a53a4d') + " " }}
             </div>
             <div class="font-semibold text-book-cloth dark:text-kraft">
               {{ compactTokens(totalStats.tokens) }}
@@ -731,16 +731,16 @@
           </div>
           <div class="text-center">
             <div class="text-muted-foreground text-[10px]">
-              {{ " " + kt('ui.totalCost') + " " }}
+              {{ " " + t('ui.totalCost') + " " }}
             </div>
             <div class="font-semibold text-amber-600 dark:text-amber-400">
               {{ formatDailyCost(totalStats.cost) }}
-              <span v-if="adminDailyCharts">{{ amountStatus(adminDailyCharts.summary.billable_amount, t) }}</span>
+              <span v-if="adminDailyCharts">{{ amountStatus(adminDailyCharts.summary.billable_amount) }}</span>
             </div>
           </div>
           <div class="text-center">
             <div class="text-muted-foreground text-[10px]">
-              {{ " " + kt('ui.averageResponse') + " " }}
+              {{ " " + t('ui.averageResponse') + " " }}
             </div>
             <div class="font-semibold text-book-cloth dark:text-kraft">
               {{ formatResponseTime(totalStats.avgResponseTime) }}
@@ -754,7 +754,6 @@
 
 <script setup lang="ts">
 import { useI18n } from '@/i18n'
-const { t: kt } = useI18n()
 
 import { getI18nLocale } from '@/i18n'
 import { formatRelativeTime } from '@/utils/format'
@@ -787,7 +786,6 @@ import DashboardActivity from "@/features/overview/dashboard/DashboardActivity.v
 import DashboardAnnouncements from "@/features/overview/dashboard/DashboardAnnouncements.vue";
 import MetricValue from "@/features/overview/components/MetricValue.vue";
 import type { ActivityHeatmap } from "@/types/activity";
-import { useOverviewI18n } from "@/features/overview/i18n";
 import { getDateRangeFromPeriod } from "@/features/usage/composables/useDateRange";
 import type { DateRangeParams } from "@/features/usage/types";
 import {
@@ -826,7 +824,7 @@ import type {
 } from "chart.js";
 
 const authStore = useAuthStore();
-const { t } = useOverviewI18n();
+const { t } = useI18n();
 
 type DashboardStatCard = Omit<DashboardStat, "icon"> & {
   icon: Component;
@@ -840,7 +838,7 @@ const route = inject(routeLocationKey, undefined);
 const isDemo = computed(() => import.meta.env.DEV && isAdmin.value && route?.query.demo === '1');
 const demoTimeline = ref<IntervalTimelineResponse | null>(null);
 const dashboardModeLabel = computed(() => {
-  if (isDemo.value) return t('演示数据', 'DEMO DATA');
+  if (isDemo.value) return t('overview.demoData');
   if (authStore.isAdmin) return "ADMIN MODE";
   if (authStore.isAuditAdmin) return "AUDIT MODE";
   return "PERSONAL MODE";
@@ -880,10 +878,10 @@ const todayStats = ref<{
 
 const dashboardSnapshot = ref<OverviewDashboardSummary | null>(null);
 const statsSince = computed(() => timestamp(dashboardSnapshot.value?.stats_since, dashboardSnapshot.value?.timezone));
-const statisticsScope = computed(() => `${t('统计自', 'Statistics since')} ${statsSince.value} · ${t('更新于', 'Updated at')} ${timestamp(dashboardSnapshot.value?.generated_at, dashboardSnapshot.value?.timezone)}`);
+const statisticsScope = computed(() => `${t('overview.statisticsSince')} ${statsSince.value} · ${t('ui.updatedAt7153f09')} ${timestamp(dashboardSnapshot.value?.generated_at, dashboardSnapshot.value?.timezone)}`);
 const activityScope = computed(() => [
   statisticsScope.value,
-  t('展示近365天', 'Last 365 days shown'),
+  t('overview.last365DaysShown'),
   dashboardSnapshot.value?.activity_timezone ?? dashboardSnapshot.value?.timezone,
 ].filter(Boolean).join(' · '));
 const activityHeatmap = computed<ActivityHeatmap | null>(() => {
@@ -925,18 +923,18 @@ const performanceCards = computed(() => {
   };
   const concurrencyAvailable = concurrency && concurrency.coverage !== 'unavailable';
   const concurrencyNote = concurrency?.coverage === 'complete'
-    ? t('当前节点 · 今日观测', 'Current node · Observed today')
+    ? t('overview.currentNodeObservedToday')
     : concurrency?.coverage === 'partial'
-      ? t('当前节点 · 部分时段', 'Current node · Partial observation')
-      : t('当前节点 · 暂无观测', 'Current node · No observation');
-  const concurrencyTooltip = `${concurrencyNote} · ${t('有效观测时间', 'Observed interval')}: ${timestamp(concurrency?.observed_from, dashboardSnapshot.value?.timezone)} — ${timestamp(concurrency?.observed_through, dashboardSnapshot.value?.timezone)}`;
+      ? t('overview.currentNodePartialObservation')
+      : t('overview.currentNodeNoObservation');
+  const concurrencyTooltip = `${concurrencyNote} · ${t('overview.observedInterval')}: ${timestamp(concurrency?.observed_from, dashboardSnapshot.value?.timezone)} — ${timestamp(concurrency?.observed_through, dashboardSnapshot.value?.timezone)}`;
   return [
-    { key: 'first-byte', label: t('平均首字', 'Avg first byte'), value: duration(today?.avg_first_byte_ms) },
-    { key: 'response', label: t('平均响应', 'Avg response'), value: duration(today?.avg_response_ms) },
-    { key: 'concurrency-avg', label: t('平均并发', 'Average concurrency'), value: metricCount(concurrencyAvailable ? concurrency.avg : null), tooltip: concurrencyTooltip },
-    { key: 'concurrency-peak', label: t('峰值并发', 'Peak concurrency'), value: metricCount(concurrencyAvailable ? concurrency.peak : null), tooltip: concurrencyTooltip },
-    { key: 'stream', label: t('流式请求', 'Streaming requests'), value: metricCount(today?.stream_requests) },
-    { key: 'standard', label: t('标准请求', 'Standard requests'), value: metricCount(today?.standard_requests) },
+    { key: 'first-byte', label: t('overview.avgFirstByte'), value: duration(today?.avg_first_byte_ms) },
+    { key: 'response', label: t('overview.avgResponse'), value: duration(today?.avg_response_ms) },
+    { key: 'concurrency-avg', label: t('overview.averageConcurrency'), value: metricCount(concurrencyAvailable ? concurrency.avg : null), tooltip: concurrencyTooltip },
+    { key: 'concurrency-peak', label: t('overview.peakConcurrency'), value: metricCount(concurrencyAvailable ? concurrency.peak : null), tooltip: concurrencyTooltip },
+    { key: 'stream', label: t('overview.streamingRequests'), value: metricCount(today?.stream_requests) },
+    { key: 'standard', label: t('overview.standardRequests'), value: metricCount(today?.standard_requests) },
   ];
 });
 
@@ -1084,7 +1082,7 @@ const dailyModelCostChartData = computed<ChartData<"bar">>(() => {
     const timezone = adminDailyRange.value.timezone;
     return {
       labels: adminDailyCharts.value.series.map(day => chartDate(day.bucket_start, timezone)),
-      datasets: modelDatasets(adminDailyCharts.value, t('未知模型', 'Unknown model'), t('其他模型', 'Other models')),
+      datasets: modelDatasets(adminDailyCharts.value, t('overview.unknownModel'), t('overview.otherModels')),
     };
   }
   if (dailyStats.value.length === 0) {
@@ -1144,11 +1142,11 @@ const dailyCostsPartial = computed(() => {
 });
 const dailyCostEmptyLabel = computed(() => {
   const data = adminDailyCharts.value;
-  if (!data) return t('暂无数据', 'No data');
+  if (!data) return t('stats.empty.title');
   const amount = amountValue(data.summary.billable_amount);
-  if (amount === null || dailyCostsPartial.value) return t('费用尚未确认', 'Cost not yet known');
-  if (amount > 0) return t('暂无费用明细', 'No cost breakdown available');
-  return data.summary.request_count === 0 ? t('暂无数据', 'No data') : t('此周期暂无计费费用', 'No billable cost in this period');
+  if (amount === null || dailyCostsPartial.value) return t('overview.costNotYetKnown');
+  if (amount > 0) return t('overview.noCostBreakdownAvailable');
+  return data.summary.request_count === 0 ? t('stats.empty.title') : t('overview.noBillableCostInThisPeriod');
 });
 
 const dailyModelCostChartOptions = computed<ChartOptions<"bar">>(() => ({
@@ -1214,7 +1212,7 @@ const PROVIDER_COLORS = [
 
 const providerCostChartData = computed<ChartData<"doughnut">>(() => {
   if (isAdmin.value && adminDailyCharts.value) {
-    const slices = providerSlices(adminDailyCharts.value.providers, t('未知提供商', 'Unknown provider'), t('其他提供商', 'Other providers'));
+    const slices = providerSlices(adminDailyCharts.value.providers, t('overview.unknownProvider'), t('overview.otherProviders'));
     return {
       labels: slices.map(slice => slice.label),
       datasets: [{ data: slices.map(slice => slice.value), backgroundColor: slices.map((_, i) => PROVIDER_COLORS[i % PROVIDER_COLORS.length]), borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.1)' }],
@@ -1440,7 +1438,7 @@ async function loadAdminDashboard() {
     dashboardSnapshot.value = snapshot;
   } catch {
     if (requestId !== dashboardRequestId || controller.signal.aborted) return;
-    dashboardError.value = t('仪表盘统计加载失败，请重试。', 'Dashboard statistics could not be loaded. Please retry.');
+    dashboardError.value = t('overview.dashboardStatisticsCouldNotBeLoadedPleaseRetry');
   } finally {
     if (requestId === dashboardRequestId) {
       loading.value = false;
@@ -1466,17 +1464,17 @@ function adminStatCards(snapshot: OverviewDashboardSummary): DashboardStatCard[]
   };
   const costHint = (value: typeof today.billable_amount) => {
     if (value.status === 'known_subtotal' || value.status === 'estimated_subtotal') {
-      return t('部分请求价格未知，当前为已知金额小计。', 'Some request prices are unknown; this is the subtotal of known amounts.');
+      return t('overview.someRequestPricesAreUnknownThisIsTheSubtotalOfKnownAmounts');
     }
-    if (value.status === 'estimated') return t('估算金额', 'Estimated amount');
-    return amountValue(value) === null ? t('金额未知', 'Amount unknown') : undefined;
+    if (value.status === 'estimated') return t('overview.estimatedAmount');
+    return amountValue(value) === null ? t('overview.amountUnknown') : undefined;
   };
   return [
-    { name: t('今日请求', "Today's requests"), value: metricCount(today.request_count), subValue: `${t('总请求', 'Total requests')} ${metricCount(total.request_count)}`, icon: markRaw(Activity) },
-    { name: t('今日 Token', "Today's tokens"), value: `${compactTokens(today.input_tokens)} / ${compactTokens(today.output_tokens)}`, subValue: `${t('总 Token', 'Total tokens')} ${compactTokens(total.total_tokens)}`, icon: markRaw(Hash) },
-    { name: t('今日缓存', "Today's cache"), value: cacheHitRate(today), valueHint: t('缓存读取 Token / 输入上下文 Token', 'Cache read tokens / input context tokens'), subValue: `${t('总缓存', 'Total cache')} ${cacheHitRate(total)}`, totalHint: `${statisticsScope.value} · ${t('累计缓存读取 Token / 累计输入上下文 Token', 'Total cache read tokens / total input context tokens')}`, icon: markRaw(Database) },
-    { name: t('今日消费', "Today's spending"), value: cost(today.billable_amount), valueHint: costHint(today.billable_amount), subValue: `${t('总消费', 'Total spending')} ${cost(total.billable_amount)}`, totalHint: [statisticsScope.value, costHint(total.billable_amount)].filter(Boolean).join(' · '), icon: markRaw(DollarSign) },
-    { name: t('今日活跃用户', 'Active users today'), value: metricCount(today.active_users), subValue: `${t('总用户', 'Total users')} ${metricCount(users.total)}`, userChange: { added: users.created_today, removed: users.deleted_today }, icon: markRaw(Users) },
+    { name: t('overview.requestsToday'), value: metricCount(today.request_count), subValue: `${t('ui.totalRequests')} ${metricCount(total.request_count)}`, icon: markRaw(Activity) },
+    { name: t('overview.tokensToday'), value: `${compactTokens(today.input_tokens)} / ${compactTokens(today.output_tokens)}`, subValue: `${t('overview.totalTokens')} ${compactTokens(total.total_tokens)}`, icon: markRaw(Hash) },
+    { name: t('overview.cacheToday'), value: cacheHitRate(today), valueHint: t('overview.cacheReadTokensInputContextTokens'), subValue: `${t('overview.totalCache')} ${cacheHitRate(total)}`, totalHint: `${statisticsScope.value} · ${t('overview.totalCacheReadTokensTotalInputContextTokens')}`, icon: markRaw(Database) },
+    { name: t('overview.spendingToday'), value: cost(today.billable_amount), valueHint: costHint(today.billable_amount), subValue: `${t('overview.totalSpending')} ${cost(total.billable_amount)}`, totalHint: [statisticsScope.value, costHint(total.billable_amount)].filter(Boolean).join(' · '), icon: markRaw(DollarSign) },
+    { name: t('overview.activeUsersToday'), value: metricCount(today.active_users), subValue: `${t('overview.totalUsers')} ${metricCount(users.total)}`, userChange: { added: users.created_today, removed: users.deleted_today }, icon: markRaw(Users) },
   ];
 }
 
@@ -1508,7 +1506,7 @@ async function loadDailyStats() {
     }
   } catch {
     if (requestId !== dailyStatsRequestId || controller.signal.aborted) return;
-    if (isAdmin.value) dailyError.value = t('统计加载失败，请重试', 'Statistics could not be loaded. Please retry.');
+    if (isAdmin.value) dailyError.value = t('overview.statisticsCouldNotBeLoadedPleaseRetry');
     dailyStats.value = [];
     providerSummary.value = [];
     adminDailyCharts.value = null;

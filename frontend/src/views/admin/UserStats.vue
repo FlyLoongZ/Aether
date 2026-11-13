@@ -1,7 +1,7 @@
 <template>
   <main class="space-y-5 px-4 pb-8 sm:px-6 lg:px-0">
     <OverviewToolbar
-      :title="t('用户分析', 'User analysis')"
+      :title="t('nav.userStats')"
       :range="range"
       :show-range="false"
       :refresh-active="autoRefresh"
@@ -23,7 +23,7 @@
         :disabled="exporting"
         @click="exportCsv('users', requestQuery)"
       >
-        <Download class="mr-2 h-4 w-4" />{{ t('导出用户报表', 'Export user report') }}
+        <Download class="mr-2 h-4 w-4" />{{ t('overview.exportUserReport') }}
       </Button>
     </OverviewToolbar>
     <OverviewStatus
@@ -44,8 +44,8 @@
         >
           <template #user-leaderboard="{ selectUser }">
             <TableCard
-              :title="t('用户排行与账目', 'User rankings and accounts')"
-              :description="t('点击消费、请求数或 Tokens 排序；消费与到账按所选时间统计，余额为当前值', 'Sort by consumption, requests or Tokens; consumption and credits follow the selected period, balances are current')"
+              :title="t('overview.userRankingsAndAccounts')"
+              :description="t('overview.sortByConsumptionRequestsOrTokensConsumptionAndCreditsFollowTheSelectedPeriodBalancesAreCurrent')"
               class="relative min-w-0"
               data-user-accounts
             >
@@ -59,8 +59,8 @@
                     <Input
                       v-model="search"
                       type="search"
-                      :placeholder="t('搜索用户', 'Search users')"
-                      :aria-label="t('搜索用户', 'Search users')"
+                      :placeholder="t('userStats.search.user')"
+                      :aria-label="t('userStats.search.user')"
                       class="h-8 w-full text-xs border-border/60 pl-8"
                     />
                   </div>
@@ -70,7 +70,7 @@
                     variant="outline"
                     class="h-8 text-xs"
                   >
-                    {{ t('查询', 'Search') }}
+                    {{ t('overview.search') }}
                   </Button>
                 </form>
               </template>
@@ -78,7 +78,7 @@
                 v-if="query.search"
                 class="border-b border-border/60 px-4 py-3 text-xs text-muted-foreground sm:px-6"
               >
-                {{ t('上方汇总与账目仅包含匹配的用户', 'The summary and accounts include matching users only') }}
+                {{ t('overview.theSummaryAndAccountsIncludeMatchingUsersOnly') }}
               </p>
               <div
                 class="min-w-0"
@@ -88,10 +88,10 @@
                   <TableHeader>
                     <TableRow class="border-b border-border/60 hover:bg-transparent">
                       <TableHead class="h-12 w-16 font-semibold">
-                        {{ t('序号', 'No.') }}
+                        {{ t('overview.no') }}
                       </TableHead>
                       <TableHead class="h-12 font-semibold">
-                        {{ t('用户', 'User') }}
+                        {{ t('auth.role.user') }}
                       </TableHead>
                       <SortableTableHead
                         v-for="column in columns"
@@ -107,16 +107,16 @@
                         {{ column.label }}
                       </SortableTableHead>
                       <TableHead class="h-12 font-semibold text-right">
-                        {{ t('充值', 'Recharges') }}
+                        {{ t('overview.recharges') }}
                       </TableHead>
                       <TableHead class="h-12 font-semibold text-right">
-                        {{ t('余额', 'Balance') }}
+                        {{ t('ui.balance') }}
                       </TableHead>
                       <TableHead class="h-12 font-semibold text-right">
-                        {{ t('最近使用', 'Last used') }}
+                        {{ t('ui.lastUsed39a9046') }}
                       </TableHead>
                       <TableHead class="h-12 font-semibold text-right">
-                        {{ t('操作', 'Actions') }}
+                        {{ t('ui.nodeActions') }}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -143,7 +143,7 @@
                         <span
                           v-if="!user.is_active"
                           class="ml-2 text-xs text-muted-foreground"
-                        >{{ t('停用', 'Disabled') }}</span>
+                        >{{ t('overview.disabled') }}</span>
                         <p class="mt-0.5 break-words text-xs text-muted-foreground">
                           {{ user.email }}
                         </p>
@@ -174,8 +174,8 @@
                           type="button"
                           variant="ghost"
                           size="icon"
-                          :title="t('查看', 'View') + ' ' + user.username + ' ' + t('使用趋势', 'usage trend')"
-                          :aria-label="t('查看', 'View') + ' ' + user.username + ' ' + t('使用趋势', 'usage trend')"
+                          :title="t('overview.view') + ' ' + user.username + ' ' + t('overview.usageTrend')"
+                          :aria-label="t('overview.view') + ' ' + user.username + ' ' + t('overview.usageTrend')"
                           @click="selectUser(user)"
                         >
                           <ChartNoAxesCombined class="h-4 w-4" />
@@ -184,8 +184,8 @@
                           type="button"
                           variant="ghost"
                           size="icon"
-                          :title="t('查看', 'View') + ' ' + user.username + ' ' + t('账目', 'account')"
-                          :aria-label="t('查看', 'View') + ' ' + user.username + ' ' + t('账目', 'account')"
+                          :title="t('overview.viewUserAccount', { name: user.username })"
+                          :aria-label="t('overview.viewUserAccount', { name: user.username })"
                           @click="accountUser = user"
                         >
                           <ReceiptText class="h-4 w-4" />
@@ -197,7 +197,7 @@
                         colspan="9"
                         class="py-12 text-center text-muted-foreground"
                       >
-                        {{ loading ? t('加载中', 'Loading') : error ? t('用户账目暂不可用', 'User accounts unavailable') : t('没有符合条件的用户', 'No matching users') }}
+                        {{ loading ? t('overview.loading') : error ? t('overview.userAccountsUnavailable') : t('overview.noMatchingUsers') }}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -246,9 +246,9 @@ import { useUserAnalysisRefresh } from '@/features/overview/users/useUserAnalysi
 import { presetRange, rangeFromQuery, useOverviewQuery } from '@/features/overview/query'
 import { useOverviewRequest } from '@/features/overview/useOverviewRequest'
 import { useOverviewExport } from '@/features/overview/useOverviewExport'
-import { useOverviewI18n } from '@/features/overview/i18n'
 import { count, money, timestamp } from '@/features/overview/format'
-const { t } = useOverviewI18n()
+import { useI18n } from '@/i18n'
+const { t } = useI18n()
 const { query, range, relativePreset, refreshRange, setRange, patch } = useOverviewQuery('today', { rolling: true })
 const { revision, autoRefresh, refreshTitle, refreshAll, toggleAutoRefresh } = useUserAnalysisRefresh(refreshRange)
 const search = ref(query.value.search || '')
@@ -266,7 +266,7 @@ const requestQuery = computed(() => ({
 const scope = computed(() => JSON.stringify({ ...requestQuery.value, ...(relativePreset.value ? { from: undefined, to: undefined, preset: relativePreset.value } : {}) }))
 const { data, loading, error } = useOverviewRequest(() => JSON.stringify([requestQuery.value, revision.value]), signal => overviewApi.users(requestQuery.value, signal), { scopeKey: scope })
 const { exporting, exportError, exportCsv } = useOverviewExport()
-const columns = computed(() => [{ key: 'billable_amount', label: t('消费', 'Consumption') }, { key: 'request_count', label: t('请求数', 'Requests') }, { key: 'total_tokens', label: 'Tokens' }])
+const columns = computed(() => [{ key: 'billable_amount', label: t('overview.consumption') }, { key: 'request_count', label: t('stats.metric.requests') }, { key: 'total_tokens', label: 'Tokens' }])
 function sameRange(left: DateRangeParams, right: typeof range.value): boolean {
   return left.from === right.from && left.to === right.to && (left.timezone || right.timezone) === right.timezone
 }
