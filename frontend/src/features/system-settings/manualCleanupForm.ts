@@ -1,3 +1,5 @@
+import { translate as t } from '@/i18n'
+
 export const MANUAL_USAGE_CLEANUP_CONFIRM_PHRASE = '确认清理'
 
 export type ManualCleanupMode = 'policy' | 'older_than_days' | 'before_now'
@@ -44,4 +46,18 @@ export function normalizeManualCleanupTargets(
 
 export function defaultManualCleanupTargets(mode: ManualCleanupMode): ManualCleanupTarget[] {
   return allowedTargetsForMode(mode)
+}
+
+/** 清理任务状态的文案（processing / failed / 其他视为已完成）。 */
+export function cleanupStatusLabel(status: string): string {
+  if (status === 'processing') return t('ui.running5026a63')
+  if (status === 'failed') return t('ui.failed28384d7')
+  return t('ui.completed')
+}
+
+/** 清理任务状态对应的文字颜色类。 */
+export function cleanupStatusClass(status: string): string {
+  if (status === 'processing') return 'text-amber-500'
+  if (status === 'failed') return 'text-destructive'
+  return 'text-emerald-500'
 }

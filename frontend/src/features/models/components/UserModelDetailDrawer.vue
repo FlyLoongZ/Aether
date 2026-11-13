@@ -330,7 +330,8 @@ import { formatTokens } from '@/utils/format'
 import ProcessingTierPricingSummary from './ProcessingTierPricingSummary.vue'
 
 import type { PublicGlobalModel } from '@/api/public-models'
-import type { TieredPricingConfig, PricingTier } from '@/api/endpoints/types'
+import type { TieredPricingConfig } from '@/api/endpoints/types'
+import { get1hCachePrice, getFirst1hCachePrice } from '../utils/globalModelPricing'
 
 defineProps<Props>()
 
@@ -370,20 +371,6 @@ function formatTierLimit(limit: number | null | undefined): string {
   if (limit == null) return ''
   return formatTokens(limit)
 }
-
-function get1hCachePrice(tier: PricingTier): string {
-  const ttl1h = tier.cache_ttl_pricing?.find(t => t.ttl_minutes === 60)
-  if (ttl1h) {
-    return `$${ttl1h.cache_creation_price_per_1m.toFixed(2)}`
-  }
-  return '-'
-}
-
-function getFirst1hCachePrice(tieredPricing: TieredPricingConfig | undefined | null): string {
-  if (!tieredPricing?.tiers?.length) return '-'
-  return get1hCachePrice(tieredPricing.tiers[0])
-}
-
 function supportsEmbedding(model: PublicGlobalModel): boolean {
   return model.supports_embedding === true
     || model.supported_capabilities?.includes('embedding') === true

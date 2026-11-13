@@ -185,3 +185,15 @@ export function getResolutionSortWeight(resolution: string): number {
 export function sortResolutionEntries<T>(entries: [string, T][]): [string, T][] {
   return [...entries].sort((a, b) => getResolutionSortWeight(a[0]) - getResolutionSortWeight(b[0]))
 }
+
+/**
+ * 解析逗号分隔的 IP 规则输入。
+ * 空输入返回 null（表示不限制），否则返回去除空白后的条目列表。
+ */
+export function parseIpRulesInput(value: string): string[] | null {
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return items.length > 0 ? items : null
+}

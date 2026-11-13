@@ -921,6 +921,7 @@ import {
 import { useClipboard } from '@/composables/useClipboard'
 import { useClientPagination } from '@/composables/useClientPagination'
 import ApiKeyInstallDialog from '@/features/api-keys/components/ApiKeyInstallDialog.vue'
+import { parseIpRulesInput } from '@/utils/form'
 
 const { success, error: showError } = useToast()
 const { copyToClipboard } = useClipboard()
@@ -1468,12 +1469,5 @@ function formatIpRules(ipRules?: string[] | null): string {
   return ipRules && ipRules.length > 0 ? ipRules.join(', ') : '不限制'
 }
 
-function parseIpRulesInput(value: string): string[] | null {
-  const items = value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-  return items.length > 0 ? items : null
-}
 
 </script>

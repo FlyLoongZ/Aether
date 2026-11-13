@@ -250,13 +250,13 @@
               :href="latestRechargePaymentUrl"
               target="_blank"
               rel="noopener noreferrer"
-              @click.prevent="submitPaymentInstructions(latestRecharge.payment_instructions)"
+              @click.prevent="submitPaymentInstructions(latestRecharge.payment_instructions, paymentHandlers)"
             > {{ t('ui.openPaymentLink') }} </a>
             <button
               v-if="latestRechargeStripeInstructions"
               type="button"
               class="inline-flex text-xs text-primary hover:underline"
-              @click="submitPaymentInstructions(latestRecharge?.payment_instructions)"
+              @click="submitPaymentInstructions(latestRecharge?.payment_instructions, paymentHandlers)"
             >
               {{ t('ui.openStripeCheckout') }}
             </button>
@@ -722,6 +722,7 @@ import { useToast } from '@/composables/useToast'
 import { parseApiError } from '@/utils/errorParser'
 import { log } from '@/utils/logger'
 import { safePaymentTargetUrl } from '@/features/wallet/utils/paymentUrl'
+import { submitPaymentInstructions } from '@/features/wallet/utils/paymentSubmission'
 import {
   getPaymentInstructionString,
   getStripePaymentInstructions,
@@ -762,6 +763,15 @@ const latestRedeem = ref<WalletRedeemResponse | null>(null)
 const rechargeOptions = ref<WalletRechargeOption[]>([])
 const stripeDialogOpen = ref(false)
 const stripePaymentInstructions = ref<PaymentInstructionMap | null>(null)
+
+// 统一支付提交入口的回调：命中 Stripe 时打开弹窗，地址不可信时提示错误。
+const paymentHandlers = {
+  onStripeInstructions: (instructions: PaymentInstructionMap) => {
+    stripePaymentInstructions.value = instructions
+    stripeDialogOpen.value = true
+  },
+  onUnsafeUrl: () => showError(t('ui.thePaymentGatewayReturnedAnUnsafePaymentUrl')),
+}
 
 const flowItems = ref<FlowItem[]>([])
 const todayUsage = ref<DailyUsageRecord | null>(null)
@@ -1252,7 +1262,7 @@ async function submitRecharge() {
     success(t('ui.topUpOrderCreated'))
     await loadOrders()
     activeTab.value = 'orders'
-    submitPaymentInstructions(latestRecharge.value.payment_instructions)
+    submitPaymentInstructions(latestRecharge.value.payment_instructions, paymentHandlers)
     rechargeForm.idempotency_key = ''
     rechargeIdempotencyFingerprint = ''
   } catch (error) {
@@ -1263,60 +1273,6 @@ async function submitRecharge() {
   }
 }
 
-function submitPaymentInstructions(instructions: Record<string, unknown> | null | undefined) {
-  if (!instructions) return
-  const stripeInstructions = getStripePaymentInstructions(instructions)
-  if (stripeInstructions) {
-    stripePaymentInstructions.value = instructions
-    stripeDialogOpen.value = true
-    return
-  }
-  const paymentUrl = getPaymentInstructionString(instructions, 'payment_url')
-  if (!paymentUrl) return
-  const safePaymentUrl = safePaymentTargetUrl(paymentUrl)
-  if (!safePaymentUrl) {
-    showError(t('ui.thePaymentGatewayReturnedAnUnsafePaymentUrl'))
-    return
-  }
-  const paymentParams = instructions.payment_params
-  if (paymentParams && typeof paymentParams === 'object' && !Array.isArray(paymentParams)) {
-    submitPaymentForm(safePaymentUrl, paymentParams as Record<string, unknown>)
-    return
-  }
-  const opened = window.open(safePaymentUrl, '_blank', 'noopener,noreferrer')
-  if (!opened) {
-    window.location.href = safePaymentUrl
-  }
-}
-
-function submitPaymentForm(url: string, params: Record<string, unknown>) {
-  const safeUrl = safePaymentTargetUrl(url)
-  if (!safeUrl) {
-    showError(t('ui.thePaymentGatewayReturnedAnUnsafePaymentUrl'))
-    return
-  }
-  const form = document.createElement('form')
-  form.action = safeUrl
-  form.method = 'POST'
-  if (!isSafariBrowser()) {
-    form.target = '_blank'
-  }
-  Object.entries(params).forEach(([key, value]) => {
-    if (value === null || value === undefined) return
-    const input = document.createElement('input')
-    input.type = 'hidden'
-    input.name = key
-    input.value = String(value)
-    form.appendChild(input)
-  })
-  document.body.appendChild(form)
-  form.submit()
-  document.body.removeChild(form)
-}
-
-function isSafariBrowser(): boolean {
-  return navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome')
-}
 
 async function handleStripePaymentSuccess() {
   info('支付已提交，正在等待充值到账')

@@ -242,6 +242,7 @@ import {
 import type { BalanceExtraItem } from '@/features/providers/auth-templates'
 import { useI18n } from '@/i18n'
 import { safeExternalWebUrl } from '@/utils/navigationSecurity'
+import { isKeyManagedProviderType } from '../utils/providerTypeUtils'
 
 const props = defineProps<{
   provider: ProviderWithEndpointsSummary
@@ -317,7 +318,6 @@ function handleDescriptionKeydown(event: KeyboardEvent) {
 }
 
 function getCredentialLabel(provider: ProviderWithEndpointsSummary): string {
-  const providerType = String(provider.provider_type || '').trim().toLowerCase()
-  return providerType && providerType !== 'custom' ? t('ui.account') : t('ui.key')
+  return isKeyManagedProviderType(provider.provider_type) ? t('ui.key') : t('ui.account')
 }
 </script>

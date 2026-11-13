@@ -1,4 +1,5 @@
 import type { GlobalModelResponse } from '@/api/global-models'
+import type { PricingTier, TieredPricingConfig } from '@/api/endpoints/types'
 import { sortResolutionEntries } from '@/utils/form'
 
 // 全局模型列表里的定价摘要展示
@@ -48,4 +49,16 @@ export function getVideoPricingTooltip(model: GlobalModelResponse): string {
   if (!priceByResolution || typeof priceByResolution !== 'object') return ''
   const entries = sortResolutionEntries(Object.entries(priceByResolution))
   return entries.map(([res, price]) => `${res}: $${(price as number).toFixed(4)}/s`).join('\n')
+}
+
+/** 阶梯内 1 小时缓存创建价格（未配置时返回 '-'）。 */
+export function get1hCachePrice(tier: PricingTier): string {
+  const ttl1h = tier.cache_ttl_pricing?.find(item => item.ttl_minutes === 60)
+  return ttl1h ? `$${ttl1h.cache_creation_price_per_1m.toFixed(2)}` : '-'
+}
+
+/** 第一阶梯的 1 小时缓存创建价格。 */
+export function getFirst1hCachePrice(tieredPricing: TieredPricingConfig | undefined | null): string {
+  if (!tieredPricing?.tiers?.length) return '-'
+  return get1hCachePrice(tieredPricing.tiers[0])
 }

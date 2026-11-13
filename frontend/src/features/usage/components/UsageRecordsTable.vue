@@ -895,7 +895,6 @@ import {
   isUsageWebSocket,
 } from '../utils/status'
 import { useRowClick } from '@/composables/useRowClick'
-import { useDarkMode } from '@/composables/useDarkMode'
 import { API_FORMAT_ORDER, formatApiFormat } from '@/api/endpoints/types/api-format'
 import { formatClientFamily } from '@/features/usage/utils/clientFamily'
 import { formatUsageWebSocketTransportTitle as getWebSocketTransportTitle } from '../utils/websocketTransport'
@@ -932,6 +931,7 @@ import UsageModelDisplay from './UsageModelDisplay.vue'
 import UsageCostDisplay from './UsageCostDisplay.vue'
 import UsageProviderDisplay from './UsageProviderDisplay.vue'
 import UsageRecordMobileCard from './UsageRecordMobileCard.vue'
+import { useStreamBadgeVariant } from '../composables/useStreamBadgeVariant'
 
 export interface UserOption {
   id: string
@@ -1229,15 +1229,8 @@ onBeforeUnmount(() => {
 
 // 使用复用的行点击逻辑
 const { handleMouseDown, shouldTriggerRowClick } = useRowClick()
-const { isDark } = useDarkMode()
 
-// 暗色模式下交换"流式"与"标准"徽章的填充/描边样式
-function streamBadgeVariant(isStream: boolean): 'secondary' | 'outline' {
-  if (isDark.value) {
-    return isStream ? 'outline' : 'secondary'
-  }
-  return isStream ? 'secondary' : 'outline'
-}
+const streamBadgeVariant = useStreamBadgeVariant()
 
 function handleRowMouseDown(event: MouseEvent, id: string) {
   handleMouseDown(event)

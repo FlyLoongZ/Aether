@@ -551,7 +551,6 @@ import axios from 'axios'
 import Button from '@/components/ui/button.vue'
 import Drawer from '@/components/ui/drawer/Drawer.vue'
 import { useClipboard } from '@/composables/useClipboard'
-import { useDarkMode } from '@/composables/useDarkMode'
 import Card from '@/components/ui/card.vue'
 import Badge from '@/components/ui/badge.vue'
 import Skeleton from '@/components/ui/skeleton.vue'
@@ -613,6 +612,8 @@ import HorizontalRequestTimeline from './HorizontalRequestTimeline.vue'
 import ReplayDialog from './ReplayDialog.vue'
 import RequestCostOverviewCard from './RequestCostOverviewCard.vue'
 import UsageModelDisplay from './UsageModelDisplay.vue'
+import { useDarkMode } from '@/composables/useDarkMode'
+import { useStreamBadgeVariant } from '../composables/useStreamBadgeVariant'
 
 const props = defineProps<{
   isOpen: boolean
@@ -975,14 +976,9 @@ watch(activeTab, (newTab) => {
   dataSource.value = getDefaultDataSourceForTab(newTab)
 })
 
-const { isDark } = useDarkMode()
 
-function streamBadgeVariant(isStream: boolean): 'secondary' | 'outline' {
-  if (isDark.value) {
-    return isStream ? 'outline' : 'secondary'
-  }
-  return isStream ? 'secondary' : 'outline'
-}
+const { isDark } = useDarkMode()
+const streamBadgeVariant = useStreamBadgeVariant()
 
 const traceRequestMetadata = computed<Record<string, unknown> | null>(() => {
   const meta = detail.value?.metadata

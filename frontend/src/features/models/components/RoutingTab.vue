@@ -611,6 +611,7 @@ import { parseApiError } from '@/utils/errorParser'
 import { useToast } from '@/composables/useToast'
 import { useCountdownTimer, getProbeCountdown } from '@/composables/useCountdownTimer'
 import { MAX_MODEL_NAME_LENGTH, createLRURegexCache, getCompiledModelMappingRegex } from '@/features/models/utils/model-mapping-regex'
+import { getHealthScoreBarColor, getHealthScoreTextColor } from '@/utils/health'
 
 const props = defineProps<{
   globalModelId: string
@@ -1195,20 +1196,6 @@ function getGlobalKeyCardClass(entry: GlobalKeyEntry, groupIndex: number, keyInd
     return 'bg-primary/5 border border-primary/30 shadow-sm'
   }
   return 'bg-muted/20 border border-border/50 hover:border-border'
-}
-
-// 健康度进度条颜色（score 为 0-1 小数格式）
-function getHealthScoreBarColor(score: number): string {
-  if (score >= 0.8) return 'bg-green-500 dark:bg-green-400'
-  if (score >= 0.5) return 'bg-yellow-500 dark:bg-yellow-400'
-  return 'bg-red-500 dark:bg-red-400'
-}
-
-// 健康度文字颜色（score 为 0-1 小数格式）
-function getHealthScoreTextColor(score: number): string {
-  if (score >= 0.8) return 'text-green-600 dark:text-green-400'
-  if (score >= 0.5) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-red-600 dark:text-red-400'
 }
 
 // 获取计费标签

@@ -252,6 +252,7 @@ import {
   isPlanEntitlementReplacementCandidate,
   billingEntitlementLabels,
   formatBillingPlanDuration,
+  hasPackageEntitlement,
 } from '@/utils/billingEntitlements'
 import {
   formatTokens,
@@ -266,6 +267,7 @@ import {
 import { log } from '@/utils/logger'
 import { useBatchSelection } from '@/composables/useBatchSelection'
 import { useI18n } from '@/i18n'
+import { parseIpRulesInput } from '@/utils/form'
 
 const { success, error } = useToast()
 const { confirmDanger } = useConfirm()
@@ -554,13 +556,6 @@ function entitlementLabels(items: BillingEntitlement[] | undefined): string[] {
   return billingEntitlementLabels(items, t)
 }
 
-function hasPackageEntitlement(items: BillingEntitlement[] | undefined): boolean {
-  return (items || []).some((item) =>
-    item.type === 'daily_quota'
-    || item.type === 'membership_group'
-    || item.type === 'usage_policy'
-  )
-}
 
 async function loadUserWallets(options: { cacheTtlMs?: number } = {}) {
   const requestId = ++userWalletsRequestId
@@ -645,13 +640,6 @@ function formatIpRules(ipRules?: string[] | null): string {
   return ipRules && ipRules.length > 0 ? ipRules.join(', ') : t('ui.noRestriction')
 }
 
-function parseIpRulesInput(value: string): string[] | null {
-  const items = value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-  return items.length > 0 ? items : null
-}
 
 function formatUserEffectiveRateLimitSource(user: User): string {
   const source = user.effective_policy?.rate_limit

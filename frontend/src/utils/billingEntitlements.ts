@@ -181,3 +181,12 @@ export function formatBillingPlanDuration(unit: BillingDurationUnit, value: numb
   }
   return `${value}${labels[unit] ?? labels.month}`
 }
+
+/** 是否包含套餐类权益（日额度 / 会员分组 / 用量策略）。 */
+export function hasPackageEntitlement(items: BillingEntitlement[] | undefined): boolean {
+  return (items || []).some((item) =>
+    item.type === 'daily_quota'
+    || item.type === 'membership_group'
+    || item.type === 'usage_policy'
+  )
+}
