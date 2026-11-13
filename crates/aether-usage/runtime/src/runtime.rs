@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex as StdMutex, Weak};
 use std::time::{Duration, Instant};
 
 use aether_contracts::ExecutionTelemetry;
-use aether_data_contracts::repository::usage::{CapturedBody, UpsertUsageRecord};
+use aether_data_contracts::repository::usage::{
+    CapturedBody, UpsertUsageRecord, UsageBodyField, MAX_USAGE_BODY_BYTES,
+};
 use aether_data_contracts::DataLayerError;
 use aether_runtime_state::{RuntimeQueueStats, RuntimeQueueStore};
 use async_trait::async_trait;
@@ -57,6 +59,10 @@ pub struct UsageBodyCapturePolicy {
     pub record_level: UsageRequestRecordLevel,
     pub compact_base64_images: bool,
     pub max_body_bytes: Option<usize>,
+    /// When true, captured bodies are written to the body file store instead of
+    /// `usage_http_bodies`. The admin switch is the authority; the store path
+    /// is a process-level environment variable.
+    pub file_store_enabled: bool,
 }
 
 impl Default for UsageBodyCapturePolicy {
@@ -65,8 +71,42 @@ impl Default for UsageBodyCapturePolicy {
             record_level: UsageRequestRecordLevel::Basic,
             compact_base64_images: false,
             max_body_bytes: None,
+            file_store_enabled: false,
         }
     }
+}
+
+fn take_body(
+    data: &mut crate::event::UsageEventData,
+    side: UsageBodyField,
+) -> Option<CapturedBody> {
+    match side {
+        UsageBodyField::RequestBody => data.request_body.take(),
+        UsageBodyField::ProviderRequestBody => data.provider_request_body.take(),
+        UsageBodyField::ResponseBody => data.response_body.take(),
+        UsageBodyField::ClientResponseBody => data.client_response_body.take(),
+    }
+}
+
+fn set_body(data: &mut crate::event::UsageEventData, side: UsageBodyField, body: CapturedBody) {
+    let slot = match side {
+        UsageBodyField::RequestBody => &mut data.request_body,
+        UsageBodyField::ProviderRequestBody => &mut data.provider_request_body,
+        UsageBodyField::ResponseBody => &mut data.response_body,
+        UsageBodyField::ClientResponseBody => &mut data.client_response_body,
+    };
+    *slot = Some(body);
+}
+
+fn body_capture_source_bytes(
+    metadata: Option<&serde_json::Value>,
+    side: UsageBodyField,
+) -> Option<u64> {
+    metadata?
+        .get("body_capture")?
+        .get(side.as_capture_key())?
+        .get("source_bytes")?
+        .as_u64()
 }
 
 #[async_trait]
@@ -97,6 +137,7 @@ pub struct UsageRuntime {
     config: UsageRuntimeConfig,
     shutdown: Arc<UsageShutdownState>,
     body_policy_cache: Arc<tokio::sync::Mutex<Option<UsageBodyCapturePolicyCacheEntry>>>,
+    body_file_store: Option<Arc<aether_body_store::BodyFileStore>>,
     enqueue_retry: Arc<UsageEnqueueRetryDispatcher>,
     worker_supervisor_state: Arc<UsageWorkerSupervisorState>,
     worker_record_gate: Option<Arc<UsageWorkerRecordConcurrencyGate>>,
@@ -3459,6 +3500,7 @@ impl UsageRuntime {
             config: UsageRuntimeConfig::disabled(),
             shutdown: Arc::new(UsageShutdownState::default()),
             body_policy_cache: Arc::new(tokio::sync::Mutex::new(None)),
+            body_file_store: None,
             enqueue_retry: UsageEnqueueRetryDispatcher::disabled(),
             worker_supervisor_state: Arc::new(UsageWorkerSupervisorState::default()),
             worker_record_gate: None,
@@ -3524,6 +3566,7 @@ impl UsageRuntime {
             config,
             shutdown,
             body_policy_cache: Arc::new(tokio::sync::Mutex::new(None)),
+            body_file_store: None,
             enqueue_retry,
             worker_supervisor_state: Arc::new(UsageWorkerSupervisorState::default()),
             worker_record_gate,
@@ -3543,6 +3586,13 @@ impl UsageRuntime {
 
     pub fn is_enabled(&self) -> bool {
         self.config.enabled
+    }
+
+    /// Installs the process-local body file store. The store is only used when
+    /// the capture policy's `file_store_enabled` switch is on.
+    pub fn with_body_file_store(mut self, store: Arc<aether_body_store::BodyFileStore>) -> Self {
+        self.body_file_store = Some(store);
+        self
     }
 
     /// Call before spawning a request finalizer that can outlive its HTTP body.
@@ -4490,7 +4540,10 @@ impl UsageRuntime {
         // Denied captures count even when the eventual Basic policy disables them.
         prepare_event_capture_memory(event, Arc::clone(&budget));
         match self.cached_body_capture_policy(data).await {
-            Ok(policy) => apply_usage_body_capture_policy_to_event(policy, event),
+            Ok(policy) => {
+                apply_usage_body_capture_policy_to_event(policy, event);
+                self.persist_file_backed_bodies(policy, event).await;
+            }
             Err(err) => {
                 warn!(
                     event_name = "usage_body_capture_policy_read_failed",
@@ -4504,6 +4557,140 @@ impl UsageRuntime {
             }
         }
         event.data.apply_capture_memory_budget(budget);
+    }
+
+    /// Writes the policy-processed bytes to the body file store and replaces
+    /// them with a `CapturedBody::File` marker on the wire.
+    ///
+    /// The file is written before the usage event is enqueued, so a large body
+    /// never has to fit in the Redis payload. A failed write degrades the side
+    /// to `Unavailable`; it never fails the accounting write.
+    async fn persist_file_backed_bodies(
+        &self,
+        policy: UsageBodyCapturePolicy,
+        event: &mut UsageEvent,
+    ) {
+        if !policy.file_store_enabled {
+            return;
+        }
+        let Some(store) = self.body_file_store.as_ref() else {
+            warn!(
+                event_name = "usage_body_file_store_not_configured",
+                log_type = "event",
+                request_id = %event.request_id,
+                "body file store is enabled but no store path is configured; marking captured bodies unavailable"
+            );
+            for side in [
+                UsageBodyField::RequestBody,
+                UsageBodyField::ProviderRequestBody,
+                UsageBodyField::ResponseBody,
+                UsageBodyField::ClientResponseBody,
+            ] {
+                let Some(body) = take_body(&mut event.data, side) else {
+                    continue;
+                };
+                if matches!(body, CapturedBody::Bytes { .. }) {
+                    set_body(&mut event.data, side, CapturedBody::Unavailable);
+                    crate::body_capture::mark_body_capture_unavailable(
+                        &mut event.data.request_metadata,
+                        side,
+                        "body_file_store_not_configured",
+                    );
+                } else {
+                    set_body(&mut event.data, side, body);
+                }
+            }
+            return;
+        };
+        let Some(day) = aether_body_store::day_from_unix_ms(event.timestamp_ms) else {
+            // A timestamp outside the representable range must not silently
+            // switch this request back to database storage.
+            warn!(
+                event_name = "usage_body_file_store_invalid_timestamp",
+                log_type = "event",
+                request_id = %event.request_id,
+                timestamp_ms = event.timestamp_ms,
+                "usage runtime could not derive a body file day; keeping the bodies inline"
+            );
+            return;
+        };
+
+        for side in [
+            UsageBodyField::RequestBody,
+            UsageBodyField::ProviderRequestBody,
+            UsageBodyField::ResponseBody,
+            UsageBodyField::ClientResponseBody,
+        ] {
+            let Some(body) = take_body(&mut event.data, side) else {
+                continue;
+            };
+            let CapturedBody::Bytes {
+                mut bytes,
+                encoding,
+                truncated,
+            } = body
+            else {
+                set_body(&mut event.data, side, body);
+                continue;
+            };
+
+            // The file store has a hard read limit, so a body above it would be
+            // written and then never loadable. Truncate here and keep the
+            // capture honest: the marker says truncated, `source_bytes` keeps
+            // the original size.
+            let truncated = if bytes.len() > MAX_USAGE_BODY_BYTES {
+                let keep = crate::body_capture::truncate_on_char_boundary(
+                    &bytes,
+                    MAX_USAGE_BODY_BYTES,
+                    encoding,
+                );
+                bytes.truncate(keep);
+                true
+            } else {
+                truncated
+            };
+
+            let stored_bytes = bytes.len() as u64;
+            let source_bytes =
+                body_capture_source_bytes(event.data.request_metadata.as_ref(), side);
+            match store
+                .put(day, &event.request_id, side, encoding, &bytes)
+                .await
+            {
+                Ok(()) => {
+                    set_body(
+                        &mut event.data,
+                        side,
+                        CapturedBody::File {
+                            encoding,
+                            truncated,
+                            stored_bytes,
+                            source_bytes,
+                        },
+                    );
+                    crate::body_capture::mark_body_capture_storage_file(
+                        &mut event.data.request_metadata,
+                        side,
+                    );
+                }
+                Err(error) => {
+                    warn!(
+                        event_name = "usage_body_file_write_failed",
+                        log_type = "event",
+                        request_id = %event.request_id,
+                        side = side.file_stem(),
+                        error = %error,
+                        "usage runtime failed to write captured body to the file store; marking it unavailable"
+                    );
+                    set_body(&mut event.data, side, CapturedBody::Unavailable);
+                    crate::body_capture::mark_body_capture_unavailable(
+                        &mut event.data.request_metadata,
+                        side,
+                        "body_file_write_failed",
+                    );
+                }
+            }
+        }
     }
 
     pub async fn body_capture_policy_for<T>(

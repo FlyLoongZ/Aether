@@ -171,6 +171,15 @@ pub fn sanitize_usage_request_metadata_object(source: &Map<String, Value>) -> Op
                 if let Some(encoding) = entry.get("encoding").and_then(Value::as_str) {
                     target_entry.insert("encoding".into(), Value::String(encoding.into()));
                 }
+                // Only the file store marker is allowed; its absence means the
+                // bytes live in `usage_http_bodies`.
+                if entry
+                    .get("storage")
+                    .and_then(Value::as_str)
+                    .is_some_and(|storage| storage.trim().eq_ignore_ascii_case("file"))
+                {
+                    target_entry.insert("storage".into(), Value::String("file".into()));
+                }
                 if !target_entry.is_empty() {
                     return Some((key.clone(), Value::Object(target_entry)));
                 }
@@ -1942,6 +1951,30 @@ mod tests {
             .pointer("/realtime_session/authorization")
             .is_none());
         assert!(metadata.pointer("/realtime_session/nested").is_none());
+    }
+
+    #[test]
+    fn persistence_projection_keeps_body_file_storage_marker() {
+        let projected = sanitize_usage_request_metadata(Some(json!({
+            "body_capture": {
+                "request": {
+                    "state": "inline",
+                    "storage": "file",
+                    "stored_bytes": 12,
+                    "source_bytes": 12
+                },
+                "response": {
+                    "state": "disabled",
+                    "storage": "db"
+                }
+            }
+        })))
+        .expect("body capture projection");
+
+        assert_eq!(projected["body_capture"]["request"]["storage"], "file");
+        assert!(projected["body_capture"]["response"]
+            .get("storage")
+            .is_none());
     }
 
     #[test]

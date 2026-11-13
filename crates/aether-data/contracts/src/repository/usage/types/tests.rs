@@ -1,13 +1,13 @@
 use super::{
-    extract_provider_actual_service_tier_from_response,
+    body_capture_metadata_storage, extract_provider_actual_service_tier_from_response,
     extract_provider_response_model_from_bodies, extract_provider_service_tier_from_body,
     for_each_sse_data_payload, normalize_provider_reasoning_effort,
     normalize_provider_response_model, normalize_provider_service_tier,
-    resolve_provider_cache_ttl_minutes, BodyEncoding, CapturedBody,
-    StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState, UsageBodyCaptureStorage,
-    UsageBodyField, UsageProviderPerformanceQuery, REALTIME_SESSION_METADATA_KEY,
-    USAGE_AVAILABLE_METADATA_KEY, USAGE_PRICING_AVAILABLE_METADATA_KEY,
-    WEBSOCKET_MODE_METADATA_KEY, WEBSOCKET_TRANSPORT_METADATA_KEY,
+    resolve_provider_cache_ttl_minutes, BodyEncoding, CapturedBody, StoredRequestUsageAudit,
+    UpsertUsageRecord, UsageBodyCaptureState, UsageBodyCaptureStorage, UsageBodyField,
+    UsageProviderPerformanceQuery, REALTIME_SESSION_METADATA_KEY, USAGE_AVAILABLE_METADATA_KEY,
+    USAGE_PRICING_AVAILABLE_METADATA_KEY, WEBSOCKET_MODE_METADATA_KEY,
+    WEBSOCKET_TRANSPORT_METADATA_KEY,
 };
 use serde_json::{json, Value};
 
@@ -1104,8 +1104,58 @@ fn sse_data_payloads_keep_content_indentation() {
 }
 
 #[test]
+fn body_capture_metadata_storage_reads_only_the_file_marker() {
+    let metadata = json!({
+        "body_capture": {
+            "request": {"state": "inline", "storage": "file"},
+            "response": {"state": "inline", "storage": "db"}
+        }
+    });
+
+    assert_eq!(
+        body_capture_metadata_storage(Some(&metadata), UsageBodyField::RequestBody),
+        Some(UsageBodyCaptureStorage::File)
+    );
+    assert_eq!(
+        body_capture_metadata_storage(Some(&metadata), UsageBodyField::ResponseBody),
+        None
+    );
+    assert_eq!(
+        body_capture_metadata_storage(None, UsageBodyField::RequestBody),
+        None
+    );
+}
+
+#[test]
+fn file_bodies_round_trip_on_the_wire() {
+    let body = CapturedBody::File {
+        encoding: BodyEncoding::Sse,
+        truncated: true,
+        stored_bytes: 42,
+        source_bytes: Some(100),
+    };
+    let encoded = serde_json::to_value(&body).expect("file body serializes");
+    assert_eq!(encoded["file"], true);
+    assert_eq!(encoded["encoding"], "sse");
+    assert_eq!(encoded["truncated"], true);
+    assert_eq!(encoded["stored_bytes"], 42);
+    assert_eq!(encoded["source_bytes"], 100);
+
+    let decoded: CapturedBody = serde_json::from_value(encoded).expect("file body deserializes");
+    assert_eq!(decoded, body);
+    assert_eq!(decoded.encoding(), Some(BodyEncoding::Sse));
+    assert!(decoded.truncated());
+    assert_eq!(
+        decoded.state_label(),
+        Some(UsageBodyCaptureState::Truncated)
+    );
+    assert!(decoded.bytes().is_none());
+}
+
+#[test]
 fn truncated_json_bodies_survive_the_wire_as_text() {
-    let truncated = CapturedBody::from_bytes(b"{\"model\": \"gpt".to_vec(), BodyEncoding::Json, true);
+    let truncated =
+        CapturedBody::from_bytes(b"{\"model\": \"gpt".to_vec(), BodyEncoding::Json, true);
     let encoded = serde_json::to_value(&truncated).expect("truncated json serializes");
     assert_eq!(encoded["encoding"], "json");
     assert_eq!(encoded["truncated"], true);

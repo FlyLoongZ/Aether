@@ -1,5 +1,6 @@
 use super::{
-    CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState, UsageBodyField,
+    BodyEncoding, CapturedBody, StoredRequestUsageAudit, UpsertUsageRecord, UsageBodyCaptureState,
+    UsageBodyField,
 };
 use serde_json::{Map, Value};
 
@@ -327,7 +328,7 @@ pub fn sanitize_usage_capture_controls_for_persistence(
 /// Stamps `body_capture.<key>` for every side of the record.
 ///
 /// The ledger is the read model's only answer to "was this side captured, and
-/// how completely": list reads never load the payload tables, so a side with
+/// how completely": detail reads never load the payload tables, so a side with
 /// bytes has to say so here or a captured body shows up as never captured. A
 /// byte-carrying side records its state and stored size; a side without bytes
 /// records the reason it is empty.
@@ -349,6 +350,25 @@ fn record_usage_body_capture_states(mut usage: UpsertUsageRecord) -> UpsertUsage
                     field,
                     state,
                     stored_bytes,
+                );
+            }
+            Some(CapturedBody::File {
+                encoding,
+                truncated,
+                stored_bytes,
+                source_bytes,
+            }) => {
+                let encoding = *encoding;
+                let truncated = *truncated;
+                let stored_bytes = *stored_bytes;
+                let source_bytes = *source_bytes;
+                usage.request_metadata = record_body_capture_file_entry(
+                    usage.request_metadata.take(),
+                    field,
+                    encoding,
+                    truncated,
+                    stored_bytes,
+                    source_bytes,
                 );
             }
             _ => {
@@ -394,6 +414,62 @@ fn record_body_capture_payload_entry(
             Value::String(state.as_str().to_string()),
         );
         entry.insert("stored_bytes".to_string(), Value::from(stored_bytes));
+        // A switch back to the database must not leave a stale file marker.
+        entry.remove("storage");
+    }
+    Some(Value::Object(metadata))
+}
+
+/// Records a file-backed side: the state, the storage marker and the sizes.
+///
+/// Unlike the disabled/unavailable path, this keeps `stored_bytes` and
+/// `source_bytes` because the file store is the authoritative copy; the ledger
+/// is the only DB-side record of it.
+fn record_body_capture_file_entry(
+    metadata: Option<Value>,
+    field: UsageBodyField,
+    encoding: BodyEncoding,
+    truncated: bool,
+    stored_bytes: u64,
+    source_bytes: Option<u64>,
+) -> Option<Value> {
+    let mut metadata = metadata
+        .and_then(|value| value.as_object().cloned())
+        .unwrap_or_default();
+    let capture = metadata
+        .entry("body_capture".to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    let Some(capture) = capture.as_object_mut() else {
+        return Some(Value::Object(metadata));
+    };
+    let entry = capture
+        .entry(field.as_capture_key().to_string())
+        .or_insert_with(|| Value::Object(Map::new()));
+    if let Some(entry) = entry.as_object_mut() {
+        entry.insert(
+            "state".to_string(),
+            Value::String(
+                if truncated {
+                    UsageBodyCaptureState::Truncated
+                } else {
+                    UsageBodyCaptureState::Inline
+                }
+                .as_str()
+                .to_string(),
+            ),
+        );
+        entry.insert("storage".to_string(), Value::String("file".to_string()));
+        // The extension is the encoding, so the ledger records it too: it is
+        // the only way to tell which file is the current one when a crash left
+        // more than one extension behind.
+        entry.insert(
+            "encoding".to_string(),
+            Value::String(encoding.as_str().to_string()),
+        );
+        entry.insert("stored_bytes".to_string(), Value::from(stored_bytes));
+        if let Some(source_bytes) = source_bytes {
+            entry.insert("source_bytes".to_string(), Value::from(source_bytes));
+        }
     }
     Some(Value::Object(metadata))
 }
@@ -426,6 +502,7 @@ fn record_body_capture_state(
         );
         entry.remove("encoding");
         entry.remove("stored_bytes");
+        entry.remove("storage");
     }
     Some(Value::Object(metadata))
 }
@@ -1229,15 +1306,47 @@ mod tests {
         assert_eq!(request["state"], json!("inline"));
         assert_eq!(
             request["stored_bytes"].as_u64(),
-            Some(usage.request_body.as_ref().and_then(CapturedBody::bytes).map(|b| b.len() as u64).unwrap_or(0))
+            Some(
+                usage
+                    .request_body
+                    .as_ref()
+                    .and_then(CapturedBody::bytes)
+                    .map(|b| b.len() as u64)
+                    .unwrap_or(0)
+            )
         );
 
         let provider_request = &capture["provider_request"];
         assert_eq!(provider_request["state"], json!("truncated"));
         assert_eq!(provider_request["source_bytes"], json!(4096));
-        assert_eq!(provider_request["reason"], json!("body_capture_limit_exceeded"));
+        assert_eq!(
+            provider_request["reason"],
+            json!("body_capture_limit_exceeded")
+        );
 
         assert_eq!(capture["response"]["state"], json!("disabled"));
+    }
+
+    /// The extension is the encoding, so the ledger records it too. Without
+    /// it, a crash that left two extensions behind has no way to tell which
+    /// file is the current one.
+    #[test]
+    fn capture_control_ledger_records_file_encoding() {
+        let mut usage = usage_with_http_capture();
+        usage.request_body = Some(CapturedBody::File {
+            encoding: BodyEncoding::Sse,
+            truncated: true,
+            stored_bytes: 7,
+            source_bytes: Some(9),
+        });
+
+        let usage = sanitize_usage_capture_controls_for_persistence(usage);
+        let entry = &usage.request_metadata.as_ref().unwrap()["body_capture"]["request"];
+        assert_eq!(entry["storage"], json!("file"));
+        assert_eq!(entry["encoding"], json!("sse"));
+        assert_eq!(entry["state"], json!("truncated"));
+        assert_eq!(entry["stored_bytes"], json!(7));
+        assert_eq!(entry["source_bytes"], json!(9));
     }
 
     #[test]
