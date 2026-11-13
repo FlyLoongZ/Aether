@@ -148,7 +148,7 @@
                   :circuit-breaker-title="getKeyCircuitBreakerTitle(key)"
                   :circuit-probe-countdown="getKeyCircuitProbeCountdown(key)"
                   :health-score-bar-class="getHealthScoreBarColor(key.health_score || 0)"
-                  :health-score-text-class="getHealthScoreColor(key.health_score || 0)"
+                  :health-score-text-class="getHealthScoreTextColor(key.health_score || 0)"
                   :proxy-popover-open="proxyPopoverOpenKeyId === key.id"
                   :proxy-node-name="getKeyProxyNodeName(key) ?? undefined"
                   :saving-proxy="savingProxyKeyId === key.id"
@@ -566,6 +566,7 @@ import {
   readPendingCodexResetCreditIdempotencyKey,
   rememberPendingCodexResetCreditIdempotencyKey,
 } from './codex-reset-credit-display'
+import { getHealthScoreBarColor, getHealthScoreTextColor } from '@/utils/health'
 
 // 扩展端点类型,包含密钥列表
 interface ProviderEndpointWithKeys extends ProviderEndpoint {
@@ -2153,17 +2154,7 @@ function getOAuthStatusTitle(key: EndpointAPIKey): string {
 }
 
 // 健康度颜色
-function getHealthScoreColor(score: number): string {
-  if (score >= 0.8) return 'text-green-600 dark:text-green-400'
-  if (score >= 0.5) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-red-600 dark:text-red-400'
-}
 
-function getHealthScoreBarColor(score: number): string {
-  if (score >= 0.8) return 'bg-green-500 dark:bg-green-400'
-  if (score >= 0.5) return 'bg-yellow-500 dark:bg-yellow-400'
-  return 'bg-red-500 dark:bg-red-400'
-}
 
 function isKeyRecoverable(key: EndpointAPIKey): boolean {
   return Boolean(

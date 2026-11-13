@@ -247,6 +247,7 @@ import {
   type ManualCleanupMode,
   type ManualCleanupTarget,
 } from './manualCleanupForm'
+import { cleanupStatusClass, cleanupStatusLabel } from './manualCleanupForm'
 
 const confirmPhrase = MANUAL_USAGE_CLEANUP_CONFIRM_PHRASE
 
@@ -506,17 +507,6 @@ async function pollTask(taskId: string) {
   }
 }
 
-function cleanupStatusLabel(status: string): string {
-  if (status === 'processing') return t('ui.running5026a63')
-  if (status === 'failed') return t('ui.failed28384d7')
-  return t('ui.completed')
-}
-
-function cleanupStatusClass(status: string): string {
-  if (status === 'processing') return 'text-amber-500'
-  if (status === 'failed') return 'text-destructive'
-  return 'text-emerald-500'
-}
 
 function cleanupSummaryText(summary: Record<string, unknown>): string {
   const total = typeof summary.total === 'number' ? summary.total : null

@@ -372,6 +372,7 @@ import {
   readChatPiiRedactionFeatureSettings,
 } from '@/utils/featureSettings'
 import type { ProviderWithEndpointsSummary, GlobalModelResponse } from '@/api/endpoints/types'
+import { parseIpRulesInput } from '@/utils/form'
 
 export interface StandaloneKeyFormData {
   id?: string
@@ -606,13 +607,6 @@ function handleSubmit() {
   })
 }
 
-function parseIpRulesInput(value: string): string[] | null {
-  const items = value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
-  return items.length > 0 ? items : null
-}
 
 // 设置保存状态
 function setSaving(value: boolean) {

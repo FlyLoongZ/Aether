@@ -556,8 +556,9 @@ import { getGlobalModelRoutingPreview } from '@/api/global-models'
 
 // 使用外部类型定义
 import type { GlobalModelResponse } from '@/api/global-models'
-import type { ModelProviderReference, TieredPricingConfig, PricingTier, ModelRoutingPreviewResponse } from '@/api/endpoints/types'
+import type { ModelProviderReference, TieredPricingConfig, ModelRoutingPreviewResponse } from '@/api/endpoints/types'
 import type { RoutingProviderInfo } from '@/api/global-models'
+import { get1hCachePrice, getFirst1hCachePrice } from '../utils/globalModelPricing'
 
 const props = withDefaults(defineProps<Props>(), {
   hasBlockingDialogOpen: false,
@@ -765,20 +766,6 @@ function formatTierLimit(limit: number | null | undefined): string {
 }
 
 // 获取 1h 缓存价格
-function get1hCachePrice(tier: PricingTier): string {
-  const ttl1h = tier.cache_ttl_pricing?.find(t => t.ttl_minutes === 60)
-  if (ttl1h) {
-    return `$${ttl1h.cache_creation_price_per_1m.toFixed(2)}`
-  }
-  return '-'
-}
-
-// 获取第一阶梯的 1h 缓存价格
-function getFirst1hCachePrice(tieredPricing: TieredPricingConfig | undefined | null): string {
-  if (!tieredPricing?.tiers?.length) return '-'
-  return get1hCachePrice(tieredPricing.tiers[0])
-}
-
 // 监听 open 变化，重置 tab 并加载数据
 watch(() => props.open, (newOpen) => {
   if (newOpen) {

@@ -308,6 +308,7 @@ import Switch from '@/components/ui/switch.vue'
 import { CardSection } from '@/components/layout'
 import ManualCleanupConfirmDialog from './ManualCleanupConfirmDialog.vue'
 import { useToast } from '@/composables/useToast'
+import { cleanupStatusClass, cleanupStatusLabel } from './manualCleanupForm'
 
 defineProps<{
   enableAutoCleanup: boolean
@@ -390,17 +391,6 @@ function cleanupKindLabel(kind: string): string {
   return labels[kind] || kind
 }
 
-function cleanupStatusLabel(status: string): string {
-  if (status === 'processing') return t('ui.running5026a63')
-  if (status === 'failed') return t('ui.failed28384d7')
-  return t('ui.completed')
-}
-
-function cleanupStatusClass(status: string): string {
-  if (status === 'processing') return 'text-amber-500'
-  if (status === 'failed') return 'text-destructive'
-  return 'text-emerald-500'
-}
 
 function formatRunTime(value: number): string {
   if (!value) return '-'

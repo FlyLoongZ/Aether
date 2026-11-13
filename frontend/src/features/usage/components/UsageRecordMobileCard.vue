@@ -207,7 +207,6 @@ import { ShieldCheck, Shuffle, Ban, RefreshCw } from '@lucide/vue'
 import { Badge } from '@/components/ui'
 import { formatTokens } from '@/utils/format'
 import { formatApiFormat } from '@/api/endpoints/types/api-format'
-import { useDarkMode } from '@/composables/useDarkMode'
 import { formatOutputRate } from '../performance'
 import { isUsageRecordFailed, isUsageWebSocket } from '../utils/status'
 import { formatUsageWebSocketTransportTitle as getWebSocketTransportTitle } from '../utils/websocketTransport'
@@ -238,6 +237,7 @@ import ElapsedTimeText from './ElapsedTimeText.vue'
 import UsageModelDisplay from './UsageModelDisplay.vue'
 import UsageCostDisplay from './UsageCostDisplay.vue'
 import UsageProviderDisplay from './UsageProviderDisplay.vue'
+import { useStreamBadgeVariant } from '../composables/useStreamBadgeVariant'
 
 /** 使用记录列表在窄屏下的单条卡片，与桌面表格行展示同一条记录 */
 defineProps<{
@@ -252,13 +252,7 @@ defineEmits<{
 
 const { t } = useI18n()
 
-const { isDark } = useDarkMode()
 
-function streamBadgeVariant(isStream: boolean): 'secondary' | 'outline' {
-  if (isDark.value) {
-    return isStream ? 'outline' : 'secondary'
-  }
-  return isStream ? 'secondary' : 'outline'
-}
+const streamBadgeVariant = useStreamBadgeVariant()
 
 </script>
