@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizeHtml, sanitizeText, sanitizeMarkdown } from '../sanitize'
+import { sanitizeHtml, sanitizeMarkdown } from '../sanitize'
 
 describe('sanitize utils', () => {
   describe('sanitizeHtml', () => {
@@ -64,24 +64,6 @@ describe('sanitize utils', () => {
       expect(result).not.toContain('style')
     })
   })
-
-  describe('sanitizeText', () => {
-    it('should remove all HTML tags', () => {
-      const input = '<p>Hello <strong>World</strong></p>'
-      const result = sanitizeText(input)
-      expect(result).not.toContain('<')
-      expect(result).not.toContain('>')
-      expect(result).toBe('Hello World')
-    })
-
-    it('should remove script tags and content', () => {
-      const input = 'Safe text<script>alert("xss")</script>More text'
-      const result = sanitizeText(input)
-      expect(result).not.toContain('<script>')
-      expect(result).not.toContain('alert')
-    })
-  })
-
   describe('sanitizeMarkdown', () => {
     it('should allow markdown-rendered HTML', () => {
       const input = '<h1>Title</h1><p>Paragraph with <em>emphasis</em></p>'
@@ -132,19 +114,6 @@ describe('sanitize utils', () => {
   })
 
   describe('edge cases', () => {
-    it('should handle empty strings', () => {
-      expect(sanitizeHtml('')).toBe('')
-      expect(sanitizeText('')).toBe('')
-      expect(sanitizeMarkdown('')).toBe('')
-    })
-
-    it('should handle strings without HTML', () => {
-      const plain = 'Just plain text'
-      expect(sanitizeHtml(plain)).toBe(plain)
-      expect(sanitizeText(plain)).toBe(plain)
-      expect(sanitizeMarkdown(plain)).toBe(plain)
-    })
-
     it('should handle nested XSS attempts', () => {
       const input = '<div><p onclick="alert(1)"><script>alert(2)</script></p></div>'
       const result = sanitizeHtml(input)

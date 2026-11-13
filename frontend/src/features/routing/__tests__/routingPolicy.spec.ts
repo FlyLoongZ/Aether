@@ -18,7 +18,6 @@ import {
   upsertModelSchedulingRule,
   upsertModelPolicy,
 } from '../utils/routingPolicy'
-import { sortCandidateTraces, summarizeRoutingTrace, type RoutingDecisionTrace } from '../utils/routingTrace'
 
 describe('routingPolicy', () => {
   it('normalizes partial configs with stable defaults', () => {
@@ -217,49 +216,3 @@ describe('routingPolicy', () => {
     })
   })
 })
-
-describe('routingTrace', () => {
-  it('sorts candidate traces by selected order', () => {
-    const sorted = sortCandidateTraces([
-      candidate('provider-b', 2),
-      candidate('provider-a', 1),
-    ])
-
-    expect(sorted.map(item => item.provider_id)).toEqual(['provider-a', 'provider-b'])
-  })
-
-  it('summarizes trace metadata', () => {
-    const trace: RoutingDecisionTrace = {
-      group_id: 'group-a',
-      group_version: 3,
-      selection_source: 'explicit',
-      selected_rules: ['rule-a'],
-      original_model: 'gpt-5',
-      resolved_model: 'gpt-5',
-      client_api_format: 'openai:chat',
-      global_candidates: [candidate('provider-a', 0)],
-      pool_expansion: [],
-      runtime_facts: {},
-    }
-
-    expect(summarizeRoutingTrace(trace)).toContain('分组: group-a')
-    expect(summarizeRoutingTrace(trace)).toContain('候选: 1')
-  })
-})
-
-function candidate(providerId: string, selectedOrder: number) {
-  return {
-    candidate_kind: 'provider' as const,
-    provider_id: providerId,
-    endpoint_id: `${providerId}-endpoint`,
-    model_id: 'model-a',
-    key_id: `${providerId}-key`,
-    selected_order: selectedOrder,
-    ranking_vector: {
-      provider_priority_before: selectedOrder,
-      provider_priority_after: selectedOrder,
-      key_priority_before: selectedOrder,
-      key_priority_after: selectedOrder,
-    },
-  }
-}

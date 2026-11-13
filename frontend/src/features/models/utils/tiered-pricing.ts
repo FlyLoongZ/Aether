@@ -42,19 +42,6 @@ export function tieredPricingHasImageOutputPricing(
   })
 }
 
-export function tieredPricingHasCacheTtl(
-  pricing: RootPricingCatalog | null | undefined,
-  ttlMinutes: number,
-): boolean {
-  return pricingCatalogs(pricing).some(catalog => (
-    Array.isArray(catalog.tiers)
-    && catalog.tiers.some(tier => (
-      Array.isArray(tier.cache_ttl_pricing)
-      && tier.cache_ttl_pricing.some(entry => entry.ttl_minutes === ttlMinutes)
-    ))
-  ))
-}
-
 function toFinitePrice(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) {

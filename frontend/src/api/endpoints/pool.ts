@@ -11,40 +11,6 @@ import type { ProviderKeyStatusSnapshot } from './types/statusSnapshot'
 
 const POOL_BATCH_ACTION_TIMEOUT_MS = 5 * 60 * 1000
 
-export interface PoolKeyStatus {
-  key_id: string
-  key_name: string
-  is_active: boolean
-  cooldown_reason: string | null
-  cooldown_ttl_seconds: number | null
-  cost_window_usage: number
-  cost_limit: number | null
-  sticky_sessions: number
-  lru_score: number | null
-}
-
-export interface PoolStatusResponse {
-  provider_id: string
-  provider_name: string
-  pool_enabled: boolean
-  total_keys: number
-  total_sticky_sessions: number
-  provider_hot_count: number
-  provider_desired_hot: number
-  provider_in_flight: number
-  provider_ema_in_flight: number
-  provider_burst_pending: boolean
-  keys: PoolKeyStatus[]
-}
-
-/**
- * 获取 Provider 的号池状态
- */
-export async function getPoolStatus(providerId: string): Promise<PoolStatusResponse> {
-  const response = await client.get<PoolStatusResponse>(`/api/admin/providers/${providerId}/pool-status`)
-  return response.data
-}
-
 /**
  * 清除指定 Key 的号池冷却状态
  */
@@ -54,19 +20,6 @@ export async function clearPoolCooldown(
 ): Promise<{ message: string }> {
   const response = await client.post<{ message: string }>(
     `/api/admin/providers/${providerId}/pool/clear-cooldown/${keyId}`,
-  )
-  return response.data
-}
-
-/**
- * 重置指定 Key 的号池成本窗口
- */
-export async function resetPoolCost(
-  providerId: string,
-  keyId: string,
-): Promise<{ message: string }> {
-  const response = await client.post<{ message: string }>(
-    `/api/admin/providers/${providerId}/pool/reset-cost/${keyId}`,
   )
   return response.data
 }
@@ -242,37 +195,6 @@ export type PoolScoreHardState =
   | 'inactive'
 
 export type PoolScoreProbeStatus = 'never' | 'ok' | 'failed' | 'stale' | 'in_progress'
-
-export interface PoolScoreKeySummary {
-  id: string
-  name: string
-  auth_type: string
-  is_active: boolean
-  internal_priority: number
-  last_used_at: number | null
-}
-
-export interface PoolMemberScoreItem extends PoolKeyScoreDetail {
-  pool_kind: string
-  pool_id: string
-  member_kind: string
-  member_id: string
-  key?: PoolScoreKeySummary | null
-}
-
-export interface PoolScoresResponse {
-  provider_id: string
-  page: number
-  page_size: number
-  filters: {
-    api_format?: string | null
-    model_id?: string | null
-    hard_state?: string | null
-    probe_status?: string | null
-  }
-  items: PoolMemberScoreItem[]
-}
-
 export interface PoolKeysQuery {
   page?: number
   page_size?: number
@@ -298,15 +220,6 @@ export interface PoolKeysQuery {
   search_scope?: 'name' | 'full'
   sort_by?: 'imported_at' | 'last_used_at' | 'score'
   sort_order?: 'asc' | 'desc'
-}
-
-export interface PoolScoresQuery {
-  page?: number
-  page_size?: number
-  api_format?: string
-  model_id?: string
-  hard_state?: string
-  probe_status?: string
 }
 
 export interface PoolKeySelectionRequest {
@@ -470,29 +383,6 @@ export async function listPoolKeys(
   )
 }
 
-export async function listPoolScores(
-  providerId: string,
-  params: PoolScoresQuery = {},
-  options: PoolReadOptions = {},
-): Promise<PoolScoresResponse> {
-  const normalizedParams = { ...params }
-  const cacheKey = buildCacheKey(
-    `pool:scores:${providerId}`,
-    normalizedParams as Record<string, unknown>,
-  )
-  return cachedRequest(
-    cacheKey,
-    async () => {
-      const response = await client.get<PoolScoresResponse>(
-        `/api/admin/pool/${providerId}/scores`,
-        { params: normalizedParams },
-      )
-      return response.data
-    },
-    options.cacheTtlMs ?? 0,
-  )
-}
-
 export async function resolvePoolKeySelection(
   providerId: string,
   body: PoolKeySelectionRequest,
@@ -555,17 +445,6 @@ export async function getPoolBatchDeleteTask(
 ): Promise<BatchDeleteTaskStatus> {
   const response = await client.get<BatchDeleteTaskStatus>(
     `/api/admin/pool/${providerId}/keys/batch-delete-task/${taskId}`,
-  )
-  return response.data
-}
-
-export async function cleanupBannedPoolKeys(
-  providerId: string,
-): Promise<{ affected: number; message: string }> {
-  const response = await client.post<{ affected: number; message: string }>(
-    `/api/admin/pool/${providerId}/keys/cleanup-banned`,
-    undefined,
-    { timeout: POOL_BATCH_ACTION_TIMEOUT_MS },
   )
   return response.data
 }

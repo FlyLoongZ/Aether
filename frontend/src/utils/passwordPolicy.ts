@@ -9,28 +9,6 @@ function getPasswordByteLength(password: string): number {
   return textEncoder.encode(password).length
 }
 
-export const PASSWORD_POLICY_OPTIONS: Array<{
-  value: PasswordPolicyLevel
-  label: string
-  description: string
-}> = [
-  {
-    value: 'weak',
-    get label() { return translate('feedback.password.weak') },
-    get description() { return translate('feedback.password.minCharacters', { count: 6 }) },
-  },
-  {
-    value: 'medium',
-    get label() { return translate('feedback.password.medium') },
-    get description() { return translate('feedback.password.optionMedium') },
-  },
-  {
-    value: 'strong',
-    get label() { return translate('feedback.password.strong') },
-    get description() { return translate('feedback.password.optionStrong') },
-  },
-]
-
 export function normalizePasswordPolicyLevel(value: unknown): PasswordPolicyLevel {
   return value === 'medium' || value === 'strong' ? value : 'weak'
 }
@@ -83,10 +61,6 @@ function getPasswordPolicyErrorMessages(password: string, level: unknown): Passw
   }
 
   return errors
-}
-
-export function getPasswordPolicyErrors(password: string, level: unknown): string[] {
-  return getPasswordPolicyErrorMessages(password, level).map(({ key, params }) => translate(key, params))
 }
 
 export function validatePasswordByPolicy(password: string, level: unknown): string {

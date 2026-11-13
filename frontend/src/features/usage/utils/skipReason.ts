@@ -73,9 +73,6 @@ export const CANDIDATE_SKIP_REASON_LABELS: Record<string, string> = {
   pool_score_member_missing: '号池评分成员缺失',
 }
 
-/** 后端无法归类时使用的占位原因。 */
-export const UNCLASSIFIED_CANDIDATE_SKIP_REASON = 'unclassified_candidate_skip_reason'
-
 /**
  * 把候选跳过原因转成中文展示文案。
  *
@@ -86,14 +83,4 @@ export function formatCandidateSkipReason(reason?: string | null): string {
   const normalized = typeof reason === 'string' ? reason.trim() : ''
   if (!normalized) return ''
   return CANDIDATE_SKIP_REASON_LABELS[normalized] ?? normalized
-}
-
-/** 是否为"根本没有向上游发起请求"的跳过状态。 */
-export function isSkippedCandidateStatus(status?: string | null): boolean {
-  return status === 'skipped'
-}
-
-/** 是否为"被枚举出来但从未尝试"的候选状态（含跳过与未使用）。 */
-export function isNonAttemptedCandidateStatus(status?: string | null): boolean {
-  return status === 'skipped' || status === 'available' || status === 'unused'
 }

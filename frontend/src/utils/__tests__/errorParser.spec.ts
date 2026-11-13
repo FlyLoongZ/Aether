@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { setI18nLocale } from '@/i18n'
-import { parseApiError, parseTestModelError, parseUpstreamModelError } from '@/utils/errorParser'
+import { parseApiError, parseUpstreamModelError } from '@/utils/errorParser'
 
 beforeEach(() => setI18nLocale('zh-CN'))
 afterEach(() => setI18nLocale('zh-CN'))
@@ -82,13 +82,6 @@ describe('errorParser', () => {
     expect(parseApiError(new Error('refresh_token_reused')))
       .toBe('Token refresh failed: refresh_token has already been used and rotated. Sign in again.')
     expect(parseApiError(new Error('Token refresh failed: 保存'))).toBe('Token refresh failed: 保存')
-  })
-
-  it('translates model test HTTP failures while retaining server error messages', () => {
-    setI18nLocale('en-US')
-    expect(parseTestModelError({ data: { response: { status_code: 503 } } })).toBe('Server error: HTTP 503')
-    expect(parseTestModelError({ data: { response: { status_code: 401, error: { message: '保存' } } } })).toBe('保存')
-    expect(parseTestModelError({ error: '删除' })).toBe('删除')
   })
 
   it('translates upstream status descriptions while preserving unknown API content', () => {

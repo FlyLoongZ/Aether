@@ -9,8 +9,6 @@ export const SECTIONS = {
   FEATURES: 3
 } as const
 
-export type SectionIndex = (typeof SECTIONS)[keyof typeof SECTIONS]
-
 // Section navigation configuration
 export const sections = [
   { nameKey: 'site.home.section.home' },

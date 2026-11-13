@@ -38,7 +38,3 @@ export async function importWithRetry<T = unknown>(
   }
   return request
 }
-
-export function createRetryableImport(importPath: string) {
-  return () => importWithRetry(() => import(/* @vite-ignore */ importPath), MAX_RETRIES, importPath)
-}

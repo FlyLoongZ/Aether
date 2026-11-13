@@ -206,7 +206,3 @@ export class JsonPageReader {
     return { lines: [], hasNext: false }
   }
 }
-
-export function getJsonPage(data: unknown, options: JsonPageOptions = {}) {
-  return new JsonPageReader(data, options).read(options.page)
-}

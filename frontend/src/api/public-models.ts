@@ -2,7 +2,6 @@
  * Public Models API - 普通用户可访问的模型列表
  */
 
-import client from './client'
 import type { TieredPricingConfig } from './endpoints/types'
 
 export interface PublicGlobalModel {
@@ -20,22 +19,4 @@ export interface PublicGlobalModel {
   config: Record<string, unknown> | null
   // 调用次数
   usage_count: number
-}
-
-export interface PublicGlobalModelListResponse {
-  models: PublicGlobalModel[]
-  total: number
-}
-
-/**
- * 获取公开的 GlobalModel 列表（普通用户可访问）
- */
-export async function getPublicGlobalModels(params?: {
-  skip?: number
-  limit?: number
-  is_active?: boolean
-  search?: string
-}): Promise<PublicGlobalModelListResponse> {
-  const response = await client.get<PublicGlobalModelListResponse>('/api/public/global-models', { params })
-  return response.data
 }

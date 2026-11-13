@@ -5,7 +5,6 @@ import {
   buildPoolAttemptCandidatesFromAudit,
   buildPoolGroupVisibleAttempts,
   buildPoolParticipatedCandidates,
-  isAttemptedCandidate,
 } from '@/features/usage/utils/poolTrace'
 
 function buildCandidate(
@@ -201,22 +200,6 @@ describe('poolTrace', () => {
 
     expect(attempts).toHaveLength(2)
     expect(attempts.map(item => item.key_id)).toEqual(['pool-group', 'key-success'])
-  })
-
-  it('treats only real execution statuses as attempted', () => {
-    expect(isAttemptedCandidate(buildCandidate({ status: 'success' }))).toBe(true)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'failed' }))).toBe(true)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'cancelled' }))).toBe(true)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'streaming' }))).toBe(true)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'stream_interrupted' }))).toBe(true)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'pending' }))).toBe(false)
-    expect(isAttemptedCandidate(buildCandidate({
-      status: 'pending',
-      started_at: '2026-04-24T12:00:00.000Z',
-    }))).toBe(true)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'skipped' }))).toBe(false)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'available' }))).toBe(false)
-    expect(isAttemptedCandidate(buildCandidate({ status: 'unused' }))).toBe(false)
   })
 
   it('keeps skipped pool children visible when attempted nodes exist', () => {

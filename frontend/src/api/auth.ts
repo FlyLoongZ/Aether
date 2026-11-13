@@ -44,20 +44,9 @@ export interface SendVerificationCodeResponse {
   verification_token: string
 }
 
-export interface VerifyEmailRequest {
-  email: string
-  code: string
-  verification_token: string
-}
-
 export interface VerifyEmailResponse {
   message: string
   success: boolean
-}
-
-export interface VerificationStatusRequest {
-  email: string
-  verification_token: string
 }
 
 export interface VerificationStatusResponse {

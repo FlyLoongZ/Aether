@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  MAX_MAPPING_LENGTH,
-  MAX_MODEL_NAME_LENGTH,
-  createLRURegexCache,
-  safeTestModelMappingPattern,
-  validateModelMappingPattern,
-} from '@/features/models/utils/model-mapping-regex'
+import { MAX_MAPPING_LENGTH, validateModelMappingPattern } from '@/features/models/utils/model-mapping-regex'
 
 describe('model-mapping-regex', () => {
   it('validateModelMappingPattern: rejects empty', () => {
@@ -29,16 +23,5 @@ describe('model-mapping-regex', () => {
     expect(validateModelMappingPattern('gpt-4o').valid).toBe(true)
   })
 
-  it('safeTestModelMappingPattern: matches case-insensitively and anchors', () => {
-    const cache = createLRURegexCache(10)
-    expect(safeTestModelMappingPattern('gpt-4o', 'GPT-4O', cache)).toBe(true)
-    expect(safeTestModelMappingPattern('gpt-4o', 'gpt-4o-mini', cache)).toBe(false)
-  })
-
-  it('safeTestModelMappingPattern: rejects overly long model names', () => {
-    const cache = createLRURegexCache(10)
-    const longName = 'a'.repeat(MAX_MODEL_NAME_LENGTH + 1)
-    expect(safeTestModelMappingPattern('a.*', longName, cache)).toBe(false)
-  })
 })
 

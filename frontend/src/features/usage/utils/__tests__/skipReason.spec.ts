@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  CANDIDATE_SKIP_REASON_LABELS,
-  formatCandidateSkipReason,
-  isNonAttemptedCandidateStatus,
-  isSkippedCandidateStatus,
-} from '../skipReason'
+import { CANDIDATE_SKIP_REASON_LABELS, formatCandidateSkipReason } from '../skipReason'
 
 describe('candidate skip reason formatting', () => {
   it('translates known skip reasons into Chinese labels', () => {
@@ -49,16 +44,4 @@ describe('candidate skip reason formatting', () => {
     }
   })
 
-  it('distinguishes skipped candidates from attempted ones', () => {
-    expect(isSkippedCandidateStatus('skipped')).toBe(true)
-    expect(isSkippedCandidateStatus('failed')).toBe(false)
-    expect(isSkippedCandidateStatus(undefined)).toBe(false)
-
-    // available/unused 同样是"从未尝试"，用于时间线是否展示的判定。
-    expect(isNonAttemptedCandidateStatus('skipped')).toBe(true)
-    expect(isNonAttemptedCandidateStatus('available')).toBe(true)
-    expect(isNonAttemptedCandidateStatus('unused')).toBe(true)
-    expect(isNonAttemptedCandidateStatus('success')).toBe(false)
-    expect(isNonAttemptedCandidateStatus('failed')).toBe(false)
-  })
 })

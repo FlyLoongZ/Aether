@@ -4,12 +4,6 @@ import {
   getAccountStatusDisplay,
   type ProviderKeyStatusCarrier,
 } from './providerKeyStatus'
-
-export interface OAuthAccountBlockDisplay {
-  label: string | null
-  reason: string | null
-}
-
 export interface OAuthRefreshFeedbackInput {
   accountStateRecheckAttempted?: boolean | null
   accountStateRecheckError?: string | null
@@ -27,19 +21,6 @@ function formatRecheckError(value: string): string {
   const maxLength = 180
   if (collapsed.length <= maxLength) return collapsed
   return `${collapsed.slice(0, maxLength - 3).trimEnd()}...`
-}
-
-export function resolveOAuthAccountBlockDisplay(
-  snapshot: ProviderKeyStatusCarrier,
-): OAuthAccountBlockDisplay {
-  const account = getAccountStatusDisplay(snapshot)
-  if (!account.blocked || !account.label) {
-    return { label: null, reason: null }
-  }
-  return {
-    label: account.label,
-    reason: account.reason,
-  }
 }
 
 export function getOAuthRefreshFeedback(

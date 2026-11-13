@@ -7,7 +7,7 @@ import type { User, LoginResponse } from '@/api/auth'
 import type { DashboardStatsResponse, RecentRequest, ProviderStatus, DailyStatsResponse } from '@/api/dashboard'
 import type { User as AdminUser } from '@/api/users'
 import type { AdminApiKeysResponse } from '@/api/admin'
-import type { Profile, UsageResponse } from '@/api/me'
+import type { Profile } from '@/api/me'
 import type { ProviderWithEndpointsSummary, GlobalModelResponse } from '@/api/endpoints/types'
 import type { ModuleStatus } from '@/api/modules'
 
@@ -877,57 +877,6 @@ export const MOCK_GLOBAL_MODELS: GlobalModelResponse[] = [
     created_at: '2024-01-01T00:00:00Z'
   }
 ]
-
-// ========== Usage 数据 ==========
-
-export const MOCK_USAGE_RESPONSE: UsageResponse = {
-  total_requests: 1234,
-  total_input_tokens: 1800000,
-  total_output_tokens: 700000,
-  total_tokens: 2500000,
-  total_cost: 45.67,
-  total_actual_cost: 33.33,
-  avg_response_time: 1.23,
-  billing: MOCK_USER_BILLING,
-  summary_by_model: [
-    { model: 'claude-sonnet-4-5-20250929', requests: 456, input_tokens: 650000, output_tokens: 250000, total_tokens: 900000, total_cost_usd: 18.50, actual_total_cost_usd: 13.50 },
-    { model: 'gpt-5.1', requests: 312, input_tokens: 480000, output_tokens: 180000, total_tokens: 660000, total_cost_usd: 12.30, actual_total_cost_usd: 9.20 },
-    { model: 'claude-haiku-4-5-20251001', requests: 289, input_tokens: 420000, output_tokens: 170000, total_tokens: 590000, total_cost_usd: 8.50, actual_total_cost_usd: 6.30 },
-    { model: 'gemini-3-pro-preview', requests: 177, input_tokens: 250000, output_tokens: 100000, total_tokens: 350000, total_cost_usd: 6.37, actual_total_cost_usd: 4.33 }
-  ],
-  records: [
-    {
-      id: 'usage-001',
-      provider: 'anthropic',
-      model: 'claude-sonnet-4-5-20250929',
-      input_tokens: 1500,
-      output_tokens: 800,
-      total_tokens: 2300,
-      cost: 0.0165,
-      response_time_ms: 1234,
-      is_stream: true,
-      created_at: new Date().toISOString(),
-      status_code: 200,
-      input_price_per_1m: 3,
-      output_price_per_1m: 15
-    },
-    {
-      id: 'usage-002',
-      provider: 'openai',
-      model: 'gpt-5.1',
-      input_tokens: 2000,
-      output_tokens: 500,
-      total_tokens: 2500,
-      cost: 0.01,
-      response_time_ms: 890,
-      is_stream: false,
-      created_at: new Date(Date.now() - 300000).toISOString(),
-      status_code: 200,
-      input_price_per_1m: 2.5,
-      output_price_per_1m: 10
-    }
-  ]
-}
 
 // ========== 系统配置 ==========
 

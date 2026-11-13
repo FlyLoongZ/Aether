@@ -43,22 +43,6 @@ export function hasUsageFallback(
   return record.has_fallback === true
 }
 
-export function hasUsageRetry(
-  record: Pick<UsageRecord, 'has_retry'>
-): boolean {
-  return record.has_retry === true
-}
-
-/**
- * 是否有候选在调度阶段被跳过（请求从未发往该候选）。
- * 与 hasUsageFallback 互补：后者要求"更靠前的候选确实尝试并失败"。
- */
-export function hasUsageSkippedCandidate(
-  record: Pick<UsageRecord, 'has_skipped_candidate'>
-): boolean {
-  return record.has_skipped_candidate === true
-}
-
 export function isUsageWebSocket(
   record: Pick<UsageRecord, 'is_websocket'>
 ): boolean {
@@ -216,23 +200,6 @@ export function isUsageRecordFailed(record: UsageFailureSignal & Pick<UsageRecor
     return status === 'failed'
   }
   return hasAnyFailureSignal(record)
-}
-
-export function isUsageRecordSuccessful(record: UsageFailureSignal & Pick<UsageRecord, 'status'>): boolean {
-  const status = typeof record.status === 'string' ? record.status.trim().toLowerCase() : ''
-  if (status) {
-    if (status === 'completed') {
-      return true
-    }
-    if (status === 'failed') {
-      return false
-    }
-    return false
-  }
-  if (hasTerminalSuccessStatusCode(record)) {
-    return true
-  }
-  return !hasAnyFailureSignal(record)
 }
 
 export function normalizeRequestStatus(status: RequestStatusLike): RequestStatus | undefined {

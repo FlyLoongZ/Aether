@@ -24,14 +24,6 @@ export async function getProviderEndpoints(providerId: string): Promise<Provider
 }
 
 /**
- * 获取 Endpoint 详情
- */
-export async function getEndpoint(endpointId: string): Promise<ProviderEndpoint> {
-  const response = await client.get<ProviderEndpoint>(`/api/admin/endpoints/${endpointId}`)
-  return response.data
-}
-
-/**
  * 为 Provider 创建新的 Endpoint
  */
 export async function createEndpoint(

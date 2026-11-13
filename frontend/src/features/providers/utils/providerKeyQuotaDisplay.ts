@@ -433,34 +433,6 @@ export function getXaiOnDemandUsedPercent(key: EndpointAPIKey): number {
   return Math.max(Math.min(((xai.on_demand_used || 0) / xai.on_demand_cap) * 100, 100), 0)
 }
 
-
-
-
-
-
-
-
-export function getPositiveQuotaNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
-}
-
-
-
-
-export function hasFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
-
-
-
-
-
-
-
-
-
-
 export function isKiroBannedKey(key: EndpointAPIKey): boolean {
   const quota = getQuotaSnapshotForProvider(key, 'kiro')
   return String(quota?.code || '').trim().toLowerCase() === 'banned'

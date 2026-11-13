@@ -138,11 +138,6 @@ export function buildUserBatchBalanceAdjustmentPayload(
 
 export type UserBatchAction = 'enable' | 'disable' | 'update_access_control' | 'update_role' | 'adjust_wallet_balance'
 
-export type UserBatchActionPayload =
-  | UserBatchAccessControlPayload
-  | UserBatchRolePayload
-  | UserBatchBalanceAdjustmentPayload
-
 export interface UserBatchToggleActionRequest {
   selection: UserBatchSelection
   action: 'enable' | 'disable'

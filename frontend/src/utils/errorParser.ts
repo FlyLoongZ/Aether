@@ -224,63 +224,6 @@ export function parseApiError(err: unknown, defaultMessage: string = translate('
 }
 
 /**
- * 解析并提取第一个错误信息（用于简短提示）
- */
-export function parseApiErrorShort(err: unknown, defaultMessage: string = translate('feedback.error.failed')): string {
-  const fullError = parseApiError(err, defaultMessage)
-
-  // 如果有多行错误，只取第一行
-  const lines = fullError.split('\n')
-  return lines[0] || defaultMessage
-}
-
-/**
- * 解析模型测试响应的错误信息
- * @param result 测试响应结果
- * @returns 格式化的错误信息
- */
-export function parseTestModelError(result: {
-  error?: string
-  data?: {
-    response?: {
-      status_code?: number
-      error?: string | { message?: string }
-    }
-  }
-}): string {
-  let errorMsg = result.error || translate('feedback.error.testFailed')
-
-  // 检查HTTP状态码错误
-  if (result.data?.response?.status_code) {
-    const status = result.data.response.status_code
-    if (status === 403) {
-      errorMsg = translate('feedback.error.auth.clientNotAllowed')
-    } else if (status === 401) {
-      errorMsg = translate('feedback.error.auth.expired')
-    } else if (status === 404) {
-      errorMsg = translate('feedback.error.modelNotFound')
-    } else if (status === 429) {
-      errorMsg = translate('feedback.error.rateLimit')
-    } else if (status >= 500) {
-      errorMsg = translate('feedback.error.serverHttp', { status })
-    } else {
-      errorMsg = translate('feedback.error.requestHttp', { status })
-    }
-  }
-
-  // 尝试从错误响应中提取更多信息
-  if (result.data?.response?.error) {
-    if (typeof result.data.response.error === 'string') {
-      errorMsg = result.data.response.error
-    } else if (result.data.response.error?.message) {
-      errorMsg = result.data.response.error.message
-    }
-  }
-
-  return errorMsg
-}
-
-/**
  * 解析上游模型查询错误信息
  * 将后端返回的原始错误信息（如 "HTTP 401: {json...}"）转换为友好的错误提示
  * @param error 错误字符串，格式可能是 "HTTP {status}: {json_body}" 或其他

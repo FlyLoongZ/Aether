@@ -130,8 +130,3 @@ export function isRefreshFailedReason(reason: string | null | undefined): boolea
   if (!reason) return false
   return reason.includes('[REFRESH_FAILED]')
 }
-
-export function isOAuthExpiredReason(reason: string | null | undefined): boolean {
-  if (!reason) return false
-  return reason.trim().startsWith('[OAUTH_EXPIRED]')
-}

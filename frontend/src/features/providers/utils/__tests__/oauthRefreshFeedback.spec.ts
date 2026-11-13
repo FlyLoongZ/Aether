@@ -1,53 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  getOAuthRefreshFeedback,
-  resolveOAuthAccountBlockDisplay,
-} from '@/features/providers/utils/oauthRefreshFeedback'
+import { getOAuthRefreshFeedback } from '@/features/providers/utils/oauthRefreshFeedback'
 
 describe('oauthRefreshFeedback', () => {
-  it('prefers explicit blocked account status from pool data', () => {
-    expect(
-      resolveOAuthAccountBlockDisplay({
-        status_snapshot: {
-          oauth: { code: 'valid' },
-          account: {
-            code: 'account_disabled',
-            label: '账号停用',
-            reason: 'account has been deactivated',
-            blocked: true,
-          },
-          quota: { code: 'unknown', exhausted: false },
-        },
-      }),
-    ).toEqual({
-      label: '账号停用',
-      reason: 'account has been deactivated',
-    })
-  })
-
-  it('classifies account-level OAuth invalid reasons', () => {
-    expect(
-      resolveOAuthAccountBlockDisplay({
-        oauth_invalid_reason: '[ACCOUNT_BLOCK] account has been deactivated',
-      }),
-    ).toEqual({
-      label: '账号停用',
-      reason: 'account has been deactivated',
-    })
-  })
-
-  it('ignores recoverable refresh failures', () => {
-    expect(
-      resolveOAuthAccountBlockDisplay({
-        oauth_invalid_reason: '[REFRESH_FAILED] Token 续期失败',
-      }),
-    ).toEqual({
-      label: null,
-      reason: null,
-    })
-  })
-
   it('reports blocked result after successful recheck', () => {
     expect(
       getOAuthRefreshFeedback({

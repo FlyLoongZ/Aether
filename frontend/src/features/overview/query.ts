@@ -98,11 +98,6 @@ export function rangeQuery(range: OverviewRange): LocationQueryRaw {
   return { from: range.from, to: range.to, timezone: range.timezone }
 }
 
-export function usageQuery(query: OverviewQuery): OverviewQuery {
-  const { search: _search, account_status: _account, usage_status: _usage, sort: _sort, order: _order, offset: _offset, limit: _limit, group_by: _group, ...filters } = query
-  return filters
-}
-
 export function useOverviewQuery(defaultPreset = 'last7days', options: { rolling?: boolean } = {}) {
   const route = useRoute()
   const router = useRouter()

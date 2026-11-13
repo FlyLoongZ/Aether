@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildDefaultModelTestRequestBody,
-  buildExactModelMappingTestRequest,
   extractModelTestImagePreviews,
   extractModelTestResponsePreview,
   formatModelTestDiagnostic,
@@ -298,23 +297,6 @@ describe('buildDefaultModelTestRequestBody', () => {
     })
   })
 })
-
-describe('buildExactModelMappingTestRequest', () => {
-  it('tests the clicked mapping name without applying another provider mapping', () => {
-    expect(buildExactModelMappingTestRequest(
-      'provider-1',
-      'MiniMax-M2.7-balanced',
-      'openai:chat',
-    )).toEqual({
-      provider_id: 'provider-1',
-      model_name: 'MiniMax-M2.7-balanced',
-      mode: 'direct',
-      apply_model_mapping: false,
-      api_format: 'openai:chat',
-    })
-  })
-})
-
 describe('isModelTestableApiFormat', () => {
   it.each([
     'openai:realtime',

@@ -91,9 +91,3 @@ export function getStripePaymentInstructions(
     submitMethod: getPaymentInstructionString(instructions, 'submit_method') || 'stripe_payment_intent',
   }
 }
-
-export function hasStripePaymentInstructions(
-  instructions: PaymentInstructionMap | null | undefined
-): boolean {
-  return getStripePaymentInstructions(instructions) !== null
-}

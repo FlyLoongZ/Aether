@@ -5,7 +5,6 @@ import { getCodexQuotaWindowPresentation } from '@/features/providers/utils/code
 import { formatCompactNumber } from '@/utils/format'
 
 export type PoolStatsMetricKey = 'request_count' | 'total_tokens' | 'total_cost_usd'
-export type PoolStatsDisplayKind = 'account_total' | 'codex_cycle'
 export type PoolCodexCycleWindowCode = string
 
 export interface PoolStatsKeyInput {

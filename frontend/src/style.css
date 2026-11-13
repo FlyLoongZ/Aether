@@ -207,8 +207,6 @@
 
     --shell-glass: rgba(250, 249, 245, 0.8);
     --shell-border: rgba(61, 57, 41, 0.16);
-    --shell-shadow: 0 25px 65px rgba(201, 100, 66, 0.18);
-    --shell-sidebar-shadow: 0 45px 95px rgba(61, 57, 41, 0.12);
   }
 
   :root[data-theme='light'] {
@@ -315,23 +313,12 @@
 
     --shell-glass: rgba(38, 38, 36, 0.68);
     --shell-border: rgba(195, 192, 182, 0.18);
-    --shell-shadow: 0 25px 65px rgba(0, 0, 0, 0.5);
-    --shell-sidebar-shadow: 0 45px 95px rgba(0, 0, 0, 0.55);
   }
 
   :root[data-theme='dark']::selection,
   .dark::selection {
     background-color: var(--book-cloth);
     color: var(--ivory-light);
-  }
-
-  :root[data-theme='light'] #content-container {
-    background-color: var(--ivory-light) !important;
-  }
-
-  :root[data-theme='dark'] #content-container,
-  .dark #content-container {
-    background-color: var(--slate-medium) !important;
   }
 
   /* JS 被禁用或 bootstrap 被 CSP 阻止时，外部 CSS 不得覆盖首屏系统深色兜底。 */
@@ -372,8 +359,7 @@
   h3,
   h4,
   h5,
-  h6,
-  .literary-heading {
+  h6 {
     font-family: var(--serif);
     font-weight: 500;
     letter-spacing: -0.015em;
@@ -385,8 +371,6 @@
     letter-spacing: -0.02em;
   }
 
-  /* 正文内容使用衬线体 */
-  .literary-body,
   article p,
   .prose p {
     font-family: var(--serif);
@@ -394,8 +378,6 @@
     letter-spacing: 0.005em;
   }
 
-  /* UI 元素保持无衬线体 */
-  .literary-ui,
   button,
   input,
   select,
@@ -414,24 +396,6 @@
 ::selection {
   background-color: var(--color-primary-soft);
   color: var(--color-text);
-}
-
-.assistant-tab {
-  font-family: var(--serif) !important;
-  font-size: small !important;
-}
-
-.assistant-tab * {
-  transition: all 0.3s ease-in-out !important;
-}
-
-.ant-avatar {
-  box-shadow: 0 0 0 1px var(--color-border-soft) !important;
-  border-radius: 999rem !important;
-}
-
-#content-container {
-  font-family: var(--sans-serif);
 }
 
 .markdown {
@@ -492,182 +456,6 @@ pre {
   margin: 0 !important;
 }
 
-.inputbar {
-  background-color: var(--color-background) !important;
-}
-
-.inputbar textarea {
-  font-size: 1rem;
-  font-family: var(--sans-serif);
-}
-
-.inputbar-container {
-  background-color: var(--color-background-soft) !important;
-  filter: drop-shadow(0 0 1.25rem hsl(0 0% 0% / 3.5%));
-  transition: all 0.3s ease-in-out;
-}
-
-.inputbar-container.focus {
-  filter: drop-shadow(0 0 1.25rem hsl(0 0% 0% / 7.5%));
-}
-
-.bubble .message-content-container {
-  border-radius: 1rem;
-  border: 0.7pt solid var(--color-border-soft);
-}
-
-.bubble .message-user .message-action-button:hover {
-  background-color: var(--color-background-mute);
-}
-
-.ant-btn,
-.ant-input-outlined {
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.ant-btn:focus,
-.ant-btn:focus-visible,
-.ant-input-outlined:focus,
-.ant-input-outlined:focus-visible {
-  box-shadow: 0 0 0 2pt var(--focus);
-  border-color: var(--color-border-mute) !important;
-}
-
-.ant-btn:hover,
-.ant-input-outlined:hover {
-  border-color: var(--color-border-soft) !important;
-}
-
-.footnotes {
-  background-color: var(--color-background-soft);
-}
-
-.ant-dropdown-menu {
-  border-style: solid;
-  border-width: 1px;
-  border-color: var(--color-border);
-}
-
-.ant-segmented-group * {
-  border-radius: 0.5rem !important;
-}
-
-.ant-dropdown-trigger {
-  --color-border: transparent !important;
-  transition: all 0.3s ease-in-out !important;
-}
-
-* {
-  --ant-color-primary-hover: var(--color-primary) !important;
-  --ant-color-primary: var(--color-primary) !important;
-}
-
-.ant-switch {
-  scale: 0.95;
-  background: var(--color-primary-mute) !important;
-  transition: all 0.3s ease-in-out;
-}
-
-.ant-switch.ant-switch-checked {
-  background: var(--book-cloth) !important;
-}
-
-.ant-switch:hover:not(.ant-switch-disabled) {
-  scale: 1;
-}
-
-.ant-select-selector {
-  border-color: var(--color-border-soft) !important;
-  transition: all 0.3s ease-in-out;
-}
-
-.ant-select-selector:hover {
-  border-color: var(--color-border) !important;
-}
-
-.ant-select-focused .ant-select-selector {
-  border-color: var(--color-primary) !important;
-  box-shadow: 0 0 0 2pt var(--focus) !important;
-}
-
-.ant-select-item-option {
-  margin-top: 2pt;
-}
-
-.ant-select-item-option-selected {
-  background-color: transparent !important;
-}
-
-.ant-select-item-option-active {
-  background-color: var(--color-active) !important;
-  border-color: var(--color-border-soft) !important;
-}
-
-.ant-slider {
-  margin: 5pt 0 !important;
-  padding-block: 0 !important;
-  height: 15pt !important;
-}
-
-.ant-slider .ant-slider-handle {
-  opacity: 0 !important;
-}
-
-.ant-slider .ant-slider-rail {
-  border-radius: 999rem !important;
-  height: 10pt !important;
-  background-color: var(--color-border-soft) !important;
-}
-
-.ant-slider .ant-slider-track {
-  border-radius: 999rem !important;
-  height: 10pt !important;
-  background-color: var(--color-primary) !important;
-}
-
-.ant-slider-step {
-  height: 10pt !important;
-  border-radius: 999rem !important;
-  overflow: hidden !important;
-  top: 0 !important;
-}
-
-.ant-slider-step span {
-  inset-block-start: 0 !important;
-  border-radius: 0 !important;
-  border-color: transparent !important;
-  background: var(--color-border-soft) !important;
-  width: 1em !important;
-  height: 10pt !important;
-}
-
-.ant-btn>div>span:nth-child(2) {
-  font-family: var(--serif) !important;
-  margin-top: 0.1em !important;
-}
-
-.ant-btn-variant-outlined:hover {
-  color: var(--color-primary) !important;
-}
-
-.ant-btn-variant-solid:not(:disabled) {
-  background-color: var(--color-black-soft) !important;
-}
-
-#app-sidebar div {
-  transition: all 0.1s ease-in-out !important;
-}
-
-#app-sidebar div.active {
-  background-color: var(--color-active) !important;
-  border: 0;
-}
-
-#app-sidebar div.active i,
-#app-sidebar div.active span {
-  color: var(--color-primary);
-}
-
 /* ==========================================
    Literary Tech / Wenren Geek Style
    "Da Vinci manuscript meets modern IDE"
@@ -709,60 +497,6 @@ pre {
   border-color: rgba(250, 249, 245, 0.1);
 }
 
-.literary-border-accent {
-  border-width: 1px;
-  border-style: solid;
-  border-color: rgba(201, 100, 66, 0.25);
-}
-
-.dark .literary-border-accent,
-:root[data-theme='dark'] .literary-border-accent {
-  border-color: rgba(217, 119, 87, 0.3);
-}
-
-/* Enhanced typography for literary style */
-.literary-title {
-  font-family: var(--serif);
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  color: var(--slate-dark);
-}
-
-.dark .literary-title,
-:root[data-theme='dark'] .literary-title {
-  color: var(--ivory-light);
-}
-
-.literary-subtitle {
-  font-family: var(--serif);
-  font-weight: 400;
-  font-style: italic;
-  letter-spacing: 0.01em;
-  color: var(--slate-medium);
-}
-
-.dark .literary-subtitle,
-:root[data-theme='dark'] .literary-subtitle {
-  color: var(--cloud-medium);
-}
-
-/* Monospace data zones - 等宽数据区 */
-.literary-data {
-  font-family: var(--monospace);
-  font-size: 0.875rem;
-  letter-spacing: -0.01em;
-  background: rgba(61, 57, 41, 0.03);
-  border: 1px solid rgba(61, 57, 41, 0.08);
-  padding: 1rem;
-}
-
-.dark .literary-data,
-:root[data-theme='dark'] .literary-data {
-  background: rgba(250, 249, 245, 0.03);
-  border-color: rgba(250, 249, 245, 0.08);
-}
-
 /* Manuscript card style */
 .literary-card {
   position: relative;
@@ -801,41 +535,6 @@ pre {
   background-image:
     linear-gradient(rgba(250, 249, 245, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(250, 249, 245, 0.03) 1px, transparent 1px);
-}
-
-/* Accent line decorations - like technical drawings */
-.literary-accent-line {
-  position: relative;
-}
-
-.literary-accent-line::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 3rem;
-  height: 2px;
-  background: var(--book-cloth);
-}
-
-/* Section divider */
-.literary-divider {
-  height: 1px;
-  background: linear-gradient(to right,
-      transparent,
-      rgba(61, 57, 41, 0.15) 20%,
-      rgba(61, 57, 41, 0.15) 80%,
-      transparent);
-  margin: 2rem 0;
-}
-
-.dark .literary-divider,
-:root[data-theme='dark'] .literary-divider {
-  background: linear-gradient(to right,
-      transparent,
-      rgba(250, 249, 245, 0.12) 20%,
-      rgba(250, 249, 245, 0.12) 80%,
-      transparent);
 }
 
 /* Manuscript badge/chip */
@@ -883,50 +582,6 @@ pre {
   border-color: rgba(250, 249, 245, 0.04);
 }
 
-/* Technical annotation style */
-.literary-annotation {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-family: var(--monospace);
-  font-size: 0.6875rem;
-  color: var(--slate-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.literary-annotation::before {
-  content: '//';
-  color: var(--book-cloth);
-  opacity: 0.6;
-}
-
-.dark .literary-annotation,
-:root[data-theme='dark'] .literary-annotation {
-  color: var(--cloud-medium);
-}
-
-/* Ruler/measurement style decoration */
-.literary-ruler {
-  position: relative;
-  padding-left: 2rem;
-}
-
-.literary-ruler::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: repeating-linear-gradient(to bottom,
-      var(--book-cloth) 0,
-      var(--book-cloth) 4px,
-      transparent 4px,
-      transparent 8px);
-  opacity: 0.5;
-}
-
 @layer components {
   .app-shell {
     @apply relative h-screen overflow-hidden;
@@ -964,31 +619,6 @@ pre {
     @apply flex-shrink-0;
   }
 
-  /* 侧边栏导航滚动区域 */
-  .sidebar-nav-scroll {
-    @apply overflow-y-auto;
-    /* 隐藏滚动条但保留滚动功能 */
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .sidebar-nav-scroll::-webkit-scrollbar {
-    display: none;
-  }
-
-  .app-shell__sidebar-card {
-    @apply rounded-2xl border p-3 flex-shrink-0;
-    background: rgba(250, 250, 247, 0.75);
-    border-color: rgba(145, 145, 141, 0.2);
-    /* Literary Tech: Remove inner shadow */
-  }
-
-  .dark .app-shell__sidebar-card,
-  :root[data-theme='dark'] .app-shell__sidebar-card {
-    background: rgba(38, 38, 37, 0.72);
-    border-color: rgba(250, 250, 247, 0.12);
-  }
-
   .app-shell__content {
     /* Fill remaining space, scroll independently */
     @apply flex-1 min-w-0 h-screen overflow-y-auto flex flex-col;
@@ -1017,140 +647,6 @@ pre {
     background: rgba(240, 238, 231, 0.68);
   }
 
-  .shell-panel {
-    @apply px-5 py-6 transition-all duration-300;
-  }
-
-  .shell-chip {
-    @apply inline-flex items-center rounded-full border px-3 py-1 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.3em] sm:tracking-[0.45em];
-    border-color: rgba(204, 120, 92, 0.35);
-    background: rgba(204, 120, 92, 0.12);
-    color: var(--color-primary);
-    /* Literary Tech: Remove inner shadow */
-  }
-
-  .dark .shell-chip,
-  :root[data-theme='dark'] .shell-chip {
-    border-color: rgba(250, 250, 247, 0.18);
-    background: rgba(36, 36, 36, 0.6);
-    color: var(--color-reference-text);
-  }
-
-  .shell-toolbar {
-    @apply flex flex-col gap-3;
-  }
-
-  .shell-toolbar__field {
-    @apply flex w-full items-center gap-2 rounded-2xl border px-3 py-2 text-sm;
-    background: rgba(250, 250, 247, 0.85);
-    border-color: rgba(145, 145, 141, 0.25);
-  }
-
-  .dark .shell-toolbar__field,
-  :root[data-theme='dark'] .shell-toolbar__field {
-    background: rgba(38, 38, 37, 0.65);
-    border-color: rgba(250, 250, 247, 0.14);
-  }
-
-  .sidebar-nav__link {
-    @apply flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition-all duration-200;
-    border-color: transparent;
-  }
-
-  .sidebar-nav__link--idle {
-    color: var(--slate-medium);
-    background: transparent;
-  }
-
-  .dark .sidebar-nav__link--idle,
-  :root[data-theme='dark'] .sidebar-nav__link--idle {
-    color: rgba(250, 250, 247, 0.75);
-  }
-
-  .sidebar-nav__link--idle:hover {
-    border-color: rgba(204, 120, 92, 0.3);
-    background: rgba(204, 120, 92, 0.15);
-    color: var(--color-primary);
-  }
-
-  .dark .sidebar-nav__link--idle:hover,
-  :root[data-theme='dark'] .sidebar-nav__link--idle:hover {
-    border-color: rgba(250, 250, 247, 0.18);
-    background: rgba(204, 120, 92, 0.22);
-    color: var(--color-reference-text);
-  }
-
-  .sidebar-nav__link--active {
-    border-color: rgba(204, 120, 92, 0.35);
-    background-color: rgba(204, 120, 92, 0.18);
-    color: var(--color-primary);
-    /* Literary Tech: Remove glow shadow */
-  }
-
-  .dark .sidebar-nav__link--active,
-  :root[data-theme='dark'] .sidebar-nav__link--active {
-    border-color: rgba(250, 250, 247, 0.18);
-    color: var(--color-reference-text);
-    background-color: rgba(204, 120, 92, 0.25);
-  }
-
-  .sidebar-nav__icon {
-    @apply flex h-10 w-10 items-center justify-center rounded-2xl transition-all;
-    background: rgba(250, 250, 247, 0.9);
-    color: var(--slate-medium);
-  }
-
-  .sidebar-nav__link:hover .sidebar-nav__icon {
-    background: rgba(204, 120, 92, 0.22);
-    color: var(--color-primary);
-  }
-
-  .dark .sidebar-nav__icon,
-  :root[data-theme='dark'] .sidebar-nav__icon {
-    background: rgba(38, 38, 37, 0.6);
-    color: rgba(250, 250, 247, 0.75);
-  }
-
-  .sidebar-nav__icon--active {
-    background-color: var(--color-primary);
-    color: var(--color-white);
-    /* Literary Tech: Remove glow shadow */
-  }
-
-  .dark .sidebar-nav__icon--active,
-  :root[data-theme='dark'] .sidebar-nav__icon--active {
-    background-color: var(--color-primary);
-  }
-
-  .sidebar-nav-enter-active,
-  .sidebar-nav-leave-active {
-    transition: all 0.18s ease;
-  }
-
-  .sidebar-nav-enter-from,
-  .sidebar-nav-leave-to {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  .sidebar-nav-move {
-    transition: transform 0.18s ease;
-  }
-
-  .sidebar-nav__label {
-    @apply leading-tight;
-  }
-
-  .sidebar-nav__description {
-    @apply text-[11px] font-normal;
-    color: var(--slate-medium);
-  }
-
-  .dark .sidebar-nav__description,
-  :root[data-theme='dark'] .sidebar-nav__description {
-    color: rgba(250, 250, 247, 0.7);
-  }
-
   .app-shell__gradient {
     @apply pointer-events-none absolute inset-0;
   }
@@ -1161,17 +657,6 @@ pre {
 
   .app-shell__gradient--accent {
     display: none;
-  }
-
-  .sidebar-profile-card {
-    @apply mt-auto rounded-3xl p-5 text-white;
-    background-color: var(--book-cloth);
-    /* Literary Tech: Remove glow shadow */
-  }
-
-  .dark .sidebar-profile-card,
-  :root[data-theme='dark'] .sidebar-profile-card {
-    background-color: var(--book-cloth);
   }
 
   .scrollbar-hide {

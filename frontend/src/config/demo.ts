@@ -29,10 +29,3 @@ export const DEMO_ACCOUNTS = {
     get hint() { return translate('ui.user') }
   }
 } as const
-
-// Demo 模式提示信息
-export const DEMO_MODE_INFO = {
-  get title() { return translate('demo.mode') },
-  description: '当前处于演示模式，所有数据均为模拟数据，不会产生实际调用。',
-  accountHint: '可使用以下演示账号登录：'
-} as const

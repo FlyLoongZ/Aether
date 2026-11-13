@@ -25,8 +25,6 @@ export const API_FORMATS = {
   ALIYUN_MULTIMODAL_EMBEDDING: 'aliyun:multimodal_embedding',
 } as const
 
-export type APIFormat = typeof API_FORMATS[keyof typeof API_FORMATS]
-
 // API 格式显示名称映射（按品牌分组）
 export const API_FORMAT_LABELS: Record<string, string> = {
   [API_FORMATS.CLAUDE_MESSAGES]: 'Claude Messages',
@@ -147,38 +145,6 @@ export const API_FORMAT_ORDER: string[] = [
   API_FORMATS.ALIYUN_MULTIMODAL_EMBEDDING,
 ]
 
-// Family 显示名称映射
-export const API_FORMAT_FAMILY_LABELS: Record<string, string> = {
-  openai: 'OpenAI',
-  codex: 'Codex',
-  claude: 'Claude',
-  gemini: 'Gemini',
-  jina: 'Jina',
-  doubao: 'Doubao',
-  aliyun: 'Aliyun',
-}
-
-// Kind 显示名称映射
-export const API_FORMAT_KIND_LABELS: Record<string, string> = {
-  chat: 'Chat',
-  responses: 'Responses',
-  'responses:compact': 'Responses Compact',
-  realtime: 'Realtime',
-  live: 'Live',
-  search: 'Search',
-  messages: 'Messages',
-  generate_content: 'Generate Content',
-  interactions: 'Interactions',
-  image: 'Image',
-  video: 'Video',
-  files: 'Files',
-  embedding: 'Embedding',
-  rerank: 'Rerank',
-}
-
-// Family 排序顺序
-const FAMILY_ORDER = ['openai', 'codex', 'claude', 'gemini', 'jina', 'doubao', 'aliyun']
-
 // 工具函数：从 API 格式中提取 family 和 kind
 export function parseApiFormat(format: string): { family: string; kind: string } {
   const idx = format.indexOf(':')
@@ -270,30 +236,6 @@ export interface ApiFormatGroup {
   family: string
   label: string
   formats: string[]
-}
-
-export function groupApiFormats(formats: string[]): ApiFormatGroup[] {
-  const sorted = sortApiFormats(formats)
-  const groups = new Map<string, string[]>()
-  for (const f of sorted) {
-    const { family } = parseApiFormat(normalizeApiFormatAlias(f))
-    if (!groups.has(family)) groups.set(family, [])
-    groups.get(family)?.push(f)
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => {
-      const ai = FAMILY_ORDER.indexOf(a)
-      const bi = FAMILY_ORDER.indexOf(b)
-      if (ai === -1 && bi === -1) return 0
-      if (ai === -1) return 1
-      if (bi === -1) return -1
-      return ai - bi
-    })
-    .map(([family, fmts]) => ({
-      family,
-      label: API_FORMAT_FAMILY_LABELS[family] || family,
-      formats: fmts,
-    }))
 }
 
 // 工具函数：将 API 格式签名转为友好显示名称

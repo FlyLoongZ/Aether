@@ -104,10 +104,6 @@ function quoteTomlString(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }
 
-export function ccSwitchTargetLabel(targetApp: CcSwitchTargetApp): string {
-  return CC_SWITCH_TARGET_OPTIONS.find(option => option.value === targetApp)?.label || targetApp
-}
-
 export function defaultCcSwitchProviderName(
   siteName?: string,
 ): string {

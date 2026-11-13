@@ -303,62 +303,6 @@ export async function refreshModelsDevList(
 }
 
 /**
- * 搜索模型
- * 搜索时包含所有提供商（包括第三方）
- */
-export async function searchModelsDevModels(
-  query: string,
-  options?: {
-    limit?: number
-    excludeDeprecated?: boolean
-  }
-): Promise<ModelsDevModelItem[]> {
-  // 搜索时包含全部提供商
-  const allModels = await getModelsDevList(false)
-  const { limit = 50, excludeDeprecated = true } = options || {}
-
-  const queryLower = query.toLowerCase()
-
-  const filtered = allModels.filter((model) => {
-    if (excludeDeprecated && model.deprecated) return false
-
-    // 搜索模型 ID、名称、provider 名称、family
-    return (
-      model.modelId.toLowerCase().includes(queryLower) ||
-      model.modelName.toLowerCase().includes(queryLower) ||
-      model.providerName.toLowerCase().includes(queryLower) ||
-      model.family?.toLowerCase().includes(queryLower)
-    )
-  })
-
-  // 排序：精确匹配优先
-  filtered.sort((a, b) => {
-    const aExact =
-      a.modelId.toLowerCase() === queryLower ||
-      a.modelName.toLowerCase() === queryLower
-    const bExact =
-      b.modelId.toLowerCase() === queryLower ||
-      b.modelName.toLowerCase() === queryLower
-    if (aExact && !bExact) return -1
-    if (!aExact && bExact) return 1
-    return 0
-  })
-
-  return filtered.slice(0, limit)
-}
-
-/**
- * 获取特定模型详情
- */
-export async function getModelsDevModel(
-  providerId: string,
-  modelId: string
-): Promise<ModelsDevModel | null> {
-  const data = await getModelsDevData()
-  return data[providerId]?.models?.[modelId] || null
-}
-
-/**
  * 获取 provider logo URL
  */
 export function getProviderLogoUrl(providerId: string): string {

@@ -32,7 +32,6 @@ vi.mock('@/features/overview/components/OverviewMetrics.vue', async () => {
   const { defineComponent, h } = await import('vue')
   return { default: defineComponent({ props: { metrics: { type: Object, required: true } }, setup: props => () => h('p', { 'data-request-count': '' }, String(props.metrics.request_count)) }) }
 })
-vi.mock('@/features/overview/components/OverviewTrend.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/features/overview/operations/LiveMetrics.vue', async () => {
   const { defineComponent, h } = await import('vue')
   return { default: defineComponent({ props: { snapshot: { type: Object, required: true }, resources: Boolean }, setup: props => () => h('p', { 'data-live-node': props.resources ? 'resources' : 'runtime' }, props.snapshot.node_id) }) }

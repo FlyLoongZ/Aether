@@ -19,8 +19,6 @@ export interface ModelDirectivesConfig {
   reasoning_effort: ReasoningEffortConfig
 }
 
-export const MODEL_DIRECTIVES_MODULE_NAME = 'model_directives'
-
 export const REASONING_EFFORTS = [
   'none',
   'minimal',
