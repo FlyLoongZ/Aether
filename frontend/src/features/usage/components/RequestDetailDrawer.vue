@@ -332,9 +332,41 @@
                   </div>
                   <div
                     v-if="isRequestBodyLoading"
-                    class="p-4"
+                    class="space-y-3 p-4"
                   >
-                    <Skeleton class="h-32 w-full" />
+                    <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>{{ t('ui.loading21bd738') }}</span>
+                      <span v-if="bodyLoadProgressText">{{ bodyLoadProgressText }}</span>
+                    </div>
+                    <div
+                      v-if="bodyLoadPhase === 'waiting'"
+                      class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div class="h-full w-full animate-body-progress-breathe rounded-full bg-gradient-to-r from-muted via-primary to-muted bg-[length:200%_100%]" />
+                    </div>
+                    <div
+                      v-else-if="bodyLoadPhase === 'streaming'"
+                      class="relative h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div class="absolute inset-y-0 w-[30%] animate-body-progress-slide rounded-full bg-primary" />
+                    </div>
+                    <div
+                      v-else
+                      class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        class="h-full rounded-full bg-primary transition-[width] duration-150"
+                        :style="{ width: (bodyLoadProgressPercent ?? 0) + '%' }"
+                      />
+                    </div>
+                    <div
+                      v-if="bodyLoadPhase === 'determinate'"
+                      class="flex items-center justify-between text-[11px] text-muted-foreground"
+                    >
+                      <span>{{ bodyLoadRateText }}</span>
+                      <span>{{ bodyLoadRemainingText }}</span>
+                    </div>
+                    <Skeleton class="h-24 w-full" />
                   </div>
                   <div
                     v-else-if="requestBodyLoadErrorVisible"
@@ -416,9 +448,41 @@
                   </div>
                   <div
                     v-if="isResponseBodyLoading"
-                    class="p-4"
+                    class="space-y-3 p-4"
                   >
-                    <Skeleton class="h-32 w-full" />
+                    <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>{{ t('ui.loading21bd738') }}</span>
+                      <span v-if="bodyLoadProgressText">{{ bodyLoadProgressText }}</span>
+                    </div>
+                    <div
+                      v-if="bodyLoadPhase === 'waiting'"
+                      class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div class="h-full w-full animate-body-progress-breathe rounded-full bg-gradient-to-r from-muted via-primary to-muted bg-[length:200%_100%]" />
+                    </div>
+                    <div
+                      v-else-if="bodyLoadPhase === 'streaming'"
+                      class="relative h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div class="absolute inset-y-0 w-[30%] animate-body-progress-slide rounded-full bg-primary" />
+                    </div>
+                    <div
+                      v-else
+                      class="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                    >
+                      <div
+                        class="h-full rounded-full bg-primary transition-[width] duration-150"
+                        :style="{ width: (bodyLoadProgressPercent ?? 0) + '%' }"
+                      />
+                    </div>
+                    <div
+                      v-if="bodyLoadPhase === 'determinate'"
+                      class="flex items-center justify-between text-[11px] text-muted-foreground"
+                    >
+                      <span>{{ bodyLoadRateText }}</span>
+                      <span>{{ bodyLoadRemainingText }}</span>
+                    </div>
+                    <Skeleton class="h-24 w-full" />
                   </div>
                   <div
                     v-else-if="responseBodyLoadErrorVisible"
@@ -551,6 +615,7 @@ import JsonContentPanel from './JsonContentPanel.vue'
 import BodyConversationContent from './RequestDetailDrawer/BodyConversationContent.vue'
 import { BodyDocument } from '../utils/body-document'
 import { BodyDocumentError, MAX_BODY_BYTES } from '../utils/body-document-protocol'
+import { formatSize } from '../utils/traceAttemptDisplay'
 import { useToast } from '@/composables/useToast'
 import HorizontalRequestTimeline from './HorizontalRequestTimeline.vue'
 import ReplayDialog from './ReplayDialog.vue'
@@ -857,6 +922,8 @@ const curlCopied = ref(false)
 const replayDialogOpen = ref(false)
 const bodyLoading = ref(false)
 const bodyLoadError = ref<string | null>(null)
+const bodyLoadProgress = ref<{ loaded: number; total: number | null } | null>(null)
+const bodyLoadRate = ref(0)
 const bodyDocuments = shallowRef(new Map<RequestBodyField, BodyDocument>())
 const bodyTruncatedFields = shallowRef(new Map<RequestBodyField, boolean>())
 const bodyTruncatedNotice = computed(() => t('ui.bodyTruncatedNotice'))
@@ -1132,6 +1199,42 @@ const bodyLoadErrorMessage = computed(() => {
   return bodyLoadError.value || formatStoredBodyLoadError(
     activeBodyField.value ? detail.value?.body_load_error_codes?.[activeBodyField.value] : undefined,
   )
+})
+
+const bodyLoadProgressPercent = computed(() => {
+  const progress = bodyLoadProgress.value
+  if (!progress || !progress.total || progress.total <= 0) return null
+  return Math.min(100, Math.max(0, Math.round((progress.loaded / progress.total) * 100)))
+})
+
+const bodyLoadPhase = computed<'waiting' | 'streaming' | 'determinate'>(() => {
+  const progress = bodyLoadProgress.value
+  if (!progress) return 'waiting'
+  return progress.total && progress.total > 0 ? 'determinate' : 'streaming'
+})
+
+const bodyLoadRateText = computed(() => {
+  if (bodyLoadPhase.value !== 'determinate' || bodyLoadRate.value <= 0) return ''
+  return `${formatSize(Math.round(bodyLoadRate.value))}/s`
+})
+
+const bodyLoadRemainingText = computed(() => {
+  if (bodyLoadPhase.value !== 'determinate') return ''
+  const progress = bodyLoadProgress.value
+  if (!progress?.total || bodyLoadRate.value <= 0) return ''
+  const remaining = (progress.total - progress.loaded) / bodyLoadRate.value
+  if (!Number.isFinite(remaining) || remaining <= 0) return ''
+  const seconds = Math.ceil(remaining)
+  return seconds < 60 ? `${seconds} 秒` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`
+})
+
+const bodyLoadProgressText = computed(() => {
+  const progress = bodyLoadProgress.value
+  if (!progress) return ''
+  if (progress.total && progress.total > 0) {
+    return `${formatSize(progress.loaded)} / ${formatSize(progress.total)}`
+  }
+  return formatSize(progress.loaded)
 })
 
 const canRetryBodyContentLoad = computed(() => {
@@ -1483,8 +1586,24 @@ async function ensureBodyContentLoaded() {
   bodyLoadController = controller
   bodyLoading.value = true
   bodyLoadError.value = null
+  bodyLoadProgress.value = null
+  bodyLoadRate.value = 0
+  let sampleAt = performance.now()
+  let sampleLoaded = 0
   try {
-    const response = await dashboardApi.getRequestBody(detail.value.id, field, controller.signal)
+    const response = await dashboardApi.getRequestBody(detail.value.id, field, controller.signal, (loaded, total) => {
+      if (requestId !== bodyLoadRequestId) return
+      const now = performance.now()
+      const elapsed = now - sampleAt
+      if (elapsed >= 250) {
+        const instant = ((loaded - sampleLoaded) * 1000) / elapsed
+        // Smooth the rate so the remaining-time estimate does not jump.
+        bodyLoadRate.value = bodyLoadRate.value > 0 ? bodyLoadRate.value * 0.6 + instant * 0.4 : instant
+        sampleAt = now
+        sampleLoaded = loaded
+      }
+      bodyLoadProgress.value = { loaded, total }
+    })
     const document = await BodyDocument.load(response.bytes, response.encoding, controller.signal)
     if (requestId !== bodyLoadRequestId || controller.signal.aborted || !detail.value ||
       !props.isOpen || !detailMatchesRequestId(detail.value, usageId)) {
@@ -1516,6 +1635,8 @@ async function ensureBodyContentLoaded() {
   } finally {
     if (requestId === bodyLoadRequestId) {
       bodyLoading.value = false
+      bodyLoadProgress.value = null
+      bodyLoadRate.value = 0
       bodyLoadController = null
     }
   }

@@ -2425,7 +2425,12 @@ async fn gateway_admin_usage_detail_raw_reads_only_selected_body_and_is_not_cach
             assert_eq!(response.headers()["x-aether-body-field"], field);
             assert_eq!(response.headers()["x-aether-body-encoding"], "json");
             assert!(response.extensions().get::<AdminAuditEvent>().is_some());
+            let declared_size = response.headers()["x-aether-body-size"]
+                .to_str()
+                .unwrap()
+                .to_owned();
             let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(declared_size, bytes.len().to_string());
             assert_eq!(
                 serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
                 json!({ "marker": field })

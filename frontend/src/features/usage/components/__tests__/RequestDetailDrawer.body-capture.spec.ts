@@ -128,7 +128,7 @@ describe('RequestDetailDrawer body capture', () => {
     expect(mocks.getRequestDetail).toHaveBeenCalledWith('usage-full-capture', expect.objectContaining({ includeBodies: false }))
     findButton('请求体')!.click()
     await expectBody('request_body')
-    expect(mocks.getRequestBody).toHaveBeenLastCalledWith('usage-full-capture', 'request_body', expect.any(AbortSignal))
+    expect(mocks.getRequestBody).toHaveBeenLastCalledWith('usage-full-capture', 'request_body', expect.any(AbortSignal), expect.any(Function))
     findButton('响应体')!.click()
     await expectBody('response_body')
     findButton('请求体')!.click()

@@ -19,7 +19,16 @@ describe('dashboard body loading', () => {
     getMock.mockResolvedValue({ data: new ArrayBuffer(0), headers: { 'x-aether-body-encoding': 'json', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'response_body' } })
     await dashboardApi.getRequestBody('usage-1', 'response_body', undefined, onProgress)
     getMock.mock.calls[0][1].onDownloadProgress({ loaded: 2 * 1024 * 1024 })
-    expect(onProgress).toHaveBeenCalledWith(2 * 1024 * 1024)
+    expect(onProgress).toHaveBeenCalledWith(2 * 1024 * 1024, null)
+  })
+
+  it('reads the exact body size from the gateway header when Content-Length is dropped', async () => {
+    const onProgress = vi.fn()
+    getMock.mockResolvedValue({ data: new ArrayBuffer(0), headers: { 'x-aether-body-encoding': 'json', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'response_body' } })
+    await dashboardApi.getRequestBody('usage-1', 'response_body', undefined, onProgress)
+    const xhr = { getResponseHeader: (name: string) => name === 'x-aether-body-size' ? '2500000' : null }
+    getMock.mock.calls[0][1].onDownloadProgress({ loaded: 1024 * 1024, total: 0, event: { target: xhr } })
+    expect(onProgress).toHaveBeenCalledWith(1024 * 1024, 2500000)
   })
 
   it('records the gateway version at export without confusing it with failure-time metadata', async () => {
@@ -33,7 +42,7 @@ describe('dashboard body loading', () => {
     const controller = new AbortController()
     getMock.mockResolvedValue({ data: bytes, headers: { 'x-aether-body-encoding': 'json', 'x-aether-usage-id': 'usage-1', 'x-aether-body-field': 'request_body' } })
     await expect(dashboardApi.getRequestBody('usage-1', 'request_body', controller.signal)).resolves.toEqual({ bytes, encoding: 'json', truncated: false })
-    expect(getMock).toHaveBeenCalledWith('/api/admin/usage/usage-1', { params: { include_bodies: true, body_field: 'request_body', body_format: 'raw' }, responseType: 'arraybuffer', signal: controller.signal })
+    expect(getMock).toHaveBeenCalledWith('/api/admin/usage/usage-1', { params: { include_bodies: true, body_field: 'request_body', body_format: 'raw' }, responseType: 'arraybuffer', timeout: 0, signal: expect.any(AbortSignal), onDownloadProgress: expect.any(Function) })
   })
 
   it('surfaces the stored truncation flag so the viewer can flag a cut capture', async () => {

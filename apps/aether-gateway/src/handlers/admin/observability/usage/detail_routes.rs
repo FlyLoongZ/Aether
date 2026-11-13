@@ -186,7 +186,8 @@ fn admin_usage_raw_payload_response(payload: AdminUsageRawBody) -> Response<Body
         BodyEncoding::Text => "text/plain; charset=utf-8",
         BodyEncoding::Binary => "application/octet-stream",
     };
-    (
+    let body_size = payload.bytes.len();
+    let mut response = (
         [
             ("content-type", content_type),
             ("content-encoding", "identity"),
@@ -194,7 +195,12 @@ fn admin_usage_raw_payload_response(payload: AdminUsageRawBody) -> Response<Body
         ],
         payload.bytes,
     )
-        .into_response()
+        .into_response();
+    // Proxies may drop `Content-Length`; the reader uses this header instead.
+    if let Ok(value) = http::HeaderValue::from_str(&body_size.to_string()) {
+        response.headers_mut().insert("x-aether-body-size", value);
+    }
+    response
 }
 
 fn admin_usage_raw_body_error(status: http::StatusCode, code: &'static str) -> Response<Body> {

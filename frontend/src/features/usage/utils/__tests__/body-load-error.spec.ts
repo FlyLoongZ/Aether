@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { AxiosError, type AxiosResponse } from 'axios'
 import { formatRequestBodyLoadError, formatStoredBodyLoadError } from '../body-load-error'
-import { RequestBodyProtocolError } from '@/api/dashboard'
+import { RequestBodyProtocolError, RequestBodyTimeoutError } from '@/api/dashboard'
 
 describe('body load error messages', () => {
   it('distinguishes timeouts, network failures, HTTP failures and storage errors', () => {
     expect(formatRequestBodyLoadError(new AxiosError('timeout', 'ECONNABORTED'))).toContain('30 秒')
+    expect(formatRequestBodyLoadError(new RequestBodyTimeoutError())).toContain('30 秒')
+    expect(formatRequestBodyLoadError(new RequestBodyTimeoutError())).toContain('传输中断')
     expect(formatRequestBodyLoadError(new AxiosError('offline', 'ERR_NETWORK'))).toContain('无法连接服务器')
     for (const status of [403, 404, 500]) {
       const error = new AxiosError('failed', undefined, undefined, undefined, { status } as AxiosResponse)
