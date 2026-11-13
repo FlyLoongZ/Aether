@@ -17,7 +17,6 @@ function view(name: string) {
 vi.mock('@/features/overview/operations/RuntimeView.vue', () => ({ default: view('runtime') }))
 vi.mock('@/features/overview/operations/PerformanceView.vue', () => ({ default: view('performance') }))
 vi.mock('@/features/overview/operations/LiveMetrics.vue', () => ({ default: view('details') }))
-vi.mock('@/features/overview/operations/RuntimeFocus.vue', () => ({ default: { render: () => null } }))
 async function settle() { await Promise.resolve(); await Promise.resolve(); await nextTick(); await new Promise(resolve => setTimeout(resolve, 0)) }
 
 describe('operations view lifecycle', () => {

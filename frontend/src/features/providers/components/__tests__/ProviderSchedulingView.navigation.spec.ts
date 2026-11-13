@@ -18,7 +18,6 @@ vi.mock('@/composables/useToast', () => ({ useToast: () => toast }))
 vi.mock('@/composables/useConfirm', () => ({ useConfirm: () => ({ confirm }) }))
 vi.mock('@/utils/logger', () => ({ log: { error: vi.fn(), warn: vi.fn() } }))
 vi.mock('@/features/providers/composables/useSchedulingProviderBalance', () => ({ provideSchedulingProviderBalance: vi.fn() }))
-vi.mock('../ProviderSchedulingStatus.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/features/routing/components/RoutingFailoverPolicyEditor.vue', async () => {
   const { defineComponent } = await import('vue')
   return { default: defineComponent({ setup(_, { expose }) { expose({ commitJsonDrafts: commitFailoverDrafts }); return () => null } }) }

@@ -9,7 +9,6 @@ const api = vi.hoisted(() => ({ performance: vi.fn() }))
 vi.mock('@/api/overview', () => ({ overviewApi: api }))
 vi.mock('@/components/charts/BarChart.vue', () => ({ default: { render: () => null } }))
 vi.mock('@/components/charts/LineChart.vue', () => ({ default: { render: () => null } }))
-vi.mock('../components/OverviewTrend.vue', () => ({ default: { render: () => null } }))
 vi.mock('../components/OverviewStatus.vue', () => ({ default: { render: () => null } }))
 
 let app: App | undefined
