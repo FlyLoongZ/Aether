@@ -25,6 +25,7 @@
               :aria-label="searchPlaceholder ?? t('common.searchPlaceholder')"
               class="h-9 rounded-xl border-border/60 bg-background/80 pl-9 pr-3 text-sm"
               @keydown.stop
+              @focus="ensurePinyin"
             />
           </div>
         </div>
@@ -53,7 +54,6 @@ import {
   computed,
   inject,
   nextTick,
-  onMounted,
   onUnmounted,
   provide,
   ref,
@@ -66,8 +66,9 @@ import {
   SELECT_SEARCH_CONTEXT_KEY,
   type RegisteredSelectItem,
 } from './select-search-context'
-import { matchesSearchQuery, preloadPinyin } from '@/utils/search'
+import { matchesSearchQuery } from '@/utils/search'
 import { useI18n } from '@/i18n'
+import { useLazyPinyin } from '@/composables/useLazyPinyin'
 
 interface Props {
   class?: string
@@ -104,7 +105,11 @@ const searchQuery = ref('')
 const searchInputRef = ref<InstanceType<typeof Input> | null>(null)
 const registeredItems = ref<Record<string, RegisteredSelectItem>>({})
 
+// 拼音词典按需加载：加载完成后需要重新过滤一次（track 建立响应式依赖）。
+const { ensureLoaded: ensurePinyin, track: trackPinyin } = useLazyPinyin()
+
 const hiddenValues = computed(() => {
+  trackPinyin()
   const query = searchQuery.value.trim()
   if (!query) return new Set<string>()
 
@@ -162,10 +167,8 @@ const showEmptyState = computed(
     hiddenValues.value.size === itemCount.value,
 )
 
-onMounted(() => {
-  if (props.searchable) {
-    preloadPinyin()
-  }
+watch(searchQuery, (query) => {
+  if (query.trim()) ensurePinyin()
 })
 
 watch(showSearchInput, async (visible) => {
