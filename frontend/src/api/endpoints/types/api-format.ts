@@ -279,3 +279,9 @@ export function compareApiFormats(a: string, b: string): number {
 export function formatSupportsAuthOverride(format: string): boolean {
   return parseApiFormat(normalizeApiFormatAlias(format)).family !== 'openai'
 }
+
+/** 是否为 embedding 类 API 格式（用于模型能力推断）。 */
+export function isEmbeddingApiFormat(format: unknown): boolean {
+  const value = String(format).trim().toLowerCase()
+  return value.endsWith(':embedding') || value === 'aliyun:multimodal_embedding'
+}

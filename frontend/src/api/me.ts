@@ -6,8 +6,7 @@ import { cachedRequest, buildCacheKey } from '@/utils/cache'
 import type { BillingSummary } from './auth'
 import type { UserSession } from '@/types/session'
 import type { FeatureSettingsMap } from '@/utils/featureSettings'
-
-const ACTIVITY_HEATMAP_CACHE_TTL_MS = 30 * 60 * 1000
+import { CACHE_TTL } from '@/config/constants'
 
 export type { UserSession }
 
@@ -624,7 +623,7 @@ export const meApi = {
         const response = await apiClient.get<ActivityHeatmap>('/api/users/me/usage/heatmap')
         return response.data
       },
-      ACTIVITY_HEATMAP_CACHE_TTL_MS
+      CACHE_TTL.ACTIVITY_HEATMAP_MS
     )
   }
 }

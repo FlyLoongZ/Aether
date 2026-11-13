@@ -303,6 +303,7 @@ import { useToast } from '@/composables/useToast'
 import { updateProvider, type ProviderWithEndpointsSummary } from '@/api/endpoints'
 import { parseApiError } from '@/utils/errorParser'
 import type { FailoverRuleItem, FailoverRulesConfig } from '@/api/endpoints/types'
+import { isRecord } from '@/utils/type-guards'
 
 const props = defineProps<{
   open: boolean
@@ -348,9 +349,6 @@ const MANAGED_FAILOVER_RULE_KEYS = [
   ...TOP_LEVEL_STOP_STATUS_CODE_KEYS,
 ] as const
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
 
 function uniqueStatusCodes(codes: number[]): number[] {
   return codes.filter((code, index, values) =>
@@ -367,14 +365,14 @@ function hasPersistableFailoverValue(value: unknown): boolean {
   if (value === null || value === undefined) return false
   if (Array.isArray(value)) return value.length > 0
   if (typeof value === 'string') return value.trim().length > 0
-  if (isJsonObject(value)) return Object.values(value).some(hasPersistableFailoverValue)
+  if (isRecord(value)) return Object.values(value).some(hasPersistableFailoverValue)
   return true
 }
 
 function buildPreservedFailoverRules(
   rules: ProviderWithEndpointsSummary['failover_rules'],
 ): Record<string, unknown> {
-  if (!isJsonObject(rules)) return {}
+  if (!isRecord(rules)) return {}
   const preserved: Record<string, unknown> = { ...rules }
   for (const key of MANAGED_FAILOVER_RULE_KEYS) {
     delete preserved[key]
@@ -563,8 +561,8 @@ function readJsonRuleArray(
   key: 'success_failover_patterns' | 'error_stop_patterns',
 ): { root: Record<string, unknown>; value: unknown[]; error: string | null } {
   if (Array.isArray(parsed)) return { root: {}, value: parsed, error: null }
-  if (!isJsonObject(parsed)) return { root: {}, value: [], error: t('ui.rulesJsonMustBeAnArrayOrObject') }
-  const root = isJsonObject(parsed.failover_rules) ? parsed.failover_rules : parsed
+  if (!isRecord(parsed)) return { root: {}, value: [], error: t('ui.rulesJsonMustBeAnArrayOrObject') }
+  const root = isRecord(parsed.failover_rules) ? parsed.failover_rules : parsed
   const raw = root[key]
   if (raw === undefined || raw === null) return { root, value: [], error: null }
   if (!Array.isArray(raw)) return { root, value: [], error: t('providers.migration.mustBeAnArrayOr606f8c', { value: String(key) }) }
@@ -602,7 +600,7 @@ function parseJsonStatusCodes(
 
 function parseJsonSuccessRule(rule: unknown, index: number): { rule: FailoverRuleItem | null; error: string | null } {
   const label = t('providers.migration.successFailoverJsonEntry8dda49', { value: String(index + 1) })
-  if (!isJsonObject(rule)) return { rule: null, error: t('providers.migration.mustBeAnObject3d1941', { value: String(label) }) }
+  if (!isRecord(rule)) return { rule: null, error: t('providers.migration.mustBeAnObject3d1941', { value: String(label) }) }
   if (typeof rule.pattern !== 'string' || !rule.pattern.trim()) {
     return { rule: null, error: t('providers.migration.patternIsRequired147d12', { value: String(label) }) }
   }
@@ -624,7 +622,7 @@ function parseJsonSuccessRule(rule: unknown, index: number): { rule: FailoverRul
 
 function parseJsonErrorRule(rule: unknown, index: number): { rule: FailoverRuleItem | null; error: string | null } {
   const label = t('providers.migration.errorTerminationJsonEntry09f2d8', { value: String(index + 1) })
-  if (!isJsonObject(rule)) return { rule: null, error: t('providers.migration.mustBeAnObject3d1941', { value: String(label) }) }
+  if (!isRecord(rule)) return { rule: null, error: t('providers.migration.mustBeAnObject3d1941', { value: String(label) }) }
   const status = parseJsonStatusCodes(rule.status_codes, label, false)
   if (status.error) return { rule: null, error: status.error }
   if (rule.pattern !== undefined && rule.pattern !== null && typeof rule.pattern !== 'string') {

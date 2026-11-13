@@ -387,6 +387,7 @@ import {
   type ProviderType
 } from '@/api/endpoints'
 import { formatApiFormat, normalizeApiFormatAlias, formatSupportsAuthOverride } from '@/api/endpoints/types/api-format'
+import { parseModelPatternText } from '../utils/modelPatterns'
 
 type RawSecretAuthType = 'api_key' | 'bearer'
 type ProviderKeyFormAuthType = RawSecretAuthType | 'service_account'
@@ -880,14 +881,6 @@ function createFieldNonce(): string {
 
 // 将逗号分隔的文本解析为数组（去空、去重）
 // 返回空数组而非 undefined，以便后端能正确清除已有规则
-function parsePatternText(text: string): string[] {
-  if (!text.trim()) return []
-  const patterns = text
-    .split(',')
-    .map(s => s.trim())
-    .filter(s => s.length > 0)
-  return [...new Set(patterns)]
-}
 
 // 解析 Service Account JSON 文本
 function parseAuthConfig(): Record<string, unknown> | null {
@@ -983,8 +976,8 @@ async function handleSave() {
         is_active: form.value.is_active,
         allowed_models: shouldClearAllowedModels ? null : undefined,
         auto_fetch_models: form.value.auto_fetch_models,
-        model_include_patterns: parsePatternText(form.value.model_include_patterns_text),
-        model_exclude_patterns: parsePatternText(form.value.model_exclude_patterns_text)
+        model_include_patterns: parseModelPatternText(form.value.model_include_patterns_text),
+        model_exclude_patterns: parseModelPatternText(form.value.model_exclude_patterns_text)
       }
 
       // 根据认证类型设置对应字段
@@ -1016,8 +1009,8 @@ async function handleSave() {
         max_probe_interval_minutes: form.value.max_probe_interval_minutes,
         note: form.value.note,
         auto_fetch_models: form.value.auto_fetch_models,
-        model_include_patterns: parsePatternText(form.value.model_include_patterns_text),
-        model_exclude_patterns: parsePatternText(form.value.model_exclude_patterns_text)
+        model_include_patterns: parseModelPatternText(form.value.model_include_patterns_text),
+        model_exclude_patterns: parseModelPatternText(form.value.model_exclude_patterns_text)
       })
 
       success(t('ui.keyAdded'), t('ui.success'))

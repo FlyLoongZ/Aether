@@ -1,9 +1,5 @@
 import type { PublicGlobalModel } from '@/api/public-models'
-
-function isEmbeddingApiFormat(format: unknown): boolean {
-  const value = String(format).trim().toLowerCase()
-  return value.endsWith(':embedding') || value === 'aliyun:multimodal_embedding'
-}
+import { isEmbeddingApiFormat } from '@/api/endpoints/types/api-format'
 
 export function supportsEmbedding(model: PublicGlobalModel): boolean {
   return model.supports_embedding === true

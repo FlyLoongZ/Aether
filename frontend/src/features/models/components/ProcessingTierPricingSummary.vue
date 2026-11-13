@@ -214,6 +214,8 @@ import type {
   TieredPricingConfig,
 } from '@/api/endpoints/types'
 import { comparePricingUpperBounds } from '@/features/models/utils/tiered-pricing'
+import { isRecord } from '@/utils/type-guards'
+import { valueHasEntries } from '../utils/tiered-pricing'
 
 type ProcessingTierEntry = {
   key: string
@@ -362,11 +364,6 @@ function processingPricingHasExplicitFacts(config: ProcessingTierPricingConfig):
   ].some(key => valueHasEntries(config[key]))
 }
 
-function valueHasEntries(value: unknown): boolean {
-  return (Array.isArray(value) && value.length > 0)
-    || (isRecord(value) && Object.keys(value).length > 0)
-}
-
 function formatMultiplier(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(6)))
 }
@@ -429,8 +426,5 @@ function toFiniteNumber(value: unknown): number | null {
   return null
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
 
 </script>

@@ -370,6 +370,7 @@ import {
 } from '@/api/endpoints'
 import { useUpstreamModelsCache } from '../composables/useUpstreamModelsCache'
 import { formatApiFormatShort, type UpstreamModel } from '@/api/endpoints/types'
+import { toggleSetMember } from '@/utils/set'
 
 interface AvailableModel {
   name: string
@@ -645,12 +646,7 @@ function toggleAllProviderModels() {
 
 // 切换折叠状态
 function toggleGroupCollapse(group: string) {
-  if (collapsedGroups.value.has(group)) {
-    collapsedGroups.value.delete(group)
-  } else {
-    collapsedGroups.value.add(group)
-  }
-  collapsedGroups.value = new Set(collapsedGroups.value)
+  collapsedGroups.value = toggleSetMember(collapsedGroups.value, group)
 }
 
 // 加载该 Provider 已关联的模型

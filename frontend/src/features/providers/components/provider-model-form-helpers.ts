@@ -4,17 +4,15 @@ import type {
   ProviderTieredPricingConfig,
   TieredPricingConfig,
 } from '@/api/endpoints'
+import { isRecord } from '@/utils/type-guards'
+import { isEmbeddingApiFormat } from '@/api/endpoints/types/api-format'
+import { valueHasEntries } from '@/features/models/utils/tiered-pricing'
 
 interface EmbeddingMetadataCarrier {
   supported_capabilities?: string[] | null
   supports_embedding?: boolean | null
   effective_supports_embedding?: boolean | null
   config?: Record<string, unknown> | null
-}
-
-function isEmbeddingApiFormat(format: unknown): boolean {
-  const value = String(format).trim().toLowerCase()
-  return value.endsWith(':embedding') || value === 'aliyun:multimodal_embedding'
 }
 
 export interface ProviderModelCreatePayloadInput {
@@ -72,9 +70,6 @@ const STANDARD_PRICING_KEYS = new Set([
   'image_prices',
 ])
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -82,11 +77,6 @@ function cloneJson<T>(value: T): T {
 
 function hasOwn(object: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(object, key)
-}
-
-function valueHasEntries(value: unknown): boolean {
-  return (Array.isArray(value) && value.length > 0)
-    || (isRecord(value) && Object.keys(value).length > 0)
 }
 
 function hasStandardPricingData(pricing: ProviderTieredPricingConfig): boolean {

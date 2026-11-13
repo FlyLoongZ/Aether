@@ -363,6 +363,7 @@ import {
 } from '../auth-templates/schema-utils'
 import ProxyNodeSelect from './ProxyNodeSelect.vue'
 import { useProxyNodesStore } from '@/stores/proxy-nodes'
+import { isRecord } from '@/utils/type-guards'
 
 const props = defineProps<{
   open: boolean
@@ -746,9 +747,6 @@ async function handleClear() {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 function stringOrDefault(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim() ? value : fallback

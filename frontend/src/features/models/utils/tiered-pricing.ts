@@ -3,6 +3,7 @@ import type {
   ProcessingTierPricingConfig,
   TieredPricingConfig,
 } from '@/api/endpoints/types'
+import { isRecord } from '@/utils/type-guards'
 
 type PricingCatalog = ProviderTieredPricingConfig | ProcessingTierPricingConfig
 type RootPricingCatalog = TieredPricingConfig | ProviderTieredPricingConfig
@@ -51,6 +52,8 @@ function toFinitePrice(value: unknown): number | null {
   return null
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+/** 计价值是否包含条目（非空数组或非空对象）。 */
+export function valueHasEntries(value: unknown): boolean {
+  return (Array.isArray(value) && value.length > 0)
+    || (isRecord(value) && Object.keys(value).length > 0)
 }
