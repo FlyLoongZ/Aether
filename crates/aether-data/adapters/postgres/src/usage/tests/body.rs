@@ -1064,3 +1064,20 @@ fn file_backed_body_detection_uses_the_ledger_storage_marker() {
     }))));
     assert!(!super::super::usage_has_file_backed_body(None));
 }
+
+/// The per-field body query and the `[Option<CapturedBody>; 4]` slot must use
+/// the same storage order as `decode_usage_http_body_row`.
+#[test]
+fn body_side_columns_and_indexes_match_the_storage_order() {
+    use super::super::{usage_body_index, usage_body_side_column};
+
+    for (index, field, column) in [
+        (0, UsageBodyField::RequestBody, "client_request"),
+        (1, UsageBodyField::ClientResponseBody, "client_response"),
+        (2, UsageBodyField::ProviderRequestBody, "provider_request"),
+        (3, UsageBodyField::ResponseBody, "provider_response"),
+    ] {
+        assert_eq!(usage_body_index(field), index);
+        assert_eq!(usage_body_side_column(field), column);
+    }
+}

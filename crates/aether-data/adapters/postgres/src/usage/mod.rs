@@ -1,6 +1,6 @@
 use aether_data_contracts::repository::usage::{
-    body_capture_metadata_storage, ApiKeyLastUsedDelta, BodyEncoding, CapturedBody,
-    ManagementTokenCounterDelta, ProxyNodeCounterDelta, StoredUsageAuditAggregation,
+    body_capture_metadata_state, body_capture_metadata_storage, ApiKeyLastUsedDelta, BodyEncoding,
+    CapturedBody, ManagementTokenCounterDelta, ProxyNodeCounterDelta, StoredUsageAuditAggregation,
     StoredUsageAuditSummary, StoredUsageBreakdownSummaryRow, StoredUsageCacheAffinityHitSummary,
     StoredUsageCacheAffinityIntervalRow, StoredUsageCacheHitSummary, StoredUsageCostSavingsSummary,
     StoredUsageDashboardDailyBreakdownRow, StoredUsageDashboardProviderCount,
@@ -3080,6 +3080,31 @@ ORDER BY request_count DESC, "usage".provider_name ASC
         let mut usage = row.as_ref().map(map_usage_row).transpose()?;
         if let Some(usage) = usage.as_mut() {
             attach_usage_http_bodies(&self.pool, usage).await?;
+        }
+        Ok(usage)
+    }
+
+    /// Loads one usage row and only the requested body side.
+    ///
+    /// `field = None` loads no bodies at all; the raw body route passes the one
+    /// side it renders so the other three are never read from the database or
+    /// the file store.
+    pub async fn find_by_id_with_body(
+        &self,
+        id: &str,
+        field: Option<UsageBodyField>,
+    ) -> Result<Option<StoredRequestUsageAudit>, DataLayerError> {
+        let row = sqlx::query(FIND_BY_ID_SQL)
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_postgres_err()?;
+        let mut usage = row.as_ref().map(map_usage_row).transpose()?;
+        if let Some(usage) = usage.as_mut() {
+            let load = field
+                .map(UsageBodyLoad::Only)
+                .unwrap_or(UsageBodyLoad::None);
+            attach_usage_http_bodies_with_load(&self.pool, usage, load).await?;
         }
         Ok(usage)
     }
@@ -10388,6 +10413,14 @@ impl UsageReadRepository for SqlxUsageReadRepository {
         Self::find_by_id(self, id).await
     }
 
+    async fn find_by_id_with_body(
+        &self,
+        id: &str,
+        field: Option<UsageBodyField>,
+    ) -> Result<Option<StoredRequestUsageAudit>, DataLayerError> {
+        Self::find_by_id_with_body(self, id, field).await
+    }
+
     async fn list_by_ids(
         &self,
         ids: &[String],
@@ -10820,6 +10853,36 @@ async fn read_usage_http_headers_in_tx(
     ))
 }
 
+/// Which captured sides a read needs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UsageBodyLoad {
+    /// The caller only needs the accounting row and the capture ledger.
+    None,
+    /// Every side, for callers that render the whole exchange.
+    All,
+    /// One side, for the raw body route.
+    Only(UsageBodyField),
+}
+
+fn usage_body_index(field: UsageBodyField) -> usize {
+    match field {
+        UsageBodyField::RequestBody => 0,
+        UsageBodyField::ClientResponseBody => 1,
+        UsageBodyField::ProviderRequestBody => 2,
+        UsageBodyField::ResponseBody => 3,
+    }
+}
+
+/// The `usage_http_bodies` base column for one side.
+fn usage_body_side_column(field: UsageBodyField) -> &'static str {
+    match field {
+        UsageBodyField::RequestBody => "client_request",
+        UsageBodyField::ClientResponseBody => "client_response",
+        UsageBodyField::ProviderRequestBody => "provider_request",
+        UsageBodyField::ResponseBody => "provider_response",
+    }
+}
+
 /// Loads one request's captured bodies outside a transaction.
 ///
 /// The accounting row and the capture rows are separate tables, so every reader
@@ -10834,23 +10897,42 @@ async fn read_usage_http_headers_in_tx(
 async fn load_usage_http_bodies(
     pool: &sqlx::PgPool,
     usage: &StoredRequestUsageAudit,
+    load: UsageBodyLoad,
 ) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
+    let metadata = usage.request_metadata.as_ref();
+    let mut bodies = [None, None, None, None];
+
+    match load {
+        UsageBodyLoad::None => return Ok(bodies),
+        UsageBodyLoad::Only(field) => {
+            let index = usage_body_index(field);
+            bodies[index] = if body_capture_metadata_storage(metadata, field)
+                == Some(UsageBodyCaptureStorage::File)
+            {
+                read_usage_body_file_side(usage, field).await
+            } else {
+                load_usage_http_body_side(pool, &usage.request_id, field).await?
+            };
+            return Ok(bodies);
+        }
+        UsageBodyLoad::All => {}
+    }
+
     let row = sqlx::query(SELECT_USAGE_HTTP_BODY_PAYLOAD_SQL)
         .bind(&usage.request_id)
         .fetch_optional(pool)
         .await
         .map_postgres_err()?;
-    let mut bodies = row
+    bodies = row
         .as_ref()
         .map(decode_usage_http_body_row)
         .transpose()?
         .unwrap_or([None, None, None, None]);
 
-    let metadata = usage.request_metadata.as_ref();
     // Only touch the file store when the ledger actually routes a side there.
     // A database-backed record would otherwise pay a `read_dir` on every
     // detail read for a directory that does not exist.
-    let file_bodies = if usage_has_file_backed_body(metadata) {
+    let mut file_bodies = if usage_has_file_backed_body(metadata) {
         match (
             aether_body_store::global(),
             aether_body_store::day_from_unix_secs(usage.updated_at_unix_secs),
@@ -10881,16 +10963,86 @@ async fn load_usage_http_bodies(
         if body_capture_metadata_storage(metadata, side) != Some(UsageBodyCaptureStorage::File) {
             continue;
         }
-        bodies[index] = match file_bodies.as_ref().and_then(|bodies| bodies.get(&side)) {
+        bodies[index] = match file_bodies.as_mut().and_then(|bodies| bodies.remove(&side)) {
             Some(file) => Some(CapturedBody::from_bytes(
-                file.bytes.clone(),
+                file.bytes,
                 file.encoding,
-                body_capture_metadata_truncated(metadata, side),
+                body_capture_metadata_state(metadata, side)
+                    == Some(UsageBodyCaptureState::Truncated),
             )),
             None => Some(CapturedBody::Unavailable),
         };
     }
     Ok(bodies)
+}
+
+/// Reads one database-backed side.
+async fn load_usage_http_body_side(
+    pool: &sqlx::PgPool,
+    request_id: &str,
+    field: UsageBodyField,
+) -> Result<Option<CapturedBody>, DataLayerError> {
+    let column = usage_body_side_column(field);
+    // The column name comes from a static match, never from user input.
+    let sql = format!(
+        "SELECT {column}, {column}_encoding, {column}_truncated \
+         FROM usage_http_bodies WHERE request_id = $1"
+    );
+    let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
+        .bind(request_id)
+        .fetch_optional(pool)
+        .await
+        .map_postgres_err()?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let Some(bytes) = row
+        .try_get::<Option<Vec<u8>>, _>(column)
+        .map_postgres_err()?
+    else {
+        return Ok(None);
+    };
+    let encoding_column = format!("{column}_encoding");
+    let encoding = decode_body_encoding(
+        row.try_get::<Option<String>, _>(encoding_column.as_str())
+            .map_postgres_err()?,
+    );
+    let truncated_column = format!("{column}_truncated");
+    let truncated = row
+        .try_get::<bool, _>(truncated_column.as_str())
+        .map_postgres_err()?;
+    Ok(Some(CapturedBody::from_bytes(bytes, encoding, truncated)))
+}
+
+/// Reads one file-backed side.
+async fn read_usage_body_file_side(
+    usage: &StoredRequestUsageAudit,
+    field: UsageBodyField,
+) -> Option<CapturedBody> {
+    let metadata = usage.request_metadata.as_ref();
+    let Some(store) = aether_body_store::global() else {
+        return Some(CapturedBody::Unavailable);
+    };
+    let Some(day) = aether_body_store::day_from_unix_secs(usage.updated_at_unix_secs) else {
+        return Some(CapturedBody::Unavailable);
+    };
+    match store.read_side(day, &usage.request_id, field).await {
+        Ok(Some(file)) => Some(CapturedBody::from_bytes(
+            file.bytes,
+            file.encoding,
+            body_capture_metadata_state(metadata, field) == Some(UsageBodyCaptureState::Truncated),
+        )),
+        Ok(None) => Some(CapturedBody::Unavailable),
+        Err(error) => {
+            tracing::warn!(
+                request_id = %usage.request_id,
+                side = field.file_stem(),
+                error = %error,
+                "usage body file read failed"
+            );
+            Some(CapturedBody::Unavailable)
+        }
+    }
 }
 
 /// Whether the capture ledger routes any side to the body file store.
@@ -10910,14 +11062,10 @@ fn usage_has_file_backed_body(metadata: Option<&Value>) -> bool {
     })
 }
 
-fn body_capture_metadata_truncated(metadata: Option<&Value>, side: UsageBodyField) -> bool {
-    metadata
-        .and_then(|metadata| metadata.get("body_capture"))
-        .and_then(|body_capture| body_capture.get(side.as_capture_key()))
-        .and_then(|entry| entry.get("state"))
-        .and_then(Value::as_str)
-        .and_then(UsageBodyCaptureState::from_label)
-        == Some(UsageBodyCaptureState::Truncated)
+fn decode_body_encoding(raw: Option<String>) -> BodyEncoding {
+    raw.as_deref()
+        .and_then(BodyEncoding::from_label)
+        .unwrap_or(BodyEncoding::Binary)
 }
 
 fn decode_usage_http_body_row(row: &PgRow) -> Result<[Option<CapturedBody>; 4], DataLayerError> {
@@ -10931,12 +11079,10 @@ fn decode_usage_http_body_row(row: &PgRow) -> Result<[Option<CapturedBody>; 4], 
         else {
             return Ok(None);
         };
-        let encoding = row
-            .try_get::<Option<String>, _>(encoding_column)
-            .map_postgres_err()?
-            .as_deref()
-            .and_then(BodyEncoding::from_label)
-            .unwrap_or(BodyEncoding::Binary);
+        let encoding = decode_body_encoding(
+            row.try_get::<Option<String>, _>(encoding_column)
+                .map_postgres_err()?,
+        );
         // The truncation cut is a stored column, not a re-derivation: the
         // reloaded body is the exact value that was written, so the
         // authority checks and capture labels stay truthful across a
@@ -10974,7 +11120,15 @@ async fn attach_usage_http_bodies(
     pool: &sqlx::PgPool,
     usage: &mut StoredRequestUsageAudit,
 ) -> Result<(), DataLayerError> {
-    let bodies = load_usage_http_bodies(pool, usage).await?;
+    attach_usage_http_bodies_with_load(pool, usage, UsageBodyLoad::All).await
+}
+
+async fn attach_usage_http_bodies_with_load(
+    pool: &sqlx::PgPool,
+    usage: &mut StoredRequestUsageAudit,
+    load: UsageBodyLoad,
+) -> Result<(), DataLayerError> {
+    let bodies = load_usage_http_bodies(pool, usage, load).await?;
     usage.request_body = bodies[0].clone();
     usage.client_response_body = bodies[1].clone();
     usage.provider_request_body = bodies[2].clone();

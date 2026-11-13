@@ -151,56 +151,22 @@ impl BodyFileStore {
         day: NaiveDate,
         request_id: &str,
     ) -> Result<HashMap<UsageBodyField, StoredBodyFile>, BodyFileStoreError> {
-        let dir = self.request_dir(day, request_id);
-        let mut entries = match tokio::fs::read_dir(&dir).await {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(HashMap::new());
-            }
-            Err(error) => return Err(error.into()),
-        };
+        scan_sides(&self.request_dir(day, request_id), None).await
+    }
 
-        let mut newest: HashMap<UsageBodyField, (std::time::SystemTime, StoredBodyFile)> =
-            HashMap::new();
-        while let Some(entry) = entries.next_entry().await? {
-            match entry.file_type().await {
-                Ok(file_type) if file_type.is_file() => {}
-                Ok(_) => continue,
-                // The file was removed by a concurrent delete or cleanup pass.
-                Err(error) if is_not_found(&error) => continue,
-                Err(error) => return Err(error.into()),
-            }
-            let Some(name) = entry.file_name().to_str().map(ToOwned::to_owned) else {
-                continue;
-            };
-            let Some((stem, ext)) = name.rsplit_once('.') else {
-                continue;
-            };
-            let Some(side) = side_from_file_stem(stem) else {
-                continue;
-            };
-            let Some(encoding) = BodyEncoding::from_ext(ext) else {
-                continue;
-            };
-            let path = entry.path();
-            let Some((bytes, modified)) = read_body_file(&path, MAX_USAGE_BODY_BYTES).await? else {
-                // A body above the read limit is unreadable, not fatal: skip
-                // this side so the other sides of the same request still load.
-                continue;
-            };
-            let candidate = StoredBodyFile { encoding, bytes };
-            match newest.get(&side) {
-                Some((existing_modified, _)) if *existing_modified >= modified => {}
-                _ => {
-                    newest.insert(side, (modified, candidate));
-                }
-            }
-        }
-
-        Ok(newest
-            .into_iter()
-            .map(|(side, (_, file))| (side, file))
-            .collect())
+    /// Reads one side's file, if present.
+    ///
+    /// The file extension is the encoding, so the directory is listed and only
+    /// the requested side's bytes are read.
+    pub async fn read_side(
+        &self,
+        day: NaiveDate,
+        request_id: &str,
+        side: UsageBodyField,
+    ) -> Result<Option<StoredBodyFile>, BodyFileStoreError> {
+        Ok(scan_sides(&self.request_dir(day, request_id), Some(side))
+            .await?
+            .remove(&side))
     }
 
     /// Removes every file for one side, regardless of extension.
@@ -210,37 +176,7 @@ impl BodyFileStore {
         request_id: &str,
         side: UsageBodyField,
     ) -> Result<(), BodyFileStoreError> {
-        let dir = self.request_dir(day, request_id);
-        let mut entries = match tokio::fs::read_dir(&dir).await {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(error) => return Err(error.into()),
-        };
-        while let Some(entry) = entries.next_entry().await? {
-            let Some(name) = entry.file_name().to_str().map(ToOwned::to_owned) else {
-                continue;
-            };
-            let Some((stem, _)) = name.rsplit_once('.') else {
-                continue;
-            };
-            if stem != side.file_stem() {
-                continue;
-            }
-            // Only regular files are body copies; a same-named directory is
-            // not ours to remove.
-            match entry.file_type().await {
-                Ok(file_type) if file_type.is_file() => {}
-                Ok(_) => continue,
-                Err(error) if is_not_found(&error) => continue,
-                Err(error) => return Err(error.into()),
-            }
-            match tokio::fs::remove_file(entry.path()).await {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
-        }
-        Ok(())
+        remove_side_files(&self.request_dir(day, request_id), side, None).await
     }
 
     /// Removes one request directory (all four sides).
@@ -389,6 +325,68 @@ async fn file_equals(path: &Path, bytes: &[u8]) -> std::io::Result<bool> {
     }
 }
 
+/// Lists one request directory and returns the newest file per side.
+///
+/// `only` restricts the scan to one side; the other sides are skipped before
+/// their bytes are read.
+async fn scan_sides(
+    dir: &Path,
+    only: Option<UsageBodyField>,
+) -> Result<HashMap<UsageBodyField, StoredBodyFile>, BodyFileStoreError> {
+    let mut entries = match tokio::fs::read_dir(dir).await {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(HashMap::new());
+        }
+        Err(error) => return Err(error.into()),
+    };
+
+    let mut newest: HashMap<UsageBodyField, (std::time::SystemTime, StoredBodyFile)> =
+        HashMap::new();
+    while let Some(entry) = entries.next_entry().await? {
+        match entry.file_type().await {
+            Ok(file_type) if file_type.is_file() => {}
+            Ok(_) => continue,
+            // The file was removed by a concurrent delete or cleanup pass.
+            Err(error) if is_not_found(&error) => continue,
+            Err(error) => return Err(error.into()),
+        }
+        let Some(name) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+            continue;
+        };
+        let Some((stem, ext)) = name.rsplit_once('.') else {
+            continue;
+        };
+        let Some(side) = side_from_file_stem(stem) else {
+            continue;
+        };
+        if only.is_some_and(|only| only != side) {
+            continue;
+        }
+        let Some(encoding) = BodyEncoding::from_ext(ext) else {
+            continue;
+        };
+        let path = entry.path();
+        let Some((bytes, modified)) = read_body_file(&path, MAX_USAGE_BODY_BYTES).await? else {
+            // A body above the read limit is unreadable, not fatal: skip this
+            // side so the other sides of the same request still load.
+            continue;
+        };
+        let candidate = StoredBodyFile { encoding, bytes };
+        match newest.get(&side) {
+            Some((existing_modified, _)) if *existing_modified >= modified => {}
+            _ => {
+                newest.insert(side, (modified, candidate));
+            }
+        }
+    }
+
+    Ok(newest
+        .into_iter()
+        .map(|(side, (_, file))| (side, file))
+        .collect())
+}
+
 /// Reads one body file, returning `None` when it exceeds `limit`.
 ///
 /// The size is taken from the opened inode, not from the path: a concurrent
@@ -441,10 +439,10 @@ fn parse_component(value: Option<&str>, width: usize) -> Option<u32> {
     value.parse().ok()
 }
 
-async fn remove_other_extensions(
+async fn remove_side_files(
     dir: &Path,
     side: UsageBodyField,
-    keep: BodyEncoding,
+    keep: Option<BodyEncoding>,
 ) -> Result<(), BodyFileStoreError> {
     let mut entries = match tokio::fs::read_dir(dir).await {
         Ok(entries) => entries,
@@ -461,12 +459,20 @@ async fn remove_other_extensions(
         if stem != side.file_stem() {
             continue;
         }
-        if BodyEncoding::from_ext(ext) == Some(keep) {
+        if keep.is_some_and(|keep| BodyEncoding::from_ext(ext) == Some(keep)) {
             continue;
+        }
+        // Only regular files are body copies; a same-named directory is not
+        // ours to remove.
+        match entry.file_type().await {
+            Ok(file_type) if file_type.is_file() => {}
+            Ok(_) => continue,
+            Err(error) if is_not_found(&error) => continue,
+            Err(error) => return Err(error.into()),
         }
         match tokio::fs::remove_file(entry.path()).await {
             Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) if is_not_found(&error) => {}
             Err(error) => return Err(error.into()),
         }
     }
@@ -478,7 +484,7 @@ async fn remove_other_extensions(
 /// The new file is already in place when this runs, so a cleanup failure only
 /// leaves an extra candidate behind; the read path still resolves the side.
 async fn remove_other_extensions_best_effort(dir: &Path, side: UsageBodyField, keep: BodyEncoding) {
-    if let Err(error) = remove_other_extensions(dir, side, keep).await {
+    if let Err(error) = remove_side_files(dir, side, Some(keep)).await {
         tracing::warn!(
             path = %dir.display(),
             side = side.file_stem(),
@@ -746,6 +752,54 @@ mod tests {
         assert!(!file_equals(&path, b"abce").await.expect("equals"));
         assert!(!file_equals(&path, b"abc").await.expect("equals"));
         assert!(!file_equals(&path, b"abcde").await.expect("equals"));
+        let _ = tokio::fs::remove_dir_all(root).await;
+    }
+
+    #[tokio::test]
+    async fn read_side_reads_only_the_requested_side() {
+        let (store, root) = temp_store();
+        let date = day(2026, 11, 6);
+        store
+            .put(
+                date,
+                "req-1",
+                UsageBodyField::RequestBody,
+                BodyEncoding::Json,
+                br#"{"a":1}"#,
+            )
+            .await
+            .expect("put request");
+        store
+            .put(
+                date,
+                "req-1",
+                UsageBodyField::ResponseBody,
+                BodyEncoding::Sse,
+                b"data: x\n\n",
+            )
+            .await
+            .expect("put response");
+
+        let request = store
+            .read_side(date, "req-1", UsageBodyField::RequestBody)
+            .await
+            .expect("read request")
+            .expect("request body");
+        assert_eq!(request.bytes, br#"{"a":1}"#.to_vec());
+        assert_eq!(request.encoding, BodyEncoding::Json);
+
+        let response = store
+            .read_side(date, "req-1", UsageBodyField::ResponseBody)
+            .await
+            .expect("read response")
+            .expect("response body");
+        assert_eq!(response.encoding, BodyEncoding::Sse);
+
+        assert!(store
+            .read_side(date, "req-1", UsageBodyField::ProviderRequestBody)
+            .await
+            .expect("read missing")
+            .is_none());
         let _ = tokio::fs::remove_dir_all(root).await;
     }
 
