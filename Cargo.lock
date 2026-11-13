@@ -130,6 +130,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aether-body-store"
+version = "0.1.0"
+dependencies = [
+ "aether-data-contracts",
+ "chrono",
+ "hex",
+ "sha2 0.11.1",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "aether-cache"
 version = "0.1.0"
 dependencies = [
@@ -215,6 +229,7 @@ name = "aether-data-postgres"
 version = "0.1.0"
 dependencies = [
  "aether-ai-formats",
+ "aether-body-store",
  "aether-data-contracts",
  "aether-data-query",
  "async-trait",
@@ -268,6 +283,7 @@ dependencies = [
  "aether-ai-formats",
  "aether-ai-serving",
  "aether-billing",
+ "aether-body-store",
  "aether-cache",
  "aether-contracts",
  "aether-crypto",
@@ -654,6 +670,7 @@ name = "aether-usage-runtime"
 version = "0.1.0"
 dependencies = [
  "aether-ai-formats",
+ "aether-body-store",
  "aether-contracts",
  "aether-data",
  "aether-data-contracts",
