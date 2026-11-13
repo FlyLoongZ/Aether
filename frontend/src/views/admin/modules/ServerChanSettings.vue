@@ -43,9 +43,9 @@
             </Label>
             <Input
               id="server-chan-send-key"
-              v-model="sendKeyInput"
+              v-model="secretInput"
               masked
-              :placeholder="sendKeyIsSet ? t('ui.setLeaveEmptyToKeepUnchanged') : 'SCTxxxxxxxxxxxxxxxxxxxxxxxx'"
+              :placeholder="secretIsSet ? t('ui.setLeaveEmptyToKeepUnchanged') : 'SCTxxxxxxxxxxxxxxxxxxxxxxxx'"
               class="mt-1"
             />
             <p class="mt-1 text-xs text-muted-foreground">
@@ -82,7 +82,7 @@
         <div class="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            :disabled="testing || !sendKeyIsSet"
+            :disabled="testing || !secretIsSet"
             @click="handleTest"
           >
             {{ testing ? t('auth.register.sendingCode') : t('ui.sendTest') }}
@@ -116,19 +116,14 @@
 </template>
 
 <script setup lang="ts">
-import { useI18n } from '@/i18n'
-const { t } = useI18n()
-
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { Button, Input, Label, Switch, Textarea } from '@/components/ui'
 import { PageHeader, PageContainer, CardSection } from '@/components/layout'
-import { adminApi } from '@/api/admin'
-import { modulesApi } from '@/api/modules'
-import { useToast } from '@/composables/useToast'
-import { parseApiError } from '@/utils/errorParser'
-import { log } from '@/utils/logger'
+import { RouterLink } from 'vue-router'
+import { useI18n } from '@/i18n'
 import { formatNotificationChannel } from './notificationChannel'
+import { useNotificationChannelSettings } from './composables/useNotificationChannelSettings'
+
+const { t } = useI18n()
 
 const CONFIG_KEYS = {
   enabled: 'module.server_chan_push.enabled',
@@ -136,86 +131,30 @@ const CONFIG_KEYS = {
   template: 'module.server_chan_push.template',
 } as const
 
-const { success, error } = useToast()
-
-const saving = ref(false)
-const testing = ref(false)
-const enabled = ref(false)
-const sendKeyIsSet = ref(false)
-const sendKeyInput = ref('')
-const templateInput = ref('')
-const lastTestResult = ref<Array<{ channel: string; success: boolean; message: string }>>([])
-
-const canEnable = computed(() => sendKeyIsSet.value || sendKeyInput.value.trim() !== '')
-
-onMounted(() => {
-  loadConfig()
+const {
+  saving,
+  testing,
+  enabled,
+  secretIsSet,
+  secretInput,
+  templateInput,
+  lastTestResult,
+  canEnable,
+  saveConfig,
+  handleTest,
+} = useNotificationChannelSettings({
+  moduleId: 'server_chan_push',
+  channel: 'server_chan',
+  secretKey: CONFIG_KEYS.send_key,
+  templateKey: CONFIG_KEYS.template,
+  secretRemark: 'Server 酱 SendKey',
+  templateRemark: 'Server 酱推送模板',
+  logLabel: 'Server 酱推送',
+  messages: {
+    loadFailed: 'ui.failedToLoadServerChanSettings',
+    saveFailed: 'ui.failedToSaveServerChanSettings',
+    saved: 'ui.serverChanSettingsSaved',
+    testFailed: 'ui.failedToSendTestNotification',
+  },
 })
-
-async function loadConfig() {
-  try {
-    const [moduleStatus, configs] = await Promise.all([
-      modulesApi.getStatus('server_chan_push'),
-      adminApi.getAllSystemConfigs({ cacheTtlMs: 30_000 }),
-    ])
-    const configsByKey = new Map(configs.map(config => [config.key, config]))
-    const sendKey = configsByKey.get(CONFIG_KEYS.send_key)
-    const template = configsByKey.get(CONFIG_KEYS.template)
-
-    enabled.value = moduleStatus.enabled === true
-    sendKeyIsSet.value = sendKey?.is_set === true
-    sendKeyInput.value = ''
-    templateInput.value = typeof template?.value === 'string' ? template.value : ''
-  } catch (err) {
-    error(parseApiError(err, t('ui.failedToLoadServerChanSettings')))
-    log.error('加载 Server 酱推送配置失败:', err)
-  }
-}
-
-async function saveConfig() {
-  saving.value = true
-  try {
-    const updates: Array<Promise<unknown>> = [
-      adminApi.updateSystemConfig(CONFIG_KEYS.template, templateInput.value, 'Server 酱推送模板'),
-    ]
-    const trimmedKey = sendKeyInput.value.trim()
-    if (trimmedKey) {
-      updates.push(adminApi.updateSystemConfig(CONFIG_KEYS.send_key, trimmedKey, 'Server 酱 SendKey'))
-    }
-    await Promise.all(updates)
-    if (trimmedKey) {
-      sendKeyIsSet.value = true
-      sendKeyInput.value = ''
-    }
-    if (!canEnable.value) {
-      enabled.value = false
-    }
-    await modulesApi.setEnabled('server_chan_push', enabled.value)
-    success(t('ui.serverChanSettingsSaved'))
-  } catch (err) {
-    error(parseApiError(err, t('ui.failedToSaveServerChanSettings')))
-    log.error('保存 Server 酱推送配置失败:', err)
-  } finally {
-    saving.value = false
-  }
-}
-
-async function handleTest() {
-  testing.value = true
-  try {
-    const result = await adminApi.testImportantNotification({ channel: 'server_chan' })
-    lastTestResult.value = result.channels || []
-    if (result.success) {
-      success(result.message || t('ui.testNotificationSent'))
-    } else {
-      error(result.message || t('ui.failedToSendTestNotification'))
-    }
-  } catch (err) {
-    error(parseApiError(err, t('ui.failedToSendTestNotification')))
-    log.error('测试 Server 酱推送失败:', err)
-  } finally {
-    testing.value = false
-  }
-}
-
 </script>
