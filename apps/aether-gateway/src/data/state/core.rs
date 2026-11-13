@@ -672,12 +672,11 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn purge_admin_request_bodies_batch(
+    pub(crate) async fn purge_admin_request_bodies_all(
         &self,
-        batch_size: usize,
     ) -> Result<aether_data::repository::system::AdminSystemPurgeSummary, DataLayerError> {
         match self.backends.as_ref() {
-            Some(backends) => backends.purge_admin_request_bodies_batch(batch_size).await,
+            Some(backends) => backends.purge_admin_request_bodies_all().await,
             None => Ok(aether_data::repository::system::AdminSystemPurgeSummary::default()),
         }
     }

@@ -954,6 +954,43 @@ impl PostgresBackend {
         Ok(summary)
     }
 
+    /// Clears every captured body in bounded batches.
+    ///
+    /// `TRUNCATE` needs `ACCESS EXCLUSIVE`, so under load it parks every writer
+    /// behind the lock for as long as the statement takes. Deleting batches with
+    /// a short lock timeout keeps each transaction small; the caller can repeat
+    /// the call to drain a very large table.
+    pub async fn purge_admin_request_bodies_all(
+        &self,
+    ) -> Result<AdminSystemPurgeSummary, DataLayerError> {
+        const BATCH_SIZE: usize = 5_000;
+        const MAX_BATCHES: usize = 200;
+        let mut total = AdminSystemPurgeSummary::default();
+        for _ in 0..MAX_BATCHES {
+            let mut tx = self.pool().begin().await.map_postgres_err()?;
+            if !pg_table_exists(&mut tx, "usage_http_bodies").await? {
+                return Ok(total);
+            }
+            sqlx::query("SET LOCAL lock_timeout = '5s'")
+                .execute(&mut *tx)
+                .await
+                .map_postgres_err()?;
+            sqlx::query("SET LOCAL statement_timeout = '60s'")
+                .execute(&mut *tx)
+                .await
+                .map_postgres_err()?;
+            let mut batch = AdminSystemPurgeSummary::default();
+            purge_postgres_request_bodies_batch(&mut tx, BATCH_SIZE, &mut batch).await?;
+            tx.commit().await.map_postgres_err()?;
+            let deleted = batch.total();
+            total.merge(&batch);
+            if deleted < BATCH_SIZE as u64 {
+                break;
+            }
+        }
+        Ok(total)
+    }
+
     pub async fn find_system_config_value(
         &self,
         key: &str,
