@@ -1,0 +1,17 @@
+[package]
+name = "aether-body-store"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "File storage for captured HTTP bodies"
+
+[dependencies]
+aether-data-contracts.workspace = true
+chrono.workspace = true
+hex.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util"] }
+tracing.workspace = true
+uuid.workspace = true
