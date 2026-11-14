@@ -138,7 +138,13 @@ function normalizePreset(value: DateRangeParams): SelectablePreset {
 }
 
 const selectedPreset = ref<SelectablePreset>(normalizePreset(props.modelValue))
-const precise = computed(() => !!props.modelValue.from && !!props.modelValue.to)
+// 精确区间：把「from/to 同时存在」这个不变量交给类型系统持有，
+// 消费者读到的就是已收窄的字符串，无需非空断言。
+const preciseRange = computed(() => {
+  const { from, to } = props.modelValue
+  return from && to ? { from, to } : null
+})
+const precise = computed(() => preciseRange.value !== null)
 const startDate = ref(props.modelValue.from ? zonedInput(props.modelValue.from, props.modelValue.timezone || browserTimezone()) : props.modelValue.start_date || '')
 const endDate = ref(props.modelValue.to ? zonedInput(props.modelValue.to, props.modelValue.timezone || browserTimezone()) : props.modelValue.end_date || '')
 const selectedGranularity = ref(props.modelValue.granularity || 'day')
@@ -162,10 +168,11 @@ function buildEmitValue(): DateRangeParams {
   const tz_offset_minutes = -new Date().getTimezoneOffset()
 
   if (selectedPreset.value === 'custom') {
-    if (precise.value) {
+    const range = preciseRange.value
+    if (range) {
       const zone = props.modelValue.timezone || timezone
-      if (startDate.value === zonedInput(props.modelValue.from!, zone)
-        && endDate.value === zonedInput(props.modelValue.to!, zone)) {
+      if (startDate.value === zonedInput(range.from, zone)
+        && endDate.value === zonedInput(range.to, zone)) {
         return { ...props.modelValue, granularity: selectedGranularity.value }
       }
       const from = zonedInstant(startDate.value, zone)
