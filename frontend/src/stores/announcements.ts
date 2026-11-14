@@ -22,7 +22,7 @@ export const useAnnouncementStore = defineStore('announcements', () => {
   let listLoaded = false
   let statusPromise: Promise<void> | null = null
   const reads = new Map<string, Promise<void>>()
-  
+
   function resetSession(userId: string | null) {
     sessionId = userId
     sessionVersion += 1

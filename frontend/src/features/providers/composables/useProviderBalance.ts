@@ -1,4 +1,3 @@
-
 import { translate as t } from '@/i18n'
 import { ref, onUnmounted } from 'vue'
 import type { ProviderWithEndpointsSummary } from '@/api/endpoints'

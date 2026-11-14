@@ -60,7 +60,7 @@ const toggleFaq = (index: number) => {
               :class="{ 'rotate-90 text-[#cc785c]': faq.isOpen }"
             />
           </button>
-          
+
           <div
             v-show="faq.isOpen"
             class="px-5 pb-5 pt-0 text-sm text-[#666663] dark:text-[#a3a094] leading-relaxed border-t border-[#e5e4df]/50 dark:border-[rgba(227,224,211,0.06)] mt-2"

@@ -1,4 +1,3 @@
-
 import { translate as t } from '@/i18n'
 import type { ProviderKeyStatusSnapshot } from '@/api/endpoints/types/statusSnapshot'
 import { getOAuthExpiresCountdown, type OAuthStatusInfo } from '@/composables/useCountdownTimer'

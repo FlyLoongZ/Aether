@@ -722,7 +722,6 @@ function reopenPresetPanel() {
 // 阶梯计费配置
 const tieredPricing = ref<TieredPricingConfig | null>(null)
 
-
 function fillVideoResolutionPricePreset(preset: VideoResolutionPricePreset) {
   videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(row => ({
     resolution: row.resolution,
@@ -938,7 +937,6 @@ function addVideoResolutionPriceRow() {
 function removeVideoResolutionPriceRow(idx: number) {
   videoResolutionPrices.value.splice(idx, 1)
 }
-
 
 async function loadExistingModels() {
   const models: GlobalModelResponse[] = []

@@ -1,4 +1,3 @@
-
 import { translate as t } from '@/i18n'
 const MODEL_TEST_RESPONSE_PREVIEW_MAX_LENGTH = 160
 const MODEL_TEST_IMAGE_PREVIEW_MAX_ITEMS = 6

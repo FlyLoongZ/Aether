@@ -46,7 +46,6 @@ type ParsedTokenPrices = Pick<
   | 'cache_read_price_per_1m'
 >
 
-
 function isPrice(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }

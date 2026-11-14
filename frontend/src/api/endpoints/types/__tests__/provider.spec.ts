@@ -20,7 +20,6 @@ describe('normalizePoolAdvancedConfig', () => {
   })
 })
 
-
 describe('normalizeChatPiiRedactionProviderConfig', () => {
   it('defaults unsupported payloads to disabled', () => {
     expect(normalizeChatPiiRedactionProviderConfig(null)).toEqual({ enabled: false })

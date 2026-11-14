@@ -525,7 +525,7 @@ const startTypewriter = () => {
 
     typeNextChar()
   }
-  
+
   // Start typing after a short delay
   typewriterTimer = setTimeout(typeLoop, 400)
 }

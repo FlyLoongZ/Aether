@@ -1,4 +1,3 @@
-
 import { translate as t } from '@/i18n'
 import { formatApiFormat } from '@/api/endpoints/types/api-format'
 import type { TestAttemptDetail, TestCandidateSummary, TestModelFailoverResponse } from '@/api/endpoints/providers'

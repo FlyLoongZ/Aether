@@ -976,7 +976,6 @@ watch(activeTab, (newTab) => {
   dataSource.value = getDefaultDataSourceForTab(newTab)
 })
 
-
 const { isDark } = useDarkMode()
 const streamBadgeVariant = useStreamBadgeVariant()
 

@@ -391,7 +391,6 @@ function cleanupKindLabel(kind: string): string {
   return labels[kind] || kind
 }
 
-
 function formatRunTime(value: number): string {
   if (!value) return '-'
   return new Date(value * 1000).toLocaleString()

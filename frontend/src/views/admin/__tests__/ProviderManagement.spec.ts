@@ -278,7 +278,6 @@ async function openPriorityInput(root: HTMLElement, providerName: string): Promi
   return input!
 }
 
-
 beforeEach(() => {
   vi.clearAllMocks()
   workspace.groups = { 'group-a': createEmptyRoutingGroupConfig(), 'group-b': createEmptyRoutingGroupConfig() }
@@ -394,7 +393,6 @@ describe('ProviderManagement provider directory', () => {
     expect(root.textContent).toContain('暂无提供商，点击右上角添加')
     expect(findButton(root, '刷新').disabled).toBe(false)
   })
-
 
 })
 

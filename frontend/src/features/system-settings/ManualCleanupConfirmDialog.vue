@@ -507,7 +507,6 @@ async function pollTask(taskId: string) {
   }
 }
 
-
 function cleanupSummaryText(summary: Record<string, unknown>): string {
   const total = typeof summary.total === 'number' ? summary.total : null
   if (total !== null && total > 0) return t('settings.cleanup.affectedItems', { count: total })

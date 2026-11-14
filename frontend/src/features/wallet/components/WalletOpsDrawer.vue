@@ -979,4 +979,3 @@ function formatFixed(value: unknown, digits: number): string {
 
 const contextLabel = computed(() => props.contextLabel ?? t('ui.walletDetails'))
 </script>
-

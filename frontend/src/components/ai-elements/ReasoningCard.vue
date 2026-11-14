@@ -61,7 +61,6 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { useClipboard } from '@/composables/useClipboard'
 import { useI18n } from '@/i18n'
 
-
 const props = withDefaults(defineProps<{
   /** 思考内容 */
   content: string

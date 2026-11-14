@@ -1080,7 +1080,6 @@ const BODY_RULE_JSON_ACTIONS = new Set(['set', 'drop', 'rename', 'append', 'inse
 const CONDITION_JSON_OPS = new Set(['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'starts_with', 'ends_with', 'contains', 'matches', 'exists', 'not_exists', 'in', 'type_is'])
 const CONDITION_JSON_SOURCES = new Set(['body', 'current', 'original', 'request_headers', 'headers'])
 
-
 function formatJsonRuleFieldLabel(label: string, index: number, field: string): string {
   return t('providers.migration.entrya26c09', { value: String(label), value_2: String(index + 1), value_3: String(field) })
 }
@@ -1951,7 +1950,6 @@ function getEndpointResponseRulesCount(endpoint: ProviderEndpoint): number {
   return getEndpointResponseHeaderRules(endpoint).length
 }
 
-
 // ========== 请求体规则相关函数 ==========
 
 // 获取端点的编辑请求体规则
@@ -2153,13 +2151,10 @@ function getEndpointBodyRulesCount(endpoint: ProviderEndpoint): number {
   return endpoint.body_rules?.length || 0
 }
 
-
 // 获取端点的总规则数量（请求头 + 请求体 + 响应头）
 function getTotalRulesCount(endpoint: ProviderEndpoint): number {
   return getEndpointRulesCount(endpoint) + getEndpointBodyRulesCount(endpoint) + getEndpointResponseRulesCount(endpoint)
 }
-
-
 
 // 检查端点请求体规则是否有修改
 function hasBodyRulesChanges(endpoint: ProviderEndpoint): boolean {
@@ -2271,7 +2266,6 @@ function getBodyValidationErrorForEndpoint(endpointId: string): string | null {
   }
   return null
 }
-
 
 // 检查端点 URL/路径是否有修改
 function hasUrlChanges(endpoint: ProviderEndpoint): boolean {

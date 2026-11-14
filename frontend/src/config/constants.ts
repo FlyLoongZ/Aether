@@ -1,5 +1,3 @@
-
-
 // 网络配置
 export const NETWORK_CONFIG = {
   API_TIMEOUT: 30000, // 30秒

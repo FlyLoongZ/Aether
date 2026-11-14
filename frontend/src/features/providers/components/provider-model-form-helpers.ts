@@ -70,7 +70,6 @@ const STANDARD_PRICING_KEYS = new Set([
   'image_prices',
 ])
 
-
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }

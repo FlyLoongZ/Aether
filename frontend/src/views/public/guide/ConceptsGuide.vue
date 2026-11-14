@@ -322,7 +322,7 @@ import { BookOpen } from '@lucide/vue'
       <p class="text-sm text-[#666663] dark:text-[#a3a094] mb-4">
         {{ t('ui.dragOrClickTheNumberInputDirectlyToAdjustPriority') }}
       </p>
-      
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         <div class="space-y-4">
           <div class="bg-white/50 dark:bg-white/5 p-4 rounded-xl border border-[#e5e4df] dark:border-[rgba(227,224,211,0.06)] shadow-sm">
@@ -367,7 +367,7 @@ import { BookOpen } from '@lucide/vue'
             </p>
           </div>
         </div>
-        
+
         <div class="space-y-4">
           <img
             loading="lazy"

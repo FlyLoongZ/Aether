@@ -148,7 +148,6 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent, Badge } from '@/co
 import { useClipboard } from '@/composables/useClipboard'
 import { useI18n } from '@/i18n'
 
-
 const props = withDefaults(defineProps<{
   /** 工具名称或标题 */
   toolName?: string

@@ -349,7 +349,6 @@ const MANAGED_FAILOVER_RULE_KEYS = [
   ...TOP_LEVEL_STOP_STATUS_CODE_KEYS,
 ] as const
 
-
 function uniqueStatusCodes(codes: number[]): number[] {
   return codes.filter((code, index, values) =>
     Number.isInteger(code) && code >= 100 && code <= 599 && values.indexOf(code) === index

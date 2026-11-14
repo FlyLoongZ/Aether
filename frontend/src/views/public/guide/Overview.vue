@@ -102,7 +102,7 @@ async function copyStep(stepId: string, code: string) {
       class="scroll-mt-24 lg:scroll-mt-20"
     >
       <h2>{{ t('ui.1Deployment') }}</h2>
-      
+
       <div
         :class="[panelClasses.card]"
         class="mt-6"
@@ -381,7 +381,7 @@ async function copyStep(stepId: string, code: string) {
     >
       <h2>{{ t('ui.4AsynchronousTasks') }}</h2>
       <p>{{ t('ui.requiresProviderEndpointSupport') }}</p>
-      
+
       <ul class="list-decimal pl-5 mt-4 text-[#666663] dark:text-[#a3a094] space-y-1">
         <li><span class="font-medium text-[#262624] dark:text-[#f1ead8]">Veo</span></li>
         <li><span class="font-medium text-[#262624] dark:text-[#f1ead8]">Sora</span></li>
@@ -404,7 +404,7 @@ async function copyStep(stepId: string, code: string) {
         <div>
           <h3>{{ t('ui.3ProxyHierarchy') }}</h3>
           <p>{{ t('ui.prioritye097ced') }}<span class="text-[#262624] dark:text-[#f1ead8] font-medium bg-[#cc785c]/10 px-2 py-0.5 rounded">{{ t('ui.keyProxy') }}</span> > <span class="text-[#262624] dark:text-[#f1ead8] font-medium bg-[#cc785c]/10 px-2 py-0.5 rounded">{{ t('ui.providerProxy') }}</span> > <span class="text-[#262624] dark:text-[#f1ead8] font-medium bg-[#cc785c]/10 px-2 py-0.5 rounded">{{ t('ui.globalProxy') }}</span></p>
-          
+
           <ul class="list-decimal pl-5 mt-4 space-y-2 text-[#666663] dark:text-[#a3a094]">
             <li>{{ t('ui.globalProxySystemSettings') }}</li>
             <li>{{ t('ui.providerProxyProviderSettings') }}</li>

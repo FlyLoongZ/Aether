@@ -169,7 +169,6 @@ export default [
     rules: {
       // Vue 规则
       'vue/multi-word-component-names': 'off',
-      'vue/no-v-html': 'warn', // 降级为警告，某些场景需要使用
       'vue/component-api-style': ['error', ['script-setup']],
       'vue/component-name-in-template-casing': ['error', 'PascalCase'],
       'vue/custom-event-name-casing': ['warn', 'camelCase', {
@@ -185,7 +184,7 @@ export default [
         },
       ],
       'vue/html-comment-content-spacing': ['error', 'always'],
-      'vue/no-unused-refs': 'warn', // 降级为警告
+      'vue/no-unused-refs': 'warn',
       'vue/no-useless-v-bind': 'error',
       'vue/padding-line-between-blocks': ['error', 'always'],
       'vue/prefer-separate-static-class': 'error',
@@ -203,9 +202,6 @@ export default [
           varsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-non-null-assertion': 'warn',
     },
   },
@@ -215,9 +211,9 @@ export default [
     files: ['**/*.js', '**/*.ts', '**/*.tsx', '**/*.vue'],
     rules: {
       'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
-      'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
-      'prefer-const': 'error',
-      'no-var': 'error',
+      // 删除代码时容易留下双空行与行尾空格
+      'no-multiple-empty-lines': ['error', { max: 1, maxBOF: 0, maxEOF: 0 }],
+      'no-trailing-spaces': 'error',
       'object-shorthand': ['error', 'always'],
       'prefer-template': 'error',
       'prefer-arrow-callback': 'error',

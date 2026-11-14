@@ -70,7 +70,6 @@ import { Check, Copy } from '@lucide/vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useI18n } from '@/i18n'
 
-
 const props = withDefaults(defineProps<{
   code: string
   language?: string
