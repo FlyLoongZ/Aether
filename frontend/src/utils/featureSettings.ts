@@ -20,7 +20,6 @@ const DEFAULT_NOTIFICATION_PUSH_SERVICE_FEATURE_SETTINGS: NotificationPushServic
   enabled: false,
 }
 
-
 export function readChatPiiRedactionFeatureSettings(
   featureSettings: unknown,
 ): ChatPiiRedactionFeatureSettings {

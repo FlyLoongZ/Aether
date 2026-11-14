@@ -583,7 +583,6 @@ interface Props {
   hasBlockingDialogOpen?: boolean
 }
 
-
 // 统一管理 routing 数据，避免子组件重复请求
 const routingData = ref<ModelRoutingPreviewResponse | null>(null)
 const routingLoading = ref(false)
@@ -775,4 +774,3 @@ watch(() => props.open, (newOpen) => {
 })
 
 </script>
-

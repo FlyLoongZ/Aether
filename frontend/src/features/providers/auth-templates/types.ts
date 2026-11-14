@@ -1,4 +1,3 @@
-
 import { translate as t } from '@/i18n'
 /**
  * 提供商认证模板类型定义

@@ -269,12 +269,12 @@ export async function getModelsDevList(officialOnly: boolean = true): Promise<Mo
     items.sort((a, b) => {
       const providerCompare = a.providerName.localeCompare(b.providerName)
       if (providerCompare !== 0) return providerCompare
-      
+
       // 模型按 release_date 从近到远排序（没有日期的排到最后）
       const aDate = a.releaseDate ? new Date(a.releaseDate).getTime() : 0
       const bDate = b.releaseDate ? new Date(b.releaseDate).getTime() : 0
       if (aDate !== bDate) return bDate - aDate // 降序：新的在前
-      
+
       // 日期相同或都没有日期时，按模型名称排序
       return a.modelName.localeCompare(b.modelName)
     })

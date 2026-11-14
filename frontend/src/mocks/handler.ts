@@ -1100,7 +1100,6 @@ function getMockEndpointExtras(apiFormat: string) {
   return extras
 }
 
-
 // Mock Endpoint Keys
 const MOCK_ENDPOINT_KEYS = [
   { id: 'ekey-001', provider_id: 'provider-001', api_formats: ['claude:messages'], api_key_masked: 'sk-ant...abc1', auth_type: 'api_key', name: 'Primary Key', rate_multiplier: 1.0, internal_priority: 1, health_score: 0.98, consecutive_failures: 0, request_count: 5000, success_count: 4950, error_count: 50, success_rate: 0.99, avg_response_time_ms: 1200, cache_ttl_minutes: 5, max_probe_interval_minutes: 32, is_active: true, created_at: '2024-01-01T00:00:00Z', updated_at: new Date().toISOString() },
@@ -3429,7 +3428,6 @@ registerDynamicRoute('POST', '/api/admin/provider-oauth/providers/:providerId/ba
   })
 })
 
-
 // Key 更新
 registerDynamicRoute('PUT', '/api/admin/endpoints/keys/:keyId', async (config, params) => {
   await delay()
@@ -3484,7 +3482,6 @@ registerDynamicRoute('POST', '/api/admin/endpoints/keys/:keyId/reset-cycle-stats
     windows,
   })
 })
-
 
 // Keys grouped by format
 mockHandlers['GET /api/admin/endpoints/keys/grouped-by-format'] = async () => {

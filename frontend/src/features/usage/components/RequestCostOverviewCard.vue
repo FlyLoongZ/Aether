@@ -926,7 +926,6 @@ const cacheCreationSplitRows = computed(() => {
   return rows
 })
 
-
 // Token 费用总计
 const tokenCostTotal = computed(() => {
   if (!detail.value) return 0

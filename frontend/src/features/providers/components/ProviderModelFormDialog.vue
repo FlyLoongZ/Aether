@@ -469,7 +469,6 @@ const originalProviderTieredPricing = ref<ProviderTieredPricingConfig | null>(nu
 const pricePerRequestModified = ref(false)
 const originalPricePerRequest = ref<number | undefined>(undefined)
 
-
 const configTouched = ref(false)
 function fillVideoResolutionPricePreset(preset: VideoResolutionPricePreset) {
   videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(row => ({
@@ -817,8 +816,6 @@ function addVideoResolutionPriceRow() {
 function removeVideoResolutionPriceRow(idx: number) {
   videoResolutionPrices.value.splice(idx, 1)
 }
-
-
 
 async function createManualGlobalModel(finalTieredPricing: TieredPricingConfig | null, cleanConfig: Record<string, unknown> | undefined): Promise<GlobalModelResponse> {
   const modelName = form.value.manual_global_model_name.trim()

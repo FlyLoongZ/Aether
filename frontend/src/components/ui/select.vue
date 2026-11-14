@@ -40,7 +40,6 @@ const openProp = computed(() =>
   props.open !== undefined ? { open: props.open } : {}
 )
 
-
 const modelValueProp = computed(() =>
   props.modelValue !== undefined ? { modelValue: props.modelValue ?? '' } : {}
 )

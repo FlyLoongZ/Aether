@@ -556,7 +556,6 @@ function entitlementLabels(items: BillingEntitlement[] | undefined): string[] {
   return billingEntitlementLabels(items, t)
 }
 
-
 async function loadUserWallets(options: { cacheTtlMs?: number } = {}) {
   const requestId = ++userWalletsRequestId
   try {
@@ -639,7 +638,6 @@ function formatConcurrentLimitSimple(concurrentLimit?: number | null): string {
 function formatIpRules(ipRules?: string[] | null): string {
   return ipRules && ipRules.length > 0 ? ipRules.join(', ') : t('ui.noRestriction')
 }
-
 
 function formatUserEffectiveRateLimitSource(user: User): string {
   const source = user.effective_policy?.rate_limit

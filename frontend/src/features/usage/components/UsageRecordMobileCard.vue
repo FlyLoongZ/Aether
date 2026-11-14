@@ -252,7 +252,6 @@ defineEmits<{
 
 const { t } = useI18n()
 
-
 const streamBadgeVariant = useStreamBadgeVariant()
 
 </script>

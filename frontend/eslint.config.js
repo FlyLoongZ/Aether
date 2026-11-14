@@ -211,6 +211,9 @@ export default [
     files: ['**/*.js', '**/*.ts', '**/*.tsx', '**/*.vue'],
     rules: {
       'no-console': process.env.NODE_ENV === 'production' ? 'error' : 'warn',
+      // 删除代码时容易留下双空行与行尾空格
+      'no-multiple-empty-lines': ['error', { max: 1, maxBOF: 0, maxEOF: 0 }],
+      'no-trailing-spaces': 'error',
       'object-shorthand': ['error', 'always'],
       'prefer-template': 'error',
       'prefer-arrow-callback': 'error',

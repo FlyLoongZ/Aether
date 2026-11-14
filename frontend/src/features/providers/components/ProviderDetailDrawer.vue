@@ -2155,7 +2155,6 @@ function getOAuthStatusTitle(key: EndpointAPIKey): string {
 
 // 健康度颜色
 
-
 function isKeyRecoverable(key: EndpointAPIKey): boolean {
   return Boolean(
     key.circuit_breaker_open

@@ -17,7 +17,6 @@ defineEmits<{
   'update:open': [value: boolean]
 }>()
 
-
 const openProp = computed(() =>
   props.open !== undefined ? { open: props.open } : {}
 )

@@ -1,4 +1,3 @@
-
 import { translate as t } from '@/i18n'
 export interface ProviderKeyAuthCarrier {
   provider_type?: string | null

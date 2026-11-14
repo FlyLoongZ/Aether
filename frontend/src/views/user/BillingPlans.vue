@@ -395,7 +395,6 @@ function openLatestPayment() {
   submitPaymentInstructions(latestCheckout.value?.payment_instructions || { payment_url: latestPaymentUrl.value }, paymentHandlers)
 }
 
-
 async function handleStripePaymentSuccess() {
   success(t('ui.paymentCompleteRefreshingPlanStatus'))
   await Promise.all([loadEntitlements(), loadPlans()])
@@ -441,7 +440,6 @@ function entitlementLabels(items: BillingEntitlement[]): string[] {
     return []
   })
 }
-
 
 function hasDailyQuotaEntitlement(items: BillingEntitlement[] | undefined): boolean {
   return (items || []).some((item) => item.type === 'daily_quota')

@@ -448,4 +448,3 @@ function modelDirectiveSuffixSupportedForApiFormat(
   return !builtInSuffix
     || defaultModelDirectiveSuffixesForApiFormat(apiFormat).includes(builtInSuffix)
 }
-

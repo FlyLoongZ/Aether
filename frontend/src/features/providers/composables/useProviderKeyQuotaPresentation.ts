@@ -104,7 +104,6 @@ export function shouldStartCodexResetCountdown(usedPercent: number | null | unde
 export function useProviderKeyQuotaPresentation(countdownTick: Ref<number>) {
   const { t } = useI18n()
 
-
   // 格式化 Kiro 重置时间
   function formatKiroResetTime(timestamp: number | null | undefined): string {
     if (!timestamp) return ''

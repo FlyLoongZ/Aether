@@ -426,5 +426,4 @@ function toFiniteNumber(value: unknown): number | null {
   return null
 }
 
-
 </script>

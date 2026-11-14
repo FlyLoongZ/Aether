@@ -29,7 +29,7 @@ import { Target } from '@lucide/vue'
       <p class="text-sm text-[#666663] dark:text-[#a3a094] mb-4">
         {{ t('ui.inSystemSettingsYouCanChangeTheRequestBodyLogging') }}
       </p>
-      
+
       <div class="overflow-hidden rounded-xl border border-[#e5e4df] dark:border-[rgba(227,224,211,0.12)] bg-white dark:bg-[#191714] shadow-sm max-w-2xl">
         <table class="w-full text-sm text-left">
           <thead class="bg-[#f5f5f0] dark:bg-[rgba(227,224,211,0.05)] border-b border-[#e5e4df] dark:border-[rgba(227,224,211,0.12)]">
@@ -76,7 +76,7 @@ import { Target } from '@lucide/vue'
           </tbody>
         </table>
       </div>
-      
+
       <img
         loading="lazy"
         src="/guide/strategy-request-logging.webp"

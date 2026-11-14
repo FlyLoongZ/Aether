@@ -242,7 +242,7 @@
         />
       </template>
     </svg>
-  
+
     <!-- Standard single-path logos -->
     <svg
       v-else
@@ -596,7 +596,6 @@
   </Transition>
 </template>
 
-
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
@@ -700,7 +699,7 @@ const clearAnimationTimers = () => {
     clearTimeout(timerId)
   })
   animationTimers.value = []
-  
+
   if (fillAnimationId.value !== null) {
     cancelAnimationFrame(fillAnimationId.value)
     fillAnimationId.value = null
