@@ -44,7 +44,7 @@
       class="divide-y"
     >
       <div
-        v-for="(mapping, index) in localMappings"
+        v-for="(_mapping, index) in localMappings"
         :key="index"
       >
         <!-- 规则行 -->

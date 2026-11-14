@@ -488,7 +488,6 @@
         <div v-show="detailTab === 'routing'">
           <RoutingTab
             v-if="model"
-            ref="routingTabRef"
             :global-model-id="model.id"
             :routing-data="routingData"
             :loading="routingLoading"
@@ -505,7 +504,6 @@
         <div v-show="detailTab === 'mappings'">
           <ModelMappingsTab
             v-if="model"
-            ref="modelMappingsTabRef"
             :global-model-id="model.id"
             :mappings="model.config?.model_mappings || []"
             :routing-data="routingData"
@@ -585,10 +583,6 @@ interface Props {
   hasBlockingDialogOpen?: boolean
 }
 
-// RoutingTab 引用
-const routingTabRef = ref<InstanceType<typeof RoutingTab> | null>(null)
-// ModelMappingsTab 引用
-const modelMappingsTabRef = ref<InstanceType<typeof ModelMappingsTab> | null>(null)
 
 // 统一管理 routing 数据，避免子组件重复请求
 const routingData = ref<ModelRoutingPreviewResponse | null>(null)

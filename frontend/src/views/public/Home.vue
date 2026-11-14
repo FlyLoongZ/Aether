@@ -176,7 +176,6 @@
               :key="`ripple-wrapper-${currentLogoType}`"
             >
               <RippleLogo
-                ref="rippleLogoRef"
                 :type="currentLogoType"
                 :size="windowWidth < 768 ? 200 : 320"
                 :use-adaptive="false"
@@ -436,7 +435,6 @@ const getSectionElement = (index: number): HTMLElement | null => {
 
 // Logo refs
 const aetherLogoRef = ref<InstanceType<typeof AetherLineByLineLogo> | null>(null)
-const rippleLogoRef = ref<InstanceType<typeof RippleLogo> | null>(null)
 const hasLogoAnimationStarted = ref(false)
 
 // Animation composables

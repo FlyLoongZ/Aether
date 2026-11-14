@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   BarController,
   BarElement,
@@ -72,7 +72,9 @@ const mergedOptions = computed<ChartOptions<'bar'>>(() => ({
   ...props.options,
 }))
 
-const { chartRef } = useChartJs({
+const chartRef = ref<HTMLCanvasElement>()
+useChartJs({
+  chartRef,
   type: 'bar',
   data: () => props.data,
   options: () => mergedOptions.value,

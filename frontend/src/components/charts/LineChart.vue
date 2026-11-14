@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -49,7 +49,9 @@ const mergedOptions = computed<ChartOptions<'line'>>(() => ({
   ...props.options,
 }))
 
-const { chartRef } = useChartJs({
+const chartRef = ref<HTMLCanvasElement>()
+useChartJs({
+  chartRef,
   type: 'line',
   data: () => props.data,
   options: () => mergedOptions.value,

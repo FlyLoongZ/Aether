@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   ArcElement,
   Chart as ChartJS,
@@ -59,7 +59,9 @@ const mergedOptions = computed<ChartOptions<'doughnut'>>(() => ({
   ...props.options,
 }))
 
-const { chartRef } = useChartJs({
+const chartRef = ref<HTMLCanvasElement>()
+useChartJs({
+  chartRef,
   type: 'doughnut',
   data: () => props.data,
   options: () => mergedOptions.value,

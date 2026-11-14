@@ -1951,14 +1951,6 @@ function getEndpointResponseRulesCount(endpoint: ProviderEndpoint): number {
   return getEndpointResponseHeaderRules(endpoint).length
 }
 
-// 检查端点是否有任何规则（包括正在编辑的空规则）
-function _hasAnyRules(endpoint: ProviderEndpoint): boolean {
-  const state = endpointEditStates.value[endpoint.id]
-  if (state) {
-    return state.rules.length > 0
-  }
-  return (endpoint.header_rules?.length || 0) > 0
-}
 
 // ========== 请求体规则相关函数 ==========
 
@@ -2161,61 +2153,13 @@ function getEndpointBodyRulesCount(endpoint: ProviderEndpoint): number {
   return endpoint.body_rules?.length || 0
 }
 
-// 检查端点是否有任何请求体规则（包括正在编辑的空规则）
-function _hasAnyBodyRules(endpoint: ProviderEndpoint): boolean {
-  const state = endpointEditStates.value[endpoint.id]
-  if (state) {
-    return state.bodyRules.length > 0
-  }
-  return (endpoint.body_rules?.length || 0) > 0
-}
 
 // 获取端点的总规则数量（请求头 + 请求体 + 响应头）
 function getTotalRulesCount(endpoint: ProviderEndpoint): number {
   return getEndpointRulesCount(endpoint) + getEndpointBodyRulesCount(endpoint) + getEndpointResponseRulesCount(endpoint)
 }
 
-// 格式化请求头规则的显示标签
-function _formatHeaderRuleLabel(rule: EditableRule): string {
-  if (rule.action === 'set') {
-    if (!rule.key) return t('ui.notSetee86d36')
-    return `${rule.key}=${rule.value || '...'}`
-  } else if (rule.action === 'drop') {
-    if (!rule.key) return t('ui.notSetee86d36')
-    return `-${rule.key}`
-  } else if (rule.action === 'rename') {
-    if (!rule.from || !rule.to) return t('ui.notSetee86d36')
-    return `${rule.from}→${rule.to}`
-  }
-  return t('ui.unknown')
-}
 
-// 格式化请求体规则的显示标签
-function _formatBodyRuleLabel(rule: EditableBodyRule): string {
-  if (rule.action === 'set') {
-    if (!rule.path) return t('ui.notSetee86d36')
-    return `${rule.path}=${rule.value || '...'}`
-  } else if (rule.action === 'drop') {
-    if (!rule.path) return t('ui.notSetee86d36')
-    return `-${rule.path}`
-  } else if (rule.action === 'rename') {
-    if (!rule.from || !rule.to) return t('ui.notSetee86d36')
-    return `${rule.from}→${rule.to}`
-  } else if (rule.action === 'append') {
-    if (!rule.path) return t('ui.notSetee86d36')
-    return `${rule.path}[]+=${rule.value || '...'}`
-  } else if (rule.action === 'insert') {
-    if (!rule.path) return t('ui.notSetee86d36')
-    const idx = rule.index?.trim() || t('ui.end')
-    return `${rule.path}[${idx}]+=${rule.value || '...'}`
-  } else if (rule.action === 'regex_replace') {
-    if (!rule.path || !rule.pattern) return t('ui.notSetee86d36')
-    const flags = rule.flags.trim()
-    const count = rule.count.trim()
-    return `${rule.path}: s/${rule.pattern}/${rule.replacement || ''}/${flags}${count ? ` ×${count}` : ''}`
-  }
-  return t('ui.unknown')
-}
 
 // 检查端点请求体规则是否有修改
 function hasBodyRulesChanges(endpoint: ProviderEndpoint): boolean {
@@ -2328,10 +2272,6 @@ function getBodyValidationErrorForEndpoint(endpointId: string): string | null {
   return null
 }
 
-// 检查请求体规则是否有验证错误
-function _hasBodyValidationErrorsForEndpoint(endpointId: string): boolean {
-  return !!getBodyValidationErrorForEndpoint(endpointId)
-}
 
 // 检查端点 URL/路径是否有修改
 function hasUrlChanges(endpoint: ProviderEndpoint): boolean {
@@ -2363,10 +2303,6 @@ function hasRulePanelChanges(endpoint: ProviderEndpoint): boolean {
 }
 
 // 检查端点是否有修改（URL、路径或规则）
-// 注：当前模板直接使用各子函数，此聚合函数保留供未来使用
-function _hasEndpointChanges(endpoint: ProviderEndpoint): boolean {
-  return hasUrlChanges(endpoint) || hasRulePanelChanges(endpoint)
-}
 
 // 重置端点修改
 function resetEndpointChanges(endpoint: ProviderEndpoint) {
