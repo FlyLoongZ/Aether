@@ -44,7 +44,6 @@
       <slot :expand-depth="panelExpandDepth">
         <JsonContent
           :data="data"
-          view-mode="formatted"
           :expand-depth="panelExpandDepth"
           :is-dark="isDark"
           :empty-message="emptyMessage"

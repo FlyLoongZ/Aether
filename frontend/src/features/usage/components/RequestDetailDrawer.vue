@@ -311,10 +311,8 @@
                   <RequestHeadersContent
                     :detail="detail"
                     :view-mode="viewMode"
-                    :data-source="dataSource"
                     :current-header-data="currentHeaderData ?? null"
                     :current-expand-depth="currentExpandDepth"
-                    :has-provider-headers="hasProviderHeaders"
                     :header-stats="headerStats"
                     :is-dark="isDark"
                   />
@@ -398,7 +396,6 @@
                     v-else
                     :data="null"
                     :body-document="currentRequestBody"
-                    :view-mode="viewMode"
                     :expand-depth="currentExpandDepth"
                     :is-dark="isDark"
                     :empty-message="t('ui.noRequestBodyInformation')"
@@ -414,10 +411,8 @@
                     v-if="viewMode === 'compare'"
                     :detail="detail"
                     :view-mode="viewMode"
-                    :data-source="dataSource"
                     :current-header-data="currentResponseHeaderData ?? null"
                     :current-expand-depth="currentExpandDepth"
-                    :has-provider-headers="hasProviderResponseHeaders"
                     :header-stats="responseHeaderStats"
                     :is-dark="isDark"
                     :client-headers="detail.client_response_headers"
@@ -429,7 +424,6 @@
                   <JsonContent
                     v-else
                     :data="currentResponseHeaderData"
-                    :view-mode="viewMode"
                     :expand-depth="currentExpandDepth"
                     :is-dark="isDark"
                     :empty-message="t('ui.noResponseHeadersaf5d1b5')"
@@ -514,7 +508,6 @@
                     v-else
                     :data="null"
                     :body-document="currentResponseBody"
-                    :view-mode="viewMode"
                     :expand-depth="currentExpandDepth"
                     :is-dark="isDark"
                     :empty-message="t('ui.noResponseBodyInformation')"
@@ -528,7 +521,6 @@
                 >
                   <JsonContent
                     :data="metadataPanelData"
-                    :view-mode="viewMode"
                     :expand-depth="currentExpandDepth"
                     :is-dark="isDark"
                     :empty-message="t('ui.noMetadata')"

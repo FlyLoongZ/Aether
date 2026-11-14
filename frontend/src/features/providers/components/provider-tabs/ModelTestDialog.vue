@@ -687,7 +687,6 @@
                   <TabsContent value="request-headers">
                     <JsonContent
                       :data="selectedInspectionAttempt.request_headers"
-                      view-mode="formatted"
                       :expand-depth="inspectionExpandDepth"
                       :is-dark="isDark"
                       :empty-message="t('ui.noRequestHeaders')"
@@ -697,7 +696,6 @@
                   <TabsContent value="request-body">
                     <JsonContent
                       :data="selectedInspectionAttempt.request_body"
-                      view-mode="formatted"
                       :expand-depth="inspectionExpandDepth"
                       :is-dark="isDark"
                       :empty-message="t('ui.noRequestBody19667d3')"
@@ -707,7 +705,6 @@
                   <TabsContent value="response-headers">
                     <JsonContent
                       :data="selectedInspectionAttempt.response_headers"
-                      view-mode="formatted"
                       :expand-depth="inspectionExpandDepth"
                       :is-dark="isDark"
                       :empty-message="t('ui.noResponseHeaders')"
@@ -717,7 +714,6 @@
                   <TabsContent value="response-body">
                     <JsonContent
                       :data="selectedInspectionAttempt.response_body"
-                      view-mode="formatted"
                       :expand-depth="inspectionExpandDepth"
                       :is-dark="isDark"
                       :empty-message="t('ui.noResponseBody0f51f71')"

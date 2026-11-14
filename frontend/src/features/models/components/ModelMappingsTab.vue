@@ -240,7 +240,6 @@ import {
 
 const props = defineProps<{
   globalModelId: string
-  modelName: string
   mappings: string[]
   loading?: boolean
   routingData?: ModelRoutingPreviewResponse | null  // 外部传入的 routing 数据

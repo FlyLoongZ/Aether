@@ -109,7 +109,6 @@ import type { BodyJsonPage } from '../../utils/body-document-protocol'
 const props = defineProps<{
   data: unknown
   bodyDocument?: BodyDocument | null
-  viewMode: 'formatted' | 'raw' | 'compare'
   expandDepth: number
   isDark: boolean
   emptyMessage: string
