@@ -2,6 +2,7 @@
  * 解析 API 错误响应，提取友好的错误信息
  */
 
+import { isAxiosError } from 'axios'
 import { isApiError } from '@/types/api-error'
 import { translate, type MessageKey } from '@/i18n'
 
@@ -173,6 +174,15 @@ export function parseApiError(err: unknown, defaultMessage: string = translate('
 
   // 处理网络错误
   if (!isApiError(err) || !err.response) {
+    // Axios 的网络层失败：err.message 是 'Network Error' / 'timeout of 30000ms exceeded'
+    // 这类英文兜底串，不能直接给用户看。
+    // 注意 ECONNABORTED 默认表示超时（未开启 transitional.clarifyTimeoutError 时）。
+    if (isAxiosError(err)) {
+      if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+        return translate('feedback.error.timeout')
+      }
+      return translate('feedback.error.network')
+    }
     if (err instanceof Error) {
       return normalizeKnownApiErrorMessage(err.message || defaultMessage)
     }
@@ -190,7 +200,16 @@ export function parseApiError(err: unknown, defaultMessage: string = translate('
 
   // 如果没有 detail 字段
   if (!detail) {
-    return normalizeKnownApiErrorMessage(data?.message || err.message || defaultMessage)
+    if (data?.message) {
+      return normalizeKnownApiErrorMessage(data.message)
+    }
+    // 有 response 但没有可用内容（如网关返回 HTML）：Axios 的 err.message 是
+    // 'Request failed with status code 502'，同样不能暴露给用户。
+    const ownMessage = err.message || defaultMessage
+    if (isAxiosError(err)) {
+      return defaultMessage
+    }
+    return normalizeKnownApiErrorMessage(ownMessage)
   }
 
   // 1. 处理 Pydantic 验证错误（数组格式）

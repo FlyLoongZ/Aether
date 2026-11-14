@@ -392,7 +392,8 @@ import Textarea from '@/components/ui/textarea.vue'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { log } from '@/utils/logger'
-import { getErrorMessage, getErrorStatus, isApiError } from '@/types/api-error'
+import { getErrorStatus, isApiError } from '@/types/api-error'
+import { parseApiError } from '@/utils/errorParser'
 import { summarizeOAuthConfigTest } from '@/utils/oauthConfigTest'
 
 const { success, warning, error: showError } = useToast()
@@ -698,7 +699,7 @@ async function toggleProviderEnabled(providerType: string, enabled: boolean, for
         return
       }
     }
-    showError(getErrorMessage(err, '操作失败'))
+    showError(parseApiError(err, '操作失败'))
   } finally {
     saving.value = false
   }
@@ -724,7 +725,7 @@ async function loadAll() {
     }
   } catch (err: unknown) {
     log.error('加载 OAuth 配置失败:', err)
-    showError(getErrorMessage(err, '加载失败'))
+    showError(parseApiError(err, '加载失败'))
   } finally {
     loading.value = false
   }
@@ -761,7 +762,7 @@ async function handleSave() {
     selectedType.value = savedType
     syncFormFromSelected()
   } catch (err: unknown) {
-    showError(getErrorMessage(err, '保存失败'))
+    showError(parseApiError(err, '保存失败'))
   } finally {
     saving.value = false
     form.value.client_secret = ''
@@ -791,7 +792,7 @@ async function handleTest() {
       showError(summary.message)
     }
   } catch (err: unknown) {
-    showError(getErrorMessage(err, '测试失败'))
+    showError(parseApiError(err, '测试失败'))
   } finally {
     testing.value = false
   }

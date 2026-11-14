@@ -58,7 +58,8 @@ import { adminApi } from '@/api/admin'
 import { useModuleStore } from '@/stores/modules'
 import { useToast } from '@/composables/useToast'
 import { log } from '@/utils/logger'
-import { getErrorMessage } from '@/types/api-error'
+import { parseApiError } from '@/utils/errorParser'
+
 import ModelDirectivesPanel from '@/features/model-directives/ModelDirectivesPanel.vue'
 import {
   createDefaultModelDirectivesConfig,
@@ -111,7 +112,7 @@ async function saveConfig(nextConfig: ModelDirectivesConfig) {
     modelDirectivesConfig.value = normalized
     success(t('ui.modelSuffixParameterSettingsSaved'))
   } catch (err) {
-    error(getErrorMessage(err, '保存模型后缀参数配置失败'))
+    error(parseApiError(err, '保存模型后缀参数配置失败'))
     log.error('保存模型后缀参数配置失败:', err)
   } finally {
     saving.value = false
@@ -125,7 +126,7 @@ async function setModuleEnabled(value: boolean) {
     moduleEnabled.value = moduleStore.modules.model_directives?.enabled === true
     success(moduleEnabled.value ? t('ui.modelSuffixParametersModuleEnabled') : t('ui.modelSuffixParametersModuleDisabled'))
   } catch (err) {
-    error(getErrorMessage(err, '更新模型后缀参数模块状态失败'))
+    error(parseApiError(err, '更新模型后缀参数模块状态失败'))
     log.error('更新模型后缀参数模块状态失败:', err)
   } finally {
     moduleSaving.value = false

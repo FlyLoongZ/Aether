@@ -677,6 +677,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { parseApiError } from '@/utils/errorParser'
 import { normalizeLocale, useI18n } from '@/i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -709,7 +710,7 @@ import { useToast } from '@/composables/useToast'
 import { formatCurrency, formatDate } from '@/utils/format'
 import { log } from '@/utils/logger'
 import { safeExternalHttpsUrl } from '@/utils/navigationSecurity'
-import { getErrorMessage, getErrorStatus } from '@/types/api-error'
+import { getErrorStatus } from '@/types/api-error'
 import {
   mergeChatPiiRedactionFeatureSettings,
   readNotificationPushServiceFeatureSettings,
@@ -907,7 +908,7 @@ async function updateFeatureSettings() {
     success(t('ui.sensitiveDataProtectionSettingsSaved'))
   } catch (err) {
     log.error('更新敏感信息保护设置失败:', err)
-    showError(getErrorMessage(err), t('ui.failedToUpdateSensitiveDataProtectionSettings'))
+    showError(parseApiError(err), t('ui.failedToUpdateSensitiveDataProtectionSettings'))
   } finally {
     savingFeatureSettings.value = false
   }
@@ -1003,7 +1004,7 @@ function handleBind(providerType: string) {
     })
     .catch((err) => {
       oauthActionLoading.value = false
-      showError(getErrorMessage(err, '获取绑定令牌失败'))
+      showError(parseApiError(err, '获取绑定令牌失败'))
     })
 }
 
@@ -1014,7 +1015,7 @@ async function handleUnbind(providerType: string) {
     success(t('ui.accountUnlinked'))
     await loadOAuthBindings()
   } catch (err) {
-    showError(getErrorMessage(err, '解绑失败'))
+    showError(parseApiError(err, '解绑失败'))
   } finally {
     oauthActionLoading.value = false
   }
@@ -1092,7 +1093,7 @@ async function updateProfile() {
     authStore.fetchCurrentUser()
   } catch (err) {
     log.error('更新个人信息失败:', err)
-    showError(getErrorMessage(err), t('ui.failedToUpdateProfile'))
+    showError(parseApiError(err), t('ui.failedToUpdateProfile'))
   } finally {
     savingProfile.value = false
   }
@@ -1123,7 +1124,7 @@ async function changePassword() {
     log.error('修改密码失败:', err)
     const title = isSettingPassword ? '密码设置失败' : '密码修改失败'
     const defaultMsg = isSettingPassword ? '请稍后重试' : '请检查当前密码是否正确'
-    showError(getErrorMessage(err, defaultMsg), title)
+    showError(parseApiError(err, defaultMsg), title)
   } finally {
     changingPassword.value = false
   }
@@ -1156,7 +1157,7 @@ async function saveSessionLabel(sessionId: string) {
     success(t('ui.deviceNameUpdated'))
   } catch (error) {
     log.error('更新设备名称失败:', error)
-    showError(getErrorMessage(error, '更新设备名称失败'))
+    showError(parseApiError(error, '更新设备名称失败'))
   } finally {
     sessionActionLoading.value = null
   }
@@ -1173,7 +1174,7 @@ async function handleRevokeSession(sessionId: string) {
     await loadSessions()
   } catch (error) {
     log.error('退出设备失败:', error)
-    showError(getErrorMessage(error, '退出设备失败'))
+    showError(parseApiError(error, '退出设备失败'))
   } finally {
     sessionActionLoading.value = null
   }
@@ -1187,7 +1188,7 @@ async function handleRevokeOtherSessions() {
     await loadSessions()
   } catch (error) {
     log.error('退出其他设备失败:', error)
-    showError(getErrorMessage(error, '退出其他设备失败'))
+    showError(parseApiError(error, '退出其他设备失败'))
   } finally {
     sessionActionLoading.value = null
   }
