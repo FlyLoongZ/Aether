@@ -1,3 +1,4 @@
+import { AxiosError, AxiosHeaders } from 'axios'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { setI18nLocale } from '@/i18n'
@@ -82,6 +83,36 @@ describe('errorParser', () => {
     expect(parseApiError(new Error('refresh_token_reused')))
       .toBe('Token refresh failed: refresh_token has already been used and rotated. Sign in again.')
     expect(parseApiError(new Error('Token refresh failed: 保存'))).toBe('Token refresh failed: 保存')
+  })
+
+  it('maps Axios network-layer failures to localized copy instead of English fallbacks', () => {
+    setI18nLocale('zh-CN')
+    expect(parseApiError(new AxiosError('Network Error', 'ERR_NETWORK')))
+      .toBe('无法连接到服务器，请检查网络连接')
+    expect(parseApiError(new AxiosError('timeout of 30000ms exceeded', 'ECONNABORTED')))
+      .toBe('请求超时，请稍后重试')
+    expect(parseApiError(new AxiosError('timeout of 30000ms exceeded', 'ETIMEDOUT')))
+      .toBe('请求超时，请稍后重试')
+    setI18nLocale('en-US')
+    expect(parseApiError(new AxiosError('Network Error', 'ERR_NETWORK')))
+      .toBe('Cannot connect to the server. Check your network connection.')
+    expect(parseApiError(new AxiosError('timeout of 30000ms exceeded', 'ECONNABORTED')))
+      .toBe('Request timed out. Try again later.')
+  })
+
+  it('falls back to the caller message when a response carries no usable body', () => {
+    setI18nLocale('zh-CN')
+    const config = { headers: new AxiosHeaders() }
+    const gatewayError = new AxiosError('Request failed with status code 502', 'ERR_BAD_RESPONSE', config, undefined, {
+      status: 502,
+      statusText: 'Bad Gateway',
+      data: '<html>Bad Gateway</html>',
+      headers: new AxiosHeaders(),
+      config,
+    })
+    expect(parseApiError(gatewayError, '保存失败')).toBe('保存失败')
+    // 非 Axios 的错误对象仍保留自己的 message，避免把调用方自定义错误吞掉
+    expect(parseApiError({ response: { data: {} }, message: '自定义错误' }, '保存失败')).toBe('自定义错误')
   })
 
   it('translates upstream status descriptions while preserving unknown API content', () => {

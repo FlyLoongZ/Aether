@@ -259,7 +259,8 @@ import { useToast } from '@/composables/useToast'
 import { useModuleStore } from '@/stores/modules'
 import { BUILTIN_TOOLS } from '@/config/builtin-tools'
 import { log } from '@/utils/logger'
-import { getErrorMessage } from '@/types/api-error'
+import { parseApiError } from '@/utils/errorParser'
+
 import { modulesApi, type ModuleStatus } from '@/api/modules'
 
 const router = useRouter()
@@ -402,7 +403,7 @@ async function toggleModule(moduleName: string, enabled: boolean) {
     await moduleStore.setEnabled(moduleName, enabled)
     success(enabled ? t('ui.moduleEnabled') : t('ui.moduleDisabled'))
   } catch (err) {
-    error(getErrorMessage(err, t('ui.operationFailed')))
+    error(parseApiError(err, t('ui.operationFailed')))
     log.error('切换模块状态失败:', err)
   } finally {
     toggling.value[moduleName] = false
@@ -419,7 +420,7 @@ async function saveModuleOrder(nextOrder: string[]) {
     success(t('ui.moduleOrderSaved'))
   } catch (err) {
     moduleOrder.value = previousOrder
-    error(getErrorMessage(err, t('ui.failedToSaveModuleOrder')))
+    error(parseApiError(err, t('ui.failedToSaveModuleOrder')))
     log.error('保存模块顺序失败:', err)
   } finally {
     orderSaving.value = false
