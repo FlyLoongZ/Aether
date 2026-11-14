@@ -106,7 +106,6 @@
                 class="rounded-lg border border-border bg-muted/30 px-4 py-3"
               >
                 <ProxyNodeSelect
-                  ref="proxyNodeSelectRef"
                   :model-value="stringFieldValue('proxy_node_id')"
                   trigger-class="h-8"
                   @update:model-value="(v: string) => { formData.proxy_node_id = v; handleFieldChange('proxy_node_id', v) }"
@@ -388,7 +387,6 @@ function isSensitiveField(key: string): boolean {
 
 const { success: showSuccess, error: showError } = useToast()
 const { confirmDanger } = useConfirm()
-const proxyNodeSelectRef = ref<InstanceType<typeof ProxyNodeSelect> | null>(null)
 const proxyNodesStore = useProxyNodesStore()
 
 /** 启用代理时加载节点列表 */

@@ -105,7 +105,7 @@
             :style="horizontalGapStyle"
           >
             <div
-              v-for="(week, weekIndex) in weekColumns"
+              v-for="(_week, weekIndex) in weekColumns"
               :key="`month-${weekIndex}`"
               :style="monthCellStyle"
               class="whitespace-nowrap text-left"

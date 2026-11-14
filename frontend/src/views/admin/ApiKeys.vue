@@ -761,7 +761,6 @@ const showKeyFormDialog = ref(false)
 const editingKeyData = ref<StandaloneKeyFormData | null>(null)
 const keyFormDialogRef = ref<InstanceType<typeof StandaloneKeyFormDialog>>()
 
-const EXPIRY_SOON_DAYS = 7
 
 // 筛选相关
 const searchQuery = ref('')
@@ -792,11 +791,6 @@ function clearFilters() {
 
 const skip = computed(() => (currentPage.value - 1) * limit.value)
 
-const activeKeyCount = computed(() => apiKeys.value.filter(key => key.is_active).length)
-const _inactiveKeyCount = computed(() => Math.max(0, apiKeys.value.length - activeKeyCount.value))
-const limitedKeyCount = computed(() => apiKeys.value.filter(isBalanceLimited).length)
-const _unlimitedKeyCount = computed(() => Math.max(0, apiKeys.value.length - limitedKeyCount.value))
-const _expiringSoonCount = computed(() => apiKeys.value.filter(key => isExpiringSoon(key)).length)
 
 // 筛选后的 API Keys
 const filteredApiKeys = computed(() => {
@@ -1115,16 +1109,6 @@ function isBalanceLimited(apiKey: AdminApiKey): boolean {
   return !isApiKeyUnlimited(apiKey)
 }
 
-function isExpiringSoon(apiKey: AdminApiKey): boolean {
-  if (!apiKey.expires_at) {
-    return false
-  }
-
-  const expiresAt = new Date(apiKey.expires_at).getTime()
-  const now = Date.now()
-  const diffDays = (expiresAt - now) / (1000 * 60 * 60 * 24)
-  return diffDays > 0 && diffDays <= EXPIRY_SOON_DAYS
-}
 
 function getRelativeTime(dateString: string): string {
   const date = new Date(dateString)

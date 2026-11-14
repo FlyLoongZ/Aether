@@ -926,21 +926,6 @@ const cacheCreationSplitRows = computed(() => {
   return rows
 })
 
-// 总输入上下文（输入 + 缓存创建 + 缓存读取）
-const _totalInputContext = computed(() => {
-  if (!detail.value) return 0
-
-  // 优先使用 tiered_pricing 中的值
-  if (detail.value.tiered_pricing?.total_input_context !== undefined) {
-    return detail.value.tiered_pricing.total_input_context
-  }
-
-  // 否则手动计算
-  const input = detail.value.tokens?.input || detail.value.input_tokens || 0
-  const cacheCreation = totalCacheCreationTokens.value
-  const cacheRead = detail.value.cache_read_input_tokens || 0
-  return input + cacheCreation + cacheRead
-})
 
 // Token 费用总计
 const tokenCostTotal = computed(() => {

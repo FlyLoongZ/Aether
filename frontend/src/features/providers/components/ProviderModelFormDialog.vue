@@ -819,20 +819,6 @@ function removeVideoResolutionPriceRow(idx: number) {
 }
 
 
-function _copyVideoPricingFromSelectedGlobal() {
-  const gm = availableGlobalModels.value.find(m => m.id === form.value.global_model_id)
-  const cfg = gm?.config || {}
-  if (cfg && typeof cfg === 'object') {
-    const raw = getNested(cfg, 'billing.video.price_per_second_by_resolution')
-    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      videoResolutionPrices.value = Object.entries(raw).map(([k, v]) => ({
-        resolution: String(k),
-        price_per_second: typeof v === 'number' ? v : undefined,
-      }))
-    }
-  }
-  configTouched.value = true
-}
 
 async function createManualGlobalModel(finalTieredPricing: TieredPricingConfig | null, cleanConfig: Record<string, unknown> | undefined): Promise<GlobalModelResponse> {
   const modelName = form.value.manual_global_model_name.trim()

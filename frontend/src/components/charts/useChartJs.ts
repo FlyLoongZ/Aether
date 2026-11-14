@@ -1,8 +1,10 @@
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, watch, type Ref } from 'vue'
 import { Chart as ChartJS, type ChartData, type ChartOptions, type ChartType } from 'chart.js'
 import { useI18n } from '@/i18n'
 
 interface UseChartJsOptions<T extends ChartType> {
+  /** 画布元素引用（由组件通过 ref="..." 绑定） */
+  chartRef: Ref<HTMLCanvasElement | undefined>
   type: T
   /** 当前数据；调用方应传入 computed，引用变化即触发更新 */
   data: () => ChartData<T>
@@ -18,7 +20,7 @@ interface UseChartJsOptions<T extends ChartType> {
  * 这里统一为浅监听：调用方传入 computed 数据，引用变化即可触发更新。
  */
 export function useChartJs<T extends ChartType>(config: UseChartJsOptions<T>) {
-  const chartRef = ref<HTMLCanvasElement>()
+  const { chartRef } = config
   const { locale } = useI18n()
   let chart: ChartJS<T> | null = null
 
@@ -53,5 +55,4 @@ export function useChartJs<T extends ChartType>(config: UseChartJsOptions<T>) {
     chart.update('none')
   }, { deep: true })
 
-  return { chartRef }
 }
