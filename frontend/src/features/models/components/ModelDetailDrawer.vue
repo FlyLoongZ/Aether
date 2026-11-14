@@ -507,7 +507,6 @@
             v-if="model"
             ref="modelMappingsTabRef"
             :global-model-id="model.id"
-            :model-name="model.name"
             :mappings="model.config?.model_mappings || []"
             :routing-data="routingData"
             :loading-preview="routingLoading"

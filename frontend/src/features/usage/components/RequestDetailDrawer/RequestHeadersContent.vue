@@ -128,7 +128,6 @@
     <div v-show="viewMode === 'formatted'">
       <JsonContent
         :data="currentHeaderData"
-        :view-mode="viewMode"
         :expand-depth="currentExpandDepth"
         :is-dark="isDark"
         :empty-message="t('ui.noRequestHeaders1eaacce')"
@@ -166,10 +165,8 @@ import type { RequestDetail } from '@/api/dashboard'
 const props = withDefaults(defineProps<{
   detail: RequestDetail
   viewMode: 'compare' | 'formatted' | 'raw'
-  dataSource: 'client' | 'provider'
   currentHeaderData: Record<string, unknown> | null
   currentExpandDepth: number
-  hasProviderHeaders: boolean
   headerStats: { added: number; modified: number; removed: number; unchanged: number }
   isDark: boolean
   // 泛化 props：允许传入任意 header 对和标签，用于复用为响应头对比

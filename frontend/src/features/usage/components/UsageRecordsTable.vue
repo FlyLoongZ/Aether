@@ -218,7 +218,7 @@
         v-if="records.length === 0"
         class="text-center py-12 text-muted-foreground"
       >
-        {{ t('ui.noRequestRecords') }}
+        {{ loading ? t('common.loading') : t('ui.noRequestRecords') }}
       </div>
       <UsageRecordMobileCard
         v-for="record in records"
@@ -499,7 +499,7 @@
             :colspan="visibleColumnCount"
             class="text-center py-12 text-muted-foreground"
           >
-            {{ t('ui.noRequestRecords') }}
+            {{ loading ? t('common.loading') : t('ui.noRequestRecords') }}
           </TableCell>
         </TableRow>
         <TableRow

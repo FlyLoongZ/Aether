@@ -359,7 +359,6 @@ const props = defineProps<{
   open: boolean
   providerId: string
   /** @deprecated */
-  providerApiFormats?: string[]
   endpoints?: ProviderEndpoint[]
   models: Model[]
   editingGroup?: AliasGroup | null

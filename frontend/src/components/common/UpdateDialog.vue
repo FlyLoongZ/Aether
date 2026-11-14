@@ -60,6 +60,12 @@
           <p class="mt-1 break-all font-mono text-base font-semibold text-primary">
             {{ formatDisplayVersion(latestVersion) }}
           </p>
+          <p
+            v-if="currentVersion"
+            class="mt-1 break-all font-mono text-xs text-muted-foreground"
+          >
+            {{ t('ui.currentVersion') }}: {{ formatDisplayVersion(currentVersion) }}
+          </p>
         </div>
 
         <!-- Release Notes -->
