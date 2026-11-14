@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { execSync } from 'child_process'
 import { startupHtmlPlugin } from './plugins/startup-html-plugin.ts'
+import { sharedResolve } from './vite.shared.ts'
 
 function normalizeVersion(version: string): string {
   const trimmed = version.trim()
@@ -44,11 +45,7 @@ export default defineConfig(({ mode }) => {
     define: {
       __APP_VERSION__: JSON.stringify(getGitVersion()),
     },
-    resolve: {
-      alias: {
-        '@': path.resolve(import.meta.dirname, './src'),
-      },
-    },
+    resolve: sharedResolve,
     build: {
       rolldownOptions: {
         output: {

@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
-import path from 'path'
+import { sharedResolve } from './vite.shared.ts'
 
 export default defineConfig({
   plugins: [vue()],
@@ -20,9 +20,5 @@ export default defineConfig({
       ]
     }
   },
-  resolve: {
-    alias: {
-      '@': path.resolve(import.meta.dirname, './src'),
-    },
-  },
+  resolve: sharedResolve,
 })
