@@ -131,26 +131,6 @@ fn sample_public_global_model(
     .expect("global model should build")
 }
 
-fn sample_public_global_model_with_capabilities(
-    id: &str,
-    name: &str,
-    display_name: &str,
-    supported_capabilities: serde_json::Value,
-) -> StoredPublicGlobalModel {
-    StoredPublicGlobalModel::new(
-        id.to_string(),
-        name.to_string(),
-        Some(display_name.to_string()),
-        true,
-        Some(0.02),
-        Some(json!({"tiers":[{"up_to": null, "input_price_per_1m": 3.0, "output_price_per_1m": 15.0}]})),
-        Some(supported_capabilities),
-        Some(json!({"family": "test"})),
-        0,
-    )
-    .expect("global model should build")
-}
-
 fn sample_public_catalog_model(
     id: &str,
     provider_id: &str,

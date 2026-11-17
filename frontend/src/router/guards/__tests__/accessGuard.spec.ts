@@ -41,12 +41,12 @@ function setup() {
 
 describe('路由认证启动策略', () => {
   it.each([
-    '/status', '/privacy-policy', '/logo-demo', '/register', '/auth/callback',
+    '/privacy-policy', '/logo-demo', '/register', '/auth/callback',
     '/guide', '/guide/architecture', '/guide/concepts', '/guide/strategy',
     '/guide/advanced', '/guide/faq', '/guide/modules',
   ])('%s 不在守卫中等待认证，也不读取角色或模块状态', async path => {
     const { getAuth, getModules, invoke } = setup()
-    await expect(invoke(path, '/status')).resolves.toBe(true)
+    await expect(invoke(path, '/privacy-policy')).resolves.toBe(true)
     expect(getAuth).not.toHaveBeenCalled()
     expect(getModules).not.toHaveBeenCalled()
   })
@@ -57,9 +57,9 @@ describe('路由认证启动策略', () => {
     for (const path of ['/dashboard', '/admin/dashboard', '/guide']) {
       expect(resolveAuthBootstrap(home, router.resolve(path) as RouteLocationNormalized)).toBe('background')
     }
-    expect(resolveAuthBootstrap(home, router.resolve('/status') as RouteLocationNormalized)).toBe('blocking')
+    expect(resolveAuthBootstrap(home, router.resolve('/privacy-policy') as RouteLocationNormalized)).toBe('blocking')
     expect(resolveAuthBootstrap(router.resolve('/?returnTo=/guide') as RouteLocationNormalized,
-      router.resolve('/status') as RouteLocationNormalized)).toBe('background')
+      router.resolve('/privacy-policy') as RouteLocationNormalized)).toBe('background')
   })
 
   it('公共 meta 不能覆盖父路由的认证要求', () => {
@@ -110,6 +110,6 @@ describe('路由认证启动策略', () => {
     auth.user = { ...currentUser, role: 'admin' }
     auth.isAuthenticated = true
     auth.canAccessAdmin = true
-    await expect(invoke('/', '/status')).resolves.toBe('/admin/dashboard')
+    await expect(invoke('/', '/privacy-policy')).resolves.toBe('/admin/dashboard')
   })
 })

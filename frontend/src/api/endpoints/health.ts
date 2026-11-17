@@ -1,5 +1,4 @@
 import client from '../client'
-export * from './health-v2'
 import type {
   EndpointStatusMonitorResponse,
   PublicEndpointStatusMonitorResponse,

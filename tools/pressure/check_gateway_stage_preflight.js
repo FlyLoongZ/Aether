@@ -40,7 +40,7 @@ function parseArgs(argv) {
   const options = {
     stage: process.env.PRESSURE_STAGE || DEFAULT_STAGE,
     gatewayBaseUrl,
-    healthUrl: `${gatewayBaseUrl.replace(/\/$/, '')}/_gateway/health`,
+    healthUrl: `${gatewayBaseUrl.replace(/\/$/, '')}/readyz`,
     metricsUrl: process.env.METRICS_URL || `${gatewayBaseUrl.replace(/\/$/, '')}/_gateway/metrics`,
     targetUrl: process.env.TARGET_URL || `${gatewayBaseUrl.replace(/\/$/, '')}/v1/chat/completions`,
     mockUpstreamMetricsUrl:
@@ -69,7 +69,7 @@ function parseArgs(argv) {
         break
       case '--gateway-base-url':
         options.gatewayBaseUrl = requireValue(argv, ++index, arg)
-        options.healthUrl = `${options.gatewayBaseUrl.replace(/\/$/, '')}/_gateway/health`
+        options.healthUrl = `${options.gatewayBaseUrl.replace(/\/$/, '')}/readyz`
         if (!process.env.METRICS_URL) {
           options.metricsUrl = `${options.gatewayBaseUrl.replace(/\/$/, '')}/_gateway/metrics`
         }
@@ -205,17 +205,17 @@ async function main() {
   }
 
   let metricsText = ''
-  await checkHttpText('gateway health', options.healthUrl, options.timeoutMs, ok, failures, (body) => {
-    const health = parseJson(body)
-    if (!health) {
-      failures.push('gateway health did not return JSON')
+  await checkHttpText('gateway readiness', options.healthUrl, options.timeoutMs, ok, failures, (body) => {
+    const readiness = parseJson(body)
+    if (!readiness) {
+      failures.push('gateway readiness did not return JSON')
       return
     }
-    if (health.status !== 'ok') {
-      failures.push(`gateway health status=${health.status ?? 'missing'}, expected ok`)
+    if (readiness.status !== 'ready') {
+      failures.push(`gateway readiness status=${readiness.status ?? 'missing'}, expected ready`)
       return
     }
-    ok.push('gateway health status ok')
+    ok.push('gateway readiness status ready')
   })
 
   await checkHttpText('gateway metrics', options.metricsUrl, options.timeoutMs, ok, failures, (body) => {

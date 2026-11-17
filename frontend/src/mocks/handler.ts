@@ -1114,12 +1114,6 @@ const MOCK_ENDPOINTS = [
   { id: 'ep-003', provider_id: 'provider-003', provider_name: 'google', api_format: 'gemini:generate_content', base_url: 'https://generativelanguage.googleapis.com/v1beta', max_retries: 2, is_active: true, total_keys: 1, active_keys: 1, created_at: '2024-01-15T00:00:00Z', updated_at: new Date().toISOString(), ...getMockEndpointExtras('gemini:generate_content') }
 ]
 
-// Mock 能力定义
-const MOCK_CAPABILITIES = [
-  { name: 'cache_1h', display_name: '1小时缓存', description: '支持1小时prompt缓存', match_mode: 'exclusive', short_name: '1h' },
-  { name: 'context_1m', display_name: '1M上下文', description: '支持1M上下文窗口', match_mode: 'compatible', short_name: '1M' }
-]
-
 const MOCK_CODEX_POOL_PROVIDER_ID = 'provider-codex-pool-demo'
 const MOCK_CODEX_POOL_PROVIDER = {
   id: MOCK_CODEX_POOL_PROVIDER_ID,
@@ -2193,47 +2187,7 @@ const mockHandlers: Record<string, (config: AxiosRequestConfig) => Promise<Axios
     })
   },
 
-  // ========== 能力接口 ==========
-  'GET /api/capabilities': async () => {
-    await delay()
-    return createMockResponse({ capabilities: MOCK_CAPABILITIES })
-  },
-
-  'GET /api/capabilities/user-configurable': async () => {
-    await delay()
-    return createMockResponse({ capabilities: MOCK_CAPABILITIES.filter(c => c.match_mode === 'exclusive') })
-  },
-
   // ========== 公开接口 ==========
-  'GET /api/public/global-models': async () => {
-    await delay()
-    return createMockResponse({
-      models: MOCK_GLOBAL_MODELS.map(m => ({
-        id: m.id,
-        name: m.name,
-        display_name: m.display_name,
-        is_active: m.is_active,
-        default_tiered_pricing: m.default_tiered_pricing,
-        default_price_per_request: m.default_price_per_request,
-        supported_capabilities: m.supported_capabilities,
-        supports_embedding: m.supports_embedding,
-        config: m.config
-      })),
-      total: MOCK_GLOBAL_MODELS.length
-    })
-  },
-
-  'GET /api/public/models': async () => {
-    await delay()
-    return createMockResponse({
-      models: MOCK_GLOBAL_MODELS.map(m => ({
-        name: m.name,
-        display_name: m.display_name,
-        description: m.config?.description
-      }))
-    })
-  },
-
   'GET /api/public/health': async () => {
     await delay(50)
     return createMockResponse({ status: 'healthy', demo_mode: true })

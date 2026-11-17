@@ -46,7 +46,7 @@ function requestPath(url?: string): string {
 
 function isPublicEndpoint(url?: string, method?: string): boolean {
   const path = requestPath(url)
-  const isHealthCheck = ['/health', '/v1/health', '/_gateway/health'].includes(path) &&
+  const isHealthCheck = ['/health', '/v1/health'].includes(path) &&
                        method?.toLowerCase() === 'get'
 
   const anonymousGet = method?.toLowerCase() === 'get' && [
@@ -57,9 +57,10 @@ function isPublicEndpoint(url?: string, method?: string): boolean {
     '/api/auth/register', '/api/auth/send-verification-code',
     '/api/auth/verify-email', '/api/auth/verification-status',
   ].includes(path)
+  const isPublicCatalogPath = (path === '/api/public' || path.startsWith('/api/public/')) &&
+                              !path.startsWith('/api/public/health')
 
-  return anonymousGet || anonymousPost ||
-         path === '/api/public' || path.startsWith('/api/public/') ||
+  return anonymousGet || anonymousPost || isPublicCatalogPath ||
          path === '/public' || path.startsWith('/public/') ||
          (!path.startsWith('/api/') && path.endsWith('.json')) ||
          isHealthCheck

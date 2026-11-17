@@ -710,9 +710,9 @@ fn gateway_frontdoor_self_loop_guard_matches_loopback_public_ai_route() {
 fn gateway_frontdoor_self_loop_guard_ignores_non_ai_routes() {
     assert!(!gateway_frontdoor_self_loop_guard_matches_with_port(
         8084,
-        "http://127.0.0.1:8084/_gateway/health"
+        "http://127.0.0.1:8084/readyz"
     ));
-    assert!(!frontdoor_self_loop_public_ai_path("/_gateway/health"));
+    assert!(!frontdoor_self_loop_public_ai_path("/readyz"));
 }
 
 #[test]

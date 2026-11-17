@@ -108,10 +108,10 @@ use aether_data_contracts::repository::candidates::{
 use aether_data_contracts::repository::global_models::{
     AdminGlobalModelListQuery, AdminProviderModelListQuery, CreateAdminGlobalModelRecord,
     GlobalModelReadRepository, GlobalModelWriteRepository, PublicCatalogModelListQuery,
-    PublicCatalogModelSearchQuery, PublicGlobalModelQuery, StoredAdminGlobalModel,
-    StoredAdminGlobalModelPage, StoredAdminProviderModel, StoredProviderActiveGlobalModel,
-    StoredProviderModelStats, StoredPublicCatalogModel, StoredPublicGlobalModel,
-    StoredPublicGlobalModelPage, UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
+    PublicGlobalModelQuery, StoredAdminGlobalModel, StoredAdminGlobalModelPage,
+    StoredAdminProviderModel, StoredProviderActiveGlobalModel, StoredProviderModelStats,
+    StoredPublicCatalogModel, StoredPublicGlobalModel, StoredPublicGlobalModelPage,
+    UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
 use aether_data_contracts::repository::pool_scores::{
     GetPoolMemberScoresByIdsQuery, ListPoolMemberScoresQuery, ListRankedPoolMembersQuery,

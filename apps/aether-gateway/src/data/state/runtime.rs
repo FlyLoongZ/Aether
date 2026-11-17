@@ -1699,19 +1699,6 @@ impl GatewayDataState {
         }
     }
 
-    pub(crate) async fn summarize_health_observations(
-        &self,
-        query: &aether_data_contracts::repository::usage::HealthObservationQuery,
-    ) -> Result<aether_data_contracts::repository::usage::HealthObservationSummary, DataLayerError>
-    {
-        match &self.usage_reader {
-            Some(repository) => repository.summarize_health_observations(query).await,
-            None => Err(DataLayerError::InvalidInput(
-                "health observations repository is unavailable".into(),
-            )),
-        }
-    }
-
     pub(crate) async fn summarize_usage_audits(
         &self,
         query: &aether_data_contracts::repository::usage::UsageAuditSummaryQuery,

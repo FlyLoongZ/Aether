@@ -686,99 +686,6 @@ fn billing_plan_checkout_buffers_request_body() {
 }
 
 #[test]
-fn classifies_public_catalog_providers_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/public/providers?limit=20"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("public_catalog"));
-    assert_eq!(decision.route_kind.as_deref(), Some("providers"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:catalog")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn classifies_public_catalog_models_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/public/models?provider_id=provider-openai"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("public_catalog"));
-    assert_eq!(decision.route_kind.as_deref(), Some("models"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:catalog")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn classifies_public_catalog_search_models_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/public/search/models?q=gpt"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("public_catalog"));
-    assert_eq!(decision.route_kind.as_deref(), Some("search_models"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:catalog")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn classifies_public_catalog_stats_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/public/stats".parse().expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("public_catalog"));
-    assert_eq!(decision.route_kind.as_deref(), Some("stats"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:catalog")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn classifies_public_catalog_global_models_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/public/global-models?limit=10"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("public_catalog"));
-    assert_eq!(decision.route_kind.as_deref(), Some("global_models"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:catalog")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
 fn classifies_public_catalog_health_api_formats_as_public_support_route() {
     let headers = headers(&[]);
     let uri: Uri = "/api/public/health/api-formats?lookback_hours=12"
@@ -1009,61 +916,6 @@ fn classifies_oauth_user_bind_token_route() {
 }
 
 #[test]
-fn classifies_capabilities_list_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/capabilities".parse().expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("capabilities"));
-    assert_eq!(decision.route_kind.as_deref(), Some("list"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:capabilities")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn classifies_capabilities_user_configurable_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/capabilities/user-configurable"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("capabilities"));
-    assert_eq!(decision.route_kind.as_deref(), Some("user_configurable"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:capabilities")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn classifies_capabilities_model_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/capabilities/model/gpt-5"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("capabilities"));
-    assert_eq!(decision.route_kind.as_deref(), Some("model"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:capabilities")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
 fn classifies_modules_user_status_as_public_support_route() {
     let headers = headers(&[]);
     let uri: Uri = "/api/modules/user-status"
@@ -1097,25 +949,6 @@ fn classifies_modules_auth_status_as_public_support_route() {
     assert_eq!(
         decision.auth_endpoint_signature.as_deref(),
         Some("public:modules")
-    );
-    assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn classifies_system_catalog_provider_detail_as_public_support_route() {
-    let headers = headers(&[]);
-    let uri: Uri = "/v1/providers/provider-openai"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::GET, &uri, &headers).expect("route should classify");
-
-    assert_eq!(decision.route_class.as_deref(), Some("public_support"));
-    assert_eq!(decision.route_family.as_deref(), Some("system_catalog"));
-    assert_eq!(decision.route_kind.as_deref(), Some("provider_detail"));
-    assert_eq!(
-        decision.auth_endpoint_signature.as_deref(),
-        Some("public:system_catalog")
     );
     assert!(!decision.is_execution_runtime_candidate());
 }

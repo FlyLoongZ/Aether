@@ -1013,7 +1013,7 @@ async function pollHealthUntilReady() {
     const elapsed = i * 2
     reconnectMessage.value = t('update.reconnect.waitingWithSeconds', { seconds: elapsed })
     try {
-      const resp = await fetch('/_gateway/health', {
+      const resp = await fetch('/health', {
         method: 'GET',
         signal: AbortSignal.timeout(3000),
       })

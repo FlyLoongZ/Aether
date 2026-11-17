@@ -361,7 +361,7 @@ target/debug/aether-gateway --app-port "$${APP_PORT}" > >(
 ) 2>&1 &
 GATEWAY_PID=$$!
 
-if ! wait_for_startup "$${GATEWAY_PID}" "$${GATEWAY_STARTUP_TIMEOUT_SECONDS}" "aether-gateway" curl -sf "http://127.0.0.1:$${APP_PORT}/_gateway/health"; then
+if ! wait_for_startup "$${GATEWAY_PID}" "$${GATEWAY_STARTUP_TIMEOUT_SECONDS}" "aether-gateway" curl -sf "http://127.0.0.1:$${APP_PORT}/readyz"; then
 	if [ "$${STARTUP_WAIT_EARLY_EXIT}" = "true" ]; then
 		GATEWAY_PID=""
 	fi
@@ -413,7 +413,7 @@ cleanup() {
 
 wait_for_backend_ready() {
 	while :; do
-		if curl -sf "http://127.0.0.1:$${APP_PORT}/_gateway/health" >/dev/null 2>&1; then
+		if curl -sf "http://127.0.0.1:$${APP_PORT}/readyz" >/dev/null 2>&1; then
 			return 0
 		fi
 
@@ -451,7 +451,7 @@ echo "=> 启动后端: 先编译 aether-gateway，再运行 target/debug/aether-
 /bin/bash -euo pipefail -c "$$DEV_BACKEND_SCRIPT" &
 backend_pid=$$!
 
-echo "=> 等待后端健康检查: http://127.0.0.1:$${APP_PORT}/_gateway/health"
+echo "=> 等待后端健康检查: http://127.0.0.1:$${APP_PORT}/readyz"
 wait_for_backend_ready
 
 echo "=> 启动前端: cd frontend && npm run dev"

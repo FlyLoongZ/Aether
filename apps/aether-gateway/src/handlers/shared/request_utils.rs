@@ -192,10 +192,6 @@ pub(crate) fn admin_proxy_local_requires_buffered_body(
                     http::Method::POST,
                     Some("create_provider_key")
                 ) | (
-                    Some("endpoints_health"),
-                    http::Method::PUT,
-                    Some("health_v2_publication")
-                ) | (
                     Some("endpoints_manage"),
                     http::Method::POST,
                     Some("create_endpoint")
