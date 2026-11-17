@@ -39,9 +39,10 @@ use crate::executor::{
     record_failed_usage_for_exhausted_request, record_failed_usage_for_runtime_miss_request,
     LocalExecutionRequestOutcome,
 };
+use crate::handlers::public::enforce_admin_auth_ip_rate_limit;
 use crate::handlers::shared::{
-    build_admin_proxy_auth_required_response, build_unhandled_admin_proxy_response, ip_rules_allow,
-    local_proxy_route_requires_buffered_body,
+    build_admin_proxy_auth_required_response, build_admin_route_not_found_response,
+    build_unhandled_admin_proxy_response, ip_rules_allow, local_proxy_route_requires_buffered_body,
 };
 
 use crate::headers::{
@@ -236,6 +237,212 @@ async fn maybe_promote_management_token_admin_principal(
         );
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AdminAuthPrecheck {
+    Missing,
+    InvalidFormat,
+    Jwt,
+    ManagementToken,
+}
+
+fn admin_auth_precheck(headers: &http::HeaderMap) -> AdminAuthPrecheck {
+    let mut values = headers.get_all(http::header::AUTHORIZATION).iter();
+    let Some(value) = values.next() else {
+        return AdminAuthPrecheck::Missing;
+    };
+    if values.next().is_some() {
+        return AdminAuthPrecheck::InvalidFormat;
+    }
+    let Ok(value) = value.to_str() else {
+        return AdminAuthPrecheck::InvalidFormat;
+    };
+    let Some((scheme, token)) = value.split_once(' ') else {
+        return AdminAuthPrecheck::InvalidFormat;
+    };
+    if !scheme.eq_ignore_ascii_case("bearer") {
+        return AdminAuthPrecheck::InvalidFormat;
+    }
+    let token = token.trim();
+    if token.is_empty() || token.len() > 8192 || token.chars().any(char::is_whitespace) {
+        return AdminAuthPrecheck::InvalidFormat;
+    }
+    if token.starts_with("ae-") || token.starts_with("ae_") {
+        return AdminAuthPrecheck::ManagementToken;
+    }
+    let mut segments = token.split('.');
+    let (Some(header), Some(payload), Some(signature), None) = (
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+    ) else {
+        return AdminAuthPrecheck::InvalidFormat;
+    };
+    if header.is_empty() || payload.is_empty() || signature.is_empty() {
+        return AdminAuthPrecheck::InvalidFormat;
+    }
+    AdminAuthPrecheck::Jwt
+}
+
+async fn maybe_build_admin_auth_gate_response(
+    state: &AppState,
+    request_context: &GatewayPublicRequestContext,
+    headers: &http::HeaderMap,
+    uri: &http::Uri,
+    client_ip: std::net::IpAddr,
+) -> Result<Option<Response<Body>>, GatewayError> {
+    if !request_path_targets_admin_namespace(&request_context.request_path) {
+        return Ok(None);
+    }
+    if request_context
+        .control_decision
+        .as_ref()
+        .and_then(|decision| decision.admin_principal.as_ref())
+        .is_some()
+    {
+        return Ok(None);
+    }
+
+    let precheck = admin_auth_precheck(headers);
+    if precheck == AdminAuthPrecheck::Missing {
+        return Ok(Some(build_admin_proxy_auth_required_response(
+            request_context,
+        )));
+    }
+
+    if let Err(response) = enforce_admin_auth_ip_rate_limit(state, client_ip).await {
+        return Ok(Some(response.into()));
+    }
+
+    if request_context
+        .control_decision
+        .as_ref()
+        .is_some_and(|decision| decision.route_class.as_deref() == Some("admin_proxy"))
+    {
+        return Ok(Some(build_admin_proxy_auth_required_response(
+            request_context,
+        )));
+    }
+
+    if precheck == AdminAuthPrecheck::InvalidFormat {
+        return Ok(Some(build_admin_proxy_auth_required_response(
+            request_context,
+        )));
+    }
+
+    let authenticated = match precheck {
+        AdminAuthPrecheck::ManagementToken => {
+            match crate::management_token_auth::authenticate_management_token(
+                state, headers, client_ip,
+            )
+            .await
+            {
+                Ok(_) => true,
+                Err(crate::management_token_auth::ManagementTokenAuthError::Unavailable) => {
+                    return Err(GatewayError::Internal(
+                        "management token authentication unavailable".to_string(),
+                    ))
+                }
+                Err(
+                    crate::management_token_auth::ManagementTokenAuthError::Missing
+                    | crate::management_token_auth::ManagementTokenAuthError::Invalid,
+                ) => false,
+            }
+        }
+        AdminAuthPrecheck::Jwt => {
+            crate::control::resolve_local_admin_session_principal(state, headers, uri)
+                .await?
+                .is_some()
+        }
+        AdminAuthPrecheck::Missing | AdminAuthPrecheck::InvalidFormat => false,
+    };
+
+    if authenticated {
+        Ok(Some(build_admin_route_not_found_response(request_context)))
+    } else {
+        Ok(Some(build_admin_proxy_auth_required_response(
+            request_context,
+        )))
+    }
+}
+
+fn decode_percent_encoded_path(path: &str) -> Result<Vec<u8>, &'static str> {
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            if index + 2 >= bytes.len() {
+                return Err("malformed percent-encoding in request path");
+            }
+            let Some(high) = hex_nibble(bytes[index + 1]) else {
+                return Err("malformed percent-encoding in request path");
+            };
+            let Some(low) = hex_nibble(bytes[index + 2]) else {
+                return Err("malformed percent-encoding in request path");
+            };
+            decoded.push((high << 4) | low);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    Ok(decoded)
+}
+
+fn validate_request_path_encoding(path: &str) -> Result<(), &'static str> {
+    let decoded = decode_percent_encoded_path(path)?;
+    if decoded.iter().any(|byte| *byte < 0x20 || *byte == 0x7f) {
+        return Err("control characters are not allowed in request path");
+    }
+    if decoded.contains(&b'\\') {
+        return Err("encoded backslash is not allowed in request path");
+    }
+    let mut segment_start = 0;
+    for (position, byte) in decoded.iter().enumerate() {
+        if *byte == b'/' {
+            if &decoded[segment_start..position] == b".." {
+                return Err("path traversal is not allowed");
+            }
+            segment_start = position + 1;
+        }
+    }
+    if &decoded[segment_start..] == b".." {
+        return Err("path traversal is not allowed");
+    }
+    Ok(())
+}
+
+/// Returns whether the request path addresses the admin namespace.
+///
+/// The check is a single percent-decode followed by an exact prefix match, so
+/// it intentionally does not fold `.` segments or repeated slashes. Those
+/// variants are not classified as admin routes either, and unclassified paths
+/// are never forwarded upstream (they end in a local 404), so they cannot
+/// reach an admin handler without authentication.
+///
+/// This only holds while the gateway is the component that normalizes paths:
+/// if a reverse proxy in front of the gateway folds `.` segments, the gateway
+/// already sees the canonical `/api/admin/...` path and the gate matches it.
+/// If the gateway ever normalizes paths itself, this function and the route
+/// classifier must be updated together, otherwise the gate would miss paths
+/// the classifier accepts.
+fn request_path_targets_admin_namespace(path: &str) -> bool {
+    decode_percent_encoded_path(path)
+        .map(|decoded| decoded == b"/api/admin" || decoded.starts_with(b"/api/admin/"))
+        .unwrap_or(false)
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn owner_forward_request_is_stream(
@@ -566,6 +773,40 @@ async fn proxy_request_inner(
             ));
         }
     }
+    if let Err(detail) = validate_request_path_encoding(parts.uri.path()) {
+        warn!(
+            event_name = "frontdoor_invalid_path_encoding",
+            log_type = "event",
+            trace_id = %trace_id,
+            client_ip = %client_ip,
+            path = %parts.uri.path(),
+            detail,
+            "gateway rejected request with unsafe path encoding"
+        );
+        let response = build_local_http_error_response_with_request_path(
+            &trace_id,
+            None,
+            Some(parts.uri.path()),
+            http::StatusCode::BAD_REQUEST,
+            detail,
+        )?;
+        return Ok(finalize_gateway_response(
+            response,
+            &trace_id,
+            &remote_addr,
+            client_ip,
+            &parts.method,
+            parts
+                .uri
+                .path_and_query()
+                .map(|value| value.as_str())
+                .unwrap_or("/"),
+            None,
+            EXECUTION_PATH_LOCAL_INVALID_REQUEST,
+            &started_at,
+            request_permit.take(),
+        ));
+    }
     crate::ai_serving::codex_context::install_codex_fingerprint_context_slot(&mut parts);
     let redaction_slot = crate::privacy::RedactionSessionSlot::default();
     parts.extensions.insert(redaction_slot.clone());
@@ -593,6 +834,29 @@ async fn proxy_request_inner(
         &mut request_context,
     )
     .await?;
+    if let Some(response) = maybe_build_admin_auth_gate_response(
+        &state,
+        &request_context,
+        &parts.headers,
+        &parts.uri,
+        client_ip,
+    )
+    .await?
+    {
+        let execution_path = if response.status() == http::StatusCode::NOT_FOUND {
+            EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND
+        } else {
+            EXECUTION_PATH_LOCAL_AUTH_DENIED
+        };
+        return Ok(finalize_gateway_response_with_context(
+            response,
+            &remote_addr,
+            &request_context,
+            execution_path,
+            &started_at,
+            request_permit.take(),
+        ));
+    }
     if let Some(auth_context) = request_context
         .control_decision
         .as_ref()
@@ -722,38 +986,9 @@ async fn proxy_request_inner(
         .as_ref()
         .is_some_and(|decision| {
             decision.route_class.as_deref() == Some("admin_proxy")
-                && decision.admin_principal.is_none()
-        })
-    {
-        let response = build_admin_proxy_auth_required_response(&request_context);
-        return Ok(finalize_gateway_response_with_context(
-            response,
-            &remote_addr,
-            &request_context,
-            EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH,
-            &started_at,
-            request_permit.take(),
-        ));
-    }
-    if request_context
-        .control_decision
-        .as_ref()
-        .is_some_and(|decision| {
-            decision.route_class.as_deref() == Some("admin_proxy")
                 && decision.admin_principal.is_some()
         })
     {
-        let response = build_unhandled_admin_proxy_response(&request_context);
-        return Ok(finalize_gateway_response_with_context(
-            response,
-            &remote_addr,
-            &request_context,
-            EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH,
-            &started_at,
-            request_permit.take(),
-        ));
-    }
-    if request_context.request_path.starts_with("/api/admin/") {
         let response = build_unhandled_admin_proxy_response(&request_context);
         return Ok(finalize_gateway_response_with_context(
             response,
@@ -1878,13 +2113,14 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        api_key_remote_ip_allowed, buffer_and_normalize_request_body,
+        admin_auth_precheck, api_key_remote_ip_allowed, buffer_and_normalize_request_body,
         diagnostic_is_auth_api_key_concurrency_limited,
         diagnostic_is_provider_key_capacity_limited, local_execution_runtime_miss_detail,
         local_execution_runtime_miss_status, owner_forward_request_is_stream,
-        restore_redacted_stream_execution_response, restore_redacted_sync_execution_response,
-        GatewayControlDecision, LocalExecutionRuntimeMissDiagnostic, RequestBodyBufferError,
-        RequestBodyBufferPolicy,
+        request_path_targets_admin_namespace, restore_redacted_stream_execution_response,
+        restore_redacted_sync_execution_response, validate_request_path_encoding,
+        AdminAuthPrecheck, GatewayControlDecision, LocalExecutionRuntimeMissDiagnostic,
+        RequestBodyBufferError, RequestBodyBufferPolicy,
     };
     use axum::body::{to_bytes, Body, Bytes};
     use axum::http::{header, HeaderMap, HeaderValue, Method, Response, StatusCode};
@@ -1892,6 +2128,71 @@ mod tests {
     use serde_json::json;
     use std::io::Write;
     use tokio::sync::Semaphore;
+
+    #[test]
+    fn rejects_unsafe_request_path_encoding() {
+        for path in [
+            "/api/admin/%2e%2e/users",
+            "/api/admin/%2E%2E/users",
+            "/api/admin/%2e./users",
+            "/api/admin/.%2e/users",
+            "/api/admin/%5cusers",
+            "/api/admin/%zz",
+            "/api/admin/%2",
+            "/api/admin/%00users",
+        ] {
+            assert!(
+                validate_request_path_encoding(path).is_err(),
+                "path should be rejected: {path}"
+            );
+        }
+        assert!(validate_request_path_encoding("/api/admin/users%2F123").is_ok());
+        assert!(validate_request_path_encoding("/v1/models/gpt-5%2Fmini").is_ok());
+    }
+
+    #[test]
+    fn treats_percent_encoded_admin_prefix_as_admin_namespace() {
+        assert!(request_path_targets_admin_namespace("/api/admin/users"));
+        assert!(request_path_targets_admin_namespace("/api/admin%2Fusers"));
+        assert!(request_path_targets_admin_namespace("/%61pi/admin/users"));
+        assert!(!request_path_targets_admin_namespace("/api/administrator"));
+    }
+
+    #[test]
+    fn classifies_admin_authorization_formats_without_database_access() {
+        let mut headers = HeaderMap::new();
+        assert_eq!(admin_auth_precheck(&headers), AdminAuthPrecheck::Missing);
+
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer ae-management-token"),
+        );
+        assert_eq!(
+            admin_auth_precheck(&headers),
+            AdminAuthPrecheck::ManagementToken
+        );
+
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer header.payload.signature"),
+        );
+        assert_eq!(admin_auth_precheck(&headers), AdminAuthPrecheck::Jwt);
+
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer not-a-token"),
+        );
+        assert_eq!(
+            admin_auth_precheck(&headers),
+            AdminAuthPrecheck::InvalidFormat
+        );
+
+        headers.insert(header::AUTHORIZATION, HeaderValue::from_static("Basic abc"));
+        assert_eq!(
+            admin_auth_precheck(&headers),
+            AdminAuthPrecheck::InvalidFormat
+        );
+    }
 
     #[test]
     fn owner_forward_uses_search_protocol_timeout_semantics() {

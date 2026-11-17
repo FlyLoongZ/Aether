@@ -31,6 +31,11 @@ impl AuthRateLimitPolicy {
             identity_limit,
         }
     }
+
+    /// Policy for endpoints that only ever rate-limit by client IP.
+    const fn ip_only(action: &'static str, window_seconds: u64, ip_limit: u32) -> Self {
+        Self::new(action, window_seconds, ip_limit, 0)
+    }
 }
 
 pub(super) const AUTH_LOGIN_RATE_LIMIT: AuthRateLimitPolicy =
@@ -45,6 +50,15 @@ pub(super) const AUTH_VERIFY_EMAIL_RATE_LIMIT: AuthRateLimitPolicy =
     AuthRateLimitPolicy::new("verify-email", 300, 30, 10);
 pub(super) const AUTH_VERIFICATION_STATUS_RATE_LIMIT: AuthRateLimitPolicy =
     AuthRateLimitPolicy::new("verification-status", 60, 60, 20);
+
+/// Rate-limit admin authentication attempts per client IP.
+///
+/// The gateway authenticates every `/api/admin/...` request before deciding
+/// whether the route exists, so this limiter also covers encoded paths that do
+/// not match the route registry. Only requests without a resolved admin
+/// principal consume budget, so a normal admin session never touches it.
+pub(super) const ADMIN_AUTH_RATE_LIMIT: AuthRateLimitPolicy =
+    AuthRateLimitPolicy::ip_only("admin-auth", 60, 30);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AuthRateLimitCheck {
@@ -223,6 +237,18 @@ pub(super) async fn enforce_auth_ip_rate_limit(
     client_ip: IpAddr,
 ) -> Result<(), crate::ApiError> {
     enforce_auth_rate_limit(state, policy, "ip", &client_ip.to_string(), policy.ip_limit).await
+}
+
+/// Rate-limit admin authentication attempts per client IP.
+///
+/// The gateway authenticates every `/api/admin/...` request before deciding
+/// whether the route exists, so this limiter also covers encoded paths that do
+/// not match the route registry.
+pub(crate) async fn enforce_admin_auth_ip_rate_limit(
+    state: &AppState,
+    client_ip: IpAddr,
+) -> Result<(), crate::ApiError> {
+    enforce_auth_ip_rate_limit(state, ADMIN_AUTH_RATE_LIMIT, client_ip).await
 }
 
 pub(super) async fn enforce_auth_identity_rate_limit(
