@@ -210,15 +210,6 @@
                     variant="ghost"
                     size="icon"
                     class="h-8 w-8"
-                    :title="t('ui.oneClickInstallAndConfigureCli')"
-                    @click="openInstallDialog(apiKey)"
-                  >
-                    <Terminal class="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="h-8 w-8"
                     :title="apiKey.is_locked ? t('ui.locked') : t('ui.edit0518365')"
                     :disabled="apiKey.is_locked"
                     @click="openEditApiKeyDialog(apiKey)"
@@ -306,15 +297,6 @@
                   @click="openCcSwitchImportDialog(apiKey)"
                 >
                   <Download class="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="h-7 w-7"
-                  :title="t('ui.oneClickInstallAndConfigureCli')"
-                  @click="openInstallDialog(apiKey)"
-                >
-                  <Terminal class="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -847,13 +829,6 @@
       </template>
     </Dialog>
 
-    <!-- 一键安装并配置 CLI 对话框 -->
-    <ApiKeyInstallDialog
-      v-model:open="showInstallDialog"
-      :api-key="selectedInstallApiKey"
-      :create-session="meApi.createApiKeyInstallSession"
-    />
-
     <!-- 删除确认对话框 -->
     <AlertDialog
       v-model="showDeleteDialog"
@@ -872,7 +847,7 @@
 import { useI18n } from '@/i18n'
 const { t } = useI18n()
 
-import { ref, onMounted, computed, watch, reactive } from 'vue'
+import { ref, onMounted, computed, reactive } from 'vue'
 import { meApi, type ApiKey, type UserRoutingGroup } from '@/api/me'
 import Card from '@/components/ui/card.vue'
 import Button from '@/components/ui/button.vue'
@@ -899,7 +874,7 @@ import {
   TableRow
 } from '@/components/ui'
 import RefreshButton from '@/components/ui/refresh-button.vue'
-import { Plus, Key, Copy, Trash2, Loader2, Activity, CheckCircle, Power, SquarePen, Terminal, Download } from '@lucide/vue'
+import { Plus, Key, Copy, Trash2, Loader2, Activity, CheckCircle, Power, SquarePen, Download } from '@lucide/vue'
 import { useToast } from '@/composables/useToast'
 import { log } from '@/utils/logger'
 import { parseApiError } from '@/utils/errorParser'
@@ -920,7 +895,6 @@ import {
 } from '@/features/api-keys/utils/ccswitchImport'
 import { useClipboard } from '@/composables/useClipboard'
 import { useClientPagination } from '@/composables/useClientPagination'
-import ApiKeyInstallDialog from '@/features/api-keys/components/ApiKeyInstallDialog.vue'
 import { parseIpRulesInput } from '@/utils/form'
 
 const { success, error: showError } = useToast()
@@ -945,7 +919,6 @@ const { currentPage, pageSize, pageItems: paginatedApiKeys } = useClientPaginati
 const showCreateDialog = ref(false)
 const showKeyDialog = ref(false)
 const showDeleteDialog = ref(false)
-const showInstallDialog = ref(false)
 const showCcSwitchDialog = ref(false)
 
 const newKeyName = ref('')
@@ -976,8 +949,6 @@ const selectedRoutingGroupLabel = computed(() => {
   const group = routingGroups.value.find(group => group.id === newKeyRoutingGroup.value)
   return group ? `${group.name} · ${group.billing_multiplier} 倍` : unavailableRoutingGroup.value?.name ?? '已选择分组'
 })
-const selectedInstallApiKey = ref<ApiKey | null>(null)
-const pendingFirstInstallApiKey = ref<ApiKey | null>(null)
 const selectedCcSwitchApiKey = ref<ApiKey | null>(null)
 const ccSwitchPlainApiKey = ref('')
 const ccSwitchTargetApp = ref<CcSwitchTargetApp>('claude')
@@ -1033,12 +1004,6 @@ const ccSwitchModelHelpText = computed(() =>
 
 onMounted(() => {
   loadApiKeys()
-})
-
-watch(showKeyDialog, (isOpen) => {
-  if (!isOpen && pendingFirstInstallApiKey.value) {
-    closeCreatedKeyDialog()
-  }
 })
 
 async function loadApiKeys() {
@@ -1110,11 +1075,6 @@ function openCreateApiKeyDialog() {
   newKeyRedactionEnabled.value = false
   newKeyRedactionInjectNotice.value = true
   showCreateDialog.value = true
-}
-
-function openInstallDialog(apiKey: ApiKey) {
-  selectedInstallApiKey.value = apiKey
-  showInstallDialog.value = true
 }
 
 function uniqueModelNames(models: Array<{ name?: string | null; display_name?: string | null }>): string[] {
@@ -1248,7 +1208,6 @@ async function openCcSwitchImportDialog(apiKey: ApiKey, plainApiKey = '') {
 
 async function openCcSwitchImportDialogForCreatedKey() {
   if (!createdApiKey.value || !newKeyValue.value) return
-  pendingFirstInstallApiKey.value = null
   showKeyDialog.value = false
   await openCcSwitchImportDialog(createdApiKey.value, newKeyValue.value)
 }
@@ -1314,12 +1273,7 @@ async function confirmCcSwitchImport() {
 
 function closeCreatedKeyDialog() {
   showKeyDialog.value = false
-  const pending = pendingFirstInstallApiKey.value
-  pendingFirstInstallApiKey.value = null
   createdApiKey.value = null
-  if (pending) {
-    void openInstallDialog(pending)
-  }
 }
 
 function closeApiKeyDialog() {
@@ -1357,7 +1311,6 @@ async function saveApiKey() {
   creating.value = true
   try {
     const ipRules = parseIpRulesInput(newKeyIpRulesText.value)
-    const isCreatingFirstApiKey = !editingApiKey.value && apiKeys.value.length === 0
     if (editingApiKey.value) {
       await meApi.updateApiKey(editingApiKey.value.id, {
         name: newKeyName.value,
@@ -1391,9 +1344,6 @@ async function saveApiKey() {
       })
       newKeyValue.value = newKey.key || ''
       createdApiKey.value = newKey
-      if (isCreatingFirstApiKey) {
-        pendingFirstInstallApiKey.value = newKey
-      }
       showKeyDialog.value = true
       success(t('ui.apiKeyCreated'))
     }

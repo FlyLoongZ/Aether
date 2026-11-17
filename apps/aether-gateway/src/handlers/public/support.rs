@@ -8,12 +8,10 @@ use super::{
 };
 use crate::control::GatewayPublicRequestContext;
 use crate::handlers::shared::{
-    decrypt_catalog_secret_with_fallbacks, decrypt_or_migrate_auth_api_key_secret,
     decrypt_or_migrate_ldap_bind_password, decrypt_or_migrate_system_config_secret,
-    encrypt_catalog_secret_with_fallbacks, escape_admin_email_template_html,
-    module_available_from_env, query_param_optional_bool, query_param_value,
-    read_admin_email_template_payload, render_admin_email_template_html, system_config_bool,
-    system_config_string, unix_secs_to_rfc3339,
+    escape_admin_email_template_html, module_available_from_env, query_param_optional_bool,
+    query_param_value, read_admin_email_template_payload, render_admin_email_template_html,
+    system_config_bool, system_config_string, unix_secs_to_rfc3339,
 };
 use crate::{AppState, GatewayError};
 use axum::body::{Body, Bytes};
@@ -28,14 +26,14 @@ mod support_announcements;
 mod support_auth;
 #[path = "support/auth_cookie_policy.rs"]
 mod support_auth_cookie_policy;
+#[path = "support/base_url.rs"]
+mod support_base_url;
 #[path = "support/billing.rs"]
 mod support_billing;
 #[path = "support/ccswitch.rs"]
 mod support_ccswitch;
 #[path = "support/dashboard.rs"]
 mod support_dashboard;
-#[path = "support/install.rs"]
-mod support_install;
 #[path = "support/models.rs"]
 mod support_models;
 #[path = "support/monitoring.rs"]
@@ -73,17 +71,10 @@ use self::support_auth::{
     build_auth_registration_settings_payload, build_auth_settings_payload,
     extract_client_device_id, mark_sensitive_response_no_store, maybe_build_local_auth_response,
 };
+pub(crate) use self::support_base_url::base_url_from_request;
 use self::support_billing::maybe_build_local_billing_response;
 use self::support_ccswitch::maybe_build_local_ccswitch_response;
 use self::support_dashboard::maybe_build_local_dashboard_response;
-pub(crate) use self::support_install::{
-    base_url_from_request, build_api_key_install_session_response,
-    CreateApiKeyInstallSessionRequest,
-};
-use self::support_install::{
-    handle_users_me_api_key_install_session_create, maybe_build_local_install_response,
-    users_me_api_key_install_sessions_path_matches,
-};
 use self::support_models::{
     build_models_auth_error_response, maybe_build_local_models_response, models_api_format,
 };
@@ -291,10 +282,6 @@ async fn build_local_public_support_response(
             request_body,
         )
         .await;
-    }
-
-    if decision.route_family.as_deref() == Some("install") {
-        return maybe_build_local_install_response(state, request_context).await;
     }
 
     if decision.route_family.as_deref() == Some("payment_callback") {

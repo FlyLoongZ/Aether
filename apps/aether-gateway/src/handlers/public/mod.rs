@@ -25,8 +25,7 @@ pub(crate) use self::system_modules_helpers::{
 #[cfg(test)]
 pub(crate) use self::support::filter_eligible_model_rows;
 pub(crate) use self::support::{
-    build_api_key_install_session_response, build_unhandled_public_support_response,
-    enforce_admin_auth_ip_rate_limit, matches_model_mapping_for_models,
-    maybe_build_local_admin_announcements_response, maybe_build_local_public_support_response,
-    CreateApiKeyInstallSessionRequest,
+    build_unhandled_public_support_response, enforce_admin_auth_ip_rate_limit,
+    matches_model_mapping_for_models, maybe_build_local_admin_announcements_response,
+    maybe_build_local_public_support_response,
 };

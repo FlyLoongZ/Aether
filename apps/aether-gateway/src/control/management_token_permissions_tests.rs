@@ -805,12 +805,6 @@ fn plaintext_credential_reads_require_admin_permission() {
             Some("include_key=true"),
             "admin:api_keys:admin",
         ),
-        (
-            "admin:api_keys",
-            "create_api_key_install_session",
-            None,
-            "admin:api_keys:admin",
-        ),
     ];
 
     for (signature, route_kind, query, expected) in cases {
@@ -823,11 +817,7 @@ fn plaintext_credential_reads_require_admin_permission() {
         );
         decision.public_query_string = query.map(str::to_string);
 
-        let method = if route_kind.ends_with("install_session") {
-            http::Method::POST
-        } else {
-            http::Method::GET
-        };
+        let method = http::Method::GET;
         assert_eq!(
             management_token_required_permission(&method, &decision).as_deref(),
             Some(expected)

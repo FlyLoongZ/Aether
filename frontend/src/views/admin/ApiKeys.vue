@@ -317,15 +317,6 @@
                       variant="ghost"
                       size="icon"
                       class="h-7 w-7"
-                      :title="t('ui.oneClickInstallAndConfigureCli')"
-                      @click="openInstallDialog(apiKey)"
-                    >
-                      <Terminal class="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-7 w-7"
                       :title="t('ui.edit0518365')"
                       @click="editApiKey(apiKey)"
                     >
@@ -542,14 +533,6 @@
                     variant="outline"
                     size="sm"
                     class="h-8 text-xs"
-                    @click="openInstallDialog(apiKey)"
-                  >
-                    <Terminal class="mr-1.5 h-3.5 w-3.5" /> {{ t('ui.install') }}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="h-8 text-xs"
                     @click="editApiKey(apiKey)"
                   >
                     <SquarePen class="mr-1.5 h-3.5 w-3.5" /> {{ t('ui.edit0518365') }}
@@ -662,13 +645,6 @@
       </template>
     </Dialog>
 
-    <!-- 一键安装并配置 CLI 对话框 -->
-    <ApiKeyInstallDialog
-      v-model:open="showInstallDialog"
-      :api-key="selectedInstallApiKey"
-      :create-session="adminApi.createApiKeyInstallSession"
-    />
-
     <WalletOpsDrawer
       :open="showWalletActionDrawer"
       :wallet="walletActionTarget?.wallet || null"
@@ -730,12 +706,10 @@ import {
   Copy,
   CheckCircle,
   SquarePen,
-  Search,
-  Terminal
+  Search
 } from '@lucide/vue'
 
 import StandaloneKeyFormDialog, { type StandaloneKeyFormData } from '@/features/api-keys/components/StandaloneKeyFormDialog.vue'
-import ApiKeyInstallDialog from '@/features/api-keys/components/ApiKeyInstallDialog.vue'
 import { parseApiError } from '@/utils/errorParser'
 import { formatTokens, formatRateLimitInheritable, isRateLimitInherited, isRateLimitUnlimited, formatDateTime } from '@/utils/format'
 import { log } from '@/utils/logger'
@@ -751,10 +725,8 @@ const total = ref(0)
 const currentPage = ref(1)
 const limit = ref(100)
 const showNewKeyDialog = ref(false)
-const showInstallDialog = ref(false)
 const newKeyValue = ref('')
 const keyInput = ref<HTMLInputElement>()
-const selectedInstallApiKey = ref<AdminApiKey | null>(null)
 
 // 统一的表单对话框状态
 const showKeyFormDialog = ref(false)
@@ -882,11 +854,6 @@ async function refreshApiKeys() {
 function handlePageChange(page: number) {
   currentPage.value = page
   refreshApiKeys()
-}
-
-function openInstallDialog(apiKey: AdminApiKey) {
-  selectedInstallApiKey.value = apiKey
-  showInstallDialog.value = true
 }
 
 async function toggleApiKey(apiKey: AdminApiKey) {

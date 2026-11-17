@@ -496,7 +496,7 @@ pub(crate) fn admin_proxy_local_requires_buffered_body(
                     | (
                         Some("api_keys_manage"),
                         http::Method::POST,
-                        Some("create_api_key" | "create_api_key_install_session"),
+                        Some("create_api_key"),
                     )
                     | (
                         Some("api_keys_manage"),
@@ -763,11 +763,7 @@ pub(crate) fn public_support_local_requires_buffered_body(
                 ) | (
                     Some("users_me"),
                     http::Method::POST,
-                    Some(
-                        "api_keys_create"
-                            | "api_key_install_session_create"
-                            | "management_tokens_create",
-                    ),
+                    Some("api_keys_create" | "management_tokens_create",),
                 ) | (
                     Some("wallet"),
                     http::Method::POST,

@@ -39,13 +39,15 @@ pub(crate) use self::api_keys::{
 pub(crate) use self::auth_api_key_secret::{
     decrypt_or_migrate_auth_api_key_secret, open_auth_api_key_secret, seal_auth_api_key_secret,
 };
+#[cfg(test)]
+pub(crate) use self::catalog::encrypt_catalog_secret_with_fallbacks;
 pub(crate) use self::catalog::{
     build_admin_provider_key_response, decrypt_catalog_secret_with_fallbacks,
-    default_provider_key_status_snapshot, encrypt_catalog_secret_with_fallbacks,
-    masked_catalog_api_key_for_provider, parse_catalog_auth_config_json,
-    provider_catalog_key_supports_format, provider_key_health_summary,
-    provider_key_health_summary_at, provider_key_status_snapshot_payload,
-    sync_provider_key_oauth_status_snapshot, sync_provider_key_quota_status_snapshot,
+    default_provider_key_status_snapshot, masked_catalog_api_key_for_provider,
+    parse_catalog_auth_config_json, provider_catalog_key_supports_format,
+    provider_key_health_summary, provider_key_health_summary_at,
+    provider_key_status_snapshot_payload, sync_provider_key_oauth_status_snapshot,
+    sync_provider_key_quota_status_snapshot,
 };
 pub(crate) use self::email_templates::{
     admin_email_template_definition, admin_email_template_html_key,
