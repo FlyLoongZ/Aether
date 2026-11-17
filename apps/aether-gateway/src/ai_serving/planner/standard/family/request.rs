@@ -447,14 +447,6 @@ pub(crate) async fn resolve_local_standard_candidate_payload_parts(
             return Ok(None);
         }
     };
-    crate::ai_serving::hydrate_openai_response_history(
-        state,
-        body_json,
-        spec_metadata.api_format,
-        provider_api_format,
-        input.auth_context.api_key_id.as_str(),
-    )
-    .await?;
     let reasoning_replay_policy = openai_responses_reasoning_replay_policy(
         transport.provider.provider_type.as_str(),
         transport.endpoint.base_url.as_str(),

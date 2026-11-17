@@ -374,6 +374,9 @@ fn finish_response_create_event(
     for field in ["store", "generate"] {
         if !normalization.body_rules_handle_websocket_field(client_event, field) {
             if let Some(value) = client_event.get(field) {
+                // Forward the field verbatim: `null` means "whatever the
+                // upstream default is", and rewriting it here would make the
+                // socket disagree with the HTTP entry point.
                 object.insert(field.to_string(), value.clone());
             }
         }
@@ -412,6 +415,24 @@ pub(super) fn validate_response_create_previous_response_id(
         }
         Some(_) => Err("invalid_response_create_previous_response_id"),
     }
+}
+
+/// Rejects Responses-only server-side state that this gateway does not own.
+///
+/// HTTP carries the same policy in `maybe_build_stateless_policy_rejection`;
+/// WebSocket events are validated here before normalization removes
+/// `background` or forwards `store`.
+pub(super) fn validate_response_create_stateless_fields(event: &Value) -> Result<(), &'static str> {
+    if event.get("store").and_then(Value::as_bool) == Some(true) {
+        return Err("response_create_store_not_supported");
+    }
+    if event.get("background").and_then(Value::as_bool) == Some(true) {
+        return Err("response_create_background_not_supported");
+    }
+    if event.get("conversation").is_some() {
+        return Err("response_create_conversation_not_supported");
+    }
+    Ok(())
 }
 
 /// Returns a named lane only after the complete public `stream_id` grammar has
@@ -549,6 +570,7 @@ pub(super) fn normalize_followup_response_create(
         return Err("invalid_response_create");
     }
     validate_response_create_previous_response_id(event)?;
+    validate_response_create_stateless_fields(event)?;
     // Never fall back to the raw event. That would bypass endpoint rules and
     // the Responses Lite de-duplication exactly when normalization rejected a
     // malformed request, potentially re-appending static configuration.
@@ -655,7 +677,6 @@ mod tests {
             "previous_response_id": "resp_123",
             "input": [],
             "stream": true,
-            "background": true,
         });
 
         let normalized = normalized_continuation(
@@ -705,11 +726,11 @@ mod tests {
     }
 
     #[test]
-    fn explicit_store_and_previous_response_id_are_forwarded() {
+    fn explicit_store_false_and_previous_response_id_are_forwarded() {
         let event = json!({
             "type": "response.create",
             "model": "public-model",
-            "store": true,
+            "store": false,
             "previous_response_id": "resp_123",
             "input": [],
         });
@@ -720,10 +741,10 @@ mod tests {
                 .with_provider_type_for_tests("codex"),
         );
 
-        // Codex HTTP normalization normally forces `store: false` and removes
-        // `previous_response_id`. WebSocket framing restores exactly what the
-        // client sent so the upstream owns validation and continuation lookup.
-        assert_eq!(normalized["store"], true);
+        // Codex HTTP normalization normally removes `previous_response_id`.
+        // WebSocket framing restores exactly what the client sent so the
+        // upstream owns validation and continuation lookup.
+        assert_eq!(normalized["store"], false);
         assert_eq!(normalized["previous_response_id"], "resp_123");
     }
 
@@ -732,7 +753,7 @@ mod tests {
         let event = json!({
             "type": "response.create",
             "model": "public-model",
-            "store": true,
+            "store": false,
             "previous_response_id": "resp_client",
             "generate": false,
             "input": [],
@@ -767,7 +788,7 @@ mod tests {
                 {
                     "action": "set",
                     "path": "store",
-                    "value": false,
+                    "value": true,
                     "condition": {"path": "metadata.mode", "op": "eq", "value": "enforce"}
                 },
                 {
@@ -782,28 +803,28 @@ mod tests {
             &json!({
                 "type": "response.create",
                 "model": "public-model",
-                "store": true,
+                "store": false,
                 "generate": false,
                 "metadata": {"mode": "observe"},
                 "input": []
             }),
             &normalization,
         );
-        assert_eq!(skipped["store"], true);
+        assert_eq!(skipped["store"], false);
         assert_eq!(skipped["generate"], false);
 
         let applied = normalized_continuation(
             &json!({
                 "type": "response.create",
                 "model": "public-model",
-                "store": true,
+                "store": false,
                 "generate": false,
                 "metadata": {"mode": "enforce"},
                 "input": []
             }),
             &normalization,
         );
-        assert_eq!(applied["store"], false);
+        assert_eq!(applied["store"], true);
         assert_eq!(applied["generate"], true);
     }
 
@@ -847,7 +868,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_null_websocket_protocol_state_is_not_rewritten() {
+    fn explicit_null_store_is_forwarded_verbatim_for_websocket_continuation() {
         let event = json!({
             "type": "response.create",
             "model": "public-model",
@@ -863,6 +884,8 @@ mod tests {
                 .with_provider_type_for_tests("codex"),
         );
 
+        // `null` means "whatever the upstream default is": rewriting it here would
+        // make the socket disagree with the HTTP entry point.
         assert!(normalized.get("store").is_some_and(Value::is_null));
         assert!(normalized
             .get("previous_response_id")
@@ -893,7 +916,7 @@ mod tests {
 
         assert!(normalized.get("temperature").is_none());
         assert!(normalized.get("top_p").is_none());
-        assert_eq!(normalized["store"], false);
+        assert!(normalized.get("store").is_none());
         // ...and the protocol state survives the same pass.
         assert_eq!(normalized["previous_response_id"], "resp_123");
     }

@@ -1,5 +1,3 @@
-use crate::formats::openai::responses::history::record_converted_response_history;
-
 use super::{
     build_standard_request_body, build_standard_request_body_from_canonical,
     build_standard_request_body_with_model_directives,
@@ -258,76 +256,6 @@ fn same_responses_family_matrix_preserves_opaque_reasoning_items_and_unknown_fie
 }
 
 #[test]
-fn standard_request_body_scopes_previous_response_history_by_api_key() {
-    record_converted_response_history(
-        &json!({
-            "needs_conversion": true,
-            "client_api_format": "openai:responses",
-            "provider_api_format": "openai:chat",
-            "api_key_id": "standard-history-key-a",
-            "original_request_body": {
-                "model": "source-model",
-                "input": [{"role": "user", "content": "inspect the repository"}]
-            }
-        }),
-        &json!({
-            "id": "resp_standard_history_scope_1",
-            "status": "completed",
-            "output": [{
-                "type": "function_call",
-                "id": "fc_standard_history_scope_1",
-                "call_id": "call_standard_history_scope_1",
-                "name": "inspect_repository",
-                "arguments": "{}"
-            }]
-        }),
-    );
-    let continuation = json!({
-        "model": "source-model",
-        "previous_response_id": "resp_standard_history_scope_1",
-        "input": [{
-            "type": "function_call_output",
-            "call_id": "call_standard_history_scope_1",
-            "output": "inspection-complete"
-        }]
-    });
-
-    let owner = build_standard_request_body(
-        &continuation,
-        "openai:responses",
-        "mapped-model",
-        "custom",
-        "openai:chat",
-        "/v1/responses",
-        false,
-        None,
-        Some("standard-history-key-a"),
-    )
-    .expect("the owning API key should restore response history");
-    assert_eq!(
-        owner["messages"][1]["tool_calls"][0]["id"],
-        "call_standard_history_scope_1"
-    );
-    assert_eq!(
-        owner["messages"][2]["tool_call_id"],
-        "call_standard_history_scope_1"
-    );
-
-    assert!(build_standard_request_body(
-        &continuation,
-        "openai:responses",
-        "mapped-model",
-        "custom",
-        "openai:chat",
-        "/v1/responses",
-        false,
-        None,
-        Some("standard-history-key-b"),
-    )
-    .is_none());
-}
-
-#[test]
 fn standard_request_body_stream_policy_wins_after_body_rules() {
     let request = json!({
         "model": "source-model",
@@ -543,7 +471,6 @@ fn codex_default_body_rules() -> Value {
         {"action":"drop","path":"max_output_tokens"},
         {"action":"drop","path":"temperature"},
         {"action":"drop","path":"top_p"},
-        {"action":"set","path":"store","value":false},
         {
             "action":"set",
             "path":"instructions",
@@ -980,7 +907,7 @@ fn claude_request_uses_typed_canonical_without_changing_non_claude_target_payloa
                 assert_eq!(converted["reasoning"]["effort"], "medium");
                 assert_eq!(converted["reasoning"]["summary"], "auto");
                 if provider_api_format == "openai:responses" {
-                    assert_eq!(converted["store"], false);
+                    assert!(converted.get("store").is_none());
                     assert!(converted["include"]
                         .as_array()
                         .expect("include")
@@ -1121,7 +1048,7 @@ fn applies_codex_body_rules_for_all_standard_sources_to_openai_responses() {
 
         assert_eq!(converted["model"], "gpt-5.5");
         assert_eq!(converted["stream"], true);
-        assert_eq!(converted["store"], false);
+        assert!(converted.get("store").is_none());
         assert!(converted.get("max_output_tokens").is_none());
         assert!(converted.get("temperature").is_none());
         assert!(converted.get("top_p").is_none());

@@ -56,8 +56,7 @@ fn applies_codex_defaults_when_body_rules_do_not_handle_fields() {
         "max_output_tokens": 128,
         "temperature": 0.3,
         "top_p": 0.9,
-        "metadata": {"client": "desktop"},
-        "store": true
+        "metadata": {"client": "desktop"}
     });
 
     apply_codex_openai_responses_special_body_edits(
@@ -72,7 +71,6 @@ fn applies_codex_defaults_when_body_rules_do_not_handle_fields() {
     assert!(body.get("temperature").is_none());
     assert!(body.get("top_p").is_none());
     assert!(body.get("metadata").is_none());
-    assert_eq!(body["store"], false);
     assert!(body.get("instructions").is_none());
     assert_eq!(body["include"], json!(["reasoning.encrypted_content"]));
     assert_eq!(body["parallel_tool_calls"], true);

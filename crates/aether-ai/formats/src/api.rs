@@ -198,10 +198,6 @@ pub use crate::formats::{
                 CODEX_OPENAI_IMAGE_DEFAULT_VARIATION_MODEL,
                 CODEX_OPENAI_IMAGE_DEFAULT_VARIATION_PROMPT, CODEX_OPENAI_IMAGE_INTERNAL_MODEL,
             },
-            history::{
-                hydrate_response_history, record_converted_response_history,
-                response_history_is_loaded, response_history_storage_key, ResponseHistoryRecord,
-            },
             spec::{
                 resolve_stream_spec as resolve_openai_responses_stream_spec,
                 resolve_sync_spec as resolve_openai_responses_sync_spec, LocalOpenAiResponsesSpec,

@@ -22,6 +22,7 @@ mod provider_ops_credential;
 pub(crate) mod provider_pool;
 mod request_utils;
 mod runtime_secret;
+mod stateless_policy;
 mod system_config_values;
 mod usage_stats;
 
@@ -125,6 +126,10 @@ pub(crate) use self::runtime_secret::{
     open_runtime_secret_payload, open_runtime_secret_payload_with_encryption_key,
     runtime_secret_payload_is_sealed, seal_runtime_secret_payload,
     seal_runtime_secret_payload_with_encryption_key,
+};
+pub(crate) use self::stateless_policy::{
+    BACKGROUND_TRUE_NOT_SUPPORTED_DETAIL, CONVERSATION_NOT_SUPPORTED_DETAIL,
+    STORE_TRUE_NOT_SUPPORTED_DETAIL,
 };
 #[cfg(test)]
 pub(crate) use self::system_config_values::decrypt_system_config_secret;

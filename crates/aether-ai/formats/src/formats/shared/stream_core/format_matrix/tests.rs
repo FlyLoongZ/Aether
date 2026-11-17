@@ -1,7 +1,5 @@
 use super::{StreamingStandardFormatMatrix, StreamingStandardTerminalObserver};
-use crate::formats::{
-    context::FormatContext, openai::namespace::NamespaceToolAliases, registry::convert_request,
-};
+use crate::formats::openai::namespace::NamespaceToolAliases;
 use serde_json::{json, Value};
 
 fn report_context(provider_api_format: &str, client_api_format: &str) -> Value {
@@ -391,121 +389,6 @@ fn event_only_stream_types_convert_across_standard_formats() {
 }
 
 #[test]
-fn streamed_chat_tool_call_records_responses_continuation_history() {
-    let report_context = json!({
-        "provider_api_format": "openai:chat",
-        "client_api_format": "openai:responses",
-        "mapped_model": "deepseek-v4-flash",
-        "needs_conversion": true,
-        "original_request_body": {
-            "model": "deepseek-v4-flash",
-            "input": [{"role": "user", "content": "perform a deep scan"}]
-        }
-    });
-    let mut matrix = StreamingStandardFormatMatrix::default();
-    matrix
-        .transform_line(
-            &report_context,
-            data_line(json!({
-                "id": "chatcmpl_history_stream_test_1",
-                "model": "deepseek-v4-flash",
-                "choices": [{
-                    "index": 0,
-                    "delta": {
-                        "tool_calls": [{
-                            "index": 0,
-                            "id": "call_history_stream_test_1",
-                            "type": "function",
-                            "function": {
-                                "name": "create_discovery_manifest",
-                                "arguments": "{\"root\":"
-                            }
-                        }]
-                    },
-                    "finish_reason": Value::Null
-                }]
-            })),
-        )
-        .expect("tool start should convert");
-    matrix
-        .transform_line(
-            &report_context,
-            data_line(json!({
-                "id": "chatcmpl_history_stream_test_1",
-                "model": "deepseek-v4-flash",
-                "choices": [{
-                    "index": 0,
-                    "delta": {
-                        "tool_calls": [{
-                            "index": 0,
-                            "function": {"arguments": "\"src\"}"}
-                        }]
-                    },
-                    "finish_reason": Value::Null
-                }]
-            })),
-        )
-        .expect("tool arguments should convert");
-    let terminal = matrix
-        .transform_line(
-            &report_context,
-            data_line(json!({
-                "id": "chatcmpl_history_stream_test_1",
-                "model": "deepseek-v4-flash",
-                "choices": [{
-                    "index": 0,
-                    "delta": {},
-                    "finish_reason": "tool_calls"
-                }],
-                "usage": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 4,
-                    "total_tokens": 14
-                }
-            })),
-        )
-        .expect("tool finish should convert");
-    let terminal_sse = String::from_utf8(terminal).expect("SSE should be utf8");
-    assert!(terminal_sse.contains("event: response.function_call_arguments.done"));
-    assert!(terminal_sse.contains("event: response.output_item.done"));
-    assert!(terminal_sse.contains("event: response.completed"));
-    let persisted = matrix
-        .take_response_history_record()
-        .expect("completed stream should expose one persistence record");
-    assert!(persisted
-        .storage_key
-        .starts_with("ai:responses:history:v1:"));
-    assert!(persisted.payload.contains("resp_history_stream_test_1"));
-    assert!(matrix.take_response_history_record().is_none());
-
-    let continuation = convert_request(
-        "openai:responses",
-        "openai:chat",
-        &json!({
-            "model": "deepseek-v4-flash",
-            "previous_response_id": "resp_history_stream_test_1",
-            "input": [{
-                "type": "function_call_output",
-                "call_id": "call_history_stream_test_1",
-                "output": "manifest-created"
-            }]
-        }),
-        &FormatContext::default(),
-    )
-    .expect("streamed response history should restore the next Chat request");
-    assert_eq!(continuation["messages"][1]["role"], "assistant");
-    assert_eq!(
-        continuation["messages"][1]["tool_calls"][0]["id"],
-        "call_history_stream_test_1"
-    );
-    assert_eq!(continuation["messages"][2]["role"], "tool");
-    assert_eq!(
-        continuation["messages"][2]["tool_call_id"],
-        "call_history_stream_test_1"
-    );
-}
-
-#[test]
 fn streamed_chat_namespace_tool_call_restores_responses_identity() {
     let report_context = json!({
         "provider_api_format": "openai:chat",
@@ -643,11 +526,6 @@ fn streamed_chat_namespace_tool_call_restores_responses_identity() {
         .expect("completed function call");
     assert_eq!(function_call["name"], "vulnerability_report");
     assert_eq!(function_call["namespace"], "mcp__vulnerability_report");
-
-    let persisted = matrix
-        .take_response_history_record()
-        .expect("completed stream should expose response history");
-    assert!(persisted.payload.contains("mcp__vulnerability_report"));
 }
 
 #[test]

@@ -6,7 +6,8 @@ use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
 use crate::handlers::shared::{
     parse_multipart_boundary, parse_multipart_fields, query_param_value, unix_ms_to_rfc3339,
-    unix_secs_to_rfc3339, MultipartField,
+    unix_secs_to_rfc3339, MultipartField, BACKGROUND_TRUE_NOT_SUPPORTED_DETAIL,
+    CONVERSATION_NOT_SUPPORTED_DETAIL, STORE_TRUE_NOT_SUPPORTED_DETAIL,
 };
 use crate::image_capabilities::openai_image_gateway_max_generation_count;
 use crate::{AppState, GatewayError};
@@ -140,6 +141,10 @@ pub(crate) async fn maybe_build_local_ai_public_response(
     let decision = request_context.control_decision.as_ref()?;
     if decision.route_class.as_deref() != Some("ai_public") {
         return None;
+    }
+
+    if let Some(response) = maybe_build_stateless_policy_rejection(request_context, request_body) {
+        return Some(response);
     }
 
     if let Some(response) =
@@ -421,6 +426,45 @@ fn normalize_gemini_file_request_path(path: &str) -> Option<String> {
         return None;
     }
     Some(format!("files/{suffix}"))
+}
+
+fn maybe_build_stateless_policy_rejection(
+    request_context: &GatewayPublicRequestContext,
+    request_body: Option<&Bytes>,
+) -> Option<Response<Body>> {
+    if request_context.request_method != http::Method::POST {
+        return None;
+    }
+    let path = request_context.request_path.trim_end_matches('/');
+    if !matches!(
+        path,
+        "/v1/responses" | "/v1/responses/compact" | "/v1/chat/completions" | "/v1/alpha/search"
+    ) {
+        return None;
+    }
+    let request_body = request_body?;
+    let Ok(body) = serde_json::from_slice::<Value>(request_body) else {
+        return None;
+    };
+    let object = body.as_object()?;
+
+    let detail = if object.get("store").and_then(Value::as_bool) == Some(true) {
+        STORE_TRUE_NOT_SUPPORTED_DETAIL
+    } else if object.get("background").and_then(Value::as_bool) == Some(true) {
+        BACKGROUND_TRUE_NOT_SUPPORTED_DETAIL
+    } else if object.get("conversation").is_some() {
+        CONVERSATION_NOT_SUPPORTED_DETAIL
+    } else {
+        return None;
+    };
+
+    crate::api::response::build_local_http_error_response(
+        &request_context.trace_id,
+        request_context.control_decision.as_ref(),
+        http::StatusCode::BAD_REQUEST,
+        detail,
+    )
+    .ok()
 }
 
 fn maybe_build_local_openai_request_validation_response(
@@ -1859,15 +1903,106 @@ mod tests {
     use super::{
         build_ai_public_error_response, build_ai_public_upstream_error_response,
         build_gemini_file_mapping_payload, gemini_video_task_error_projection,
-        parse_openai_image_validation_input, validate_claude_count_tokens_request,
-        validate_openai_image_n, OpenAiImageOperation, StoredGeminiFileMapping,
-        AI_PUBLIC_UPSTREAM_ERROR_DETAIL, CLAUDE_COUNT_TOKENS_BODY_REQUIRED_DETAIL,
-        CLAUDE_COUNT_TOKENS_INVALID_JSON_DETAIL, CLAUDE_COUNT_TOKENS_MESSAGES_REQUIRED_DETAIL,
-        CLAUDE_COUNT_TOKENS_MODEL_REQUIRED_DETAIL, OPENAI_IMAGE_INVALID_MULTIPART_DETAIL,
+        maybe_build_stateless_policy_rejection, parse_openai_image_validation_input,
+        validate_claude_count_tokens_request, validate_openai_image_n, OpenAiImageOperation,
+        StoredGeminiFileMapping, AI_PUBLIC_UPSTREAM_ERROR_DETAIL,
+        CLAUDE_COUNT_TOKENS_BODY_REQUIRED_DETAIL, CLAUDE_COUNT_TOKENS_INVALID_JSON_DETAIL,
+        CLAUDE_COUNT_TOKENS_MESSAGES_REQUIRED_DETAIL, CLAUDE_COUNT_TOKENS_MODEL_REQUIRED_DETAIL,
+        OPENAI_IMAGE_INVALID_MULTIPART_DETAIL,
     };
+    use crate::control::{GatewayControlDecision, GatewayPublicRequestContext};
     use aether_data_contracts::repository::video_tasks::{StoredVideoTask, VideoTaskStatus};
     use axum::body::{to_bytes, Body, Bytes};
-    use axum::http::StatusCode;
+    use axum::http::{HeaderMap, Method, StatusCode};
+
+    fn stateless_policy_context(path: &str) -> GatewayPublicRequestContext {
+        let decision = GatewayControlDecision::synthetic(
+            path,
+            Some("ai_public".to_string()),
+            Some("openai".to_string()),
+            Some("responses".to_string()),
+            Some("openai:responses".to_string()),
+        );
+        GatewayPublicRequestContext::from_request_parts(
+            "trace-stateless-policy",
+            &Method::POST,
+            &path.parse().expect("path should parse"),
+            &HeaderMap::new(),
+            Some(decision),
+        )
+    }
+
+    async fn stateless_policy_error_message(body: &str) -> String {
+        let context = stateless_policy_context("/v1/responses");
+        let response = maybe_build_stateless_policy_rejection(
+            &context,
+            Some(&Bytes::copy_from_slice(body.as_bytes())),
+        )
+        .expect("request should be rejected");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("error body should read");
+        let payload: serde_json::Value =
+            serde_json::from_slice(&body).expect("error body should be JSON");
+        payload["error"]["message"]
+            .as_str()
+            .expect("error message should be a string")
+            .to_string()
+    }
+
+    #[tokio::test]
+    async fn stateless_policy_rejects_store_true() {
+        let message = stateless_policy_error_message(r#"{"store":true}"#).await;
+        assert_eq!(message, "store=true is not supported; use store=false");
+    }
+
+    #[tokio::test]
+    async fn stateless_policy_rejects_background_true() {
+        let message = stateless_policy_error_message(r#"{"background":true}"#).await;
+        assert_eq!(message, "background=true is not supported");
+    }
+
+    #[tokio::test]
+    async fn stateless_policy_rejects_conversation() {
+        let message = stateless_policy_error_message(r#"{"conversation":"conv_1"}"#).await;
+        assert_eq!(message, "conversation is not supported");
+    }
+
+    #[test]
+    fn stateless_policy_applies_to_all_stateful_routes() {
+        for path in [
+            "/v1/responses",
+            "/v1/responses/compact",
+            "/v1/chat/completions",
+            "/v1/alpha/search",
+        ] {
+            let context = stateless_policy_context(path);
+            assert!(
+                maybe_build_stateless_policy_rejection(
+                    &context,
+                    Some(&Bytes::from_static(br#"{"store":true}"#)),
+                )
+                .is_some(),
+                "path should reject store=true: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn stateless_policy_allows_store_false_and_absent() {
+        let context = stateless_policy_context("/v1/responses");
+        for body in [r#"{"store":false}"#, r#"{"model":"gpt-5"}"#] {
+            assert!(
+                maybe_build_stateless_policy_rejection(
+                    &context,
+                    Some(&Bytes::copy_from_slice(body.as_bytes())),
+                )
+                .is_none(),
+                "body should pass: {body}"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn ai_public_server_errors_do_not_expose_internal_details() {

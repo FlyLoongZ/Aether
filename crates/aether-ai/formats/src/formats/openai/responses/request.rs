@@ -621,9 +621,6 @@ fn apply_claude_responses_request_defaults(
         output.remove("top_p");
     }
     output
-        .entry("store".to_string())
-        .or_insert_with(|| Value::Bool(false));
-    output
         .entry("parallel_tool_calls".to_string())
         .or_insert_with(|| Value::Bool(true));
     let include = output

@@ -1733,8 +1733,6 @@ fn apply_codex_openai_responses_special_body_edits_with_source_model_and_capabil
     adapt_codex_prompt_cache_identity_for_backend(body_object);
     if is_openai_responses_compact_request(provider_api_format) {
         body_object.remove("store");
-    } else if !body_rules_handle_path(body_rules, "store") {
-        body_object.insert("store".to_string(), json!(false));
     }
     remove_empty_codex_instructions(body_object);
     strip_codex_hosted_tool_names_for_backend(body_object);

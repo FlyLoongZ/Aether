@@ -3433,7 +3433,7 @@ fn pure_gemini_same_format_roundtrip_preserves_raw_function_parameters() {
 }
 
 #[test]
-fn runtime_openai_responses_to_chat_rejects_missing_previous_response_history() {
+fn runtime_openai_responses_to_chat_rejects_previous_response_id() {
     let body = json!({
         "model": "gpt-source",
         "input": [{"role": "user", "content": "hello"}],
@@ -3448,13 +3448,61 @@ fn runtime_openai_responses_to_chat_rejects_missing_previous_response_history() 
         &body,
         &FormatContext::default(),
     )
-    .expect_err("missing previous response history must fail closed");
+    .expect_err("cross-format continuation must fail closed");
 
     assert!(matches!(
         error,
-        FormatError::UnsupportedField { ref field, .. }
+        FormatError::LossyConversionBlocked {
+            ref source_format,
+            ref target_format,
+            ref field,
+            ..
+        } if source_format == "openai:responses"
+            && target_format == "openai:chat"
+            && field == "previous_response_id"
+    ));
+}
+
+#[test]
+fn runtime_openai_responses_compact_to_chat_rejects_previous_response_id() {
+    let body = json!({
+        "model": "gpt-source",
+        "input": [{"role": "user", "content": "hello"}],
+        "previous_response_id": "resp_123",
+    });
+
+    let error = convert_request(
+        "openai:responses:compact",
+        "openai:chat",
+        &body,
+        &FormatContext::default(),
+    )
+    .expect_err("compact cross-format continuation must fail closed");
+
+    assert!(matches!(
+        error,
+        FormatError::LossyConversionBlocked { ref field, .. }
             if field == "previous_response_id"
     ));
+}
+
+#[test]
+fn runtime_openai_responses_to_responses_preserves_previous_response_id() {
+    let body = json!({
+        "model": "gpt-source",
+        "input": [{"role": "user", "content": "hello"}],
+        "previous_response_id": "resp_123",
+    });
+
+    let converted = convert_request(
+        "openai:responses",
+        "openai:responses",
+        &body,
+        &FormatContext::default(),
+    )
+    .expect("same-format conversion should preserve previous_response_id");
+
+    assert_eq!(converted["previous_response_id"], "resp_123");
 }
 
 #[test]

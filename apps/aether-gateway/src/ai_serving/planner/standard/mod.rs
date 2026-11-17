@@ -197,7 +197,7 @@ mod tests {
         .expect("claude cli should convert to codex request");
 
         assert!(converted.get("metadata").is_none());
-        assert_eq!(converted["store"], false);
+        assert!(converted.get("store").is_none());
         assert!(converted.get("instructions").is_none());
         assert_eq!(converted["include"], json!(["reasoning.encrypted_content"]));
         assert_eq!(converted["parallel_tool_calls"], true);

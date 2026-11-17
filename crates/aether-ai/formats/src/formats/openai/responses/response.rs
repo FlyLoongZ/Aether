@@ -7,8 +7,7 @@ use serde_json::{json, Map, Value};
 
 use super::{
     apply_openai_responses_reasoning_text, encode_gemini_tool_signature_carrier,
-    encode_tool_result_error, history::record_converted_response_history,
-    openai_responses_synthetic_reasoning_item_id,
+    encode_tool_result_error, openai_responses_synthetic_reasoning_item_id,
 };
 
 use crate::{
@@ -33,9 +32,7 @@ pub fn from(body: &Value, _ctx: &FormatContext) -> Option<CanonicalResponse> {
 
 pub fn to(response: &CanonicalResponse, ctx: &FormatContext) -> Option<Value> {
     let report_context = ctx.report_context_value();
-    let response = to_raw(response, &report_context, false);
-    record_converted_response_history(&report_context, &response);
-    Some(response)
+    Some(to_raw(response, &report_context, false))
 }
 
 pub fn to_compact(response: &CanonicalResponse, ctx: &FormatContext) -> Option<Value> {

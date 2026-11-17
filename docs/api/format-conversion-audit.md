@@ -65,7 +65,7 @@ Provider schema refresh is not a runtime dependency. Same-format runtime paths d
 | `response_format` | canonical response format | `text.format` | mapped |
 | `reasoning_effort` | OpenAI enum | `reasoning.effort` | mapped; invalid enum blocked |
 | `verbosity` | OpenAI extension | `text.verbosity` | mapped |
-| `store` | OpenAI extension | `store` | extension-preserved |
+| `store` | OpenAI extension | `store` | store=true rejected at gateway; false/absent preserved |
 | `service_tier` | OpenAI extension | `service_tier` | extension-preserved |
 | `safety_identifier` | OpenAI extension | `safety_identifier` | extension-preserved |
 | `prompt_cache_key` | OpenAI extension | `prompt_cache_key` | extension-preserved |
@@ -102,7 +102,7 @@ Provider schema refresh is not a runtime dependency. Same-format runtime paths d
 | `reasoning.budget_tokens` | Responses-only | none | lossy-blocked |
 | `stream` | Responses request transport policy | none | lossy-blocked; target stream policy is transport-owned |
 | `include` | Responses-only | none | lossy-blocked; legacy emitter no longer leaks |
-| `previous_response_id` | Responses-only | none | lossy-blocked; legacy emitter no longer leaks |
+| `previous_response_id` | Responses-only | none | same-format preserved; cross-format dropped |
 | `truncation` | Responses-only | none | lossy-blocked |
 | `prompt` | Responses-only | none | lossy-blocked |
 | `conversation` | Responses-only | none | lossy-blocked |
