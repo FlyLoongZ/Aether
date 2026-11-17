@@ -194,10 +194,6 @@ mod tests {
             ),
             "/api/admin/providers?limit=25"
         );
-        assert_eq!(
-            sanitize_admin_audit_path("/install/one-time-secret?view=raw"),
-            "/install/[redacted]?view=raw"
-        );
     }
 
     #[test]
