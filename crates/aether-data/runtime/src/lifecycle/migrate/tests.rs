@@ -1725,6 +1725,7 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20261019010000,
             20261102000000,
             20261103000000,
+            20261117000000,
         ]
     );
 }

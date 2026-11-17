@@ -193,7 +193,7 @@ describe('apiClient auth state change event', () => {
     }
   })
 
-  it('authenticates user and admin health while public status stays anonymous', async () => {
+  it('authenticates user, admin and public-scope health projections', async () => {
     const rawClient = apiClient['client']
     const previousAdapter = rawClient.defaults.adapter
     const requests: InternalAxiosRequestConfig[] = []
@@ -207,7 +207,7 @@ describe('apiClient auth state change event', () => {
       apiClient.setToken('health-access-token')
       await apiClient.get('/api/users/me/health/v2/summary')
       await apiClient.get('/api/admin/endpoints/health/v2/objects')
-      await apiClient.get('/api/public/health/v2/summary')
+      await apiClient.get('/api/public/health/api-formats')
       await apiClient.get('/health')
 
       expect(requests.map(request => request.headers.Authorization)).toEqual([
@@ -243,7 +243,7 @@ describe('apiClient auth state change event', () => {
     } finally { rawClient.defaults.adapter = previousAdapter }
   })
 
-  it('keeps publication and protected JSON routes authenticated despite public-looking names or query strings', async () => {
+  it('keeps protected JSON routes authenticated despite public-looking names or query strings', async () => {
     const rawClient = apiClient['client']
     const previousAdapter = rawClient.defaults.adapter
     const requests: InternalAxiosRequestConfig[] = []
@@ -253,12 +253,12 @@ describe('apiClient auth state change event', () => {
     }) as AxiosAdapter
     try {
       apiClient.setToken('publication-access-token')
-      await apiClient.get('/api/admin/endpoints/health/v2/publication')
-      await apiClient.put('/api/admin/endpoints/health/v2/publication', { enabled: false, objects: [] })
+      await apiClient.get('/api/admin/endpoints/health/api-formats')
+      await apiClient.put('/api/admin/endpoints/health/keys/key-1', {})
       await apiClient.get('/api/admin/usage/records?search=/public/health.json')
       await apiClient.get('/api/admin/reports.json')
       await apiClient.get('/api/publicity')
-      await apiClient.get('/api/public/health/v2/summary?window=1h')
+      await apiClient.get('/api/public/health/api-formats?lookback_hours=6')
       expect(requests.map(request => request.headers.Authorization)).toEqual([
         'Bearer publication-access-token', 'Bearer publication-access-token',
         'Bearer publication-access-token', 'Bearer publication-access-token',
