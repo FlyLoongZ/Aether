@@ -897,7 +897,6 @@ async fn forward_pinned_continuation(
     bound.turn_state.begin(
         LogicalTurn::new(client_event, turn_index, logical_turn_id)
             .with_codex_fingerprint_context(codex_fingerprint_context)
-            .with_provider_store(provider_event.get("store") == Some(&Value::Bool(true)))
             .with_turn_control(turn_control)
             .with_plan_usage_permit(plan_usage_permit)
             .with_plan_usage_policy_snapshot(plan_usage_policy_snapshot)
@@ -1173,7 +1172,6 @@ async fn forward_replanned_response_create(
         bound.turn_state.begin(
             LogicalTurn::new(client_event.clone(), turn_index, logical_turn_id.clone())
                 .with_codex_fingerprint_context(codex_fingerprint_context.clone())
-                .with_provider_store(provider_event.get("store") == Some(&Value::Bool(true)))
                 .with_turn_control(turn_control)
                 .with_plan_usage_permit(plan_usage_permit)
                 .with_plan_usage_policy_snapshot(plan_usage_policy_snapshot)
@@ -1283,7 +1281,6 @@ async fn forward_replanned_response_create(
     bound.turn_state.begin(
         LogicalTurn::new(client_event, turn_index, logical_turn_id)
             .with_codex_fingerprint_context(codex_fingerprint_context)
-            .with_provider_store(provider_event.get("store") == Some(&Value::Bool(true)))
             .with_turn_control(turn_control)
             .with_plan_usage_permit(plan_usage_permit)
             .with_plan_usage_policy_snapshot(plan_usage_policy_snapshot)

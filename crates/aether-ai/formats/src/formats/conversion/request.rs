@@ -800,7 +800,7 @@ mod tests {
         assert_eq!(converted["reasoning"]["effort"], "medium");
         assert_eq!(converted["reasoning"]["summary"], "auto");
         assert_eq!(converted["max_output_tokens"], 128);
-        assert_eq!(converted["store"], false);
+        assert!(converted.get("store").is_none());
         assert_eq!(converted["parallel_tool_calls"], true);
         assert!(converted["include"]
             .as_array()

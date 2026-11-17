@@ -911,7 +911,7 @@ mod tests {
 
         assert!(normalized.get("temperature").is_none());
         assert!(normalized.get("top_p").is_none());
-        assert_eq!(normalized["store"], false);
+        assert!(normalized.get("store").is_none());
         // ...and the protocol state survives the same pass.
         assert_eq!(normalized["previous_response_id"], "resp_123");
     }

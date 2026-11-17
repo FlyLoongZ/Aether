@@ -856,17 +856,13 @@ fn prepare_persisted_continuation_registration(
 }
 
 fn persistable_terminal_response_id<'a>(
-    logical: Option<&LogicalTurn>,
-    frame: &'a ParsedResponsesWebSocketFrame<'_>,
+    _logical: Option<&LogicalTurn>,
+    _frame: &'a ParsedResponsesWebSocketFrame<'_>,
 ) -> Option<&'a str> {
-    let logical = logical?;
-    // `provider_store` is derived from the final framed provider event. False
-    // or absent is ZDR/connection-local and must never create a 24-hour KV
-    // record, even if the provider happens to return an ID.
-    if !logical.provider_store {
-        return None;
-    }
-    connection_local_terminal_response_id(Some(logical), frame)
+    // `store: true` is rejected at the client boundary, so the gateway never
+    // owns a cross-connection continuation record. Connection-local
+    // continuations still use `connection_local_terminal_response_id`.
+    None
 }
 
 fn connection_local_terminal_response_id<'a>(
@@ -995,7 +991,7 @@ mod tests {
     };
 
     #[test]
-    fn cross_connection_registration_requires_explicit_store_true_and_a_success_terminal() {
+    fn cross_connection_registration_is_disabled_without_store_true_support() {
         let completed = ParsedResponsesWebSocketFrame::parse(
             r#"{"type":"response.completed","response":{"id":"resp_persisted"}}"#,
         )
@@ -1030,16 +1026,15 @@ mod tests {
             json!({"type": "response.create", "store": true}),
             1,
             "logical-persisted".to_string(),
-        )
-        .with_provider_store(true);
+        );
         assert_eq!(
             persistable_terminal_response_id(Some(&persisted), &completed),
-            Some("resp_persisted")
+            None,
+            "store=true is rejected at the client boundary and never creates cross-connection state"
         );
         assert_eq!(
             persistable_terminal_response_id(Some(&persisted), &failed),
-            None,
-            "a failed terminal must never establish cross-connection ownership"
+            None
         );
 
         let continuation = LogicalTurn::new(

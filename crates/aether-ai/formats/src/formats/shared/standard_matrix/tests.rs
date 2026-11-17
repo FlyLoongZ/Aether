@@ -471,7 +471,6 @@ fn codex_default_body_rules() -> Value {
         {"action":"drop","path":"max_output_tokens"},
         {"action":"drop","path":"temperature"},
         {"action":"drop","path":"top_p"},
-        {"action":"set","path":"store","value":false},
         {
             "action":"set",
             "path":"instructions",
@@ -908,7 +907,7 @@ fn claude_request_uses_typed_canonical_without_changing_non_claude_target_payloa
                 assert_eq!(converted["reasoning"]["effort"], "medium");
                 assert_eq!(converted["reasoning"]["summary"], "auto");
                 if provider_api_format == "openai:responses" {
-                    assert_eq!(converted["store"], false);
+                    assert!(converted.get("store").is_none());
                     assert!(converted["include"]
                         .as_array()
                         .expect("include")
@@ -1049,7 +1048,7 @@ fn applies_codex_body_rules_for_all_standard_sources_to_openai_responses() {
 
         assert_eq!(converted["model"], "gpt-5.5");
         assert_eq!(converted["stream"], true);
-        assert_eq!(converted["store"], false);
+        assert!(converted.get("store").is_none());
         assert!(converted.get("max_output_tokens").is_none());
         assert!(converted.get("temperature").is_none());
         assert!(converted.get("top_p").is_none());

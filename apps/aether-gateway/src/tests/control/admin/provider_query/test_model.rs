@@ -195,13 +195,12 @@ async fn gateway_handles_openai_responses_test_model_locally_impl() {
                 .as_ref()
                 .and_then(|body| body.get("instructions"))
                 .is_none());
-            assert_eq!(
-                plan.body
-                    .json_body
-                    .as_ref()
-                    .and_then(|body| body.get("store")),
-                Some(&json!(false))
-            );
+            assert!(plan
+                .body
+                .json_body
+                .as_ref()
+                .and_then(|body| body.get("store"))
+                .is_none());
             assert!(plan
                 .body
                 .json_body

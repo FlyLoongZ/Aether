@@ -265,7 +265,6 @@ pub(super) async fn retry_active_turn_after_quota_exhaustion(
             return Ok(false);
         }
     };
-    let replacement_provider_store = provider_event.get("store") == Some(&Value::Bool(true));
     let turn_decision = prepare_responses_websocket_turn_decision(
         &decision,
         turn_request_id,
@@ -399,9 +398,6 @@ pub(super) async fn retry_active_turn_after_quota_exhaustion(
             .await;
         drop(orphan);
         return Ok(false);
-    }
-    if let Some(logical) = bound.turn_state.logical_mut() {
-        logical.provider_store = replacement_provider_store;
     }
     bound.upstream_response_headers = replacement.upstream_response_headers;
     bound.pending_adapter_drain = None;

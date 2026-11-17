@@ -1053,7 +1053,6 @@ async fn bootstrap_responses_websocket(
     bound.turn_state.begin(
         LogicalTurn::new(first_event, 1, first_logical_turn_id)
             .with_codex_fingerprint_context(first_codex_fingerprint_context)
-            .with_provider_store(first_provider_event.get("store") == Some(&Value::Bool(true)))
             .with_turn_control(turn_control)
             .with_plan_usage_permit(plan_usage_permit)
             .with_plan_usage_policy_snapshot(plan_usage_policy_snapshot)

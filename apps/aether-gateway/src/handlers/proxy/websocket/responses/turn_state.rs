@@ -27,10 +27,6 @@ pub(super) struct LogicalTurn {
     /// 透明重试（配额换 key）会重建 planning parts 并重放同一份事件，
     /// 事实必须留在 logical turn 上，否则重试产生的记录会漏标。
     pub(super) client_event_pii_redacted: bool,
-    /// Effective `store` after provider body rules and WebSocket framing. Only
-    /// an explicit provider-side `true` permits cross-connection registry
-    /// state; false or absent remains ZDR/connection-local.
-    pub(super) provider_store: bool,
     pub(super) turn_index: u64,
     pub(super) logical_turn_id: String,
     /// Immutable Codex client identity for every provider attempt belonging to
@@ -58,7 +54,6 @@ impl LogicalTurn {
         Self {
             client_event,
             client_event_pii_redacted: false,
-            provider_store: false,
             turn_index,
             logical_turn_id,
             codex_fingerprint_context: None,
@@ -97,11 +92,6 @@ impl LogicalTurn {
         context: CodexFingerprintConvergenceContext,
     ) -> Self {
         self.codex_fingerprint_context = Some(context);
-        self
-    }
-
-    pub(super) fn with_provider_store(mut self, provider_store: bool) -> Self {
-        self.provider_store = provider_store;
         self
     }
 
