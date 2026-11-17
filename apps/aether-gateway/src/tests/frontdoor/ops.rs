@@ -177,12 +177,34 @@ async fn gateway_adds_cors_headers_to_proxied_responses_inner() {
             .expect("allow origin header"),
         "http://localhost:3000"
     );
-    assert_eq!(
-        response_headers
-            .get("access-control-expose-headers")
-            .expect("expose headers header"),
-        "*"
-    );
+    let expose_headers = response_headers
+        .get("access-control-expose-headers")
+        .expect("expose headers header")
+        .to_str()
+        .expect("expose headers should be ascii")
+        .to_ascii_lowercase();
+    // `*` is not a wildcard for credentialed requests, so the gateway lists
+    // every client-readable header explicitly.
+    assert!(!expose_headers.contains('*'));
+    for name in [
+        "x-trace-id",
+        "retry-after",
+        "content-disposition",
+        "x-aether-body-encoding",
+        "x-aether-body-field",
+        "x-aether-body-error",
+        "x-aether-body-truncated",
+        "x-aether-body-size",
+        "x-aether-usage-id",
+        "x-aether-build-version",
+    ] {
+        assert!(
+            expose_headers
+                .split(',')
+                .any(|header| header.trim() == name),
+            "{name} must be exposed"
+        );
+    }
     assert_eq!(
         *execution_runtime_hits.lock().expect("mutex should lock"),
         1
