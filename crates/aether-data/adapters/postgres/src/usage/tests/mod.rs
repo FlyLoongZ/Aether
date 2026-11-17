@@ -17,8 +17,9 @@ use super::{
 use crate::{PostgresPoolConfig, PostgresPoolFactory};
 use aether_data_contracts::repository::usage::{
     BodyEncoding, CapturedBody, UpsertUsageRecord, UsageAuditListQuery, UsageBodyCaptureState,
-    UsageBodyField, UsageBreakdownGroupBy, UsageBreakdownSummaryQuery, UsageDashboardDailyBreakdownQuery,
-    UsageHealthTimelineGroupBy, UsageHealthTimelineQuery, UsageWriteRepository,
+    UsageBodyField, UsageBreakdownGroupBy, UsageBreakdownSummaryQuery,
+    UsageDashboardDailyBreakdownQuery, UsageHealthTimelineGroupBy, UsageHealthTimelineQuery,
+    UsageWriteRepository,
 };
 
 mod body;

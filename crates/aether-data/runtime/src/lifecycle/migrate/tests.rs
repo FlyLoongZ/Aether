@@ -372,10 +372,8 @@ fn empty_database_snapshot_omits_retired_http_capture_tables_and_keeps_audit_adm
     assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("usage_body_blobs"));
     assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("usage_http_audits"));
     assert!(!EMPTY_DATABASE_SNAPSHOT_SQL.contains("request_body_state character varying(32)"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.usage_routing_snapshots"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.usage_settlement_snapshots"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.usage_routing_snapshots"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.usage_settlement_snapshots"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("billing_snapshot_schema_version"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("price_per_request"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("settlement_snapshot_schema_version"));
@@ -387,15 +385,10 @@ fn empty_database_snapshot_omits_retired_http_capture_tables_and_keeps_audit_adm
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("usage_settlement_snapshots.billing_total_cost_usd")
     );
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("candidate_index integer"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.stats_user_summary"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.stats_user_daily_model"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.stats_hourly_user_model"));
-    assert!(
-        EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.schema_backfills")
-    );
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.stats_user_summary"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.stats_user_daily_model"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.stats_hourly_user_model"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.schema_backfills"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_schema_backfills_applied_at"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.stats_hourly"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("response_time_sum_ms double precision"));
@@ -403,15 +396,12 @@ fn empty_database_snapshot_omits_retired_http_capture_tables_and_keeps_audit_adm
     assert!(
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("total_tokens bigint DEFAULT '0'::bigint NOT NULL")
     );
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.stats_user_daily_provider"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.stats_user_daily_api_format"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.stats_user_daily_provider"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.stats_user_daily_api_format"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
         .contains("CREATE TABLE public.stats_daily_cost_savings_model_provider"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains(
-        "CREATE TABLE public.stats_user_daily_cost_savings_model_provider"
-    ));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
+        .contains("CREATE TABLE public.stats_user_daily_cost_savings_model_provider"));
     assert!(
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("successful_response_time_sum_ms double precision")
     );
@@ -424,8 +414,7 @@ fn empty_database_snapshot_omits_retired_http_capture_tables_and_keeps_audit_adm
         .and_then(|rest| rest.split(");").next())
         .expect("stats_daily_model definition");
     assert!(stats_daily_model.contains("cache_creation_ephemeral_5m_tokens bigint"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.usage_counter_deltas"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.usage_counter_deltas"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("ix_usage_counter_deltas_unprocessed"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_entitlement_usage_entitlement_date"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_provider_api_keys_provider_default_sort"));
@@ -518,13 +507,11 @@ fn stats_daily_api_key_identity_is_decoupled_for_historical_reaggregation() {
 #[test]
 fn empty_database_snapshot_sql_includes_payment_gateway_and_plans() {
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("payment_provider character varying(64)"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.payment_gateway_configs"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.payment_gateway_configs"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.billing_plans"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL
         .contains("purchase_limit_scope character varying(32) DEFAULT 'active_period'"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL
-        .contains("CREATE TABLE public.user_plan_entitlements"));
+    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("CREATE TABLE public.user_plan_entitlements"));
 }
 
 #[test]

@@ -36,7 +36,7 @@ fn metrics_value(metrics: &DashboardSummaryMetrics) -> Value {
         metrics.billable_amount.clone()
     };
     let average = |sum: f64, samples: u64| {
-        (samples > 0 && sum.is_finite() && sum >= 0.0).then(|| sum / samples as f64)
+        (samples > 0 && sum.is_finite() && sum >= 0.0).then_some(sum / samples as f64)
     };
     json!({
         "request_count": metrics.request_count,

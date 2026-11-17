@@ -969,8 +969,7 @@ fn split_request_candidate_upsert_batches(
     for row in rows {
         let key = (row.request_id.clone(), row.candidate_index, row.retry_index);
         if seen.contains(&key) && !current.is_empty() {
-            batches.push(current);
-            current = Vec::new();
+            batches.push(std::mem::take(&mut current));
             seen.clear();
         }
         seen.insert(key);
