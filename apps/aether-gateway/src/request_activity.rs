@@ -114,7 +114,7 @@ impl History {
                 (area + minute.request_microseconds, peak.max(minute.peak))
             });
         Ok(json!({
-            "avg": (duration_us > 0).then(|| area as f64 / duration_us as f64),
+            "avg": (duration_us > 0).then_some(area as f64 / duration_us as f64),
             "peak": peak,
             "observed_from": DateTime::from_timestamp_micros(observed_from_us),
             "observed_through": through,

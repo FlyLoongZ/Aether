@@ -1150,7 +1150,7 @@ fn observe_stream_usage_bytes(
             observer.disable_with_error(format!(
                 "stream usage event exceeded {SSE_TERMINAL_DETECTOR_MAX_LINE_BYTES} bytes"
             ));
-            *buffered = Vec::new();
+            buffered.clear();
             return;
         }
         buffered.extend_from_slice(&remaining[..line_part_len]);
@@ -1159,7 +1159,7 @@ fn observe_stream_usage_bytes(
             let line = std::mem::take(buffered);
             if let Err(_err) = observer.push_line(report_context, line) {
                 observer.disable_with_error("stream usage parsing failed");
-                *buffered = Vec::new();
+                buffered.clear();
                 return;
             }
         }
