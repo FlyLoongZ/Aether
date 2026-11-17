@@ -521,7 +521,8 @@ async fn gateway_rejects_management_token_without_pool_write_for_provider_oauth_
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
     assert_eq!(payload["detail"], "management token permission denied");
     assert_eq!(payload["required_permission"], "admin:provider_oauth:admin");
-    assert_eq!(payload["route_family"], "provider_oauth_manage");
+    assert!(payload.get("route_family").is_none());
+    assert!(payload.get("route_kind").is_none());
 
     gateway_handle.abort();
 }
@@ -728,7 +729,8 @@ async fn gateway_rejects_partial_management_token_for_admin_management_token_rou
         payload["required_permission"],
         "admin:management_tokens:read"
     );
-    assert_eq!(payload["route_family"], "management_tokens_manage");
+    assert!(payload.get("route_family").is_none());
+    assert!(payload.get("route_kind").is_none());
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();

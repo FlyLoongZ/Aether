@@ -99,8 +99,6 @@ fn maybe_build_management_token_permission_denied_response(
         Json(json!({
             "detail": "management token permission denied",
             "required_permission": denied.required_permission,
-            "route_family": decision.route_family.as_deref(),
-            "route_kind": decision.route_kind.as_deref(),
             "request_path": request_context.request_path,
         })),
     )

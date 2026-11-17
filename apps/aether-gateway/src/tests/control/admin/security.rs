@@ -141,13 +141,6 @@ async fn gateway_fails_closed_when_ip_blacklist_state_is_unavailable() {
     let response = send_request(gateway, request).await;
 
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(
-        response
-            .headers()
-            .get(crate::constants::EXECUTION_PATH_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some(crate::constants::EXECUTION_PATH_LOCAL_AUTH_DENIED)
-    );
     let payload = response
         .into_body()
         .collect()

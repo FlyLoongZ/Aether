@@ -112,14 +112,43 @@ pub(crate) fn build_unhandled_public_support_response(
         .control_decision
         .as_ref()
         .expect("public support response requires control decision");
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "detail".to_string(),
+        serde_json::Value::String(
+            "public support route not implemented in rust frontdoor".to_string(),
+        ),
+    );
+    if crate::handlers::shared::should_expose_internal_metadata(
+        Some(decision),
+        http::StatusCode::NOT_IMPLEMENTED,
+    ) {
+        payload.insert(
+            "route_family".to_string(),
+            decision
+                .route_family
+                .as_deref()
+                .map_or(serde_json::Value::Null, |value| {
+                    serde_json::Value::String(value.to_string())
+                }),
+        );
+        payload.insert(
+            "route_kind".to_string(),
+            decision
+                .route_kind
+                .as_deref()
+                .map_or(serde_json::Value::Null, |value| {
+                    serde_json::Value::String(value.to_string())
+                }),
+        );
+    }
+    payload.insert(
+        "request_path".to_string(),
+        serde_json::Value::String(request_context.request_path.clone()),
+    );
     (
         http::StatusCode::NOT_IMPLEMENTED,
-        Json(json!({
-            "detail": "public support route not implemented in rust frontdoor",
-            "route_family": decision.route_family,
-            "route_kind": decision.route_kind,
-            "request_path": request_context.request_path,
-        })),
+        Json(serde_json::Value::Object(payload)),
     )
         .into_response()
 }

@@ -1339,7 +1339,7 @@ async fn gateway_rejects_users_write_management_token_for_administrator_account_
         ),
     ];
 
-    for (method, path, body, route_kind) in cases {
+    for (method, path, body, _route_kind) in cases {
         let response = client
             .request(method, format!("{gateway_url}{path}"))
             .bearer_auth(raw_token)
@@ -1352,7 +1352,8 @@ async fn gateway_rejects_users_write_management_token_for_administrator_account_
         let payload: serde_json::Value = response.json().await.expect("json body should parse");
         assert_eq!(payload["detail"], "management token permission denied");
         assert_eq!(payload["required_permission"], "admin:users:admin");
-        assert_eq!(payload["route_kind"], route_kind);
+        assert!(payload.get("route_kind").is_none());
+        assert!(payload.get("route_family").is_none());
     }
 
     let ordinary_create_response = client

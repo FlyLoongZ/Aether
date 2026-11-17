@@ -227,8 +227,6 @@ fn oauth_frontend_callback_permission_denied_response(
             Json(json!({
                 "detail": "management token permission denied",
                 "required_permission": "admin:oauth:admin",
-                "route_family": "oauth_manage",
-                "route_kind": "upsert_provider",
                 "request_path": request_context.path(),
             })),
         )

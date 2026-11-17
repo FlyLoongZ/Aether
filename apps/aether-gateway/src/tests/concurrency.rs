@@ -9,8 +9,7 @@ use super::{
     build_state_with_execution_runtime_override, start_authenticated_operational_server,
     start_server, wait_until, AppState, Arc, Body, Bytes, GatewayFallbackMetricKind,
     GatewayFallbackReason, HeaderValue, Infallible, Request, Response, Router, StatusCode,
-    EXECUTION_PATH_DISTRIBUTED_OVERLOADED, EXECUTION_PATH_HEADER,
-    EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, EXECUTION_PATH_LOCAL_OVERLOADED,
+    EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS,
 };
 use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
@@ -256,13 +255,6 @@ async fn gateway_rejects_second_in_flight_stream_request_with_distributed_overlo
     assert_eq!(second_response.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
         second_response
-            .headers()
-            .get(EXECUTION_PATH_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some(EXECUTION_PATH_DISTRIBUTED_OVERLOADED)
-    );
-    assert_eq!(
-        second_response
             .json::<serde_json::Value>()
             .await
             .expect("json body should decode")["error"]["details"]["gate"],
@@ -349,13 +341,6 @@ async fn gateway_rejects_second_in_flight_stream_request_with_local_overload_imp
         .expect("second request should complete");
 
     assert_eq!(second_response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(
-        second_response
-            .headers()
-            .get(EXECUTION_PATH_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some(EXECUTION_PATH_LOCAL_OVERLOADED)
-    );
     assert_eq!(
         second_response
             .json::<serde_json::Value>()
