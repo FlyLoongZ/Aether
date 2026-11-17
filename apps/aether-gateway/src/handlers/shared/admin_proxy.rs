@@ -56,6 +56,19 @@ pub(crate) fn build_admin_proxy_auth_required_response(
         .into_response()
 }
 
+pub(crate) fn build_admin_route_not_found_response(
+    request_context: &GatewayPublicRequestContext,
+) -> Response<Body> {
+    (
+        http::StatusCode::NOT_FOUND,
+        Json(json!({
+            "detail": "admin route not found",
+            "request_path": request_context.request_path,
+        })),
+    )
+        .into_response()
+}
+
 pub(crate) fn attach_admin_audit_response(
     mut response: Response<Body>,
     event_name: &'static str,

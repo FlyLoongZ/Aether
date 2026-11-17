@@ -24,6 +24,7 @@ pub(crate) use auth_helpers::*;
 
 #[path = "auth_rate_limit.rs"]
 mod auth_rate_limit;
+pub(crate) use auth_rate_limit::enforce_admin_auth_ip_rate_limit;
 use auth_rate_limit::*;
 
 #[path = "auth_turnstile.rs"]

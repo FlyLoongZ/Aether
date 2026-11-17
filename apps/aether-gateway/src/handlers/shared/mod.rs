@@ -28,7 +28,8 @@ mod usage_stats;
 
 pub(crate) use self::admin_proxy::{
     attach_admin_audit_response, build_admin_proxy_auth_required_response,
-    build_unhandled_admin_proxy_response, mark_sensitive_admin_response_no_store,
+    build_admin_route_not_found_response, build_unhandled_admin_proxy_response,
+    mark_sensitive_admin_response_no_store,
 };
 pub(crate) use self::api_keys::{
     api_key_placeholder_display, generate_gateway_api_key_plaintext,

@@ -70,6 +70,7 @@ use self::support_auth::auth_session::{
     build_auth_wallet_summary_payload, handle_auth_me, resolve_authenticated_local_user,
     AuthenticatedLocalUserContext,
 };
+pub(crate) use self::support_auth::enforce_admin_auth_ip_rate_limit;
 use self::support_auth::{auth_email_is_verified, consume_auth_email_registration_proof};
 use self::support_auth::{
     build_auth_error_response, build_auth_json_response, build_auth_refresh_cookie_clear_header,
