@@ -2057,6 +2057,36 @@ async fn gateway_returns_service_unavailable_for_auth_register_without_storage()
 }
 
 #[tokio::test]
+async fn gateway_reports_service_unavailable_when_email_verification_has_no_smtp_config() {
+    let (gateway_url, upstream_hits, gateway_handle, upstream_handle) =
+        start_auth_gateway_with_builder(|| {
+            AppState::new()
+                .expect("gateway should build")
+                .with_data_state_for_tests(crate::data::GatewayDataState::disabled())
+        })
+        .await;
+
+    let response = reqwest::Client::new()
+        .post(format!("{gateway_url}/api/auth/send-verification-code"))
+        .json(&json!({ "email": "alice@example.com" }))
+        .send()
+        .await
+        .expect("request should succeed");
+
+    // A missing SMTP configuration is a dependency that is not ready, not a
+    // server-side bug, so clients are told to retry instead of seeing a 500.
+    // 5xx details are projected to a generic message by
+    // `build_auth_error_response`, so only the status code is observable.
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let payload: serde_json::Value = response.json().await.expect("json body should parse");
+    assert_eq!(payload["detail"], "服务暂不可用，请稍后重试");
+    assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
+
+    gateway_handle.abort();
+    upstream_handle.abort();
+}
+
+#[tokio::test]
 async fn gateway_handles_auth_send_verification_code_locally_without_proxying_upstream() {
     let (gateway_url, upstream_hits, gateway_handle, upstream_handle) =
         start_auth_gateway_with_builder(|| {
