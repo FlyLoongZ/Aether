@@ -4,7 +4,6 @@ mod auth_api_key_secret;
 mod catalog;
 mod email_templates;
 mod external_models;
-pub(crate) mod health_monitor;
 mod identity_oauth_provider_secret;
 mod internal_metadata;
 mod module_status;
