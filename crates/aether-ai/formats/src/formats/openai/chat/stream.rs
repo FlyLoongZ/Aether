@@ -2241,7 +2241,6 @@ pub struct OpenAIResponsesClientEmitter {
     image_generation_items: BTreeMap<usize, Value>,
     opaque_output_items: BTreeMap<usize, Value>,
     opaque_output_indexes: BTreeMap<String, usize>,
-    completed_history_response: Option<Value>,
     namespace_tool_aliases: NamespaceToolAliases,
 }
 
@@ -2585,10 +2584,6 @@ impl OpenAIResponsesClientEmitter {
 
     fn response_id(&self) -> &str {
         self.response_id.as_deref().unwrap_or("resp-local-stream")
-    }
-
-    pub(crate) fn completed_response_for_history(&self) -> Option<&Value> {
-        self.completed_history_response.as_ref()
     }
 
     fn model(&self) -> &str {
@@ -3352,9 +3347,6 @@ impl OpenAIResponsesClientEmitter {
         out.extend(self.finish_text_item()?);
         out.extend(self.finish_tool_items()?);
         out.extend(self.finish_tool_result_items()?);
-        if event_type == "response.completed" {
-            self.completed_history_response = Some(response.clone());
-        }
         out.extend(self.encode_response_event(
             event_type,
             json!({
@@ -3781,9 +3773,6 @@ impl OpenAIResponsesClientEmitter {
                     ),
                     _ => ("response.completed", self.completed_response(usage)),
                 };
-                if event_type == "response.completed" {
-                    self.completed_history_response = Some(response.clone());
-                }
                 out.extend(self.encode_response_event(
                     event_type,
                     json!({

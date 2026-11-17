@@ -1,5 +1,3 @@
-use crate::formats::openai::responses::history::record_converted_response_history;
-
 use super::{
     build_standard_request_body, build_standard_request_body_from_canonical,
     build_standard_request_body_with_model_directives,
@@ -255,76 +253,6 @@ fn same_responses_family_matrix_preserves_opaque_reasoning_items_and_unknown_fie
         0,
         "compact must not use the DeepSeek opaque replay policy"
     );
-}
-
-#[test]
-fn standard_request_body_scopes_previous_response_history_by_api_key() {
-    record_converted_response_history(
-        &json!({
-            "needs_conversion": true,
-            "client_api_format": "openai:responses",
-            "provider_api_format": "openai:chat",
-            "api_key_id": "standard-history-key-a",
-            "original_request_body": {
-                "model": "source-model",
-                "input": [{"role": "user", "content": "inspect the repository"}]
-            }
-        }),
-        &json!({
-            "id": "resp_standard_history_scope_1",
-            "status": "completed",
-            "output": [{
-                "type": "function_call",
-                "id": "fc_standard_history_scope_1",
-                "call_id": "call_standard_history_scope_1",
-                "name": "inspect_repository",
-                "arguments": "{}"
-            }]
-        }),
-    );
-    let continuation = json!({
-        "model": "source-model",
-        "previous_response_id": "resp_standard_history_scope_1",
-        "input": [{
-            "type": "function_call_output",
-            "call_id": "call_standard_history_scope_1",
-            "output": "inspection-complete"
-        }]
-    });
-
-    let owner = build_standard_request_body(
-        &continuation,
-        "openai:responses",
-        "mapped-model",
-        "custom",
-        "openai:chat",
-        "/v1/responses",
-        false,
-        None,
-        Some("standard-history-key-a"),
-    )
-    .expect("the owning API key should restore response history");
-    assert_eq!(
-        owner["messages"][1]["tool_calls"][0]["id"],
-        "call_standard_history_scope_1"
-    );
-    assert_eq!(
-        owner["messages"][2]["tool_call_id"],
-        "call_standard_history_scope_1"
-    );
-
-    assert!(build_standard_request_body(
-        &continuation,
-        "openai:responses",
-        "mapped-model",
-        "custom",
-        "openai:chat",
-        "/v1/responses",
-        false,
-        None,
-        Some("standard-history-key-b"),
-    )
-    .is_none());
 }
 
 #[test]

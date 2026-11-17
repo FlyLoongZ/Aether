@@ -1927,17 +1927,6 @@ async fn apply_sync_success_effects(
     report_context: Option<&serde_json::Value>,
     payload: &GatewaySyncReportRequest,
 ) {
-    if let Some(report_context) = report_context {
-        crate::ai_serving::persist_converted_response_history(
-            state,
-            report_context,
-            payload
-                .client_body_json
-                .as_ref()
-                .or(payload.body_json.as_ref()),
-        )
-        .await;
-    }
     apply_local_execution_effect(
         state,
         LocalExecutionEffectContext {

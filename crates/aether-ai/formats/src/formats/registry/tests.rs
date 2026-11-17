@@ -3433,7 +3433,7 @@ fn pure_gemini_same_format_roundtrip_preserves_raw_function_parameters() {
 }
 
 #[test]
-fn runtime_openai_responses_to_chat_rejects_missing_previous_response_history() {
+fn runtime_openai_responses_to_chat_drops_previous_response_id() {
     let body = json!({
         "model": "gpt-source",
         "input": [{"role": "user", "content": "hello"}],
@@ -3442,19 +3442,54 @@ fn runtime_openai_responses_to_chat_rejects_missing_previous_response_history() 
         "stream": true
     });
 
-    let error = convert_request(
+    let converted = convert_request(
         "openai:responses",
         "openai:chat",
         &body,
         &FormatContext::default(),
     )
-    .expect_err("missing previous response history must fail closed");
+    .expect("cross-format conversion should drop previous_response_id");
 
-    assert!(matches!(
-        error,
-        FormatError::UnsupportedField { ref field, .. }
-            if field == "previous_response_id"
-    ));
+    assert!(converted.get("previous_response_id").is_none());
+    assert_eq!(converted["messages"][0]["content"], "hello");
+}
+
+#[test]
+fn runtime_openai_responses_compact_to_chat_drops_previous_response_id() {
+    let body = json!({
+        "model": "gpt-source",
+        "input": [{"role": "user", "content": "hello"}],
+        "previous_response_id": "resp_123",
+    });
+
+    let converted = convert_request(
+        "openai:responses:compact",
+        "openai:chat",
+        &body,
+        &FormatContext::default(),
+    )
+    .expect("compact cross-format conversion should drop previous_response_id");
+
+    assert!(converted.get("previous_response_id").is_none());
+}
+
+#[test]
+fn runtime_openai_responses_to_responses_preserves_previous_response_id() {
+    let body = json!({
+        "model": "gpt-source",
+        "input": [{"role": "user", "content": "hello"}],
+        "previous_response_id": "resp_123",
+    });
+
+    let converted = convert_request(
+        "openai:responses",
+        "openai:responses",
+        &body,
+        &FormatContext::default(),
+    )
+    .expect("same-format conversion should preserve previous_response_id");
+
+    assert_eq!(converted["previous_response_id"], "resp_123");
 }
 
 #[test]

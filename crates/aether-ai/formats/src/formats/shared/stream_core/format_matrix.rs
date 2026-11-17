@@ -9,9 +9,6 @@ use crate::formats::openai::chat::stream::{
     OpenAIResponsesProviderState,
 };
 use crate::formats::openai::image::stream::OpenAiImageStreamTerminalState;
-use crate::formats::openai::responses::history::{
-    record_converted_response_history, ResponseHistoryRecord,
-};
 use crate::formats::shared::error_body::{
     build_core_error_body_for_client_format, LocalCoreSyncErrorKind,
 };
@@ -33,8 +30,6 @@ pub struct StreamingStandardFormatMatrix {
     propagated_actual_service_tier: Option<String>,
     pending_sse_event: Option<String>,
     terminated: bool,
-    history_recorded: bool,
-    pending_history_record: Option<ResponseHistoryRecord>,
 }
 
 impl StreamingStandardFormatMatrix {
@@ -98,7 +93,6 @@ impl StreamingStandardFormatMatrix {
         if let Some(client) = self.client.as_mut() {
             out.extend(client.finish()?);
         }
-        self.record_response_history(report_context);
         Ok(out)
     }
 
@@ -117,7 +111,7 @@ impl StreamingStandardFormatMatrix {
 
     fn emit_frames(
         &mut self,
-        report_context: &Value,
+        _report_context: &Value,
         frames: Vec<CanonicalStreamFrame>,
     ) -> Result<Vec<u8>, AiSurfaceFinalizeError> {
         let Some(client) = self.client.as_mut() else {
@@ -155,28 +149,7 @@ impl StreamingStandardFormatMatrix {
             }
             out.extend(client.emit(frame)?);
         }
-        self.record_response_history(report_context);
         Ok(out)
-    }
-
-    fn record_response_history(&mut self, report_context: &Value) {
-        if self.history_recorded {
-            return;
-        }
-        let Some(response) = self.client.as_ref().and_then(|client| match client {
-            ClientStreamEmitter::OpenAIResponses(emitter) => {
-                emitter.completed_response_for_history()
-            }
-            _ => None,
-        }) else {
-            return;
-        };
-        self.pending_history_record = record_converted_response_history(report_context, response);
-        self.history_recorded = true;
-    }
-
-    pub fn take_response_history_record(&mut self) -> Option<ResponseHistoryRecord> {
-        self.pending_history_record.take()
     }
 
     fn emit_error(&mut self, error_body: Value) -> Result<Vec<u8>, AiSurfaceFinalizeError> {

@@ -2,7 +2,6 @@ use serde_json::Value;
 
 use crate::ai_serving::{
     maybe_build_ai_surface_stream_rewriter, AiSurfaceFinalizeError, AiSurfaceStreamRewriter,
-    ResponseHistoryRecord,
 };
 use crate::GatewayError;
 
@@ -30,10 +29,6 @@ impl LocalStreamRewriter<'_> {
 
     pub(crate) fn finish(&mut self) -> Result<Vec<u8>, GatewayError> {
         self.inner.finish().map_err(map_surface_error)
-    }
-
-    pub(crate) fn take_response_history_record(&mut self) -> Option<ResponseHistoryRecord> {
-        self.inner.take_response_history_record()
     }
 }
 

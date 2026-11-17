@@ -656,57 +656,6 @@ mod tests {
     }
 
     #[test]
-    fn antigravity_responses_conversion_keeps_scoped_previous_response_history() {
-        use aether_ai_formats::{
-            api::record_converted_response_history,
-            formats::shared::standard_matrix::build_standard_request_body,
-        };
-        let schema = json!({"type": "object", "properties": {"mode": {"const": "fast"}}});
-        let response_id = "resp_antigravity_schema_history_test";
-        let scope = "antigravity-schema-history";
-        record_converted_response_history(&json!({
-            "needs_conversion": true, "client_api_format": "openai:responses",
-            "provider_api_format": "openai:chat", "api_key_id": scope,
-            "original_request_body": {"model": "client", "input": "first"}
-        }), &json!({"id": response_id, "status": "completed", "output": [{
-            "type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "remembered"}]
-        }]})).expect("seed scoped history");
-        let input = json!({"model": "client", "previous_response_id": response_id,
-            "input": "second", "tools": [{"type": "function", "name": "probe", "parameters": schema}]});
-        let output = build_standard_request_body(
-            &input,
-            "openai:responses",
-            "claude-test",
-            "antigravity",
-            "gemini:generate_content",
-            "",
-            true,
-            None,
-            Some(scope),
-        )
-        .expect("expand history");
-        assert_eq!(output["contents"][0]["parts"][0]["text"], "first");
-        assert_eq!(output["contents"][1]["parts"][0]["text"], "remembered");
-        assert_eq!(output["contents"][2]["parts"][0]["text"], "second");
-        assert_eq!(
-            output["tools"][0]["functionDeclarations"][0]["parameters"],
-            schema
-        );
-        assert!(build_standard_request_body(
-            &input,
-            "openai:responses",
-            "claude-test",
-            "antigravity",
-            "gemini:generate_content",
-            "",
-            true,
-            None,
-            Some("different-key")
-        )
-        .is_none());
-    }
-
-    #[test]
     fn antigravity_rejects_shared_schema_budget_exhaustion_on_both_envelope_paths() {
         use super::AntigravityRequestEnvelopeUnsupportedReason;
         let declaration = json!({"name": "probe", "parameters": {

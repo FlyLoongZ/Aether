@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use serde_json::{Map, Value};
 
 use crate::formats::openai::namespace::NamespaceToolAliases;
@@ -122,7 +124,8 @@ pub fn convert_request_pure_with_context(
     let pure_ctx = ctx.without_runtime_request_edits();
     let source = parse_format(source_format)?;
     let target = parse_format(target_format)?;
-    let normalized_body = normalize_openai_responses_to_chat_body(source, target, body)?;
+    let body = strip_cross_format_responses_state(source, target, body);
+    let normalized_body = normalize_openai_responses_to_chat_body(source, target, body.as_ref())?;
     let request = parse_request(source_format, &normalized_body, &pure_ctx)?;
     validate_openai_responses_target_contract(target_format, &normalized_body)?;
     validate_request_conversion(
@@ -133,7 +136,8 @@ pub fn convert_request_pure_with_context(
         ctx.mapped_model.as_deref(),
     )?;
     let value = emit_request_inner(target_format, &request, &pure_ctx)?;
-    let report = build_request_conversion_report(source_format, target_format, body, &value);
+    let report =
+        build_request_conversion_report(source_format, target_format, body.as_ref(), &value);
     Ok(Converted { value, report })
 }
 
@@ -145,23 +149,8 @@ pub fn convert_request(
 ) -> Result<Value, FormatError> {
     let source = parse_format(source_format)?;
     let target = parse_format(target_format)?;
-    let expanded_body = if source == FormatId::OpenAiResponses && target == FormatId::OpenAiChat {
-        Some(
-            openai_responses::history::expand_previous_response_for_chat(
-                body,
-                ctx.history_scope.as_deref(),
-            )
-            .map_err(|reason| FormatError::UnsupportedField {
-                format: source.as_str().to_string(),
-                field: "previous_response_id".to_string(),
-                reason,
-            })?,
-        )
-    } else {
-        None
-    };
-    let body = expanded_body.as_ref().unwrap_or(body);
-    let normalized_body = normalize_openai_responses_to_chat_body(source, target, body)?;
+    let body = strip_cross_format_responses_state(source, target, body);
+    let normalized_body = normalize_openai_responses_to_chat_body(source, target, body.as_ref())?;
     validate_openai_responses_target_contract(target_format, &normalized_body)?;
     let mut request = parse_request(source_format, &normalized_body, ctx)?;
     validate_runtime_request_conversion(
@@ -179,6 +168,31 @@ pub fn convert_request(
         request.model = mapped_model.to_string();
     }
     emit_request_inner(target_format, &request, ctx)
+}
+
+fn strip_cross_format_responses_state(
+    source: FormatId,
+    target: FormatId,
+    body: &Value,
+) -> Cow<'_, Value> {
+    if !matches!(
+        source,
+        FormatId::OpenAiResponses | FormatId::OpenAiResponsesCompact
+    ) || matches!(
+        target,
+        FormatId::OpenAiResponses | FormatId::OpenAiResponsesCompact
+    ) {
+        return Cow::Borrowed(body);
+    }
+    let Some(object) = body.as_object() else {
+        return Cow::Borrowed(body);
+    };
+    if !object.contains_key("previous_response_id") {
+        return Cow::Borrowed(body);
+    }
+    let mut stripped = object.clone();
+    stripped.remove("previous_response_id");
+    Cow::Owned(Value::Object(stripped))
 }
 
 fn normalize_openai_responses_to_chat_body(

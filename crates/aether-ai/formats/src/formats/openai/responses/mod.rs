@@ -6,7 +6,6 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
 pub mod codex;
-pub(crate) mod history;
 pub mod request;
 pub mod response;
 pub mod spec;
