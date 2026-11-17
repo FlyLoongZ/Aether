@@ -26,8 +26,9 @@ use super::request::{
     planned_request_uses_codex_responses_lite, planned_response_create_event,
     prepare_responses_lite_continuation, provider_model_from_decision,
     response_create_has_previous_response_id, response_create_model_or_current,
-    validate_response_create_previous_response_id, validate_response_create_stream_id_support,
-    validated_named_stream_id, ResponsesLiteStaticConfig,
+    validate_response_create_previous_response_id, validate_response_create_stateless_fields,
+    validate_response_create_stream_id_support, validated_named_stream_id,
+    ResponsesLiteStaticConfig,
 };
 use super::state::BoundResponsesConnection;
 use super::turn::{
@@ -44,7 +45,9 @@ use crate::ai_serving::ResponsesWebSocketPinnedCandidate;
 use crate::clock::current_unix_secs;
 use crate::control::GatewayControlDecision;
 use crate::handlers::proxy::websocket::ingress::WebSocketRequestContext;
-use crate::handlers::proxy::websocket::session::{CLOSE_INTERNAL_ERROR, WEBSOCKET_LOG_TRANSPORT};
+use crate::handlers::proxy::websocket::session::{
+    CLOSE_INTERNAL_ERROR, CLOSE_POLICY_VIOLATION, WEBSOCKET_LOG_TRANSPORT,
+};
 use crate::handlers::proxy::websocket::transport::{
     close_client_socket, close_upstream_socket, send_client_message, send_gateway_error,
     send_gateway_error_with_status, send_gateway_error_with_stream_id,
@@ -128,6 +131,8 @@ fn parse_response_create_event(text: &str) -> Result<Value, ResponseCreateParseE
     }
     validate_response_create_previous_response_id(&event)
         .map_err(|code| ResponseCreateParseError::new(code, Some(&event)))?;
+    validate_response_create_stateless_fields(&event)
+        .map_err(|code| ResponseCreateParseError::new(code, Some(&event)))?;
     validate_response_create_stream_id_support(&event)
         .map_err(|code| ResponseCreateParseError::new(code, Some(&event)))?;
     Ok(event)
@@ -199,17 +204,33 @@ pub(super) async fn forward_client_message(
             let mut client_event = match parse_response_create_event(&text) {
                 Ok(event) => event,
                 Err(error) => {
-                    let message = match error.code {
-                        "invalid_response_create_previous_response_id" => {
-                            "response.create.previous_response_id must be null or a non-empty string"
+                    let (message, close) = match error.code {
+                        "invalid_response_create_previous_response_id" => (
+                            "response.create.previous_response_id must be null or a non-empty string",
+                            false,
+                        ),
+                        "invalid_response_create_stream_id" => (
+                            "response.create.stream_id must be 1-256 ASCII letters, numbers, underscores, hyphens, or periods",
+                            false,
+                        ),
+                        "responses_websocket_named_stream_unsupported" => (
+                            "Aether currently supports only the implicit default WebSocket lane; omit response.create.stream_id",
+                            false,
+                        ),
+                        "response_create_store_not_supported" => (
+                            "store=true is not supported; use store=false or omit store",
+                            true,
+                        ),
+                        "response_create_background_not_supported" => {
+                            ("background=true is not supported", true)
                         }
-                        "invalid_response_create_stream_id" => {
-                            "response.create.stream_id must be 1-256 ASCII letters, numbers, underscores, hyphens, or periods"
+                        "response_create_conversation_not_supported" => {
+                            ("conversation is not supported", true)
                         }
-                        "responses_websocket_named_stream_unsupported" => {
-                            "Aether currently supports only the implicit default WebSocket lane; omit response.create.stream_id"
-                        }
-                        _ => "WebSocket client text events must be response.create JSON objects",
+                        _ => (
+                            "WebSocket client text events must be response.create JSON objects",
+                            false,
+                        ),
                     };
                     send_gateway_error_with_stream_id(
                         client_socket,
@@ -218,6 +239,11 @@ pub(super) async fn forward_client_message(
                         error.stream_id.as_deref(),
                     )
                     .await;
+                    if close {
+                        close_client_socket(client_socket, CLOSE_POLICY_VIOLATION, error.code)
+                            .await;
+                        return RelayDisposition::Close;
+                    }
                     return RelayDisposition::Continue;
                 }
             };
@@ -1378,11 +1404,32 @@ mod tests {
         }
 
         let valid = parse_response_create_event(
-            r#"{"type":"response.create","model":"gpt-test","store":true}"#,
+            r#"{"type":"response.create","model":"gpt-test","store":false}"#,
         )
         .expect("a valid event after rejected text should still parse");
         assert_eq!(valid["type"], "response.create");
-        assert_eq!(valid["store"], true);
+        assert_eq!(valid["store"], false);
+    }
+
+    #[test]
+    fn stateless_fields_are_rejected_by_the_websocket_parser() {
+        for (body, code) in [
+            (
+                r#"{"type":"response.create","store":true}"#,
+                "response_create_store_not_supported",
+            ),
+            (
+                r#"{"type":"response.create","background":true}"#,
+                "response_create_background_not_supported",
+            ),
+            (
+                r#"{"type":"response.create","conversation":"conv_1"}"#,
+                "response_create_conversation_not_supported",
+            ),
+        ] {
+            let error = parse_response_create_event(body).expect_err("must reject");
+            assert_eq!(error.code, code, "body: {body}");
+        }
     }
 
     #[test]

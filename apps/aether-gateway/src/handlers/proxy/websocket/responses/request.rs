@@ -414,6 +414,24 @@ pub(super) fn validate_response_create_previous_response_id(
     }
 }
 
+/// Rejects Responses-only server-side state that this gateway does not own.
+///
+/// HTTP carries the same policy in `maybe_build_stateless_policy_rejection`;
+/// WebSocket events are validated here before normalization removes
+/// `background` or forwards `store`.
+pub(super) fn validate_response_create_stateless_fields(event: &Value) -> Result<(), &'static str> {
+    if event.get("store").and_then(Value::as_bool) == Some(true) {
+        return Err("response_create_store_not_supported");
+    }
+    if event.get("background").and_then(Value::as_bool) == Some(true) {
+        return Err("response_create_background_not_supported");
+    }
+    if event.get("conversation").is_some() {
+        return Err("response_create_conversation_not_supported");
+    }
+    Ok(())
+}
+
 /// Returns a named lane only after the complete public `stream_id` grammar has
 /// been checked. This is the sole source for reflecting a request-scoped lane
 /// into gateway-generated error events.
@@ -549,6 +567,7 @@ pub(super) fn normalize_followup_response_create(
         return Err("invalid_response_create");
     }
     validate_response_create_previous_response_id(event)?;
+    validate_response_create_stateless_fields(event)?;
     // Never fall back to the raw event. That would bypass endpoint rules and
     // the Responses Lite de-duplication exactly when normalization rejected a
     // malformed request, potentially re-appending static configuration.
@@ -655,7 +674,6 @@ mod tests {
             "previous_response_id": "resp_123",
             "input": [],
             "stream": true,
-            "background": true,
         });
 
         let normalized = normalized_continuation(
@@ -705,11 +723,11 @@ mod tests {
     }
 
     #[test]
-    fn explicit_store_and_previous_response_id_are_forwarded() {
+    fn explicit_store_false_and_previous_response_id_are_forwarded() {
         let event = json!({
             "type": "response.create",
             "model": "public-model",
-            "store": true,
+            "store": false,
             "previous_response_id": "resp_123",
             "input": [],
         });
@@ -720,10 +738,10 @@ mod tests {
                 .with_provider_type_for_tests("codex"),
         );
 
-        // Codex HTTP normalization normally forces `store: false` and removes
-        // `previous_response_id`. WebSocket framing restores exactly what the
-        // client sent so the upstream owns validation and continuation lookup.
-        assert_eq!(normalized["store"], true);
+        // Codex HTTP normalization normally removes `previous_response_id`.
+        // WebSocket framing restores exactly what the client sent so the
+        // upstream owns validation and continuation lookup.
+        assert_eq!(normalized["store"], false);
         assert_eq!(normalized["previous_response_id"], "resp_123");
     }
 
@@ -732,7 +750,7 @@ mod tests {
         let event = json!({
             "type": "response.create",
             "model": "public-model",
-            "store": true,
+            "store": false,
             "previous_response_id": "resp_client",
             "generate": false,
             "input": [],
@@ -767,7 +785,7 @@ mod tests {
                 {
                     "action": "set",
                     "path": "store",
-                    "value": false,
+                    "value": true,
                     "condition": {"path": "metadata.mode", "op": "eq", "value": "enforce"}
                 },
                 {
@@ -782,28 +800,28 @@ mod tests {
             &json!({
                 "type": "response.create",
                 "model": "public-model",
-                "store": true,
+                "store": false,
                 "generate": false,
                 "metadata": {"mode": "observe"},
                 "input": []
             }),
             &normalization,
         );
-        assert_eq!(skipped["store"], true);
+        assert_eq!(skipped["store"], false);
         assert_eq!(skipped["generate"], false);
 
         let applied = normalized_continuation(
             &json!({
                 "type": "response.create",
                 "model": "public-model",
-                "store": true,
+                "store": false,
                 "generate": false,
                 "metadata": {"mode": "enforce"},
                 "input": []
             }),
             &normalization,
         );
-        assert_eq!(applied["store"], false);
+        assert_eq!(applied["store"], true);
         assert_eq!(applied["generate"], true);
     }
 

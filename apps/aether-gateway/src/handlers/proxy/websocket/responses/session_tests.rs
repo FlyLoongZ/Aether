@@ -147,6 +147,30 @@ fn initial_message_error_diagnostics_are_stable() {
             false,
         ),
         (
+            InitialMessageError::StoreNotSupported,
+            "response_create_store_not_supported",
+            "store_not_supported",
+            Some("store=true is not supported; use store=false or omit store"),
+            1008,
+            false,
+        ),
+        (
+            InitialMessageError::BackgroundNotSupported,
+            "response_create_background_not_supported",
+            "background_not_supported",
+            Some("background=true is not supported"),
+            1008,
+            false,
+        ),
+        (
+            InitialMessageError::ConversationNotSupported,
+            "response_create_conversation_not_supported",
+            "conversation_not_supported",
+            Some("conversation is not supported"),
+            1008,
+            false,
+        ),
+        (
             InitialMessageError::InvalidStreamId,
             "invalid_response_create_stream_id",
             "invalid_stream_id",
@@ -434,7 +458,6 @@ fn followup_rewrites_the_provider_model_and_removes_http_stream_fields() {
         "type": "response.create",
         "model": "public-model",
         "stream": true,
-        "background": true,
     });
     let normalized = normalize_followup_response_create(
         &event,

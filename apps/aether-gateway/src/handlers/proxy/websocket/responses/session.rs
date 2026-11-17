@@ -39,8 +39,8 @@ use super::relay_policy::{fatal_relay_policy, FatalRelaySignal};
 use super::request::{
     build_planning_parts, planned_request_uses_codex_responses_lite, planned_response_create_event,
     prepare_responses_lite_continuation, validate_response_create_previous_response_id,
-    validate_response_create_stream_id_support, validated_named_stream_id,
-    validated_response_create_model, ResponsesLiteStaticConfig,
+    validate_response_create_stateless_fields, validate_response_create_stream_id_support,
+    validated_named_stream_id, validated_response_create_model, ResponsesLiteStaticConfig,
 };
 use super::state::BoundResponsesConnection;
 use super::turn::{prepare_responses_websocket_turn_decision, ResponsesWebSocketTurnOutcome};
@@ -92,6 +92,9 @@ enum InitialMessageError {
     MissingModel,
     InvalidModel,
     InvalidPreviousResponseId,
+    StoreNotSupported,
+    BackgroundNotSupported,
+    ConversationNotSupported,
     InvalidStreamId,
     UnsupportedStreamId,
 }
@@ -198,6 +201,9 @@ impl InitialMessageError {
             Self::MissingModel => "response_create_model_required",
             Self::InvalidModel => "invalid_response_create_model",
             Self::InvalidPreviousResponseId => "invalid_response_create_previous_response_id",
+            Self::StoreNotSupported => "response_create_store_not_supported",
+            Self::BackgroundNotSupported => "response_create_background_not_supported",
+            Self::ConversationNotSupported => "response_create_conversation_not_supported",
             Self::InvalidStreamId => "invalid_response_create_stream_id",
             Self::UnsupportedStreamId => "responses_websocket_named_stream_unsupported",
         }
@@ -212,6 +218,9 @@ impl InitialMessageError {
                 CLOSE_POLICY_VIOLATION
             }
             Self::InvalidPreviousResponseId => CLOSE_POLICY_VIOLATION,
+            Self::StoreNotSupported => CLOSE_POLICY_VIOLATION,
+            Self::BackgroundNotSupported => CLOSE_POLICY_VIOLATION,
+            Self::ConversationNotSupported => CLOSE_POLICY_VIOLATION,
             Self::InvalidStreamId => CLOSE_POLICY_VIOLATION,
             Self::UnsupportedStreamId => CLOSE_POLICY_VIOLATION,
         }
@@ -240,6 +249,11 @@ impl InitialMessageError {
             Self::InvalidPreviousResponseId => {
                 Some("response.create.previous_response_id must be null or a non-empty string")
             }
+            Self::StoreNotSupported => {
+                Some("store=true is not supported; use store=false or omit store")
+            }
+            Self::BackgroundNotSupported => Some("background=true is not supported"),
+            Self::ConversationNotSupported => Some("conversation is not supported"),
             Self::InvalidStreamId => Some(
                 "response.create.stream_id must be 1-256 ASCII letters, numbers, underscores, hyphens, or periods",
             ),
@@ -260,6 +274,9 @@ impl InitialMessageError {
             Self::MissingModel => "missing_model",
             Self::InvalidModel => "invalid_model",
             Self::InvalidPreviousResponseId => "invalid_previous_response_id",
+            Self::StoreNotSupported => "store_not_supported",
+            Self::BackgroundNotSupported => "background_not_supported",
+            Self::ConversationNotSupported => "conversation_not_supported",
             Self::InvalidStreamId => "invalid_stream_id",
             Self::UnsupportedStreamId => "unsupported_stream_id",
         }
@@ -1279,6 +1296,14 @@ fn validate_initial_response_create(event: &Value) -> Result<(), InitialMessageE
     validated_response_create_model(model).map_err(|_| InitialMessageError::InvalidModel)?;
     validate_response_create_previous_response_id(event)
         .map_err(|_| InitialMessageError::InvalidPreviousResponseId)?;
+    validate_response_create_stateless_fields(event).map_err(|code| match code {
+        "response_create_store_not_supported" => InitialMessageError::StoreNotSupported,
+        "response_create_background_not_supported" => InitialMessageError::BackgroundNotSupported,
+        "response_create_conversation_not_supported" => {
+            InitialMessageError::ConversationNotSupported
+        }
+        _ => InitialMessageError::InvalidJson,
+    })?;
     match validate_response_create_stream_id_support(event) {
         Ok(()) => {}
         Err("invalid_response_create_stream_id") => {
