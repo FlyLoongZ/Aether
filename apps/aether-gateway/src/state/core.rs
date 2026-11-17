@@ -19,7 +19,7 @@ use aether_runtime::{
 };
 use aether_runtime_state::{
     MemoryRuntimeStateConfig, RedisRuntimeDiagnostics, RuntimeQueueStore, RuntimeSemaphore,
-    RuntimeSemaphoreError, RuntimeSemaphoreSnapshot, RuntimeState,
+    RuntimeState,
 };
 use aether_scheduler_core::PROVIDER_KEY_RPM_WINDOW_SECS;
 use dashmap::DashMap;
@@ -520,10 +520,6 @@ impl AppState {
 
     pub const fn execution_runtime_configured(&self) -> bool {
         true
-    }
-
-    pub(crate) fn internal_gateway_auth_status(&self) -> &'static str {
-        self.internal_gateway_auth.status()
     }
 
     #[cfg(test)]
@@ -1208,24 +1204,6 @@ impl AppState {
         self.upstream_execution_gate
             .as_ref()
             .map(|gate| gate.snapshot())
-    }
-
-    pub(crate) async fn distributed_request_concurrency_snapshot(
-        &self,
-    ) -> Result<Option<RuntimeSemaphoreSnapshot>, RuntimeSemaphoreError> {
-        match self.distributed_request_gate.as_ref() {
-            Some(gate) => gate.snapshot().await.map(Some),
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn distributed_websocket_connection_concurrency_snapshot(
-        &self,
-    ) -> Result<Option<RuntimeSemaphoreSnapshot>, RuntimeSemaphoreError> {
-        match self.distributed_websocket_connection_gate.as_ref() {
-            Some(gate) => gate.snapshot().await.map(Some),
-            None => Ok(None),
-        }
     }
 
     pub(crate) async fn metric_samples(&self) -> Vec<MetricSample> {

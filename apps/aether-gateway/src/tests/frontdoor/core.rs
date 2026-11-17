@@ -33,10 +33,7 @@ async fn gateway_exposes_readyz_without_proxying_upstream() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["status"], "ready");
-    assert_eq!(payload["component"], "aether-gateway");
-    assert_eq!(payload["warmup_status"], "disabled");
-    assert_eq!(payload["gate_readiness"], false);
+    assert_eq!(payload, json!({ "status": "ready" }));
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();

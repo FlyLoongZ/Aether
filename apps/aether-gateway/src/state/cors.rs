@@ -63,8 +63,4 @@ impl FrontdoorCorsConfig {
     pub(crate) fn allow_credentials(&self) -> bool {
         self.allow_credentials
     }
-
-    pub(crate) fn allowed_origins(&self) -> &[String] {
-        &self.allowed_origins
-    }
 }
