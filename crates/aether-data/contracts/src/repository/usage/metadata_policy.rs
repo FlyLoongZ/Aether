@@ -1778,7 +1778,7 @@ mod tests {
             "client_ip": "127.0.0.1, 10.0.0.1",
             "trace_id": "Bearer secret",
             "plan_usage_reservation_token": "server-token",
-            "request_path": "/install/sensitive-code",
+            "request_path": "/v1/live/abc123",
             "request_query_string": "key=secret&alt=sse",
             "routing_failure_diagnostic": {
                 "kind": "request_body_build",
@@ -1789,7 +1789,7 @@ mod tests {
             metadata.get("client_ip").is_none()
                 && metadata.get("trace_id").is_none()
                 && metadata.get("plan_usage_reservation_token").is_none()
-                && metadata["request_path"] == "/install/[redacted]"
+                && metadata["request_path"] == "/v1/live/{call_id}"
                 && metadata["request_query_string"] == "alt=sse"
                 && metadata
                     .pointer("/routing_failure_diagnostic/path")
