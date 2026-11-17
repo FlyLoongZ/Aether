@@ -191,8 +191,6 @@ pub(super) fn build_admin_users_permission_denied_response(
             Json(json!({
                 "detail": "management token permission denied",
                 "required_permission": "admin:users:admin",
-                "route_family": request_context.route_family(),
-                "route_kind": request_context.route_kind(),
                 "request_path": request_context.path(),
             })),
         )
@@ -219,8 +217,6 @@ pub(super) fn build_admin_users_wallet_permission_denied_response(
                 "detail": "management token permission denied",
                 "required_permissions": ["admin:wallets:write", "admin:wallets:admin"],
                 "permission_mode": "any_of",
-                "route_family": request_context.route_family(),
-                "route_kind": request_context.route_kind(),
                 "request_path": request_context.path(),
             })),
         )

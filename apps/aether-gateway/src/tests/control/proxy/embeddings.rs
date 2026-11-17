@@ -13,9 +13,7 @@ use super::super::{
     start_server, AppState, GatewayDataState, InMemoryAuthApiKeySnapshotRepository,
     InMemoryProviderCatalogReadRepository, Json, Router,
 };
-use crate::constants::{
-    CONTROL_ENDPOINT_SIGNATURE_HEADER, EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AUTH_DENIED,
-};
+use crate::constants::CONTROL_ENDPOINT_SIGNATURE_HEADER;
 use crate::tests::DEV_FERNET_KEY;
 use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 
@@ -1404,13 +1402,6 @@ async fn embeddings_route_rejects_chat_only_model_impl() {
         .expect("request should succeed");
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert_eq!(
-        response
-            .headers()
-            .get(EXECUTION_PATH_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some(EXECUTION_PATH_LOCAL_AUTH_DENIED)
-    );
     let payload: serde_json::Value = response.json().await.expect("body should parse");
     assert_eq!(
         payload["error"]["message"],

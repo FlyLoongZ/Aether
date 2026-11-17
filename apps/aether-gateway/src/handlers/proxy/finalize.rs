@@ -6,6 +6,7 @@ use crate::constants::{
 };
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
+use crate::handlers::shared::{should_expose_internal_metadata, strip_internal_metadata_headers};
 use crate::middleware::{sanitize_access_log_path, should_downgrade_access_log, RequestLogEmitted};
 use aether_runtime::{maybe_hold_axum_response_permit, AdmissionPermit};
 use axum::body::Body;
@@ -171,6 +172,9 @@ pub(super) fn finalize_gateway_response(
             elapsed_ms,
             "gateway completed request"
         );
+    }
+    if !should_expose_internal_metadata(control_decision, response.status()) {
+        strip_internal_metadata_headers(response.headers_mut());
     }
     response.extensions_mut().insert(RequestLogEmitted);
 

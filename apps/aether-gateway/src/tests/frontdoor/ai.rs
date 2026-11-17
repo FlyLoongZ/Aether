@@ -3340,14 +3340,6 @@ async fn gateway_handles_antigravity_v1internal_control_plane_without_proxying()
             .expect("request should succeed");
 
         assert_eq!(response.status(), StatusCode::OK, "path {path}");
-        assert_eq!(
-            response
-                .headers()
-                .get(EXECUTION_PATH_HEADER)
-                .and_then(|value| value.to_str().ok()),
-            Some(EXECUTION_PATH_LOCAL_AI_PUBLIC),
-            "path {path}"
-        );
         let payload: serde_json::Value = response.json().await.expect("json body should parse");
 
         match path {

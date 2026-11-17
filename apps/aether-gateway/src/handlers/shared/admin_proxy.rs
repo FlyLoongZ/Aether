@@ -1,25 +1,44 @@
 use crate::audit::attach_admin_audit_event;
 use crate::control::GatewayPublicRequestContext;
+use crate::handlers::shared::should_expose_internal_metadata;
 use axum::{
     body::Body,
     http,
     response::{IntoResponse, Response},
     Json,
 };
-use serde_json::json;
+use serde_json::{json, Map, Value};
 
 pub(crate) fn build_unhandled_admin_proxy_response(
     request_context: &GatewayPublicRequestContext,
 ) -> Response<Body> {
     let decision = request_context.control_decision.as_ref();
+    let mut payload = Map::new();
+    payload.insert(
+        "detail".to_string(),
+        Value::String("admin proxy route not implemented in rust frontdoor".to_string()),
+    );
+    if should_expose_internal_metadata(decision, http::StatusCode::NOT_IMPLEMENTED) {
+        payload.insert(
+            "route_family".to_string(),
+            decision
+                .and_then(|value| value.route_family.as_deref())
+                .map_or(Value::Null, |value| Value::String(value.to_string())),
+        );
+        payload.insert(
+            "route_kind".to_string(),
+            decision
+                .and_then(|value| value.route_kind.as_deref())
+                .map_or(Value::Null, |value| Value::String(value.to_string())),
+        );
+    }
+    payload.insert(
+        "request_path".to_string(),
+        Value::String(request_context.request_path.clone()),
+    );
     (
         http::StatusCode::NOT_IMPLEMENTED,
-        Json(json!({
-            "detail": "admin proxy route not implemented in rust frontdoor",
-            "route_family": decision.and_then(|value| value.route_family.as_deref()),
-            "route_kind": decision.and_then(|value| value.route_kind.as_deref()),
-            "request_path": request_context.request_path,
-        })),
+        Json(Value::Object(payload)),
     )
         .into_response()
 }
@@ -27,13 +46,10 @@ pub(crate) fn build_unhandled_admin_proxy_response(
 pub(crate) fn build_admin_proxy_auth_required_response(
     request_context: &GatewayPublicRequestContext,
 ) -> Response<Body> {
-    let decision = request_context.control_decision.as_ref();
     (
         http::StatusCode::UNAUTHORIZED,
         Json(json!({
             "detail": "admin authentication required",
-            "route_family": decision.and_then(|value| value.route_family.as_deref()),
-            "route_kind": decision.and_then(|value| value.route_kind.as_deref()),
             "request_path": request_context.request_path,
         })),
     )

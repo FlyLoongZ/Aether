@@ -6,6 +6,7 @@ mod email_templates;
 mod external_models;
 pub(crate) mod health_monitor;
 mod identity_oauth_provider_secret;
+mod internal_metadata;
 mod module_status;
 mod multipart;
 mod normalize;
@@ -54,6 +55,9 @@ pub(crate) use self::external_models::OFFICIAL_EXTERNAL_MODEL_PROVIDERS;
 pub(crate) use self::identity_oauth_provider_secret::{
     decrypt_or_migrate_identity_oauth_provider_client_secret,
     identity_oauth_provider_secret_binding_matches, seal_identity_oauth_provider_client_secret,
+};
+pub(crate) use self::internal_metadata::{
+    should_expose_internal_metadata, strip_internal_metadata_headers,
 };
 pub(crate) use self::module_status::{
     module_enabled_config_key, read_module_enabled, REFERRAL_ENABLED_CONFIG_KEY,

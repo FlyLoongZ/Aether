@@ -1,9 +1,7 @@
 use super::{
     any, build_router, build_router_with_execution_runtime_override, json, start_server, Arc, Body,
     HeaderValue, Json, Mutex, Request, Response, Router, StatusCode, DEPENDENCY_REASON_HEADER,
-    EXECUTION_PATH_HEADER, EXECUTION_PATH_LOCAL_AI_PUBLIC,
-    EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
-    TRACE_ID_HEADER,
+    EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 
 #[tokio::test]
@@ -101,23 +99,9 @@ async fn gateway_locally_denies_openai_chat_after_repeated_execution_runtime_mis
         assert_eq!(
             response
                 .headers()
-                .get(EXECUTION_PATH_HEADER)
-                .and_then(|value| value.to_str().ok()),
-            Some(EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS)
-        );
-        assert_eq!(
-            response
-                .headers()
                 .get(DEPENDENCY_REASON_HEADER)
                 .and_then(|value| value.to_str().ok()),
             None
-        );
-        assert_eq!(
-            response
-                .headers()
-                .get(LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER)
-                .and_then(|value| value.to_str().ok()),
-            Some("missing_auth_context")
         );
         let payload: serde_json::Value = response.json().await.expect("body should parse");
         assert_eq!(payload["error"]["type"], "http_error");
@@ -227,23 +211,9 @@ async fn gateway_locally_denies_openai_chat_when_control_api_is_configured_witho
     assert_eq!(
         response
             .headers()
-            .get(EXECUTION_PATH_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some(EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS)
-    );
-    assert_eq!(
-        response
-            .headers()
             .get(DEPENDENCY_REASON_HEADER)
             .and_then(|value| value.to_str().ok()),
         None
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("missing_auth_context")
     );
     let payload: serde_json::Value = response.json().await.expect("body should parse");
     assert_eq!(payload["error"]["type"], "http_error");
@@ -338,23 +308,9 @@ async fn gateway_locally_denies_openai_chat_stream_after_execution_runtime_miss_
     assert_eq!(
         response
             .headers()
-            .get(EXECUTION_PATH_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some(EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS)
-    );
-    assert_eq!(
-        response
-            .headers()
             .get(DEPENDENCY_REASON_HEADER)
             .and_then(|value| value.to_str().ok()),
         None
-    );
-    assert_eq!(
-        response
-            .headers()
-            .get(LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some("missing_auth_context")
     );
     let payload: serde_json::Value = response.json().await.expect("body should parse");
     assert_eq!(payload["error"]["type"], "http_error");
@@ -510,13 +466,6 @@ async fn assert_ai_route_locally_denied_after_execution_runtime_miss_with_reques
         assert_eq!(
             response
                 .headers()
-                .get(EXECUTION_PATH_HEADER)
-                .and_then(|value| value.to_str().ok()),
-            Some(EXECUTION_PATH_LOCAL_AI_PUBLIC)
-        );
-        assert_eq!(
-            response
-                .headers()
                 .get(DEPENDENCY_REASON_HEADER)
                 .and_then(|value| value.to_str().ok()),
             None
@@ -538,13 +487,6 @@ async fn assert_ai_route_locally_denied_after_execution_runtime_miss_with_reques
         upstream_handle.abort();
         return;
     }
-    assert_eq!(
-        response
-            .headers()
-            .get(EXECUTION_PATH_HEADER)
-            .and_then(|value| value.to_str().ok()),
-        Some(EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS)
-    );
     assert_eq!(
         response
             .headers()

@@ -475,8 +475,9 @@ mod tests {
             payload["detail"],
             "public support route not implemented in rust frontdoor"
         );
-        assert_eq!(payload["route_family"], "auth");
-        assert_eq!(payload["route_kind"], "login");
+        // Unauthenticated requests must not learn the internal route taxonomy.
+        assert!(payload.get("route_family").is_none());
+        assert!(payload.get("route_kind").is_none());
         assert_eq!(payload["request_path"], "/api/auth/login/history");
     }
 }
