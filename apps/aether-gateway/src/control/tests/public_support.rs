@@ -427,11 +427,6 @@ fn classifies_users_me_routes_as_public_support_route() {
             "api_keys_create",
         ),
         (
-            http::Method::POST,
-            "/api/users/me/api-keys/key-1/install-sessions",
-            "api_key_install_session_create",
-        ),
-        (
             http::Method::PUT,
             "/api/users/me/api-keys/key-1",
             "api_key_update",
@@ -537,25 +532,6 @@ fn classifies_ccswitch_usage_as_api_key_public_support_route() {
         Some("aether:ccswitch_usage")
     );
     assert!(!decision.is_execution_runtime_candidate());
-}
-
-#[test]
-fn user_api_key_install_session_create_buffers_request_body() {
-    let headers = headers(&[]);
-    let uri: Uri = "/api/users/me/api-keys/key-1/install-sessions"
-        .parse()
-        .expect("uri should parse");
-    let decision =
-        classify_control_route(&http::Method::POST, &uri, &headers).expect("route should classify");
-    let context = GatewayPublicRequestContext::from_request_parts(
-        "trace-install-session",
-        &http::Method::POST,
-        &uri,
-        &headers,
-        Some(decision),
-    );
-
-    assert!(local_proxy_route_requires_buffered_body(&context));
 }
 
 #[test]

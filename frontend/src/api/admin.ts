@@ -3,7 +3,6 @@ import type { ModelTestCapabilities } from './endpoints/types'
 import axios, { type AxiosRequestConfig } from 'axios'
 import { cache, cachedRequest, buildCacheKey } from '@/utils/cache'
 import type { BillingSummary } from './auth'
-import type { ApiKeyInstallSession, InstallSessionTargetSystem, InstallTargetCli } from './me'
 
 const SYSTEM_DATA_IMPORT_TIMEOUT_MS = 10 * 60 * 1000
 const ALL_SYSTEM_CONFIGS_CACHE_KEY = 'admin:system:configs'
@@ -933,18 +932,6 @@ export const adminApi = {
     const response = await apiClient.get<{ key: string }>(
       `/api/admin/api-keys/${keyId}`,
       { params: { include_key: true } }
-    )
-    return response.data
-  },
-
-  // 创建独立余额 Key 的 CLI 安装会话
-  async createApiKeyInstallSession(
-    keyId: string,
-    data: { target_cli: InstallTargetCli; target_system: InstallSessionTargetSystem }
-  ): Promise<ApiKeyInstallSession> {
-    const response = await apiClient.post<ApiKeyInstallSession>(
-      `/api/admin/api-keys/${keyId}/install-sessions`,
-      data
     )
     return response.data
   },

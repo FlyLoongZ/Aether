@@ -560,10 +560,7 @@ fn access_for_route(method: &http::Method, decision: &GatewayControlDecision) ->
                 Some("admin:payments"),
                 Some("update_epay_gateway" | "update_payment_gateway")
             )
-            | (
-                Some("admin:api_keys"),
-                Some("create_api_key" | "create_api_key_install_session")
-            )
+            | (Some("admin:api_keys"), Some("create_api_key"))
             | (Some("admin:usage"), Some("detail" | "curl" | "replay"))
             | (Some("admin:monitoring"), Some("trace_request"))
             | (Some("admin:tasks"), Some("detail" | "events"))

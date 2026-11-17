@@ -45,10 +45,6 @@ impl<'a> AdminRequestContext<'a> {
     pub(crate) fn trace_id(&self) -> &str {
         self.context.trace_id.as_str()
     }
-
-    pub(crate) fn public(&self) -> &GatewayPublicRequestContext {
-        self.context
-    }
 }
 
 impl<'a> Deref for AdminRequestContext<'a> {

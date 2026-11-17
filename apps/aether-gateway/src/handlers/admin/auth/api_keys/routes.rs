@@ -1,4 +1,3 @@
-use super::install_routes::build_admin_create_api_key_install_session_response;
 use super::mutation_routes::{
     build_admin_create_api_key_response, build_admin_delete_api_key_response,
     build_admin_toggle_api_key_response, build_admin_update_api_key_response,
@@ -12,8 +11,6 @@ use axum::{body::Body, http, response::Response};
 pub(super) async fn maybe_build_local_admin_api_keys_routes_response(
     state: &AdminAppState<'_>,
     request_context: &AdminRequestContext<'_>,
-    request_headers: &http::HeaderMap,
-    remote_addr: &std::net::SocketAddr,
     request_body: Option<&axum::body::Bytes>,
 ) -> Result<Option<Response<Body>>, GatewayError> {
     let Some(decision) = request_context.decision() else {
@@ -57,22 +54,6 @@ pub(super) async fn maybe_build_local_admin_api_keys_routes_response(
         {
             Ok(Some(
                 build_admin_create_api_key_response(state, request_context, request_body).await?,
-            ))
-        }
-        Some("create_api_key_install_session")
-            if request_context.method() == http::Method::POST
-                && path_no_trailing.starts_with("/api/admin/api-keys/")
-                && path_no_trailing.ends_with("/install-sessions") =>
-        {
-            Ok(Some(
-                build_admin_create_api_key_install_session_response(
-                    state,
-                    request_context,
-                    request_headers,
-                    remote_addr,
-                    request_body,
-                )
-                .await?,
             ))
         }
         Some("update_api_key")

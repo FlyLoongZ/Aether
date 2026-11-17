@@ -213,22 +213,6 @@ export interface ApiKey {
   routing_group_name?: string | null
 }
 
-export type InstallTargetCli = 'claude_code' | 'codex_cli'
-export type InstallTargetSystem = 'macos' | 'linux' | 'windows' | 'auto'
-export type InstallSessionTargetSystem = Exclude<InstallTargetSystem, 'auto'>
-
-export interface ApiKeyInstallSession {
-  install_code: string
-  expires_at_unix_secs: number
-  expires_in_seconds: number
-  target_cli: InstallTargetCli
-  target_cli_label: string
-  target_system: InstallTargetSystem
-  target_system_label: string
-  unix_command: string
-  powershell_command: string
-}
-
 export interface UserClientConfig {
   base_url: string
   site_name?: string
@@ -342,17 +326,6 @@ export const meApi = {
   ): Promise<ApiKey & { message: string }> {
     const response = await apiClient.put<ApiKey & { message: string }>(
       `/api/users/me/api-keys/${keyId}`,
-      data
-    )
-    return response.data
-  },
-
-  async createApiKeyInstallSession(
-    keyId: string,
-    data: { target_cli: InstallTargetCli; target_system: InstallSessionTargetSystem }
-  ): Promise<ApiKeyInstallSession> {
-    const response = await apiClient.post<ApiKeyInstallSession>(
-      `/api/users/me/api-keys/${keyId}/install-sessions`,
       data
     )
     return response.data

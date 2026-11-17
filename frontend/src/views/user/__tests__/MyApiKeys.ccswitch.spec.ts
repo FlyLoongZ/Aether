@@ -15,7 +15,6 @@ const meApiMock = vi.hoisted(() => ({
   getFullApiKey: vi.fn(),
   getClientConfig: vi.fn(),
   getAvailableModels: vi.fn(),
-  createApiKeyInstallSession: vi.fn(),
   updateApiKey: vi.fn(),
   deleteApiKey: vi.fn(),
   toggleApiKey: vi.fn(),
@@ -110,17 +109,6 @@ beforeEach(() => {
       { id: 'gm-4', name: 'gpt-5', display_name: 'GPT 5', is_active: true },
     ],
     total: 4,
-  })
-  meApiMock.createApiKeyInstallSession.mockResolvedValue({
-    install_code: 'install-code',
-    expires_at_unix_secs: 1,
-    expires_in_seconds: 900,
-    target_cli: 'claude_code',
-    target_cli_label: 'Claude Code',
-    target_system: 'linux',
-    target_system_label: 'Linux',
-    unix_command: 'curl install',
-    powershell_command: 'irm install',
   })
 })
 

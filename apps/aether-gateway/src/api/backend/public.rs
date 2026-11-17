@@ -16,7 +16,5 @@ pub(crate) fn mount_public_support_routes(router: Router<AppState>) -> Router<Ap
         .route("/api/public/health/models", get(proxy_request))
         .route("/api/public/health/related", get(proxy_request))
         .route("/api/modules/auth-status", get(proxy_request))
-        .route("/install/{*install_path}", get(proxy_request))
-        .route("/i/{*install_path}", get(proxy_request))
         .route("/", get(proxy_request))
 }
