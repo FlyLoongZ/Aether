@@ -204,8 +204,9 @@ async function main() {
     ok.push(`target configured: ${options.targetUrl}`)
   }
 
+  const authHeaders = resolveAuthHeaders(options)
   let metricsText = ''
-  await checkHttpText('gateway readiness', options.healthUrl, options.timeoutMs, ok, failures, (body) => {
+  await checkHttpText('gateway readiness', options.healthUrl, options.timeoutMs, ok, failures, authHeaders, (body) => {
     const readiness = parseJson(body)
     if (!readiness) {
       failures.push('gateway readiness did not return JSON')
@@ -218,7 +219,7 @@ async function main() {
     ok.push('gateway readiness status ready')
   })
 
-  await checkHttpText('gateway metrics', options.metricsUrl, options.timeoutMs, ok, failures, (body) => {
+  await checkHttpText('gateway metrics', options.metricsUrl, options.timeoutMs, ok, failures, authHeaders, (body) => {
     metricsText = body
     const metricNames = parseMetricNames(body)
     if (metricNames.size === 0) {
@@ -249,6 +250,7 @@ async function main() {
       options.timeoutMs,
       ok,
       failures,
+      {},
       (body) => {
         if (!body.trim()) {
           failures.push('mock upstream metrics response was empty')
@@ -284,6 +286,54 @@ async function main() {
   console.log('PASS gateway staged pressure preflight')
 }
 
+// Operational endpoints such as `/_gateway/metrics` require an admin session
+// or management token, so the preflight has to send the same credential the
+// pressure run uses. Header values are never printed.
+function resolveAuthHeaders(options) {
+  const rawHeader = process.env.AUTH_HEADER
+  if (typeof rawHeader === 'string' && rawHeader.trim()) {
+    const separator = rawHeader.indexOf(':')
+    if (separator > 0) {
+      const name = rawHeader.slice(0, separator).trim()
+      const value = rawHeader.slice(separator + 1).trim()
+      if (name && value) {
+        return { [name]: value }
+      }
+    }
+    return {}
+  }
+  for (const name of ['AETHER_API_KEY', 'API_KEY']) {
+    const value = process.env[name]
+    if (typeof value === 'string' && value.trim()) {
+      return { authorization: `Bearer ${value.trim()}` }
+    }
+  }
+  for (const path of [options.apiKeyFile, options.apiKeyListFile]) {
+    const token = firstSecretLine(path)
+    if (token) {
+      return { authorization: `Bearer ${token}` }
+    }
+  }
+  return {}
+}
+
+function firstSecretLine(path) {
+  if (!path || !path.trim()) {
+    return ''
+  }
+  try {
+    const fs = require('node:fs')
+    const line = fs
+      .readFileSync(path, 'utf8')
+      .split(/\r?\n/)
+      .map((value) => value.trim())
+      .find((value) => value.length > 0)
+    return line || ''
+  } catch (_error) {
+    return ''
+  }
+}
+
 function authConfigured(options) {
   if (['AUTH_HEADER', 'AETHER_API_KEY', 'API_KEY'].some((name) => {
     const value = process.env[name]
@@ -306,14 +356,14 @@ function fileHasSecret(path) {
   }
 }
 
-async function checkHttpText(label, url, timeoutMs, ok, failures, inspect) {
+async function checkHttpText(label, url, timeoutMs, ok, failures, headers, inspect) {
   if (!isHttpUrl(url)) {
     failures.push(`${label} URL is not http(s): ${url}`)
     return
   }
 
   try {
-    const response = await requestText(url, timeoutMs)
+    const response = await requestText(url, timeoutMs, headers)
     if (response.statusCode < 200 || response.statusCode >= 300) {
       failures.push(`${label} returned HTTP ${response.statusCode}`)
       return
@@ -333,7 +383,7 @@ function isHttpUrl(value) {
   }
 }
 
-function requestText(urlString, timeoutMs) {
+function requestText(urlString, timeoutMs, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlString)
     const client = url.protocol === 'https:' ? https : http
@@ -342,6 +392,7 @@ function requestText(urlString, timeoutMs) {
       {
         headers: {
           accept: 'text/plain, application/json;q=0.9, */*;q=0.1',
+          ...extraHeaders,
         },
       },
       (response) => {
