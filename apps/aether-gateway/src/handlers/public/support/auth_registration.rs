@@ -291,8 +291,8 @@ pub(super) async fn handle_auth_send_verification_code(
         Ok(Some(value)) => value,
         Ok(None) => {
             return build_auth_error_response(
-                http::StatusCode::INTERNAL_SERVER_ERROR,
-                "发送验证码失败，请稍后重试",
+                http::StatusCode::SERVICE_UNAVAILABLE,
+                AUTH_VERIFICATION_UNAVAILABLE_DETAIL,
                 false,
             );
         }
