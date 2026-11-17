@@ -180,11 +180,6 @@ pub(super) fn classify_public_support_route(
         && matches!(
             normalized_path,
             "/api/public/site-info"
-                | "/api/public/providers"
-                | "/api/public/models"
-                | "/api/public/search/models"
-                | "/api/public/stats"
-                | "/api/public/global-models"
                 | "/api/public/health/api-formats"
                 | "/api/public/health/models"
                 | "/api/public/health/related"
@@ -192,11 +187,6 @@ pub(super) fn classify_public_support_route(
     {
         let route_kind = match normalized_path {
             "/api/public/site-info" => "site_info",
-            "/api/public/providers" => "providers",
-            "/api/public/models" => "models",
-            "/api/public/search/models" => "search_models",
-            "/api/public/stats" => "stats",
-            "/api/public/global-models" => "global_models",
             "/api/public/health/api-formats" => "health_api_formats",
             "/api/public/health/models" => "health_models",
             "/api/public/health/related" => "health_related",
@@ -804,33 +794,6 @@ pub(super) fn classify_public_support_route(
     } else if method == http::Method::GET
         && matches!(
             normalized_path,
-            "/api/capabilities" | "/api/capabilities/user-configurable"
-        )
-    {
-        let route_kind = match normalized_path {
-            "/api/capabilities" => "list",
-            "/api/capabilities/user-configurable" => "user_configurable",
-            _ => "list",
-        };
-        Some(classified(
-            "public_support",
-            "capabilities",
-            route_kind,
-            "public:capabilities",
-            false,
-        ))
-    } else if method == http::Method::GET && normalized_path.starts_with("/api/capabilities/model/")
-    {
-        Some(classified(
-            "public_support",
-            "capabilities",
-            "model",
-            "public:capabilities",
-            false,
-        ))
-    } else if method == http::Method::GET
-        && matches!(
-            normalized_path,
             "/api/modules/auth-status" | "/api/modules/user-status"
         )
     {
@@ -848,13 +811,12 @@ pub(super) fn classify_public_support_route(
     } else if method == http::Method::GET
         && matches!(
             normalized_path,
-            "/" | "/health" | "/v1/health" | "/v1/providers" | "/v1/test-connection"
+            "/" | "/health" | "/v1/health" | "/v1/test-connection"
         )
     {
         let route_kind = match normalized_path {
             "/" => "root",
             "/health" | "/v1/health" => "health",
-            "/v1/providers" => "providers",
             "/v1/test-connection" => "test_connection",
             _ => "root",
         };
@@ -862,14 +824,6 @@ pub(super) fn classify_public_support_route(
             "public_support",
             "system_catalog",
             route_kind,
-            "public:system_catalog",
-            false,
-        ))
-    } else if method == http::Method::GET && normalized_path.starts_with("/v1/providers/") {
-        Some(classified(
-            "public_support",
-            "system_catalog",
-            "provider_detail",
             "public:system_catalog",
             false,
         ))

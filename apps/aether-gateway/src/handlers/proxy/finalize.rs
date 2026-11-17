@@ -387,30 +387,6 @@ mod tests {
     }
 
     #[test]
-    fn public_catalog_responses_keep_their_existing_cache_policy() {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            http::header::CACHE_CONTROL,
-            HeaderValue::from_static("public, max-age=3600"),
-        );
-        let decision = GatewayControlDecision::synthetic(
-            "/api/public/models",
-            Some("public_support".to_string()),
-            Some("public_catalog".to_string()),
-            Some("models".to_string()),
-            None,
-        );
-
-        apply_sensitive_route_cache_policy(&mut headers, "/api/public/models", Some(&decision));
-
-        assert_eq!(
-            headers.get(http::header::CACHE_CONTROL),
-            Some(&HeaderValue::from_static("public, max-age=3600"))
-        );
-        assert!(headers.get(http::header::PRAGMA).is_none());
-    }
-
-    #[test]
     fn non_admin_responses_keep_their_existing_cache_policy() {
         let mut headers = HeaderMap::new();
         headers.insert(

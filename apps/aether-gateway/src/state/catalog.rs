@@ -237,32 +237,12 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    pub(crate) async fn get_public_global_model_by_name(
-        &self,
-        model_name: &str,
-    ) -> Result<Option<global_models::StoredPublicGlobalModel>, GatewayError> {
-        self.data
-            .get_public_global_model_by_name(model_name)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
     pub(crate) async fn list_public_catalog_models(
         &self,
         query: &global_models::PublicCatalogModelListQuery,
     ) -> Result<Vec<global_models::StoredPublicCatalogModel>, GatewayError> {
         self.data
             .list_public_catalog_models(query)
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))
-    }
-
-    pub(crate) async fn search_public_catalog_models(
-        &self,
-        query: &global_models::PublicCatalogModelSearchQuery,
-    ) -> Result<Vec<global_models::StoredPublicCatalogModel>, GatewayError> {
-        self.data
-            .search_public_catalog_models(query)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }

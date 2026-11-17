@@ -1,12 +1,11 @@
 use super::{
     AdminGlobalModelListQuery, AdminProviderModelListQuery, CreateAdminGlobalModelRecord,
-    DataLayerError, GatewayDataState, PublicCatalogModelListQuery, PublicCatalogModelSearchQuery,
-    PublicGlobalModelQuery, StoredAdminGlobalModel, StoredAdminGlobalModelPage,
-    StoredAdminProviderModel, StoredMinimalCandidateSelectionRow,
-    StoredPoolKeyCandidateRowsByKeyIdsQuery, StoredPoolKeyCandidateRowsQuery,
-    StoredProviderActiveGlobalModel, StoredProviderModelStats, StoredPublicCatalogModel,
-    StoredPublicGlobalModel, StoredPublicGlobalModelPage, UpdateAdminGlobalModelRecord,
-    UpsertAdminProviderModelRecord,
+    DataLayerError, GatewayDataState, PublicCatalogModelListQuery, PublicGlobalModelQuery,
+    StoredAdminGlobalModel, StoredAdminGlobalModelPage, StoredAdminProviderModel,
+    StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateRowsByKeyIdsQuery,
+    StoredPoolKeyCandidateRowsQuery, StoredProviderActiveGlobalModel, StoredProviderModelStats,
+    StoredPublicCatalogModel, StoredPublicGlobalModel, StoredPublicGlobalModelPage,
+    UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
 
 impl GatewayDataState {
@@ -120,16 +119,6 @@ impl GatewayDataState {
     ) -> Result<Vec<StoredPublicCatalogModel>, DataLayerError> {
         match &self.global_model_reader {
             Some(repository) => repository.list_public_catalog_models(query).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn search_public_catalog_models(
-        &self,
-        query: &PublicCatalogModelSearchQuery,
-    ) -> Result<Vec<StoredPublicCatalogModel>, DataLayerError> {
-        match &self.global_model_reader {
-            Some(repository) => repository.search_public_catalog_models(query).await,
             None => Ok(Vec::new()),
         }
     }

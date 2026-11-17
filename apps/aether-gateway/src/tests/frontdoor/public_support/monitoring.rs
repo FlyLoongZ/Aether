@@ -24,22 +24,46 @@ async fn health_v2_public_scope_filters_summary_lists_and_details_before_project
         "completed",
         now - chrono::Duration::minutes(4),
     );
+    let user = sample_auth_user(now);
+    let access_token = build_test_auth_token(
+        "access",
+        serde_json::Map::from_iter([
+            ("user_id".into(), json!(user.id)),
+            ("role".into(), json!(user.role)),
+            (
+                "created_at".into(),
+                json!(user.created_at.map(|value| value.to_rfc3339())),
+            ),
+            ("session_id".into(), json!("health-public-session")),
+        ]),
+        now + chrono::Duration::hours(1),
+    );
     let data = GatewayDataState::with_usage_reader_for_tests(Arc::new(InMemoryUsageReadRepository::seed(vec![published, hidden])))
+        .with_user_reader(Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user])))
         .with_system_config_values_for_tests(vec![("health_publication_v1".into(), json!({
             "enabled": true, "objects": [
                 {"public_id": "model-api", "kind": "model", "value": "internal-published-model", "display_name": "Model API"},
             ],
         }))]);
-    let (gateway_url, gateway_handle) = start_server(build_router_with_state(
-        AppState::new().unwrap().with_data_state_for_tests(data),
-    ))
-    .await;
+    let state = AppState::new()
+        .unwrap()
+        .with_data_state_for_tests(data)
+        .with_auth_session_for_tests(sample_auth_session(
+            "user-auth-public",
+            "health-public-session",
+            "health-public-device",
+            "refresh-token-placeholder",
+            now,
+        ));
+    let (gateway_url, gateway_handle) = start_server(build_router_with_state(state)).await;
     let client = reqwest::Client::new();
     for resource in ["summary", "objects", "objects/model-api"] {
         let response = client
             .get(format!(
                 "{gateway_url}/api/public/health/v2/{resource}?kind=model"
             ))
+            .bearer_auth(&access_token)
+            .header("x-client-device-id", "health-public-device")
             .send()
             .await
             .unwrap();
@@ -80,6 +104,8 @@ async fn health_v2_public_scope_filters_summary_lists_and_details_before_project
         .get(format!(
             "{gateway_url}/api/public/health/v2/summary?kind=api_format"
         ))
+        .bearer_auth(&access_token)
+        .header("x-client-device-id", "health-public-device")
         .send()
         .await
         .unwrap();
@@ -177,6 +203,14 @@ async fn health_v2_authenticated_user_access_does_not_publish_anonymous_status()
         .await
         .unwrap();
     assert_eq!(public.status(), StatusCode::NOT_FOUND);
+    let authenticated_public = client
+        .get(format!("{gateway_url}/api/public/health/v2/objects"))
+        .bearer_auth(&access_token)
+        .header("x-client-device-id", "health-user-device")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(authenticated_public.status(), StatusCode::NOT_FOUND);
     gateway_handle.abort();
 }
 
@@ -263,16 +297,38 @@ async fn gateway_handles_public_health_api_formats_without_proxying_upstream() {
         ),
     ]));
 
+    let now = Utc::now();
+    let user = sample_auth_user(now);
+    let access_token = build_test_auth_token(
+        "access",
+        serde_json::Map::from_iter([
+            ("user_id".into(), json!(user.id)),
+            ("role".into(), json!(user.role)),
+            (
+                "created_at".into(),
+                json!(user.created_at.map(|value| value.to_rfc3339())),
+            ),
+            ("session_id".into(), json!("health-api-formats-session")),
+        ]),
+        now + chrono::Duration::hours(1),
+    );
+    let data = crate::data::GatewayDataState::with_provider_catalog_and_request_candidate_reader_for_tests(
+        provider_catalog_repository,
+        request_candidate_repository,
+    )
+    .with_user_reader(Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![user])));
     let (_upstream_url, upstream_handle) = start_server(upstream).await;
     let gateway = build_router_with_state(
         AppState::new()
             .expect("gateway should build")
-            .with_data_state_for_tests(
-                crate::data::GatewayDataState::with_provider_catalog_and_request_candidate_reader_for_tests(
-                    provider_catalog_repository,
-                    request_candidate_repository,
-                ),
-            ),
+            .with_data_state_for_tests(data)
+            .with_auth_session_for_tests(sample_auth_session(
+                "user-auth-1",
+                "health-api-formats-session",
+                "health-api-formats-device",
+                "refresh-token-placeholder",
+                now,
+            )),
     );
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
@@ -280,6 +336,8 @@ async fn gateway_handles_public_health_api_formats_without_proxying_upstream() {
         .get(format!(
             "{gateway_url}/api/public/health/api-formats?lookback_hours=6&per_format_limit=10"
         ))
+        .bearer_auth(&access_token)
+        .header("x-client-device-id", "health-api-formats-device")
         .send()
         .await
         .expect("request should succeed");

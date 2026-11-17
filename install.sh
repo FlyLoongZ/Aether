@@ -1249,7 +1249,7 @@ Docker Compose service:
   ${compose_cmd} -f docker-compose.yml logs -f app
 
 Health checks:
-  curl -fsS http://127.0.0.1:${gateway_port}/_gateway/health
+  curl -fsS http://127.0.0.1:${gateway_port}/health
   curl -fsS http://127.0.0.1:${gateway_port}/readyz
 
 Install directory:
@@ -2514,7 +2514,7 @@ Gateway service:
   sudo journalctl -u ${SERVICE_NAME} -f
 
 Health checks:
-  curl -fsS http://127.0.0.1:${gateway_port}/_gateway/health
+  curl -fsS http://127.0.0.1:${gateway_port}/health
   curl -fsS http://127.0.0.1:${gateway_port}/readyz
 
 Install directory:
@@ -2726,7 +2726,7 @@ Logs:
   tail -f ${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.out.log ${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.err.log
 
 Health checks:
-  curl -fsS http://127.0.0.1:${gateway_port}/_gateway/health
+  curl -fsS http://127.0.0.1:${gateway_port}/health
   curl -fsS http://127.0.0.1:${gateway_port}/readyz
 
 Install directory:

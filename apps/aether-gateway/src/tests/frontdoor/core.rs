@@ -2,8 +2,8 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::tests::{
-    any, attach_static_frontend, build_router, start_server, Arc, Body, Mutex, Request, Router,
-    StatusCode, READYZ_PATH,
+    any, attach_static_frontend, build_router, json, start_server, Arc, Body, Mutex, Request,
+    Router, StatusCode, READYZ_PATH,
 };
 
 #[tokio::test]
@@ -70,8 +70,7 @@ async fn gateway_handles_public_health_without_proxying_upstream() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["status"], "healthy");
-    assert_eq!(payload["database_pool"]["source"], "rust_frontdoor");
+    assert_eq!(payload, json!({ "status": "healthy" }));
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();
@@ -105,10 +104,7 @@ async fn gateway_handles_public_service_health_without_proxying_upstream() {
 
     assert_eq!(response.status(), StatusCode::OK);
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["status"], "ok");
-    assert!(payload["stats"].is_object());
-    assert!(payload["dependencies"]["database"]["status"].is_string());
-    assert!(payload["dependencies"]["redis"]["status"].is_string());
+    assert_eq!(payload, json!({ "status": "ok" }));
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();

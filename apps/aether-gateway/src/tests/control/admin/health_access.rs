@@ -61,6 +61,8 @@ async fn health_v2_publication_requires_admin_and_public_projection_keeps_empty_
     ));
     let disabled = client
         .get(format!("{gateway_url}/api/public/health/v2/objects"))
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .unwrap();
@@ -86,6 +88,8 @@ async fn health_v2_publication_requires_admin_and_public_projection_keeps_empty_
         .get(format!(
             "{gateway_url}/api/public/health/v2/objects?kind=api_format&window=1h"
         ))
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .unwrap();
@@ -113,6 +117,8 @@ async fn health_v2_publication_requires_admin_and_public_projection_keeps_empty_
         .get(format!(
             "{gateway_url}/api/public/health/v2/objects/internal-format"
         ))
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .unwrap();
@@ -121,6 +127,8 @@ async fn health_v2_publication_requires_admin_and_public_projection_keeps_empty_
         .get(format!(
             "{gateway_url}/api/public/health/v2/objects?kind=provider"
         ))
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .send()
         .await
         .unwrap();

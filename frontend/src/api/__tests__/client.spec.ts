@@ -208,12 +208,12 @@ describe('apiClient auth state change event', () => {
       await apiClient.get('/api/users/me/health/v2/summary')
       await apiClient.get('/api/admin/endpoints/health/v2/objects')
       await apiClient.get('/api/public/health/v2/summary')
-      await apiClient.get('/_gateway/health')
+      await apiClient.get('/health')
 
       expect(requests.map(request => request.headers.Authorization)).toEqual([
         'Bearer health-access-token',
         'Bearer health-access-token',
-        undefined,
+        'Bearer health-access-token',
         undefined,
       ])
       expect(requests[0].headers['X-Client-Device-Id']).toBeTruthy()
@@ -262,7 +262,7 @@ describe('apiClient auth state change event', () => {
       expect(requests.map(request => request.headers.Authorization)).toEqual([
         'Bearer publication-access-token', 'Bearer publication-access-token',
         'Bearer publication-access-token', 'Bearer publication-access-token',
-        'Bearer publication-access-token', undefined,
+        'Bearer publication-access-token', 'Bearer publication-access-token',
       ])
     } finally {
       rawClient.defaults.adapter = previousAdapter

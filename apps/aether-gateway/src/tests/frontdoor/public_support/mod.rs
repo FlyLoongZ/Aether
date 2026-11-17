@@ -1,11 +1,9 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::{
-    hash_api_key, sample_endpoint, sample_key, sample_models_candidate_row, sample_provider,
-    sample_public_catalog_model, sample_public_global_model,
-    sample_public_global_model_with_capabilities, sample_request_candidate,
-    InMemoryAnnouncementReadRepository, InMemoryGlobalModelReadRepository,
-    InMemoryMinimalCandidateSelectionReadRepository, InMemoryProviderCatalogReadRepository,
+    hash_api_key, sample_endpoint, sample_key, sample_provider, sample_public_catalog_model,
+    sample_public_global_model, sample_request_candidate, InMemoryAnnouncementReadRepository,
+    InMemoryGlobalModelReadRepository, InMemoryProviderCatalogReadRepository,
     InMemoryRequestCandidateRepository, RequestCandidateStatus, StoredAnnouncement,
     StoredPublicGlobalModel,
 };
