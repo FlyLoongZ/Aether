@@ -151,6 +151,38 @@
           </div>
         </div>
 
+        <!-- 上游 HTTP 协议 -->
+        <div
+          class="space-y-1.5 rounded-lg border p-3"
+          data-testid="upstream-http-mode-setting"
+        >
+          <div class="flex items-center gap-1">
+            <Label for="upstream-http-mode">
+              {{ t('ui.upstreamHttpProtocol') }}
+            </Label>
+            <HelpHint
+              :label="t('ui.upstreamHttpProtocol')"
+              :text="t('ui.upstreamHttpProtocolHint')"
+            />
+          </div>
+          <Select v-model="form.upstream_http_mode">
+            <SelectTrigger id="upstream-http-mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">
+                {{ t('ui.upstreamHttpProtocolAuto') }}
+              </SelectItem>
+              <SelectItem value="http1_only">
+                {{ t('ui.upstreamHttpProtocolHttp1') }}
+              </SelectItem>
+              <SelectItem value="h2c_prior_knowledge">
+                {{ t('ui.upstreamHttpProtocolH2c') }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <!-- 提供商内转移限制 -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="min-w-0 space-y-1.5">
@@ -354,6 +386,23 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+/**
+ * 上游 HTTP 协议，落点是 `config.fingerprint.transport_profile.http_mode`：
+ * - auto：https 靠 TLS ALPN 协商 h2，http 上游保持 HTTP/1.1
+ * - http1_only：强制 HTTP/1.1
+ * - h2c_prior_knowledge：明文假定 HTTP/2，只对确定支持 h2c 的 http 上游有意义
+ */
+type UpstreamHttpMode = 'auto' | 'http1_only' | 'h2c_prior_knowledge'
+
+const UPSTREAM_HTTP_MODES: UpstreamHttpMode[] = ['auto', 'http1_only', 'h2c_prior_knowledge']
+
+function readUpstreamHttpMode(provider?: ProviderWithEndpointsSummary | null): UpstreamHttpMode {
+  const mode = provider?.upstream_http_mode ?? ''
+  return UPSTREAM_HTTP_MODES.includes(mode as UpstreamHttpMode)
+    ? (mode as UpstreamHttpMode)
+    : 'auto'
+}
+
 const { success, error: showError } = useToast()
 
 const loading = ref(false)
@@ -402,6 +451,8 @@ const form = ref({
   kiro_simulated_cache_enabled: false,
   // Responses WebSocket 配置
   responses_websocket_enabled: false,
+  // 上游 HTTP 协议
+  upstream_http_mode: 'auto' as UpstreamHttpMode,
 })
 
 // 重置表单
@@ -430,6 +481,7 @@ function resetForm() {
     kiro_simulated_cache_enabled: false,
     // Responses WebSocket 配置
     responses_websocket_enabled: false,
+    upstream_http_mode: 'auto',
   }
 }
 
@@ -462,6 +514,7 @@ function loadProviderData() {
     kiro_simulated_cache_enabled: props.provider.kiro_simulated_cache_enabled ?? false,
     // Responses WebSocket 配置
     responses_websocket_enabled: props.provider.responses_websocket_enabled ?? false,
+    upstream_http_mode: readUpstreamHttpMode(props.provider),
   }
 }
 
@@ -499,6 +552,7 @@ const handleSubmit = async () => {
       description: form.value.description || undefined,
       website: form.value.website || undefined,
       responses_websocket_enabled: form.value.responses_websocket_enabled,
+      upstream_http_mode: form.value.upstream_http_mode,
       is_active: form.value.is_active,
       // 请求配置
       max_retries: form.value.max_retries ?? undefined,

@@ -135,6 +135,18 @@ pub(crate) fn build_admin_provider_summary_value(
         .and_then(|cfg| cfg.get("architecture_id"))
         .and_then(serde_json::Value::as_str)
         .map(ToOwned::to_owned);
+    // 上游 HTTP 协议来自 config.fingerprint.transport_profile.http_mode。
+    // 只回显两个显式取值，其余一律 auto，避免把历史遗留的非法值带到前端。
+    let upstream_http_mode = config
+        .and_then(|cfg| cfg.get("fingerprint"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|fingerprint| fingerprint.get("transport_profile"))
+        .and_then(serde_json::Value::as_object)
+        .and_then(|profile| profile.get("http_mode"))
+        .and_then(serde_json::Value::as_str)
+        .map(|mode| mode.trim().to_ascii_lowercase())
+        .filter(|mode| matches!(mode.as_str(), "http1_only" | "h2c_prior_knowledge"))
+        .unwrap_or_else(|| "auto".to_string());
     let kiro_simulated_cache_enabled = config
         .and_then(|cfg| cfg.get("kiro"))
         .and_then(serde_json::Value::as_object)
@@ -209,6 +221,7 @@ pub(crate) fn build_admin_provider_summary_value(
         "ops_configured": ops_configured,
         "ops_architecture_id": ops_architecture_id,
         "kiro_simulated_cache_enabled": kiro_simulated_cache_enabled,
+        "upstream_http_mode": upstream_http_mode,
         "codex_cyber_flag_passthrough_enabled": codex_cyber_flag_passthrough_enabled(&provider.provider_type, provider.config.as_ref()),
         "codex_fingerprint_convergence_enabled": crate::provider_transport::codex_fingerprint_convergence_enabled(
             &provider.provider_type,
