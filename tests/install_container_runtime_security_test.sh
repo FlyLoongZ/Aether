@@ -29,7 +29,6 @@ assert_generated_key_output() {
 APP_DOCKERFILE="${REPO_ROOT}/Dockerfile.app"
 COMPOSE_FILES=(
     "${REPO_ROOT}/docker-compose.yml"
-    "${REPO_ROOT}/docker-compose.single-node.yml"
 )
 
 assert_line "${APP_DOCKERFILE}" "USER 0:0"

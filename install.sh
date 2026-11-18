@@ -567,13 +567,6 @@ select_mode() {
             MODE="single-node"
             return
             ;;
-        cluster|multi|multi-node)
-            if ui_is_zh; then
-                die "集群部署模式暂未开放；请先选择 compose、compose-single-node 或 single-node"
-            else
-                die "cluster deployment mode is temporarily disabled; choose compose, compose-single-node, or single-node"
-            fi
-            ;;
         auto|"")
             ;;
         *)
@@ -1683,53 +1676,6 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}
 EOF
 }
 
-generate_cluster_env() {
-    local output="$1"
-    local jwt_key encryption_key role
-    prompt_admin_password
-    jwt_key="$(urlsafe_rand 32)"
-    encryption_key="$(urlsafe_rand 32)"
-    role="${AETHER_GATEWAY_NODE_ROLE:-frontdoor}"
-    validate_dotenv_scalar "ADMIN_PASSWORD" "${ADMIN_PASSWORD}"
-    validate_dotenv_scalar "ADMIN_EMAIL" "${ADMIN_EMAIL:-admin@example.local}"
-    validate_dotenv_scalar "ADMIN_USERNAME" "${ADMIN_USERNAME:-admin}"
-    validate_dotenv_scalar "DATABASE_URL" "${DATABASE_URL:-}"
-    validate_dotenv_scalar "REDIS_URL" "${REDIS_URL:-}"
-
-    cat > "${output}" <<EOF
-ENVIRONMENT=production
-TZ=Asia/Shanghai
-RUST_LOG=aether_gateway=info
-AETHER_LOG_DESTINATION=both
-AETHER_LOG_FORMAT=pretty
-AETHER_LOG_DIR=${INSTALL_ROOT}/logs
-AETHER_LOG_ROTATION=daily
-AETHER_LOG_RETENTION_DAYS=7
-AETHER_LOG_MAX_FILES=30
-
-APP_PORT=${APP_PORT:-8084}
-AETHER_BASE_DIR=${INSTALL_ROOT}
-AETHER_UPDATE_STRATEGY=manual
-AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY=multi-node
-AETHER_GATEWAY_NODE_ROLE=${role}
-AETHER_GATEWAY_STATIC_DIR=${INSTALL_ROOT}/current/frontend
-AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE=rust-authoritative
-AETHER_GATEWAY_DATABASE_MODE=auto
-AETHER_RUNTIME_BACKEND=redis
-API_KEY_PREFIX=sk
-
-DATABASE_URL=${DATABASE_URL:-}
-REDIS_URL=${REDIS_URL:-}
-
-JWT_SECRET_KEY=${jwt_key}
-ENCRYPTION_KEY=${encryption_key}
-
-ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.local}
-ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-ADMIN_PASSWORD=${ADMIN_PASSWORD}
-EOF
-}
-
 compose_image() {
     if [[ -n "${APP_IMAGE}" ]]; then
         echo "${APP_IMAGE}"
@@ -1974,24 +1920,9 @@ ensure_env_matches_requested_mode() {
     topology="$(env_file_value "${file}" "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY")"
     topology="${topology:-single-node}"
 
-    if [[ "${mode}" == "cluster" ]]; then
-        [[ "${topology}" == "multi-node" ]] || die "existing env ${file} is ${topology}; set AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY=multi-node or use --mode single-node"
-        cluster_env_has_required_backends "${file}" || die "existing multi-node env ${file} must define DATABASE_URL and REDIS_URL"
-    elif [[ "${mode}" == "single-node" && "${topology}" == "multi-node" ]]; then
-        die "existing env ${file} is multi-node; cluster mode is temporarily disabled, edit the env file"
+    if [[ "${mode}" == "single-node" && "${topology}" == "multi-node" ]]; then
+        die "existing env ${file} is multi-node; cluster mode is not available in this installer"
     fi
-}
-
-cluster_env_has_required_backends() {
-    local file="$1"
-    local database_url redis_url
-    database_url="$(env_file_value "${file}" "AETHER_DATABASE_URL")"
-    [[ -n "${database_url}" ]] || database_url="$(env_file_value "${file}" "DATABASE_URL")"
-    [[ -n "${database_url}" ]] || database_url="$(env_file_value "${file}" "AETHER_GATEWAY_DATA_POSTGRES_URL")"
-    redis_url="$(env_file_value "${file}" "REDIS_URL")"
-    [[ -n "${redis_url}" ]] || redis_url="$(env_file_value "${file}" "AETHER_GATEWAY_DATA_REDIS_URL")"
-
-    [[ -n "${database_url}" && -n "${redis_url}" ]]
 }
 
 validate_env_file() {
@@ -2011,8 +1942,6 @@ validate_env_file() {
     local redis_url=""
     local jwt_secret_key=""
     local encryption_key=""
-    local video_task_store_path=""
-    local body_file_store_path=""
     local static_dir=""
 
     [[ -f "${env_file}" ]] || die "env file not found: ${env_file}"
@@ -2067,12 +1996,6 @@ validate_env_file() {
             ENCRYPTION_KEY|AETHER_GATEWAY_DATA_ENCRYPTION_KEY)
                 [[ -n "${value}" ]] && encryption_key="${value}"
                 ;;
-            AETHER_GATEWAY_VIDEO_TASK_STORE_PATH)
-                video_task_store_path="${value}"
-                ;;
-            AETHER_GATEWAY_BODY_FILE_STORE_PATH)
-                body_file_store_path="${value}"
-                ;;
             AETHER_GATEWAY_STATIC_DIR)
                 static_dir="${value}"
                 ;;
@@ -2080,18 +2003,18 @@ validate_env_file() {
     done < "${env_file}"
 
     case "${topology}" in
-        single-node|multi-node)
+        single-node)
             ;;
         *)
-            die "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY must be single-node or multi-node"
+            die "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY must be single-node; cluster mode is not available in this installer"
             ;;
     esac
 
     case "${node_role}" in
-        all|frontdoor|background)
+        all)
             ;;
         *)
-            die "AETHER_GATEWAY_NODE_ROLE must be all, frontdoor, or background"
+            die "AETHER_GATEWAY_NODE_ROLE must be all; split roles are not enabled by this installer"
             ;;
     esac
 
@@ -2116,20 +2039,8 @@ validate_env_file() {
         *) die "a PostgreSQL DATABASE_URL is required" ;;
     esac
 
-    if [[ "${topology}" == "multi-node" ]]; then
-        [[ "${node_role}" != "all" ]] || die "multi-node deployment requires AETHER_GATEWAY_NODE_ROLE=frontdoor or background"
-        [[ -n "${database_url}" ]] || die "multi-node deployment requires AETHER_DATABASE_URL, DATABASE_URL, or AETHER_GATEWAY_DATA_POSTGRES_URL"
-        [[ -n "${redis_url}" ]] || die "multi-node deployment requires REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL"
-        [[ "${runtime_backend}" != "memory" ]] || die "multi-node deployment must not use AETHER_RUNTIME_BACKEND=memory"
-        [[ -z "${video_task_store_path}" ]] || die "multi-node deployment must not set AETHER_GATEWAY_VIDEO_TASK_STORE_PATH"
-        [[ -z "${body_file_store_path}" ]] || die "multi-node deployment must not set AETHER_GATEWAY_BODY_FILE_STORE_PATH"
-    else
-        if [[ "${node_role}" != "all" ]]; then
-            warn "single-node deployment usually uses AETHER_GATEWAY_NODE_ROLE=all; split roles are not enabled by this installer"
-        fi
-        if [[ "${runtime_backend}" == "redis" && -z "${redis_url}" ]]; then
-            die "AETHER_RUNTIME_BACKEND=redis requires REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL"
-        fi
+    if [[ "${runtime_backend}" == "redis" && -z "${redis_url}" ]]; then
+        die "AETHER_RUNTIME_BACKEND=redis requires REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL"
     fi
 
     if is_placeholder_value "${db_password}"; then
@@ -2164,29 +2075,8 @@ resolve_service_env_source() {
         TMP_ROOT="$(dirname "${GENERATED_ENV}")"
     fi
 
-    if [[ "${mode}" == "cluster" ]]; then
-        info "generating multi-node env file"
-        generate_cluster_env "${GENERATED_ENV}"
-        if ! cluster_env_has_required_backends "${GENERATED_ENV}"; then
-            install_config_dir
-            install_env_target_from "${GENERATED_ENV}"
-            cat <<EOF
-
-Multi-node env scaffolded:
-  ${ENV_TARGET}
-
-Fill DATABASE_URL and REDIS_URL, then rerun:
-  sudo AETHER_INSTALL_MODE=cluster bash install.sh
-
-Or provide them non-interactively:
-  curl -fsSL https://raw.githubusercontent.com/${REPO}/${SOURCE_REF}/install.sh | sudo DATABASE_URL=postgresql://... REDIS_URL=redis://... bash -s -- --mode cluster
-EOF
-            exit 1
-        fi
-    else
-        info "generating first-install single-node env file"
-        generate_first_install_env "${GENERATED_ENV}"
-    fi
+    info "generating first-install single-node env file"
+    generate_first_install_env "${GENERATED_ENV}"
     echo "${GENERATED_ENV}"
 }
 
@@ -2240,7 +2130,7 @@ install_compose_single_node_mode() {
     ensure_directory "${COMPOSE_DIR}"
     ensure_directory "${COMPOSE_DIR}/logs"
 
-    install_project_file "docker-compose.single-node.yml" "${COMPOSE_DIR}/docker-compose.yml" "0644"
+    install_project_file "docker-compose.yml" "${COMPOSE_DIR}/docker-compose.yml" "0644"
     install_project_file ".env.example" "${COMPOSE_DIR}/.env.example" "0644"
     install_project_file "update.sh" "${COMPOSE_DIR}/update.sh" "0755"
     install_generate_keys_script "${COMPOSE_DIR}/generate_keys.sh"

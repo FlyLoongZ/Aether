@@ -13,7 +13,6 @@ with tempfile.TemporaryDirectory(prefix="aether-compose-databases-") as director
     for filename in (
         "docker-compose.yml",
         "docker-compose.local.yml",
-        "docker-compose.single-node.yml",
         "docker-compose.release-local.yml",
     ):
         shutil.copyfile(repo_root / filename, fixture / filename)
@@ -37,7 +36,6 @@ with tempfile.TemporaryDirectory(prefix="aether-compose-databases-") as director
     standard_compose_files = (
         ["docker-compose.yml"],
         ["docker-compose.yml", "docker-compose.local.yml"],
-        ["docker-compose.single-node.yml"],
     )
     env_file.write_text(database_environment)
     for files in standard_compose_files:
