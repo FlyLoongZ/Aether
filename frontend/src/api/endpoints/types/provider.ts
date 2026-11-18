@@ -845,6 +845,8 @@ export interface ProviderWithEndpointsSummary {
   ops_configured: boolean  // 是否配置了扩展操作（余额监控等）
   ops_architecture_id?: string  // 扩展操作使用的架构 ID（如 cubence, anyrouter）
   codex_fingerprint_convergence_enabled?: boolean
+  /** 上游 HTTP 协议：auto / http1_only / h2c_prior_knowledge（来自 config.fingerprint.transport_profile） */
+  upstream_http_mode?: string
   kiro_simulated_cache_enabled?: boolean
   responses_websocket_enabled?: boolean
   ops_quota_alert_enabled?: boolean

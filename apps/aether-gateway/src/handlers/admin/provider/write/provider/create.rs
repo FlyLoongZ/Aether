@@ -175,6 +175,13 @@ pub(crate) async fn build_admin_create_provider_record(
         }
         config_map.insert("claude_code_advanced".to_string(), value);
     }
+    if let Some(mode) = payload.upstream_http_mode.as_deref() {
+        crate::handlers::admin::provider::write::normalize::apply_upstream_http_mode(
+            &mut config_map,
+            mode,
+        )?;
+    }
+
     if config_map.contains_key("chat_pii_redaction") {
         let value = normalize_chat_pii_redaction_config(config_map.remove("chat_pii_redaction"))?;
         if let Some(value) = value {

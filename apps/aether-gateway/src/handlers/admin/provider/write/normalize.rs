@@ -300,13 +300,83 @@ fn normalize_json_like_object(
     }
 }
 
+/// 把 `upstream_http_mode` 落到 `config.fingerprint.transport_profile`。
+///
+/// `auto` 表示"不指定"：只删掉 `http_mode`，交给传输层默认协商（https 走
+/// ALPN，http 走 HTTP/1.1）。其余取值保留 profile 里已有的其它键（backend /
+/// pool_scope / header_fingerprint），只改 `http_mode` 与缺失时的 `profile_id`。
+pub(crate) fn apply_upstream_http_mode(
+    config: &mut serde_json::Map<String, serde_json::Value>,
+    mode: &str,
+) -> Result<(), String> {
+    let normalized = mode.trim().to_ascii_lowercase();
+    let mode = match normalized.as_str() {
+        "" | "auto" => None,
+        "http1_only" | "h2c_prior_knowledge" => Some(normalized),
+        other => {
+            return Err(format!(
+                "upstream_http_mode 取值无效: {other}（可选 auto/http1_only/h2c_prior_knowledge）"
+            ))
+        }
+    };
+
+    let mut fingerprint = match config.remove("fingerprint") {
+        Some(value) => value
+            .as_object()
+            .cloned()
+            .ok_or_else(|| "config.fingerprint 必须是 JSON 对象".to_string())?,
+        None => serde_json::Map::new(),
+    };
+    let mut profile = match fingerprint.remove("transport_profile") {
+        Some(value) => value
+            .as_object()
+            .cloned()
+            .ok_or_else(|| "config.fingerprint.transport_profile 必须是 JSON 对象".to_string())?,
+        None => serde_json::Map::new(),
+    };
+
+    match mode {
+        None => {
+            profile.remove("http_mode");
+        }
+        Some(mode) => {
+            let profile_id = profile
+                .get("profile_id")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| format!("ui-{mode}"));
+            profile.insert(
+                "profile_id".to_string(),
+                serde_json::Value::String(profile_id),
+            );
+            profile.insert("http_mode".to_string(), serde_json::Value::String(mode));
+        }
+    }
+
+    if !profile.is_empty() {
+        fingerprint.insert(
+            "transport_profile".to_string(),
+            serde_json::Value::Object(profile),
+        );
+    }
+    if !fingerprint.is_empty() {
+        config.insert(
+            "fingerprint".to_string(),
+            serde_json::Value::Object(fingerprint),
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_allow_auth_channel_mismatch_formats, normalize_api_format_json_object_keys,
-        normalize_api_format_list, normalize_auth_type, normalize_auth_type_by_format,
-        normalize_chat_pii_redaction_config, normalize_pool_advanced_config,
-        normalize_provider_type_input, normalize_rate_multipliers,
+        apply_upstream_http_mode, normalize_allow_auth_channel_mismatch_formats,
+        normalize_api_format_json_object_keys, normalize_api_format_list, normalize_auth_type,
+        normalize_auth_type_by_format, normalize_chat_pii_redaction_config,
+        normalize_pool_advanced_config, normalize_provider_type_input, normalize_rate_multipliers,
         reconcile_allow_auth_channel_mismatch_formats, remove_responses_websocket_enabled,
         set_responses_websocket_enabled, validate_responses_websocket_config,
         validate_vertex_api_formats,
@@ -540,5 +610,78 @@ mod tests {
             ],
         )
         .is_ok());
+    }
+
+    #[test]
+    fn upstream_http_mode_writes_the_transport_profile_and_keeps_siblings() {
+        let mut config = serde_json::json!({
+            "fingerprint": {
+                "preset": "codex",
+                "transport_profile": {
+                    "profile_id": "existing",
+                    "backend": "reqwest_rustls"
+                }
+            }
+        })
+        .as_object()
+        .cloned()
+        .unwrap();
+
+        apply_upstream_http_mode(&mut config, "h2c_prior_knowledge").unwrap();
+
+        let profile = &config["fingerprint"]["transport_profile"];
+        assert_eq!(profile["http_mode"], "h2c_prior_knowledge");
+        assert_eq!(profile["profile_id"], "existing");
+        assert_eq!(profile["backend"], "reqwest_rustls");
+        assert_eq!(config["fingerprint"]["preset"], "codex");
+    }
+
+    #[test]
+    fn upstream_http_mode_auto_removes_the_profile_and_empty_parents() {
+        let mut config = serde_json::json!({
+            "fingerprint": { "transport_profile": { "http_mode": "http1_only" } }
+        })
+        .as_object()
+        .cloned()
+        .unwrap();
+
+        apply_upstream_http_mode(&mut config, "auto").unwrap();
+
+        assert!(config.get("fingerprint").is_none());
+        assert!(config.is_empty());
+    }
+
+    #[test]
+    fn upstream_http_mode_auto_keeps_the_rest_of_a_hand_written_profile() {
+        let mut config = serde_json::json!({
+            "fingerprint": {
+                "transport_profile": {
+                    "profile_id": "hand-written",
+                    "backend": "reqwest_rustls",
+                    "pool_scope": "key",
+                    "http_mode": "h2c_prior_knowledge"
+                }
+            }
+        })
+        .as_object()
+        .cloned()
+        .unwrap();
+
+        apply_upstream_http_mode(&mut config, "auto").unwrap();
+
+        let profile = &config["fingerprint"]["transport_profile"];
+        assert!(profile.get("http_mode").is_none());
+        assert_eq!(profile["profile_id"], "hand-written");
+        assert_eq!(profile["backend"], "reqwest_rustls");
+        assert_eq!(profile["pool_scope"], "key");
+    }
+
+    #[test]
+    fn upstream_http_mode_rejects_an_unknown_value() {
+        let mut config = serde_json::Map::new();
+
+        let error = apply_upstream_http_mode(&mut config, "http2").unwrap_err();
+
+        assert!(error.contains("upstream_http_mode"));
     }
 }

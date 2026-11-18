@@ -371,6 +371,16 @@ pub(crate) async fn build_admin_update_provider_record(
             .ok_or_else(|| "responses_websocket_enabled 必须是布尔值".to_string())?;
         set_responses_websocket_enabled(&mut config_map, enabled)?;
     }
+    if fields.contains("upstream_http_mode") {
+        let Some(mode) = payload.upstream_http_mode.as_deref() else {
+            return Err("upstream_http_mode 必须是字符串".to_string());
+        };
+        crate::handlers::admin::provider::write::normalize::apply_upstream_http_mode(
+            &mut config_map,
+            mode,
+        )?;
+    }
+
     validate_responses_websocket_config(&config_map)?;
 
     updated.config = (!config_map.is_empty()).then_some(serde_json::Value::Object(config_map));
