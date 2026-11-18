@@ -3,11 +3,11 @@ use crate::handlers::shared::{
     system_config_bool as system_config_bool_with_default,
 };
 use crate::{AppState, GatewayError};
-use aether_data::repository::oauth_providers::{
+use aether_data_contracts::repository::oauth_providers::{
     validate_oauth_frontend_callback_url, validate_oauth_provider_endpoint_config,
     validate_oauth_redirect_uri, StoredOAuthProviderConfig,
 };
-use aether_data::repository::users::{
+use aether_data_contracts::repository::users::{
     BindUserOAuthLinkOutcome, BindUserOAuthLinkSessionExpectation, DeleteUserOAuthLinkOutcome,
     ResolveOAuthLinkedUserOutcome, StoredUserAuthRecord, StoredUserOAuthLinkSummary,
 };

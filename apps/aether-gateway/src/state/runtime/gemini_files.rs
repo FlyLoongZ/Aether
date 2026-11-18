@@ -3,9 +3,9 @@ use crate::{AppState, GatewayError};
 impl AppState {
     pub(crate) async fn upsert_gemini_file_mapping_if_owner_matches(
         &self,
-        record: aether_data::repository::gemini_file_mappings::UpsertGeminiFileMappingRecord,
+        record: aether_data_contracts::repository::gemini_file_mappings::UpsertGeminiFileMappingRecord,
     ) -> Result<
-        Option<aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
+        Option<aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping>,
         GatewayError,
     > {
         self.data
@@ -16,9 +16,9 @@ impl AppState {
 
     pub(crate) async fn list_gemini_file_mappings(
         &self,
-        query: &aether_data::repository::gemini_file_mappings::GeminiFileMappingListQuery,
+        query: &aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingListQuery,
     ) -> Result<
-        aether_data::repository::gemini_file_mappings::StoredGeminiFileMappingListPage,
+        aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMappingListPage,
         GatewayError,
     > {
         self.data
@@ -33,7 +33,7 @@ impl AppState {
         user_id: &str,
         now_unix_secs: u64,
     ) -> Result<
-        Option<aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
+        Option<aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping>,
         GatewayError,
     > {
         self.data
@@ -49,7 +49,7 @@ impl AppState {
         user_id: &str,
         now_unix_secs: u64,
     ) -> Result<
-        Option<aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
+        Option<aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping>,
         GatewayError,
     > {
         self.data
@@ -61,7 +61,7 @@ impl AppState {
     pub(crate) async fn summarize_gemini_file_mappings(
         &self,
         now_unix_secs: u64,
-    ) -> Result<aether_data::repository::gemini_file_mappings::GeminiFileMappingStats, GatewayError>
+    ) -> Result<aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingStats, GatewayError>
     {
         self.data
             .summarize_gemini_file_mappings(now_unix_secs)
@@ -85,7 +85,7 @@ impl AppState {
         &self,
         mapping_id: &str,
     ) -> Result<
-        Option<aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
+        Option<aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping>,
         GatewayError,
     > {
         self.data

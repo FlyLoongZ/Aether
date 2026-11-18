@@ -1,12 +1,12 @@
 use crate::{AdminWalletPaymentOrderRecord, AdminWalletTransactionRecord, AppState, GatewayError};
-use aether_data::repository::wallet::{
+use aether_data_contracts::repository::wallet::{
     AdjustWalletBalanceInBatchInput, AdminUserWalletBalanceBatchUserOutcome,
     PrepareAdminUserWalletBalanceBatchInput, PrepareAdminUserWalletBalanceBatchOutcome,
 };
 
 use super::admin_wallet_build_order_no;
 #[cfg(test)]
-pub(crate) use aether_data::repository::wallet::StoredAdminUserWalletBalanceBatch;
+pub(crate) use aether_data_contracts::repository::wallet::StoredAdminUserWalletBalanceBatch;
 #[cfg(test)]
 pub(crate) use std::collections::BTreeMap;
 
@@ -205,7 +205,7 @@ impl AppState {
         clamp_deduction_to_available_balance: bool,
     ) -> Result<
         Option<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             Option<AdminWalletTransactionRecord>,
         )>,
         GatewayError,
@@ -306,7 +306,7 @@ impl AppState {
         }
 
         Ok(self
-            .adjust_wallet_balance(aether_data::repository::wallet::AdjustWalletBalanceInput {
+            .adjust_wallet_balance(aether_data_contracts::repository::wallet::AdjustWalletBalanceInput {
                 wallet_id: wallet_id.to_string(),
                 amount_usd,
                 balance_type: balance_type.to_string(),
@@ -333,7 +333,7 @@ impl AppState {
         description: Option<&str>,
     ) -> Result<
         Option<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             AdminWalletPaymentOrderRecord,
         )>,
         GatewayError,
@@ -383,7 +383,7 @@ impl AppState {
         let order_no = admin_wallet_build_order_no(now);
         Ok(self
             .create_manual_wallet_recharge(
-                aether_data::repository::wallet::CreateManualWalletRechargeInput {
+                aether_data_contracts::repository::wallet::CreateManualWalletRechargeInput {
                     wallet_id: wallet_id.to_string(),
                     amount_usd,
                     payment_method: payment_method.to_string(),
@@ -398,7 +398,7 @@ impl AppState {
 }
 
 fn stored_wallet_transaction_to_gateway(
-    transaction: aether_data::repository::wallet::StoredAdminWalletTransaction,
+    transaction: aether_data_contracts::repository::wallet::StoredAdminWalletTransaction,
 ) -> AdminWalletTransactionRecord {
     AdminWalletTransactionRecord {
         id: transaction.id,
@@ -421,7 +421,7 @@ fn stored_wallet_transaction_to_gateway(
 }
 
 fn stored_admin_payment_order_to_gateway(
-    order: aether_data::repository::wallet::StoredAdminPaymentOrder,
+    order: aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
 ) -> AdminWalletPaymentOrderRecord {
     AdminWalletPaymentOrderRecord {
         id: order.id,

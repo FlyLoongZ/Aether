@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
-use aether_data::repository::proxy_nodes::{
+use aether_data_contracts::repository::proxy_nodes::{
     ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation, ProxyNodeTrafficMutation,
     StoredProxyNode,
 };

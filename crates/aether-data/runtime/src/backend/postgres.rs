@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::driver::postgres::{
+use aether_data_postgres::{
     PostgresLeaseRunner, PostgresLeaseRunnerConfig, PostgresPool, PostgresPoolConfig,
     PostgresPoolFactory, PostgresTransactionRunner,
 };
@@ -272,7 +272,7 @@ impl PostgresBackend {
 #[cfg(test)]
 mod tests {
     use super::PostgresBackend;
-    use crate::driver::postgres::{PostgresLeaseRunnerConfig, PostgresPoolConfig};
+    use aether_data_postgres::{PostgresLeaseRunnerConfig, PostgresPoolConfig};
 
     #[tokio::test]
     async fn maintenance_and_aggregation_futures_are_send() {

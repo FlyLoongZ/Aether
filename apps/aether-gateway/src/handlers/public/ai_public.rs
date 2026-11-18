@@ -364,7 +364,7 @@ async fn build_local_gemini_files_list_response(
         .unwrap_or(0);
     let mappings = match state
         .list_gemini_file_mappings(
-            &aether_data::repository::gemini_file_mappings::GeminiFileMappingListQuery {
+            &aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingListQuery {
                 user_id: Some(user_id.to_string()),
                 include_expired: false,
                 search: None,

@@ -7,9 +7,6 @@ repository.workspace = true
 description = "Shared execution, streaming, and usage contracts for Aether services"
 
 [dependencies]
-base64.workspace = true
-hmac.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2.workspace = true
 url.workspace = true

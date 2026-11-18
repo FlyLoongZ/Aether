@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::handlers::shared::{
     payment_gateway_allow_user_refund, payment_gateway_provider_for_payment_method,
 };
-use aether_data::repository::wallet::{
+use aether_data_contracts::repository::wallet::{
     canonicalize_wallet_refund_fields, stored_timestamp_unix_secs,
 };
 
@@ -127,7 +127,7 @@ pub(super) async fn handle_wallet_refund_eligible_providers(
 }
 
 fn wallet_refund_payload_from_record(
-    record: &aether_data::repository::wallet::StoredAdminWalletRefund,
+    record: &aether_data_contracts::repository::wallet::StoredAdminWalletRefund,
 ) -> serde_json::Value {
     json!({
         "id": record.id,
@@ -271,7 +271,7 @@ pub(super) async fn handle_wallet_refund_detail(
         );
     };
     let wallet = match state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
             &auth.user.id,
         ))
         .await
@@ -348,7 +348,7 @@ pub(super) async fn handle_wallet_create_refund(
     };
 
     let wallet = match state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
             &auth.user.id,
         ))
         .await
@@ -498,7 +498,7 @@ pub(super) async fn handle_wallet_create_refund(
 
     let outcome = match state
         .create_wallet_refund_request(
-            aether_data::repository::wallet::CreateWalletRefundRequestInput {
+            aether_data_contracts::repository::wallet::CreateWalletRefundRequestInput {
                 wallet_id: wallet.id.clone(),
                 user_id: auth.user.id.clone(),
                 amount_usd: payload.amount_usd,
@@ -525,53 +525,53 @@ pub(super) async fn handle_wallet_create_refund(
     };
 
     match outcome {
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::Created(refund)
-        | aether_data::repository::wallet::CreateWalletRefundRequestOutcome::Duplicate(refund) => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::Created(refund)
+        | aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::Duplicate(refund) => {
             build_auth_json_response(
                 http::StatusCode::OK,
                 wallet_refund_payload_from_record(&refund),
                 None,
             )
         }
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::InvalidInput(detail) => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::InvalidInput(detail) => {
             build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
         }
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::WalletMissing => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::WalletMissing => {
             build_auth_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "当前账户尚未开通钱包，无法申请退款",
                 false,
             )
         }
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::RefundAmountExceedsAvailableBalance => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::RefundAmountExceedsAvailableBalance => {
             build_auth_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "refund amount exceeds available refundable recharge balance",
                 false,
             )
         }
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::PaymentOrderNotFound => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::PaymentOrderNotFound => {
             build_auth_error_response(
                 http::StatusCode::NOT_FOUND,
                 "Payment order not found",
                 false,
             )
         }
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::PaymentOrderNotRefundable => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::PaymentOrderNotRefundable => {
             build_auth_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "payment order is not refundable",
                 false,
             )
         }
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::RefundAmountExceedsAvailableOrderAmount => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::RefundAmountExceedsAvailableOrderAmount => {
             build_auth_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "refund amount exceeds available refundable amount",
                 false,
             )
         }
-        aether_data::repository::wallet::CreateWalletRefundRequestOutcome::DuplicateRejected => {
+        aether_data_contracts::repository::wallet::CreateWalletRefundRequestOutcome::DuplicateRejected => {
             build_auth_error_response(
                 http::StatusCode::BAD_REQUEST,
                 "退款申请重复，请勿重复提交",
@@ -584,7 +584,7 @@ pub(super) async fn handle_wallet_create_refund(
 #[cfg(test)]
 mod tests {
     use super::wallet_refund_payload_from_record;
-    use aether_data::repository::wallet::StoredAdminWalletRefund;
+    use aether_data_contracts::repository::wallet::StoredAdminWalletRefund;
     use serde_json::json;
 
     #[test]

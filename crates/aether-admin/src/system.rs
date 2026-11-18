@@ -1,9 +1,9 @@
-use aether_data::repository::{
+use aether_data_contracts::repository::{
     auth_modules::{StoredLdapModuleConfig, StoredOAuthProviderModuleConfig},
     proxy_nodes::StoredProxyNode,
-    system::StoredSystemConfigEntry,
     wallet::StoredWalletSnapshot,
 };
+use aether_data::repository::system::StoredSystemConfigEntry;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
 };

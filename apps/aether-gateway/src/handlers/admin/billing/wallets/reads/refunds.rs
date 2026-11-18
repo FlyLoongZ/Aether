@@ -32,7 +32,7 @@ pub(in super::super) async fn build_admin_wallet_refunds_response(
     };
 
     let Some(wallet) = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::WalletId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
             &wallet_id,
         ))
         .await?

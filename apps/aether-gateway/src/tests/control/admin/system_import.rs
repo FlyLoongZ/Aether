@@ -15,9 +15,9 @@ use aether_data::repository::oauth_providers::{
 };
 use aether_data::repository::pool_scores::InMemoryPoolMemberScoreRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::users::StoredUserAuthRecord;
+use aether_data_contracts::repository::users::StoredUserAuthRecord;
 
-use aether_data::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
+use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
 use aether_data_contracts::repository::global_models::{
     AdminGlobalModelListQuery, AdminProviderModelListQuery, GlobalModelReadRepository,
     StoredPublicGlobalModel,

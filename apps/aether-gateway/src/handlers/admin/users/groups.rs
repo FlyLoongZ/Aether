@@ -357,13 +357,13 @@ pub(crate) async fn read_default_user_group_id(
 
 fn parse_group_record(
     request_body: Option<&axum::body::Bytes>,
-) -> Result<aether_data::repository::users::UpsertUserGroupRecord, String> {
+) -> Result<aether_data_contracts::repository::users::UpsertUserGroupRecord, String> {
     let Some(body) = request_body.filter(|body| !body.is_empty()) else {
         return Err("请求数据验证失败".to_string());
     };
     let payload = serde_json::from_slice::<AdminUserGroupPayload>(body)
         .map_err(|_| "请求数据验证失败".to_string())?;
-    let name = aether_data::repository::users::normalize_user_group_name(&payload.name);
+    let name = aether_data_contracts::repository::users::normalize_user_group_name(&payload.name);
     if name.is_empty() {
         return Err("分组名称不能为空".to_string());
     }
@@ -375,7 +375,7 @@ fn parse_group_record(
     let allowed_api_formats = normalize_admin_user_api_formats(payload.allowed_api_formats)?;
     let allowed_models =
         normalize_admin_user_string_list(payload.allowed_models, "allowed_models")?;
-    Ok(aether_data::repository::users::UpsertUserGroupRecord {
+    Ok(aether_data_contracts::repository::users::UpsertUserGroupRecord {
         name,
         description: payload
             .description
@@ -404,7 +404,7 @@ fn parse_members_payload(
 }
 
 fn user_group_payload(
-    group: aether_data::repository::users::StoredUserGroup,
+    group: aether_data_contracts::repository::users::StoredUserGroup,
     default_group_id: Option<&str>,
 ) -> serde_json::Value {
     json!({

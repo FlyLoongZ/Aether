@@ -137,7 +137,7 @@ impl std::fmt::Debug for DirectGatewayConfig {
 pub(crate) async fn find_payment_callback_order(
     state: &AppState,
     order_no: &str,
-) -> Result<Option<aether_data::repository::wallet::StoredAdminPaymentOrder>, String> {
+) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>, String> {
     state
         .find_payment_order_by_order_no(order_no)
         .await
@@ -154,7 +154,7 @@ fn valid_exchange_rate(value: Option<f64>) -> Option<f64> {
 /// by the repository; this helper only supplies a finite amount for the
 /// callback contract and a non-sensitive rate fallback.
 pub(crate) fn payment_callback_settlement_values(
-    order: Option<&aether_data::repository::wallet::StoredAdminPaymentOrder>,
+    order: Option<&aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>,
     pay_amount: f64,
     fallback_exchange_rate: Option<f64>,
 ) -> Result<(f64, Option<f64>), String> {
@@ -774,7 +774,7 @@ pub(crate) async fn create_alipay_direct_checkout(
 pub(crate) async fn verify_alipay_notify_callback(
     state: &AppState,
     body: &[u8],
-) -> Result<aether_data::repository::wallet::ProcessPaymentCallbackInput, String> {
+) -> Result<aether_data_contracts::repository::wallet::ProcessPaymentCallbackInput, String> {
     let config = load_direct_gateway_callback_config(state, "alipay").await?;
     let raw = std::str::from_utf8(body).map_err(|_| "支付宝通知请求体不是 UTF-8".to_string())?;
     let params = url::form_urlencoded::parse(raw.as_bytes())
@@ -850,7 +850,7 @@ pub(crate) async fn verify_alipay_notify_callback(
         "success",
     );
     Ok(
-        aether_data::repository::wallet::ProcessPaymentCallbackInput {
+        aether_data_contracts::repository::wallet::ProcessPaymentCallbackInput {
             payment_method: "alipay".to_string(),
             payment_provider: Some("alipay".to_string()),
             payment_channel: Some("alipay".to_string()),
@@ -1398,7 +1398,7 @@ pub(crate) async fn verify_wxpay_notify_callback(
     state: &AppState,
     headers: &http::HeaderMap,
     body: &[u8],
-) -> Result<aether_data::repository::wallet::ProcessPaymentCallbackInput, String> {
+) -> Result<aether_data_contracts::repository::wallet::ProcessPaymentCallbackInput, String> {
     let config = load_direct_gateway_callback_config(state, "wxpay").await?;
     wxpay_verify_notify_headers(&config, headers, body)?;
     let payload =
@@ -1483,7 +1483,7 @@ pub(crate) async fn verify_wxpay_notify_callback(
         "success",
     );
     Ok(
-        aether_data::repository::wallet::ProcessPaymentCallbackInput {
+        aether_data_contracts::repository::wallet::ProcessPaymentCallbackInput {
             payment_method: "wxpay".to_string(),
             payment_provider: Some("wxpay".to_string()),
             payment_channel: Some(payment_channel),

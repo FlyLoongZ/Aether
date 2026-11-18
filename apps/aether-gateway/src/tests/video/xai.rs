@@ -95,7 +95,7 @@ async fn xai_video_native_and_compatibility_http_lifecycle_postgres() {
         .connect(&database_url)
         .await
         .expect("test database should connect");
-    aether_data::driver::postgres::run_migrations(&pool)
+    aether_data_postgres::run_migrations(&pool)
         .await
         .expect("test database should migrate");
     // Preserve the production column constraints and unique indexes while isolating test rows.

@@ -66,7 +66,7 @@ pub(crate) fn seal_auth_api_key_secret(
 
 pub(crate) fn open_auth_api_key_secret(
     state: &AppState,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
 ) -> Result<AuthApiKeySecretProjection, &'static str> {
     let observed_raw = record
         .key_encrypted
@@ -132,7 +132,7 @@ pub(crate) fn open_auth_api_key_secret(
 
 pub(crate) async fn decrypt_or_migrate_auth_api_key_secret(
     state: &AppState,
-    initial: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    initial: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
 ) -> Result<String, GatewayError> {
     let identity = (
         initial.user_id.clone(),
@@ -159,7 +159,7 @@ pub(crate) async fn decrypt_or_migrate_auth_api_key_secret(
         let observed = current.key_encrypted.clone().ok_or_else(|| {
             api_key_secret_error("stored API-key ciphertext disappeared during migration")
         })?;
-        let mutation = aether_data::repository::auth::CompareAndSwapAuthApiKeyCiphertext {
+        let mutation = aether_data_contracts::repository::auth::CompareAndSwapAuthApiKeyCiphertext {
             user_id: identity.0.clone(),
             api_key_id: identity.1.clone(),
             key_hash: identity.2.clone(),
@@ -220,8 +220,8 @@ mod tests {
         api_key_id: &str,
         is_standalone: bool,
         key_encrypted: Option<String>,
-    ) -> aether_data::repository::auth::StoredAuthApiKeyExportRecord {
-        aether_data::repository::auth::StoredAuthApiKeyExportRecord {
+    ) -> aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord {
+        aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord {
             user_id: user_id.to_string(),
             api_key_id: api_key_id.to_string(),
             key_hash: sha256_hex(plaintext),

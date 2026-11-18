@@ -59,7 +59,7 @@ pub(super) async fn build_admin_usage_cache_affinity_ttl_analysis_response(
                 grouped
             });
 
-    let user_map: BTreeMap<String, aether_data::repository::users::StoredUserSummary> =
+    let user_map: BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary> =
         if !group_by_api_key && state.has_user_data_reader() {
             let user_ids = grouped.keys().cloned().collect::<Vec<_>>();
             state

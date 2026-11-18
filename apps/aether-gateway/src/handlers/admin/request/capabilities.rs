@@ -16,7 +16,7 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) fn encrypt_ldap_bind_password(
         &self,
-        config: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+        config: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
         secret: &str,
     ) -> Option<String> {
         crate::handlers::shared::encrypt_ldap_bind_password(self.app, config, secret)

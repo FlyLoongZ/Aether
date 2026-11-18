@@ -534,7 +534,7 @@ impl<'a> AdminAppState<'a> {
 
         let mut api_keys_by_user_id = BTreeMap::<
             String,
-            Vec<aether_data::repository::auth::StoredAuthApiKeyExportRecord>,
+            Vec<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>,
         >::new();
         for key in user_api_keys.into_iter().filter(|key| !key.is_standalone) {
             api_keys_by_user_id
@@ -544,7 +544,7 @@ impl<'a> AdminAppState<'a> {
         }
         let mut memberships_by_user_id = BTreeMap::<
             String,
-            Vec<aether_data::repository::users::StoredUserGroupMembership>,
+            Vec<aether_data_contracts::repository::users::StoredUserGroupMembership>,
         >::new();
         for membership in memberships {
             memberships_by_user_id
@@ -682,8 +682,8 @@ impl<'a> AdminAppState<'a> {
 
     fn build_admin_system_users_export_api_key_payload(
         &self,
-        key: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
-        wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+        key: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
+        wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
         include_is_standalone: bool,
         mode: SystemExportMode,
         recovery_plaintext: Option<&str>,

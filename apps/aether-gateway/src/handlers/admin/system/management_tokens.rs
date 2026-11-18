@@ -10,7 +10,7 @@ use crate::handlers::admin::system::shared::paths::{
 use crate::handlers::shared::build_management_token_payload;
 use crate::handlers::shared::{generate_gateway_secret_plaintext, parse_json_ip_rules};
 use crate::{GatewayError, LocalMutationOutcome};
-use aether_data::repository::management_tokens::{
+use aether_data_contracts::repository::management_tokens::{
     CreateManagementTokenRecord, ManagementTokenListQuery, RegenerateManagementTokenSecret,
     StoredManagementTokenUserSummary, UpdateManagementTokenRecord,
 };

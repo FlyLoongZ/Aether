@@ -487,7 +487,7 @@ pub(super) async fn handle_epay_notify(
 
     let outcome = state
         .process_payment_callback(
-            aether_data::repository::wallet::ProcessPaymentCallbackInput {
+            aether_data_contracts::repository::wallet::ProcessPaymentCallbackInput {
                 payment_method: "epay".to_string(),
                 payment_provider: Some("epay".to_string()),
                 payment_channel: Some(channel),
@@ -514,16 +514,16 @@ pub(super) async fn handle_epay_notify(
     }
 
     match outcome {
-        Ok(Some(aether_data::repository::wallet::ProcessPaymentCallbackOutcome::Applied {
+        Ok(Some(aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::Applied {
             ..
         })) => epay_plain(http::StatusCode::OK, "success"),
         Ok(Some(
-            aether_data::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
+            aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
                 ..
             },
         ))
         | Ok(Some(
-            aether_data::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
+            aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
                 ..
             },
         )) => epay_plain(http::StatusCode::OK, "success"),

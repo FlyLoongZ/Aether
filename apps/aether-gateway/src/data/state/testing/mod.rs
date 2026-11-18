@@ -299,7 +299,7 @@ impl GatewayDataState {
     ) -> Self
     where
         T: RequestCandidateRepository + 'static,
-        U: aether_data::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
+        U: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
     {
         let request_candidate_reader: Arc<dyn RequestCandidateReadRepository> =
             request_candidate_repository.clone();
@@ -383,7 +383,7 @@ impl GatewayDataState {
         wallet_repository: Arc<T>,
     ) -> Self
     where
-        T: aether_data::repository::wallet::WalletRepository + 'static,
+        T: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
@@ -401,7 +401,7 @@ impl GatewayDataState {
         wallet_repository: Arc<T>,
     ) -> Self
     where
-        T: aether_data::repository::wallet::WalletRepository + 'static,
+        T: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
@@ -421,7 +421,7 @@ impl GatewayDataState {
     ) -> Self
     where
         TUsage: UsageRepository + 'static,
-        TWallet: aether_data::repository::wallet::WalletRepository + 'static,
+        TWallet: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
@@ -445,7 +445,7 @@ impl GatewayDataState {
     ) -> Self
     where
         T: AnnouncementReadRepository + AnnouncementWriteRepository + 'static,
-        U: aether_data::repository::wallet::WalletRepository + 'static,
+        U: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         let announcement_reader: Arc<dyn AnnouncementReadRepository> =
             announcement_repository.clone();
@@ -529,8 +529,8 @@ impl GatewayDataState {
 
     pub(crate) fn with_management_token_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::management_tokens::ManagementTokenReadRepository
-            + aether_data::repository::management_tokens::ManagementTokenWriteRepository
+        T: aether_data_contracts::repository::management_tokens::ManagementTokenReadRepository
+            + aether_data_contracts::repository::management_tokens::ManagementTokenWriteRepository
             + 'static,
     {
         let management_token_reader: Arc<dyn ManagementTokenReadRepository> = repository.clone();
@@ -553,8 +553,8 @@ impl GatewayDataState {
 
     pub(crate) fn with_oauth_provider_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::oauth_providers::OAuthProviderReadRepository
-            + aether_data::repository::oauth_providers::OAuthProviderWriteRepository
+        T: aether_data_contracts::repository::oauth_providers::OAuthProviderReadRepository
+            + aether_data_contracts::repository::oauth_providers::OAuthProviderWriteRepository
             + 'static,
     {
         let oauth_provider_reader: Arc<dyn OAuthProviderReadRepository> = repository.clone();
@@ -571,8 +571,8 @@ impl GatewayDataState {
         repository: Arc<T>,
     ) -> Self
     where
-        T: aether_data::repository::oauth_providers::OAuthProviderReadRepository
-            + aether_data::repository::oauth_providers::OAuthProviderWriteRepository
+        T: aether_data_contracts::repository::oauth_providers::OAuthProviderReadRepository
+            + aether_data_contracts::repository::oauth_providers::OAuthProviderWriteRepository
             + 'static,
     {
         let oauth_provider_reader: Arc<dyn OAuthProviderReadRepository> = repository.clone();
@@ -584,8 +584,8 @@ impl GatewayDataState {
 
     pub(crate) fn with_proxy_node_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::proxy_nodes::ProxyNodeReadRepository
-            + aether_data::repository::proxy_nodes::ProxyNodeWriteRepository
+        T: aether_data_contracts::repository::proxy_nodes::ProxyNodeReadRepository
+            + aether_data_contracts::repository::proxy_nodes::ProxyNodeWriteRepository
             + 'static,
     {
         let proxy_node_reader: Arc<dyn ProxyNodeReadRepository> = repository.clone();
@@ -599,8 +599,8 @@ impl GatewayDataState {
 
     pub(crate) fn attach_proxy_node_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::proxy_nodes::ProxyNodeReadRepository
-            + aether_data::repository::proxy_nodes::ProxyNodeWriteRepository
+        T: aether_data_contracts::repository::proxy_nodes::ProxyNodeReadRepository
+            + aether_data_contracts::repository::proxy_nodes::ProxyNodeWriteRepository
             + 'static,
     {
         let proxy_node_reader: Arc<dyn ProxyNodeReadRepository> = repository.clone();
@@ -612,7 +612,7 @@ impl GatewayDataState {
 
     pub(crate) fn with_auth_api_key_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::auth::AuthRepository + 'static,
+        T: aether_data_contracts::repository::auth::AuthRepository + 'static,
     {
         GatewayDataStateFixture::new()
             .with_auth_api_key_repository(repository)
@@ -621,7 +621,7 @@ impl GatewayDataState {
 
     pub(crate) fn attach_auth_api_key_repository_for_tests<T>(mut self, repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::auth::AuthRepository + 'static,
+        T: aether_data_contracts::repository::auth::AuthRepository + 'static,
     {
         let auth_api_key_reader: Arc<dyn AuthApiKeyReadRepository> = repository.clone();
         let auth_api_key_writer: Arc<dyn AuthApiKeyWriteRepository> = repository;
@@ -805,7 +805,7 @@ impl GatewayDataState {
     where
         T: RequestCandidateRepository + 'static,
         U: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
-        V: aether_data::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
+        V: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
     {
         GatewayDataStateFixture::new()
             .with_encryption_key(encryption_key)
@@ -863,7 +863,7 @@ impl GatewayDataState {
         T: RequestCandidateRepository + 'static,
         U: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
         V: UsageRepository + 'static,
-        W: aether_data::repository::wallet::WalletRepository + 'static,
+        W: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         GatewayDataStateFixture::new()
             .with_encryption_key(encryption_key)
@@ -905,7 +905,7 @@ impl GatewayDataState {
         wallet_repository: Arc<T>,
     ) -> Self
     where
-        T: aether_data::repository::wallet::WalletRepository + 'static,
+        T: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
         let wallet_writer: Arc<dyn WalletWriteRepository> = wallet_repository;
@@ -923,7 +923,7 @@ impl GatewayDataState {
         usage_repository: Arc<TUsage>,
     ) -> Self
     where
-        TWallet: aether_data::repository::wallet::WalletRepository + 'static,
+        TWallet: aether_data_contracts::repository::wallet::WalletRepository + 'static,
         TUsage: UsageRepository + 'static,
     {
         let wallet_reader: Arc<dyn WalletReadRepository> = wallet_repository.clone();
@@ -947,7 +947,7 @@ impl GatewayDataState {
     ) -> Self
     where
         TUsage: UsageRepository + 'static,
-        TWallet: aether_data::repository::wallet::WalletRepository + 'static,
+        TWallet: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         let usage_reader: Arc<dyn UsageReadRepository> = usage_repository.clone();
         let usage_writer: Arc<dyn UsageWriteRepository> = usage_repository;
@@ -1073,7 +1073,7 @@ impl GatewayDataStateFixture {
 
     pub(crate) fn with_wallet_repository<T>(mut self, repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::wallet::WalletRepository + 'static,
+        T: aether_data_contracts::repository::wallet::WalletRepository + 'static,
     {
         self.state.wallet_reader = Some(repository.clone());
         self.state.wallet_writer = Some(repository);
@@ -1082,7 +1082,7 @@ impl GatewayDataStateFixture {
 
     pub(crate) fn with_gemini_file_mapping_repository<T>(mut self, repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
+        T: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
     {
         self.state.gemini_file_mapping_reader = Some(repository.clone());
         self.state.gemini_file_mapping_writer = Some(repository);

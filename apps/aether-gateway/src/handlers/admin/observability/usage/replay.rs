@@ -89,7 +89,7 @@ pub(super) fn build_admin_usage_curl_response(
 
 pub(super) fn build_admin_usage_detail_payload(
     item: &StoredRequestUsageAudit,
-    users_by_id: &BTreeMap<String, aether_data::repository::users::StoredUserSummary>,
+    users_by_id: &BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>,
     api_key_names: &BTreeMap<String, String>,
     auth_user_reader_available: bool,
     auth_api_key_reader_available: bool,

@@ -9,7 +9,7 @@ use super::{
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::unix_secs_to_rfc3339;
 use crate::GatewayError;
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use axum::{
     body::{Body, Bytes},
     http,

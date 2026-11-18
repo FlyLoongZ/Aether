@@ -57,18 +57,18 @@ pub(super) async fn handle_wxpay_notify(
         }
     }
     match outcome {
-        Ok(aether_data::repository::wallet::ProcessPaymentCallbackOutcome::Applied { .. }) => {
+        Ok(aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::Applied { .. }) => {
             wxpay_json(http::StatusCode::OK, "SUCCESS", "成功")
         }
         Ok(
-            aether_data::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
+            aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
                 ..
             }
-            | aether_data::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
+            | aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
                 ..
             },
         ) => wxpay_json(http::StatusCode::OK, "SUCCESS", "成功"),
-        Ok(aether_data::repository::wallet::ProcessPaymentCallbackOutcome::Failed { .. }) => {
+        Ok(aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::Failed { .. }) => {
             warn!(
                 error_category = "callback_rejected",
                 path = %request_context.request_path,

@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::PostgresBackend;
-use crate::driver::postgres::{PostgresLeaseRunner, PostgresLeaseRunnerConfig};
+use aether_data_postgres::{PostgresLeaseRunner, PostgresLeaseRunnerConfig};
 use crate::DataLayerError;
 
 #[derive(Clone, Default)]
@@ -41,7 +41,7 @@ impl DataLeaseBackends {
 mod tests {
     use super::DataLeaseBackends;
     use crate::backend::PostgresBackend;
-    use crate::driver::postgres::PostgresPoolConfig;
+    use crate::PostgresPoolConfig;
 
     #[tokio::test]
     async fn builds_postgres_lease_runner_from_backend() {

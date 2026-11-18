@@ -1,4 +1,4 @@
-use aether_data::repository::management_tokens::{
+use aether_data_contracts::repository::management_tokens::{
     StoredManagementToken, StoredManagementTokenUserSummary,
 };
 use serde_json::json;

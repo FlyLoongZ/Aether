@@ -336,7 +336,7 @@ pub(in super::super) async fn build_admin_update_user_response(
     }
     if let Some(unlimited) = payload.unlimited {
         match state
-            .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+            .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
                 &user_id,
             ))
             .await?
@@ -377,7 +377,7 @@ pub(in super::super) async fn build_admin_update_user_response(
             .into_response());
     };
     let wallet = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
             &user_id,
         ))
         .await?;

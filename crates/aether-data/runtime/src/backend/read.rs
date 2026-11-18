@@ -284,7 +284,7 @@ impl DataReadRepositories {
 mod tests {
     use super::DataReadRepositories;
     use crate::backend::PostgresBackend;
-    use crate::driver::postgres::PostgresPoolConfig;
+    use crate::PostgresPoolConfig;
 
     #[tokio::test]
     async fn builds_read_repositories_from_postgres_backend() {

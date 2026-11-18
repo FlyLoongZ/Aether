@@ -2,7 +2,7 @@ use crate::handlers::admin::request::AdminAppState;
 use crate::handlers::admin::shared::unix_secs_to_rfc3339;
 use crate::handlers::shared::round_to;
 use crate::GatewayError;
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use serde_json::{json, Map, Value};
 
 #[derive(Clone)]
@@ -37,7 +37,7 @@ pub(in super::super) fn build_admin_wallet_payment_order_payload(
 
 #[allow(clippy::too_many_arguments)]
 pub(in super::super) fn build_admin_wallet_transaction_payload(
-    wallet: &aether_data::repository::wallet::StoredWalletSnapshot,
+    wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
     owner: &AdminWalletOwnerSummary,
     transaction_id: String,
     category: &str,
@@ -108,7 +108,7 @@ pub(in super::super) fn wallet_owner_summary_from_fields(
 
 pub(in super::super) async fn resolve_admin_wallet_owner_summary(
     state: &AdminAppState<'_>,
-    wallet: &aether_data::repository::wallet::StoredWalletSnapshot,
+    wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
 ) -> Result<AdminWalletOwnerSummary, GatewayError> {
     if let Some(user_id) = wallet.user_id.as_deref() {
         let user = state.find_user_auth_by_id(user_id).await?;
@@ -140,7 +140,7 @@ pub(in super::super) async fn resolve_admin_wallet_owner_summary(
 }
 
 pub(in super::super) fn build_admin_wallet_summary_payload(
-    wallet: &aether_data::repository::wallet::StoredWalletSnapshot,
+    wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
     owner: &AdminWalletOwnerSummary,
 ) -> serde_json::Value {
     json!({
@@ -168,7 +168,7 @@ pub(in super::super) fn build_admin_wallet_summary_payload(
 
 pub(in super::super) async fn build_admin_wallet_summary_payload_with_package(
     state: &AdminAppState<'_>,
-    wallet: &aether_data::repository::wallet::StoredWalletSnapshot,
+    wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
     owner: &AdminWalletOwnerSummary,
 ) -> Result<serde_json::Value, GatewayError> {
     let mut payload = build_admin_wallet_summary_payload(wallet, owner);
@@ -338,7 +338,7 @@ pub(in super::super) fn admin_wallet_payout_proof_projection(
 }
 
 pub(in super::super) fn build_admin_wallet_refund_payload(
-    wallet: &aether_data::repository::wallet::StoredWalletSnapshot,
+    wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
     owner: &AdminWalletOwnerSummary,
     refund: &crate::AdminWalletRefundRecord,
 ) -> serde_json::Value {

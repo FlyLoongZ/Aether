@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aether_cache::{optional_strings_weight, value_weight, CacheWeight, OnceMap};
-use aether_data::repository::auth::*;
+use aether_data_contracts::repository::auth::*;
 use aether_data::DataLayerError;
 use async_trait::async_trait;
 

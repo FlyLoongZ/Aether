@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static POSTGRES_WORKDIR_SEQ: AtomicU64 = AtomicU64::new(0);
 
-use aether_data::driver::postgres::PostgresPoolConfig;
+use aether_data::PostgresPoolConfig;
 use aether_data::{DataBackends, DataLayerConfig};
 use sqlx::{Connection, PgConnection};
 

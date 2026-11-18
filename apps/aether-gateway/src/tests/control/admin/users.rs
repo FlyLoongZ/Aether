@@ -11,7 +11,7 @@ use aether_data::repository::users::{
     UserReadRepository,
 };
 use aether_data::repository::wallet::InMemoryWalletRepository;
-use aether_data::repository::wallet::StoredWalletSnapshot;
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 use axum::body::Body;
 use axum::routing::any;

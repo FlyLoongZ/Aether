@@ -10,8 +10,6 @@
 
 pub mod backend;
 mod config;
-mod database;
-pub mod driver;
 mod error;
 pub mod lifecycle;
 pub mod maintenance;
@@ -23,7 +21,7 @@ pub use backend::{
     DataWriteRepositories,
 };
 pub use config::DataLayerConfig;
-pub use database::PostgresPoolConfig;
+pub use aether_data_contracts::PostgresPoolConfig;
 pub use error::DataLayerError;
 pub use maintenance::{
     DatabaseMaintenanceSummary, DatabasePoolSummary, DatabasePostgresActivityGroup,

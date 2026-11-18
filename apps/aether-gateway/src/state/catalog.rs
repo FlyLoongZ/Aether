@@ -69,9 +69,9 @@ impl AppState {
 
     pub(crate) async fn list_management_tokens(
         &self,
-        query: &aether_data::repository::management_tokens::ManagementTokenListQuery,
+        query: &aether_data_contracts::repository::management_tokens::ManagementTokenListQuery,
     ) -> Result<
-        aether_data::repository::management_tokens::StoredManagementTokenListPage,
+        aether_data_contracts::repository::management_tokens::StoredManagementTokenListPage,
         GatewayError,
     > {
         self.data
@@ -84,7 +84,7 @@ impl AppState {
         &self,
         token_id: &str,
     ) -> Result<
-        Option<aether_data::repository::management_tokens::StoredManagementTokenWithUser>,
+        Option<aether_data_contracts::repository::management_tokens::StoredManagementTokenWithUser>,
         GatewayError,
     > {
         self.data
@@ -97,7 +97,7 @@ impl AppState {
         &self,
         token_hash: &str,
     ) -> Result<
-        Option<aether_data::repository::management_tokens::StoredManagementTokenWithUser>,
+        Option<aether_data_contracts::repository::management_tokens::StoredManagementTokenWithUser>,
         GatewayError,
     > {
         self.data
@@ -108,9 +108,9 @@ impl AppState {
 
     pub(crate) async fn create_management_token(
         &self,
-        record: &aether_data::repository::management_tokens::CreateManagementTokenRecord,
+        record: &aether_data_contracts::repository::management_tokens::CreateManagementTokenRecord,
     ) -> Result<
-        LocalMutationOutcome<aether_data::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data
@@ -121,9 +121,9 @@ impl AppState {
 
     pub(crate) async fn update_management_token(
         &self,
-        record: &aether_data::repository::management_tokens::UpdateManagementTokenRecord,
+        record: &aether_data_contracts::repository::management_tokens::UpdateManagementTokenRecord,
     ) -> Result<
-        LocalMutationOutcome<aether_data::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data
@@ -134,10 +134,10 @@ impl AppState {
 
     pub(crate) async fn update_management_token_for_user(
         &self,
-        record: &aether_data::repository::management_tokens::UpdateManagementTokenRecord,
+        record: &aether_data_contracts::repository::management_tokens::UpdateManagementTokenRecord,
         user_id: &str,
     ) -> Result<
-        LocalMutationOutcome<aether_data::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data
@@ -172,7 +172,7 @@ impl AppState {
         token_id: &str,
         last_used_ip: Option<&str>,
     ) -> Result<
-        Option<aether_data::repository::management_tokens::StoredManagementToken>,
+        Option<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data
@@ -186,7 +186,7 @@ impl AppState {
         token_id: &str,
         is_active: bool,
     ) -> Result<
-        Option<aether_data::repository::management_tokens::StoredManagementToken>,
+        Option<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data
@@ -201,7 +201,7 @@ impl AppState {
         user_id: &str,
         is_active: bool,
     ) -> Result<
-        Option<aether_data::repository::management_tokens::StoredManagementToken>,
+        Option<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data
@@ -212,9 +212,9 @@ impl AppState {
 
     pub(crate) async fn regenerate_management_token_secret(
         &self,
-        mutation: &aether_data::repository::management_tokens::RegenerateManagementTokenSecret,
+        mutation: &aether_data_contracts::repository::management_tokens::RegenerateManagementTokenSecret,
     ) -> Result<
-        LocalMutationOutcome<aether_data::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data
@@ -225,10 +225,10 @@ impl AppState {
 
     pub(crate) async fn regenerate_management_token_secret_for_user(
         &self,
-        mutation: &aether_data::repository::management_tokens::RegenerateManagementTokenSecret,
+        mutation: &aether_data_contracts::repository::management_tokens::RegenerateManagementTokenSecret,
         user_id: &str,
     ) -> Result<
-        LocalMutationOutcome<aether_data::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.data

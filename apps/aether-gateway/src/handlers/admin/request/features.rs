@@ -57,9 +57,9 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_gemini_file_mappings(
         &self,
-        query: &aether_data::repository::gemini_file_mappings::GeminiFileMappingListQuery,
+        query: &aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingListQuery,
     ) -> Result<
-        aether_data::repository::gemini_file_mappings::StoredGeminiFileMappingListPage,
+        aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMappingListPage,
         GatewayError,
     > {
         self.app.list_gemini_file_mappings(query).await
@@ -68,7 +68,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn summarize_gemini_file_mappings(
         &self,
         now_unix_secs: u64,
-    ) -> Result<aether_data::repository::gemini_file_mappings::GeminiFileMappingStats, GatewayError>
+    ) -> Result<aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingStats, GatewayError>
     {
         self.app.summarize_gemini_file_mappings(now_unix_secs).await
     }
@@ -77,7 +77,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         mapping_id: &str,
     ) -> Result<
-        Option<aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
+        Option<aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping>,
         GatewayError,
     > {
         self.app.delete_gemini_file_mapping_by_id(mapping_id).await

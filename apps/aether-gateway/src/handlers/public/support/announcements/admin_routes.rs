@@ -14,7 +14,7 @@ use super::announcements_shared::{
     build_public_announcement_payload, parse_optional_rfc3339_unix_secs,
     public_announcement_id_from_path,
 };
-use aether_data::repository::announcements::{CreateAnnouncementRecord, UpdateAnnouncementRecord};
+use aether_data_contracts::repository::announcements::{CreateAnnouncementRecord, UpdateAnnouncementRecord};
 
 fn build_admin_announcement_writer_unavailable_response() -> Response<Body> {
     (

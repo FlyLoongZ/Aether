@@ -166,7 +166,7 @@ fn is_fixed_linuxdo_oauth_origin(url: &reqwest::Url) -> bool {
 fn admin_oauth_test_allowed_domains(
     provider_type: &str,
     payload: &serde_json::Value,
-    persisted_config: Option<&aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+    persisted_config: Option<&aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
 ) -> Vec<String> {
     if let Some(domains) = admin_oauth_builtin_allowed_domains(provider_type) {
         return domains.iter().map(|domain| (*domain).to_string()).collect();
@@ -184,7 +184,7 @@ fn admin_oauth_test_allowed_domains(
 
 fn management_token_may_configure_frontend_callback(
     request_context: &AdminRequestContext<'_>,
-    existing: Option<&aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+    existing: Option<&aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
     requested_callback: &str,
 ) -> bool {
     let Some(principal) = request_context
@@ -474,7 +474,7 @@ pub(crate) async fn maybe_build_local_admin_oauth_response(
                 .is_some_and(|value| !value.trim().is_empty())
                 && matches!(
                     record.client_secret_encrypted,
-                    aether_data::repository::oauth_providers::EncryptedSecretUpdate::Preserve
+                    aether_data_contracts::repository::oauth_providers::EncryptedSecretUpdate::Preserve
                 )
             {
                 match crate::handlers::shared::identity_oauth_provider_secret_binding_matches(
@@ -507,10 +507,10 @@ pub(crate) async fn maybe_build_local_admin_oauth_response(
             return Ok(None);
         };
         let provider = match outcome {
-            aether_data::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::Upserted(
+            aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::Upserted(
                 provider,
             ) => provider,
-            aether_data::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::DisableRequiresConfirmation {
+            aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::DisableRequiresConfirmation {
                 affected_count,
             } => {
                 return Ok(Some(build_proxy_error_response(

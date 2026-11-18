@@ -76,7 +76,7 @@ async fn admin_gemini_files_username_map<'a, I>(
     mappings: I,
 ) -> Result<BTreeMap<String, String>, GatewayError>
 where
-    I: Iterator<Item = &'a aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping>,
+    I: Iterator<Item = &'a aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping>,
 {
     let user_ids = mappings
         .filter_map(|mapping| mapping.user_id.clone())
@@ -126,7 +126,7 @@ async fn admin_gemini_files_all_keys(
 }
 
 fn build_admin_gemini_file_mapping_payload(
-    mapping: &aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping,
+    mapping: &aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping,
     key_name: Option<&str>,
     username: Option<&str>,
     now_unix_secs: u64,
@@ -172,7 +172,7 @@ pub(super) async fn maybe_build_local_admin_gemini_files_read_response(
             };
             let mappings = state
                 .list_gemini_file_mappings(
-                    &aether_data::repository::gemini_file_mappings::GeminiFileMappingListQuery {
+                    &aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingListQuery {
                         user_id: None,
                         include_expired: page.include_expired,
                         search: page.search.clone(),

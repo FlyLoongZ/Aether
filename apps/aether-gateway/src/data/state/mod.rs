@@ -14,7 +14,7 @@ use crate::provider_transport::{
 };
 use crate::video_tasks::LocalVideoTaskReadResponse;
 use aether_cache::{value_weight, CacheWeight, OnceMap, OnceMapError};
-use aether_data::repository::announcements::{
+use aether_data_contracts::repository::announcements::{
     AnnouncementListQuery, AnnouncementReadRepository, AnnouncementWriteRepository,
     CreateAnnouncementRecord, StoredAnnouncement, StoredAnnouncementPage, UpdateAnnouncementRecord,
 };
@@ -22,41 +22,41 @@ use aether_data::repository::audit::{
     AuditLogListQuery, RequestAuditBundle, StoredAdminAuditLogPage, StoredSuspiciousActivity,
     StoredUserAuditLogPage,
 };
-use aether_data::repository::auth::{
+use aether_data_contracts::repository::auth::{
     AuthApiKeyLookupKey, AuthApiKeyReadRepository, AuthApiKeyWriteRepository,
     StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
 };
-use aether_data::repository::auth_modules::{
+use aether_data_contracts::repository::auth_modules::{
     AuthModuleReadRepository, AuthModuleWriteRepository, CompareAndSwapLdapConfigResult,
     LdapBindPasswordUpdate, StoredLdapModuleConfig, StoredOAuthProviderModuleConfig,
 };
-use aether_data::repository::gemini_file_mappings::{
+use aether_data_contracts::repository::gemini_file_mappings::{
     GeminiFileMappingListQuery, GeminiFileMappingReadRepository, GeminiFileMappingStats,
     GeminiFileMappingWriteRepository, StoredGeminiFileMapping, StoredGeminiFileMappingListPage,
     UpsertGeminiFileMappingRecord,
 };
-use aether_data::repository::management_tokens::{
+use aether_data_contracts::repository::management_tokens::{
     CreateManagementTokenRecord, ManagementTokenListQuery, ManagementTokenReadRepository,
     ManagementTokenWriteRepository, RegenerateManagementTokenSecret, StoredManagementToken,
     StoredManagementTokenListPage, StoredManagementTokenWithUser, UpdateManagementTokenRecord,
 };
-use aether_data::repository::oauth_providers::{
+use aether_data_contracts::repository::oauth_providers::{
     OAuthProviderReadRepository, OAuthProviderWriteRepository, StoredOAuthProviderConfig,
     UpsertOAuthProviderConfigRecord,
 };
-use aether_data::repository::proxy_nodes::{
+use aether_data_contracts::repository::proxy_nodes::{
     ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation, ProxyNodeReadRepository,
     ProxyNodeTrafficMutation, ProxyNodeWriteRepository, StoredProxyNode,
 };
 pub(crate) use aether_data::repository::system::{AdminSystemStats, StoredSystemConfigEntry};
-use aether_data::repository::users::{
+use aether_data_contracts::repository::users::{
     StoredUserAuthRecord, StoredUserExportRow, StoredUserOAuthLinkSummary, StoredUserSummary,
     UserReadRepository,
 };
-pub(crate) use aether_data::repository::users::{
+pub(crate) use aether_data_contracts::repository::users::{
     StoredUserPreferenceRecord, StoredUserSessionRecord,
 };
-use aether_data::repository::wallet::{
+use aether_data_contracts::repository::wallet::{
     AdjustWalletBalanceInBatchInput, AdjustWalletBalanceInput, AdminPaymentOrderListQuery,
     AdminRedeemCodeBatchListQuery, AdminRedeemCodeListQuery,
     AdminUserWalletBalanceBatchUserOutcome, AdminWalletLedgerQuery, AdminWalletListQuery,

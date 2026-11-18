@@ -14,7 +14,7 @@ use crate::tests::{
     Json, Mutex, Request, Router, StatusCode,
 };
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::announcements::{AnnouncementListQuery, AnnouncementReadRepository};
+use aether_data_contracts::repository::announcements::{AnnouncementListQuery, AnnouncementReadRepository};
 use aether_data::repository::auth::{
     InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
 };
@@ -546,7 +546,7 @@ async fn start_auth_announcement_gateway_with_state<T>(
 )
 where
     T: AnnouncementReadRepository
-        + aether_data::repository::announcements::AnnouncementWriteRepository
+        + aether_data_contracts::repository::announcements::AnnouncementWriteRepository
         + 'static,
 {
     let upstream_hits = Arc::new(Mutex::new(0usize));

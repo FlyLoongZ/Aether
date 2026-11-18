@@ -4,7 +4,7 @@ use crate::GatewayError;
 impl<'a> AdminAppState<'a> {
     pub(crate) async fn get_ldap_module_config(
         &self,
-    ) -> Result<Option<aether_data::repository::auth_modules::StoredLdapModuleConfig>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>, GatewayError>
     {
         self.app.get_ldap_module_config().await
     }
@@ -12,7 +12,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_oauth_provider_configs(
         &self,
     ) -> Result<
-        Vec<aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+        Vec<aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
         GatewayError,
     > {
         self.app.list_oauth_provider_configs().await
@@ -22,7 +22,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         provider_type: &str,
     ) -> Result<
-        Option<aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+        Option<aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
         GatewayError,
     > {
         self.app.get_oauth_provider_config(provider_type).await
@@ -30,9 +30,9 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn upsert_oauth_provider_config(
         &self,
-        record: &aether_data::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
+        record: &aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
     ) -> Result<
-        Option<aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+        Option<aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
         GatewayError,
     > {
         self.app.upsert_oauth_provider_config(record).await
@@ -40,10 +40,10 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn upsert_oauth_provider_config_with_force_disable(
         &self,
-        record: &aether_data::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
+        record: &aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
         force_disable: bool,
     ) -> Result<
-        Option<aether_data::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
+        Option<aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
         GatewayError,
     > {
         self.app
@@ -71,7 +71,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         token_id: &str,
     ) -> Result<
-        Option<aether_data::repository::management_tokens::StoredManagementTokenWithUser>,
+        Option<aether_data_contracts::repository::management_tokens::StoredManagementTokenWithUser>,
         GatewayError,
     > {
         self.app.get_management_token_with_user(token_id).await
@@ -86,10 +86,10 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn create_management_token(
         &self,
-        record: &aether_data::repository::management_tokens::CreateManagementTokenRecord,
+        record: &aether_data_contracts::repository::management_tokens::CreateManagementTokenRecord,
     ) -> Result<
         crate::LocalMutationOutcome<
-            aether_data::repository::management_tokens::StoredManagementToken,
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
         >,
         GatewayError,
     > {
@@ -98,10 +98,10 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn update_management_token(
         &self,
-        record: &aether_data::repository::management_tokens::UpdateManagementTokenRecord,
+        record: &aether_data_contracts::repository::management_tokens::UpdateManagementTokenRecord,
     ) -> Result<
         crate::LocalMutationOutcome<
-            aether_data::repository::management_tokens::StoredManagementToken,
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
         >,
         GatewayError,
     > {
@@ -110,9 +110,9 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_management_tokens(
         &self,
-        query: &aether_data::repository::management_tokens::ManagementTokenListQuery,
+        query: &aether_data_contracts::repository::management_tokens::ManagementTokenListQuery,
     ) -> Result<
-        aether_data::repository::management_tokens::StoredManagementTokenListPage,
+        aether_data_contracts::repository::management_tokens::StoredManagementTokenListPage,
         GatewayError,
     > {
         self.app.list_management_tokens(query).await
@@ -123,7 +123,7 @@ impl<'a> AdminAppState<'a> {
         token_id: &str,
         is_active: bool,
     ) -> Result<
-        Option<aether_data::repository::management_tokens::StoredManagementToken>,
+        Option<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
         GatewayError,
     > {
         self.app
@@ -133,10 +133,10 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn regenerate_management_token_secret(
         &self,
-        mutation: &aether_data::repository::management_tokens::RegenerateManagementTokenSecret,
+        mutation: &aether_data_contracts::repository::management_tokens::RegenerateManagementTokenSecret,
     ) -> Result<
         crate::LocalMutationOutcome<
-            aether_data::repository::management_tokens::StoredManagementToken,
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
         >,
         GatewayError,
     > {
@@ -193,11 +193,11 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn compare_and_swap_ldap_module_config(
         &self,
-        expected: Option<&aether_data::repository::auth_modules::StoredLdapModuleConfig>,
-        replacement: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
-        bind_password_update: &aether_data::repository::auth_modules::LdapBindPasswordUpdate,
+        expected: Option<&aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
+        replacement: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
+        bind_password_update: &aether_data_contracts::repository::auth_modules::LdapBindPasswordUpdate,
     ) -> Result<
-        Option<aether_data::repository::auth_modules::CompareAndSwapLdapConfigResult>,
+        Option<aether_data_contracts::repository::auth_modules::CompareAndSwapLdapConfigResult>,
         GatewayError,
     > {
         self.app
@@ -207,7 +207,7 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn delete_ldap_module_config_if_matches(
         &self,
-        expected: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+        expected: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
     ) -> Result<bool, GatewayError> {
         self.app
             .delete_ldap_module_config_if_matches(expected)
@@ -225,7 +225,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_enabled_oauth_module_providers(
         &self,
     ) -> Result<
-        Vec<aether_data::repository::auth_modules::StoredOAuthProviderModuleConfig>,
+        Vec<aether_data_contracts::repository::auth_modules::StoredOAuthProviderModuleConfig>,
         GatewayError,
     > {
         self.app.list_enabled_oauth_module_providers().await

@@ -389,7 +389,7 @@ pub(super) async fn maybe_build_local_admin_usage_detail_response(
 
             let user_ids = item.user_id.clone().into_iter().collect::<Vec<_>>();
             let (users_by_id, provider_key_names, api_key_names): (
-                BTreeMap<String, aether_data::repository::users::StoredUserSummary>,
+                BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>,
                 BTreeMap<String, String>,
                 BTreeMap<String, String>,
             ) = try_join!(

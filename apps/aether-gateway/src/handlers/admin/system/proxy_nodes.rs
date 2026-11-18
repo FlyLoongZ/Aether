@@ -287,7 +287,7 @@ struct DeletedProxyNodeCleanup {
 }
 
 fn build_admin_proxy_node_detail_payload(
-    node: &aether_data::repository::proxy_nodes::StoredProxyNode,
+    node: &aether_data_contracts::repository::proxy_nodes::StoredProxyNode,
 ) -> Value {
     build_admin_proxy_node_payload(node)
 }
@@ -478,7 +478,7 @@ fn build_proxy_connectivity_result(
 
 async fn test_proxy_node_connectivity(
     state: &AdminAppState<'_>,
-    node: &aether_data::repository::proxy_nodes::StoredProxyNode,
+    node: &aether_data_contracts::repository::proxy_nodes::StoredProxyNode,
 ) -> Value {
     let probe_url = proxy_connectivity_probe_url();
     let Some(proxy_url) = node.proxy_url.as_deref() else {
@@ -661,7 +661,7 @@ async fn test_manual_proxy_connectivity_with_probe_url(
 fn validate_manual_create_request(
     input: ManualProxyNodeCreateRequest,
     request_context: &AdminRequestContext<'_>,
-) -> Result<aether_data::repository::proxy_nodes::ProxyNodeManualCreateMutation, crate::ApiError> {
+) -> Result<aether_data_contracts::repository::proxy_nodes::ProxyNodeManualCreateMutation, crate::ApiError> {
     let endpoint = normalize_manual_proxy_endpoint(&input.proxy_url)?;
     let registered_by = request_context
         .decision()
@@ -669,7 +669,7 @@ fn validate_manual_create_request(
         .map(|principal| principal.user_id.clone());
 
     Ok(
-        aether_data::repository::proxy_nodes::ProxyNodeManualCreateMutation {
+        aether_data_contracts::repository::proxy_nodes::ProxyNodeManualCreateMutation {
             node_id: None,
             name: normalize_required_string(&input.name, "name", 100)?,
             ip: endpoint.node_ip,
@@ -686,7 +686,7 @@ fn validate_manual_create_request(
 fn validate_manual_update_request(
     node_id: String,
     input: ManualProxyNodeUpdateRequest,
-) -> Result<aether_data::repository::proxy_nodes::ProxyNodeManualUpdateMutation, crate::ApiError> {
+) -> Result<aether_data_contracts::repository::proxy_nodes::ProxyNodeManualUpdateMutation, crate::ApiError> {
     let endpoint = match input.proxy_url.as_deref() {
         Some(proxy_url) => Some(normalize_manual_proxy_endpoint(proxy_url)?),
         None => None,
@@ -706,7 +706,7 @@ fn validate_manual_update_request(
     }
 
     Ok(
-        aether_data::repository::proxy_nodes::ProxyNodeManualUpdateMutation {
+        aether_data_contracts::repository::proxy_nodes::ProxyNodeManualUpdateMutation {
             node_id,
             name,
             ip: endpoint.as_ref().map(|value| value.node_ip.clone()),

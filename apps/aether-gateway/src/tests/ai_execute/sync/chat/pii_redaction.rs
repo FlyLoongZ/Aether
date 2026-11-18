@@ -42,8 +42,8 @@ fn auth_export_record(
     snapshot: &StoredAuthApiKeySnapshot,
     key_hash: String,
     feature_settings: Option<serde_json::Value>,
-) -> aether_data::repository::auth::StoredAuthApiKeyExportRecord {
-    aether_data::repository::auth::StoredAuthApiKeyExportRecord::new(
+) -> aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord {
+    aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord::new(
         snapshot.user_id.clone(),
         snapshot.api_key_id.clone(),
         key_hash,

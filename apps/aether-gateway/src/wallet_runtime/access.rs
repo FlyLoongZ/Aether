@@ -1,4 +1,4 @@
-use aether_data::repository::wallet::StoredWalletSnapshot;
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 use aether_wallet::{
     WalletAccessDecision, WalletAccessFailure, WalletLimitMode, WalletSnapshot, WalletStatus,
 };

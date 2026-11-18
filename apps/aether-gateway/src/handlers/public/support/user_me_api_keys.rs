@@ -146,7 +146,7 @@ pub(super) fn users_me_api_key_capabilities_path_matches(request_path: &str) -> 
 
 fn users_me_masked_api_key_display(
     state: &AppState,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
 ) -> String {
     let Ok(projection) = open_auth_api_key_secret(state, record) else {
         return api_key_placeholder_display();
@@ -172,7 +172,7 @@ fn build_users_me_api_key_mutation_conflict_response() -> Response<Body> {
 
 fn build_users_me_api_key_list_payload(
     state: &AppState,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
     is_locked: bool,
     group_names: &BTreeMap<String, String>,
 ) -> serde_json::Value {
@@ -205,7 +205,7 @@ fn build_users_me_api_key_list_payload(
 
 fn build_users_me_api_key_detail_payload(
     state: &AppState,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
     is_locked: bool,
     group_names: &BTreeMap<String, String>,
 ) -> serde_json::Value {
@@ -644,7 +644,7 @@ pub(super) async fn handle_users_me_api_key_create(
             false,
         );
     };
-    let record = aether_data::repository::auth::CreateUserApiKeyRecord {
+    let record = aether_data_contracts::repository::auth::CreateUserApiKeyRecord {
         user_id: auth.user.id.clone(),
         api_key_id,
         key_hash,
@@ -821,7 +821,7 @@ pub(super) async fn handle_users_me_api_key_update(
 
     let Some(updated) = (match state
         .update_user_api_key_basic_if_unlocked(
-            aether_data::repository::auth::UpdateUserApiKeyBasicRecord {
+            aether_data_contracts::repository::auth::UpdateUserApiKeyBasicRecord {
                 user_id: auth.user.id.clone(),
                 api_key_id: snapshot.api_key_id.clone(),
                 key_encrypted: None,
@@ -835,7 +835,7 @@ pub(super) async fn handle_users_me_api_key_update(
                 ip_rules,
                 feature_settings,
                 routing_group_selection: Some(
-                    aether_data::repository::auth::UpdateApiKeyRoutingGroupSelection {
+                    aether_data_contracts::repository::auth::UpdateApiKeyRoutingGroupSelection {
                         group_id: routing_group_patch,
                     },
                 ),

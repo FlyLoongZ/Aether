@@ -4,8 +4,8 @@ impl AppState {
     pub(crate) async fn list_user_announcements(
         &self,
         user_id: &str,
-        query: &aether_data::repository::announcements::UserAnnouncementListQuery,
-    ) -> Result<aether_data::repository::announcements::StoredUserAnnouncementPage, GatewayError>
+        query: &aether_data_contracts::repository::announcements::UserAnnouncementListQuery,
+    ) -> Result<aether_data_contracts::repository::announcements::StoredUserAnnouncementPage, GatewayError>
     {
         self.data
             .list_user_announcements(user_id, query)
@@ -15,8 +15,8 @@ impl AppState {
 
     pub(crate) async fn list_announcements(
         &self,
-        query: &aether_data::repository::announcements::AnnouncementListQuery,
-    ) -> Result<aether_data::repository::announcements::StoredAnnouncementPage, GatewayError> {
+        query: &aether_data_contracts::repository::announcements::AnnouncementListQuery,
+    ) -> Result<aether_data_contracts::repository::announcements::StoredAnnouncementPage, GatewayError> {
         self.data
             .list_announcements(query)
             .await
@@ -26,7 +26,7 @@ impl AppState {
     pub(crate) async fn find_announcement_by_id(
         &self,
         announcement_id: &str,
-    ) -> Result<Option<aether_data::repository::announcements::StoredAnnouncement>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::announcements::StoredAnnouncement>, GatewayError>
     {
         self.data
             .find_announcement_by_id(announcement_id)
@@ -50,7 +50,7 @@ impl AppState {
         user_id: &str,
         now_unix_secs: u64,
         limit: usize,
-    ) -> Result<Vec<aether_data::repository::announcements::StoredAnnouncement>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::announcements::StoredAnnouncement>, GatewayError> {
         self.data
             .list_required_unread_active_announcements(user_id, now_unix_secs, limit)
             .await
@@ -59,8 +59,8 @@ impl AppState {
 
     pub(crate) async fn create_announcement(
         &self,
-        record: aether_data::repository::announcements::CreateAnnouncementRecord,
-    ) -> Result<Option<aether_data::repository::announcements::StoredAnnouncement>, GatewayError>
+        record: aether_data_contracts::repository::announcements::CreateAnnouncementRecord,
+    ) -> Result<Option<aether_data_contracts::repository::announcements::StoredAnnouncement>, GatewayError>
     {
         self.data
             .create_announcement(record)
@@ -70,8 +70,8 @@ impl AppState {
 
     pub(crate) async fn update_announcement(
         &self,
-        record: aether_data::repository::announcements::UpdateAnnouncementRecord,
-    ) -> Result<Option<aether_data::repository::announcements::StoredAnnouncement>, GatewayError>
+        record: aether_data_contracts::repository::announcements::UpdateAnnouncementRecord,
+    ) -> Result<Option<aether_data_contracts::repository::announcements::StoredAnnouncement>, GatewayError>
     {
         self.data
             .update_announcement(record)

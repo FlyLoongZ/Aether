@@ -6,7 +6,7 @@ use axum::{
 };
 use serde_json::json;
 
-use aether_data::repository::announcements::{
+use aether_data_contracts::repository::announcements::{
     AnnouncementListQuery, StoredAnnouncement, StoredAnnouncementPage,
 };
 

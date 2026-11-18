@@ -7,7 +7,7 @@ use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKe
 
 pub(super) fn admin_monitoring_masked_user_api_key_prefix(
     state: &AdminAppState<'_>,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
 ) -> Option<String> {
     let projection = open_auth_api_key_secret(state.app(), record).ok()?;
     Some(masked_secret_display(&projection.plaintext, 10, 4, "..."))
@@ -126,7 +126,7 @@ mod tests {
             .expect("secret should encrypt");
         let mut hasher = Sha256::new();
         hasher.update(plaintext.as_bytes());
-        let record = aether_data::repository::auth::StoredAuthApiKeyExportRecord::new(
+        let record = aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord::new(
             "owner-1".to_string(),
             "key-1".to_string(),
             hex::encode(hasher.finalize()),

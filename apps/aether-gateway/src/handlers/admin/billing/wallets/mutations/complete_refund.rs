@@ -33,7 +33,7 @@ fn gateway_refund_mode_allowed(refund_mode: &str) -> bool {
 }
 
 pub(super) fn stored_refund_to_gateway(
-    refund: aether_data::repository::wallet::StoredAdminWalletRefund,
+    refund: aether_data_contracts::repository::wallet::StoredAdminWalletRefund,
 ) -> crate::AdminWalletRefundRecord {
     crate::AdminWalletRefundRecord {
         id: refund.id,
@@ -127,7 +127,7 @@ pub(in super::super) async fn build_admin_wallet_complete_refund_response(
     }
 
     let Some(wallet) = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::WalletId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
             &wallet_id,
         ))
         .await?
@@ -267,7 +267,7 @@ pub(in super::super) async fn build_admin_wallet_complete_refund_response(
                     let persisted = match state
                         .app()
                         .update_admin_wallet_refund_gateway(
-                            aether_data::repository::wallet::UpdateAdminWalletRefundGatewayInput {
+                            aether_data_contracts::repository::wallet::UpdateAdminWalletRefundGatewayInput {
                                 wallet_id: wallet_id.clone(),
                                 refund_id: refund_id.clone(),
                                 gateway_refund_id: result.gateway_refund_id.clone(),
@@ -276,13 +276,13 @@ pub(in super::super) async fn build_admin_wallet_complete_refund_response(
                         )
                         .await?
                     {
-                        Some(aether_data::repository::wallet::WalletMutationOutcome::Applied(
+                        Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(
                             refund,
                         )) => refund,
-                        Some(aether_data::repository::wallet::WalletMutationOutcome::NotFound) => {
+                        Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                             return Ok(build_admin_wallet_refund_not_found_response())
                         }
-                        Some(aether_data::repository::wallet::WalletMutationOutcome::Invalid(
+                        Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(
                             detail,
                         )) => return Ok(build_admin_wallets_bad_request_response(detail)),
                         None => return Ok(build_admin_wallets_data_unavailable_response()),
@@ -320,7 +320,7 @@ pub(in super::super) async fn build_admin_wallet_complete_refund_response(
                 match state
                     .app()
                     .update_admin_wallet_refund_gateway(
-                        aether_data::repository::wallet::UpdateAdminWalletRefundGatewayInput {
+                        aether_data_contracts::repository::wallet::UpdateAdminWalletRefundGatewayInput {
                             wallet_id: wallet_id.clone(),
                             refund_id: refund_id.clone(),
                             gateway_refund_id: result.gateway_refund_id.clone(),
@@ -329,11 +329,11 @@ pub(in super::super) async fn build_admin_wallet_complete_refund_response(
                     )
                     .await?
                 {
-                    Some(aether_data::repository::wallet::WalletMutationOutcome::Applied(_)) => {}
-                    Some(aether_data::repository::wallet::WalletMutationOutcome::NotFound) => {
+                    Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(_)) => {}
+                    Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                         return Ok(build_admin_wallet_refund_not_found_response())
                     }
-                    Some(aether_data::repository::wallet::WalletMutationOutcome::Invalid(
+                    Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(
                         detail,
                     )) => return Ok(build_admin_wallets_bad_request_response(detail)),
                     None => return Ok(build_admin_wallets_data_unavailable_response()),

@@ -33,7 +33,7 @@ use self::flow::handle_wallet_flow;
 /// handler before it renders its own payload.
 pub(super) struct WalletRequestScope {
     pub(super) auth: AuthenticatedLocalUserContext,
-    pub(super) wallet: Option<aether_data::repository::wallet::StoredWalletSnapshot>,
+    pub(super) wallet: Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
     pub(super) limit: usize,
     pub(super) offset: usize,
 }
@@ -52,7 +52,7 @@ pub(super) async fn resolve_wallet_request_scope(
         build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
     })?;
     let wallet = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
             &auth.user.id,
         ))
         .await

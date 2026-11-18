@@ -10,7 +10,7 @@ use super::super::shared::{
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::{attach_admin_audit_response, unix_secs_to_rfc3339};
 use crate::GatewayError;
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use axum::{
     body::Body,
     response::{IntoResponse, Response},
@@ -49,7 +49,7 @@ pub(in super::super) async fn build_admin_wallet_recharge_response(
     };
 
     let Some(existing_wallet) = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::WalletId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
             &wallet_id,
         ))
         .await?

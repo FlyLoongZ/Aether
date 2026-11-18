@@ -1,4 +1,4 @@
-use aether_data::repository::wallet::{
+use aether_data_contracts::repository::wallet::{
     AdjustWalletBalanceInput, CompareAndSwapPaymentOrderStripeClientSecretInput,
     CompleteAdminWalletRefundInput, CreateManualWalletRechargeInput, CreatePlanPurchaseOrderInput,
     CreatePlanPurchaseOrderOutcome, CreateWalletRechargeOrderInput,
@@ -26,7 +26,7 @@ impl AppState {
         &self,
         input: UpdateWalletRechargeCheckoutInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
         GatewayError,
     > {
         self.data
@@ -49,7 +49,7 @@ impl AppState {
         &self,
         input: FailWalletRechargeCheckoutInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
         GatewayError,
     > {
         self.data
@@ -62,7 +62,7 @@ impl AppState {
         &self,
         input: ReclaimWalletRechargeCheckoutInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
         GatewayError,
     > {
         self.data
@@ -111,8 +111,8 @@ impl AppState {
         input: AdjustWalletBalanceInput,
     ) -> Result<
         Option<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
-            Option<aether_data::repository::wallet::StoredAdminWalletTransaction>,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+            Option<aether_data_contracts::repository::wallet::StoredAdminWalletTransaction>,
         )>,
         GatewayError,
     > {
@@ -132,8 +132,8 @@ impl AppState {
         input: CreateManualWalletRechargeInput,
     ) -> Result<
         Option<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
-            aether_data::repository::wallet::StoredAdminPaymentOrder,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
         )>,
         GatewayError,
     > {
@@ -154,9 +154,9 @@ impl AppState {
     ) -> Result<
         Option<
             WalletMutationOutcome<(
-                aether_data::repository::wallet::StoredWalletSnapshot,
-                aether_data::repository::wallet::StoredAdminWalletRefund,
-                aether_data::repository::wallet::StoredAdminWalletTransaction,
+                aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+                aether_data_contracts::repository::wallet::StoredAdminWalletRefund,
+                aether_data_contracts::repository::wallet::StoredAdminWalletTransaction,
             )>,
         >,
         GatewayError,
@@ -176,7 +176,7 @@ impl AppState {
         &self,
         input: CompleteAdminWalletRefundInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data::repository::wallet::StoredAdminWalletRefund>>,
+        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>>,
         GatewayError,
     > {
         self.data
@@ -189,7 +189,7 @@ impl AppState {
         &self,
         input: UpdateAdminWalletRefundGatewayInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data::repository::wallet::StoredAdminWalletRefund>>,
+        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>>,
         GatewayError,
     > {
         self.data
@@ -204,9 +204,9 @@ impl AppState {
     ) -> Result<
         Option<
             WalletMutationOutcome<(
-                aether_data::repository::wallet::StoredWalletSnapshot,
-                aether_data::repository::wallet::StoredAdminWalletRefund,
-                Option<aether_data::repository::wallet::StoredAdminWalletTransaction>,
+                aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+                aether_data_contracts::repository::wallet::StoredAdminWalletRefund,
+                Option<aether_data_contracts::repository::wallet::StoredAdminWalletTransaction>,
             )>,
         >,
         GatewayError,
@@ -231,7 +231,7 @@ impl AppState {
     ) -> Result<
         Option<
             WalletMutationOutcome<(
-                aether_data::repository::wallet::StoredAdminPaymentOrder,
+                aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
                 bool,
             )>,
         >,
@@ -247,7 +247,7 @@ impl AppState {
         &self,
         order_id: &str,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
         GatewayError,
     > {
         self.data
@@ -262,7 +262,7 @@ impl AppState {
     ) -> Result<
         Option<
             WalletMutationOutcome<(
-                aether_data::repository::wallet::StoredAdminPaymentOrder,
+                aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
                 bool,
             )>,
         >,

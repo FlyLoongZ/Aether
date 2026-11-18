@@ -8,7 +8,7 @@ use crate::handlers::admin::shared::{
     attach_admin_audit_response, query_param_value, unix_secs_to_rfc3339,
 };
 use crate::GatewayError;
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use axum::{
     body::Body,
     http,
@@ -108,7 +108,7 @@ fn build_redeem_code_not_found_response(detail: &str) -> Response<Body> {
 }
 
 fn build_batch_payload(
-    batch: &aether_data::repository::wallet::StoredAdminRedeemCodeBatch,
+    batch: &aether_data_contracts::repository::wallet::StoredAdminRedeemCodeBatch,
 ) -> serde_json::Value {
     json!({
         "id": batch.id,
@@ -129,7 +129,7 @@ fn build_batch_payload(
 }
 
 fn build_code_payload(
-    code: &aether_data::repository::wallet::StoredAdminRedeemCode,
+    code: &aether_data_contracts::repository::wallet::StoredAdminRedeemCode,
 ) -> serde_json::Value {
     json!({
         "id": code.id,
@@ -253,7 +253,7 @@ async fn build_admin_create_redeem_code_batch_response(
 
     let Some(result) = state
         .admin_create_redeem_code_batch(
-            aether_data::repository::wallet::CreateAdminRedeemCodeBatchInput {
+            aether_data_contracts::repository::wallet::CreateAdminRedeemCodeBatchInput {
                 name,
                 amount_usd: payload.amount_usd,
                 currency: "USD".to_string(),

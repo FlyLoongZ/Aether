@@ -1,4 +1,4 @@
-use aether_data::repository::wallet::{
+use aether_data_contracts::repository::wallet::{
     AdminPaymentOrderListQuery, AdminRedeemCodeBatchListQuery, AdminRedeemCodeListQuery,
     AdminWalletLedgerQuery, AdminWalletListQuery, AdminWalletRefundRequestListQuery,
     StoredAdminPaymentCallback, StoredAdminPaymentOrder, StoredAdminRedeemCodeBatch,

@@ -161,7 +161,7 @@ pub(crate) async fn build_admin_create_user_api_key_response(
     };
 
     let Some(created) = state
-        .create_user_api_key(aether_data::repository::auth::CreateUserApiKeyRecord {
+        .create_user_api_key(aether_data_contracts::repository::auth::CreateUserApiKeyRecord {
             user_id: target_user_id.clone(),
             api_key_id,
             key_hash,

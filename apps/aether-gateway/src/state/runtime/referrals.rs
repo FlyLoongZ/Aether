@@ -80,8 +80,8 @@ impl AppState {
         input: crate::data::state::LocalAuthRegistration<'_>,
     ) -> Result<
         Option<(
-            aether_data::repository::users::StoredUserAuthRecord,
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::users::StoredUserAuthRecord,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             bool,
         )>,
         GatewayError,
@@ -317,7 +317,7 @@ impl AppState {
 
     pub(crate) async fn apply_referral_rewards_for_paid_order(
         &self,
-        order: &aether_data::repository::wallet::StoredAdminPaymentOrder,
+        order: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
     ) -> Result<Vec<ReferralRewardRecord>, GatewayError> {
         self.data
             .settle_paid_order_referral_rewards(&order.id)

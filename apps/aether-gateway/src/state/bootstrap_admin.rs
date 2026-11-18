@@ -1,5 +1,5 @@
 use crate::{AppState, GatewayError};
-use aether_data::repository::wallet::WalletLookupKey;
+use aether_data_contracts::repository::wallet::WalletLookupKey;
 use regex::Regex;
 use tracing::{info, warn};
 
@@ -195,7 +195,7 @@ async fn find_existing_bootstrap_user(
     state: &AppState,
     username: &str,
     email: Option<&str>,
-) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
     let by_username = state.find_user_auth_by_identifier(username).await?;
     let by_email = match email {
         Some(email) => state.find_user_auth_by_identifier(email).await?,
@@ -361,7 +361,7 @@ impl AppState {
 mod tests {
     use super::BootstrapAdminConfig;
     use crate::AppState;
-    use aether_data::repository::wallet::WalletLookupKey;
+    use aether_data_contracts::repository::wallet::WalletLookupKey;
 
     fn bootstrap_config() -> BootstrapAdminConfig {
         BootstrapAdminConfig {
@@ -375,8 +375,8 @@ mod tests {
         user_id: &str,
         username: &str,
         email: Option<&str>,
-    ) -> aether_data::repository::users::StoredUserAuthRecord {
-        aether_data::repository::users::StoredUserAuthRecord::new(
+    ) -> aether_data_contracts::repository::users::StoredUserAuthRecord {
+        aether_data_contracts::repository::users::StoredUserAuthRecord::new(
             user_id.to_string(),
             email.map(|value| value.to_string()),
             true,
@@ -453,7 +453,7 @@ mod tests {
 
     #[tokio::test]
     async fn bootstrap_admin_rejects_existing_non_admin_collision() {
-        let existing = aether_data::repository::users::StoredUserAuthRecord::new(
+        let existing = aether_data_contracts::repository::users::StoredUserAuthRecord::new(
             "user-1".to_string(),
             Some("admin@example.com".to_string()),
             true,

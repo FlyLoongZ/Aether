@@ -72,7 +72,7 @@ impl GatewayDataState {
         let backends = DataBackends::from_config(config.to_data_layer_config())?;
         let auth_api_key_reader = backends.read().auth_api_keys().map(|repository| {
             Arc::new(super::auth_api_key_cache::CachedAuthApiKeyReadRepository::new(repository))
-                as Arc<dyn aether_data::repository::auth::AuthApiKeyReadRepository>
+                as Arc<dyn aether_data_contracts::repository::auth::AuthApiKeyReadRepository>
         });
         let auth_api_key_writer = backends.write().auth_api_keys();
         let auth_module_reader = backends.read().auth_modules();

@@ -24,7 +24,7 @@ impl<'a> AdminAppState<'a> {
         idempotency_key: &str,
         request_fingerprint: &str,
     ) -> Result<
-        Option<aether_data::repository::wallet::PrepareAdminUserWalletBalanceBatchOutcome>,
+        Option<aether_data_contracts::repository::wallet::PrepareAdminUserWalletBalanceBatchOutcome>,
         GatewayError,
     > {
         self.app
@@ -38,9 +38,9 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn prepare_admin_user_wallet_balance_batch(
         &self,
-        input: aether_data::repository::wallet::PrepareAdminUserWalletBalanceBatchInput,
+        input: aether_data_contracts::repository::wallet::PrepareAdminUserWalletBalanceBatchInput,
     ) -> Result<
-        aether_data::repository::wallet::PrepareAdminUserWalletBalanceBatchOutcome,
+        aether_data_contracts::repository::wallet::PrepareAdminUserWalletBalanceBatchOutcome,
         GatewayError,
     > {
         self.app
@@ -54,7 +54,7 @@ impl<'a> AdminAppState<'a> {
         idempotency_key: &str,
         user_id: &str,
         reason: &str,
-    ) -> Result<aether_data::repository::wallet::AdminUserWalletBalanceBatchUserOutcome, GatewayError>
+    ) -> Result<aether_data_contracts::repository::wallet::AdminUserWalletBalanceBatchUserOutcome, GatewayError>
     {
         self.app
             .record_admin_user_wallet_balance_batch_failure(
@@ -68,8 +68,8 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn adjust_admin_user_wallet_balance_batch_user(
         &self,
-        input: aether_data::repository::wallet::AdjustWalletBalanceInBatchInput,
-    ) -> Result<aether_data::repository::wallet::AdminUserWalletBalanceBatchUserOutcome, GatewayError>
+        input: aether_data_contracts::repository::wallet::AdjustWalletBalanceInBatchInput,
+    ) -> Result<aether_data_contracts::repository::wallet::AdminUserWalletBalanceBatchUserOutcome, GatewayError>
     {
         self.app
             .adjust_admin_user_wallet_balance_batch_user(input)

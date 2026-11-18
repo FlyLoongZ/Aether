@@ -246,7 +246,7 @@ impl DataWriteRepositories {
 mod tests {
     use super::DataWriteRepositories;
     use crate::backend::PostgresBackend;
-    use crate::driver::postgres::PostgresPoolConfig;
+    use crate::PostgresPoolConfig;
 
     #[tokio::test]
     async fn builds_write_repositories_from_postgres_backend() {

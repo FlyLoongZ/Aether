@@ -5,14 +5,14 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn find_user_auth_by_id(
         &self,
         user_id: &str,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         self.app.find_user_auth_by_id(user_id).await
     }
 
     pub(crate) async fn list_users_by_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserSummary>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserSummary>, GatewayError> {
         self.app.list_users_by_ids(user_ids).await
     }
 
@@ -20,7 +20,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         user_ids: &[String],
     ) -> Result<
-        std::collections::BTreeMap<String, aether_data::repository::users::StoredUserSummary>,
+        std::collections::BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>,
         GatewayError,
     > {
         self.app.resolve_auth_user_summaries_by_ids(user_ids).await
@@ -29,7 +29,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn search_auth_user_summaries_by_username(
         &self,
         username_search: &str,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserSummary>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserSummary>, GatewayError> {
         self.app
             .search_auth_user_summaries_by_username(username_search)
             .await
@@ -37,14 +37,14 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_export_users_page(
         &self,
-        query: &aether_data::repository::users::UserExportListQuery,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserExportRow>, GatewayError> {
+        query: &aether_data_contracts::repository::users::UserExportListQuery,
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserExportRow>, GatewayError> {
         self.app.list_export_users_page(query).await
     }
 
     pub(crate) async fn count_export_users(
         &self,
-        query: &aether_data::repository::users::UserExportListQuery,
+        query: &aether_data_contracts::repository::users::UserExportListQuery,
     ) -> Result<u64, GatewayError> {
         self.app.count_export_users(query).await
     }
@@ -52,63 +52,63 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn find_export_user_by_id(
         &self,
         user_id: &str,
-    ) -> Result<Option<aether_data::repository::users::StoredUserExportRow>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserExportRow>, GatewayError> {
         self.app.find_export_user_by_id(user_id).await
     }
 
     pub(crate) async fn list_user_auth_by_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         self.app.list_user_auth_by_ids(user_ids).await
     }
 
     pub(crate) async fn find_user_auth_by_identifier(
         &self,
         identifier: &str,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         self.app.find_user_auth_by_identifier(identifier).await
     }
 
     pub(crate) async fn list_user_groups(
         &self,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
         self.app.list_user_groups().await
     }
 
     pub(crate) async fn find_user_group_by_id(
         &self,
         group_id: &str,
-    ) -> Result<Option<aether_data::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
         self.app.find_user_group_by_id(group_id).await
     }
 
     pub(crate) async fn list_user_groups_by_ids(
         &self,
         group_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
         self.app.list_user_groups_by_ids(group_ids).await
     }
 
     pub(crate) async fn create_user_group(
         &self,
-        record: aether_data::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data::repository::users::StoredUserGroup>, GatewayError> {
+        record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
         self.app.create_user_group(record).await
     }
 
     pub(crate) async fn update_user_group(
         &self,
         group_id: &str,
-        record: aether_data::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data::repository::users::StoredUserGroup>, GatewayError> {
+        record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
         self.app.update_user_group(group_id, record).await
     }
 
     pub(crate) async fn restore_user_group_if_matches(
         &self,
-        expected: &aether_data::repository::users::StoredUserGroup,
-        restored: &aether_data::repository::users::StoredUserGroup,
+        expected: &aether_data_contracts::repository::users::StoredUserGroup,
+        restored: &aether_data_contracts::repository::users::StoredUserGroup,
     ) -> Result<bool, GatewayError> {
         self.app
             .restore_user_group_if_matches(expected, restored)
@@ -122,7 +122,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_user_group_members(
         &self,
         group_id: &str,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroupMember>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, GatewayError> {
         self.app.list_user_group_members(group_id).await
     }
 
@@ -154,7 +154,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         group_id: &str,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroupMember>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, GatewayError> {
         self.app
             .replace_user_group_members(group_id, user_ids)
             .await
@@ -163,14 +163,14 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_user_groups_for_user(
         &self,
         user_id: &str,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
         self.app.list_user_groups_for_user(user_id).await
     }
 
     pub(crate) async fn list_user_group_memberships_by_user_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroupMembership>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMembership>, GatewayError> {
         self.app
             .list_user_group_memberships_by_user_ids(user_ids)
             .await
@@ -180,7 +180,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         user_id: &str,
         group_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
         self.app
             .replace_user_groups_for_user(user_id, group_ids)
             .await
@@ -256,7 +256,7 @@ impl<'a> AdminAppState<'a> {
         allowed_api_formats: Option<Vec<String>>,
         allowed_models: Option<Vec<String>>,
         rate_limit: Option<i32>,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         self.app
             .create_local_auth_user_with_settings(
                 email,
@@ -277,7 +277,7 @@ impl<'a> AdminAppState<'a> {
         user_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app
             .initialize_auth_user_wallet(user_id, initial_gift_usd, unlimited)
             .await
@@ -288,7 +288,7 @@ impl<'a> AdminAppState<'a> {
         user_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
     {
         self.app
             .initialize_auth_user_wallet_with_outcome(user_id, initial_gift_usd, unlimited)
@@ -300,7 +300,7 @@ impl<'a> AdminAppState<'a> {
         api_key_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app
             .initialize_auth_api_key_wallet(api_key_id, initial_gift_usd, unlimited)
             .await
@@ -311,7 +311,7 @@ impl<'a> AdminAppState<'a> {
         api_key_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
     {
         self.app
             .initialize_auth_api_key_wallet_with_outcome(api_key_id, initial_gift_usd, unlimited)
@@ -321,7 +321,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn delete_wallet_if_unreferenced(
         &self,
         wallet_id: &str,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, GatewayError> {
         self.app
             .delete_wallet_if_unreferenced(wallet_id, owner)
@@ -330,8 +330,8 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn delete_wallet_if_snapshot_matches_and_unreferenced(
         &self,
-        expected: &aether_data::repository::wallet::StoredWalletSnapshot,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        expected: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, GatewayError> {
         self.app
             .delete_wallet_if_snapshot_matches_and_unreferenced(expected, owner)
@@ -340,9 +340,9 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn restore_wallet_if_snapshot_matches(
         &self,
-        before: &aether_data::repository::wallet::StoredWalletSnapshot,
-        after: &aether_data::repository::wallet::StoredWalletSnapshot,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        before: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+        after: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, GatewayError> {
         self.app
             .restore_wallet_if_snapshot_matches(before, after, owner)
@@ -356,7 +356,7 @@ impl<'a> AdminAppState<'a> {
         email: Option<String>,
         email_verified: Option<bool>,
         username: Option<String>,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         self.app
             .update_local_auth_user_profile(user_id, email_present, email, email_verified, username)
             .await
@@ -365,10 +365,10 @@ impl<'a> AdminAppState<'a> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn restore_local_auth_user_state_if_matches(
         &self,
-        expected_auth: &aether_data::repository::users::StoredUserAuthRecord,
-        restored_auth: &aether_data::repository::users::StoredUserAuthRecord,
-        expected_export: &aether_data::repository::users::StoredUserExportRow,
-        restored_export: &aether_data::repository::users::StoredUserExportRow,
+        expected_auth: &aether_data_contracts::repository::users::StoredUserAuthRecord,
+        restored_auth: &aether_data_contracts::repository::users::StoredUserAuthRecord,
+        expected_export: &aether_data_contracts::repository::users::StoredUserExportRow,
+        restored_export: &aether_data_contracts::repository::users::StoredUserExportRow,
         expected_model_capability_settings: Option<&serde_json::Value>,
         restored_model_capability_settings: Option<serde_json::Value>,
         expected_feature_settings: Option<&serde_json::Value>,
@@ -430,7 +430,7 @@ impl<'a> AdminAppState<'a> {
         rate_limit_present: bool,
         rate_limit: Option<i32>,
         is_active: Option<bool>,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         self.app
             .update_local_auth_user_admin_fields(
                 user_id,
@@ -455,7 +455,7 @@ impl<'a> AdminAppState<'a> {
         allowed_api_formats_mode: Option<String>,
         allowed_models_mode: Option<String>,
         rate_limit_mode: Option<String>,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         self.app
             .update_local_auth_user_policy_modes(
                 user_id,
@@ -471,7 +471,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         user_id: &str,
         limit_mode: &str,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app
             .update_auth_user_wallet_limit_mode(user_id, limit_mode)
             .await
@@ -481,7 +481,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         api_key_id: &str,
         limit_mode: &str,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app
             .update_auth_api_key_wallet_limit_mode(api_key_id, limit_mode)
             .await
@@ -501,7 +501,7 @@ impl<'a> AdminAppState<'a> {
         total_refunded: f64,
         total_adjusted: f64,
         updated_at_unix_secs: Option<u64>,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app
             .update_auth_user_wallet_snapshot(
                 user_id,
@@ -533,7 +533,7 @@ impl<'a> AdminAppState<'a> {
         total_refunded: f64,
         total_adjusted: f64,
         updated_at_unix_secs: Option<u64>,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app
             .update_auth_api_key_wallet_snapshot(
                 api_key_id,
@@ -644,7 +644,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_auth_api_key_snapshots_by_ids(
         &self,
         api_key_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeySnapshot>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot>, GatewayError> {
         self.app
             .data
             .list_auth_api_key_snapshots_by_ids(api_key_ids)
@@ -664,7 +664,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_auth_api_key_export_records_by_user_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .data
@@ -676,7 +676,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_auth_api_key_export_records_by_ids(
         &self,
         api_key_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .data
@@ -688,7 +688,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_auth_api_key_export_records_by_name_search(
         &self,
         name_search: &str,
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .list_auth_api_key_export_records_by_name_search(name_search)
@@ -697,8 +697,8 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_auth_api_key_export_standalone_records_page(
         &self,
-        query: &aether_data::repository::auth::StandaloneApiKeyExportListQuery,
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+        query: &aether_data_contracts::repository::auth::StandaloneApiKeyExportListQuery,
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .list_auth_api_key_export_standalone_records_page(query)
@@ -716,7 +716,7 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_auth_api_key_export_standalone_records(
         &self,
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app.list_auth_api_key_export_standalone_records().await
     }
@@ -724,7 +724,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn find_auth_api_key_export_standalone_record_by_id(
         &self,
         api_key_id: &str,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .find_auth_api_key_export_standalone_record_by_id(api_key_id)
@@ -733,40 +733,40 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn create_user_api_key(
         &self,
-        record: aether_data::repository::auth::CreateUserApiKeyRecord,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+        record: aether_data_contracts::repository::auth::CreateUserApiKeyRecord,
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app.create_user_api_key(record).await
     }
 
     pub(crate) async fn create_standalone_api_key(
         &self,
-        record: aether_data::repository::auth::CreateStandaloneApiKeyRecord,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+        record: aether_data_contracts::repository::auth::CreateStandaloneApiKeyRecord,
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app.create_standalone_api_key(record).await
     }
 
     pub(crate) async fn update_user_api_key_basic(
         &self,
-        record: aether_data::repository::auth::UpdateUserApiKeyBasicRecord,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+        record: aether_data_contracts::repository::auth::UpdateUserApiKeyBasicRecord,
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app.update_user_api_key_basic(record).await
     }
 
     pub(crate) async fn update_standalone_api_key_basic(
         &self,
-        record: aether_data::repository::auth::UpdateStandaloneApiKeyBasicRecord,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+        record: aether_data_contracts::repository::auth::UpdateStandaloneApiKeyBasicRecord,
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app.update_standalone_api_key_basic(record).await
     }
 
     pub(crate) async fn restore_api_key_if_matches(
         &self,
-        expected: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
-        restored: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+        expected: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
+        restored: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
     ) -> Result<bool, GatewayError> {
         self.app
             .restore_api_key_if_matches(expected, restored)
@@ -777,7 +777,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         api_key_id: &str,
         is_active: bool,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .set_standalone_api_key_active(api_key_id, is_active)
@@ -788,7 +788,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         api_key_id: &str,
         feature_settings: Option<serde_json::Value>,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .set_standalone_api_key_feature_settings(api_key_id, feature_settings)
@@ -800,7 +800,7 @@ impl<'a> AdminAppState<'a> {
         user_id: &str,
         api_key_id: &str,
         is_active: bool,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .set_user_api_key_active(user_id, api_key_id, is_active)
@@ -823,7 +823,7 @@ impl<'a> AdminAppState<'a> {
         user_id: &str,
         api_key_id: &str,
         allowed_providers: Option<Vec<String>>,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .set_user_api_key_allowed_providers(user_id, api_key_id, allowed_providers)
@@ -835,7 +835,7 @@ impl<'a> AdminAppState<'a> {
         user_id: &str,
         api_key_id: &str,
         force_capabilities: Option<serde_json::Value>,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .set_user_api_key_force_capabilities(user_id, api_key_id, force_capabilities)
@@ -848,7 +848,7 @@ impl<'a> AdminAppState<'a> {
         total_requests: u64,
         total_tokens: u64,
         total_cost_usd: f64,
-    ) -> Result<Option<aether_data::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>, GatewayError>
     {
         self.app
             .set_api_key_usage_totals(api_key_id, total_requests, total_tokens, total_cost_usd)
@@ -873,7 +873,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_wallet_snapshots_by_api_key_ids(
         &self,
         api_key_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app
             .list_wallet_snapshots_by_api_key_ids(api_key_ids)
             .await
@@ -882,7 +882,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn list_wallet_snapshots_by_user_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app.list_wallet_snapshots_by_user_ids(user_ids).await
     }
 
@@ -896,13 +896,13 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_non_admin_export_users(
         &self,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserExportRow>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserExportRow>, GatewayError> {
         self.app.list_non_admin_export_users().await
     }
 
     pub(crate) async fn list_export_users(
         &self,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserExportRow>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserExportRow>, GatewayError> {
         self.app.list_export_users().await
     }
 }

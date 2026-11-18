@@ -209,7 +209,7 @@ pub(crate) fn decode_local_auth_token(
 
 pub(crate) fn local_auth_token_identity_matches_user(
     payload: &Map<String, Value>,
-    user: &aether_data::repository::users::StoredUserAuthRecord,
+    user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
 ) -> bool {
     if non_empty_string_claim(payload, "user_id") != Some(user.id.as_str()) {
         return false;
@@ -384,7 +384,7 @@ mod tests {
     #[test]
     fn identity_binding_rejects_even_subsecond_user_replacement() {
         let created_at = chrono::Utc::now();
-        let user = aether_data::repository::users::StoredUserAuthRecord::new(
+        let user = aether_data_contracts::repository::users::StoredUserAuthRecord::new(
             "user-1".to_string(),
             Some("user-1@example.com".to_string()),
             true,
@@ -420,7 +420,7 @@ mod tests {
     #[test]
     fn identity_binding_validates_present_role_claim() {
         let created_at = chrono::Utc::now();
-        let user = aether_data::repository::users::StoredUserAuthRecord::new(
+        let user = aether_data_contracts::repository::users::StoredUserAuthRecord::new(
             "user-1".to_string(),
             Some("user-1@example.com".to_string()),
             true,

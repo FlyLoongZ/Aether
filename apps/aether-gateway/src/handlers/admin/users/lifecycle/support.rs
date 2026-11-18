@@ -28,16 +28,16 @@ pub(super) async fn admin_user_password_policy(
 pub(super) async fn find_admin_export_user(
     state: &AdminAppState<'_>,
     user_id: &str,
-) -> Result<Option<aether_data::repository::users::StoredUserExportRow>, GatewayError> {
+) -> Result<Option<aether_data_contracts::repository::users::StoredUserExportRow>, GatewayError> {
     state.find_export_user_by_id(user_id).await
 }
 
 pub(super) fn build_admin_user_payload_with_groups(
-    user: &aether_data::repository::users::StoredUserAuthRecord,
+    user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
     rate_limit: Option<i32>,
     rate_limit_mode: Option<&str>,
     unlimited: bool,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
     json!({
         "id": user.id,
@@ -74,13 +74,13 @@ pub(super) fn build_admin_user_payload_with_groups(
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build_admin_user_export_payload(
-    row: &aether_data::repository::users::StoredUserExportRow,
+    row: &aether_data_contracts::repository::users::StoredUserExportRow,
     unlimited: bool,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     last_login_at: Option<chrono::DateTime<chrono::Utc>>,
     request_count: u64,
     total_tokens: u64,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
     json!({
         "id": row.id,
@@ -119,7 +119,7 @@ pub(super) fn build_admin_user_export_payload(
 }
 
 pub(super) fn user_group_badge_payload(
-    group: &aether_data::repository::users::StoredUserGroup,
+    group: &aether_data_contracts::repository::users::StoredUserGroup,
 ) -> serde_json::Value {
     json!({
         "id": group.id,
@@ -137,7 +137,7 @@ fn effective_policy_payload(
     allowed_models_mode: &str,
     rate_limit: Option<i32>,
     rate_limit_mode: &str,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
     let mut sorted_groups = groups.to_vec();
     sorted_groups.sort_by(|left, right| {
@@ -171,9 +171,9 @@ fn effective_policy_payload(
 fn effective_list_policy_payload(
     user_values: Option<&Vec<String>>,
     user_mode: &str,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
     group_field: impl Fn(
-        &aether_data::repository::users::StoredUserGroup,
+        &aether_data_contracts::repository::users::StoredUserGroup,
     ) -> (&String, Option<&Vec<String>>),
 ) -> serde_json::Value {
     let mut effective = None;
@@ -203,7 +203,7 @@ fn effective_list_policy_payload(
 fn effective_rate_limit_policy_payload(
     user_rate_limit: Option<i32>,
     user_mode: &str,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
     let mut effective = None;
     let mut group_sources = Vec::new();
@@ -232,7 +232,7 @@ fn policy_payload(
     mode: &str,
     value: serde_json::Value,
     source: &str,
-    groups: &[&aether_data::repository::users::StoredUserGroup],
+    groups: &[&aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
     let single_group = groups.first().copied().filter(|_| groups.len() == 1);
     json!({

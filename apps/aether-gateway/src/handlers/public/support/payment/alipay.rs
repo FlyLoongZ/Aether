@@ -40,18 +40,18 @@ pub(super) async fn handle_alipay_notify(
         }
     }
     match outcome {
-        Ok(aether_data::repository::wallet::ProcessPaymentCallbackOutcome::Applied { .. }) => {
+        Ok(aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::Applied { .. }) => {
             alipay_plain(http::StatusCode::OK, "success")
         }
         Ok(
-            aether_data::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
+            aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
                 ..
             }
-            | aether_data::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
+            | aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
                 ..
             },
         ) => alipay_plain(http::StatusCode::OK, "success"),
-        Ok(aether_data::repository::wallet::ProcessPaymentCallbackOutcome::Failed { .. }) => {
+        Ok(aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::Failed { .. }) => {
             warn!(
                 error_category = "callback_rejected",
                 path = %request_context.request_path,

@@ -27,6 +27,7 @@ aether-contracts.workspace = true
 aether-crypto.workspace = true
 aether-data.workspace = true
 aether-data-contracts.workspace = true
+aether-data-postgres.workspace = true
 aether-dispatch-core.workspace = true
 aether-gateway-frontdoor.workspace = true
 aether-gateway-control.workspace = true

@@ -1,9 +1,9 @@
 use std::net::IpAddr;
 
-use aether_data::repository::management_tokens::{
+use aether_data_contracts::repository::management_tokens::{
     StoredManagementToken, StoredManagementTokenWithUser,
 };
-use aether_data::repository::users::StoredUserAuthRecord;
+use aether_data_contracts::repository::users::StoredUserAuthRecord;
 use axum::http::{self, HeaderMap};
 use sha2::{Digest, Sha256};
 

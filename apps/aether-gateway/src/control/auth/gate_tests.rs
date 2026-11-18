@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use aether_contracts::{ExecutionPlan, RequestBody};
 use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::wallet::StoredWalletSnapshot;
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 use aether_data_contracts::repository::billing::{
     BillingReadRepository, StoredBillingModelContext, UserDailyQuotaAvailabilityRecord,
 };

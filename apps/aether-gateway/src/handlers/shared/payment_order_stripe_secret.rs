@@ -51,7 +51,7 @@ impl PaymentOrderStripeSecretBinding {
     }
 
     pub(crate) fn from_order(
-        order: &aether_data::repository::wallet::StoredAdminPaymentOrder,
+        order: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
     ) -> Result<Self, &'static str> {
         Self::new(
             &order.order_no,

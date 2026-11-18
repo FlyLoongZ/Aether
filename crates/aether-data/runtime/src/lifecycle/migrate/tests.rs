@@ -129,7 +129,7 @@ fn historical_stats_day() -> chrono::DateTime<chrono::Utc> {
 }
 
 fn postgres_backend(database_url: &str) -> crate::PostgresBackend {
-    crate::PostgresBackend::from_config(crate::driver::postgres::PostgresPoolConfig {
+    crate::PostgresBackend::from_config(crate::PostgresPoolConfig {
         database_url: database_url.to_string(),
         min_connections: 1,
         max_connections: 4,

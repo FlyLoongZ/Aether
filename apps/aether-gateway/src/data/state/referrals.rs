@@ -34,8 +34,8 @@ impl GatewayDataState {
         input: LocalAuthRegistration<'_>,
     ) -> Result<
         Option<(
-            aether_data::repository::users::StoredUserAuthRecord,
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::users::StoredUserAuthRecord,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             bool,
         )>,
         DataLayerError,

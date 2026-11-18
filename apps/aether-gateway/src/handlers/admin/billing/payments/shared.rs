@@ -2,7 +2,7 @@ use crate::handlers::admin::request::AdminRequestContext;
 use crate::handlers::admin::shared::{query_param_value, unix_secs_to_rfc3339};
 use crate::handlers::shared::normalize_payment_currency;
 use crate::GatewayAdminPaymentCallbackView;
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use axum::{
     body::Body,
     http,

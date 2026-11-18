@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use aether_data::repository::auth::{AuthApiKeyLookupKey, ResolvedAuthApiKeySnapshotReader};
+use aether_data_contracts::repository::auth::{AuthApiKeyLookupKey, ResolvedAuthApiKeySnapshotReader};
 
 use std::time::Duration;
 
@@ -56,7 +56,7 @@ impl AppState {
     pub(crate) async fn resolve_auth_api_key_snapshots_by_ids(
         &self,
         api_key_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::auth::StoredAuthApiKeySnapshot>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot>, GatewayError> {
         if !self.has_auth_api_key_data_reader() {
             return Ok(Vec::new());
         }

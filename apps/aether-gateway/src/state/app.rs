@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 
-use aether_data::repository::users::StoredUserGroup;
+use aether_data_contracts::repository::users::StoredUserGroup;
 use aether_data_contracts::repository::billing::UserDailyQuotaAvailabilityRecord;
 use aether_data_contracts::repository::quota::StoredProviderQuotaSnapshot;
 use aether_data_contracts::repository::usage::UsageCounterHealthSnapshot;
@@ -87,7 +87,7 @@ pub(crate) type AuthWalletBatchStoreForTests = Arc<
     StdMutex<
         HashMap<
             (String, String),
-            aether_data::repository::wallet::StoredAdminUserWalletBalanceBatch,
+            aether_data_contracts::repository::wallet::StoredAdminUserWalletBalanceBatch,
         >,
     >,
 >;
@@ -411,7 +411,7 @@ pub struct AppState {
     pub(crate) auth_plan_usage_policy_cache:
         Arc<ValueCache<String, crate::plan_usage_policy::EffectivePlanUsagePolicy>>,
     pub(crate) auth_wallet_snapshot_cache:
-        Arc<ValueCache<String, aether_data::repository::wallet::StoredWalletSnapshot>>,
+        Arc<ValueCache<String, aether_data_contracts::repository::wallet::StoredWalletSnapshot>>,
     pub(crate) auth_request_cost_upper_bound_cache: Arc<ValueCache<String, f64>>,
     pub(crate) provider_quota_snapshot_cache: Arc<ValueCache<String, StoredProviderQuotaSnapshot>>,
     pub(crate) user_groups_for_user_cache: Arc<ValueCache<String, Vec<StoredUserGroup>>>,
@@ -469,14 +469,14 @@ pub struct AppState {
     pub(crate) auth_email_delivery_store: Option<Arc<StdMutex<Vec<serde_json::Value>>>>,
     #[cfg(test)]
     pub(crate) auth_user_store: Option<
-        Arc<StdMutex<HashMap<String, aether_data::repository::users::StoredUserAuthRecord>>>,
+        Arc<StdMutex<HashMap<String, aether_data_contracts::repository::users::StoredUserAuthRecord>>>,
     >,
     #[cfg(test)]
     pub(crate) auth_user_model_capability_store:
         Option<Arc<StdMutex<HashMap<String, serde_json::Value>>>>,
     #[cfg(test)]
     pub(crate) auth_wallet_store: Option<
-        Arc<StdMutex<HashMap<String, aether_data::repository::wallet::StoredWalletSnapshot>>>,
+        Arc<StdMutex<HashMap<String, aether_data_contracts::repository::wallet::StoredWalletSnapshot>>>,
     >,
     #[cfg(test)]
     pub(crate) auth_wallet_adjustment_error_for_tests: Option<String>,

@@ -14,8 +14,8 @@ impl GatewayDataState {
 
     pub(crate) fn with_announcement_repository_for_tests<T>(repository: Arc<T>) -> Self
     where
-        T: aether_data::repository::announcements::AnnouncementReadRepository
-            + aether_data::repository::announcements::AnnouncementWriteRepository
+        T: aether_data_contracts::repository::announcements::AnnouncementReadRepository
+            + aether_data_contracts::repository::announcements::AnnouncementWriteRepository
             + 'static,
     {
         let announcement_reader: Arc<dyn AnnouncementReadRepository> = repository.clone();

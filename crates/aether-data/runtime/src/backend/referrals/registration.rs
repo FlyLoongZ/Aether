@@ -65,7 +65,7 @@ mod postgres_tests {
     use super::*;
     async fn isolated_backend() -> DataBackends {
         let backend = crate::backend::PostgresBackend::from_config(
-            crate::driver::postgres::PostgresPoolConfig {
+            crate::PostgresPoolConfig {
                 database_url: std::env::var("AETHER_TEST_DATABASE_URL")
                     .expect("explicit test database required"),
                 min_connections: 0,

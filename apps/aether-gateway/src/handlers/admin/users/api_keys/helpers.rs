@@ -16,7 +16,7 @@ pub(crate) fn format_optional_unix_secs_iso8601(value: Option<u64>) -> Option<St
 
 pub(crate) fn masked_user_api_key_display(
     state: &AdminAppState<'_>,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
 ) -> String {
     let Ok(projection) = open_auth_api_key_secret(state.app(), record) else {
         return api_key_placeholder_display();
@@ -26,7 +26,7 @@ pub(crate) fn masked_user_api_key_display(
 
 pub(super) fn build_admin_user_api_key_detail_payload(
     state: &AdminAppState<'_>,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
     is_locked: bool,
 ) -> serde_json::Value {
     json!({

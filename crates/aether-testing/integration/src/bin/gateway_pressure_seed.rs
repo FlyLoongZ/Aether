@@ -8,8 +8,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use aether_crypto::PythonFernetCompat;
-use aether_data::repository::auth::CreateStandaloneApiKeyRecord;
-use aether_data::repository::wallet::WalletLookupKey;
+use aether_data_contracts::repository::auth::CreateStandaloneApiKeyRecord;
+use aether_data_contracts::repository::wallet::WalletLookupKey;
 use aether_data::{DataBackends, DataLayerConfig, PostgresPoolConfig};
 use aether_data_contracts::repository::global_models::{
     CreateAdminGlobalModelRecord, UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
@@ -559,7 +559,7 @@ async fn seed_api_key(
     } else {
         auth_writer
             .update_standalone_api_key_basic(
-                aether_data::repository::auth::UpdateStandaloneApiKeyBasicRecord {
+                aether_data_contracts::repository::auth::UpdateStandaloneApiKeyBasicRecord {
                     api_key_id: api_key_id.clone(),
                     key_encrypted: Some(key_encrypted),
                     key_encrypted_present: true,

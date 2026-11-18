@@ -6,7 +6,7 @@ pub(super) async fn admin_monitoring_list_export_api_key_records_by_ids(
     state: &AdminAppState<'_>,
     api_key_ids: &[String],
 ) -> Result<
-    std::collections::BTreeMap<String, aether_data::repository::auth::StoredAuthApiKeyExportRecord>,
+    std::collections::BTreeMap<String, aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>,
     GatewayError,
 > {
     if api_key_ids.is_empty() {
@@ -25,7 +25,7 @@ async fn admin_monitoring_list_user_summaries_by_ids(
     state: &AdminAppState<'_>,
     user_ids: &[String],
 ) -> Result<
-    std::collections::BTreeMap<String, aether_data::repository::users::StoredUserSummary>,
+    std::collections::BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>,
     GatewayError,
 > {
     if user_ids.is_empty() {
@@ -47,9 +47,9 @@ pub(super) async fn admin_monitoring_load_affinity_identity_maps(
     (
         std::collections::BTreeMap<
             String,
-            aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+            aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
         >,
-        std::collections::BTreeMap<String, aether_data::repository::users::StoredUserSummary>,
+        std::collections::BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>,
     ),
     GatewayError,
 > {
@@ -74,7 +74,7 @@ pub(super) async fn admin_monitoring_load_affinity_identity_maps(
 pub(super) async fn admin_monitoring_find_user_summary_by_id(
     state: &AdminAppState<'_>,
     user_id: &str,
-) -> Result<Option<aether_data::repository::users::StoredUserSummary>, GatewayError> {
+) -> Result<Option<aether_data_contracts::repository::users::StoredUserSummary>, GatewayError> {
     if user_id.trim().is_empty() {
         return Ok(None);
     }

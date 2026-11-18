@@ -1,13 +1,13 @@
 use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
-use aether_data::repository::auth_modules::{
+use aether_data_contracts::repository::auth_modules::{
     StoredLdapModuleConfig, StoredOAuthProviderModuleConfig,
 };
-use aether_data::repository::management_tokens::{
+use aether_data_contracts::repository::management_tokens::{
     StoredManagementToken, StoredManagementTokenUserSummary, StoredManagementTokenWithUser,
 };
-use aether_data::repository::oauth_providers::StoredOAuthProviderConfig;
+use aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::proxy_nodes::StoredProxyNode;
+use aether_data_contracts::repository::proxy_nodes::StoredProxyNode;
 use aether_data_contracts::repository::{
     candidates::{RequestCandidateStatus, StoredRequestCandidate},
     global_models::{

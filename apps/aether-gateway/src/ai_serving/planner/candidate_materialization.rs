@@ -2110,7 +2110,7 @@ mod tests {
     use std::sync::Arc;
 
     use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
-    use aether_data::repository::auth::StoredAuthApiKeySnapshot;
+    use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
     use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
     use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
     use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;

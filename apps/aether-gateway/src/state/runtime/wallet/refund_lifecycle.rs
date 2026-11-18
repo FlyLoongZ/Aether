@@ -3,7 +3,7 @@ use super::{
     GatewayError,
 };
 #[cfg(test)]
-pub(crate) use aether_data::repository::wallet::{
+pub(crate) use aether_data_contracts::repository::wallet::{
     payment_order_refund_amounts_are_consistent, wallet_refund_proof_is_success,
 };
 
@@ -15,7 +15,7 @@ impl AppState {
         operator_id: Option<&str>,
     ) -> Result<
         AdminWalletMutationOutcome<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             AdminWalletRefundRecord,
             AdminWalletTransactionRecord,
         )>,
@@ -195,7 +195,7 @@ impl AppState {
 
         match self
             .process_admin_wallet_refund(
-                aether_data::repository::wallet::ProcessAdminWalletRefundInput {
+                aether_data_contracts::repository::wallet::ProcessAdminWalletRefundInput {
                     wallet_id: wallet_id.to_string(),
                     refund_id: refund_id.to_string(),
                     operator_id: operator_id.map(ToOwned::to_owned),
@@ -203,7 +203,7 @@ impl AppState {
             )
             .await?
         {
-            Some(aether_data::repository::wallet::WalletMutationOutcome::Applied((
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied((
                 wallet,
                 refund,
                 transaction,
@@ -212,10 +212,10 @@ impl AppState {
                 stored_admin_wallet_refund_to_gateway(refund),
                 stored_admin_wallet_transaction_to_gateway(transaction),
             ))),
-            Some(aether_data::repository::wallet::WalletMutationOutcome::NotFound) => {
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                 Ok(AdminWalletMutationOutcome::NotFound)
             }
-            Some(aether_data::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
                 Ok(AdminWalletMutationOutcome::Invalid(detail))
             }
             None => Ok(AdminWalletMutationOutcome::Unavailable),
@@ -293,7 +293,7 @@ impl AppState {
 
         match self
             .complete_admin_wallet_refund(
-                aether_data::repository::wallet::CompleteAdminWalletRefundInput {
+                aether_data_contracts::repository::wallet::CompleteAdminWalletRefundInput {
                     wallet_id: wallet_id.to_string(),
                     refund_id: refund_id.to_string(),
                     gateway_refund_id: gateway_refund_id.map(ToOwned::to_owned),
@@ -303,13 +303,13 @@ impl AppState {
             )
             .await?
         {
-            Some(aether_data::repository::wallet::WalletMutationOutcome::Applied(refund)) => Ok(
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(refund)) => Ok(
                 AdminWalletMutationOutcome::Applied(stored_admin_wallet_refund_to_gateway(refund)),
             ),
-            Some(aether_data::repository::wallet::WalletMutationOutcome::NotFound) => {
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                 Ok(AdminWalletMutationOutcome::NotFound)
             }
-            Some(aether_data::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
                 Ok(AdminWalletMutationOutcome::Invalid(detail))
             }
             None => Ok(AdminWalletMutationOutcome::Unavailable),
@@ -324,7 +324,7 @@ impl AppState {
         operator_id: Option<&str>,
     ) -> Result<
         AdminWalletMutationOutcome<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             AdminWalletRefundRecord,
             Option<AdminWalletTransactionRecord>,
         )>,
@@ -531,7 +531,7 @@ impl AppState {
 
         match self
             .fail_admin_wallet_refund(
-                aether_data::repository::wallet::FailAdminWalletRefundInput {
+                aether_data_contracts::repository::wallet::FailAdminWalletRefundInput {
                     wallet_id: wallet_id.to_string(),
                     refund_id: refund_id.to_string(),
                     reason: reason.to_string(),
@@ -540,7 +540,7 @@ impl AppState {
             )
             .await?
         {
-            Some(aether_data::repository::wallet::WalletMutationOutcome::Applied((
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied((
                 wallet,
                 refund,
                 transaction,
@@ -549,10 +549,10 @@ impl AppState {
                 stored_admin_wallet_refund_to_gateway(refund),
                 transaction.map(stored_admin_wallet_transaction_to_gateway),
             ))),
-            Some(aether_data::repository::wallet::WalletMutationOutcome::NotFound) => {
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                 Ok(AdminWalletMutationOutcome::NotFound)
             }
-            Some(aether_data::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
                 Ok(AdminWalletMutationOutcome::Invalid(detail))
             }
             None => Ok(AdminWalletMutationOutcome::Unavailable),
@@ -561,7 +561,7 @@ impl AppState {
 }
 
 fn stored_admin_wallet_refund_to_gateway(
-    refund: aether_data::repository::wallet::StoredAdminWalletRefund,
+    refund: aether_data_contracts::repository::wallet::StoredAdminWalletRefund,
 ) -> AdminWalletRefundRecord {
     AdminWalletRefundRecord {
         id: refund.id,
@@ -591,7 +591,7 @@ fn stored_admin_wallet_refund_to_gateway(
 }
 
 fn stored_admin_wallet_transaction_to_gateway(
-    transaction: aether_data::repository::wallet::StoredAdminWalletTransaction,
+    transaction: aether_data_contracts::repository::wallet::StoredAdminWalletTransaction,
 ) -> AdminWalletTransactionRecord {
     AdminWalletTransactionRecord {
         id: transaction.id,

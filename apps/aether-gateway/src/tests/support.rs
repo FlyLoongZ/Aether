@@ -28,11 +28,11 @@ pub(crate) const TEST_ADMIN_CREATED_AT_RFC3339: &str = "2024-01-01T00:00:00+00:0
 /// Test-only fallback: the fixed administrator identity exists outside the
 /// regular auth user/session stores so it never appears in user lists or
 /// last-active-admin counts.
-pub(crate) fn test_admin_user_record() -> aether_data::repository::users::StoredUserAuthRecord {
+pub(crate) fn test_admin_user_record() -> aether_data_contracts::repository::users::StoredUserAuthRecord {
     let created_at = chrono::DateTime::parse_from_rfc3339(TEST_ADMIN_CREATED_AT_RFC3339)
         .expect("test admin created_at should parse")
         .with_timezone(&chrono::Utc);
-    aether_data::repository::users::StoredUserAuthRecord::new(
+    aether_data_contracts::repository::users::StoredUserAuthRecord::new(
         TEST_ADMIN_USER_ID.to_string(),
         Some(TEST_ADMIN_EMAIL.to_string()),
         true,
@@ -122,7 +122,7 @@ pub(crate) fn test_admin_alt_access_token() -> &'static str {
 /// session in the state's in-memory session store.
 pub(crate) async fn issue_access_token_for_user(
     state: &crate::AppState,
-    user: &aether_data::repository::users::StoredUserAuthRecord,
+    user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
     device_id: &str,
 ) -> String {
     let session_id = format!("session-{}", user.id);
@@ -196,7 +196,7 @@ fn dev_fernet_key_is_the_derived_development_key() {
         "fixture-round-trip"
     );
 }
-use aether_data::repository::auth::StoredAuthApiKeySnapshot;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,

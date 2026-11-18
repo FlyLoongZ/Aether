@@ -486,7 +486,7 @@ fn resolution_mode_name(mode: AiCandidateResolutionMode) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aether_data::repository::auth::ResolvedAuthApiKeySnapshot;
+    use aether_data_contracts::repository::auth::ResolvedAuthApiKeySnapshot;
     use serde_json::json;
     use std::sync::Mutex;
 

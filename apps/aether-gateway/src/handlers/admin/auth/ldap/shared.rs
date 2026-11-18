@@ -44,7 +44,7 @@ pub(super) fn is_admin_ldap_test_root(request_path: &str) -> bool {
 }
 
 pub(super) fn build_admin_ldap_config_payload(
-    config: Option<&aether_data::repository::auth_modules::StoredLdapModuleConfig>,
+    config: Option<&aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
 ) -> serde_json::Value {
     match config {
         Some(config) => json!({

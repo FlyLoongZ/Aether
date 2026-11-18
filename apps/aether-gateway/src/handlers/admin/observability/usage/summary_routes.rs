@@ -13,7 +13,7 @@ use aether_admin::observability::usage::{
     build_admin_usage_active_requests_response, build_admin_usage_records_response,
     build_admin_usage_summary_stats_response_from_summary, ADMIN_USAGE_DATA_UNAVAILABLE_DETAIL,
 };
-use aether_data::repository::users::StoredUserSummary;
+use aether_data_contracts::repository::users::StoredUserSummary;
 use aether_data_contracts::repository::{
     candidates::{
         sanitize_request_candidate_extra_data, RequestCandidateStatus, StoredRequestCandidate,
@@ -967,7 +967,7 @@ pub(super) async fn maybe_build_local_admin_usage_summary_response(
                     .collect();
                 let users_by_id: BTreeMap<
                     String,
-                    aether_data::repository::users::StoredUserSummary,
+                    aether_data_contracts::repository::users::StoredUserSummary,
                 > = state.resolve_auth_user_summaries_by_ids(&user_ids).await?;
                 let api_key_names = admin_usage_api_key_names(state, &usage).await?;
                 let attempt_flags_by_usage_id =
@@ -1097,7 +1097,7 @@ pub(super) async fn maybe_build_local_admin_usage_summary_response(
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect();
-            let users_by_id: BTreeMap<String, aether_data::repository::users::StoredUserSummary> =
+            let users_by_id: BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary> =
                 state.resolve_auth_user_summaries_by_ids(&user_ids).await?;
             let api_key_names = admin_usage_api_key_names(state, &usage).await?;
             let provider_key_names = admin_usage_provider_key_names(state, &usage).await?;

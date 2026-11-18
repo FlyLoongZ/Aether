@@ -110,7 +110,7 @@ pub(crate) async fn build_auth_settings_payload(
 }
 
 pub(super) fn ldap_config_is_enabled(
-    config: Option<&aether_data::repository::auth_modules::StoredLdapModuleConfig>,
+    config: Option<&aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
 ) -> bool {
     config.is_some_and(|config| config.is_enabled) && ldap_module_config_is_valid(config)
 }

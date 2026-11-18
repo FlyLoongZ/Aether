@@ -1,1 +1,1 @@
-pub(crate) use aether_data::repository::auth::ResolvedAuthApiKeySnapshot as GatewayAuthApiKeySnapshot;
+pub(crate) use aether_data_contracts::repository::auth::ResolvedAuthApiKeySnapshot as GatewayAuthApiKeySnapshot;

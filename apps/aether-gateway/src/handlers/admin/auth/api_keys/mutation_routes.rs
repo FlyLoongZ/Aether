@@ -74,7 +74,7 @@ async fn compensate_standalone_api_key_creation(
     api_key_id: &str,
 ) -> Result<(), GatewayError> {
     let wallet = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::ApiKeyId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
             api_key_id,
         ))
         .await?;
@@ -82,12 +82,12 @@ async fn compensate_standalone_api_key_creation(
         let removed = state
             .delete_wallet_if_unreferenced(
                 &wallet.id,
-                aether_data::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id),
+                aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id),
             )
             .await?;
         if !removed
             && state
-                .find_wallet(aether_data::repository::wallet::WalletLookupKey::WalletId(
+                .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
                     &wallet.id,
                 ))
                 .await?
@@ -213,7 +213,7 @@ pub(super) async fn build_admin_create_api_key_response(
 
     let Some(created) = state
         .create_standalone_api_key(
-            aether_data::repository::auth::CreateStandaloneApiKeyRecord {
+            aether_data_contracts::repository::auth::CreateStandaloneApiKeyRecord {
                 user_id: operator_id,
                 api_key_id,
                 key_hash,
@@ -451,7 +451,7 @@ pub(super) async fn build_admin_update_api_key_response(
     }
 
     let mut wallet = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::ApiKeyId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
             &api_key_id,
         ))
         .await?;
@@ -488,7 +488,7 @@ pub(super) async fn build_admin_update_api_key_response(
 
     let Some(updated) = state
         .update_standalone_api_key_basic(
-            aether_data::repository::auth::UpdateStandaloneApiKeyBasicRecord {
+            aether_data_contracts::repository::auth::UpdateStandaloneApiKeyBasicRecord {
                 api_key_id: api_key_id.clone(),
                 key_encrypted: None,
                 key_encrypted_present: false,
@@ -528,7 +528,7 @@ pub(super) async fn build_admin_update_api_key_response(
 
     if wallet.is_none() {
         wallet = state
-            .find_wallet(aether_data::repository::wallet::WalletLookupKey::ApiKeyId(
+            .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
                 &api_key_id,
             ))
             .await?;
@@ -640,7 +640,7 @@ mod tests {
         AuthApiKeyReadRepository, AuthApiKeyWriteRepository, CreateStandaloneApiKeyRecord,
         InMemoryAuthApiKeySnapshotRepository,
     };
-    use aether_data::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
+    use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
     use std::sync::Arc;
 
     async fn seed_standalone_key(

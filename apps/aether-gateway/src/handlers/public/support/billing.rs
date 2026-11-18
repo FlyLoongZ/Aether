@@ -27,7 +27,7 @@ use sha2::{Digest, Sha256};
 use tracing::warn;
 use uuid::Uuid;
 
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 
 const BILLING_STORAGE_UNAVAILABLE_DETAIL: &str = "套餐后端暂不可用";
 const BILLING_ORDER_IDENTITY_BUCKET_SECS: u64 = 30 * 60;
@@ -212,7 +212,7 @@ fn payment_amounts_match(expected: f64, stored: f64) -> bool {
 }
 
 fn plan_order_metadata_string<'a>(
-    order: &'a aether_data::repository::wallet::StoredAdminPaymentOrder,
+    order: &'a aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
     key: &str,
 ) -> Option<&'a str> {
     order
@@ -230,7 +230,7 @@ fn plan_order_metadata_string<'a>(
 /// with older rows; this boundary check prevents a payment-method, channel,
 /// currency, rate, or amount change from receiving stale instructions.
 fn plan_purchase_order_matches_checkout(
-    order: &aether_data::repository::wallet::StoredAdminPaymentOrder,
+    order: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
     identity: &BillingCheckoutIdentity<'_>,
 ) -> bool {
     let BillingCheckoutIdentity {
@@ -301,7 +301,7 @@ fn plan_purchase_order_matches_checkout(
 async fn find_matching_pending_plan_purchase_order(
     state: &AppState,
     identity: &BillingCheckoutIdentity<'_>,
-) -> Result<Option<aether_data::repository::wallet::StoredAdminPaymentOrder>, String> {
+) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>, String> {
     let BillingCheckoutIdentity {
         user_id, plan_id, ..
     } = *identity;
@@ -313,7 +313,7 @@ async fn find_matching_pending_plan_purchase_order(
 }
 
 enum PlanOrderNoChoice {
-    Reuse(Box<aether_data::repository::wallet::StoredAdminPaymentOrder>),
+    Reuse(Box<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>),
     Fresh(String),
 }
 
@@ -488,7 +488,7 @@ fn plan_has_package_rights(
 }
 
 fn payment_order_payload(
-    record: &aether_data::repository::wallet::StoredAdminPaymentOrder,
+    record: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
     plan: &aether_data_contracts::repository::billing::BillingPlanRecord,
 ) -> serde_json::Value {
     // A gateway response is a live checkout capability, not durable order
@@ -528,7 +528,7 @@ fn payment_order_payload(
 
 async fn plan_checkout_replay_response(
     state: &AppState,
-    order: &aether_data::repository::wallet::StoredAdminPaymentOrder,
+    order: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
     plan: &aether_data_contracts::repository::billing::BillingPlanRecord,
 ) -> Response<Body> {
     let payment_instructions = wallet_payment_instructions_from_stored(state, order).await;
@@ -843,7 +843,7 @@ pub(super) async fn handle_billing_plan_checkout(
         };
         let outcome = match state
             .create_plan_purchase_order(
-                aether_data::repository::wallet::CreatePlanPurchaseOrderInput {
+                aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderInput {
                     preferred_wallet_id: None,
                     user_id: auth.user.id.clone(),
                     amount_usd,
@@ -893,17 +893,17 @@ pub(super) async fn handle_billing_plan_checkout(
             }
         };
         let order = match outcome {
-            aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::Created(order) => {
+            aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::Created(order) => {
                 payment_order_payload(&order, &plan)
             }
-            aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::WalletInactive => {
+            aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::WalletInactive => {
                 return build_auth_error_response(
                     http::StatusCode::BAD_REQUEST,
                     "wallet is not active",
                     false,
                 )
             }
-            aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::ActivePlanLimitReached => {
+            aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::ActivePlanLimitReached => {
                 return build_auth_error_response(
                     http::StatusCode::CONFLICT,
                     "套餐购买限制已达到上限",
@@ -1129,7 +1129,7 @@ pub(super) async fn handle_billing_plan_checkout(
         };
         let outcome = match state
             .create_plan_purchase_order(
-                aether_data::repository::wallet::CreatePlanPurchaseOrderInput {
+                aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderInput {
                     preferred_wallet_id: None,
                     user_id: auth.user.id.clone(),
                     amount_usd,
@@ -1204,10 +1204,10 @@ pub(super) async fn handle_billing_plan_checkout(
             }
         };
         let order = match outcome {
-            aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::Created(order) => {
+            aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::Created(order) => {
                 payment_order_payload(&order, &plan)
             }
-            aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::WalletInactive => {
+            aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::WalletInactive => {
                 close_abandoned_direct_plan_checkout(
                     state,
                     requested_provider,
@@ -1222,7 +1222,7 @@ pub(super) async fn handle_billing_plan_checkout(
                     false,
                 )
             }
-            aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::ActivePlanLimitReached => {
+            aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::ActivePlanLimitReached => {
                 close_abandoned_direct_plan_checkout(
                     state,
                     requested_provider,

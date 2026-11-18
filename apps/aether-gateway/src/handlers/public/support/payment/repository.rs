@@ -4,7 +4,7 @@ use super::payment_shared::{
     payment_callback_persistence_projection, payment_callback_success_response,
     NormalizedPaymentCallbackRequest,
 };
-use aether_data::repository::wallet::{ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome};
+use aether_data_contracts::repository::wallet::{ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome};
 use axum::{body::Body, http, response::Response};
 
 use super::{
@@ -82,16 +82,16 @@ pub(super) async fn handle_payment_callback_input_with_wallet_repository(
     }
 
     match outcome {
-        aether_data::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
+        aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::DuplicateProcessed {
             ..
         } => payment_callback_success_response(),
-        aether_data::repository::wallet::ProcessPaymentCallbackOutcome::Failed { .. } => {
+        aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::Failed { .. } => {
             payment_callback_mark_failed_response()
         }
-        aether_data::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
+        aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::AlreadyCredited {
             ..
         } => payment_callback_success_response(),
-        aether_data::repository::wallet::ProcessPaymentCallbackOutcome::Applied { .. } => {
+        aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome::Applied { .. } => {
             payment_callback_success_response()
         }
     }
@@ -167,7 +167,7 @@ mod tests {
     };
     use crate::control::GatewayPublicRequestContext;
     use crate::handlers::public::support::support_payment::PAYMENT_CALLBACK_STORAGE_UNAVAILABLE_DETAIL;
-    use aether_data::repository::wallet::ProcessPaymentCallbackOutcome;
+    use aether_data_contracts::repository::wallet::ProcessPaymentCallbackOutcome;
     use axum::body::to_bytes;
     use axum::http::{HeaderMap, Method, Uri};
     use serde_json::json;

@@ -31,13 +31,13 @@ pub(crate) fn decode_auth_token(
 
 pub(super) fn auth_token_identity_matches_user(
     payload: &serde_json::Map<String, serde_json::Value>,
-    user: &aether_data::repository::users::StoredUserAuthRecord,
+    user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
 ) -> bool {
     crate::local_auth_token::local_auth_token_identity_matches_user(payload, user)
 }
 
 pub(crate) fn build_auth_wallet_summary_payload(
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     let recharge_balance = wallet.map(|value| value.balance).unwrap_or(0.0);
     let gift_balance = wallet.map(|value| value.gift_balance).unwrap_or(0.0);
@@ -69,8 +69,8 @@ pub(crate) fn build_auth_wallet_summary_payload(
 }
 
 fn build_auth_me_payload(
-    user: &aether_data::repository::users::StoredUserAuthRecord,
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
     feature_settings: Option<serde_json::Value>,
 ) -> serde_json::Value {
     let billing = build_auth_wallet_summary_payload(wallet);
@@ -98,7 +98,7 @@ fn build_auth_me_payload(
 
 #[derive(Debug, Clone)]
 pub(crate) struct AuthenticatedLocalUserContext {
-    pub(crate) user: aether_data::repository::users::StoredUserAuthRecord,
+    pub(crate) user: aether_data_contracts::repository::users::StoredUserAuthRecord,
     pub(crate) session_id: String,
 }
 
@@ -504,7 +504,7 @@ pub(crate) async fn build_auth_login_success_response(
     headers: &http::HeaderMap,
     client_ip: std::net::IpAddr,
     client_device_id: String,
-    user: aether_data::repository::users::StoredUserAuthRecord,
+    user: aether_data_contracts::repository::users::StoredUserAuthRecord,
     expected_password_hash: Option<&str>,
 ) -> Response<Body> {
     let now = auth_now();

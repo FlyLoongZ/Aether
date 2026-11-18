@@ -30,7 +30,7 @@ pub(super) struct AuthLdapAuthenticatedUser {
 
 pub(super) async fn auth_local_login_allowed_for_user(
     state: &AppState,
-    user: Option<&aether_data::repository::users::StoredUserAuthRecord>,
+    user: Option<&aether_data_contracts::repository::users::StoredUserAuthRecord>,
 ) -> Result<bool, GatewayError> {
     let ldap_enabled_config = state
         .read_system_config_json_value("module.ldap.enabled")

@@ -9,7 +9,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use aether_data::repository::management_tokens::{
+use aether_data_contracts::repository::management_tokens::{
     CreateManagementTokenRecord, ManagementTokenListQuery, RegenerateManagementTokenSecret,
     StoredManagementTokenUserSummary, UpdateManagementTokenRecord,
 };
@@ -351,7 +351,7 @@ async fn list_users_me_management_tokens_for_user(
     is_active: Option<bool>,
     limit: usize,
 ) -> Result<
-    aether_data::repository::management_tokens::StoredManagementTokenListPage,
+    aether_data_contracts::repository::management_tokens::StoredManagementTokenListPage,
     crate::ApiError,
 > {
     if !state.has_management_token_reader() {
@@ -379,7 +379,7 @@ async fn resolve_users_me_management_token(
     user_id: &str,
     token_id: &str,
 ) -> Result<
-    aether_data::repository::management_tokens::StoredManagementTokenWithUser,
+    aether_data_contracts::repository::management_tokens::StoredManagementTokenWithUser,
     crate::ApiError,
 > {
     if !state.has_management_token_reader() {

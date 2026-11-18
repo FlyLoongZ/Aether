@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use aether_crypto::looks_like_python_fernet_ciphertext;
-use aether_data::repository::oauth_providers::{
+use aether_data_contracts::repository::oauth_providers::{
     validate_oauth_redirect_uri, StoredOAuthProviderConfig, UpsertOAuthProviderConfigRecord,
 };
 use url::{Host, Url};

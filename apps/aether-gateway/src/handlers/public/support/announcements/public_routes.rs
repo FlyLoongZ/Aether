@@ -66,7 +66,7 @@ pub(crate) async fn maybe_build_local_public_announcements_response(
                     "/api/announcements/active" | "/api/announcements/active/"
                 ) =>
         {
-            let query = aether_data::repository::announcements::AnnouncementListQuery {
+            let query = aether_data_contracts::repository::announcements::AnnouncementListQuery {
                 active_only: true,
                 offset: 0,
                 limit: 10,

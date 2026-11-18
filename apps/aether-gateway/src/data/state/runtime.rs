@@ -314,8 +314,8 @@ impl GatewayDataState {
     pub(crate) async fn list_user_announcements(
         &self,
         user_id: &str,
-        query: &aether_data::repository::announcements::UserAnnouncementListQuery,
-    ) -> Result<aether_data::repository::announcements::StoredUserAnnouncementPage, DataLayerError>
+        query: &aether_data_contracts::repository::announcements::UserAnnouncementListQuery,
+    ) -> Result<aether_data_contracts::repository::announcements::StoredUserAnnouncementPage, DataLayerError>
     {
         match &self.announcement_reader {
             Some(repository) => repository.list_user_announcements(user_id, query).await,
@@ -911,7 +911,7 @@ impl GatewayDataState {
         &self,
         wallet_id: &str,
         refund_id: &str,
-    ) -> Result<Option<aether_data::repository::wallet::StoredAdminWalletRefund>, DataLayerError>
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>, DataLayerError>
     {
         match &self.wallet_reader {
             Some(repository) => repository.find_wallet_refund(wallet_id, refund_id).await,
@@ -1253,7 +1253,7 @@ impl GatewayDataState {
         &self,
         input: DisableAdminRedeemCodeInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data::repository::wallet::StoredAdminRedeemCode>>,
+        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminRedeemCode>>,
         DataLayerError,
     > {
         match &self.wallet_writer {
@@ -2062,7 +2062,7 @@ impl GatewayDataState {
 
     pub(crate) async fn list_export_users_page(
         &self,
-        query: &aether_data::repository::users::UserExportListQuery,
+        query: &aether_data_contracts::repository::users::UserExportListQuery,
     ) -> Result<Vec<StoredUserExportRow>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.list_export_users_page(query).await,
@@ -2072,7 +2072,7 @@ impl GatewayDataState {
 
     pub(crate) async fn count_export_users(
         &self,
-        query: &aether_data::repository::users::UserExportListQuery,
+        query: &aether_data_contracts::repository::users::UserExportListQuery,
     ) -> Result<u64, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.count_export_users(query).await,
@@ -2082,10 +2082,10 @@ impl GatewayDataState {
 
     pub(crate) async fn summarize_export_users(
         &self,
-    ) -> Result<aether_data::repository::users::UserExportSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::users::UserExportSummary, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.summarize_export_users().await,
-            None => Ok(aether_data::repository::users::UserExportSummary::default()),
+            None => Ok(aether_data_contracts::repository::users::UserExportSummary::default()),
         }
     }
 

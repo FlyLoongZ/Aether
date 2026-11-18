@@ -13,7 +13,7 @@ fn normalize_ldap_identity_email(value: &str) -> Option<String> {
 /// wallet id only when this invocation created that row so later compensation
 /// can never delete a pre-existing wallet.
 pub(crate) struct LdapAuthProvisioningResult {
-    pub(crate) user: aether_data::repository::users::StoredUserAuthRecord,
+    pub(crate) user: aether_data_contracts::repository::users::StoredUserAuthRecord,
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) owned_wallet_id: Option<String>,
 }
@@ -21,7 +21,7 @@ pub(crate) struct LdapAuthProvisioningResult {
 #[cfg(test)]
 pub(super) fn record_test_initial_gift_transaction(
     state: &AppState,
-    wallet: &aether_data::repository::wallet::StoredWalletSnapshot,
+    wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
     owner_id: &str,
     description: &str,
 ) {
@@ -107,7 +107,7 @@ impl AppState {
     pub(crate) async fn delete_wallet_if_unreferenced(
         &self,
         wallet_id: &str,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, GatewayError> {
         if wallet_id.trim().is_empty() {
             return Ok(false);
@@ -116,24 +116,24 @@ impl AppState {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let owner_matches =
-                |wallet: &aether_data::repository::wallet::StoredWalletSnapshot| match owner {
-                    aether_data::repository::wallet::WalletLookupKey::UserId(user_id) => {
+                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| match owner {
+                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
                         !user_id.trim().is_empty()
                             && wallet.id == wallet_id
                             && wallet.user_id.as_deref() == Some(user_id)
                             && wallet.api_key_id.is_none()
                     }
-                    aether_data::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
+                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
                         !api_key_id.trim().is_empty()
                             && wallet.id == wallet_id
                             && wallet.api_key_id.as_deref() == Some(api_key_id)
                             && wallet.user_id.is_none()
                     }
-                    aether_data::repository::wallet::WalletLookupKey::WalletId(_) => false,
+                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => false,
                 };
             if matches!(
                 owner,
-                aether_data::repository::wallet::WalletLookupKey::WalletId(_)
+                aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_)
             ) {
                 return Err(GatewayError::Internal(
                     "wallet compensation requires an explicit user or API-key owner".to_string(),
@@ -212,8 +212,8 @@ impl AppState {
 
     pub(crate) async fn delete_wallet_if_snapshot_matches_and_unreferenced(
         &self,
-        expected: &aether_data::repository::wallet::StoredWalletSnapshot,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        expected: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, GatewayError> {
         if expected.id.trim().is_empty() {
             return Ok(false);
@@ -222,24 +222,24 @@ impl AppState {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let owner_matches =
-                |wallet: &aether_data::repository::wallet::StoredWalletSnapshot| match owner {
-                    aether_data::repository::wallet::WalletLookupKey::UserId(user_id) => {
+                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| match owner {
+                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
                         !user_id.trim().is_empty()
                             && wallet.id == expected.id
                             && wallet.user_id.as_deref() == Some(user_id)
                             && wallet.api_key_id.is_none()
                     }
-                    aether_data::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
+                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
                         !api_key_id.trim().is_empty()
                             && wallet.id == expected.id
                             && wallet.api_key_id.as_deref() == Some(api_key_id)
                             && wallet.user_id.is_none()
                     }
-                    aether_data::repository::wallet::WalletLookupKey::WalletId(_) => false,
+                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => false,
                 };
             if matches!(
                 owner,
-                aether_data::repository::wallet::WalletLookupKey::WalletId(_)
+                aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_)
             ) {
                 return Err(GatewayError::Internal(
                     "wallet compensation requires an explicit user or API-key owner".to_string(),
@@ -309,9 +309,9 @@ impl AppState {
 
     pub(crate) async fn restore_wallet_if_snapshot_matches(
         &self,
-        before: &aether_data::repository::wallet::StoredWalletSnapshot,
-        after: &aether_data::repository::wallet::StoredWalletSnapshot,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        before: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+        after: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, GatewayError> {
         if before.id.trim().is_empty() || after.id.trim().is_empty() {
             return Ok(false);
@@ -325,22 +325,22 @@ impl AppState {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let owner_matches =
-                |wallet: &aether_data::repository::wallet::StoredWalletSnapshot| match owner {
-                    aether_data::repository::wallet::WalletLookupKey::UserId(user_id) => {
+                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| match owner {
+                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
                         !user_id.trim().is_empty()
                             && wallet.user_id.as_deref() == Some(user_id)
                             && wallet.api_key_id.is_none()
                     }
-                    aether_data::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
+                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
                         !api_key_id.trim().is_empty()
                             && wallet.api_key_id.as_deref() == Some(api_key_id)
                             && wallet.user_id.is_none()
                     }
-                    aether_data::repository::wallet::WalletLookupKey::WalletId(_) => false,
+                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => false,
                 };
             if matches!(
                 owner,
-                aether_data::repository::wallet::WalletLookupKey::WalletId(_)
+                aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_)
             ) {
                 return Err(GatewayError::Internal(
                     "wallet restore requires an explicit user or API-key owner".to_string(),
@@ -644,7 +644,7 @@ impl AppState {
         logged_in_at: chrono::DateTime<chrono::Utc>,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
         Ok(self
             .get_or_create_ldap_auth_user_with_wallet_outcome(
                 email,
@@ -735,7 +735,7 @@ impl AppState {
                     );
                 }
 
-                let user = aether_data::repository::users::StoredUserAuthRecord::new(
+                let user = aether_data_contracts::repository::users::StoredUserAuthRecord::new(
                     uuid::Uuid::new_v4().to_string(),
                     Some(email),
                     true,
@@ -820,7 +820,7 @@ impl AppState {
         user_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             if user_id.trim().is_empty() {
@@ -842,7 +842,7 @@ impl AppState {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64;
-            let wallet = aether_data::repository::wallet::StoredWalletSnapshot::new(
+            let wallet = aether_data_contracts::repository::wallet::StoredWalletSnapshot::new(
                 uuid::Uuid::new_v4().to_string(),
                 Some(user_id.to_string()),
                 None,
@@ -893,7 +893,7 @@ impl AppState {
         user_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
     {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
@@ -916,7 +916,7 @@ impl AppState {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64;
-            let wallet = aether_data::repository::wallet::StoredWalletSnapshot::new(
+            let wallet = aether_data_contracts::repository::wallet::StoredWalletSnapshot::new(
                 uuid::Uuid::new_v4().to_string(),
                 Some(user_id.to_string()),
                 None,
@@ -941,7 +941,7 @@ impl AppState {
                 existing.user_id.as_deref() == Some(user_id) && existing.api_key_id.is_none()
             }) {
                 return Ok(Some(
-                    aether_data::repository::wallet::InitializeAuthWalletOutcome {
+                    aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome {
                         wallet: existing.clone(),
                         created: false,
                     },
@@ -952,7 +952,7 @@ impl AppState {
             record_test_initial_gift_transaction(self, &wallet, user_id, "用户初始赠款");
             self.invalidate_auth_context_cache();
             return Ok(Some(
-                aether_data::repository::wallet::InitializeAuthWalletOutcome {
+                aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome {
                     wallet,
                     created: true,
                 },
@@ -970,7 +970,7 @@ impl AppState {
         api_key_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             if api_key_id.trim().is_empty() {
@@ -992,7 +992,7 @@ impl AppState {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64;
-            let wallet = aether_data::repository::wallet::StoredWalletSnapshot::new(
+            let wallet = aether_data_contracts::repository::wallet::StoredWalletSnapshot::new(
                 uuid::Uuid::new_v4().to_string(),
                 None,
                 Some(api_key_id.to_string()),
@@ -1048,7 +1048,7 @@ impl AppState {
         api_key_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
     {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
@@ -1071,7 +1071,7 @@ impl AppState {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs() as i64;
-            let wallet = aether_data::repository::wallet::StoredWalletSnapshot::new(
+            let wallet = aether_data_contracts::repository::wallet::StoredWalletSnapshot::new(
                 uuid::Uuid::new_v4().to_string(),
                 None,
                 Some(api_key_id.to_string()),
@@ -1096,7 +1096,7 @@ impl AppState {
                 existing.api_key_id.as_deref() == Some(api_key_id) && existing.user_id.is_none()
             }) {
                 return Ok(Some(
-                    aether_data::repository::wallet::InitializeAuthWalletOutcome {
+                    aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome {
                         wallet: existing.clone(),
                         created: false,
                     },
@@ -1112,7 +1112,7 @@ impl AppState {
             );
             self.invalidate_auth_context_cache();
             return Ok(Some(
-                aether_data::repository::wallet::InitializeAuthWalletOutcome {
+                aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome {
                     wallet,
                     created: true,
                 },
@@ -1129,7 +1129,7 @@ impl AppState {
         &self,
         user_id: &str,
         limit_mode: &str,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");
@@ -1163,7 +1163,7 @@ impl AppState {
         &self,
         api_key_id: &str,
         limit_mode: &str,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");
@@ -1207,7 +1207,7 @@ impl AppState {
         total_refunded: f64,
         total_adjusted: f64,
         updated_at_unix_secs: Option<u64>,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");
@@ -1272,7 +1272,7 @@ impl AppState {
         total_refunded: f64,
         total_adjusted: f64,
         updated_at_unix_secs: Option<u64>,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");
@@ -1327,8 +1327,8 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aether_data::repository::users::StoredUserAuthRecord;
-    use aether_data::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
+    use aether_data_contracts::repository::users::StoredUserAuthRecord;
+    use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
 
     #[test]
     fn ldap_identity_email_uses_the_canonical_account_namespace() {

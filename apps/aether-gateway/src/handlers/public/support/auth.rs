@@ -44,7 +44,7 @@ use auth_ldap::*;
 
 pub(super) async fn local_password_login_allowed_for_user(
     state: &AppState,
-    user: Option<&aether_data::repository::users::StoredUserAuthRecord>,
+    user: Option<&aether_data_contracts::repository::users::StoredUserAuthRecord>,
 ) -> Result<bool, GatewayError> {
     auth_ldap::auth_local_login_allowed_for_user(state, user).await
 }

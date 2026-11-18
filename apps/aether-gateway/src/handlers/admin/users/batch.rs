@@ -8,7 +8,7 @@ use super::{
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::attach_admin_audit_response;
 use crate::GatewayError;
-use aether_data::repository::wallet::{
+use aether_data_contracts::repository::wallet::{
     AdminUserWalletBalanceBatchUserOutcome, PrepareAdminUserWalletBalanceBatchOutcome,
 };
 use axum::{
@@ -518,7 +518,7 @@ async fn build_admin_user_wallet_balance_batch_response(
                 .unwrap_or_default();
             let prepared = state
                 .prepare_admin_user_wallet_balance_batch(
-                    aether_data::repository::wallet::PrepareAdminUserWalletBalanceBatchInput {
+                    aether_data_contracts::repository::wallet::PrepareAdminUserWalletBalanceBatchInput {
                         admin_user_id: admin_user_id.clone(),
                         idempotency_key: idempotency_key.to_string(),
                         request_fingerprint: request_fingerprint.clone(),
@@ -644,7 +644,7 @@ async fn build_admin_user_wallet_balance_batch_response(
             }
             Ok(Some(_)) => {
                 let wallet = match state
-                    .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+                    .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
                         &item.user_id,
                     ))
                     .await
@@ -709,11 +709,11 @@ async fn build_admin_user_wallet_balance_batch_response(
                 };
                 let result = state
                     .adjust_admin_user_wallet_balance_batch_user(
-                        aether_data::repository::wallet::AdjustWalletBalanceInBatchInput {
+                        aether_data_contracts::repository::wallet::AdjustWalletBalanceInBatchInput {
                             admin_user_id: admin_user_id.clone(),
                             idempotency_key: idempotency_key.to_string(),
                             user_id: item.user_id.clone(),
-                            adjustment: aether_data::repository::wallet::AdjustWalletBalanceInput {
+                            adjustment: aether_data_contracts::repository::wallet::AdjustWalletBalanceInput {
                                 wallet_id: wallet.id,
                                 amount_usd: signed_amount,
                                 balance_type: "recharge".to_string(),
@@ -995,7 +995,7 @@ async fn resolve_admin_user_selection(
                 || filters.group_id.is_some()
         }) {
             state
-                .list_export_users_page(&aether_data::repository::users::UserExportListQuery {
+                .list_export_users_page(&aether_data_contracts::repository::users::UserExportListQuery {
                     skip: 0,
                     limit: 100_000,
                     role: filters.as_ref().and_then(|filters| filters.role.clone()),
@@ -1108,7 +1108,7 @@ fn normalize_selection_filters(
 }
 
 fn admin_user_matches_filters(
-    user: &aether_data::repository::users::StoredUserExportRow,
+    user: &aether_data_contracts::repository::users::StoredUserExportRow,
     filters: Option<&NormalizedAdminUserSelectionFilters>,
 ) -> bool {
     let Some(filters) = filters else {
@@ -1302,7 +1302,7 @@ async fn apply_batch_user_wallet_limit_mode(
 ) -> Result<bool, AdminBatchWalletLimitModeError> {
     let desired_limit_mode = if unlimited { "unlimited" } else { "finite" };
     let wallet = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
             user_id,
         ))
         .await
@@ -1334,7 +1334,7 @@ async fn apply_batch_user_wallet_balance_adjustment(
 ) -> Result<bool, AdminBatchWalletBalanceAdjustmentError> {
     // Resolve only the wallet ID; the repository clamps the deduction under its row lock.
     let Some(wallet) = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
             user_id,
         ))
         .await

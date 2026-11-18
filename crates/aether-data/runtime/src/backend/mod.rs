@@ -124,7 +124,7 @@ impl DataBackends {
 #[cfg(test)]
 mod tests {
     use super::DataBackends;
-    use crate::driver::postgres::PostgresPoolConfig;
+    use crate::PostgresPoolConfig;
     use crate::DataLayerConfig;
 
     #[test]

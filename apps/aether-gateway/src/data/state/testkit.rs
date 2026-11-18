@@ -11,7 +11,7 @@ use aether_data_contracts::repository::usage::{
     UsageReadRepository, UsageRepository, UsageWriteRepository,
 };
 
-use aether_data::repository::auth::AuthApiKeyReadRepository;
+use aether_data_contracts::repository::auth::AuthApiKeyReadRepository;
 use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::routing_profiles::{
     StoredRoutingGroup, StoredRoutingGroupBinding, StoredRoutingGroupVersion,

@@ -362,7 +362,7 @@ pub(crate) async fn store_local_gemini_file_mapping(
 
     let stored = state
         .upsert_gemini_file_mapping_if_owner_matches(
-            aether_data::repository::gemini_file_mappings::UpsertGeminiFileMappingRecord {
+            aether_data_contracts::repository::gemini_file_mappings::UpsertGeminiFileMappingRecord {
                 id: Uuid::new_v4().to_string(),
                 file_name: file_name.clone(),
                 key_id: key_id.to_string(),

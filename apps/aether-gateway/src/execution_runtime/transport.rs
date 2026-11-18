@@ -17,7 +17,7 @@ use aether_contracts::{
     TRANSPORT_BACKEND_BROWSER_WREQ, TRANSPORT_BACKEND_REQWEST_RUSTLS,
     TRANSPORT_HTTP_MODE_H2C_PRIOR_KNOWLEDGE, TRANSPORT_HTTP_MODE_HTTP1_ONLY,
 };
-use aether_data::repository::proxy_nodes::ProxyNodeTrafficMutation;
+use aether_data_contracts::repository::proxy_nodes::ProxyNodeTrafficMutation;
 use aether_http::{apply_http_client_config, is_private_or_reserved_ip, HttpClientConfig};
 use aether_runtime::{MetricKind, MetricSample};
 use axum::body::Bytes;

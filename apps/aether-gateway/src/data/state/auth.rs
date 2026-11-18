@@ -11,7 +11,7 @@ use super::{
     StoredWalletSnapshot, UpdateManagementTokenRecord, UpsertOAuthProviderConfigRecord,
 };
 use crate::LocalMutationOutcome;
-use aether_data::repository::auth::ResolvedAuthApiKeySnapshotReader;
+use aether_data_contracts::repository::auth::ResolvedAuthApiKeySnapshotReader;
 
 /// Result of synchronizing an LDAP identity and, when applicable, creating its
 /// first wallet.  The wallet id is only exposed when this invocation created
@@ -25,8 +25,8 @@ pub(crate) struct LdapAuthProvisioningResult {
 fn auth_user_wallet_matches(wallet: &StoredWalletSnapshot, user_id: &str) -> bool {
     wallet.user_id.as_deref() == Some(user_id) && wallet.api_key_id.is_none()
 }
-use aether_data::repository::users::ResolveOAuthLinkedUserOutcome;
-use aether_data::repository::users::{
+use aether_data_contracts::repository::users::ResolveOAuthLinkedUserOutcome;
+use aether_data_contracts::repository::users::{
     BindUserOAuthLinkOutcome, BindUserOAuthLinkSessionExpectation, DeleteUserOAuthLinkOutcome,
 };
 
@@ -108,7 +108,7 @@ impl GatewayDataState {
 
     pub(crate) async fn list_user_groups(
         &self,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.list_user_groups().await,
             None => Ok(Vec::new()),
@@ -118,7 +118,7 @@ impl GatewayDataState {
     pub(crate) async fn find_user_group_by_id(
         &self,
         group_id: &str,
-    ) -> Result<Option<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.find_user_group_by_id(group_id).await,
             None => Ok(None),
@@ -128,7 +128,7 @@ impl GatewayDataState {
     pub(crate) async fn list_user_groups_by_ids(
         &self,
         group_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.list_user_groups_by_ids(group_ids).await,
             None => Ok(Vec::new()),
@@ -137,8 +137,8 @@ impl GatewayDataState {
 
     pub(crate) async fn create_user_group(
         &self,
-        record: aether_data::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+        record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.create_user_group(record).await,
             None => Ok(None),
@@ -148,8 +148,8 @@ impl GatewayDataState {
     pub(crate) async fn update_user_group(
         &self,
         group_id: &str,
-        record: aether_data::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+        record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.update_user_group(group_id, record).await,
             None => Ok(None),
@@ -158,8 +158,8 @@ impl GatewayDataState {
 
     pub(crate) async fn restore_user_group_if_matches(
         &self,
-        expected: &aether_data::repository::users::StoredUserGroup,
-        restored: &aether_data::repository::users::StoredUserGroup,
+        expected: &aether_data_contracts::repository::users::StoredUserGroup,
+        restored: &aether_data_contracts::repository::users::StoredUserGroup,
     ) -> Result<bool, DataLayerError> {
         match &self.user_reader {
             Some(repository) => {
@@ -181,7 +181,7 @@ impl GatewayDataState {
     pub(crate) async fn list_user_group_members(
         &self,
         group_id: &str,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroupMember>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.list_user_group_members(group_id).await,
             None => Ok(Vec::new()),
@@ -192,7 +192,7 @@ impl GatewayDataState {
         &self,
         group_id: &str,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroupMember>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => {
                 repository
@@ -206,7 +206,7 @@ impl GatewayDataState {
     pub(crate) async fn list_user_groups_for_user(
         &self,
         user_id: &str,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => repository.list_user_groups_for_user(user_id).await,
             None => Ok(Vec::new()),
@@ -216,7 +216,7 @@ impl GatewayDataState {
     pub(crate) async fn list_user_group_memberships_by_user_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroupMembership>, DataLayerError>
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMembership>, DataLayerError>
     {
         match &self.user_reader {
             Some(repository) => {
@@ -232,7 +232,7 @@ impl GatewayDataState {
         &self,
         user_id: &str,
         group_ids: &[String],
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         match &self.user_reader {
             Some(repository) => {
                 repository
@@ -535,10 +535,10 @@ impl GatewayDataState {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn restore_local_auth_user_state_if_matches(
         &self,
-        expected_auth: &aether_data::repository::users::StoredUserAuthRecord,
-        restored_auth: &aether_data::repository::users::StoredUserAuthRecord,
-        expected_export: &aether_data::repository::users::StoredUserExportRow,
-        restored_export: &aether_data::repository::users::StoredUserExportRow,
+        expected_auth: &aether_data_contracts::repository::users::StoredUserAuthRecord,
+        restored_auth: &aether_data_contracts::repository::users::StoredUserAuthRecord,
+        expected_export: &aether_data_contracts::repository::users::StoredUserExportRow,
+        restored_export: &aether_data_contracts::repository::users::StoredUserExportRow,
         expected_model_capability_settings: Option<&serde_json::Value>,
         restored_model_capability_settings: Option<serde_json::Value>,
         expected_feature_settings: Option<&serde_json::Value>,
@@ -878,7 +878,7 @@ impl GatewayDataState {
     pub(crate) async fn delete_wallet_if_unreferenced(
         &self,
         wallet_id: &str,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, DataLayerError> {
         match &self.wallet_writer {
             Some(repository) => {
@@ -893,7 +893,7 @@ impl GatewayDataState {
     pub(crate) async fn delete_wallet_if_snapshot_matches_and_unreferenced(
         &self,
         expected: &StoredWalletSnapshot,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, DataLayerError> {
         match &self.wallet_writer {
             Some(repository) => {
@@ -909,7 +909,7 @@ impl GatewayDataState {
         &self,
         before: &StoredWalletSnapshot,
         after: &StoredWalletSnapshot,
-        owner: aether_data::repository::wallet::WalletLookupKey<'_>,
+        owner: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
     ) -> Result<bool, DataLayerError> {
         match &self.wallet_writer {
             Some(repository) => {
@@ -1098,7 +1098,7 @@ impl GatewayDataState {
         };
 
         if repository
-            .find(aether_data::repository::wallet::WalletLookupKey::UserId(
+            .find(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
                 user_id,
             ))
             .await?
@@ -1128,7 +1128,7 @@ impl GatewayDataState {
         // A single-row page is enough to establish that an API-key wallet
         // exists while avoiding an unbounded read during error compensation.
         let page = repository
-            .list_admin_wallets(&aether_data::repository::wallet::AdminWalletListQuery {
+            .list_admin_wallets(&aether_data_contracts::repository::wallet::AdminWalletListQuery {
                 user_id: None,
                 status: None,
                 owner_type: Some("api_key".to_string()),
@@ -1170,7 +1170,7 @@ impl GatewayDataState {
                 // for provisional cleanup.
                 let exact_wallet_exists = match &self.wallet_reader {
                     Some(repository) => repository
-                        .find(aether_data::repository::wallet::WalletLookupKey::WalletId(
+                        .find(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
                             wallet_id,
                         ))
                         .await?
@@ -1508,7 +1508,7 @@ impl GatewayDataState {
         force_disable: bool,
         locked_users_snapshot: usize,
     ) -> Result<
-        Option<aether_data::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
+        Option<aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
         DataLayerError,
     > {
         match &self.oauth_provider_writer {
@@ -1923,7 +1923,7 @@ impl GatewayDataState {
 
     pub(crate) async fn list_auth_api_key_export_standalone_records_page(
         &self,
-        query: &aether_data::repository::auth::StandaloneApiKeyExportListQuery,
+        query: &aether_data_contracts::repository::auth::StandaloneApiKeyExportListQuery,
     ) -> Result<Vec<StoredAuthApiKeyExportRecord>, DataLayerError> {
         match &self.auth_api_key_reader {
             Some(repository) => repository.list_export_standalone_api_keys_page(query).await,
@@ -1945,28 +1945,28 @@ impl GatewayDataState {
         &self,
         user_ids: &[String],
         now_unix_secs: u64,
-    ) -> Result<aether_data::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
         match &self.auth_api_key_reader {
             Some(repository) => {
                 repository
                     .summarize_export_api_keys_by_user_ids(user_ids, now_unix_secs)
                     .await
             }
-            None => Ok(aether_data::repository::auth::AuthApiKeyExportSummary::default()),
+            None => Ok(aether_data_contracts::repository::auth::AuthApiKeyExportSummary::default()),
         }
     }
 
     pub(crate) async fn summarize_auth_api_key_export_non_standalone_records(
         &self,
         now_unix_secs: u64,
-    ) -> Result<aether_data::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
         match &self.auth_api_key_reader {
             Some(repository) => {
                 repository
                     .summarize_export_non_standalone_api_keys(now_unix_secs)
                     .await
             }
-            None => Ok(aether_data::repository::auth::AuthApiKeyExportSummary::default()),
+            None => Ok(aether_data_contracts::repository::auth::AuthApiKeyExportSummary::default()),
         }
     }
 
@@ -1982,14 +1982,14 @@ impl GatewayDataState {
     pub(crate) async fn summarize_auth_api_key_export_standalone_records(
         &self,
         now_unix_secs: u64,
-    ) -> Result<aether_data::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
         match &self.auth_api_key_reader {
             Some(repository) => {
                 repository
                     .summarize_export_standalone_api_keys(now_unix_secs)
                     .await
             }
-            None => Ok(aether_data::repository::auth::AuthApiKeyExportSummary::default()),
+            None => Ok(aether_data_contracts::repository::auth::AuthApiKeyExportSummary::default()),
         }
     }
 
@@ -2009,7 +2009,7 @@ impl GatewayDataState {
 
     pub(crate) async fn create_user_api_key(
         &self,
-        record: aether_data::repository::auth::CreateUserApiKeyRecord,
+        record: aether_data_contracts::repository::auth::CreateUserApiKeyRecord,
     ) -> Result<Option<StoredAuthApiKeyExportRecord>, DataLayerError> {
         match &self.auth_api_key_writer {
             Some(repository) => repository.create_user_api_key(record).await,
@@ -2034,7 +2034,7 @@ impl GatewayDataState {
 
     pub(crate) async fn create_standalone_api_key(
         &self,
-        record: aether_data::repository::auth::CreateStandaloneApiKeyRecord,
+        record: aether_data_contracts::repository::auth::CreateStandaloneApiKeyRecord,
     ) -> Result<Option<StoredAuthApiKeyExportRecord>, DataLayerError> {
         match &self.auth_api_key_writer {
             Some(repository) => repository.create_standalone_api_key(record).await,
@@ -2044,7 +2044,7 @@ impl GatewayDataState {
 
     pub(crate) async fn update_user_api_key_basic(
         &self,
-        record: aether_data::repository::auth::UpdateUserApiKeyBasicRecord,
+        record: aether_data_contracts::repository::auth::UpdateUserApiKeyBasicRecord,
     ) -> Result<Option<StoredAuthApiKeyExportRecord>, DataLayerError> {
         match &self.auth_api_key_writer {
             Some(repository) => repository.update_user_api_key_basic(record).await,
@@ -2054,7 +2054,7 @@ impl GatewayDataState {
 
     pub(crate) async fn compare_and_swap_api_key_ciphertext(
         &self,
-        mutation: &aether_data::repository::auth::CompareAndSwapAuthApiKeyCiphertext,
+        mutation: &aether_data_contracts::repository::auth::CompareAndSwapAuthApiKeyCiphertext,
     ) -> Result<bool, DataLayerError> {
         match &self.auth_api_key_writer {
             Some(repository) => {
@@ -2068,7 +2068,7 @@ impl GatewayDataState {
 
     pub(crate) async fn update_user_api_key_basic_if_unlocked(
         &self,
-        record: aether_data::repository::auth::UpdateUserApiKeyBasicRecord,
+        record: aether_data_contracts::repository::auth::UpdateUserApiKeyBasicRecord,
     ) -> Result<Option<StoredAuthApiKeyExportRecord>, DataLayerError> {
         match &self.auth_api_key_writer {
             Some(repository) => {
@@ -2082,7 +2082,7 @@ impl GatewayDataState {
 
     pub(crate) async fn update_standalone_api_key_basic(
         &self,
-        record: aether_data::repository::auth::UpdateStandaloneApiKeyBasicRecord,
+        record: aether_data_contracts::repository::auth::UpdateStandaloneApiKeyBasicRecord,
     ) -> Result<Option<StoredAuthApiKeyExportRecord>, DataLayerError> {
         match &self.auth_api_key_writer {
             Some(repository) => repository.update_standalone_api_key_basic(record).await,
@@ -2430,7 +2430,7 @@ impl GatewayDataState {
     async fn effective_user_groups_for_user(
         &self,
         user_id: &str,
-    ) -> Result<Vec<aether_data::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
         let Some(repository) = self.user_reader.as_ref() else {
             return Ok(Vec::new());
         };
@@ -2505,7 +2505,7 @@ impl GatewayDataState {
 // Per-user list policy columns are retained only for legacy import/export compatibility.
 // Runtime authorization and user-facing catalogs must both treat group policies as authoritative.
 fn resolve_group_effective_list_policies(
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> GatewayUserEffectiveListPolicies {
     GatewayUserEffectiveListPolicies {
         allowed_providers: resolve_effective_list_policy(None, "unrestricted", groups, |group| {
@@ -2534,9 +2534,9 @@ fn resolve_group_effective_list_policies(
 fn resolve_effective_list_policy(
     user_values: Option<Vec<String>>,
     user_mode: &str,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
     group_field: impl Fn(
-        &aether_data::repository::users::StoredUserGroup,
+        &aether_data_contracts::repository::users::StoredUserGroup,
     ) -> (&str, Option<Vec<String>>),
 ) -> Option<Vec<String>> {
     let group_policy = union_group_list_policies(groups, group_field);
@@ -2547,9 +2547,9 @@ fn resolve_effective_list_policy(
 fn resolve_effective_api_format_policy(
     user_values: Option<Vec<String>>,
     user_mode: &str,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
     group_field: impl Fn(
-        &aether_data::repository::users::StoredUserGroup,
+        &aether_data_contracts::repository::users::StoredUserGroup,
     ) -> (&str, Option<Vec<String>>),
 ) -> Option<Vec<String>> {
     let group_policy = union_group_list_policies(groups, group_field);
@@ -2558,9 +2558,9 @@ fn resolve_effective_api_format_policy(
 }
 
 fn union_group_list_policies(
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
     group_field: impl Fn(
-        &aether_data::repository::users::StoredUserGroup,
+        &aether_data_contracts::repository::users::StoredUserGroup,
     ) -> (&str, Option<Vec<String>>),
 ) -> Option<Vec<String>> {
     let mut saw_restrictive_group = false;
@@ -2595,7 +2595,7 @@ fn list_restriction_from_mode(mode: &str, values: Option<Vec<String>>) -> Option
 fn resolve_effective_rate_limit_policy(
     user_rate_limit: Option<i32>,
     user_mode: &str,
-    groups: &[aether_data::repository::users::StoredUserGroup],
+    groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> Option<i32> {
     let group_policy = groups.iter().fold(None, |effective, group| {
         union_rate_limit_policies(
@@ -3706,7 +3706,7 @@ mod tests {
 
         let paged_records = state
             .list_auth_api_key_export_standalone_records_page(
-                &aether_data::repository::auth::StandaloneApiKeyExportListQuery {
+                &aether_data_contracts::repository::auth::StandaloneApiKeyExportListQuery {
                     skip: 0,
                     limit: 10,
                     is_active: Some(true),

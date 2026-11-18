@@ -1,4 +1,4 @@
-use crate::database::PostgresPoolConfig;
+use aether_data_contracts::PostgresPoolConfig;
 use crate::DataLayerError;
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -32,7 +32,7 @@ impl DataLayerConfig {
 #[cfg(test)]
 mod tests {
     use super::DataLayerConfig;
-    use crate::database::PostgresPoolConfig;
+    use aether_data_contracts::PostgresPoolConfig;
 
     fn postgres_config(database_url: &str) -> PostgresPoolConfig {
         PostgresPoolConfig {

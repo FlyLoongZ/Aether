@@ -6,7 +6,7 @@ use super::shared::*;
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::attach_admin_audit_response;
 use crate::GatewayError;
-use aether_data::repository::auth_modules::CompareAndSwapLdapConfigResult;
+use aether_data_contracts::repository::auth_modules::CompareAndSwapLdapConfigResult;
 use axum::{
     body::{Body, Bytes},
     http,

@@ -581,7 +581,7 @@ impl AppState {
     pub(crate) async fn list_enabled_oauth_module_providers(
         &self,
     ) -> Result<
-        Vec<aether_data::repository::auth_modules::StoredOAuthProviderModuleConfig>,
+        Vec<aether_data_contracts::repository::auth_modules::StoredOAuthProviderModuleConfig>,
         GatewayError,
     > {
         self.data
@@ -592,7 +592,7 @@ impl AppState {
 
     pub(crate) async fn get_ldap_module_config(
         &self,
-    ) -> Result<Option<aether_data::repository::auth_modules::StoredLdapModuleConfig>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>, GatewayError>
     {
         self.data
             .get_ldap_module_config()
@@ -602,11 +602,11 @@ impl AppState {
 
     pub(crate) async fn compare_and_swap_ldap_module_config(
         &self,
-        expected: Option<&aether_data::repository::auth_modules::StoredLdapModuleConfig>,
-        replacement: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
-        bind_password_update: &aether_data::repository::auth_modules::LdapBindPasswordUpdate,
+        expected: Option<&aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
+        replacement: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
+        bind_password_update: &aether_data_contracts::repository::auth_modules::LdapBindPasswordUpdate,
     ) -> Result<
-        Option<aether_data::repository::auth_modules::CompareAndSwapLdapConfigResult>,
+        Option<aether_data_contracts::repository::auth_modules::CompareAndSwapLdapConfigResult>,
         GatewayError,
     > {
         self.data
@@ -617,7 +617,7 @@ impl AppState {
 
     pub(crate) async fn delete_ldap_module_config_if_matches(
         &self,
-        expected: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+        expected: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
     ) -> Result<bool, GatewayError> {
         self.data
             .delete_ldap_module_config_if_matches(expected)
@@ -648,7 +648,7 @@ impl AppState {
     pub(crate) async fn list_oauth_provider_configs(
         &self,
     ) -> Result<
-        Vec<aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+        Vec<aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
         GatewayError,
     > {
         self.data
@@ -671,7 +671,7 @@ impl AppState {
         &self,
         provider_type: &str,
     ) -> Result<
-        Option<aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+        Option<aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
         GatewayError,
     > {
         self.data
@@ -705,9 +705,9 @@ impl AppState {
 
     pub(crate) async fn upsert_oauth_provider_config(
         &self,
-        record: &aether_data::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
+        record: &aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
     ) -> Result<
-        Option<aether_data::repository::oauth_providers::StoredOAuthProviderConfig>,
+        Option<aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
         GatewayError,
     > {
         let _mutation_guard = crate::oauth::lock_identity_oauth_mutation().await;
@@ -736,12 +736,12 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))?
         {
             Some(
-                aether_data::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::Upserted(
+                aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::Upserted(
                     provider,
                 ),
             ) => Ok(Some(provider)),
             Some(
-                aether_data::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::DisableRequiresConfirmation {
+                aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome::DisableRequiresConfirmation {
                     affected_count,
                 },
             ) => Err(GatewayError::Client {
@@ -757,10 +757,10 @@ impl AppState {
 
     pub(crate) async fn upsert_oauth_provider_config_with_force_disable(
         &self,
-        record: &aether_data::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
+        record: &aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
         force_disable: bool,
     ) -> Result<
-        Option<aether_data::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
+        Option<aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
         GatewayError,
     > {
         let _mutation_guard = crate::oauth::lock_identity_oauth_mutation().await;

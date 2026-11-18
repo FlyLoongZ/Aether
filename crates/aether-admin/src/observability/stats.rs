@@ -1,5 +1,5 @@
 use crate::observability::usage::admin_usage_total_tokens;
-use aether_data::repository::auth::StoredAuthApiKeySnapshot;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::{
     provider_catalog::StoredProviderCatalogProvider,
     usage::{
@@ -2103,7 +2103,7 @@ mod tests {
         build_api_key_leaderboard_items, build_api_key_leaderboard_items_from_summaries,
         build_user_leaderboard_items, AdminStatsUserMetadata,
     };
-    use aether_data::repository::auth::StoredAuthApiKeySnapshot;
+    use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
     use aether_data_contracts::repository::usage::{
         StoredRequestUsageAudit, StoredUsageLeaderboardSummary,
     };

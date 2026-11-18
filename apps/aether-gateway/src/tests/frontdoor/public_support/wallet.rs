@@ -25,7 +25,7 @@ async fn gateway_redeems_wallet_code_locally() {
     )]));
     let batch = wallet_repository
         .create_admin_redeem_code_batch(
-            aether_data::repository::wallet::CreateAdminRedeemCodeBatchInput {
+            aether_data_contracts::repository::wallet::CreateAdminRedeemCodeBatchInput {
                 name: "测试兑换".to_string(),
                 amount_usd: 6.5,
                 currency: "USD".to_string(),

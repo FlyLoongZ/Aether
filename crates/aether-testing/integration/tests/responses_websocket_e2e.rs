@@ -14,8 +14,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
-use aether_data::repository::auth::{CreateStandaloneApiKeyRecord, CreateUserApiKeyRecord};
-use aether_data::repository::wallet::WalletLookupKey;
+use aether_data_contracts::repository::auth::{CreateStandaloneApiKeyRecord, CreateUserApiKeyRecord};
+use aether_data_contracts::repository::wallet::WalletLookupKey;
 use aether_data::{DataBackends, DataLayerConfig, PostgresPoolConfig};
 use aether_data_contracts::repository::global_models::{
     CreateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,

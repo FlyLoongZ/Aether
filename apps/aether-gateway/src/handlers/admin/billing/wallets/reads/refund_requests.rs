@@ -7,7 +7,7 @@ use super::super::shared::{
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::{query_param_value, unix_secs_to_rfc3339};
 use crate::GatewayError;
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use axum::{
     body::Body,
     response::{IntoResponse, Response},
@@ -50,7 +50,7 @@ pub(in super::super) async fn build_admin_wallet_refund_requests_response(
         );
         if owner.owner_name.is_none() {
             if let Some(wallet) = state
-                .find_wallet(aether_data::repository::wallet::WalletLookupKey::WalletId(
+                .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
                     &refund.wallet_id,
                 ))
                 .await?

@@ -1,4 +1,4 @@
-use aether_data::repository::announcements::UserAnnouncementListQuery;
+use aether_data_contracts::repository::announcements::UserAnnouncementListQuery;
 use axum::{
     body::Body,
     http,
@@ -248,7 +248,7 @@ async fn mark_all_announcements_read(
     loop {
         let page = state
             .list_announcements(
-                &aether_data::repository::announcements::AnnouncementListQuery {
+                &aether_data_contracts::repository::announcements::AnnouncementListQuery {
                     active_only: true,
                     offset,
                     limit: PAGE_SIZE,

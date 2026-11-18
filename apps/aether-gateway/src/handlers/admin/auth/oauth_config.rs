@@ -1,5 +1,5 @@
 use crate::handlers::admin::request::AdminAppState;
-use aether_data::repository::oauth_providers::{
+use aether_data_contracts::repository::oauth_providers::{
     validate_oauth_frontend_callback_url, validate_oauth_provider_endpoint_config,
     validate_oauth_redirect_uri, EncryptedSecretUpdate, UpsertOAuthProviderConfigRecord,
 };
@@ -57,7 +57,7 @@ pub(super) fn build_admin_oauth_supported_types_payload() -> Vec<serde_json::Val
 }
 
 pub(super) fn build_admin_oauth_provider_payload(
-    provider: &aether_data::repository::oauth_providers::StoredOAuthProviderConfig,
+    provider: &aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig,
 ) -> serde_json::Value {
     json!({
         "provider_type": provider.provider_type,

@@ -51,8 +51,8 @@ pub(crate) const UNGROUPED_USAGE_ID: &str = "__ungrouped__";
 
 pub(crate) async fn ungrouped_usage_users(
     state: &crate::handlers::admin::request::AdminAppState<'_>,
-) -> Result<Vec<aether_data::repository::users::StoredUserSummary>, crate::GatewayError> {
-    use aether_data::repository::users::UserExportListQuery;
+) -> Result<Vec<aether_data_contracts::repository::users::StoredUserSummary>, crate::GatewayError> {
+    use aether_data_contracts::repository::users::UserExportListQuery;
     let mut users = Vec::new();
     let mut skip = 0;
     loop {
@@ -97,7 +97,7 @@ pub(crate) async fn ungrouped_usage_users(
 /// None is unrestricted; Some(empty) deliberately matches no usage.
 pub(crate) async fn usage_group_provider_names(
     state: &crate::handlers::admin::request::AdminAppState<'_>,
-    group: &aether_data::repository::users::StoredUserGroup,
+    group: &aether_data_contracts::repository::users::StoredUserGroup,
 ) -> Result<Option<Vec<String>>, crate::GatewayError> {
     if matches!(
         group.allowed_providers_mode.as_str(),

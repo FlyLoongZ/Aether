@@ -348,7 +348,7 @@ pub(in super::super) async fn build_admin_grant_user_billing_plan_response(
     let outcome = match state
         .app()
         .create_plan_purchase_order(
-            aether_data::repository::wallet::CreatePlanPurchaseOrderInput {
+            aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderInput {
                 preferred_wallet_id: None,
                 user_id: user_id.clone(),
                 amount_usd: 0.0,
@@ -376,13 +376,13 @@ pub(in super::super) async fn build_admin_grant_user_billing_plan_response(
         None => return Ok(build_admin_users_data_unavailable_response()),
     };
     let order = match outcome {
-        aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::Created(order) => order,
-        aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::WalletInactive => {
+        aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::Created(order) => order,
+        aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::WalletInactive => {
             return Ok(build_admin_users_bad_request_response(
                 "wallet is not active",
             ));
         }
-        aether_data::repository::wallet::CreatePlanPurchaseOrderOutcome::ActivePlanLimitReached => {
+        aether_data_contracts::repository::wallet::CreatePlanPurchaseOrderOutcome::ActivePlanLimitReached => {
             return Ok((
                 http::StatusCode::CONFLICT,
                 Json(json!({ "detail": "套餐购买限制已达到上限" })),

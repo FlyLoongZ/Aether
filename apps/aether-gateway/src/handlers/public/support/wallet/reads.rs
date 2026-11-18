@@ -4,7 +4,7 @@ use super::{
     GatewayPublicRequestContext, Response, WALLET_LEGACY_TIMEZONE,
 };
 use crate::handlers::shared::round_to;
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use aether_data_contracts::repository::usage::UsageSettledCostSummaryQuery;
 use chrono::{TimeZone, Utc};
 use serde_json::json;
@@ -12,7 +12,7 @@ use serde_json::json;
 const WALLET_TODAY_COST_UNAVAILABLE_DETAIL: &str = "钱包今日费用数据暂不可用";
 
 pub(super) fn build_wallet_payload(
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     let wallet_payload = build_auth_wallet_summary_payload(wallet);
     json!({
@@ -43,7 +43,7 @@ pub(super) fn build_wallet_payload(
 }
 
 fn build_wallet_balance_payload(
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     let mut payload = build_wallet_payload(wallet);
     payload["pending_refund_count"] = json!(0);
@@ -53,7 +53,7 @@ fn build_wallet_balance_payload(
 pub(in crate::handlers::public::support) async fn build_wallet_balance_payload_for_user(
     state: &AppState,
     user_id: &str,
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     build_wallet_balance_payload_for_quota_user(state, Some(user_id), wallet).await
 }
@@ -62,7 +62,7 @@ pub(in crate::handlers::public::support) async fn build_wallet_balance_payload_f
     state: &AppState,
     user_id: &str,
     api_key_is_standalone: bool,
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     let quota_user_id = if api_key_is_standalone {
         None
@@ -75,7 +75,7 @@ pub(in crate::handlers::public::support) async fn build_wallet_balance_payload_f
 async fn build_wallet_balance_payload_for_quota_user(
     state: &AppState,
     quota_user_id: Option<&str>,
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     let mut payload = build_wallet_balance_payload(wallet);
     let wallet_balance = wallet
@@ -207,7 +207,7 @@ pub(super) struct WalletDailyUsagePayload {
 
 impl WalletDailyUsagePayload {
     fn from_ledger(
-        entry: &aether_data::repository::wallet::StoredWalletDailyUsageLedger,
+        entry: &aether_data_contracts::repository::wallet::StoredWalletDailyUsageLedger,
         is_today: bool,
     ) -> Self {
         Self {
@@ -266,7 +266,7 @@ fn build_wallet_daily_usage_payload(payload: WalletDailyUsagePayload) -> serde_j
 }
 
 pub(super) fn build_wallet_daily_usage_payload_from_ledger(
-    entry: &aether_data::repository::wallet::StoredWalletDailyUsageLedger,
+    entry: &aether_data_contracts::repository::wallet::StoredWalletDailyUsageLedger,
     is_today: bool,
 ) -> serde_json::Value {
     build_wallet_daily_usage_payload(WalletDailyUsagePayload::from_ledger(entry, is_today))
@@ -346,7 +346,7 @@ pub(in crate::handlers::public::support) async fn build_wallet_live_today_usage_
 }
 
 pub(super) fn wallet_transaction_payload_from_record(
-    record: &aether_data::repository::wallet::StoredAdminWalletTransaction,
+    record: &aether_data_contracts::repository::wallet::StoredAdminWalletTransaction,
 ) -> serde_json::Value {
     json!({
         "id": record.id.clone(),

@@ -136,15 +136,15 @@ pub(super) fn admin_api_keys_parse_limit(query: Option<&str>) -> Result<usize, S
 
 fn masked_admin_api_key_display(
     state: &AdminAppState<'_>,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
 ) -> String {
     masked_user_api_key_display(state, record)
 }
 
 pub(super) fn build_admin_api_key_list_item_payload(
     state: &AdminAppState<'_>,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     json!({
         "id": record.api_key_id,
@@ -174,8 +174,8 @@ pub(super) fn build_admin_api_key_list_item_payload(
 
 pub(super) fn build_admin_api_key_detail_payload(
     state: &AdminAppState<'_>,
-    record: &aether_data::repository::auth::StoredAuthApiKeyExportRecord,
-    wallet: Option<&aether_data::repository::wallet::StoredWalletSnapshot>,
+    record: &aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
+    wallet: Option<&aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
 ) -> serde_json::Value {
     json!({
         "id": record.api_key_id,

@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
-use aether_data::repository::wallet::stored_timestamp_unix_secs;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 
 #[derive(Debug, Deserialize)]
 struct WalletRedeemRequest {
@@ -24,7 +24,7 @@ fn wallet_build_redeem_order_no(now: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 fn build_wallet_payment_order_payload(
-    record: &aether_data::repository::wallet::StoredAdminPaymentOrder,
+    record: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
 ) -> serde_json::Value {
     json!({
         "id": record.id,
@@ -75,7 +75,7 @@ pub(super) async fn handle_wallet_redeem(
     };
 
     let outcome = match state
-        .redeem_wallet_code(aether_data::repository::wallet::RedeemWalletCodeInput {
+        .redeem_wallet_code(aether_data_contracts::repository::wallet::RedeemWalletCodeInput {
             code,
             user_id: auth.user.id.clone(),
             order_no: wallet_build_redeem_order_no(Utc::now()),
@@ -100,7 +100,7 @@ pub(super) async fn handle_wallet_redeem(
     };
 
     match outcome {
-        aether_data::repository::wallet::RedeemWalletCodeOutcome::Redeemed {
+        aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::Redeemed {
             wallet,
             order,
             amount_usd,
@@ -115,23 +115,23 @@ pub(super) async fn handle_wallet_redeem(
             }),
             None,
         ),
-        aether_data::repository::wallet::RedeemWalletCodeOutcome::InvalidCode => {
+        aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::InvalidCode => {
             build_auth_error_response(http::StatusCode::BAD_REQUEST, "兑换码格式无效", false)
         }
-        aether_data::repository::wallet::RedeemWalletCodeOutcome::CodeNotFound => {
+        aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::CodeNotFound => {
             build_auth_error_response(http::StatusCode::NOT_FOUND, "兑换码不存在", false)
         }
-        aether_data::repository::wallet::RedeemWalletCodeOutcome::CodeDisabled
-        | aether_data::repository::wallet::RedeemWalletCodeOutcome::BatchDisabled => {
+        aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::CodeDisabled
+        | aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::BatchDisabled => {
             build_auth_error_response(http::StatusCode::BAD_REQUEST, "兑换码已停用", false)
         }
-        aether_data::repository::wallet::RedeemWalletCodeOutcome::CodeExpired => {
+        aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::CodeExpired => {
             build_auth_error_response(http::StatusCode::BAD_REQUEST, "兑换码已过期", false)
         }
-        aether_data::repository::wallet::RedeemWalletCodeOutcome::CodeRedeemed => {
+        aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::CodeRedeemed => {
             build_auth_error_response(http::StatusCode::BAD_REQUEST, "兑换码已被使用", false)
         }
-        aether_data::repository::wallet::RedeemWalletCodeOutcome::WalletInactive => {
+        aether_data_contracts::repository::wallet::RedeemWalletCodeOutcome::WalletInactive => {
             build_auth_error_response(http::StatusCode::BAD_REQUEST, "wallet is not active", false)
         }
     }

@@ -34,7 +34,7 @@ use crate::ai_serving::planner::candidate_resolution::{
 use crate::data::auth::GatewayAuthApiKeySnapshot;
 use crate::data::GatewayDataState;
 use crate::{scheduler::affinity::SCHEDULER_AFFINITY_TTL, AppState};
-use aether_data::repository::auth::StoredAuthApiKeySnapshot;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 
 async fn rank_local_execution_candidates(
     state: PlannerAppState<'_>,

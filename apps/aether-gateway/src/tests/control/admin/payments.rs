@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use aether_data::repository::users::InMemoryUserReadRepository;
 use aether_data::repository::wallet::InMemoryWalletRepository;
-use aether_data::repository::wallet::StoredWalletSnapshot;
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

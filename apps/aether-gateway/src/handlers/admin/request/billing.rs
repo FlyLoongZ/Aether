@@ -114,8 +114,8 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn find_wallet(
         &self,
-        lookup: aether_data::repository::wallet::WalletLookupKey<'_>,
-    ) -> Result<Option<aether_data::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+        lookup: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
         self.app.find_wallet(lookup).await
     }
 
@@ -123,7 +123,7 @@ impl<'a> AdminAppState<'a> {
         &self,
         wallet_id: &str,
         refund_id: &str,
-    ) -> Result<Option<aether_data::repository::wallet::StoredAdminWalletRefund>, GatewayError>
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>, GatewayError>
     {
         self.app.find_wallet_refund(wallet_id, refund_id).await
     }
@@ -137,7 +137,7 @@ impl<'a> AdminAppState<'a> {
         offset: usize,
     ) -> Result<
         (
-            Vec<aether_data::repository::wallet::StoredAdminWalletListItem>,
+            Vec<aether_data_contracts::repository::wallet::StoredAdminWalletListItem>,
             u64,
         ),
         GatewayError,
@@ -156,7 +156,7 @@ impl<'a> AdminAppState<'a> {
         offset: usize,
     ) -> Result<
         (
-            Vec<aether_data::repository::wallet::StoredAdminWalletLedgerItem>,
+            Vec<aether_data_contracts::repository::wallet::StoredAdminWalletLedgerItem>,
             u64,
         ),
         GatewayError,
@@ -173,7 +173,7 @@ impl<'a> AdminAppState<'a> {
         offset: usize,
     ) -> Result<
         (
-            Vec<aether_data::repository::wallet::StoredAdminWalletRefundRequestItem>,
+            Vec<aether_data_contracts::repository::wallet::StoredAdminWalletRefundRequestItem>,
             u64,
         ),
         GatewayError,
@@ -190,7 +190,7 @@ impl<'a> AdminAppState<'a> {
         offset: usize,
     ) -> Result<
         (
-            Vec<aether_data::repository::wallet::StoredAdminWalletTransaction>,
+            Vec<aether_data_contracts::repository::wallet::StoredAdminWalletTransaction>,
             u64,
         ),
         GatewayError,
@@ -294,7 +294,7 @@ impl<'a> AdminAppState<'a> {
         offset: usize,
     ) -> Result<
         (
-            Vec<aether_data::repository::wallet::StoredAdminRedeemCodeBatch>,
+            Vec<aether_data_contracts::repository::wallet::StoredAdminRedeemCodeBatch>,
             u64,
         ),
         GatewayError,
@@ -309,7 +309,7 @@ impl<'a> AdminAppState<'a> {
         batch_id: &str,
     ) -> Result<
         crate::AdminWalletMutationOutcome<
-            aether_data::repository::wallet::StoredAdminRedeemCodeBatch,
+            aether_data_contracts::repository::wallet::StoredAdminRedeemCodeBatch,
         >,
         GatewayError,
     > {
@@ -322,7 +322,7 @@ impl<'a> AdminAppState<'a> {
         status: Option<&str>,
         limit: usize,
         offset: usize,
-    ) -> Result<aether_data::repository::wallet::StoredAdminRedeemCodePage, GatewayError> {
+    ) -> Result<aether_data_contracts::repository::wallet::StoredAdminRedeemCodePage, GatewayError> {
         self.app
             .list_admin_redeem_codes(batch_id, status, limit, offset)
             .await
@@ -330,9 +330,9 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn admin_create_redeem_code_batch(
         &self,
-        input: aether_data::repository::wallet::CreateAdminRedeemCodeBatchInput,
+        input: aether_data_contracts::repository::wallet::CreateAdminRedeemCodeBatchInput,
     ) -> Result<
-        Option<aether_data::repository::wallet::CreateAdminRedeemCodeBatchResult>,
+        Option<aether_data_contracts::repository::wallet::CreateAdminRedeemCodeBatchResult>,
         GatewayError,
     > {
         self.app.admin_create_redeem_code_batch(input).await
@@ -344,7 +344,7 @@ impl<'a> AdminAppState<'a> {
         operator_id: Option<&str>,
     ) -> Result<
         crate::AdminWalletMutationOutcome<
-            aether_data::repository::wallet::StoredAdminRedeemCodeBatch,
+            aether_data_contracts::repository::wallet::StoredAdminRedeemCodeBatch,
         >,
         GatewayError,
     > {
@@ -359,7 +359,7 @@ impl<'a> AdminAppState<'a> {
         operator_id: Option<&str>,
     ) -> Result<
         crate::AdminWalletMutationOutcome<
-            aether_data::repository::wallet::StoredAdminRedeemCodeBatch,
+            aether_data_contracts::repository::wallet::StoredAdminRedeemCodeBatch,
         >,
         GatewayError,
     > {
@@ -373,7 +373,7 @@ impl<'a> AdminAppState<'a> {
         code_id: &str,
         operator_id: Option<&str>,
     ) -> Result<
-        crate::AdminWalletMutationOutcome<aether_data::repository::wallet::StoredAdminRedeemCode>,
+        crate::AdminWalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminRedeemCode>,
         GatewayError,
     > {
         self.app
@@ -391,7 +391,7 @@ impl<'a> AdminAppState<'a> {
         clamp_deduction_to_available_balance: bool,
     ) -> Result<
         Option<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             Option<crate::AdminWalletTransactionRecord>,
         )>,
         GatewayError,
@@ -417,7 +417,7 @@ impl<'a> AdminAppState<'a> {
         description: Option<&str>,
     ) -> Result<
         Option<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             crate::AdminWalletPaymentOrderRecord,
         )>,
         GatewayError,
@@ -440,7 +440,7 @@ impl<'a> AdminAppState<'a> {
         operator_id: Option<&str>,
     ) -> Result<
         crate::AdminWalletMutationOutcome<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             crate::AdminWalletRefundRecord,
             crate::AdminWalletTransactionRecord,
         )>,
@@ -479,7 +479,7 @@ impl<'a> AdminAppState<'a> {
         operator_id: Option<&str>,
     ) -> Result<
         crate::AdminWalletMutationOutcome<(
-            aether_data::repository::wallet::StoredWalletSnapshot,
+            aether_data_contracts::repository::wallet::StoredWalletSnapshot,
             crate::AdminWalletRefundRecord,
             Option<crate::AdminWalletTransactionRecord>,
         )>,

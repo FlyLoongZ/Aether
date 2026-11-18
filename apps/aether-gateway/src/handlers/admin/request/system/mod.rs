@@ -64,7 +64,7 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_proxy_nodes(
         &self,
-    ) -> Result<Vec<aether_data::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
         self.app.list_proxy_nodes().await
     }
 
@@ -103,7 +103,7 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn find_proxy_node(
         &self,
         node_id: &str,
-    ) -> Result<Option<aether_data::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
         self.app.find_proxy_node(node_id).await
     }
 

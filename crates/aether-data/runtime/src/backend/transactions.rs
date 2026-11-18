@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::PostgresBackend;
-use crate::driver::postgres::PostgresTransactionRunner;
+use aether_data_postgres::PostgresTransactionRunner;
 
 #[derive(Clone, Default)]
 pub struct DataTransactionBackends {
@@ -36,7 +36,7 @@ impl DataTransactionBackends {
 mod tests {
     use super::DataTransactionBackends;
     use crate::backend::PostgresBackend;
-    use crate::driver::postgres::PostgresPoolConfig;
+    use crate::PostgresPoolConfig;
 
     #[tokio::test]
     async fn builds_postgres_transaction_runner_from_backend() {

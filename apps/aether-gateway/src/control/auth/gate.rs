@@ -233,7 +233,7 @@ async fn available_balance_capacity_usd(
 }
 
 fn wallet_finite_available_usd(
-    wallet: &aether_data::repository::wallet::StoredWalletSnapshot,
+    wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot,
 ) -> Option<f64> {
     if !wallet.status.eq_ignore_ascii_case("active")
         || wallet.limit_mode.eq_ignore_ascii_case("unlimited")

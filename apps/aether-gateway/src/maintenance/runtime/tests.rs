@@ -493,7 +493,7 @@ fn usage_cleanup_before_now_window_uses_current_timestamp_only() {
 #[tokio::test]
 async fn summarize_database_pool_uses_busy_connections_for_usage_rate() {
     let data = GatewayDataState::from_config(crate::data::GatewayDataConfig::from_postgres_config(
-        aether_data::driver::postgres::PostgresPoolConfig {
+        aether_data::PostgresPoolConfig {
             database_url: "postgres://localhost/aether".to_string(),
             min_connections: 1,
             max_connections: 8,

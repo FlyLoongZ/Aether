@@ -5,7 +5,7 @@ use aether_data::repository::auth::{
 };
 use aether_data::repository::users::{InMemoryUserReadRepository, StoredUserAuthRecord};
 use aether_data::repository::wallet::InMemoryWalletRepository;
-use aether_data::repository::wallet::StoredWalletSnapshot;
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

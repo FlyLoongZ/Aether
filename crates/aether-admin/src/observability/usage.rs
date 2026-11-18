@@ -4,7 +4,7 @@ use aether_ai_formats::UPSTREAM_IS_STREAM_KEY;
 use aether_billing::{
     normalize_input_tokens_for_billing, normalize_total_input_context_for_cache_hit_rate,
 };
-use aether_data::repository::users::StoredUserSummary;
+use aether_data_contracts::repository::users::StoredUserSummary;
 use aether_data_contracts::repository::{
     provider_catalog::{StoredProviderCatalogEndpoint, StoredProviderCatalogProvider},
     usage::{

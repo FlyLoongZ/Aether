@@ -52,7 +52,7 @@ pub(crate) async fn build_public_user_modules_status_payload(
 }
 
 pub(crate) fn oauth_module_config_is_valid(
-    providers: &[aether_data::repository::auth_modules::StoredOAuthProviderModuleConfig],
+    providers: &[aether_data_contracts::repository::auth_modules::StoredOAuthProviderModuleConfig],
 ) -> bool {
     !providers.is_empty()
         && providers.iter().all(|provider| {
@@ -68,7 +68,7 @@ pub(crate) fn oauth_module_config_is_valid(
 }
 
 pub(crate) fn ldap_module_config_is_valid(
-    config: Option<&aether_data::repository::auth_modules::StoredLdapModuleConfig>,
+    config: Option<&aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
 ) -> bool {
     crate::handlers::shared::ldap_module_config_is_valid(config)
 }

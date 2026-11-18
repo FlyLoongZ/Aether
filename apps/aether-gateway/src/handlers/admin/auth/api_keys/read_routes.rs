@@ -37,7 +37,7 @@ pub(super) async fn build_admin_list_api_keys_response(
     };
     let is_active = query_param_optional_bool(query, "is_active");
 
-    let list_query = aether_data::repository::auth::StandaloneApiKeyExportListQuery {
+    let list_query = aether_data_contracts::repository::auth::StandaloneApiKeyExportListQuery {
         skip,
         limit,
         is_active,

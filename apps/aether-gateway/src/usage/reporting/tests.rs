@@ -1073,7 +1073,7 @@ async fn submit_sync_report_deletes_gemini_file_mapping_locally_on_success() {
             "req-gemini-files-delete-123",
         ),
     ]));
-    let mut mapping = aether_data::repository::gemini_file_mappings::StoredGeminiFileMapping::new(
+    let mut mapping = aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping::new(
         "mapping-gemini-files-delete-123".to_string(),
         "files/delete-me".to_string(),
         "key-reporting-tests-123".to_string(),

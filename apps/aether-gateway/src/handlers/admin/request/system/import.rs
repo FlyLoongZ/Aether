@@ -56,17 +56,17 @@ use aether_admin::system::{
     AdminSystemConfigProviderModel as ImportedProviderModel,
     AdminSystemConfigProxyNode as ImportedProxyNode, ADMIN_SYSTEM_USERS_SUPPORTED_VERSIONS,
 };
-use aether_data::repository::auth_modules::{
+use aether_data_contracts::repository::auth_modules::{
     CompareAndSwapLdapConfigResult, LdapBindPasswordUpdate, StoredLdapModuleConfig,
 };
-use aether_data::repository::oauth_providers::{
+use aether_data_contracts::repository::oauth_providers::{
     EncryptedSecretUpdate, UpsertOAuthProviderConfigRecord,
 };
 use aether_data::repository::system::{
     AdminSystemStatsUserDailyAggregate, AdminSystemUsageAggregateImportMode,
     AdminSystemUsageAggregateImportSummary, AdminSystemUsageAggregateSnapshot,
 };
-use aether_data::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
+use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
 use aether_data_contracts::repository::global_models::{
     CreateAdminGlobalModelRecord, UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
@@ -140,10 +140,10 @@ struct ExistingWalletMutation {
 
 #[derive(Debug, Clone)]
 struct ExistingUserMutation {
-    before_auth: aether_data::repository::users::StoredUserAuthRecord,
-    after_auth: aether_data::repository::users::StoredUserAuthRecord,
-    before_export: Option<aether_data::repository::users::StoredUserExportRow>,
-    after_export: Option<aether_data::repository::users::StoredUserExportRow>,
+    before_auth: aether_data_contracts::repository::users::StoredUserAuthRecord,
+    after_auth: aether_data_contracts::repository::users::StoredUserAuthRecord,
+    before_export: Option<aether_data_contracts::repository::users::StoredUserExportRow>,
+    after_export: Option<aether_data_contracts::repository::users::StoredUserExportRow>,
     before_model_capability_settings: Option<Value>,
     after_model_capability_settings: Option<Value>,
     before_feature_settings: Option<Value>,
@@ -154,23 +154,23 @@ struct ExistingUserMutation {
 
 #[derive(Debug, Clone)]
 struct ExistingUserGroupMutation {
-    before: aether_data::repository::users::StoredUserGroup,
-    after: aether_data::repository::users::StoredUserGroup,
+    before: aether_data_contracts::repository::users::StoredUserGroup,
+    after: aether_data_contracts::repository::users::StoredUserGroup,
 }
 
 #[derive(Debug, Clone)]
 struct ExistingApiKeyMutation {
-    before: aether_data::repository::auth::StoredAuthApiKeyExportRecord,
-    after: aether_data::repository::auth::StoredAuthApiKeyExportRecord,
+    before: aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
+    after: aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
 }
 
 #[cfg(test)]
 fn synthetic_rollback_export_row(
-    auth: &aether_data::repository::users::StoredUserAuthRecord,
+    auth: &aether_data_contracts::repository::users::StoredUserAuthRecord,
     model_capability_settings: Option<Value>,
     feature_settings: Option<Value>,
-) -> Result<aether_data::repository::users::StoredUserExportRow, GatewayError> {
-    aether_data::repository::users::StoredUserExportRow::new(
+) -> Result<aether_data_contracts::repository::users::StoredUserExportRow, GatewayError> {
+    aether_data_contracts::repository::users::StoredUserExportRow::new(
         auth.id.clone(),
         auth.email.clone(),
         auth.email_verified,
@@ -1607,7 +1607,7 @@ fn simulated_imported_user_id_by_identifier(
 }
 
 fn simulated_imported_user_from_auth_record(
-    user: &aether_data::repository::users::StoredUserAuthRecord,
+    user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
 ) -> SimulatedImportedUser {
     SimulatedImportedUser {
         id: user.id.clone(),
@@ -1782,7 +1782,7 @@ fn resolve_imported_password_hash(
     }
     if password_hash
         .as_deref()
-        .is_some_and(|value| !aether_data::repository::users::is_valid_bcrypt_hash(value))
+        .is_some_and(|value| !aether_data_contracts::repository::users::is_valid_bcrypt_hash(value))
     {
         return Err("恢复备份中的 password_hash 不是有效的 bcrypt 哈希".to_string());
     }
@@ -2291,14 +2291,14 @@ fn build_imported_user_group_record(
     (
         Option<String>,
         String,
-        aether_data::repository::users::UpsertUserGroupRecord,
+        aether_data_contracts::repository::users::UpsertUserGroupRecord,
     ),
     String,
 > {
     let export_id = imported_optional_string(group.get("id"))?;
     let name = imported_optional_string(group.get("name"))?
         .ok_or_else(|| format!("{field_name}.name 不能为空"))?;
-    let name = aether_data::repository::users::normalize_user_group_name(&name);
+    let name = aether_data_contracts::repository::users::normalize_user_group_name(&name);
     if name.is_empty() {
         return Err(format!("{field_name}.name 不能为空"));
     }
@@ -2356,7 +2356,7 @@ fn build_imported_user_group_record(
     Ok((
         export_id,
         normalized_name,
-        aether_data::repository::users::UpsertUserGroupRecord {
+        aether_data_contracts::repository::users::UpsertUserGroupRecord {
             name,
             description,
             priority: 0,
@@ -2376,7 +2376,7 @@ fn resolve_imported_user_group_ids(
     user: &Map<String, Value>,
     imported_group_id_map: &BTreeMap<String, String>,
     imported_group_name_map: &BTreeMap<String, String>,
-    groups_by_name: &BTreeMap<String, aether_data::repository::users::StoredUserGroup>,
+    groups_by_name: &BTreeMap<String, aether_data_contracts::repository::users::StoredUserGroup>,
 ) -> Result<Vec<String>, String> {
     let raw_group_ids =
         imported_string_list_from_value(user.get("group_ids"), "group_ids")?.unwrap_or_default();
@@ -2392,7 +2392,7 @@ fn resolve_imported_user_group_ids(
     }
     for raw_group_name in raw_group_names {
         let normalized_name =
-            aether_data::repository::users::normalize_user_group_name(&raw_group_name)
+            aether_data_contracts::repository::users::normalize_user_group_name(&raw_group_name)
                 .to_ascii_lowercase();
         if normalized_name.is_empty() {
             continue;
@@ -3521,7 +3521,7 @@ impl<'a> AdminAppState<'a> {
             .into_iter()
             .map(|group| {
                 (
-                    aether_data::repository::users::normalize_user_group_name(&group.name)
+                    aether_data_contracts::repository::users::normalize_user_group_name(&group.name)
                         .to_ascii_lowercase(),
                     group,
                 )
@@ -3579,7 +3579,7 @@ impl<'a> AdminAppState<'a> {
                 imported_group_name_map.insert(normalized_name, existing.id.clone());
             } else {
                 let synthetic_id = format!("prevalidated-group-{index}");
-                let stored = aether_data::repository::users::StoredUserGroup::new(
+                let stored = aether_data_contracts::repository::users::StoredUserGroup::new(
                     synthetic_id.clone(),
                     record.name.clone(),
                     normalized_name.clone(),
@@ -4803,7 +4803,7 @@ impl<'a> AdminAppState<'a> {
     async fn capture_existing_user_mutation(
         &self,
         journal: &mut AggregateMutationJournal,
-        user: &aether_data::repository::users::StoredUserAuthRecord,
+        user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
     ) -> Result<(), GatewayError> {
         if journal.existing_users.contains_key(&user.id) {
             return Ok(());
@@ -6897,7 +6897,7 @@ impl<'a> AdminAppState<'a> {
             .into_iter()
             .map(|group| {
                 (
-                    aether_data::repository::users::normalize_user_group_name(&group.name)
+                    aether_data_contracts::repository::users::normalize_user_group_name(&group.name)
                         .to_ascii_lowercase(),
                     group,
                 )
@@ -7624,7 +7624,7 @@ impl<'a> AdminAppState<'a> {
                             }
                             let updated = self
                                 .update_user_api_key_basic(
-                                    aether_data::repository::auth::UpdateUserApiKeyBasicRecord {
+                                    aether_data_contracts::repository::auth::UpdateUserApiKeyBasicRecord {
                                         user_id: user_id.clone(),
                                         api_key_id: existing_key.api_key_id.clone(),
                                         key_encrypted: key_encrypted.clone(),
@@ -7769,7 +7769,7 @@ impl<'a> AdminAppState<'a> {
                     false,
                 ));
                 let created = self
-                    .create_user_api_key(aether_data::repository::auth::CreateUserApiKeyRecord {
+                    .create_user_api_key(aether_data_contracts::repository::auth::CreateUserApiKeyRecord {
                         user_id: user_id.clone(),
                         // Preserve a checkpoint API-key ID when a missing row must be recreated;
                         // ordinary imports continue to receive fresh IDs.
@@ -7973,7 +7973,7 @@ impl<'a> AdminAppState<'a> {
                             }
                             let updated = self
                             .update_standalone_api_key_basic(
-                                aether_data::repository::auth::UpdateStandaloneApiKeyBasicRecord {
+                                aether_data_contracts::repository::auth::UpdateStandaloneApiKeyBasicRecord {
                                     api_key_id: existing_key.api_key_id.clone(),
                                     key_encrypted: key_encrypted.clone(),
                                     key_encrypted_present: key_encrypted.is_some()
@@ -8108,7 +8108,7 @@ impl<'a> AdminAppState<'a> {
                 ));
                 let created = self
                     .create_standalone_api_key(
-                        aether_data::repository::auth::CreateStandaloneApiKeyRecord {
+                        aether_data_contracts::repository::auth::CreateStandaloneApiKeyRecord {
                             user_id: standalone_owner_id.clone(),
                             api_key_id,
                             key_hash: key_hash.clone(),

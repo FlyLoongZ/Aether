@@ -134,7 +134,7 @@ impl AppState {
 
     pub(crate) fn with_request_audit_data_readers_for_tests(
         mut self,
-        auth_api_key_repository: Arc<dyn aether_data::repository::auth::AuthApiKeyReadRepository>,
+        auth_api_key_repository: Arc<dyn aether_data_contracts::repository::auth::AuthApiKeyReadRepository>,
         request_candidate_repository: Arc<dyn RequestCandidateReadRepository>,
         provider_catalog_repository: Arc<dyn ProviderCatalogReadRepository>,
         usage_repository: Arc<dyn UsageReadRepository>,
@@ -152,7 +152,7 @@ impl AppState {
 
     pub(crate) fn with_auth_api_key_data_reader_for_tests(
         mut self,
-        repository: Arc<dyn aether_data::repository::auth::AuthApiKeyReadRepository>,
+        repository: Arc<dyn aether_data_contracts::repository::auth::AuthApiKeyReadRepository>,
     ) -> Self {
         self.replace_data_state(Arc::new(
             GatewayDataState::with_auth_api_key_reader_for_tests(repository),
@@ -340,7 +340,7 @@ impl AppState {
 
     pub(crate) fn with_auth_users_for_tests<I>(mut self, users: I) -> Self
     where
-        I: IntoIterator<Item = aether_data::repository::users::StoredUserAuthRecord>,
+        I: IntoIterator<Item = aether_data_contracts::repository::users::StoredUserAuthRecord>,
     {
         let store = self
             .auth_user_store
@@ -370,7 +370,7 @@ impl AppState {
 
     pub(crate) fn with_auth_wallets_for_tests<I>(mut self, wallets: I) -> Self
     where
-        I: IntoIterator<Item = aether_data::repository::wallet::StoredWalletSnapshot>,
+        I: IntoIterator<Item = aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
     {
         let store = self
             .auth_wallet_store

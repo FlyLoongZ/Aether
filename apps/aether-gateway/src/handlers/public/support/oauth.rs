@@ -732,7 +732,7 @@ async fn complete_oauth_bind(
         return redirect_oauth_error(Some(frontend_callback_url), "invalid_state");
     }
     let session_expectation =
-        match aether_data::repository::users::BindUserOAuthLinkSessionExpectation::new(
+        match aether_data_contracts::repository::users::BindUserOAuthLinkSessionExpectation::new(
             session.id,
             stored.client_device_id,
             user.security_version,

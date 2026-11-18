@@ -38,13 +38,13 @@ pub(in super::super) async fn build_admin_list_users_response(
         .filter(|value| !value.is_empty());
 
     let sort_by = query_param_value(request_context.query_string(), "sort_by")
-        .and_then(|value| aether_data::repository::users::UserExportSortBy::parse(&value))
+        .and_then(|value| aether_data_contracts::repository::users::UserExportSortBy::parse(&value))
         .unwrap_or_default();
     let sort_order = query_param_value(request_context.query_string(), "sort_order")
-        .and_then(|value| aether_data::repository::users::UserExportSortOrder::parse(&value))
+        .and_then(|value| aether_data_contracts::repository::users::UserExportSortOrder::parse(&value))
         .unwrap_or_default();
 
-    let query = aether_data::repository::users::UserExportListQuery {
+    let query = aether_data_contracts::repository::users::UserExportListQuery {
         skip,
         limit,
         role: role.clone(),
@@ -156,7 +156,7 @@ pub(in super::super) async fn build_admin_get_user_response(
     };
 
     let wallet = state
-        .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
             &user_id,
         ))
         .await?;

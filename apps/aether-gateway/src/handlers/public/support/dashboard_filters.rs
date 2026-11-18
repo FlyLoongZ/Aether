@@ -798,7 +798,7 @@ async fn dashboard_load_api_key_counts(
         let standalone_keys = state
             .summarize_auth_api_key_export_standalone_records(now_unix_secs)
             .await?;
-        aether_data::repository::auth::AuthApiKeyExportSummary {
+        aether_data_contracts::repository::auth::AuthApiKeyExportSummary {
             total: user_keys.total.saturating_add(standalone_keys.total),
             active: user_keys.active.saturating_add(standalone_keys.active),
         }
@@ -1145,7 +1145,7 @@ pub(super) async fn handle_dashboard_stats_get(
 
     let wallet = if state.has_wallet_data_reader() {
         match state
-            .find_wallet(aether_data::repository::wallet::WalletLookupKey::UserId(
+            .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
                 auth.user.id.as_str(),
             ))
             .await
@@ -1363,7 +1363,7 @@ pub(super) async fn handle_dashboard_recent_requests_get(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let users_by_id: BTreeMap<String, aether_data::repository::users::StoredUserSummary> =
+    let users_by_id: BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary> =
         match state.resolve_auth_user_summaries_by_ids(&user_ids).await {
             Ok(value) => value,
             Err(err) => {

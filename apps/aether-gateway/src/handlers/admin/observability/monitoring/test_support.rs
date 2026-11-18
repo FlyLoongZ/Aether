@@ -10,8 +10,8 @@ use aether_data_contracts::repository::{
 use axum::http::{self, Uri};
 use serde_json::json;
 
-use aether_data::repository::auth::StoredAuthApiKeyExportRecord;
-use aether_data::repository::users::{StoredUserAuthRecord, StoredUserExportRow};
+use aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord;
+use aether_data_contracts::repository::users::{StoredUserAuthRecord, StoredUserExportRow};
 
 pub(super) fn request_context(method: http::Method, uri: &str) -> GatewayPublicRequestContext {
     GatewayPublicRequestContext::from_request_parts(

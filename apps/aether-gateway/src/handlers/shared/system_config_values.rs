@@ -224,7 +224,7 @@ pub(crate) fn ldap_attribute_description_is_valid(value: &str) -> bool {
 }
 
 pub(crate) fn ldap_module_config_is_valid(
-    config: Option<&aether_data::repository::auth_modules::StoredLdapModuleConfig>,
+    config: Option<&aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
 ) -> bool {
     config.is_some_and(|config| {
         normalize_ldap_transport_server_url(&config.server_url, config.use_starttls).is_some()
@@ -237,7 +237,7 @@ fn canonical_ldap_server_url(raw: &str, use_starttls: bool) -> Option<String> {
 }
 
 fn ldap_bind_password_binding(
-    config: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+    config: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
 ) -> Option<LdapBindPasswordBinding> {
     let server_url = canonical_ldap_server_url(&config.server_url, config.use_starttls)?;
     let bind_dn = config.bind_dn.trim();
@@ -256,8 +256,8 @@ fn ldap_bind_password_binding(
 }
 
 pub(crate) fn ldap_bind_password_binding_matches(
-    stored: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
-    replacement: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+    stored: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
+    replacement: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
 ) -> Result<bool, &'static str> {
     let stored =
         ldap_bind_password_binding(stored).ok_or("stored LDAP bind password binding is invalid")?;
@@ -282,7 +282,7 @@ fn ldap_bind_password_purpose_v3(binding: &LdapBindPasswordBinding) -> String {
 
 pub(crate) fn encrypt_ldap_bind_password(
     state: &AppState,
-    config: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+    config: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
     plaintext: &str,
 ) -> Option<String> {
     if plaintext.contains('\0') {
@@ -301,7 +301,7 @@ fn decrypt_ldap_bind_password_v2(state: &AppState, stored: &str) -> Option<Strin
 
 fn decrypt_ldap_bind_password_v3(
     state: &AppState,
-    config: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+    config: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
     stored: &str,
 ) -> Option<String> {
     let sealed = stored.strip_prefix(LDAP_BIND_PASSWORD_V3_PREFIX)?;
@@ -522,7 +522,7 @@ pub(crate) async fn decrypt_or_migrate_system_config_secret(
 
 pub(crate) async fn decrypt_or_migrate_ldap_bind_password(
     state: &AppState,
-    config: &aether_data::repository::auth_modules::StoredLdapModuleConfig,
+    config: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
 ) -> Result<Option<String>, GatewayError> {
     let mut current = config.clone();
     for _ in 0..LDAP_BIND_PASSWORD_MIGRATION_RETRIES {

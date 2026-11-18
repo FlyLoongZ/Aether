@@ -1506,7 +1506,7 @@ fn admin_usage_record_prefers_joined_user_and_api_key_names_over_legacy_columns(
     };
     let users_by_id = BTreeMap::from([(
         "user-1".to_string(),
-        aether_data::repository::users::StoredUserSummary::new(
+        aether_data_contracts::repository::users::StoredUserSummary::new(
             "user-1".to_string(),
             "fresh-alice".to_string(),
             Some("fresh-alice@example.com".to_string()),
