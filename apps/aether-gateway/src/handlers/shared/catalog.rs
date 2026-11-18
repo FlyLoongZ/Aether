@@ -49,32 +49,8 @@ pub(crate) fn decrypt_catalog_secret_with_fallbacks(
     encryption_key: Option<&str>,
     ciphertext: &str,
 ) -> Option<String> {
-    let encryption_key = encryption_key.map(str::trim).unwrap_or("");
-    if !encryption_key.is_empty() {
-        if let Ok(value) = decrypt_python_fernet_ciphertext(encryption_key, ciphertext) {
-            return Some(value);
-        }
-    }
-    for env_key in ["ENCRYPTION_KEY"] {
-        let Ok(fallback) = std::env::var(env_key) else {
-            continue;
-        };
-        let fallback = fallback.trim();
-        if fallback.is_empty() || fallback == encryption_key {
-            continue;
-        }
-        if let Ok(value) = decrypt_python_fernet_ciphertext(fallback, ciphertext) {
-            return Some(value);
-        }
-    }
-    #[cfg(test)]
-    if encryption_key != DEVELOPMENT_ENCRYPTION_KEY {
-        if let Ok(value) = decrypt_python_fernet_ciphertext(DEVELOPMENT_ENCRYPTION_KEY, ciphertext)
-        {
-            return Some(value);
-        }
-    }
-    None
+    let encryption_key = effective_catalog_encryption_key_from_config(encryption_key)?;
+    decrypt_python_fernet_ciphertext(encryption_key.as_ref(), ciphertext).ok()
 }
 
 pub(crate) fn effective_catalog_encryption_key_from_config(
@@ -84,25 +60,18 @@ pub(crate) fn effective_catalog_encryption_key_from_config(
     if !encryption_key.is_empty() {
         return Some(Cow::Borrowed(encryption_key));
     }
-    for env_key in ["ENCRYPTION_KEY"] {
-        let Ok(candidate) = std::env::var(env_key) else {
-            continue;
-        };
+    if let Ok(candidate) = std::env::var("ENCRYPTION_KEY") {
         let trimmed = candidate.trim();
         if !trimmed.is_empty() {
-            return Some(if trimmed.len() == candidate.len() {
-                Cow::Owned(candidate)
-            } else {
-                Cow::Owned(trimmed.to_string())
-            });
+            return Some(Cow::Owned(trimmed.to_string()));
         }
     }
     #[cfg(test)]
-    {
-        return Some(Cow::Borrowed(DEVELOPMENT_ENCRYPTION_KEY));
-    }
-    #[allow(unreachable_code)]
-    None
+    const FALLBACK_ENCRYPTION_KEY: Option<&str> = Some(DEVELOPMENT_ENCRYPTION_KEY);
+    #[cfg(not(test))]
+    const FALLBACK_ENCRYPTION_KEY: Option<&str> = None;
+
+    FALLBACK_ENCRYPTION_KEY.map(Cow::Borrowed)
 }
 
 pub(crate) fn encrypt_catalog_secret_with_fallbacks(
