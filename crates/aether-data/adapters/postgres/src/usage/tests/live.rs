@@ -1085,7 +1085,7 @@ async fn live_first_byte_fast_path_is_atomic_and_preserves_terminal_state() {
         .await
         .expect("late first-byte write should be ignored without failing");
     let terminal = sqlx::query(
-        "SELECT status, billing_status, first_byte_time_ms, request_metadata, finalized_at FROM \"usage\" WHERE request_id = $1",
+        "SELECT u.status, u.billing_status, u.first_byte_time_ms, u.request_metadata, s.finalized_at FROM \"usage\" AS u LEFT JOIN usage_settlement_snapshots AS s USING (request_id) WHERE u.request_id = $1",
     )
     .bind(&existing_request_id)
     .fetch_one(repository.pool())
@@ -1395,7 +1395,7 @@ async fn live_first_byte_batch_preserves_duplicate_order_and_terminal_guards() {
         .expect("first-byte batch should commit");
 
     let rows = sqlx::query(
-        "SELECT request_id, status, response_time_ms, first_byte_time_ms, has_format_conversion, request_metadata, finalized_at FROM \"usage\" WHERE request_id = ANY($1) ORDER BY request_id",
+        "SELECT u.request_id, u.status, u.response_time_ms, u.first_byte_time_ms, u.has_format_conversion, u.request_metadata, s.finalized_at FROM \"usage\" AS u LEFT JOIN usage_settlement_snapshots AS s USING (request_id) WHERE u.request_id = ANY($1) ORDER BY u.request_id",
     )
     .bind(vec![
         request_a.clone(),

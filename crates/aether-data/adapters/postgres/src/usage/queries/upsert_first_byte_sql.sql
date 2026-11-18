@@ -118,7 +118,6 @@ DO UPDATE SET
   )
 WHERE "usage".billing_status = 'pending'
   AND "usage".status IN ('pending', 'streaming')
-  AND "usage".finalized_at IS NULL
   AND EXCLUDED.updated_at_unix_secs >= COALESCE(
     NULLIF("usage".updated_at_unix_secs, 0),
     CAST(EXTRACT(EPOCH FROM "usage".created_at) AS BIGINT)

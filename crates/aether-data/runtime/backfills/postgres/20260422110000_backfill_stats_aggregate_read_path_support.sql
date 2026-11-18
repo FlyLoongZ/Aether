@@ -1,3 +1,9 @@
+-- Historical stats backfill retained for databases that have not applied it.
+--
+-- usage.finalized_at and usage.output_price_per_1m were retired after this
+-- script shipped. Fresh databases apply this backfill after the retirement
+-- migration, so read the canonical settlement snapshot instead of the removed
+-- usage mirrors.
 CREATE TEMP TABLE tmp_stats_backfill_context ON COMMIT DROP AS
 SELECT
     NOW() AS now_utc,
@@ -1890,9 +1896,17 @@ WITH aggregated AS (
             AS settled_cache_creation_tokens,
         COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0)::BIGINT
             AS settled_cache_read_tokens,
-        MIN(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MIN(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_first_finalized_at_unix_secs,
-        MAX(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MAX(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
     FROM usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
@@ -1941,9 +1955,17 @@ WITH aggregated AS (
             AS settled_cache_creation_tokens,
         COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0)::BIGINT
             AS settled_cache_read_tokens,
-        MIN(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MIN(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_first_finalized_at_unix_secs,
-        MAX(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MAX(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
     FROM usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
@@ -1993,9 +2015,17 @@ WITH aggregated AS (
             AS settled_cache_creation_tokens,
         COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0)::BIGINT
             AS settled_cache_read_tokens,
-        MIN(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MIN(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_first_finalized_at_unix_secs,
-        MAX(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MAX(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
     FROM usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
@@ -2047,9 +2077,17 @@ WITH aggregated AS (
             AS settled_cache_creation_tokens,
         COALESCE(SUM(GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)), 0)::BIGINT
             AS settled_cache_read_tokens,
-        MIN(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MIN(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_first_finalized_at_unix_secs,
-        MAX(CAST(EXTRACT(EPOCH FROM usage.finalized_at) AS BIGINT))
+        MAX(CAST(EXTRACT(EPOCH FROM (
+            SELECT usage_settlement_snapshots.finalized_at
+            FROM usage_settlement_snapshots
+            WHERE usage_settlement_snapshots.request_id = usage.request_id
+        )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
     FROM usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
@@ -2091,7 +2129,6 @@ SELECT
     COALESCE(CAST(usage.cache_creation_cost_usd AS DOUBLE PRECISION), 0) AS cache_creation_cost,
     COALESCE(
         CAST(usage_settlement_snapshots.output_price_per_1m AS DOUBLE PRECISION),
-        CAST(usage.output_price_per_1m AS DOUBLE PRECISION),
         0
     ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION / 1000000.0
         AS estimated_full_cost

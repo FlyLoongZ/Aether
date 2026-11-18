@@ -16,11 +16,11 @@ fn usage_sql_preserves_nonzero_lifecycle_updated_revision() {
         super::super::LIST_USAGE_AUDITS_PREFIX,
         super::super::LIST_RECENT_USAGE_AUDITS_PREFIX,
     ] {
-        assert!(sql
-            .contains("COALESCE(\n    NULLIF(\"usage\".updated_at_unix_secs, 0),\n    GREATEST("));
-        assert!(
-            !sql.contains("GREATEST(\n    COALESCE(NULLIF(\"usage\".updated_at_unix_secs, 0), 0),")
-        );
+        assert!(sql.contains("COALESCE(\n    NULLIF(\"usage\".updated_at_unix_secs, 0),"));
+        assert!(sql.contains(
+            "CAST(EXTRACT(EPOCH FROM usage_settlement_snapshots.finalized_at) AS BIGINT)"
+        ));
+        assert!(!sql.contains("\"usage\".finalized_at"));
     }
 }
 

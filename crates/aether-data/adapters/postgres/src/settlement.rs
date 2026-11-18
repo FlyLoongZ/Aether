@@ -19,38 +19,18 @@ const FIND_USAGE_FOR_SETTLEMENT_SQL: &str = r#"
 SELECT
   usage_record.request_id,
   usage_record.request_metadata,
-  COALESCE(usage_settlement_snapshots.wallet_id, usage_record.wallet_id) AS wallet_id,
+  usage_settlement_snapshots.wallet_id AS wallet_id,
   COALESCE(usage_settlement_snapshots.billing_status, usage_record.billing_status) AS billing_status,
-  COALESCE(
-    CAST(usage_settlement_snapshots.wallet_balance_before AS DOUBLE PRECISION),
-    CAST(usage_record.wallet_balance_before AS DOUBLE PRECISION)
-  ) AS wallet_balance_before,
-  COALESCE(
-    CAST(usage_settlement_snapshots.wallet_balance_after AS DOUBLE PRECISION),
-    CAST(usage_record.wallet_balance_after AS DOUBLE PRECISION)
-  ) AS wallet_balance_after,
-  COALESCE(
-    CAST(usage_settlement_snapshots.wallet_recharge_balance_before AS DOUBLE PRECISION),
-    CAST(usage_record.wallet_recharge_balance_before AS DOUBLE PRECISION)
-  ) AS wallet_recharge_balance_before,
-  COALESCE(
-    CAST(usage_settlement_snapshots.wallet_recharge_balance_after AS DOUBLE PRECISION),
-    CAST(usage_record.wallet_recharge_balance_after AS DOUBLE PRECISION)
-  ) AS wallet_recharge_balance_after,
-  COALESCE(
-    CAST(usage_settlement_snapshots.wallet_gift_balance_before AS DOUBLE PRECISION),
-    CAST(usage_record.wallet_gift_balance_before AS DOUBLE PRECISION)
-  ) AS wallet_gift_balance_before,
-  COALESCE(
-    CAST(usage_settlement_snapshots.wallet_gift_balance_after AS DOUBLE PRECISION),
-    CAST(usage_record.wallet_gift_balance_after AS DOUBLE PRECISION)
-  ) AS wallet_gift_balance_after,
+  CAST(usage_settlement_snapshots.wallet_balance_before AS DOUBLE PRECISION) AS wallet_balance_before,
+  CAST(usage_settlement_snapshots.wallet_balance_after AS DOUBLE PRECISION) AS wallet_balance_after,
+  CAST(usage_settlement_snapshots.wallet_recharge_balance_before AS DOUBLE PRECISION) AS wallet_recharge_balance_before,
+  CAST(usage_settlement_snapshots.wallet_recharge_balance_after AS DOUBLE PRECISION) AS wallet_recharge_balance_after,
+  CAST(usage_settlement_snapshots.wallet_gift_balance_before AS DOUBLE PRECISION) AS wallet_gift_balance_before,
+  CAST(usage_settlement_snapshots.wallet_gift_balance_after AS DOUBLE PRECISION) AS wallet_gift_balance_after,
   CAST(usage_settlement_snapshots.provider_monthly_used_usd AS DOUBLE PRECISION) AS provider_monthly_used_usd,
   usage_record.provider_id,
   CAST(
-    EXTRACT(
-      EPOCH FROM COALESCE(usage_settlement_snapshots.finalized_at, usage_record.finalized_at)
-    ) AS BIGINT
+    EXTRACT(EPOCH FROM usage_settlement_snapshots.finalized_at) AS BIGINT
   ) AS finalized_at_unix_secs
 FROM "usage" AS usage_record
 LEFT JOIN usage_settlement_snapshots
@@ -62,8 +42,7 @@ FOR UPDATE OF usage_record
 const FINALIZE_USAGE_BILLING_SQL: &str = r#"
 UPDATE "usage"
 SET
-  billing_status = $2,
-  finalized_at = COALESCE(finalized_at, to_timestamp($3))
+  billing_status = $2
 WHERE request_id = $1
 "#;
 
@@ -1319,7 +1298,6 @@ LIMIT 1
                             sqlx::query(FINALIZE_USAGE_BILLING_SQL)
                                 .bind(&input.request_id)
                                 .bind(&final_billing_status)
-                                .bind(finalized_at)
                                 .execute(&mut **tx)
                                 .await
                                 .map_postgres_err()?;
@@ -1401,7 +1379,6 @@ WHERE id = $1
                             sqlx::query(FINALIZE_USAGE_BILLING_SQL)
                                 .bind(&input.request_id)
                                 .bind(&final_billing_status)
-                                .bind(finalized_at)
                                 .execute(&mut **tx)
                                 .await
                                 .map_postgres_err()?;
@@ -1450,7 +1427,6 @@ WHERE id = $1
                     sqlx::query(FINALIZE_USAGE_BILLING_SQL)
                         .bind(&input.request_id)
                         .bind(&final_billing_status)
-                        .bind(finalized_at)
                         .execute(&mut **tx)
                         .await
                         .map_postgres_err()?;

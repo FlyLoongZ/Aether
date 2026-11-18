@@ -175,36 +175,6 @@ type = "float64"
 default = 0
 
 [[table.usage.columns]]
-name = "rate_multiplier"
-type = "float64"
-default = 1
-
-[[table.usage.columns]]
-name = "input_price_per_1m"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "output_price_per_1m"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "cache_creation_price_per_1m"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "cache_read_price_per_1m"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "price_per_request"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
 name = "status_code"
 type = "int32"
 nullable = true
@@ -228,12 +198,6 @@ nullable = true
 [[table.usage.columns]]
 name = "first_byte_time_ms"
 type = "int64"
-nullable = true
-
-[[table.usage.columns]]
-name = "wallet_id"
-type = "text_id"
-length = 64
 nullable = true
 
 [[table.usage.columns]]
@@ -269,23 +233,6 @@ type = "unix_seconds"
 nullable = true
 
 [[table.usage.columns]]
-name = "candidate_id"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "candidate_index"
-type = "int64"
-nullable = true
-
-[[table.usage.columns]]
-name = "key_name"
-type = "text"
-length = 255
-nullable = true
-
-[[table.usage.columns]]
 name = "username"
 type = "text"
 length = 255
@@ -295,71 +242,6 @@ nullable = true
 name = "api_key_name"
 type = "text"
 length = 255
-nullable = true
-
-[[table.usage.columns]]
-name = "planner_kind"
-type = "text"
-length = 64
-nullable = true
-
-[[table.usage.columns]]
-name = "route_family"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "route_kind"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "execution_path"
-type = "text"
-length = 128
-nullable = true
-
-[[table.usage.columns]]
-name = "local_execution_runtime_miss_reason"
-type = "text"
-length = 255
-nullable = true
-
-[[table.usage.columns]]
-name = "wallet_balance_before"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "wallet_balance_after"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "wallet_recharge_balance_before"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "wallet_recharge_balance_after"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "wallet_gift_balance_before"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "wallet_gift_balance_after"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "finalized_at"
-type = "unix_seconds"
 nullable = true
 
 [[table.usage.columns]]
@@ -390,10 +272,6 @@ columns = ["request_id"]
 [[table.usage.indexes]]
 name = "usage_user_id_idx"
 columns = ["user_id"]
-
-[[table.usage.indexes]]
-name = "usage_wallet_id_idx"
-columns = ["wallet_id"]
 
 [table.usage_routing_snapshots]
 domain = "usage"

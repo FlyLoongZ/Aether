@@ -1,6 +1,7 @@
--- Schema state at migration 20261103000000 plus the 20261118000000 usage
--- retirement backfill: derived from pg_dump of a PostgreSQL 18.x reference
--- database and then post-processed (see ../../README.md).
+-- Schema state at migration 20261103000000 plus the 20261118000000 and
+-- 20261118000100 usage retirement backfills: derived from pg_dump of a
+-- PostgreSQL 18.x reference database and then post-processed (see
+-- ../../README.md).
 -- Retired capture and proxy tables are intentionally omitted.
 -- Requires PostgreSQL 18 or newer: this is pg_dump output from an 18.x
 -- server, which is not guaranteed to restore into an older major version.
@@ -2316,12 +2317,6 @@ CREATE TABLE public.usage (
     cache_read_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     total_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     actual_total_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    rate_multiplier numeric(10,6) DEFAULT '1'::double precision,
-    input_price_per_1m numeric(20,8),
-    output_price_per_1m numeric(20,8),
-    cache_creation_price_per_1m numeric(20,8),
-    cache_read_price_per_1m numeric(20,8),
-    price_per_request numeric(20,8),
     request_type character varying(50),
     api_format character varying(50),
     is_stream boolean DEFAULT false,
@@ -2335,7 +2330,6 @@ CREATE TABLE public.usage (
     endpoint_api_format character varying(50),
     has_format_conversion boolean DEFAULT false,
     billing_status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
-    finalized_at timestamp with time zone,
     error_category character varying(50),
     api_family character varying(50),
     endpoint_kind character varying(50),
@@ -2343,13 +2337,6 @@ CREATE TABLE public.usage (
     provider_endpoint_kind character varying(50),
     cache_creation_input_tokens_5m integer DEFAULT 0 NOT NULL,
     cache_creation_input_tokens_1h integer DEFAULT 0 NOT NULL,
-    wallet_id character varying(36),
-    wallet_balance_before numeric(20,8),
-    wallet_balance_after numeric(20,8),
-    wallet_recharge_balance_before numeric(20,8),
-    wallet_recharge_balance_after numeric(20,8),
-    wallet_gift_balance_before numeric(20,8),
-    wallet_gift_balance_after numeric(20,8),
     username character varying(100),
     api_key_name character varying(200),
     total_tokens integer DEFAULT 0 NOT NULL,
@@ -2419,46 +2406,10 @@ COMMENT ON COLUMN public.usage.total_cost_usd IS 'DEPRECATED: billing cost mirro
 COMMENT ON COLUMN public.usage.actual_total_cost_usd IS 'DEPRECATED: billing cost mirror. Use public.usage_settlement_snapshots.billing_actual_total_cost_usd or public.usage_billing_facts.actual_total_cost_usd.';
 
 
---
--- Name: COLUMN usage.rate_multiplier; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.rate_multiplier IS 'DEPRECATED: settlement pricing owner moved to public.usage_settlement_snapshots.rate_multiplier. Legacy compatibility only; do not write new values.';
 
 
---
--- Name: COLUMN usage.input_price_per_1m; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.input_price_per_1m IS 'DEPRECATED: settlement pricing owner moved to public.usage_settlement_snapshots.input_price_per_1m. Legacy compatibility only; do not write new values.';
 
 
---
--- Name: COLUMN usage.output_price_per_1m; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.output_price_per_1m IS 'DEPRECATED: settlement pricing owner moved to public.usage_settlement_snapshots.output_price_per_1m. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.cache_creation_price_per_1m; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.cache_creation_price_per_1m IS 'DEPRECATED: settlement pricing owner moved to public.usage_settlement_snapshots.cache_creation_price_per_1m. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.cache_read_price_per_1m; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.cache_read_price_per_1m IS 'DEPRECATED: settlement pricing owner moved to public.usage_settlement_snapshots.cache_read_price_per_1m. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.price_per_request; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.price_per_request IS 'DEPRECATED: settlement pricing owner moved to public.usage_settlement_snapshots.price_per_request. Legacy compatibility only; do not write new values.';
 
 
 
@@ -2471,12 +2422,6 @@ COMMENT ON COLUMN public.usage.price_per_request IS 'DEPRECATED: settlement pric
 
 COMMENT ON COLUMN public.usage.billing_status IS 'DEPRECATED: authoritative owner moved to public.usage_settlement_snapshots.billing_status. Compatibility/index mirror only; do not write new values.';
 
-
---
--- Name: COLUMN usage.finalized_at; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.finalized_at IS 'DEPRECATED: authoritative owner moved to public.usage_settlement_snapshots.finalized_at. Compatibility/index mirror only; do not write new values.';
 
 
 --
@@ -2493,53 +2438,11 @@ COMMENT ON COLUMN public.usage.cache_creation_input_tokens_5m IS 'DEPRECATED: bi
 COMMENT ON COLUMN public.usage.cache_creation_input_tokens_1h IS 'DEPRECATED: billing dimension mirror. Use public.usage_settlement_snapshots.billing_cache_creation_1h_tokens or public.usage_billing_facts.cache_creation_input_tokens_1h.';
 
 
---
--- Name: COLUMN usage.wallet_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.wallet_id IS 'DEPRECATED: settlement owner moved to public.usage_settlement_snapshots.wallet_id. Legacy compatibility only; do not write new values.';
 
 
---
--- Name: COLUMN usage.wallet_balance_before; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.wallet_balance_before IS 'DEPRECATED: settlement owner moved to public.usage_settlement_snapshots.wallet_balance_before. Legacy compatibility only; do not write new values.';
 
 
---
--- Name: COLUMN usage.wallet_balance_after; Type: COMMENT; Schema: public; Owner: -
---
 
-COMMENT ON COLUMN public.usage.wallet_balance_after IS 'DEPRECATED: settlement owner moved to public.usage_settlement_snapshots.wallet_balance_after. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.wallet_recharge_balance_before; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.wallet_recharge_balance_before IS 'DEPRECATED: settlement owner moved to public.usage_settlement_snapshots.wallet_recharge_balance_before. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.wallet_recharge_balance_after; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.wallet_recharge_balance_after IS 'DEPRECATED: settlement owner moved to public.usage_settlement_snapshots.wallet_recharge_balance_after. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.wallet_gift_balance_before; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.wallet_gift_balance_before IS 'DEPRECATED: settlement owner moved to public.usage_settlement_snapshots.wallet_gift_balance_before. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.wallet_gift_balance_after; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.wallet_gift_balance_after IS 'DEPRECATED: settlement owner moved to public.usage_settlement_snapshots.wallet_gift_balance_after. Legacy compatibility only; do not write new values.';
 
 
 --
@@ -2679,7 +2582,7 @@ CREATE OR REPLACE VIEW public.usage_billing_facts AS
     usage_rows.status,
     COALESCE(settlement.billing_status, usage_rows.billing_status) AS billing_status,
     usage_rows.created_at,
-    COALESCE(settlement.finalized_at, usage_rows.finalized_at) AS finalized_at,
+    settlement.finalized_at AS finalized_at,
     GREATEST(COALESCE(settlement.billing_input_tokens, (usage_rows.input_tokens)::bigint, (0)::bigint), (0)::bigint) AS input_tokens,
     GREATEST(COALESCE(settlement.billing_effective_input_tokens, (
         CASE
@@ -2778,11 +2681,11 @@ CREATE OR REPLACE VIEW public.usage_billing_facts AS
     COALESCE((settlement.billing_cache_read_cost_usd)::double precision, (usage_rows.cache_read_cost_usd)::double precision, (0)::double precision) AS cache_read_cost_usd,
     COALESCE((settlement.billing_total_cost_usd)::double precision, (usage_rows.total_cost_usd)::double precision, (0)::double precision) AS total_cost_usd,
     COALESCE((settlement.billing_actual_total_cost_usd)::double precision, (usage_rows.actual_total_cost_usd)::double precision, (0)::double precision) AS actual_total_cost_usd,
-    COALESCE((settlement.output_price_per_1m)::double precision, (usage_rows.output_price_per_1m)::double precision) AS output_price_per_1m,
-    COALESCE((settlement.input_price_per_1m)::double precision, (usage_rows.input_price_per_1m)::double precision) AS input_price_per_1m,
-    COALESCE((settlement.cache_creation_price_per_1m)::double precision, (usage_rows.cache_creation_price_per_1m)::double precision) AS cache_creation_price_per_1m,
-    COALESCE((settlement.cache_read_price_per_1m)::double precision, (usage_rows.cache_read_price_per_1m)::double precision) AS cache_read_price_per_1m,
-    COALESCE((settlement.price_per_request)::double precision, (usage_rows.price_per_request)::double precision) AS price_per_request,
+    (settlement.output_price_per_1m)::double precision AS output_price_per_1m,
+    (settlement.input_price_per_1m)::double precision AS input_price_per_1m,
+    (settlement.cache_creation_price_per_1m)::double precision AS cache_creation_price_per_1m,
+    (settlement.cache_read_price_per_1m)::double precision AS cache_read_price_per_1m,
+    (settlement.price_per_request)::double precision AS price_per_request,
     settlement.billing_pricing_source,
     settlement.billing_rule_id,
     settlement.billing_rule_version,
@@ -2795,7 +2698,7 @@ CREATE OR REPLACE VIEW public.usage_billing_facts AS
 -- Name: VIEW usage_billing_facts; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.usage_billing_facts IS 'Canonical billing read model. Token/cost fields prefer usage_settlement_snapshots.billing_* and fall back to deprecated usage mirrors for legacy rows.';
+COMMENT ON VIEW public.usage_billing_facts IS 'Canonical billing read model. Token and cost fields prefer usage_settlement_snapshots.billing_* and fall back to legacy usage mirrors; settlement-only fields read usage_settlement_snapshots.';
 
 
 --
@@ -5457,12 +5360,6 @@ CREATE INDEX idx_usage_api_format_created_id_desc ON public.usage USING btree (a
 CREATE INDEX idx_usage_apikey_created ON public.usage USING btree (api_key_id, created_at);
 
 
---
--- Name: idx_usage_billing_finalized_wallet; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_usage_billing_finalized_wallet ON public.usage USING btree (billing_status, finalized_at, wallet_id);
-
 
 --
 -- Name: idx_usage_billing_status; Type: INDEX; Schema: public; Owner: -
@@ -5575,12 +5472,6 @@ CREATE INDEX idx_usage_user_created ON public.usage USING btree (user_id, create
 
 CREATE INDEX idx_usage_user_created_id_desc ON public.usage USING btree (user_id, created_at DESC, id);
 
-
---
--- Name: idx_usage_wallet_finalized; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_usage_wallet_finalized ON public.usage USING btree (wallet_id, finalized_at);
 
 
 --
@@ -6254,12 +6145,6 @@ CREATE INDEX ix_usage_settlement_snapshots_wallet_id ON public.usage_settlement_
 
 CREATE INDEX ix_usage_status ON public.usage USING btree (status);
 
-
---
--- Name: ix_usage_wallet_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_usage_wallet_id ON public.usage USING btree (wallet_id);
 
 
 --

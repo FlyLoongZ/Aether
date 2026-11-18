@@ -545,6 +545,20 @@ pub const RETIRED_BASELINE_COLUMNS: &[(&str, &str)] = &[
     ("usage", "provider_request_headers"),
     ("usage", "response_headers"),
     ("usage", "client_response_headers"),
+    ("usage", "finalized_at"),
+    ("usage", "wallet_id"),
+    ("usage", "wallet_balance_before"),
+    ("usage", "wallet_balance_after"),
+    ("usage", "wallet_recharge_balance_before"),
+    ("usage", "wallet_recharge_balance_after"),
+    ("usage", "wallet_gift_balance_before"),
+    ("usage", "wallet_gift_balance_after"),
+    ("usage", "rate_multiplier"),
+    ("usage", "input_price_per_1m"),
+    ("usage", "output_price_per_1m"),
+    ("usage", "cache_creation_price_per_1m"),
+    ("usage", "cache_read_price_per_1m"),
+    ("usage", "price_per_request"),
 ];
 
 fn is_retired_baseline_column(table_name: &str, column_name: &str) -> bool {

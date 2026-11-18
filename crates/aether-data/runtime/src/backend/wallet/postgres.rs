@@ -14,16 +14,16 @@ WITH aggregated AS (
         COALESCE(SUM(usage.output_tokens), 0) AS output_tokens,
         COALESCE(SUM(usage.cache_creation_input_tokens), 0) AS cache_creation_tokens,
         COALESCE(SUM(usage.cache_read_input_tokens), 0) AS cache_read_tokens,
-        MIN(COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at)) AS first_finalized_at,
-        MAX(COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at)) AS last_finalized_at
+        MIN(usage_settlement_snapshots.finalized_at) AS first_finalized_at,
+        MAX(usage_settlement_snapshots.finalized_at) AS last_finalized_at
     FROM usage_billing_facts AS usage
     JOIN usage_settlement_snapshots
       ON usage_settlement_snapshots.request_id = usage.request_id
     WHERE usage_settlement_snapshots.wallet_id IS NOT NULL
       AND usage_settlement_snapshots.billing_status = 'settled'
       AND usage.total_cost_usd > 0
-      AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) >= $1
-      AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) < $2
+      AND usage_settlement_snapshots.finalized_at >= $1
+      AND usage_settlement_snapshots.finalized_at < $2
     GROUP BY usage_settlement_snapshots.wallet_id
 )
 INSERT INTO wallet_daily_usage_ledgers (
@@ -86,8 +86,8 @@ WHERE ledgers.billing_date = $1
       WHERE usage_settlement_snapshots.wallet_id = ledgers.wallet_id
         AND usage_settlement_snapshots.billing_status = 'settled'
         AND usage.total_cost_usd > 0
-        AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) >= $3
-        AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) < $4
+        AND usage_settlement_snapshots.finalized_at >= $3
+        AND usage_settlement_snapshots.finalized_at < $4
   )
 "#;
 

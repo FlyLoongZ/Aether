@@ -137,10 +137,7 @@ SELECT
     CAST("usage".cache_read_cost_usd AS DOUBLE PRECISION),
     0
   ) AS cache_read_cost_usd,
-  COALESCE(
-    CAST(usage_settlement_snapshots.output_price_per_1m AS DOUBLE PRECISION),
-    CAST("usage".output_price_per_1m AS DOUBLE PRECISION)
-  ) AS output_price_per_1m,
+  CAST(usage_settlement_snapshots.output_price_per_1m AS DOUBLE PRECISION) AS output_price_per_1m,
   COALESCE(
     CAST(usage_settlement_snapshots.billing_total_cost_usd AS DOUBLE PRECISION),
     CAST("usage".total_cost_usd AS DOUBLE PRECISION),
@@ -208,17 +205,10 @@ SELECT
   CAST(EXTRACT(EPOCH FROM "usage".created_at) AS BIGINT) AS created_at_unix_ms,
   COALESCE(
     NULLIF("usage".updated_at_unix_secs, 0),
-    GREATEST(
-      COALESCE(CAST(EXTRACT(EPOCH FROM usage_settlement_snapshots.finalized_at) AS BIGINT), 0),
-      COALESCE(CAST(EXTRACT(EPOCH FROM "usage".finalized_at) AS BIGINT), 0),
-      CAST(EXTRACT(EPOCH FROM "usage".created_at) AS BIGINT)
-    )
+    CAST(EXTRACT(EPOCH FROM usage_settlement_snapshots.finalized_at) AS BIGINT),
+    CAST(EXTRACT(EPOCH FROM "usage".created_at) AS BIGINT)
   ) AS updated_at_unix_secs,
-  CAST(
-    EXTRACT(
-      EPOCH FROM COALESCE(usage_settlement_snapshots.finalized_at, "usage".finalized_at)
-    ) AS BIGINT
-  ) AS finalized_at_unix_secs
+  CAST(EXTRACT(EPOCH FROM usage_settlement_snapshots.finalized_at) AS BIGINT) AS finalized_at_unix_secs
 FROM "usage"
 LEFT JOIN usage_http_headers
   ON usage_http_headers.request_id = "usage".request_id

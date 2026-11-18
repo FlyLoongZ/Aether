@@ -2113,7 +2113,6 @@ INSERT INTO "usage" (
   cache_read_input_tokens,
   cache_creation_cost_usd,
   cache_read_cost_usd,
-  output_price_per_1m,
   total_cost_usd,
   actual_total_cost_usd,
   status_code,
@@ -2124,7 +2123,6 @@ INSERT INTO "usage" (
   status,
   billing_status,
   request_metadata,
-  finalized_at,
   created_at,
   updated_at_unix_secs
 )
@@ -2229,7 +2227,6 @@ WITH updated_usage AS (
         error_message = NULL,
         error_category = $4,
         billing_status = 'void',
-        finalized_at = $2,
         total_cost_usd = 0,
         actual_total_cost_usd = 0
     WHERE request_id = $1
@@ -2303,7 +2300,6 @@ struct PreparedPendingUsage {
     response_time_ms: Option<i32>,
     first_byte_time_ms: Option<i32>,
     routing_candidate_index: Option<i32>,
-    finalized_at_unix_secs: Option<f64>,
     created_at_unix_ms: Option<f64>,
     updated_at_unix_secs: i64,
 }
@@ -2382,7 +2378,6 @@ impl PreparedPendingUsage {
             .candidate_index
             .map(to_i32)
             .transpose()?;
-        let finalized_at_unix_secs = usage.finalized_at_unix_secs.map(|value| value as f64);
         let created_at_unix_ms = usage.created_at_unix_ms.map(|value| value as f64);
         let updated_at_unix_secs = i64::try_from(usage.updated_at_unix_secs).map_err(|_| {
             DataLayerError::InvalidInput(format!(
@@ -2404,7 +2399,6 @@ impl PreparedPendingUsage {
             response_time_ms,
             first_byte_time_ms,
             routing_candidate_index,
-            finalized_at_unix_secs,
             created_at_unix_ms,
             updated_at_unix_secs,
         })
@@ -8863,7 +8857,6 @@ ORDER BY "usage".user_id ASC
                         .bind(usage.cache_read_input_tokens.map(to_i32).transpose()?)
                         .bind(usage.cache_creation_cost_usd)
                         .bind(usage.cache_read_cost_usd)
-                        .bind(None::<f64>)
                         .bind(usage.total_cost_usd)
                         .bind(usage.actual_total_cost_usd)
                         .bind(usage.status_code.map(i32::from))
@@ -8874,7 +8867,6 @@ ORDER BY "usage".user_id ASC
                         .bind(&usage.status)
                         .bind(&usage.billing_status)
                         .bind(&request_metadata_json)
-                        .bind(usage.finalized_at_unix_secs.map(|value| value as f64))
                         .bind(usage.created_at_unix_ms.map(|value| value as f64))
                         .bind(i64::try_from(usage.updated_at_unix_secs).map_err(|_| {
                             DataLayerError::InvalidInput(format!(
@@ -9255,7 +9247,6 @@ ORDER BY "usage".user_id ASC
                 .push_bind(row.cache_read_input_tokens)
                 .push_bind(row.usage.cache_creation_cost_usd.unwrap_or_default())
                 .push_bind(row.usage.cache_read_cost_usd)
-                .push_bind(0.0_f64)
                 .push_bind(row.usage.total_cost_usd.unwrap_or_default())
                 .push_bind(row.usage.actual_total_cost_usd)
                 .push_bind(row.usage.status_code.map(i32::from))
@@ -9268,11 +9259,6 @@ ORDER BY "usage".user_id ASC
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.request_metadata_json.clone())
                 .push_unseparated(" AS jsonb)")
-                .push("CASE WHEN ")
-                .push_bind_unseparated(row.finalized_at_unix_secs)
-                .push_unseparated("::double precision IS NULL THEN NULL ELSE TO_TIMESTAMP(")
-                .push_bind_unseparated(row.finalized_at_unix_secs)
-                .push_unseparated("::double precision) END")
                 .push("COALESCE(TO_TIMESTAMP(")
                 .push_bind_unseparated(row.created_at_unix_ms)
                 .push_unseparated("::double precision), NOW())")
@@ -9820,7 +9806,6 @@ DO UPDATE SET
   )
   WHERE "usage".billing_status = 'pending'
   AND "usage".status IN ('pending', 'streaming')
-  AND "usage".finalized_at IS NULL
   AND EXCLUDED.updated_at_unix_secs >= COALESCE(
     NULLIF("usage".updated_at_unix_secs, 0),
     CAST(EXTRACT(EPOCH FROM "usage".created_at) AS BIGINT)

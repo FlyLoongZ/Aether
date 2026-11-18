@@ -666,7 +666,6 @@ WHERE id = $1
   AND NOT EXISTS (
       SELECT 1 FROM wallet_daily_usage_ledgers d WHERE d.wallet_id = wallets.id
   )
-  AND NOT EXISTS (SELECT 1 FROM usage u WHERE u.wallet_id = wallets.id)
   AND NOT EXISTS (
       SELECT 1 FROM usage_settlement_snapshots s WHERE s.wallet_id = wallets.id
   )
@@ -1677,7 +1676,6 @@ WHERE id = $1
   AND NOT EXISTS (
       SELECT 1 FROM wallet_daily_usage_ledgers d WHERE d.wallet_id = wallets.id
   )
-  AND NOT EXISTS (SELECT 1 FROM usage u WHERE u.wallet_id = wallets.id)
   AND NOT EXISTS (
       SELECT 1 FROM usage_settlement_snapshots s WHERE s.wallet_id = wallets.id
   )
@@ -1765,7 +1763,6 @@ WHERE id = $1
   AND NOT EXISTS (
       SELECT 1 FROM wallet_daily_usage_ledgers d WHERE d.wallet_id = wallets.id
   )
-  AND NOT EXISTS (SELECT 1 FROM usage u WHERE u.wallet_id = wallets.id)
   AND NOT EXISTS (
       SELECT 1 FROM usage_settlement_snapshots s WHERE s.wallet_id = wallets.id
   )
@@ -1972,7 +1969,6 @@ WHERE w.id = $1
   AND NOT EXISTS (
       SELECT 1 FROM wallet_daily_usage_ledgers d WHERE d.wallet_id = w.id
   )
-  AND NOT EXISTS (SELECT 1 FROM usage u WHERE u.wallet_id = w.id)
   AND NOT EXISTS (
       SELECT 1 FROM usage_settlement_snapshots s WHERE s.wallet_id = w.id
   )

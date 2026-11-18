@@ -12,6 +12,9 @@ const USAGE_HTTP_CAPTURE_BACKFILL_SQL: &str =
 const USAGE_LEGACY_ACCOUNTING_COLUMNS_BACKFILL_SQL: &str = include_str!(
     "../../../backfills/postgres/20261118000000_drop_usage_legacy_accounting_columns.sql"
 );
+const USAGE_SETTLEMENT_MIRROR_COLUMNS_BACKFILL_SQL: &str = include_str!(
+    "../../../backfills/postgres/20261118000100_drop_usage_settlement_mirror_columns.sql"
+);
 
 #[test]
 fn capture_backfill_skips_missing_legacy_tables_before_dropping_them() {
@@ -69,6 +72,55 @@ fn usage_retirement_backfill_drops_columns_without_cascade() {
     );
 }
 
+#[test]
+fn usage_settlement_mirror_backfill_drops_columns_and_indexes() {
+    for column in [
+        "finalized_at",
+        "wallet_id",
+        "wallet_balance_before",
+        "wallet_balance_after",
+        "wallet_recharge_balance_before",
+        "wallet_recharge_balance_after",
+        "wallet_gift_balance_before",
+        "wallet_gift_balance_after",
+        "rate_multiplier",
+        "input_price_per_1m",
+        "output_price_per_1m",
+        "cache_creation_price_per_1m",
+        "cache_read_price_per_1m",
+        "price_per_request",
+    ] {
+        assert!(
+            USAGE_SETTLEMENT_MIRROR_COLUMNS_BACKFILL_SQL
+                .contains(&format!("DROP COLUMN IF EXISTS {column}")),
+            "settlement mirror backfill must drop {column}"
+        );
+    }
+    assert_eq!(
+        USAGE_SETTLEMENT_MIRROR_COLUMNS_BACKFILL_SQL
+            .matches("DROP COLUMN IF EXISTS")
+            .count(),
+        14,
+        "settlement mirror backfill must drop every retired column exactly once"
+    );
+    for index in [
+        "idx_usage_billing_finalized_wallet",
+        "idx_usage_wallet_finalized",
+        "ix_usage_wallet_id",
+        "usage_wallet_id_idx",
+    ] {
+        assert!(
+            USAGE_SETTLEMENT_MIRROR_COLUMNS_BACKFILL_SQL
+                .contains(&format!("DROP INDEX IF EXISTS public.{index}")),
+            "settlement mirror backfill must drop {index}"
+        );
+    }
+    assert!(
+        !USAGE_SETTLEMENT_MIRROR_COLUMNS_BACKFILL_SQL.contains("CASCADE"),
+        "settlement mirror backfill must fail instead of cascading through unknown dependents"
+    );
+}
+
 #[tokio::test]
 async fn usage_retirement_backfill_is_noop_on_fresh_database() {
     let Some(server) = ManagedPostgresServer::try_start()
@@ -102,7 +154,21 @@ async fn usage_retirement_backfill_is_noop_on_fresh_database() {
                 'request_headers',
                 'provider_request_headers',
                 'response_headers',
-                'client_response_headers'
+                'client_response_headers',
+                'finalized_at',
+                'wallet_id',
+                'wallet_balance_before',
+                'wallet_balance_after',
+                'wallet_recharge_balance_before',
+                'wallet_recharge_balance_after',
+                'wallet_gift_balance_before',
+                'wallet_gift_balance_after',
+                'rate_multiplier',
+                'input_price_per_1m',
+                'output_price_per_1m',
+                'cache_creation_price_per_1m',
+                'cache_read_price_per_1m',
+                'price_per_request'
               )
         )",
     )
@@ -182,7 +248,8 @@ fn pending_backfills_from_applied_returns_all_versions_when_none_applied() {
             20260716010000,
             20260722140744,
             20261102010000,
-            20261118000000
+            20261118000000,
+            20261118000100
         ]
     );
 }
@@ -206,7 +273,8 @@ fn pending_backfills_from_applied_skips_versions_already_applied() {
             20260716010000,
             20260722140744,
             20261102010000,
-            20261118000000
+            20261118000000,
+            20261118000100
         ]
     );
 }
@@ -312,11 +380,8 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
                 cache_read_cost_usd,
                 total_cost_usd,
                 actual_total_cost_usd,
-                input_price_per_1m,
-                output_price_per_1m,
                 status,
                 billing_status,
-                finalized_at,
                 created_at,
                 username,
                 api_format,
@@ -339,11 +404,8 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
                 0.0,
                 1.25,
                 1.10,
-                50.0,
-                50.0,
                 'completed',
                 'settled',
-                TIMESTAMPTZ '2024-05-06 07:18:09+00',
                 TIMESTAMPTZ '2024-05-06 07:08:09+00',
                 'alice',
                 'openai',
@@ -357,10 +419,31 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
     .await
     .expect("usage fixture should insert");
 
+    query(
+        r#"
+            INSERT INTO public.usage_settlement_snapshots (
+                request_id,
+                billing_status,
+                finalized_at,
+                input_price_per_1m,
+                output_price_per_1m
+            ) VALUES (
+                'req-backfill-1',
+                'settled',
+                TIMESTAMPTZ '2024-05-06 07:18:09+00',
+                50.0,
+                50.0
+            )
+            "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("settlement fixture should insert");
+
     let pending_before = pending_backfills(&pool)
         .await
         .expect("pending backfills should load");
-    assert_eq!(pending_before.len(), 9);
+    assert_eq!(pending_before.len(), 10);
     assert_eq!(pending_before[0].version, 20260422110000);
     assert_eq!(pending_before[1].version, 20260422120000);
     assert_eq!(pending_before[2].version, 20260504120000);
@@ -370,6 +453,7 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
     assert_eq!(pending_before[6].version, 20260722140744);
     assert_eq!(pending_before[7].version, 20261102010000);
     assert_eq!(pending_before[8].version, 20261118000000);
+    assert_eq!(pending_before[9].version, 20261118000100);
 
     run_backfills(&pool)
         .await
@@ -396,7 +480,8 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
             20260716010000,
             20260722140744,
             20261102010000,
-            20261118000000
+            20261118000000,
+            20261118000100
         ]
     );
 
@@ -1070,5 +1155,5 @@ ORDER BY total_tokens
         .fetch_one(&pool)
         .await
         .expect("backfill count should load");
-    assert_eq!(applied_count, 9);
+    assert_eq!(applied_count, 10);
 }

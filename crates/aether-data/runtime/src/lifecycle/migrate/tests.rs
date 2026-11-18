@@ -1599,14 +1599,9 @@ fn deprecation_migration_and_baseline_mark_legacy_usage_columns() {
         .sql
         .as_str()
         .contains("COMMENT ON COLUMN public.usage.finalized_at"));
-    assert!(
-        EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.output_price_per_1m")
-    );
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.wallet_id"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.username"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.api_key_name"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.billing_status"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.finalized_at"));
 }
 
 #[test]
@@ -1725,6 +1720,7 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20261102000000,
             20261103000000,
             20261117000000,
+            20261118000000,
         ]
     );
 }
@@ -3087,7 +3083,37 @@ INSERT INTO public.usage_settlement_snapshots (
     .await
     .expect("settlement fixtures should be inserted");
 
-    sqlx::raw_sql(legacy_view_migration.sql.clone())
+    // Historical views still name settlement mirrors retired from usage. Keep
+    // their token-total semantics for this fixture while reading the retired
+    // fields from their canonical settlement owner.
+    let canonicalize_retired_view_fields = |sql: &str| -> String {
+        sql.replace(
+            "COALESCE(settlement.finalized_at, usage_rows.finalized_at) AS finalized_at",
+            "settlement.finalized_at AS finalized_at",
+        )
+        .replace(
+            "COALESCE(\n    CAST(settlement.output_price_per_1m AS DOUBLE PRECISION),\n    CAST(usage_rows.output_price_per_1m AS DOUBLE PRECISION)\n  ) AS output_price_per_1m",
+            "CAST(settlement.output_price_per_1m AS DOUBLE PRECISION) AS output_price_per_1m",
+        )
+        .replace(
+            "COALESCE(\n    CAST(settlement.input_price_per_1m AS DOUBLE PRECISION),\n    CAST(usage_rows.input_price_per_1m AS DOUBLE PRECISION)\n  ) AS input_price_per_1m",
+            "CAST(settlement.input_price_per_1m AS DOUBLE PRECISION) AS input_price_per_1m",
+        )
+        .replace(
+            "COALESCE(\n    CAST(settlement.cache_creation_price_per_1m AS DOUBLE PRECISION),\n    CAST(usage_rows.cache_creation_price_per_1m AS DOUBLE PRECISION)\n  ) AS cache_creation_price_per_1m",
+            "CAST(settlement.cache_creation_price_per_1m AS DOUBLE PRECISION) AS cache_creation_price_per_1m",
+        )
+        .replace(
+            "COALESCE(\n    CAST(settlement.cache_read_price_per_1m AS DOUBLE PRECISION),\n    CAST(usage_rows.cache_read_price_per_1m AS DOUBLE PRECISION)\n  ) AS cache_read_price_per_1m",
+            "CAST(settlement.cache_read_price_per_1m AS DOUBLE PRECISION) AS cache_read_price_per_1m",
+        )
+        .replace(
+            "COALESCE(\n    CAST(settlement.price_per_request AS DOUBLE PRECISION),\n    CAST(usage_rows.price_per_request AS DOUBLE PRECISION)\n  ) AS price_per_request",
+            "CAST(settlement.price_per_request AS DOUBLE PRECISION) AS price_per_request",
+        )
+    };
+    let legacy_view_sql = canonicalize_retired_view_fields(legacy_view_migration.sql.as_str());
+    sqlx::raw_sql(sqlx::AssertSqlSafe(legacy_view_sql))
         .execute(&pool)
         .await
         .expect("legacy billing-facts view should be restored for the upgrade fixture");
@@ -3099,12 +3125,13 @@ INSERT INTO public.usage_settlement_snapshots (
     .expect("legacy billing-facts total should be readable");
     assert_eq!(duplicated_total, 330805);
 
-    query("DELETE FROM public._sqlx_migrations WHERE version = $1")
-        .bind(FIX_MIGRATION_VERSION)
+    let fix_view_migration = POSTGRES_MIGRATOR
+        .iter()
+        .find(|migration| migration.version == FIX_MIGRATION_VERSION)
+        .expect("billing-facts fix migration should be embedded");
+    let fix_view_sql = canonicalize_retired_view_fields(fix_view_migration.sql.as_str());
+    sqlx::raw_sql(sqlx::AssertSqlSafe(fix_view_sql))
         .execute(&pool)
-        .await
-        .expect("billing-facts fix migration stamp should be reset");
-    super::run_migrations(&pool)
         .await
         .expect("billing-facts fix migration should rebuild the view");
 
