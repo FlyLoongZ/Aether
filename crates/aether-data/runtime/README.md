@@ -24,12 +24,9 @@ task crates live in the sibling `../contracts` crate (`aether-data-contracts`).
 | `src/lifecycle/backfill.rs` | Backfill entry points and backfill discovery. |
 | `src/lifecycle/export.rs` | Cross-database export/import workflows. |
 | `../adapters/postgres/migrations` | Executable `sqlx` migrations owned and embedded by each adapter crate. |
-| `schema` | Schema maintenance workspace for logical definitions, driver fragments, and generated output. |
-| `schema/logical` | Human-maintained logical table definitions used by `aether-data-schema`. |
-| `schema/drivers/postgres` | Human-maintained driver fragments that compose back into executable SQL while generation is being promoted. |
-| `schema/bootstrap/postgres` | Post-processed Postgres bootstrap snapshot, seed rows, and SQLx search-path footer. `build.rs` composes them into the runtime embedded artifact. |
-| `schema/generated` | Machine-written SQL generated from logical schema for audit and drift detection only. |
-| `schema/overrides` | Rare driver-specific SQL escape hatch. Keep README-only until a real override is needed. |
+| `schema` | Schema fragment workspace used to assemble the baseline migration and bootstrap snapshot. |
+| `schema/drivers/postgres` | Human-maintained driver fragments composed into the executable baseline migration. |
+| `schema/bootstrap/postgres` | Postgres bootstrap fragments, seed rows, and SQLx search-path footer. `build.rs` composes them into the runtime embedded artifact. |
 | `backfills/postgres` | Executable backfill SQL grouped by driver. |
 
 ## Layering Rules
@@ -106,46 +103,27 @@ Moving their physical files does not change SQLx migration versions or deployed
 database history because SQLx records migration version and checksum, not the
 workspace source path.
 
-The large baseline SQL files are maintained through `schema` fragments. New
-table-structure work should start in `schema/logical/*.toml` and be generated
-into driver-specific SQL before it is composed into executable migrations:
+The large baseline SQL files are maintained as ordered fragments under
+`schema/drivers/postgres`. The executable baseline migration
+`../adapters/postgres/migrations/20260403000000_baseline.sql` must stay byte-for-byte
+equal to the composition of `schema/drivers/postgres/baseline/manifest.txt`;
+`src/lifecycle/migrate/tests.rs` enforces that equality. The bootstrap snapshot is
+composed automatically by `build.rs` from `schema/bootstrap/postgres/manifest.txt`.
 
-```bash
-bash crates/aether-data/runtime/schema/compose_schema.sh generate
-bash crates/aether-data/runtime/schema/compose_schema.sh compose
-bash crates/aether-data/runtime/schema/compose_schema.sh check
-```
+There is no logical-schema compiler or generated SQL directory. When adding a
+table:
 
-`schema/generated/**` is machine-written by `aether-data-schema`; it is checked
-in to make generator drift reviewable, not because runtime reads it. Edit
-`schema/logical/*.toml` instead. Use `schema/overrides/**` only as an exception
-bucket for driver-specific SQL that cannot live cleanly in logical schema or the
-normal driver fragments.
-
-`compose_schema.sh check` also verifies that required baseline/portable
-table-creation SQL is represented in `schema/logical`. This is the guardrail
-that keeps table structure from drifting back into multiple manually maintained
-definitions.
-
-For executable fragments that have not been promoted to generated output yet,
-edit fragments under `schema/drivers/postgres` directly, run
-`compose`, then run `check`. Do not edit baseline executable SQL and fragments
-independently.
-
-When adding a table:
-
-1. Add or update `schema/logical/*.toml` first for the table structure.
-2. Run `schema/compose_schema.sh generate` and inspect the generated driver SQL.
-3. Add or update the executable driver-specific migration/fragments only for
-   deployment compatibility or generator gaps.
+1. Update `schema/drivers/postgres` and the executable baseline migration together,
+   preserving the composition order in `manifest.txt`.
+2. Update `schema/bootstrap/postgres` when the empty-database snapshot changes;
+   `build.rs` rebuilds the embedded artifact.
+3. Add a new incremental migration under `../adapters/postgres/migrations` for
+   existing databases. Do not modify already-applied migration checksums.
 4. Add or update repository contracts in `aether-data-contracts` if other crates
    need the new shape.
-5. Add driver repository implementations only for the drivers that are actually
-   supported for that domain.
-6. Wire new repositories through `src/backend/read.rs` or `src/backend/write.rs`
-   only after the implementation exists for each selected driver.
-7. Update `docs/architecture/data-layer.md` when ownership, import, or logical
-   type policy changes.
+5. Add the Postgres repository implementation and wire it through
+   `src/backend/read.rs` or `src/backend/write.rs`.
+6. Update this README when ownership or schema maintenance rules change.
 
 ## Known Cleanup Targets
 

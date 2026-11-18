@@ -632,10 +632,6 @@ fn management_tokens_json_columns_are_normalized_to_jsonb_in_postgres_schema_pat
     assert!(driver_schema.contains("permissions jsonb,"));
     assert!(driver_schema.contains("jsonb_array_length(allowed_ips)"));
 
-    let generated_identity =
-        include_str!("../../../schema/generated/postgres/baseline/001_identity.sql");
-    assert!(generated_identity.contains("allowed_ips jsonb,"));
-    assert!(generated_identity.contains("permissions jsonb,"));
 }
 
 #[test]
@@ -655,9 +651,9 @@ fn api_key_ip_rules_is_jsonb_in_postgres_schema_paths() {
 
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("ip_rules jsonb,"));
 
-    let generated_identity =
-        include_str!("../../../schema/generated/postgres/baseline/001_identity.sql");
-    assert!(generated_identity.contains("ip_rules jsonb,"));
+    let driver_schema =
+        include_str!("../../../schema/drivers/postgres/baseline/001_types_and_tables.sql");
+    assert!(driver_schema.contains("ip_rules jsonb,"));
 }
 
 #[test]

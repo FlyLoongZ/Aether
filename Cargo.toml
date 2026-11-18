@@ -9,7 +9,6 @@ members = [
     "crates/aether-body-store",
     "crates/aether-data/contracts",
     "crates/aether-data/adapters/postgres",
-    "crates/aether-data/schema",
     "crates/aether-dispatch-core",
     "crates/aether-cache",
     "crates/aether-billing",
