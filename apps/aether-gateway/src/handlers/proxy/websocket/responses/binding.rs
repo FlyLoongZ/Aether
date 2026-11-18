@@ -143,7 +143,6 @@ impl UpstreamBindingIdentity {
         }
         changed
     }
-
 }
 
 /// Excludes headers whose values identify one downstream request/turn rather

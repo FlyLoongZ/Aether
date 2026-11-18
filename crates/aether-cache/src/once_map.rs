@@ -2371,8 +2371,9 @@ mod tests {
     async fn tombstones_do_not_evict_a_live_entry() {
         let probe: OnceMap<String, String, String> = OnceMap::builder().build();
         probe.publish("aaa".to_string(), value(8), WINDOW);
-        let map: OnceMap<String, String, String> =
-            OnceMap::builder().capacity_bytes(probe.weight() * 2).build();
+        let map: OnceMap<String, String, String> = OnceMap::builder()
+            .capacity_bytes(probe.weight() * 2)
+            .build();
 
         map.publish("aaa".to_string(), value(8), WINDOW);
         map.publish("bbb".to_string(), value(8), WINDOW);
