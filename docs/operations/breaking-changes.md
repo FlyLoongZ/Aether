@@ -52,8 +52,14 @@ a default.
 - Usage reads no longer coalesce deprecated `usage.*` mirror columns with the
   split audit/settlement tables. Historical rows without canonical satellite
   rows may display empty billing state.
-- The deprecated columns are not dropped by this change; a separate schema
-  cleanup is required.
+- The retired legacy accounting columns (`input_output_total_tokens`,
+  `input_context_tokens`, the unused split cost/price fields, and
+  `created_at_unix_ms`) and the legacy `usage` HTTP header mirrors are dropped
+  from `public.usage`. Fresh databases never create them; upgraded databases
+  drop them in the usage retirement backfill.
+- Settlement and billing mirror columns, including `billing_status`, remain in
+  this release; `username` and `api_key_name` remain as historical display
+  snapshots.
 
 ## Format conversion
 

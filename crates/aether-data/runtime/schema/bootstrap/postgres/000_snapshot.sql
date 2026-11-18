@@ -1,6 +1,6 @@
--- Schema state at migration 20261103000000: derived from pg_dump of a
--- PostgreSQL 18.x reference database and then post-processed (see
--- ../../README.md).
+-- Schema state at migration 20261103000000 plus the 20261118000000 usage
+-- retirement backfill: derived from pg_dump of a PostgreSQL 18.x reference
+-- database and then post-processed (see ../../README.md).
 -- Retired capture and proxy tables are intentionally omitted.
 -- Requires PostgreSQL 18 or newer: this is pg_dump output from an 18.x
 -- server, which is not guaranteed to restore into an older major version.
@@ -2308,21 +2308,13 @@ CREATE TABLE public.usage (
     provider_api_key_id character varying(36),
     input_tokens integer DEFAULT 0,
     output_tokens integer DEFAULT 0,
-    input_output_total_tokens integer DEFAULT 0,
     cache_creation_input_tokens integer DEFAULT 0,
     cache_read_input_tokens integer DEFAULT 0,
     input_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     output_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    cache_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     cache_creation_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     cache_read_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    request_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     total_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    actual_input_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    actual_output_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    actual_cache_creation_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    actual_cache_read_cost_usd numeric(20,8) DEFAULT '0'::double precision,
-    actual_request_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     actual_total_cost_usd numeric(20,8) DEFAULT '0'::double precision,
     rate_multiplier numeric(10,6) DEFAULT '1'::double precision,
     input_price_per_1m numeric(20,8),
@@ -2337,13 +2329,9 @@ CREATE TABLE public.usage (
     error_message text,
     response_time_ms integer,
     status character varying(20) DEFAULT 'completed'::character varying NOT NULL,
-    request_headers jsonb,
-    provider_request_headers jsonb,
-    response_headers jsonb,
     request_metadata jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     first_byte_time_ms integer,
-    client_response_headers jsonb,
     endpoint_api_format character varying(50),
     has_format_conversion boolean DEFAULT false,
     billing_status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
@@ -2355,8 +2343,6 @@ CREATE TABLE public.usage (
     provider_endpoint_kind character varying(50),
     cache_creation_input_tokens_5m integer DEFAULT 0 NOT NULL,
     cache_creation_input_tokens_1h integer DEFAULT 0 NOT NULL,
-    cache_creation_ephemeral_5m_input_tokens integer DEFAULT 0 NOT NULL,
-    cache_creation_ephemeral_1h_input_tokens integer DEFAULT 0 NOT NULL,
     wallet_id character varying(36),
     wallet_balance_before numeric(20,8),
     wallet_balance_after numeric(20,8),
@@ -2366,16 +2352,7 @@ CREATE TABLE public.usage (
     wallet_gift_balance_after numeric(20,8),
     username character varying(100),
     api_key_name character varying(200),
-    input_context_tokens integer DEFAULT 0 NOT NULL,
     total_tokens integer DEFAULT 0 NOT NULL,
-    cache_creation_cost_usd_5m numeric(20,8) DEFAULT '0'::numeric NOT NULL,
-    cache_creation_cost_usd_1h numeric(20,8) DEFAULT '0'::numeric NOT NULL,
-    actual_cache_creation_cost_usd_5m numeric(20,8) DEFAULT '0'::numeric NOT NULL,
-    actual_cache_creation_cost_usd_1h numeric(20,8) DEFAULT '0'::numeric NOT NULL,
-    actual_cache_cost_usd numeric(20,8) DEFAULT '0'::numeric NOT NULL,
-    cache_creation_price_per_1m_5m numeric(20,8),
-    cache_creation_price_per_1m_1h numeric(20,8),
-    created_at_unix_ms bigint DEFAULT 0 NOT NULL,
     updated_at_unix_secs bigint DEFAULT 0 NOT NULL,
     upstream_is_stream boolean,
     failure_origin text,
@@ -2484,32 +2461,8 @@ COMMENT ON COLUMN public.usage.cache_read_price_per_1m IS 'DEPRECATED: settlemen
 COMMENT ON COLUMN public.usage.price_per_request IS 'DEPRECATED: settlement pricing owner moved to public.usage_settlement_snapshots.price_per_request. Legacy compatibility only; do not write new values.';
 
 
---
--- Name: COLUMN usage.request_headers; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.request_headers IS 'DEPRECATED: HTTP audit owner moved to public.usage_http_headers.client_request. Legacy compatibility only; do not write new values.';
 
 
---
--- Name: COLUMN usage.provider_request_headers; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.provider_request_headers IS 'DEPRECATED: HTTP audit owner moved to public.usage_http_headers.provider_request. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.response_headers; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.response_headers IS 'DEPRECATED: HTTP audit owner moved to public.usage_http_headers.provider_response. Legacy compatibility only; do not write new values.';
-
-
---
--- Name: COLUMN usage.client_response_headers; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.usage.client_response_headers IS 'DEPRECATED: HTTP audit owner moved to public.usage_http_headers.client_response. Legacy compatibility only; do not write new values.';
 
 
 --

@@ -269,12 +269,12 @@ fn create_table_names(sql: &str) -> BTreeSet<String> {
 }
 
 #[test]
-fn empty_database_snapshot_uses_jsonb_for_all_usage_headers() {
+fn empty_database_snapshot_uses_jsonb_for_usage_http_headers() {
     for field in [
-        "request_headers",
-        "provider_request_headers",
-        "response_headers",
-        "client_response_headers",
+        "client_request",
+        "client_response",
+        "provider_request",
+        "provider_response",
     ] {
         assert_eq!(
             EMPTY_DATABASE_SNAPSHOT_SQL
@@ -1605,7 +1605,6 @@ fn deprecation_migration_and_baseline_mark_legacy_usage_columns() {
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.wallet_id"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.username"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.api_key_name"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.request_headers"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.billing_status"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("COMMENT ON COLUMN public.usage.finalized_at"));
 }

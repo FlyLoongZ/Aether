@@ -2107,8 +2107,6 @@ INSERT INTO "usage" (
   input_tokens,
   output_tokens,
   total_tokens,
-  input_output_total_tokens,
-  input_context_tokens,
   cache_creation_input_tokens,
   cache_creation_input_tokens_5m,
   cache_creation_input_tokens_1h,
@@ -2125,10 +2123,6 @@ INSERT INTO "usage" (
   first_byte_time_ms,
   status,
   billing_status,
-  request_headers,
-  provider_request_headers,
-  response_headers,
-  client_response_headers,
   request_metadata,
   finalized_at,
   created_at,
@@ -2171,7 +2165,7 @@ INSERT INTO "usage" (
 const SELECT_STALE_PENDING_USAGE_BATCH_SQL: &str = r#"
 SELECT
   usage.request_id,
-  COALESCE(usage_settlement_snapshots.billing_status, usage.billing_status) AS billing_status
+  usage_settlement_snapshots.billing_status AS billing_status
 FROM usage
 LEFT JOIN usage_settlement_snapshots
   ON usage_settlement_snapshots.request_id = usage.request_id
@@ -2237,9 +2231,7 @@ WITH updated_usage AS (
         billing_status = 'void',
         finalized_at = $2,
         total_cost_usd = 0,
-        request_cost_usd = 0,
-        actual_total_cost_usd = 0,
-        actual_request_cost_usd = 0
+        actual_total_cost_usd = 0
     WHERE request_id = $1
     RETURNING request_id
 )
@@ -2304,8 +2296,6 @@ struct PreparedPendingUsage {
     input_tokens: i32,
     output_tokens: i32,
     total_tokens: i32,
-    input_output_total_tokens: i32,
-    input_context_tokens: i32,
     cache_creation_input_tokens: i32,
     cache_creation_ephemeral_5m_input_tokens: i32,
     cache_creation_ephemeral_1h_input_tokens: i32,
@@ -2376,12 +2366,6 @@ impl PreparedPendingUsage {
         } else {
             cache_creation_input_tokens
         };
-        let input_output_total_tokens = checked_pending_usage_sum(&[input_tokens, output_tokens])?;
-        let input_context_tokens = checked_pending_usage_sum(&[
-            input_tokens,
-            effective_cache_creation_tokens,
-            cache_read_input_tokens,
-        ])?;
         let total_tokens = match usage.total_tokens {
             Some(value) => to_i32(value)?,
             None => checked_pending_usage_sum(&[
@@ -2413,8 +2397,6 @@ impl PreparedPendingUsage {
             input_tokens,
             output_tokens,
             total_tokens,
-            input_output_total_tokens,
-            input_context_tokens,
             cache_creation_input_tokens,
             cache_creation_ephemeral_5m_input_tokens,
             cache_creation_ephemeral_1h_input_tokens,
@@ -8891,10 +8873,6 @@ ORDER BY "usage".user_id ASC
                         .bind(usage.first_byte_time_ms.map(to_i32).transpose()?)
                         .bind(&usage.status)
                         .bind(&usage.billing_status)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
-                        .bind(None::<String>)
                         .bind(&request_metadata_json)
                         .bind(usage.finalized_at_unix_secs.map(|value| value as f64))
                         .bind(usage.created_at_unix_ms.map(|value| value as f64))
@@ -9271,8 +9249,6 @@ ORDER BY "usage".user_id ASC
                 .push_bind(row.input_tokens)
                 .push_bind(row.output_tokens)
                 .push_bind(row.total_tokens)
-                .push_bind(row.input_output_total_tokens)
-                .push_bind(row.input_context_tokens)
                 .push_bind(row.cache_creation_input_tokens)
                 .push_bind(row.cache_creation_ephemeral_5m_input_tokens)
                 .push_bind(row.cache_creation_ephemeral_1h_input_tokens)
@@ -9289,12 +9265,6 @@ ORDER BY "usage".user_id ASC
                 .push_bind(row.first_byte_time_ms)
                 .push_bind(row.usage.status.clone())
                 .push_bind(row.usage.billing_status.clone())
-                // The four header mirrors are always NULL here: the HTTP audit row
-                // owns them, and the body columns no longer exist at all.
-                .push("CAST(NULL AS jsonb)")
-                .push("CAST(NULL AS jsonb)")
-                .push("CAST(NULL AS jsonb)")
-                .push("CAST(NULL AS jsonb)")
                 .push("CAST(")
                 .push_bind_unseparated(row.prepared.request_metadata_json.clone())
                 .push_unseparated(" AS jsonb)")
@@ -12206,8 +12176,8 @@ async fn apply_api_key_last_used_delta_in_tx(
 
 // Build the usage read model from the split storage layout.
 //
-// Query projections already prefer the newer audit/snapshot owners and only fall back to
-// deprecated `public.usage` mirror columns for historical rows that predate the split schema.
+// Query projections read the newer audit/snapshot owners directly; deprecated `public.usage`
+// mirror columns are not part of the runtime read model.
 //
 // Some read paths intentionally project only the core usage fields. For the newer adjunct
 // audit/snapshot columns, treat a missing projection the same as SQL NULL so older callers and

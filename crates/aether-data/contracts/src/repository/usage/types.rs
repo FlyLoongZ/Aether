@@ -456,8 +456,8 @@ pub fn extract_provider_cache_ttl_minutes_from_metadata(value: Option<&Value>) -
 ///
 /// The canonical owners are split across `public.usage`, `public.usage_http_headers`,
 /// `public.usage_http_bodies`, `public.usage_routing_snapshots`, and
-/// `public.usage_settlement_snapshots`. Fallback reads from deprecated `public.usage.*` mirror
-/// columns still exist for historical rows, but those columns are compatibility-only.
+/// `public.usage_settlement_snapshots`. Deprecated `public.usage.*` mirror columns are no longer
+/// read by the runtime.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct StoredRequestUsageAudit {
     pub id: String,
@@ -503,12 +503,10 @@ pub struct StoredRequestUsageAudit {
     pub response_time_ms: Option<u64>,
     pub first_byte_time_ms: Option<u64>,
     pub status: String,
-    // Settlement state prefers `public.usage_settlement_snapshots` and only falls back to the
-    // deprecated `public.usage.billing_status` mirror for older rows.
+    // Settlement state comes from `public.usage_settlement_snapshots`.
     pub billing_status: String,
     // HTTP capture read model. Canonical owners are `public.usage_http_headers` and
-    // `public.usage_http_bodies`; deprecated `public.usage.*headers/*body*` columns are historical
-    // fallback only.
+    // `public.usage_http_bodies`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub request_headers: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

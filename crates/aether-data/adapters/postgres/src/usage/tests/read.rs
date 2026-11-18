@@ -274,11 +274,8 @@ fn usage_sql_qualifies_shared_usage_columns_for_single_record_fetches() {
         super::super::FIND_BY_ID_SQL,
     ] {
         assert!(sql.contains("\"usage\".request_id"));
-        assert!(
-                sql.contains(
-                    "COALESCE(usage_settlement_snapshots.billing_status, \"usage\".billing_status) AS billing_status"
-                )
-            );
+        assert!(sql.contains("usage_settlement_snapshots.billing_status AS billing_status"));
+        assert!(!sql.contains("\"usage\".billing_status"));
         assert!(sql
             .contains("CAST(usage_settlement_snapshots.output_price_per_1m AS DOUBLE PRECISION)"));
         assert!(sql.contains("EXTRACT(EPOCH FROM \"usage\".created_at)"));

@@ -130,11 +130,6 @@ type = "int64"
 default = 0
 
 [[table.usage.columns]]
-name = "input_output_total_tokens"
-type = "int64"
-default = 0
-
-[[table.usage.columns]]
 name = "total_tokens"
 type = "int64"
 default = 0
@@ -155,22 +150,7 @@ type = "int64"
 default = 0
 
 [[table.usage.columns]]
-name = "cache_creation_ephemeral_5m_input_tokens"
-type = "int64"
-default = 0
-
-[[table.usage.columns]]
-name = "cache_creation_ephemeral_1h_input_tokens"
-type = "int64"
-default = 0
-
-[[table.usage.columns]]
 name = "cache_read_input_tokens"
-type = "int64"
-default = 0
-
-[[table.usage.columns]]
-name = "input_context_tokens"
 type = "int64"
 default = 0
 
@@ -185,72 +165,12 @@ type = "float64"
 default = 0
 
 [[table.usage.columns]]
-name = "cache_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
 name = "cache_creation_cost_usd"
 type = "float64"
 default = 0
 
 [[table.usage.columns]]
-name = "cache_creation_cost_usd_5m"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "cache_creation_cost_usd_1h"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
 name = "cache_read_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "request_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_input_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_output_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_cache_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_cache_creation_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_cache_creation_cost_usd_5m"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_cache_creation_cost_usd_1h"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_cache_read_cost_usd"
-type = "float64"
-default = 0
-
-[[table.usage.columns]]
-name = "actual_request_cost_usd"
 type = "float64"
 default = 0
 
@@ -271,16 +191,6 @@ nullable = true
 
 [[table.usage.columns]]
 name = "cache_creation_price_per_1m"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "cache_creation_price_per_1m_5m"
-type = "float64"
-nullable = true
-
-[[table.usage.columns]]
-name = "cache_creation_price_per_1m_1h"
 type = "float64"
 nullable = true
 
@@ -347,26 +257,6 @@ default = 0
 name = "actual_total_cost_usd"
 type = "float64"
 default = 0
-
-[[table.usage.columns]]
-name = "request_headers"
-type = "json"
-nullable = true
-
-[[table.usage.columns]]
-name = "provider_request_headers"
-type = "json"
-nullable = true
-
-[[table.usage.columns]]
-name = "response_headers"
-type = "json"
-nullable = true
-
-[[table.usage.columns]]
-name = "client_response_headers"
-type = "json"
-nullable = true
 
 [[table.usage.columns]]
 name = "request_metadata"
@@ -473,11 +363,6 @@ type = "unix_seconds"
 nullable = true
 
 [[table.usage.columns]]
-name = "created_at_unix_ms"
-type = "unix_millis"
-default = 0
-
-[[table.usage.columns]]
 name = "updated_at_unix_secs"
 type = "unix_seconds"
 default = 0
@@ -489,10 +374,6 @@ columns = ["api_key_id"]
 [[table.usage.indexes]]
 name = "usage_billing_status_idx"
 columns = ["billing_status"]
-
-[[table.usage.indexes]]
-name = "usage_created_at_idx"
-columns = ["created_at_unix_ms"]
 
 [[table.usage.indexes]]
 name = "usage_provider_api_key_id_idx"

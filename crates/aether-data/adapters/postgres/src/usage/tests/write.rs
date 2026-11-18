@@ -152,15 +152,15 @@ fn stale_pending_cleanup_index_matches_the_batch_filter_and_order() {
 #[test]
 fn usage_sql_insert_values_aligns_request_metadata_and_timestamps() {
     let sql = normalize_newlines(super::super::UPSERT_SQL);
-    assert!(sql.contains("\n  $44::jsonb,\n  $45::jsonb,\n  CASE"));
-    assert!(sql.contains("WHEN $46 IS NULL THEN NULL"));
-    assert!(sql.contains("TO_TIMESTAMP($47::double precision)"));
+    assert!(sql.contains("\n  $41::jsonb,\n  CASE"));
+    assert!(sql.contains("WHEN $42 IS NULL THEN NULL"));
+    assert!(sql.contains("TO_TIMESTAMP($43::double precision)"));
 }
 
 #[test]
 fn usage_sql_upsert_materializes_upstream_stream_mode() {
     assert!(super::super::UPSERT_SQL.contains("upstream_is_stream,"));
-    assert!(super::super::UPSERT_SQL.contains("$45::jsonb->>'upstream_is_stream'"));
+    assert!(super::super::UPSERT_SQL.contains("$41::jsonb->>'upstream_is_stream'"));
     assert!(super::super::UPSERT_SQL.contains("COALESCE($21, FALSE)"));
     assert!(super::super::UPSERT_SQL.contains("upstream_is_stream = CASE"));
 }
@@ -174,8 +174,8 @@ fn usage_sql_upsert_returning_includes_routing_placeholders() {
         .contains("NULL::varchar AS settlement_billing_snapshot_schema_version"));
     assert!(super::super::UPSERT_SQL
         .contains("NULL::double precision AS settlement_input_price_per_1m"));
-    assert!(super::super::UPSERT_SQL.contains("input_output_total_tokens"));
-    assert!(super::super::UPSERT_SQL.contains("input_context_tokens"));
+    assert!(!super::super::UPSERT_SQL.contains("input_output_total_tokens"));
+    assert!(!super::super::UPSERT_SQL.contains("input_context_tokens"));
 }
 
 #[test]
@@ -192,9 +192,9 @@ fn usage_sql_writes_usage_settlement_pricing_snapshots() {
 #[test]
 fn usage_sql_upsert_recovers_missing_provider_links_after_billing_finalizes() {
     for assignment in [
-        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
-        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
-        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $49) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
+        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $45) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
+        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $45) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
+        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $45) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
     ] {
         assert!(
             super::super::UPSERT_SQL.contains(assignment),
@@ -209,8 +209,6 @@ fn usage_sql_updates_usage_mirror_columns_from_terminal_events_only() {
         "input_tokens",
         "output_tokens",
         "total_tokens",
-        "input_output_total_tokens",
-        "input_context_tokens",
         "cache_creation_input_tokens",
         "cache_creation_input_tokens_5m",
         "cache_creation_input_tokens_1h",
@@ -263,17 +261,24 @@ fn usage_sql_clears_legacy_output_price_column_on_upsert() {
 }
 
 #[test]
-fn usage_sql_clears_legacy_header_columns_on_upsert() {
-    assert!(super::super::UPSERT_SQL.contains("request_headers = NULL"));
-    assert!(super::super::UPSERT_SQL.contains("provider_request_headers = NULL"));
-    assert!(super::super::UPSERT_SQL.contains("response_headers = NULL"));
-    assert!(super::super::UPSERT_SQL.contains("client_response_headers = NULL"));
+fn usage_sql_does_not_reference_retired_header_columns() {
+    for column in [
+        "request_headers",
+        "provider_request_headers",
+        "response_headers",
+        "client_response_headers",
+    ] {
+        assert!(
+            !super::super::UPSERT_SQL.contains(column),
+            "retired header column must not be referenced: {column}"
+        );
+    }
 }
 
 #[test]
 fn usage_sql_terminal_snapshots_replace_sparse_routing_and_settlement_facts() {
     assert!(super::super::UPSERT_SQL.contains(
-        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $49 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
+        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $45 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
     ));
     let routing = super::super::UPSERT_USAGE_ROUTING_SNAPSHOT_SQL;
     assert!(routing.contains("candidate_id = CASE WHEN $14 THEN EXCLUDED.candidate_id"));

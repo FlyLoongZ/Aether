@@ -162,12 +162,10 @@ fn usage_sql_websocket_filter_compares_json_metadata_without_boolean_casts() {
 
 #[test]
 fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
-    for placeholder in [41, 42, 43, 44, 45] {
-        assert!(
-            super::super::UPSERT_SQL.contains(format!("${placeholder}::jsonb").as_str()),
-            "missing ::jsonb cast for placeholder ${placeholder}"
-        );
-    }
+    assert!(
+        super::super::UPSERT_SQL.contains("$41::jsonb"),
+        "request metadata must be bound as jsonb"
+    );
 }
 
 #[test]
@@ -206,7 +204,7 @@ fn usage_sql_capture_guard_covers_metadata_and_the_capture_tables() {
     // Bodies are not columns of `usage` any more: the accounting row only guards
     // its metadata, and the capture tables own the bytes.
     assert!(super::super::UPSERT_SQL
-        .contains("request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $49"));
+        .contains("request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $45"));
     for body in [
         "request_body",
         "provider_request_body",

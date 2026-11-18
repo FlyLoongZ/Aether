@@ -9,6 +9,9 @@ const LEGACY_SYNC_ENABLED_ACTIVE_FLAGS_SQL: &str =
     include_str!("../../../backfills/postgres/20260517012000_sync_legacy_enabled_active_flags.sql");
 const USAGE_HTTP_CAPTURE_BACKFILL_SQL: &str =
     include_str!("../../../backfills/postgres/20261102010000_migrate_usage_http_capture.sql");
+const USAGE_LEGACY_ACCOUNTING_COLUMNS_BACKFILL_SQL: &str = include_str!(
+    "../../../backfills/postgres/20261118000000_drop_usage_legacy_accounting_columns.sql"
+);
 
 #[test]
 fn capture_backfill_skips_missing_legacy_tables_before_dropping_them() {
@@ -34,6 +37,79 @@ fn capture_backfill_skips_missing_legacy_tables_before_dropping_them() {
     assert!(
         USAGE_HTTP_CAPTURE_BACKFILL_SQL.contains("DROP TABLE IF EXISTS public.usage_http_audits")
     );
+}
+
+#[test]
+fn usage_retirement_backfill_drops_columns_without_cascade() {
+    for column in [
+        "input_output_total_tokens",
+        "input_context_tokens",
+        "created_at_unix_ms",
+        "request_headers",
+        "provider_request_headers",
+        "response_headers",
+        "client_response_headers",
+    ] {
+        assert!(
+            USAGE_LEGACY_ACCOUNTING_COLUMNS_BACKFILL_SQL
+                .contains(&format!("DROP COLUMN IF EXISTS {column}")),
+            "retirement backfill must drop {column}"
+        );
+    }
+    assert_eq!(
+        USAGE_LEGACY_ACCOUNTING_COLUMNS_BACKFILL_SQL
+            .matches("DROP COLUMN IF EXISTS")
+            .count(),
+        23,
+        "retirement backfill must drop every retired column exactly once"
+    );
+    assert!(
+        !USAGE_LEGACY_ACCOUNTING_COLUMNS_BACKFILL_SQL.contains("CASCADE"),
+        "retirement backfill must fail instead of cascading through unknown dependents"
+    );
+}
+
+#[tokio::test]
+async fn usage_retirement_backfill_is_noop_on_fresh_database() {
+    let Some(server) = ManagedPostgresServer::try_start()
+        .await
+        .expect("postgres backfill test should start or skip")
+    else {
+        return;
+    };
+
+    let pool = PgPool::connect(server.database_url())
+        .await
+        .expect("pool should connect");
+    prepare_database_for_startup(&pool)
+        .await
+        .expect("schema should prepare");
+
+    run_backfills(&pool)
+        .await
+        .expect("usage retirement backfill should tolerate absent columns");
+
+    let legacy_exists: bool = query_scalar(
+        "SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'usage'
+              AND column_name IN (
+                'input_output_total_tokens',
+                'input_context_tokens',
+                'created_at_unix_ms',
+                'request_headers',
+                'provider_request_headers',
+                'response_headers',
+                'client_response_headers'
+              )
+        )",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("retired column presence should load");
+    assert!(!legacy_exists);
 }
 
 #[tokio::test]
@@ -105,7 +181,8 @@ fn pending_backfills_from_applied_returns_all_versions_when_none_applied() {
             20260517012000,
             20260716010000,
             20260722140744,
-            20261102010000
+            20261102010000,
+            20261118000000
         ]
     );
 }
@@ -128,7 +205,8 @@ fn pending_backfills_from_applied_skips_versions_already_applied() {
             20260517012000,
             20260716010000,
             20260722140744,
-            20261102010000
+            20261102010000,
+            20261118000000
         ]
     );
 }
@@ -282,7 +360,7 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
     let pending_before = pending_backfills(&pool)
         .await
         .expect("pending backfills should load");
-    assert_eq!(pending_before.len(), 8);
+    assert_eq!(pending_before.len(), 9);
     assert_eq!(pending_before[0].version, 20260422110000);
     assert_eq!(pending_before[1].version, 20260422120000);
     assert_eq!(pending_before[2].version, 20260504120000);
@@ -291,6 +369,7 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
     assert_eq!(pending_before[5].version, 20260716010000);
     assert_eq!(pending_before[6].version, 20260722140744);
     assert_eq!(pending_before[7].version, 20261102010000);
+    assert_eq!(pending_before[8].version, 20261118000000);
 
     run_backfills(&pool)
         .await
@@ -316,7 +395,8 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
             20260517012000,
             20260716010000,
             20260722140744,
-            20261102010000
+            20261102010000,
+            20261118000000
         ]
     );
 
@@ -990,5 +1070,5 @@ ORDER BY total_tokens
         .fetch_one(&pool)
         .await
         .expect("backfill count should load");
-    assert_eq!(applied_count, 8);
+    assert_eq!(applied_count, 9);
 }

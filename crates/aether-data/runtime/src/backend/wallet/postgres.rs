@@ -20,7 +20,7 @@ WITH aggregated AS (
     JOIN usage_settlement_snapshots
       ON usage_settlement_snapshots.request_id = usage.request_id
     WHERE usage_settlement_snapshots.wallet_id IS NOT NULL
-      AND COALESCE(usage_settlement_snapshots.billing_status, usage.billing_status) = 'settled'
+      AND usage_settlement_snapshots.billing_status = 'settled'
       AND usage.total_cost_usd > 0
       AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) >= $1
       AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) < $2
@@ -84,7 +84,7 @@ WHERE ledgers.billing_date = $1
       JOIN usage_settlement_snapshots
         ON usage_settlement_snapshots.request_id = usage.request_id
       WHERE usage_settlement_snapshots.wallet_id = ledgers.wallet_id
-        AND COALESCE(usage_settlement_snapshots.billing_status, usage.billing_status) = 'settled'
+        AND usage_settlement_snapshots.billing_status = 'settled'
         AND usage.total_cost_usd > 0
         AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) >= $3
         AND COALESCE(usage_settlement_snapshots.finalized_at, usage.finalized_at) < $4

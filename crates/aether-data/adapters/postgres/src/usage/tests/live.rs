@@ -172,9 +172,6 @@ async fn live_full_http_capture_round_trips_for_direct_and_batch_writes() {
                 "batch={batch}, field={field:?}"
             );
         }
-        let legacy_content_present: bool = sqlx::query_scalar("SELECT request_headers IS NOT NULL OR provider_request_headers IS NOT NULL OR response_headers IS NOT NULL OR client_response_headers IS NOT NULL FROM usage WHERE request_id = $1")
-            .bind(&request_id).fetch_one(repository.pool()).await.unwrap();
-        assert!(!legacy_content_present);
         sqlx::query("DELETE FROM usage WHERE request_id = $1")
             .bind(&request_id)
             .execute(repository.pool())
