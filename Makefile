@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-DEV_RUST_LOG := info,executor::candidate_loop=debug,stream::execution=debug
+DEV_RUST_LOG := info,aether_gateway::executor::candidate_loop=debug,aether_gateway::execution_runtime::stream::execution=debug
 ifeq ($(origin RUST_LOG), command line)
 DEV_RUST_LOG := $(RUST_LOG)
 endif
