@@ -1,9 +1,10 @@
 //! Keyed cache with request coalescing and write-through invalidation.
 
 use crate::budget::CacheBudget;
+use crate::housekeeper::{Housekeeping, Progress, REAP_BATCH};
 use crate::weight::CacheWeight;
 use std::borrow::Borrow;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::future::Future;
 use std::hash::Hash;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
@@ -152,8 +153,15 @@ const MAX_EVICTIONS_PER_INSERT: usize = 32;
 /// window is a ceiling on its life: a read sees the entry while it is younger
 /// than both the reader's window and the window it was written with. Retention
 /// is additionally bounded by `capacity_bytes` and, when one is installed, by a
-/// shared [`CacheBudget`]. Reclamation happens on write, so there is no
-/// background task.
+/// shared [`CacheBudget`].
+///
+/// Reclamation happens on write, so the hot path never pays for a timer: entries
+/// are indexed by their own deadline, which means a write drops what has passed
+/// without scanning the table and no live entry can hide an expired one behind
+/// it. The one case a write cannot cover is a cache nobody writes to any more,
+/// so every map also registers with the process-wide housekeeper
+/// ([`start_housekeeper`](crate::start_housekeeper)) that reclaims it while it
+/// sits idle, and [`OnceMap::run_pending_tasks`] does the same on demand.
 ///
 /// Flights are coalesced per `(key, load kind)`, never per key alone: a caller
 /// only joins a load that promises the same thing it does. [`OnceMap::reload`]
@@ -174,9 +182,14 @@ impl<K, V, E> Clone for OnceMap<K, V, E> {
 impl<K, V, E> std::fmt::Debug for OnceMap<K, V, E> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Report sizes only, so no bound is needed on `K`, `V` or `E`.
-        let (entries, tombstones, weight) = match self.inner.store.read() {
-            Ok(store) => (store.entries.len(), store.tombstones.len(), store.weight),
-            Err(_) => (0, 0, 0),
+        let (entries, tombstones, expiry_index, weight) = match self.inner.store.read() {
+            Ok(store) => (
+                store.entries.len(),
+                store.tombstones.len(),
+                store.expiry.len(),
+                store.weight,
+            ),
+            Err(_) => (0, 0, 0, 0),
         };
         let inflight = match self.inner.inflight.lock() {
             Ok(inflight) => inflight.len(),
@@ -186,6 +199,7 @@ impl<K, V, E> std::fmt::Debug for OnceMap<K, V, E> {
             .debug_struct("OnceMap")
             .field("entries", &entries)
             .field("tombstones", &tombstones)
+            .field("expiry_index", &expiry_index)
             .field("inflight", &inflight)
             .field("weight", &weight)
             .finish()
@@ -220,16 +234,32 @@ struct Store<K, V> {
     /// publish under it, so a load that started before the mutation cannot
     /// repopulate the key. Once no load is in flight the tombstone is swept.
     tombstones: HashMap<K, Tombstone>,
-    /// Insertion order as `(key, seq)`. Drives both expiry and capacity
-    /// eviction; `seq` identifies the entry that owns the slot.
-    order: VecDeque<(K, u64)>,
+    /// Every live entry, ordered by `(deadline, seq)` in nanoseconds since
+    /// `base`.
+    ///
+    /// The index is deadline-ordered rather than insertion-ordered for two
+    /// reasons: a long window can no longer keep an already-expired neighbour
+    /// resident, and the write path then knows exactly which entries have to go
+    /// without walking the table. `seq` identifies the entry that owns the
+    /// node, and a node is removed together with its entry, so the index cannot
+    /// drift away from `entries`.
+    expiry: BTreeMap<(u128, u64), K>,
     tomb_order: VecDeque<(K, u64)>,
     seq: u64,
     /// Global generation. `invalidate_all` bumps it instead of walking keys.
     epoch: u64,
+    /// Bytes of live entries. What `capacity_bytes` bounds: tombstones are
+    /// guarded entries that go away on their own, so they must not make this
+    /// cache evict a row somebody can still read.
+    live_weight: usize,
+    /// Bytes of live entries *and* tombstones, as reported by
+    /// [`OnceMap::weight`](crate::OnceMap::weight) and charged to the ledger.
     weight: usize,
     capacity_bytes: usize,
     tombstone_ttl: Duration,
+    /// Anchor for the relative deadlines in `expiry`, so `Instant + Duration`
+    /// overflow can never enter a comparison.
+    base: Instant,
     budget: Option<Arc<CacheBudget>>,
 }
 
@@ -243,12 +273,23 @@ struct Entry<V> {
     weight: usize,
     refresh_failures: u32,
     next_refresh_at: Option<Instant>,
+    /// The absolute deadline this entry owns in the index, in nanoseconds since
+    /// `base`. Kept here so a replacement removes exactly its own node instead
+    /// of leaving a stale one for reclamation to walk past.
+    deadline: u128,
 }
 
 struct Tombstone {
     epoch: u64,
     at: Instant,
     weight: usize,
+    /// Whether the shared ledger was charged for this tombstone.
+    ///
+    /// A tombstone is a generation guard, not a cached value: it is kept even
+    /// when the ledger is full, so that the load it is guarding against cannot
+    /// repopulate the key. In that case it simply is not charged, and every
+    /// release path has to know not to uncharge it.
+    charged: bool,
 }
 
 struct Flight<V, E> {
@@ -581,6 +622,27 @@ where
         Q: Hash + Eq + ToOwned<Owned = K> + ?Sized,
     {
         self.remove(key);
+    }
+
+    /// Reclaims what this cache has already outlived, now.
+    ///
+    /// Expired entries and expired tombstones go, anything over
+    /// `capacity_bytes` goes, and the structural maintenance a write would have
+    /// done runs afterwards. The process-wide housekeeper does this for every
+    /// cache while it is idle; call it directly when the reclaim has to happen
+    /// *now* — after a bulk write, or in a test — or when the host prefers to
+    /// drive reclamation from its own periodic task.
+    ///
+    /// A cache that is being written right now is left alone: reclamation never
+    /// waits for the store lock, and the next write reclaims instead.
+    pub fn run_pending_tasks(&self) {
+        let now = Instant::now();
+        loop {
+            match self.inner.housekeep(now) {
+                Progress::More => continue,
+                Progress::Done | Progress::Busy => break,
+            }
+        }
     }
 
     /// Drops everything. Used when the underlying table is rewritten.
@@ -1240,6 +1302,12 @@ where
     /// shrunk: those are the expensive parts, and holding `inflight` through
     /// them would stall every concurrent lookup and flight registration.
     fn reap(&self, store: &mut Store<K, V>, now: Instant) {
+        self.reap_with_batch(store, now, usize::MAX);
+    }
+
+    /// The body of [`Inner::reap`], with `batch` bounding how many expired
+    /// entries one call drops. Returns whether more expired entries remain.
+    fn reap_with_batch(&self, store: &mut Store<K, V>, now: Instant, batch: usize) -> bool {
         {
             let inflight = match self.inflight.lock() {
                 Ok(inflight) => inflight,
@@ -1247,7 +1315,34 @@ where
             };
             store.reap_tombstones(now, &|key: &K| inflight.has(key));
         }
-        store.reap_entries(now);
+        let more = store.reap_expired(now, batch);
+        store.enforce_capacity();
+        more
+    }
+
+    /// Reclaims without waiting for a write, and without waiting for a lock: a
+    /// cache that is being written is skipped and retried on the next pass.
+    fn housekeep(&self, now: Instant) -> Progress {
+        let Ok(mut store) = self.store.try_write() else {
+            return Progress::Busy;
+        };
+        let more = self.reap_with_batch(&mut store, now, REAP_BATCH);
+        if more {
+            return Progress::More;
+        }
+        // Structural maintenance outside the reclamation itself, like every
+        // other write path does it.
+        drop(store);
+        self.maintain();
+        Progress::Done
+    }
+
+    fn next_deadline(&self) -> Option<Instant> {
+        let store = match self.store.read() {
+            Ok(store) => store,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        store.next_deadline()
     }
 
     /// Runs the structural reclamation the write path has only *flagged*.
@@ -1266,6 +1361,21 @@ where
         }
         store.compact();
         store.shrink();
+    }
+}
+
+impl<K, V, E> Housekeeping for Inner<K, V, E>
+where
+    K: Clone + Eq + Hash + Send + Sync + 'static,
+    V: CacheWeight + Send + Sync + 'static,
+    E: Send + Sync + 'static,
+{
+    fn next_deadline(&self) -> Option<Instant> {
+        Inner::next_deadline(self)
+    }
+
+    fn housekeep(&self, now: Instant) -> Progress {
+        Inner::housekeep(self, now)
     }
 }
 
@@ -1302,19 +1412,37 @@ where
         let epoch = self.stamp(key).key_epoch.wrapping_add(1);
         let previous = self.take_entry(key);
         if let Some(previous_tombstone) = self.tombstones.remove(key) {
-            self.weight = self.weight.saturating_sub(previous_tombstone.weight);
+            self.release_tombstone(previous_tombstone);
         }
+        // The ledger pays for a tombstone like it pays for a value. A refusal is
+        // not a reason to skip the tombstone — it guards the key against a load
+        // that is still in flight — so it is kept uncharged instead.
+        let charged = self
+            .budget
+            .as_ref()
+            .is_none_or(|budget| budget.try_charge(key_weight));
         self.tombstones.insert(
             key.to_owned(),
             Tombstone {
                 epoch,
                 at: now,
                 weight: key_weight,
+                charged,
             },
         );
         self.weight = self.weight.saturating_add(key_weight);
         self.tomb_order.push_back((key.to_owned(), epoch));
         previous
+    }
+
+    /// Nanoseconds since `base`: an integer that a deadline can be stored and
+    /// compared under without `Instant + Duration` ever overflowing.
+    fn now_nanos(&self, now: Instant) -> u128 {
+        now.saturating_duration_since(self.base).as_nanos()
+    }
+
+    fn deadline_nanos(&self, now: Instant, ttl: Duration) -> u128 {
+        self.now_nanos(now).saturating_add(ttl.as_nanos())
     }
 
     fn take_entry<Q>(&mut self, key: &Q) -> Option<Arc<V>>
@@ -1323,11 +1451,41 @@ where
         Q: Hash + Eq + ?Sized,
     {
         let entry = self.entries.remove(key)?;
+        self.expiry.remove(&(entry.deadline, entry.seq));
+        Some(self.release(entry))
+    }
+
+    /// Removes the entry itself, leaving the expiry index alone.
+    ///
+    /// Split from [`Store::take_entry`] so reclamation can pop the index node it
+    /// already holds instead of looking the same slots up twice.
+    fn drop_entry<Q>(&mut self, key: &Q) -> Option<Arc<V>>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        let entry = self.entries.remove(key)?;
+        Some(self.release(entry))
+    }
+
+    /// Gives back everything a removed entry accounted for.
+    fn release(&mut self, entry: Entry<V>) -> Arc<V> {
+        self.live_weight = self.live_weight.saturating_sub(entry.weight);
         self.weight = self.weight.saturating_sub(entry.weight);
         if let Some(budget) = &self.budget {
             budget.uncharge(entry.weight);
         }
-        Some(entry.value)
+        entry.value
+    }
+
+    /// Gives back what a retired tombstone accounted for.
+    fn release_tombstone(&mut self, tombstone: Tombstone) {
+        self.weight = self.weight.saturating_sub(tombstone.weight);
+        if tombstone.charged {
+            if let Some(budget) = &self.budget {
+                budget.uncharge(tombstone.weight);
+            }
+        }
     }
 
     fn insert(
@@ -1344,7 +1502,7 @@ where
             .saturating_add(entry_overhead::<K, V>());
         self.take_entry(&key);
         if let Some(previous_tombstone) = self.tombstones.remove(&key) {
-            self.weight = self.weight.saturating_sub(previous_tombstone.weight);
+            self.release_tombstone(previous_tombstone);
         }
 
         // A value larger than this cache's own cap can never be resident: it
@@ -1356,13 +1514,13 @@ where
 
         if let Some(budget) = self.budget.clone() {
             if !budget.try_charge(weight) {
-                // Expired entries are already dead weight in the ledger.
-                // Release them before the eviction loop starts sacrificing
-                // live rows.
-                self.reclaim_expired(now);
+                // Expired entries are already dead weight in the ledger. The
+                // deadline index finds all of them without a sweep, so release
+                // them before the eviction loop starts sacrificing live rows.
+                self.reap_entries(now);
                 let mut evictions = 0;
                 while !budget.try_charge(weight) {
-                    if evictions >= MAX_EVICTIONS_PER_INSERT || !self.evict_oldest() {
+                    if evictions >= MAX_EVICTIONS_PER_INSERT || !self.evict_earliest() {
                         // The ledger is full and this cache has nothing left
                         // to give: the caller still gets its value, it just is
                         // not retained.
@@ -1376,8 +1534,10 @@ where
 
         self.seq = self.seq.wrapping_add(1);
         let seq = self.seq;
+        let deadline = self.deadline_nanos(now, ttl);
+        self.expiry.insert((deadline, seq), key.clone());
         self.entries.insert(
-            key.clone(),
+            key,
             Entry {
                 value,
                 seq,
@@ -1387,50 +1547,35 @@ where
                 weight,
                 refresh_failures: 0,
                 next_refresh_at: None,
+                deadline,
             },
         );
+        self.live_weight = self.live_weight.saturating_add(weight);
         self.weight = self.weight.saturating_add(weight);
-        self.order.push_back((key, seq));
+
+        // Wake the housekeeper only when this entry became the earliest thing to
+        // drop. An insert that lands behind the current front changes nothing
+        // about when the next pass is worth running, so a table of one window
+        // wakes it exactly once — on the insert that filled an empty index.
+        if self.expiry.keys().next() == Some(&(deadline, seq)) {
+            if let Some(at) = now.checked_add(ttl) {
+                crate::housekeeper::request_wake(at);
+            }
+        }
     }
 
-    /// Drops every entry whose own window has passed, wherever it sits in the
-    /// insertion queue.
+    /// Evicts the entry that expires first. Returns whether anything was
+    /// evicted.
     ///
-    /// `reap_entries` stops at the first live entry because it runs on the
-    /// write path and must stay cheap. That rule cannot free an expired entry
-    /// that was inserted before a long-lived one, which is exactly the state
-    /// that fills the ledger with dead weight — so the budget-refusal path pays
-    /// for one full sweep instead.
-    fn reclaim_expired(&mut self, now: Instant) {
-        let mut kept = VecDeque::with_capacity(self.order.len());
-        let mut expired = Vec::new();
-        while let Some((key, seq)) = self.order.pop_front() {
-            match self.entries.get(&key) {
-                // Slot superseded by a newer insert, or already gone.
-                None => {}
-                Some(entry) if entry.seq != seq => {}
-                Some(entry) if now.saturating_duration_since(entry.inserted_at) > entry.ttl => {
-                    expired.push(key);
-                }
-                Some(_) => kept.push_back((key, seq)),
+    /// Capacity eviction used to follow insertion order, which on a table of
+    /// mixed windows could sacrifice a row with a full window left while keeping
+    /// one that was about to die. For a single window the two orders are the
+    /// same; otherwise the deadline is the one that loses the least.
+    fn evict_earliest(&mut self) -> bool {
+        while let Some((_, key)) = self.expiry.pop_first() {
+            if self.drop_entry(&key).is_some() {
+                return true;
             }
-        }
-        self.order = kept;
-        for key in expired {
-            self.take_entry(&key);
-        }
-    }
-
-    /// Evicts the oldest live entry. Returns whether anything was evicted.
-    fn evict_oldest(&mut self) -> bool {
-        while let Some((key, seq)) = self.order.front().cloned() {
-            self.order.pop_front();
-            let owns_slot = self.entries.get(&key).is_some_and(|entry| entry.seq == seq);
-            if !owns_slot {
-                continue;
-            }
-            self.take_entry(&key);
-            return true;
         }
         false
     }
@@ -1455,40 +1600,88 @@ where
                 budget.uncharge(entry.weight);
             }
         }
+        for tombstone in self.tombstones.values() {
+            if tombstone.charged {
+                if let Some(budget) = &self.budget {
+                    budget.uncharge(tombstone.weight);
+                }
+            }
+        }
         self.entries.clear();
         self.tombstones.clear();
-        self.order.clear();
+        self.expiry.clear();
         self.tomb_order.clear();
+        self.live_weight = 0;
         self.weight = 0;
         self.epoch = self.epoch.wrapping_add(1);
     }
 
-    /// Drops expired entries and, once the byte budget is exceeded, the oldest
-    /// survivors. The tombstone sweep runs separately because it is the only
-    /// part that needs the in-flight set.
+    /// Drops every expired entry, then anything over `capacity_bytes`.
+    ///
+    /// The write path calls this with no limit: it is already holding the lock
+    /// and the work is bounded by what it just changed. The housekeeper calls
+    /// [`Store::reap_expired`] with a batch instead.
     fn reap_entries(&mut self, now: Instant) {
-        while let Some((key, seq)) = self.order.front().cloned() {
-            let Some(entry) = self.entries.get(&key) else {
-                self.order.pop_front();
-                continue;
-            };
-            // Queue entries superseded by a newer insert are discarded.
-            if entry.seq != seq {
-                self.order.pop_front();
-                continue;
-            }
+        self.reap_expired(now, usize::MAX);
+        self.enforce_capacity();
+    }
 
-            // The ledger only admits or refuses; it never reclaims. Anything
-            // that is over `capacity_bytes` is evicted here, and the charge
-            // that put it there was already refused by the budget.
-            let expired = now.saturating_duration_since(entry.inserted_at) > entry.ttl;
-            let over_capacity = self.weight > self.capacity_bytes;
-            if !expired && !over_capacity {
+    /// Drops at most `batch` entries whose deadline has passed.
+    ///
+    /// The index is deadline-ordered, so the front is exactly what has to go: a
+    /// long window cannot hide its already-expired neighbours behind it, and this
+    /// costs one pop per expired entry instead of a table walk.
+    ///
+    /// Returns whether the batch limit was reached. That is a promise to look
+    /// again, not a claim that more is due: proving otherwise would cost another
+    /// `log n` for nothing.
+    fn reap_expired(&mut self, now: Instant, batch: usize) -> bool {
+        let now_nanos = self.now_nanos(now);
+        let mut dropped = 0;
+        while dropped < batch {
+            let Some((deadline, _)) = self.expiry.keys().next() else {
+                return false;
+            };
+            if *deadline >= now_nanos {
+                return false;
+            }
+            let Some((_, key)) = self.expiry.pop_first() else {
+                return false;
+            };
+            self.drop_entry(&key);
+            dropped += 1;
+        }
+        true
+    }
+
+    /// The ledger only admits or refuses; it never reclaims. Anything that is
+    /// over `capacity_bytes` is evicted here, and the charge that put it there
+    /// was already refused by the budget.
+    fn enforce_capacity(&mut self) {
+        while self.live_weight > self.capacity_bytes {
+            if !self.evict_earliest() {
                 break;
             }
-            self.order.pop_front();
-            self.take_entry(&key);
         }
+    }
+
+    /// When this cache next expects to have something to drop: the earlier of
+    /// the first entry deadline and the first tombstone the sweep could retire.
+    fn next_deadline(&self) -> Option<Instant> {
+        let entry = self.expiry.keys().next().map(|(deadline, _)| *deadline);
+        let tombstone = self.tomb_order.front().and_then(|(key, epoch)| {
+            let tombstone = self.tombstones.get(key)?;
+            (tombstone.epoch == *epoch).then(|| {
+                self.now_nanos(tombstone.at)
+                    .saturating_add(self.tombstone_ttl.as_nanos())
+            })
+        });
+
+        let deadline = entry.into_iter().chain(tombstone).min()?;
+        // A deadline further out than an `Instant` can express is effectively
+        // "never" — `Snapshot` stores its version that way.
+        let nanos = u64::try_from(deadline).ok()?;
+        self.base.checked_add(Duration::from_nanos(nanos))
     }
 
     /// Tombstones only have to outlive the loads that could republish under
@@ -1509,7 +1702,7 @@ where
             }
             self.tomb_order.pop_front();
             if let Some(removed) = self.tombstones.remove(&key) {
-                self.weight = self.weight.saturating_sub(removed.weight);
+                self.release_tombstone(removed);
             }
         }
     }
@@ -1519,30 +1712,21 @@ where
     /// Bucket capacity is part of the footprint, so it is part of the trigger:
     /// without this a burst's high-water mark is kept for the process lifetime.
     fn maintenance_due(&self) -> bool {
-        let order_bloated =
-            self.order.len() > self.entries.len().saturating_mul(2).saturating_add(64);
         let tombs_bloated =
             self.tomb_order.len() > self.tombstones.len().saturating_mul(2).saturating_add(64);
         let entries_bloated =
             self.entries.capacity() > self.entries.len().saturating_mul(4).saturating_add(64);
         let tombs_capacity_bloated =
             self.tombstones.capacity() > self.tombstones.len().saturating_mul(4).saturating_add(64);
-        order_bloated || tombs_bloated || entries_bloated || tombs_capacity_bloated
+        tombs_bloated || entries_bloated || tombs_capacity_bloated
     }
 
+    /// Rebuilds the tombstone queue from the tombstones that are still live.
+    ///
+    /// Entry expiry needs no compaction any more: the index is keyed by the
+    /// deadline itself and every node is removed together with its entry, so it
+    /// cannot accumulate slots that no longer own anything.
     fn compact(&mut self) {
-        if self.entries.is_empty() {
-            self.order.clear();
-        } else if self.order.len() > self.entries.len().saturating_mul(2).saturating_add(64) {
-            self.order = self
-                .entries
-                .iter()
-                .map(|(key, entry)| (key.clone(), entry.seq))
-                .collect();
-            self.order
-                .make_contiguous()
-                .sort_unstable_by_key(|(_, seq)| *seq);
-        }
         if self.tombstones.is_empty() {
             self.tomb_order.clear();
         } else if self.tomb_order.len() > self.tombstones.len().saturating_mul(2).saturating_add(64)
@@ -1561,7 +1745,6 @@ where
     fn shrink(&mut self) {
         if self.entries.capacity() > self.entries.len().saturating_mul(4) + 64 {
             self.entries.shrink_to_fit();
-            self.order.shrink_to_fit();
         }
         if self.tombstones.capacity() > self.tombstones.len().saturating_mul(4) + 64 {
             self.tombstones.shrink_to_fit();
@@ -1571,16 +1754,17 @@ where
 }
 
 /// Bytes the map retains per entry besides the key and the value: the entry
-/// header, the entry's slot in the insertion queue (which holds a second copy
-/// of the key) and its share of the table's buckets.
+/// header, the entry's node in the deadline index (which holds a second copy of
+/// the key) and its share of the table's buckets.
 ///
 /// Charging them is what makes `capacity_bytes` a bound on memory rather than
 /// on value bytes: without it a cache of small values holds several times its
 /// declared cap.
 fn entry_overhead<K, V>() -> usize {
     std::mem::size_of::<Entry<V>>()
-        .saturating_add(std::mem::size_of::<(K, u64)>())
-        .saturating_add(16)
+        .saturating_add(std::mem::size_of::<(u128, u64)>())
+        .saturating_add(std::mem::size_of::<K>())
+        .saturating_add(32)
 }
 
 /// Keeps the builder's type parameters without implying ownership of them, so
@@ -1673,33 +1857,48 @@ impl<K, V, E> OnceMapBuilder<K, V, E> {
         self
     }
 
-    pub fn build(self) -> OnceMap<K, V, E> {
-        OnceMap {
-            inner: Arc::new(Inner {
-                store: RwLock::new(Store {
-                    entries: HashMap::new(),
-                    tombstones: HashMap::new(),
-                    order: VecDeque::new(),
-                    tomb_order: VecDeque::new(),
-                    seq: 0,
-                    epoch: 0,
-                    weight: 0,
-                    capacity_bytes: self.capacity_bytes,
-                    tombstone_ttl: self.tombstone_ttl,
-                    budget: self.budget,
-                }),
-                inflight: Mutex::new(Inflight::default()),
-                limits: Limits {
-                    max_inflight: self.max_inflight,
-                    load_timeout: self.load_timeout,
-                    admission: self.admission,
-                    refresh: self.refresh,
-                },
-                observer: self.observer,
-                #[cfg(test)]
-                stats: Stats::default(),
+    pub fn build(self) -> OnceMap<K, V, E>
+    where
+        K: Clone + Eq + Hash + Send + Sync + 'static,
+        V: CacheWeight + Send + Sync + 'static,
+        E: Send + Sync + 'static,
+    {
+        let inner = Arc::new(Inner {
+            store: RwLock::new(Store {
+                entries: HashMap::new(),
+                tombstones: HashMap::new(),
+                expiry: BTreeMap::new(),
+                tomb_order: VecDeque::new(),
+                seq: 0,
+                epoch: 0,
+                live_weight: 0,
+                weight: 0,
+                capacity_bytes: self.capacity_bytes,
+                tombstone_ttl: self.tombstone_ttl,
+                base: Instant::now(),
+                budget: self.budget,
             }),
-        }
+            inflight: Mutex::new(Inflight::default()),
+            limits: Limits {
+                max_inflight: self.max_inflight,
+                load_timeout: self.load_timeout,
+                admission: self.admission,
+                refresh: self.refresh,
+            },
+            observer: self.observer,
+            #[cfg(test)]
+            stats: Stats::default(),
+        });
+
+        // Registered unconditionally, including the caches that have no write
+        // path of their own: a `PublishedMap` is only ever reset by a new
+        // publish, so without the housekeeper its entries would outlive their
+        // window for the lifetime of the process.
+        let registered: Arc<dyn Housekeeping> = inner.clone();
+        crate::housekeeper::register(Arc::downgrade(&registered));
+        drop(registered);
+
+        OnceMap { inner }
     }
 }
 
@@ -1707,10 +1906,11 @@ impl<K, V, E> OnceMapBuilder<K, V, E> {
 mod tests {
     use super::{Admission, OnceMap, OnceMapError};
     use crate::budget::CacheBudget;
+    use crate::housekeeper::{Progress, REAP_BATCH};
     use crate::weight::CacheWeight;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tokio::sync::Semaphore;
 
     const WINDOW: Duration = Duration::from_secs(60);
@@ -2011,6 +2211,80 @@ mod tests {
         assert_eq!(0, map.tombstones());
     }
 
+    /// A tombstone holds a key and lives for a while, so it has to be charged
+    /// to the ledger — and handed back when it is swept. Otherwise the ledger
+    /// reports less than the cache holds, and a cache can be refused retention
+    /// on bytes nobody is holding.
+    #[tokio::test]
+    async fn a_tombstone_is_charged_and_returns_its_bytes_when_swept() {
+        let budget = Arc::new(CacheBudget::new(entry_weight(8) * 8));
+        let map: OnceMap<String, String, String> = OnceMap::builder()
+            .budget(Arc::clone(&budget))
+            .tombstone_ttl(Duration::from_millis(10))
+            .build();
+
+        map.publish("k".to_string(), value(8), WINDOW);
+        map.invalidate(&"k".to_string());
+
+        assert!(
+            budget.used() > 0,
+            "a tombstone keeps a key's worth of bytes"
+        );
+        assert_eq!(map.weight(), budget.used());
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        map.run_pending_tasks();
+
+        assert_eq!(0, map.tombstones());
+        assert_eq!(0, map.weight());
+        assert_eq!(0, budget.used());
+    }
+
+    /// A tombstone the ledger had no room for is kept anyway (it guards the key
+    /// against an in-flight load) and must not be refunded on the way out.
+    #[tokio::test]
+    async fn a_tombstone_the_ledger_could_not_charge_is_not_refunded() {
+        // Room for exactly one entry, already taken by a live row.
+        let budget = Arc::new(CacheBudget::new(entry_weight(8)));
+        let map: OnceMap<String, String, String> = OnceMap::builder()
+            .budget(Arc::clone(&budget))
+            .tombstone_ttl(Duration::from_millis(10))
+            .build();
+        map.publish("k".to_string(), value(8), WINDOW);
+        let used = budget.used();
+
+        map.invalidate(&"ghost".to_string());
+        assert_eq!(used, budget.used());
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        map.run_pending_tasks();
+        assert_eq!(used, budget.used());
+    }
+
+    /// Tombstones are not part of what a reader can reach, so they must not make
+    /// the cache evict a row that a reader can.
+    #[tokio::test]
+    async fn tombstones_do_not_evict_a_live_entry() {
+        let probe: OnceMap<String, String, String> = OnceMap::builder().build();
+        probe.publish("aaa".to_string(), value(8), WINDOW);
+        let map: OnceMap<String, String, String> =
+            OnceMap::builder().capacity_bytes(probe.weight() * 2).build();
+
+        map.publish("aaa".to_string(), value(8), WINDOW);
+        map.publish("bbb".to_string(), value(8), WINDOW);
+        // Tombstones for keys that were never cached: their bytes used to be
+        // counted against the capacity of the live set.
+        for index in 0..8 {
+            map.invalidate(&format!("ghost{index}"));
+        }
+
+        // Any write runs reclamation. It must leave both live rows alone.
+        map.publish("aaa".to_string(), value(8), WINDOW);
+
+        assert!(map.peek_within(&"aaa".to_string(), WINDOW).is_some());
+        assert!(map.peek_within(&"bbb".to_string(), WINDOW).is_some());
+    }
+
     #[tokio::test]
     async fn the_shared_budget_bounds_retention() {
         let budget = Arc::new(CacheBudget::new(entry_weight(64) * 4));
@@ -2263,6 +2537,205 @@ mod tests {
             "the expired entry should have been the one reclaimed"
         );
         assert!(budget.used() <= budget.limit());
+    }
+
+    /// A long window must not keep its already-expired neighbours resident.
+    ///
+    /// This is the state a write-path reclaimer leaks whenever it walks the
+    /// table in insertion order and stops at the first live entry: the expired
+    /// row sits behind a fresh one and is never reached again, so its bytes stay
+    /// charged to the cache and to the ledger for the process lifetime.
+    #[tokio::test]
+    async fn an_expired_entry_is_reclaimed_behind_a_live_one() {
+        let map = cache();
+        map.publish("long".to_string(), value(8), WINDOW);
+        map.publish("short".to_string(), value(8), Duration::from_millis(10));
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        // Any write runs reclamation; nothing about it is specific to "long".
+        map.publish("incoming".to_string(), value(8), WINDOW);
+
+        assert!(
+            map.peek_within(&"short".to_string(), WINDOW).is_none(),
+            "the expired entry must not be readable"
+        );
+        assert_eq!(
+            2,
+            map.len(),
+            "only the two live entries may remain resident"
+        );
+        assert_eq!(2, map.inner.store.read().unwrap().expiry.len());
+    }
+
+    /// Reclaiming expired rows must hand their bytes back to the shared ledger.
+    ///
+    /// A cache that falls idle otherwise keeps the ledger full with entries no
+    /// read can reach, and every other cache is then refused retention. The
+    /// long-lived row is written first on purpose: it is the one an
+    /// insertion-ordered reclaimer stops at.
+    #[tokio::test]
+    async fn reclaiming_expired_entries_returns_their_bytes_to_the_ledger() {
+        let budget = Arc::new(CacheBudget::new(entry_weight(8) * 8));
+        let map: OnceMap<String, String, String> =
+            OnceMap::builder().budget(Arc::clone(&budget)).build();
+
+        map.publish("long".to_string(), value(8), WINDOW);
+        for index in 0..3 {
+            map.publish(format!("k{index}"), value(8), Duration::from_millis(10));
+        }
+        let charged = budget.used();
+        assert!(charged > 0);
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        map.publish("fresh".to_string(), value(8), WINDOW);
+
+        assert_eq!(2, map.len(), "only the two live entries may remain");
+        assert!(
+            budget.used() < charged,
+            "the expired rows must have been uncharged: {charged} -> {}",
+            budget.used()
+        );
+        assert_eq!(map.weight(), budget.used());
+    }
+
+    /// Republishing a key must move its deadline, not add a second one.
+    ///
+    /// A stale node would keep a slot for a key that no longer owns anything:
+    /// reclamation would walk it forever and the index would grow with the
+    /// write rate instead of the live set.
+    #[tokio::test]
+    async fn replacing_a_key_leaves_one_index_node() {
+        let map = cache();
+        for _ in 0..8 {
+            map.publish("k".to_string(), value(8), Duration::from_secs(600));
+        }
+
+        let store = map.inner.store.read().unwrap();
+        assert_eq!(1, store.entries.len());
+        assert_eq!(
+            store.entries.len(),
+            store.expiry.len(),
+            "a replaced deadline must not be left behind"
+        );
+    }
+
+    /// Capacity eviction drops what dies first, not what was written first.
+    ///
+    /// With one window the two orders coincide; with mixed windows, writing a
+    /// short-lived row second used to make it survive while a row with a full
+    /// window was sacrificed.
+    #[tokio::test]
+    async fn capacity_eviction_drops_the_entry_that_expires_first() {
+        let probe: OnceMap<String, String, String> = OnceMap::builder().build();
+        probe.publish("aaa".to_string(), value(8), WINDOW);
+        // Room for exactly two entries, all three keys weighing the same.
+        let map: OnceMap<String, String, String> = OnceMap::builder()
+            .capacity_bytes(probe.weight() * 2)
+            .build();
+
+        map.publish("aaa".to_string(), value(8), WINDOW);
+        map.publish("bbb".to_string(), value(8), Duration::from_millis(50));
+        map.publish("ccc".to_string(), value(8), WINDOW);
+
+        assert!(
+            map.peek_within(&"bbb".to_string(), WINDOW).is_none(),
+            "the entry with the least life left should have been evicted"
+        );
+        assert!(map.peek_within(&"aaa".to_string(), WINDOW).is_some());
+        assert!(map.peek_within(&"ccc".to_string(), WINDOW).is_some());
+        assert_eq!(2, map.len());
+    }
+
+    /// Reclamation must not need a write. A cache that is only read — or not
+    /// touched at all — is exactly the state a process sits in after traffic
+    /// stops, and it is where expired rows used to become permanent residents.
+    #[tokio::test]
+    async fn nothing_needs_a_write_to_release_an_expired_entry() {
+        let map = cache();
+        map.publish("long".to_string(), value(8), WINDOW);
+        map.publish("short".to_string(), value(8), Duration::from_millis(10));
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        assert_eq!(2, map.len());
+        map.run_pending_tasks();
+
+        assert_eq!(1, map.len());
+        assert!(map.peek_within(&"short".to_string(), WINDOW).is_none());
+        assert!(map.peek_within(&"long".to_string(), WINDOW).is_some());
+    }
+
+    /// Going idle must give the bytes back to the shared ledger, or every other
+    /// cache is refused retention while nothing is happening.
+    #[tokio::test]
+    async fn going_idle_returns_the_ledger_without_a_write() {
+        let budget = Arc::new(CacheBudget::new(entry_weight(8) * 8));
+        let map: OnceMap<String, String, String> =
+            OnceMap::builder().budget(Arc::clone(&budget)).build();
+
+        for index in 0..4 {
+            map.publish(format!("k{index}"), value(8), Duration::from_millis(10));
+        }
+        assert!(budget.used() > 0);
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        map.run_pending_tasks();
+
+        assert!(map.is_empty());
+        assert_eq!(0, budget.used());
+        assert_eq!(0, map.weight());
+    }
+
+    /// One housekeeping attempt is bounded, and says so, so a cache that fell
+    /// far behind cannot hold its store lock for a visible amount of time.
+    #[tokio::test]
+    async fn a_housekeeping_attempt_stops_at_the_batch_limit() {
+        let map = cache();
+        for index in 0..(REAP_BATCH + 8) {
+            map.publish(format!("k{index}"), value(8), Duration::from_millis(10));
+        }
+        tokio::time::sleep(Duration::from_millis(30)).await;
+
+        assert_eq!(Progress::More, map.inner.housekeep(Instant::now()));
+        assert_eq!(8, map.len());
+
+        assert_eq!(Progress::Done, map.inner.housekeep(Instant::now()));
+        assert_eq!(0, map.len());
+    }
+
+    /// The housekeeper is only as good as the deadline a cache reports.
+    #[tokio::test]
+    async fn the_reported_deadline_is_the_earliest_thing_to_drop() {
+        let map = cache();
+        assert_eq!(None, map.inner.next_deadline());
+
+        map.publish("long".to_string(), value(8), WINDOW);
+        map.publish("short".to_string(), value(8), Duration::from_millis(10));
+
+        let short = map.inner.next_deadline().expect("a deadline to report");
+        assert!(
+            short <= Instant::now() + Duration::from_millis(10),
+            "the short window should be the one reported"
+        );
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        map.run_pending_tasks();
+        let remaining = map.inner.next_deadline().expect("the long entry remains");
+        assert!(
+            remaining > Instant::now() + Duration::from_secs(30),
+            "only the long window may be left to report"
+        );
+    }
+
+    /// The registry is what makes the fix reach a cache its own write path never
+    /// touches, so building one has to register it.
+    #[test]
+    fn building_a_cache_registers_it_with_the_housekeeper() {
+        let map = cache();
+
+        assert!(
+            crate::housekeeper::holds_for_tests(&map.inner),
+            "a built cache must be visible to the housekeeper"
+        );
     }
 
     /// A value larger than the cache's own cap can never stay resident, so it
