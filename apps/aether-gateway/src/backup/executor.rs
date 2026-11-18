@@ -17,15 +17,12 @@ use super::BackupRestoreScope;
 // V1: magic || version || nonce || ciphertext/tag.
 // V2: magic || version || fixed-length key ID || nonce || ciphertext/tag.
 const BACKUP_ENVELOPE_MAGIC: &[u8; 8] = b"AETHERBK";
-const BACKUP_ENVELOPE_VERSION_V1: u8 = 1;
 const BACKUP_ENVELOPE_VERSION_V2: u8 = 2;
 const BACKUP_ENVELOPE_KEY_ID_LEN: usize = 16;
 const BACKUP_ENVELOPE_NONCE_LEN: usize = 12;
-const BACKUP_ENCRYPTION_CONTEXT_V1: &[u8] = b"aether-s3-backup-aes-256-gcm-v1";
 const BACKUP_ENCRYPTION_CONTEXT_V2: &[u8] = b"aether-s3-backup-aes-256-gcm-v2";
 const BACKUP_KEY_ID_CONTEXT: &[u8] = b"aether-s3-backup-key-id-v1";
 const BACKUP_ENCRYPTION_NAME: &str = "aes-256-gcm-v2";
-const MAX_LEGACY_V1_CANDIDATES: usize = 16;
 const MAX_V2_CANDIDATES: usize = 256;
 const MAX_BACKUP_OBJECTS_PER_PREFIX: usize = 10_000;
 const MAX_ENCRYPTED_VARIANTS_PER_LEGACY_OBJECT: usize = 32;
@@ -43,23 +40,14 @@ type HmacSha256 = Hmac<Sha256>;
 pub struct BackupDecryptionKey {
     secret: String,
     v2_key_id: [u8; BACKUP_ENVELOPE_KEY_ID_LEN],
-    allow_legacy_v1: bool,
 }
 
 impl BackupDecryptionKey {
     pub fn current(secret: impl Into<String>) -> Result<Self, BackupRestoreError> {
-        Self::new(secret, false)
+        Self::new(secret)
     }
 
-    pub fn historical(secret: impl Into<String>) -> Result<Self, BackupRestoreError> {
-        Self::new(secret, true)
-    }
-
-    pub fn v2_only(secret: impl Into<String>) -> Result<Self, BackupRestoreError> {
-        Self::new(secret, false)
-    }
-
-    fn new(secret: impl Into<String>, allow_legacy_v1: bool) -> Result<Self, BackupRestoreError> {
+    fn new(secret: impl Into<String>) -> Result<Self, BackupRestoreError> {
         let secret = secret.into();
         if secret.trim().is_empty() {
             return Err(BackupRestoreError::InvalidKeyMaterial);
@@ -68,11 +56,7 @@ impl BackupDecryptionKey {
             .map_err(|_| BackupRestoreError::InvalidKeyMaterial)?;
         let v2_key_id =
             derive_backup_key_id(&v2_key).map_err(|_| BackupRestoreError::InvalidKeyMaterial)?;
-        Ok(Self {
-            secret,
-            v2_key_id,
-            allow_legacy_v1,
-        })
+        Ok(Self { secret, v2_key_id })
     }
 }
 
@@ -82,7 +66,6 @@ impl std::fmt::Debug for BackupDecryptionKey {
             .debug_struct("BackupDecryptionKey")
             .field("secret", &"[REDACTED]")
             .field("v2_key_id", &encode_key_id(&self.v2_key_id))
-            .field("allow_legacy_v1", &self.allow_legacy_v1)
             .finish()
     }
 }
@@ -165,9 +148,6 @@ pub enum BackupRestoreError {
 
     #[error("backup authentication failed")]
     AuthenticationFailed,
-
-    #[error("legacy v1 backup restore allows at most 16 candidate keys")]
-    TooManyLegacyKeys,
 
     #[error("backup restore allows at most 256 v2 candidate keys")]
     TooManyV2Keys,
@@ -472,23 +452,19 @@ fn decrypt_backup_bytes(
         .get(BACKUP_ENVELOPE_MAGIC.len())
         .copied()
         .ok_or(BackupExecutionError::Encryption)?;
-    let (context, key_id_len) = match version {
-        BACKUP_ENVELOPE_VERSION_V1 => (BACKUP_ENCRYPTION_CONTEXT_V1, 0),
-        BACKUP_ENVELOPE_VERSION_V2 => (BACKUP_ENCRYPTION_CONTEXT_V2, BACKUP_ENVELOPE_KEY_ID_LEN),
-        _ => return Err(BackupExecutionError::Encryption),
-    };
+    if version != BACKUP_ENVELOPE_VERSION_V2 {
+        return Err(BackupExecutionError::Encryption);
+    }
+    let context = BACKUP_ENCRYPTION_CONTEXT_V2;
+    let key_id_len = BACKUP_ENVELOPE_KEY_ID_LEN;
     let envelope_header_len = BACKUP_ENVELOPE_MAGIC.len() + 1 + key_id_len;
     let header_len = envelope_header_len + BACKUP_ENVELOPE_NONCE_LEN;
     if envelope.len() <= header_len || !envelope.starts_with(BACKUP_ENVELOPE_MAGIC) {
         return Err(BackupExecutionError::Encryption);
     }
-    let key_id = if version == BACKUP_ENVELOPE_VERSION_V2 {
-        let mut key_id = [0_u8; BACKUP_ENVELOPE_KEY_ID_LEN];
-        key_id.copy_from_slice(&envelope[BACKUP_ENVELOPE_MAGIC.len() + 1..envelope_header_len]);
-        Some(key_id)
-    } else {
-        None
-    };
+    let mut key_id = [0_u8; BACKUP_ENVELOPE_KEY_ID_LEN];
+    key_id.copy_from_slice(&envelope[BACKUP_ENVELOPE_MAGIC.len() + 1..envelope_header_len]);
+    let key_id = Some(key_id);
     let aad = backup_envelope_aad(version, key_id.as_ref(), object_key)?;
     if envelope.get(..envelope_header_len) != Some(&aad[..envelope_header_len]) {
         return Err(BackupExecutionError::Encryption);
@@ -551,22 +527,6 @@ pub fn restore_backup_json(
             let compressed = decrypt_backup_bytes(&candidate.secret, object_key, envelope)
                 .map_err(|_| BackupRestoreError::AuthenticationFailed)?;
             (compressed, Some(encoded_key_id))
-        }
-        BACKUP_ENVELOPE_VERSION_V1 => {
-            let legacy_candidates: Vec<_> = candidates
-                .iter()
-                .filter(|candidate| candidate.allow_legacy_v1)
-                .collect();
-            if legacy_candidates.len() > MAX_LEGACY_V1_CANDIDATES {
-                return Err(BackupRestoreError::TooManyLegacyKeys);
-            }
-            let compressed = legacy_candidates
-                .into_iter()
-                .find_map(|candidate| {
-                    decrypt_backup_bytes(&candidate.secret, object_key, envelope).ok()
-                })
-                .ok_or(BackupRestoreError::AuthenticationFailed)?;
-            (compressed, None)
         }
         _ => return Err(BackupRestoreError::InvalidEnvelope),
     };
@@ -791,16 +751,11 @@ mod tests {
     use super::super::scopes::BackupScope;
     use super::super::store::{BackupObjectStore, FakeBackupObjectStore};
     use super::{
-        backup_envelope_aad, decrypt_backup_bytes, derive_backup_encryption_key,
-        encrypt_backup_bytes, restore_backup_json, run_backup_with_store,
+        decrypt_backup_bytes, encrypt_backup_bytes, restore_backup_json, run_backup_with_store,
         validate_new_backup_encryption_secret, BackupDecryptionKey, BackupRestoreError,
-        BackupRestoreLimits, BACKUP_ENCRYPTION_CONTEXT_V1, BACKUP_ENVELOPE_MAGIC,
-        BACKUP_ENVELOPE_NONCE_LEN, BACKUP_ENVELOPE_VERSION_V1, BACKUP_ENVELOPE_VERSION_V2,
+        BackupRestoreLimits, BACKUP_ENVELOPE_MAGIC, BACKUP_ENVELOPE_VERSION_V2,
     };
-    use aes_gcm::aead::{Aead, Generate, KeyInit, Payload};
-    use aes_gcm::{Aes256Gcm, Nonce};
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-    use base64::Engine as _;
     use bytes::Bytes;
     use chrono::{DateTime, Utc};
     use serde_json::json;
@@ -809,30 +764,6 @@ mod tests {
 
     fn compressed_json(value: serde_json::Value) -> Vec<u8> {
         zstd::stream::encode_all(serde_json::to_vec(&value).unwrap().as_slice(), 0).unwrap()
-    }
-
-    fn encrypt_v1_for_test(secret: &str, object_key: &str, plaintext: &[u8]) -> Vec<u8> {
-        let key = derive_backup_encryption_key(secret, BACKUP_ENCRYPTION_CONTEXT_V1).unwrap();
-        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
-        let nonce = Nonce::try_generate().unwrap();
-        let aad = backup_envelope_aad(BACKUP_ENVELOPE_VERSION_V1, None, object_key).unwrap();
-        let ciphertext = cipher
-            .encrypt(
-                &nonce,
-                Payload {
-                    msg: plaintext,
-                    aad: &aad,
-                },
-            )
-            .unwrap();
-        let mut envelope = Vec::with_capacity(
-            BACKUP_ENVELOPE_MAGIC.len() + 1 + BACKUP_ENVELOPE_NONCE_LEN + ciphertext.len(),
-        );
-        envelope.extend_from_slice(BACKUP_ENVELOPE_MAGIC);
-        envelope.push(BACKUP_ENVELOPE_VERSION_V1);
-        envelope.extend_from_slice(&nonce);
-        envelope.extend_from_slice(&ciphertext);
-        envelope
     }
 
     fn sample_backup_config(scope: BackupScope, retention_count: u32) -> S3BackupConfig {
@@ -1090,8 +1021,8 @@ mod tests {
                 .expect_err("new backup creation must reject weak or published keys");
             assert!(error.to_string().contains("unsafe"));
 
-            BackupDecryptionKey::historical(insecure)
-                .expect("historical restore must continue accepting legacy weak keys");
+            BackupDecryptionKey::current(insecure)
+                .expect("restore must continue accepting weak key material");
         }
 
         validate_new_backup_encryption_secret(TEST_NEW_BACKUP_ENCRYPTION_SECRET)
@@ -1219,54 +1150,6 @@ mod tests {
                 "unexpected error for {object_key}: {error}"
             );
         }
-    }
-
-    #[test]
-    fn restore_keeps_v1_compatibility_and_tries_only_legacy_candidates() {
-        let object_key = "prod/aether-config-backup-20260524-010000.json.zst.aes256gcm";
-        let compressed = compressed_json(json!({
-            "version": "2.3",
-            "exported_at": "2026-05-24T01:00:00Z",
-            "config_data": {}
-        }));
-        let encrypted = encrypt_v1_for_test(DEVELOPMENT_ENCRYPTION_KEY, object_key, &compressed);
-        let restored = restore_backup_json(
-            object_key,
-            &encrypted,
-            &[
-                BackupDecryptionKey::v2_only(DEVELOPMENT_ENCRYPTION_KEY).unwrap(),
-                BackupDecryptionKey::historical("wrong-legacy-secret").unwrap(),
-                BackupDecryptionKey::historical(DEVELOPMENT_ENCRYPTION_KEY).unwrap(),
-            ],
-            BackupRestoreLimits::default(),
-        )
-        .unwrap();
-        assert_eq!(restored.envelope_version, BACKUP_ENVELOPE_VERSION_V1);
-        assert_eq!(restored.key_id, None);
-        assert_eq!(restored.export_version.as_deref(), Some("2.3"));
-
-        // 17 个互不相同的合法 base64-32 字节直接密钥：本段只验证“legacy 候选 >16 → TooManyLegacyKeys”，
-        // 不测口令强度、不解密。直接密钥走 decode_direct_fernet_key（生产已支持路径），跳过 PBKDF2，
-        // 避免本用例为计数语义再付 17×10 万次迭代；上半段 DEVELOPMENT_ENCRYPTION_KEY 真实 v1 兼容
-        // 与 wrong-legacy-secret 派生路径保持不变。
-        let too_many: Vec<_> = (0..17)
-            .map(|index| {
-                let mut material = [0u8; 32];
-                material[0] = index as u8 + 1;
-                material[31] = index as u8 + 1;
-                let secret = base64::engine::general_purpose::STANDARD.encode(material);
-                BackupDecryptionKey::historical(secret).unwrap()
-            })
-            .collect();
-        assert!(matches!(
-            restore_backup_json(
-                object_key,
-                &encrypted,
-                &too_many,
-                BackupRestoreLimits::default()
-            ),
-            Err(BackupRestoreError::TooManyLegacyKeys)
-        ));
     }
 
     #[test]

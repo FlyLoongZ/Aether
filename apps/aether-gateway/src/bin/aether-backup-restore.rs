@@ -17,12 +17,7 @@ const HISTORICAL_KEYS_ENV: &str = "AETHER_BACKUP_HISTORICAL_KEYS_JSON";
 const MAX_SECRET_FILE_BYTES: usize = 1024 * 1024;
 const MAX_KEY_FILES: usize = 16;
 const MAX_V2_KEY_CANDIDATES: usize = 256;
-const MAX_LEGACY_V1_KEY_CANDIDATES: usize = 16;
-const AUTOMATIC_KEY_ENV_VARS: [(&str, bool); 3] = [
-    ("AETHER_BACKUP_ENCRYPTION_KEY", false),
-    ("AETHER_GATEWAY_DATA_ENCRYPTION_KEY", true),
-    ("ENCRYPTION_KEY", true),
-];
+const AUTOMATIC_KEY_ENV_VARS: [&str; 2] = ["AETHER_BACKUP_ENCRYPTION_KEY", "ENCRYPTION_KEY"];
 
 #[derive(Debug, Parser)]
 #[command(
@@ -69,8 +64,6 @@ struct KeyringDocument {
     version: u8,
     #[serde(default)]
     keys: Vec<KeyringSecret>,
-    #[serde(default)]
-    legacy_v1: Vec<KeyringSecret>,
 }
 
 #[derive(Deserialize)]
@@ -120,7 +113,7 @@ fn run(args: Args) -> Result<(), CliError> {
     let candidates = load_key_candidates(&args)?;
     if candidates.is_empty() {
         return Err(CliError::Message(format!(
-            "no backup keys configured; set AETHER_BACKUP_ENCRYPTION_KEY, AETHER_GATEWAY_DATA_ENCRYPTION_KEY, or ENCRYPTION_KEY, or use a protected key/keyring file ({HISTORICAL_KEYS_ENV} is also supported)"
+            "no backup keys configured; set AETHER_BACKUP_ENCRYPTION_KEY or ENCRYPTION_KEY, or use a protected key/keyring file ({HISTORICAL_KEYS_ENV} is also supported)"
         )));
     }
 
@@ -188,7 +181,7 @@ fn load_key_candidates(args: &Args) -> Result<Vec<BackupDecryptionKey>, CliError
             "at most {MAX_KEY_FILES} --key-file values are allowed"
         )));
     }
-    let mut values = Vec::<(String, bool)>::new();
+    let mut values = Vec::<String>::new();
     append_automatic_environment_keys(&mut values, |env_name| std::env::var(env_name).ok())?;
     if let Ok(value) = std::env::var(HISTORICAL_KEYS_ENV) {
         append_keyring_document(
@@ -208,63 +201,43 @@ fn load_key_candidates(args: &Args) -> Result<Vec<BackupDecryptionKey>, CliError
         let value = String::from_utf8(bytes).map_err(|_| {
             CliError::Message(format!("key file {} is not valid UTF-8", path.display()))
         })?;
-        push_secret(&mut values, value, true)?;
+        push_secret(&mut values, value)?;
     }
 
     let unique = deduplicate_and_validate_key_values(values)?;
     unique
         .into_iter()
-        .map(|(secret, allow_v1)| {
-            if allow_v1 {
-                BackupDecryptionKey::historical(secret)
-            } else {
-                BackupDecryptionKey::v2_only(secret)
-            }
-            .map_err(CliError::from)
-        })
+        .map(BackupDecryptionKey::current)
+        .map(|result| result.map_err(CliError::from))
         .collect()
 }
 
 fn append_automatic_environment_keys(
-    values: &mut Vec<(String, bool)>,
+    values: &mut Vec<String>,
     mut get_env: impl FnMut(&str) -> Option<String>,
 ) -> Result<(), CliError> {
-    for (env_name, allow_v1) in AUTOMATIC_KEY_ENV_VARS {
+    for env_name in AUTOMATIC_KEY_ENV_VARS {
         if let Some(value) = get_env(env_name) {
-            push_secret(values, value, allow_v1)?;
+            push_secret(values, value)?;
         }
     }
     Ok(())
 }
 
-fn deduplicate_and_validate_key_values(
-    values: Vec<(String, bool)>,
-) -> Result<Vec<(String, bool)>, CliError> {
+fn deduplicate_and_validate_key_values(values: Vec<String>) -> Result<Vec<String>, CliError> {
     let mut indexes = HashMap::<String, usize>::new();
-    let mut unique = Vec::<(String, bool)>::new();
-    let mut legacy_v1_count = 0_usize;
-    for (secret, allow_v1) in values {
-        if let Some(index) = indexes.get(&secret).copied() {
-            if allow_v1 && !unique[index].1 {
-                unique[index].1 = true;
-                legacy_v1_count += 1;
-            }
-        } else {
-            let index = unique.len();
-            indexes.insert(secret.clone(), index);
-            unique.push((secret, allow_v1));
-            legacy_v1_count += usize::from(allow_v1);
-
-            if unique.len() > MAX_V2_KEY_CANDIDATES {
-                return Err(CliError::Message(format!(
-                    "backup restore allows at most {MAX_V2_KEY_CANDIDATES} v2 candidate keys"
-                )));
-            }
+    let mut unique = Vec::<String>::new();
+    for secret in values {
+        if indexes.contains_key(&secret) {
+            continue;
         }
+        let index = unique.len();
+        indexes.insert(secret.clone(), index);
+        unique.push(secret);
 
-        if legacy_v1_count > MAX_LEGACY_V1_KEY_CANDIDATES {
+        if unique.len() > MAX_V2_KEY_CANDIDATES {
             return Err(CliError::Message(format!(
-                "legacy v1 backup restore allows at most {MAX_LEGACY_V1_KEY_CANDIDATES} candidate keys"
+                "backup restore allows at most {MAX_V2_KEY_CANDIDATES} v2 candidate keys"
             )));
         }
     }
@@ -280,7 +253,7 @@ fn parse_keyring(bytes: &[u8], source: &str) -> Result<KeyringDocument, CliError
 }
 
 fn append_keyring_document(
-    values: &mut Vec<(String, bool)>,
+    values: &mut Vec<String>,
     keyring: KeyringDocument,
 ) -> Result<(), CliError> {
     if keyring.version != 1 {
@@ -290,26 +263,19 @@ fn append_keyring_document(
         )));
     }
     for secret in keyring.keys {
-        push_secret(values, secret.into_secret(), false)?;
-    }
-    for secret in keyring.legacy_v1 {
-        push_secret(values, secret.into_secret(), true)?;
+        push_secret(values, secret.into_secret())?;
     }
     Ok(())
 }
 
-fn push_secret(
-    values: &mut Vec<(String, bool)>,
-    value: String,
-    allow_v1: bool,
-) -> Result<(), CliError> {
+fn push_secret(values: &mut Vec<String>, value: String) -> Result<(), CliError> {
     let value = value.trim().to_string();
     if value.is_empty() || value.contains('\0') {
         return Err(CliError::Message(
             "backup key material must not be empty or contain NUL".to_string(),
         ));
     }
-    values.push((value, allow_v1));
+    values.push(value);
     Ok(())
 }
 
@@ -792,7 +758,7 @@ fn safe_temp_file_component(file_name: &std::ffi::OsStr) -> OsString {
 mod tests {
     use super::{
         append_automatic_environment_keys, deduplicate_and_validate_key_values, read_limited_file,
-        write_atomic_private, MAX_LEGACY_V1_KEY_CANDIDATES, MAX_V2_KEY_CANDIDATES,
+        write_atomic_private, MAX_V2_KEY_CANDIDATES,
     };
 
     #[cfg(unix)]
@@ -814,49 +780,36 @@ mod tests {
 
         assert_eq!(
             requested,
-            vec![
-                "AETHER_BACKUP_ENCRYPTION_KEY",
-                "AETHER_GATEWAY_DATA_ENCRYPTION_KEY",
-                "ENCRYPTION_KEY",
-            ]
+            vec!["AETHER_BACKUP_ENCRYPTION_KEY", "ENCRYPTION_KEY",]
         );
         assert_eq!(
             values,
             vec![
-                ("secret-for-AETHER_BACKUP_ENCRYPTION_KEY".to_string(), false,),
-                (
-                    "secret-for-AETHER_GATEWAY_DATA_ENCRYPTION_KEY".to_string(),
-                    true,
-                ),
-                ("secret-for-ENCRYPTION_KEY".to_string(), true),
+                "secret-for-AETHER_BACKUP_ENCRYPTION_KEY".to_string(),
+                "secret-for-ENCRYPTION_KEY".to_string(),
             ]
         );
     }
 
     #[test]
-    fn candidate_deduplication_preserves_priority_and_promotes_legacy_access() {
+    fn candidate_deduplication_preserves_priority() {
         let candidates = deduplicate_and_validate_key_values(vec![
-            ("backup-current".to_string(), false),
-            ("gateway-fallback".to_string(), true),
-            ("default-fallback".to_string(), true),
-            ("backup-current".to_string(), true),
+            "backup-current".to_string(),
+            "default-fallback".to_string(),
+            "backup-current".to_string(),
         ])
         .expect("candidate set should be valid");
 
         assert_eq!(
             candidates,
-            vec![
-                ("backup-current".to_string(), true),
-                ("gateway-fallback".to_string(), true),
-                ("default-fallback".to_string(), true),
-            ]
+            vec!["backup-current".to_string(), "default-fallback".to_string()]
         );
     }
 
     #[test]
     fn rejects_too_many_v2_candidates_before_key_construction() {
         let values = (0..=MAX_V2_KEY_CANDIDATES)
-            .map(|index| (format!("v2-key-{index}"), false))
+            .map(|index| format!("v2-key-{index}"))
             .collect();
 
         let error = deduplicate_and_validate_key_values(values)
@@ -869,40 +822,15 @@ mod tests {
     }
 
     #[test]
-    fn accepts_candidate_counts_at_both_restore_limits() {
-        let values = (0..MAX_LEGACY_V1_KEY_CANDIDATES)
-            .map(|index| (format!("legacy-key-{index}"), true))
-            .chain(
-                (MAX_LEGACY_V1_KEY_CANDIDATES..MAX_V2_KEY_CANDIDATES)
-                    .map(|index| (format!("v2-key-{index}"), false)),
-            )
+    fn accepts_candidate_count_at_restore_limit() {
+        let values = (0..MAX_V2_KEY_CANDIDATES)
+            .map(|index| format!("v2-key-{index}"))
             .collect();
 
         let candidates = deduplicate_and_validate_key_values(values)
-            .expect("candidate counts at the restore limits must be accepted");
+            .expect("candidate count at the restore limit must be accepted");
 
         assert_eq!(candidates.len(), MAX_V2_KEY_CANDIDATES);
-        assert_eq!(
-            candidates.iter().filter(|(_, allow_v1)| *allow_v1).count(),
-            MAX_LEGACY_V1_KEY_CANDIDATES
-        );
-    }
-
-    #[test]
-    fn rejects_too_many_legacy_candidates_before_key_construction() {
-        let values = (0..=MAX_LEGACY_V1_KEY_CANDIDATES)
-            .map(|index| (format!("legacy-key-{index}"), true))
-            .collect();
-
-        let error = deduplicate_and_validate_key_values(values)
-            .expect_err("legacy candidate count above the restore limit must fail");
-
-        assert_eq!(
-            error.to_string(),
-            format!(
-                "legacy v1 backup restore allows at most {MAX_LEGACY_V1_KEY_CANDIDATES} candidate keys"
-            )
-        );
     }
 
     #[cfg(unix)]
