@@ -1,131 +1,6 @@
 <template>
-  <!-- Windsurf: 浏览器 session/poll 授权 -->
-  <template v-if="variant === 'windsurf'">
-    <div class="space-y-4">
-      <div class="grid grid-cols-3 gap-1.5">
-        <button
-          v-for="opt in ([
-            { key: 'default', label: '默认' },
-            { key: 'google', label: 'Google' },
-            { key: 'github', label: 'GitHub' },
-          ] as const)"
-          :key="opt.key"
-          class="h-8 text-xs font-medium rounded-md border transition-colors"
-          :class="device.auth_type === opt.key
-            ? 'border-primary bg-primary/5 text-foreground'
-            : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/20'"
-          @click="$emit('selectWindsurfLoginOption', opt.key)"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
-
-      <div
-        v-if="device.status === 'error' || device.status === 'expired'"
-        class="rounded-xl border border-destructive/20 bg-destructive/5 p-5"
-      >
-        <div class="flex flex-col items-center text-center space-y-3">
-          <div class="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center">
-            <AlertCircle class="w-5 h-5 text-destructive" />
-          </div>
-          <div class="space-y-1">
-            <p class="text-sm font-medium text-destructive">
-              {{ device.status === 'expired' ? t('ui.authorizationExpired') : t('ui.authorizationFailed') }}
-            </p>
-            <p class="text-xs text-muted-foreground">
-              {{ (device.error || t('ui.pleaseTryAgain')) }}
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            @click="$emit('reset')"
-          >
-            {{ t('ui.startOver') }}
-          </Button>
-        </div>
-      </div>
-
-      <div
-        v-else-if="device.starting && !device.session_id"
-        class="flex items-center justify-center py-12"
-      >
-        <div class="text-center">
-          <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-3" />
-          <p class="text-xs text-muted-foreground">
-            {{ t('ui.preparingSignIn') }}
-          </p>
-        </div>
-      </div>
-
-      <div
-        v-else
-        class="space-y-4"
-      >
-        <div class="space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold shrink-0">1</span>
-            <span class="text-xs font-medium">{{ t('ui.goToSignIn') }}</span>
-          </div>
-          <div class="flex gap-2 pl-6">
-            <Button
-              size="sm"
-              :disabled="device.starting || device.completing || !device.verification_uri_complete"
-              @click="$emit('openVerificationUrl')"
-            >
-              <ExternalLink class="w-3 h-3 mr-1" />
-              {{ t('ui.openc771248') }}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              :disabled="device.starting || device.completing || !device.verification_uri_complete"
-              @click="copyToClipboard(device.verification_uri_complete)"
-            >
-              <Copy class="w-3 h-3 mr-1" />
-              {{ t('common.copy') }}
-            </Button>
-            <Button
-              v-if="!device.session_id"
-              size="sm"
-              variant="outline"
-              :disabled="device.starting"
-              @click="$emit('start')"
-            >
-              {{ t('ui.start') }}
-            </Button>
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="flex items-center justify-center w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-semibold shrink-0">2</span>
-            <span class="text-xs font-medium">{{ t('ui.pasteCallbackUrlOrToken') }}</span>
-          </div>
-          <div class="pl-6">
-            <Textarea
-              :model-value="device.callback_url"
-              :disabled="device.completing"
-              :placeholder="callbackPlaceholder"
-              class="min-h-[150px] text-xs font-mono break-all !rounded-xl"
-              spellcheck="false"
-              @update:model-value="(v: string) => $emit('update:field', 'callback_url', v)"
-            />
-          </div>
-          <div
-            v-if="device.session_id && device.status === 'pending'"
-            class="pl-6 flex items-center gap-1.5 text-[11px] text-muted-foreground"
-          >
-            <div class="animate-spin rounded-full h-3 w-3 border-[1.5px] border-primary/30 border-t-primary" />
-            <span>{{ sessionRemainingText }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </template>
-
   <!-- xAI: 设备授权 -->
-  <template v-else-if="variant === 'xai'">
+  <template v-if="variant === 'xai'">
     <div class="space-y-3">
       <div class="h-[265px]">
         <div
@@ -570,18 +445,17 @@ import { useI18n } from '@/i18n'
 import type {
   DeviceAuthState,
   DeviceAuthType,
-  WindsurfLoginOption,
 } from '@/features/providers/utils/oauthDeviceAuth'
 
 export type DeviceAuthEditableField = 'callback_url' | 'start_url' | 'region' | 'totp_secret'
 
 /**
- * OAuth 账号对话框里的设备授权面板：Windsurf 浏览器登录、xAI 设备码、
+ * OAuth 账号对话框里的设备授权面板：xAI 设备码、
  * Kiro（Google / GitHub 回调、Builder ID、Identity Center）。
  * 会话状态与轮询由父组件持有，面板只负责展示和把用户操作抛回去。
  */
 const props = withDefaults(defineProps<{
-  variant: 'windsurf' | 'xai' | 'kiro'
+  variant: 'xai' | 'kiro'
   device: DeviceAuthState
   countdownSeconds: number
   totpCode?: string
@@ -595,7 +469,6 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   'update:field': [field: DeviceAuthEditableField, value: string]
-  selectWindsurfLoginOption: [option: WindsurfLoginOption]
   selectAuthType: [authType: DeviceAuthType]
   reset: []
   start: []
@@ -610,10 +483,8 @@ const isSocialDeviceAuth = computed(() =>
   props.device.auth_type === 'google' || props.device.auth_type === 'github'
 )
 
-const callbackPlaceholder = computed(() =>
-  props.variant === 'windsurf'
-    ? t('ui.pasteACallbackUrlContainingTokenStateSessionTokenApikey')
-    : `http://localhost:49153/oauth/callback?login_option=${props.device.auth_type}&code=...&state=...`
+const callbackPlaceholder = computed(
+  () => `http://localhost:49153/oauth/callback?login_option=${props.device.auth_type}&code=...&state=...`
 )
 
 const countdownFormatted = computed(() => {
@@ -622,10 +493,6 @@ const countdownFormatted = computed(() => {
   const sec = s % 60
   return `${min}:${String(sec).padStart(2, '0')}`
 })
-
-const sessionRemainingText = computed(() => (
-  t('providers.migration.sessionExpiresIn5fcc5f', { value: String(countdownFormatted.value) })
-))
 
 const remainingText = computed(() => (
   t('providers.migration.remaining43f955', { value: String(countdownFormatted.value) })

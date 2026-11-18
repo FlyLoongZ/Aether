@@ -1,8 +1,6 @@
-// OAuth 设备授权（Kiro / Windsurf / xAI）的会话状态定义
+// OAuth 设备授权（Kiro / xAI）的会话状态定义
 
 export type DeviceAuthType = 'default' | 'google' | 'github' | 'builder_id' | 'identity_center' | 'device'
-
-export type WindsurfLoginOption = 'default' | 'google' | 'github'
 
 export interface DeviceAuthState {
   auth_type: DeviceAuthType
