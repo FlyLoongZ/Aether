@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PoolKeyDetail } from '@/api/endpoints/pool'
 import { setI18nLocale, translate } from '@/i18n'
 import {
-  buildQuotaProgressItemsFromSnapshot,
   getQuotaLabelOrder,
   getQuotaProgressLabel,
   normalizeQuotaLabel,
@@ -25,23 +24,5 @@ describe('pool quota display localization', () => {
     expect(items.map(item => item.label)).toEqual(['5H', '周', '月'])
     expect(items.map(item => getQuotaProgressLabel(item.label))).toEqual(['5H', 'Weekly', 'Month'])
     expect(getQuotaProgressLabel('保存：自定义配额')).toBe('保存：自定义配额')
-  })
-
-  it('translates snapshot detail counts at the display boundary', () => {
-    setI18nLocale('en-US')
-    const key = {
-      status_snapshot: {
-        oauth: { code: 'none' },
-        account: { code: 'ok', blocked: false },
-        quota: {
-          provider_type: 'windsurf', code: 'ok', exhausted: false, allowed_models_count: 4,
-          windows: [{ code: 'daily', remaining_value: 3, limit_value: 10 }],
-        },
-      },
-    } as PoolKeyDetail
-    const items = buildQuotaProgressItemsFromSnapshot(key, 'windsurf', translate)
-    expect(items.map(item => item.label)).toEqual(['日', '模型'])
-    expect(items.map(item => item.detail)).toEqual(['Remaining 3/10', '4 items'])
-    expect(items.map(item => getQuotaProgressLabel(item.label))).toEqual(['Day', 'Model'])
   })
 })

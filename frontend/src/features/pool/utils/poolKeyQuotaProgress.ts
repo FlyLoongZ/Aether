@@ -274,20 +274,6 @@ export function getGrokQuotaWindowLabel(window: QuotaWindowSnapshot): string {
   return GROK_QUOTA_MODE_LABELS[normalized] || GROK_QUOTA_MODE_LABELS[code.toLowerCase()] || label || code || translate('ui.mode')
 }
 
-export function getGeminiCliQuotaWindowLabel(window: QuotaWindowSnapshot): string {
-  const code = String(window.code || '').trim().replace(/^model:/i, '')
-  const label = String(window.label || window.model || code).trim()
-  return label || code || '模型'
-}
-
-function formatRemainingQuotaValue(value: string): string {
-  return translate('feedback.pool.remainingValue', { value })
-}
-
-function formatQuotaItemCount(count: number): string {
-  return translate('feedback.pool.itemCount', { count })
-}
-
 export function buildQuotaProgressItemsFromSnapshot(
   key: PoolKeyDetail,
   fallbackProviderType: string,
@@ -380,57 +366,6 @@ export function buildQuotaProgressItemsFromSnapshot(
     }]
   }
 
-  if (providerType === 'windsurf') {
-    const items: QuotaProgressItem[] = []
-    for (const [label, code] of [
-      ['日', 'daily'],
-      ['周', 'weekly'],
-      ['Prompt', 'prompt'],
-      ['Flex', 'flex'],
-    ] as const) {
-      const window = getQuotaSnapshotWindow(quota, code)
-      const remainingPercent = getQuotaWindowRemainingPercent(window)
-      if (remainingPercent == null) continue
-      const detail = typeof window?.used_value === 'number' && typeof window?.limit_value === 'number'
-        ? `${formatQuotaValue(window.used_value)}/${formatQuotaValue(window.limit_value)}`
-        : typeof window?.remaining_value === 'number' && typeof window?.limit_value === 'number'
-          ? formatRemainingQuotaValue(`${formatQuotaValue(window.remaining_value)}/${formatQuotaValue(window.limit_value)}`)
-          : undefined
-      items.push({
-        label,
-        remainingPercent,
-        detail,
-        resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? null),
-        resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? null),
-        updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-      })
-    }
-
-    const rateLimitWindow = getQuotaSnapshotWindow(quota, 'rate_limit')
-    if (rateLimitWindow) {
-      items.push({
-        label: '速率',
-        remainingPercent: rateLimitWindow.is_exhausted ? 0 : 100,
-        resetAtSeconds: normalizeUnixSeconds(rateLimitWindow.reset_at ?? null),
-        resetSeconds: normalizeRemainingSeconds(rateLimitWindow.reset_seconds ?? null),
-        updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-      })
-    }
-
-    if (typeof quota.allowed_models_count === 'number' && Number.isFinite(quota.allowed_models_count)) {
-      items.push({
-        label: '模型',
-        remainingPercent: 100,
-        detail: formatQuotaItemCount(quota.allowed_models_count),
-        resetAtSeconds: null,
-        resetSeconds: null,
-        updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-      })
-    }
-
-    return items
-  }
-
   if (providerType === 'antigravity') {
     const windows = getQuotaSnapshotWindowsByScope(quota, 'quota_group')
     if (windows.length === 0) return []
@@ -478,58 +413,6 @@ export function buildQuotaProgressItemsFromSnapshot(
         }
       })
       .filter((item): item is QuotaProgressItem => item != null)
-  }
-
-  if (providerType === 'gemini_cli') {
-    const windows = getQuotaSnapshotWindowsByScope(quota, 'model')
-    if (windows.length === 0) return []
-
-    const quotaResetAtSeconds = getQuotaSnapshotResetAtSeconds(quota)
-    const quotaResetSeconds = getQuotaSnapshotResetSeconds(quota)
-    return windows
-      .map((window): QuotaProgressItem | null => {
-        const remainingPercent = getQuotaWindowRemainingPercent(window)
-          ?? (window?.is_exhausted === true ? 0 : null)
-        if (remainingPercent == null) return null
-        return {
-          label: getGeminiCliQuotaWindowLabel(window),
-          remainingPercent,
-          detail: getQuotaWindowValueText(window),
-          resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? quotaResetAtSeconds ?? null),
-          resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? quotaResetSeconds ?? null),
-          updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-          allowDynamicReset: true,
-        }
-      })
-      .filter((item): item is QuotaProgressItem => item != null)
-  }
-
-  if (providerType === 'chatgpt_web') {
-    const window = getQuotaSnapshotWindow(quota, 'image_gen')
-      ?? getQuotaSnapshotWindowsByScope(quota, 'account')[0]
-      ?? null
-    const remainingPercent = getQuotaWindowRemainingPercent(window)
-    if (remainingPercent == null) return []
-
-    const remainingValue = typeof window?.remaining_value === 'number' ? window.remaining_value : null
-    const limitValue = typeof window?.limit_value === 'number' ? window.limit_value : null
-    const usedValue = typeof window?.used_value === 'number' ? window.used_value : null
-    const detail = remainingValue != null && limitValue != null
-      ? `${formatQuotaValue(remainingValue)}/${formatQuotaValue(limitValue)}`
-      : usedValue != null && limitValue != null
-        ? `${formatQuotaValue(Math.max(limitValue - usedValue, 0))}/${formatQuotaValue(limitValue)}`
-        : remainingValue != null
-          ? formatRemainingQuotaValue(formatQuotaValue(remainingValue))
-          : undefined
-
-    return [{
-      label: '生图',
-      remainingPercent,
-      detail,
-      resetAtSeconds: normalizeUnixSeconds(window?.reset_at ?? null),
-      resetSeconds: normalizeRemainingSeconds(window?.reset_seconds ?? null),
-      updatedAtSeconds: getQuotaSnapshotUpdatedAtSeconds(quota),
-    }]
   }
 
   return []
