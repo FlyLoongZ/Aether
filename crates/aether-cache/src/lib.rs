@@ -20,6 +20,7 @@
 
 mod budget;
 mod gate;
+mod housekeeper;
 mod namespace;
 mod once_map;
 mod snapshot;
@@ -27,6 +28,7 @@ mod weight;
 
 pub use budget::CacheBudget;
 pub use gate::Gate;
+pub use housekeeper::start_housekeeper;
 pub use namespace::CacheKeyNamespace;
 pub use once_map::{Admission, CacheObserver, OnceMap, OnceMapBuilder, OnceMapError, PublishedMap};
 pub use snapshot::Snapshot;

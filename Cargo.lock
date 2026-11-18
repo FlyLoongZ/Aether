@@ -150,6 +150,7 @@ dependencies = [
  "bytes",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

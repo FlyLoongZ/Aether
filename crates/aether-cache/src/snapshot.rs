@@ -42,7 +42,8 @@ impl<T, E> std::fmt::Debug for Snapshot<T, E> {
 
 impl<T, E> Default for Snapshot<T, E>
 where
-    T: CacheWeight,
+    T: CacheWeight + Send + Sync + 'static,
+    E: Send + Sync + 'static,
 {
     fn default() -> Self {
         Self::new()
@@ -51,7 +52,8 @@ where
 
 impl<T, E> Snapshot<T, E>
 where
-    T: CacheWeight,
+    T: CacheWeight + Send + Sync + 'static,
+    E: Send + Sync + 'static,
 {
     pub fn new() -> Self {
         Self {

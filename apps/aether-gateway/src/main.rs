@@ -2345,6 +2345,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Reclaim expired entries even from caches nothing is writing to any more.
+    // Each table is bounded on its own, but a table that traffic stopped
+    // touching keeps whatever it held at that moment for the life of the
+    // process, which is exactly what an idle gateway must not do.
+    aether_cache::start_housekeeper();
+
     let background_tasks = if args.node_role.spawns_background_tasks() {
         Some(state.spawn_background_tasks())
     } else {
