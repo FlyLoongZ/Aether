@@ -4,7 +4,6 @@ use super::route_filters::{
     parse_admin_monitoring_limit, parse_admin_monitoring_offset,
     parse_admin_monitoring_username_filter,
 };
-use crate::constants::INTERNAL_GATEWAY_PATH_PREFIXES;
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::build_admin_usage_counter_health_payload;
 use crate::GatewayError;
@@ -209,7 +208,6 @@ pub(super) async fn build_admin_monitoring_system_status_response(
         today_requests,
         today_tokens,
         today_cost,
-        INTERNAL_GATEWAY_PATH_PREFIXES,
         recent_errors,
         usage_counter,
     ))

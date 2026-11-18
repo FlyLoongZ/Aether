@@ -149,7 +149,7 @@ use crate::request_diagnostics::{
 };
 use crate::stage_metrics::{
     attach_stage_trace_to_report_context, observe_gateway_stage_ms, observe_gateway_stage_trace_ms,
-    record_stream_pre_first_byte_spawn, RequestStageTrace,
+    RequestStageTrace,
 };
 use crate::usage::submit_stream_report;
 use crate::usage::{GatewayStreamReportRequest, GatewaySyncReportRequest};
@@ -2907,7 +2907,7 @@ async fn execute_stream_from_direct_passthrough(
         started_at: upstream_started_at,
         response_observation,
         stream_first_byte_timeout,
-        stream_idle_timeout,
+        stream_idle_timeout: _,
         upstream_target_permit,
     } = execution;
 
@@ -3063,9 +3063,11 @@ async fn execute_stream_from_direct_passthrough(
     )?))
 }
 
+#[cfg(test)]
 type StreamExecutionFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Option<Response<Body>>, GatewayError>> + Send + 'a>>;
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)] // internal function, grouping would add unnecessary indirection
 pub(crate) fn execute_execution_runtime_stream<'a>(
     state: &'a AppState,
@@ -4786,33 +4788,6 @@ fn usage_refresh_telemetry(
     }
 }
 
-fn maybe_record_first_stream_event_started(
-    state: &AppState,
-    lifecycle_seed: &LifecycleUsageSeed,
-    status_code: u16,
-    stream_started_at: Instant,
-    event_observed_at: Instant,
-    upstream_telemetry: Option<&ExecutionTelemetry>,
-    usage_stream_telemetry: &mut Option<ExecutionTelemetry>,
-) {
-    if !maybe_capture_first_stream_event_telemetry(
-        stream_started_at,
-        event_observed_at,
-        upstream_telemetry,
-        usage_stream_telemetry,
-    ) {
-        return;
-    }
-    let Some(telemetry) = usage_stream_telemetry.as_ref() else {
-        return;
-    };
-    state.usage_runtime.record_stream_started(
-        state.usage_lifecycle_data_state().as_ref(),
-        lifecycle_seed,
-        status_code,
-        Some(telemetry),
-    );
-}
 
 fn build_terminal_stream_telemetry(
     stream_started_at: Instant,

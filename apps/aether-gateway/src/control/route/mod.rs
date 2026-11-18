@@ -6,7 +6,6 @@ use crate::{AppState, GatewayError};
 
 mod admin;
 mod ai;
-mod internal;
 mod oauth;
 mod public_support;
 
@@ -78,6 +77,7 @@ impl GatewayControlDecision {
         self.execution_runtime_candidate
     }
 
+    #[cfg(test)]
     pub(crate) fn with_execution_runtime_candidate(mut self, value: bool) -> Self {
         self.execution_runtime_candidate = value;
         self
@@ -211,7 +211,6 @@ pub(crate) fn classify_control_route(
     )
     .or_else(|| oauth::classify_oauth_route(method, &normalized_path))
     .or_else(|| admin::classify_admin_route(method, &normalized_path))
-    .or_else(|| internal::classify_internal_route(method, &normalized_path))
     .or_else(|| ai::classify_ai_public_route(method, &normalized_path, uri.query(), headers))?;
 
     let mut decision = classified.into_decision(normalized_path);

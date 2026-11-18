@@ -53,7 +53,6 @@ pub fn build_router_with_state(state: AppState) -> Router {
     router = api::mount_ai_routes(router);
     router = api::mount_public_support_routes(router);
     router = api::mount_oauth_routes(router);
-    router = api::mount_internal_routes(router);
     router = api::mount_admin_routes(router);
     let mut router = router
         .route("/{*path}", any(proxy_request))

@@ -9,7 +9,7 @@ use super::{
     PUBLIC_CAPABILITY_DEFINITIONS,
 };
 use crate::admin_api::build_admin_endpoint_health_status_payload;
-use crate::handlers::internal::build_management_token_payload;
+use crate::handlers::shared::build_management_token_payload;
 use crate::handlers::shared::{
     admin_stats_bad_request_response, parse_bounded_u32, round_to, AdminStatsTimeRange,
 };

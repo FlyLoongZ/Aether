@@ -24,7 +24,6 @@ pub(crate) use self::observability::{
     admin_stats_bad_request_response, parse_bounded_u32, round_to, AdminStatsTimeRange,
 };
 pub(crate) use self::provider::oauth::duplicates::find_duplicate_provider_oauth_key;
-pub(crate) use self::provider::oauth::errors::build_internal_control_error_response;
 pub(crate) use self::provider::oauth::provisioning::{
     create_provider_oauth_catalog_key, update_existing_provider_oauth_catalog_key,
 };

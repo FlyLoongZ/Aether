@@ -1939,6 +1939,7 @@ enum RemoteSyncFallbackOutcome {
     Unavailable,
 }
 
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)] // internal function, grouping would add unnecessary indirection
 pub(crate) async fn execute_execution_runtime_sync(
     state: &AppState,

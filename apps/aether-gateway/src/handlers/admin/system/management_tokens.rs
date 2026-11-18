@@ -7,7 +7,7 @@ use crate::handlers::admin::system::shared::paths::{
     admin_management_token_id_from_path, admin_management_token_regenerate_id_from_path,
     admin_management_token_status_id_from_path, is_admin_management_tokens_root,
 };
-use crate::handlers::internal::build_management_token_payload;
+use crate::handlers::shared::build_management_token_payload;
 use crate::handlers::shared::{generate_gateway_secret_plaintext, parse_json_ip_rules};
 use crate::{GatewayError, LocalMutationOutcome};
 use aether_data::repository::management_tokens::{

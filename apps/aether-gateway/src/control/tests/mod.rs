@@ -93,5 +93,4 @@ mod admin_users;
 mod admin_video_tasks;
 mod admin_wallets;
 mod ai;
-mod internal;
 mod public_support;

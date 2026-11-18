@@ -102,7 +102,7 @@ async fn postgres_auth_config_nodes(
         .await
         .expect("temporary PostgreSQL should start");
     let database = PostgresPoolConfig {
-        database_url: server.database_url(),
+        database_url: server.database_url().to_string(),
         min_connections: 0,
         max_connections: 4,
         ..Default::default()

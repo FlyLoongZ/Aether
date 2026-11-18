@@ -28,7 +28,6 @@ mod handlers;
 mod headers;
 mod image_capabilities;
 mod important_notification;
-mod internal_gateway_auth;
 mod local_auth_token;
 mod log_ids;
 mod maintenance;

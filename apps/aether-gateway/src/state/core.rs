@@ -334,14 +334,6 @@ impl AppState {
         )
         .build()?;
         let frontdoor_runtime_guards = Arc::new(FrontdoorRuntimeGuardConfig::from_env());
-        let internal_gateway_auth =
-            Arc::new(crate::internal_gateway_auth::InternalGatewayAuthConfig::for_process());
-        if internal_gateway_auth.status() == "misconfigured" {
-            warn!(
-                environment_variable = crate::internal_gateway_auth::INTERNAL_GATEWAY_AUTH_SECRET_ENV,
-                "internal gateway control plane is fail-closed because its authentication secret is invalid"
-            );
-        }
         Ok(Self {
             #[cfg(test)]
             execution_runtime_override_base_url: _execution_runtime_override_base_url
@@ -354,7 +346,6 @@ impl AppState {
             background_data: Arc::clone(&data),
             background_data_isolated: false,
             runtime_state: runtime_state.clone(),
-            internal_gateway_auth,
             usage_runtime: Arc::new(usage::UsageRuntime::disabled()),
             body_file_store: None,
             request_activity: Arc::new(crate::request_activity::RequestActivity::default()),

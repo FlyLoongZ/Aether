@@ -6,13 +6,10 @@ use self::body_buffer::{
     buffer_and_normalize_request_body, build_request_body_buffer_error_response,
     RequestBodyBufferError, RequestBodyBufferPolicy,
 };
-use self::local::{
-    maybe_build_local_admin_proxy_response, maybe_build_local_internal_proxy_response,
-};
+use self::local::maybe_build_local_admin_proxy_response;
 pub(crate) use self::websocket::live::{live_websocket, maybe_handle_live_http};
 pub(crate) use self::websocket::realtime::realtime_websocket;
 pub(crate) use self::websocket::responses::responses_websocket;
-use super::internal::resolve_local_proxy_execution_path;
 use crate::api::response::{
     build_local_auth_rejection_response, build_local_http_error_response,
     build_local_http_error_response_with_request_path, build_local_overloaded_response,
@@ -43,6 +40,7 @@ use crate::handlers::public::enforce_admin_auth_ip_rate_limit;
 use crate::handlers::shared::{
     build_admin_proxy_auth_required_response, build_admin_route_not_found_response,
     build_unhandled_admin_proxy_response, ip_rules_allow, local_proxy_route_requires_buffered_body,
+    resolve_local_proxy_execution_path,
 };
 
 use crate::headers::{
@@ -940,26 +938,6 @@ async fn proxy_request_inner(
     let request_path_and_query = request_context.request_path_and_query();
     let _path_and_queryy = request_path_and_query.as_str();
     let control_decision = request_context.control_decision.as_ref();
-    if let Some(response) = maybe_build_local_internal_proxy_response(
-        &state,
-        &request_context,
-        &remote_addr,
-        &parts.headers,
-        local_proxy_body.as_ref(),
-    )
-    .await?
-    {
-        let execution_path =
-            resolve_local_proxy_execution_path(&response, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH);
-        return Ok(finalize_gateway_response_with_context(
-            response,
-            &remote_addr,
-            &request_context,
-            execution_path,
-            &started_at,
-            request_permit.take(),
-        ));
-    }
     if let Some(response) = maybe_build_local_admin_proxy_response(
         &state,
         &request_context,

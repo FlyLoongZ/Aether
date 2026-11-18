@@ -11,8 +11,8 @@ pub(crate) use crate::ai_serving::{
     build_local_openai_responses_sync_attempt_source_for_kind,
     build_local_same_format_stream_attempt_source, build_local_same_format_sync_attempt_source,
     build_local_video_sync_attempt_source_for_kind, build_standard_family_stream_attempt_source,
-    build_standard_family_sync_attempt_source, maybe_build_stream_decision_payload,
-    maybe_build_stream_plan_payload, maybe_build_sync_decision_payload,
+    build_standard_family_sync_attempt_source,
+    maybe_build_stream_plan_payload,
     maybe_build_sync_plan_payload, set_local_openai_chat_execution_exhausted_diagnostic,
     set_local_openai_image_execution_exhausted_diagnostic,
 };

@@ -24,7 +24,6 @@ pub(crate) const EXECUTION_PATH_LOCAL_OVERLOADED: &str = "local_overloaded";
 pub(crate) const EXECUTION_PATH_DISTRIBUTED_OVERLOADED: &str = "distributed_overloaded";
 pub(crate) const EXECUTION_PATH_LOCAL_AI_PUBLIC: &str = "local_ai_public";
 pub(crate) const CONTROL_ROUTE_CLASS_HEADER: &str = "x-aether-control-route-class";
-pub(crate) const CONTROL_EXECUTION_RUNTIME_CANDIDATE_KEY: &str = "execution_runtime_candidate";
 pub(crate) const CONTROL_REQUEST_ID_HEADER: &str = "x-aether-control-request-id";
 pub(crate) const CONTROL_CANDIDATE_ID_HEADER: &str = "x-aether-control-candidate-id";
 pub(crate) const CONTROL_ENDPOINT_SIGNATURE_HEADER: &str = "x-aether-control-endpoint-signature";
@@ -52,9 +51,6 @@ pub(crate) const CLIENT_READABLE_RESPONSE_HEADERS: &[&str] = &[
     "x-aether-usage-id",
     "x-aether-build-version",
 ];
-pub(crate) const CONTROL_ACTION_PROXY_PUBLIC: &str = "proxy_public";
 pub(crate) const DEFAULT_USER_GROUP_CONFIG_KEY: &str = "default_user_group_id";
 pub(crate) const ANTIGRAVITY_BEARER_BRIDGE_CONFIG_KEY: &str = "module.antigravity.bearer_bridge";
 pub(crate) const BUILTIN_DEFAULT_USER_GROUP_ID: &str = "00000000-0000-0000-0000-000000000001";
-
-pub(crate) const INTERNAL_GATEWAY_PATH_PREFIXES: &[&str] = &["/api/internal/gateway"];

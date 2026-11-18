@@ -117,6 +117,7 @@ pub(crate) fn request_origin_from_headers(headers: &http::HeaderMap) -> RequestO
     }
 }
 
+#[cfg(test)]
 pub(crate) fn request_origin_from_trusted_headers(headers: &http::HeaderMap) -> RequestOrigin {
     RequestOrigin {
         client_ip: client_ip_from_headers(headers),
@@ -234,6 +235,7 @@ pub(crate) fn request_origin_from_parts(parts: &http::request::Parts) -> Request
         .unwrap_or_else(|| request_origin_from_headers(&parts.headers))
 }
 
+#[cfg(test)]
 fn client_ip_from_headers(headers: &http::HeaderMap) -> Option<String> {
     header_value_str(headers, "x-forwarded-for")
         .and_then(|value| {

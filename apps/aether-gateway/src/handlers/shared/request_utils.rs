@@ -676,43 +676,6 @@ pub(crate) fn admin_proxy_local_requires_buffered_body(
         })
 }
 
-pub(crate) fn internal_proxy_local_requires_buffered_body(
-    request_context: &GatewayPublicRequestContext,
-) -> bool {
-    request_context
-        .control_decision
-        .as_ref()
-        .is_some_and(|decision| {
-            if decision.route_class.as_deref() != Some("internal_proxy")
-                || request_context.request_method != http::Method::POST
-            {
-                return false;
-            }
-            matches!(
-                (
-                    decision.route_family.as_deref(),
-                    decision.route_kind.as_deref()
-                ),
-                (
-                    Some("internal_gateway"),
-                    Some(
-                        "resolve"
-                            | "auth_context"
-                            | "decision_sync"
-                            | "decision_stream"
-                            | "execute_sync"
-                            | "execute_stream"
-                            | "plan_sync"
-                            | "plan_stream"
-                            | "report_sync"
-                            | "report_stream"
-                            | "finalize_sync"
-                    )
-                )
-            )
-        })
-}
-
 pub(crate) fn public_support_local_requires_buffered_body(
     request_context: &GatewayPublicRequestContext,
 ) -> bool {
@@ -785,7 +748,6 @@ pub(crate) fn local_proxy_route_requires_buffered_body(
     request_context: &GatewayPublicRequestContext,
 ) -> bool {
     admin_proxy_local_requires_buffered_body(request_context)
-        || internal_proxy_local_requires_buffered_body(request_context)
         || public_support_local_requires_buffered_body(request_context)
 }
 

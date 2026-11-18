@@ -15,7 +15,7 @@ use crate::execution_runtime::submission::{
     resolve_core_error_background_report_kind, resolve_core_success_background_report_kind,
     resolve_local_core_error_response_body_json,
 };
-use crate::execution_runtime::{
+use crate::execution_runtime::sync::{
     resolve_local_sync_error_background_report_kind,
     resolve_local_sync_success_background_report_kind,
 };

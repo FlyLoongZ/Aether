@@ -163,7 +163,6 @@ fn sample_public_catalog_model(
 
 mod ai;
 mod core;
-mod internal;
 mod oauth;
 mod ops;
 mod public_support;

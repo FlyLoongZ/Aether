@@ -85,27 +85,6 @@ pub(crate) use aether_ai_serving::{
     CandidateFailureDiagnostic,
 };
 
-pub(crate) async fn maybe_build_sync_decision_payload(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    body_json: &serde_json::Value,
-    body_base64: Option<&str>,
-    body_is_empty: bool,
-) -> Result<Option<AiExecutionDecision>, GatewayError> {
-    decision::maybe_build_sync_decision_payload(
-        state,
-        parts,
-        trace_id,
-        decision,
-        body_json,
-        body_base64,
-        body_is_empty,
-    )
-    .await
-}
-
 pub(crate) async fn maybe_build_stream_decision_payload(
     state: &AppState,
     parts: &http::request::Parts,

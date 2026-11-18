@@ -1,4 +1,3 @@
-use super::super::internal;
 use crate::admin_api;
 use crate::audit::attach_admin_audit_event;
 use crate::control::{
@@ -12,23 +11,6 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::json;
 use tracing::warn;
-
-pub(super) async fn maybe_build_local_internal_proxy_response(
-    state: &AppState,
-    request_context: &GatewayPublicRequestContext,
-    remote_addr: &std::net::SocketAddr,
-    request_headers: &http::HeaderMap,
-    request_body: Option<&Bytes>,
-) -> Result<Option<Response<Body>>, GatewayError> {
-    internal::maybe_build_local_internal_proxy_response_impl(
-        state,
-        request_context,
-        remote_addr,
-        request_headers,
-        request_body,
-    )
-    .await
-}
 
 pub(super) async fn maybe_build_local_admin_proxy_response(
     state: &AppState,

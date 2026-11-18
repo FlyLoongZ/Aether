@@ -2969,7 +2969,6 @@ mod tests {
                 Some(&isolated_background),
             )
             .expect("all-role usage database")
-            .pool
             .max_connections,
             4
         );
@@ -2977,7 +2976,6 @@ mod tests {
             assert_eq!(
                 usage_database_config_for_role(role, Some(&database), Some(&isolated_background),)
                     .expect("single-pool role usage database")
-                    .pool
                     .max_connections,
                 20
             );

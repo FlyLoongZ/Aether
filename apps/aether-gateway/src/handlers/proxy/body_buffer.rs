@@ -3,7 +3,6 @@ use crate::control::GatewayPublicRequestContext;
 use crate::headers::RequestBodyNormalizationError;
 use crate::{AppState, GatewayError};
 use aether_gateway_frontdoor::{BodyBufferError, BodyBufferPolicy as FrontdoorBodyBufferPolicy};
-use aether_usage_runtime::MAX_INTERNAL_REPORT_BODY_BYTES;
 use axum::body::{Body, Bytes};
 use axum::http::{self, Response};
 use std::sync::Arc;
@@ -15,12 +14,6 @@ use tracing::{info, warn};
 const REQUEST_BODY_READ_TIMEOUT_DETAIL: &str =
     "Request body read timed out before the gateway could route the request";
 const REQUEST_BODY_READ_FAILED_DETAIL: &str = "Failed to read request body";
-// A report can carry two 64 MiB decoded provider/client bodies.  Base64 expands
-// each body by roughly one third, so the request envelope needs about 180 MiB
-// plus JSON metadata.  Keep a bounded 192 MiB control-plane ceiling rather
-// than inheriting the generic 256 MiB public request limit.
-const MAX_INTERNAL_REPORT_REQUEST_BODY_BYTES: u64 = 192 * 1024 * 1024;
-
 #[derive(Debug, Clone)]
 pub(super) struct RequestBodyBufferPolicy {
     inner: FrontdoorBodyBufferPolicy,
@@ -31,35 +24,8 @@ impl RequestBodyBufferPolicy {
         Self::from_state_with_max_bytes(state, crate::headers::max_request_body_bytes())
     }
 
-    pub(super) fn for_internal_report(state: &AppState) -> Self {
-        // Keep the envelope limit tied to the per-field decoded limit.  The
-        // explicit constant leaves room for base64 expansion and metadata.
-        let envelope_limit = MAX_INTERNAL_REPORT_REQUEST_BODY_BYTES
-            .min((MAX_INTERNAL_REPORT_BODY_BYTES as u64).saturating_mul(3));
-        Self::from_state_with_max_bytes(state, envelope_limit)
-    }
-
-    pub(super) fn for_request_context(
-        state: &AppState,
-        request_context: &GatewayPublicRequestContext,
-    ) -> Self {
-        let is_internal_report =
-            request_context
-                .control_decision
-                .as_ref()
-                .is_some_and(|decision| {
-                    decision.route_class.as_deref() == Some("internal_proxy")
-                        && decision.route_family.as_deref() == Some("internal_gateway")
-                        && matches!(
-                            decision.route_kind.as_deref(),
-                            Some("report_sync" | "report_stream" | "finalize_sync")
-                        )
-                });
-        if is_internal_report {
-            Self::for_internal_report(state)
-        } else {
-            Self::from_state(state)
-        }
+    pub(super) fn for_request_context(state: &AppState, _: &GatewayPublicRequestContext) -> Self {
+        Self::from_state(state)
     }
 
     fn from_state_with_max_bytes(state: &AppState, max_bytes: u64) -> Self {

@@ -794,7 +794,6 @@ pub fn build_admin_monitoring_system_status_payload_response(
     today_requests: usize,
     today_tokens: u64,
     today_cost: f64,
-    path_prefixes: &[&str],
     recent_errors: usize,
     usage_counter: Value,
 ) -> Response<Body> {
@@ -816,10 +815,6 @@ pub fn build_admin_monitoring_system_status_payload_response(
             "requests": today_requests,
             "tokens": today_tokens,
             "cost_usd": format!("${today_cost:.4}"),
-        },
-        "internal_gateway": {
-            "status": "rust_native_control_plane",
-            "path_prefixes": path_prefixes,
         },
         "recent_errors": recent_errors,
         "usage_counter": usage_counter,

@@ -46,7 +46,7 @@ pub(crate) use self::planner::{
     extract_pool_sticky_session_token,
     maybe_build_pinned_stream_local_same_format_provider_decision_payload,
     maybe_build_responses_websocket_decision, maybe_build_stream_decision_payload,
-    maybe_build_stream_plan_payload, maybe_build_sync_decision_payload,
+    maybe_build_stream_plan_payload,
     maybe_build_sync_plan_payload, planner_is_matching_stream_request, provider_key_pool_score_id,
     provider_key_pool_score_scope, read_candidate_transport_snapshot,
     record_local_runtime_candidate_skip_reason, resolve_provider_chat_pii_redaction,

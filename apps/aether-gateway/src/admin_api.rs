@@ -1,6 +1,6 @@
 pub(crate) use crate::handlers::admin::{
     admin_provider_ops_local_action_response, admin_provider_pool_config,
-    build_internal_control_error_response, create_provider_oauth_catalog_key,
+    create_provider_oauth_catalog_key,
     execute_admin_system_import_exclusively, find_duplicate_provider_oauth_key,
     maybe_build_local_admin_response, provider_oauth_maintenance_endpoint_for_provider,
     provider_quota_refresh_endpoint_for_provider, provider_type_supports_quota_refresh,

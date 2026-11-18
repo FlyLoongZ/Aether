@@ -383,7 +383,6 @@ pub struct AppState {
     pub(crate) background_data: Arc<GatewayDataState>,
     pub(crate) background_data_isolated: bool,
     pub(crate) runtime_state: Arc<RuntimeState>,
-    pub(crate) internal_gateway_auth: Arc<crate::internal_gateway_auth::InternalGatewayAuthConfig>,
     pub(crate) usage_runtime: Arc<usage::UsageRuntime>,
     pub(crate) body_file_store: Option<Arc<aether_body_store::BodyFileStore>>,
     pub(crate) request_activity: Arc<crate::request_activity::RequestActivity>,

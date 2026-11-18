@@ -324,9 +324,6 @@ fn gateway_stage_metric_samples_for_enabled(enabled: bool) -> Vec<MetricSample> 
     samples
 }
 
-pub(crate) fn record_stream_pre_first_byte_spawn() {
-    STREAM_PRE_FIRST_BYTE_SPAWN_TOTAL.fetch_add(1, Ordering::Relaxed);
-}
 
 pub(crate) fn record_openai_chat_stream_raw_candidates_scanned(count: usize) {
     OPENAI_CHAT_STREAM_RAW_TARGET_SELECT_SCANNED_TOTAL.fetch_add(count as u64, Ordering::Relaxed);

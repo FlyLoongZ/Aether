@@ -6,16 +6,17 @@ mod email_templates;
 mod external_models;
 mod identity_oauth_provider_secret;
 mod internal_metadata;
+mod management_tokens;
 mod module_status;
 mod multipart;
 mod normalize;
-mod payloads;
 mod payment_currency;
 mod payment_direct;
 #[cfg(test)]
 pub(crate) use payment_direct::set_refund_failure_stub_for_tests;
 mod payment_gateway_config;
 mod payment_gateway_secret;
+mod proxy_execution_path;
 mod payment_order_stripe_secret;
 mod provider_catalog_credential;
 mod provider_ops_credential;
@@ -62,6 +63,7 @@ pub(crate) use self::identity_oauth_provider_secret::{
 pub(crate) use self::internal_metadata::{
     should_expose_internal_metadata, strip_internal_metadata_headers,
 };
+pub(crate) use self::management_tokens::build_management_token_payload;
 pub(crate) use self::module_status::{
     module_enabled_config_key, read_module_enabled, REFERRAL_ENABLED_CONFIG_KEY,
 };
@@ -74,9 +76,6 @@ pub(crate) use self::normalize::{
     ip_rule_pattern_matches, ip_rules_allow, json_ip_rules_allow, normalize_feature_settings,
     normalize_ip_rules, normalize_json_array, normalize_json_object, normalize_string_list,
     normalize_user_self_feature_settings_update, parse_json_ip_rules,
-};
-pub(crate) use self::payloads::{
-    InternalGatewayAuthContextRequest, InternalGatewayExecuteRequest, InternalGatewayResolveRequest,
 };
 pub(crate) use self::payment_currency::{
     effective_payment_exchange_rate, normalize_payment_currency, stripe_amount_to_major,
@@ -100,6 +99,7 @@ pub(crate) use self::payment_gateway_secret::{
     open_payment_gateway_secret, payment_gateway_secret_is_legacy_unbound,
     seal_payment_gateway_secret, PaymentGatewaySecretBinding,
 };
+pub(crate) use self::proxy_execution_path::resolve_local_proxy_execution_path;
 pub(crate) use self::payment_order_stripe_secret::{
     normalize_stripe_client_secret, open_payment_order_stripe_client_secret,
     seal_payment_order_stripe_client_secret, PaymentOrderStripeSecretBinding,

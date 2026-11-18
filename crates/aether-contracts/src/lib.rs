@@ -1,6 +1,5 @@
 mod error;
 mod frame;
-pub mod internal_gateway;
 mod plan;
 mod result;
 mod usage;

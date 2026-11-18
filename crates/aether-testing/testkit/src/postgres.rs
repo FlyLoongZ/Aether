@@ -208,7 +208,7 @@ pub async fn prepare_aether_postgres_schema(
         ..Default::default()
     };
 
-    let backends = DataBackends::from_config(DataLayerConfig::from_postgres(config))?;
+    let backends = DataBackends::from_config(DataLayerConfig::from_database(config))?;
     let pending_migrations = backends
         .prepare_database_for_startup()
         .await?
