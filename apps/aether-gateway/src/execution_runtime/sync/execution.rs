@@ -23,7 +23,6 @@ use axum::body::{to_bytes, Body, Bytes};
 use axum::http::header::{CACHE_CONTROL, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE};
 use axum::http::{HeaderName, HeaderValue, Response, StatusCode};
 use futures_util::StreamExt;
-use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
@@ -58,7 +57,7 @@ use crate::execution_runtime::transport::{
     append_upstream_response_body_chunk_with_limit, build_execution_response_body,
     build_request_body, decode_response_body_bytes_with_limit,
     execution_plan_response_body_limit_bytes, execution_response_body_mode,
-    format_hyper_error_chain, format_upstream_request_error, format_wreq_upstream_request_error,
+    format_upstream_request_error, format_wreq_upstream_request_error,
     safe_transport_error_message, send_request, DirectHttpResponse, DirectSyncExecutionRuntime,
     ExecutionRuntimeTransportError,
 };
@@ -1617,28 +1616,6 @@ async fn execute_openai_image_sync_upstream_sse_candidate(
                         ExecutionRuntimeTransportError::UpstreamRequest(
                             format_upstream_request_error(&err),
                         ),
-                    )
-                })?;
-                append_upstream_response_body_chunk_with_limit(
-                    &mut body_bytes,
-                    &chunk,
-                    response_body_limit_bytes,
-                )
-                .map_err(SyncExecutionFailure::from_transport)?;
-                let elapsed_ms = started_at.elapsed().as_millis() as u64;
-                progress
-                    .observe_chunk(&chunk, status_code, elapsed_ms)
-                    .await;
-            }
-        }
-        DirectHttpResponse::HyperH2c(response) => {
-            let mut upstream_stream = response.into_body().into_data_stream();
-            while let Some(chunk) = upstream_stream.next().await {
-                let chunk = chunk.map_err(|err| {
-                    SyncExecutionFailure::from_transport(
-                        ExecutionRuntimeTransportError::UpstreamRequest(format_hyper_error_chain(
-                            &err,
-                        )),
                     )
                 })?;
                 append_upstream_response_body_chunk_with_limit(
