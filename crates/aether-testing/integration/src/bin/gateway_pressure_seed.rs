@@ -67,8 +67,6 @@ impl Config {
     fn from_env_and_args() -> Result<Self, String> {
         let mut config = Self {
             database_url: env_value("DATABASE_URL")
-                .or_else(|| env_value("AETHER_DATABASE_URL"))
-                .or_else(|| env_value("AETHER_GATEWAY_DATA_POSTGRES_URL"))
                 .unwrap_or_else(|| DEFAULT_POSTGRES_URL.to_string()),
             output_env_path: PathBuf::from(
                 env_value("OUTPUT_ENV_PATH").unwrap_or_else(|| DEFAULT_OUTPUT_ENV_PATH.to_string()),
@@ -202,11 +200,8 @@ impl Config {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::from_env_and_args().map_err(|err| format!("invalid config: {err}"))?;
-    let encryption_key = env_value("AETHER_GATEWAY_DATA_ENCRYPTION_KEY")
-        .or_else(|| env_value("ENCRYPTION_KEY"))
-        .ok_or(
-            "set AETHER_GATEWAY_DATA_ENCRYPTION_KEY or ENCRYPTION_KEY to the gateway's encryption key before seeding",
-        )?;
+    let encryption_key = env_value("ENCRYPTION_KEY")
+        .ok_or("set ENCRYPTION_KEY to the gateway's encryption key before seeding")?;
     let secret_cipher = PythonFernetCompat::from_secret(&encryption_key);
 
     let backends = DataBackends::from_config(DataLayerConfig::from_database(SqlDatabaseConfig {
@@ -912,7 +907,7 @@ fn print_help() {
     println!(
         "Usage: cargo run -p aether-integration-tests --bin gateway_pressure_seed -- [options]\n\
 \n\
-The seed and gateway must share AETHER_GATEWAY_DATA_ENCRYPTION_KEY (or ENCRYPTION_KEY).\n\
+The seed and gateway must share ENCRYPTION_KEY.\n\
 \n\
 Options:\n\
   --database-url URL\n\

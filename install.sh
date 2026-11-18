@@ -74,9 +74,8 @@ Usage: install.sh [options]
 Install Aether Gateway.
 
 Options:
-  --mode MODE          Deployment mode: compose, compose-single-node, or single-node
+  --mode MODE          Deployment mode: compose or single-node
                       compose: Docker Compose app + Postgres + Redis
-                      compose-single-node: Docker Compose single-node app
                       single-node: single-node system service
                       Linux services use systemd; macOS services use launchd
   --channel CHANNEL    Release channel to resolve when --version is omitted: stable, latest, rc, beta, or nightly
@@ -555,12 +554,8 @@ validate_single_node_managed_paths() {
 
 select_mode() {
     case "${MODE}" in
-        compose|docker|docker-compose)
+        compose|docker|docker-compose|compose-single-node|docker-single-node|docker-single-node-compose)
             MODE="compose"
-            return
-            ;;
-        compose-single-node|docker-single-node|docker-single-node-compose)
-            MODE="compose-single-node"
             return
             ;;
         single-node|service|systemd|launchd)
@@ -570,7 +565,7 @@ select_mode() {
         auto|"")
             ;;
         *)
-            die "unsupported install mode: ${MODE}; expected compose, compose-single-node, or single-node"
+            die "unsupported install mode: ${MODE}; expected compose or single-node"
             ;;
     esac
 
@@ -579,33 +574,28 @@ select_mode() {
             cat >/dev/tty <<EOF
 
 请选择 Aether 部署模式:
-  1) Docker Compose 标准部署（Postgres + Redis）
-  2) Docker Compose 单节点部署（PostgreSQL）
-  3) 系统服务单节点部署（需提供 PostgreSQL DATABASE_URL）
+  1) Docker Compose 部署（Postgres + Redis）
+  2) 系统服务单节点部署（需提供 PostgreSQL DATABASE_URL）
 
-请输入选项 [3]:
+请输入选项 [2]:
 EOF
         else
             cat >/dev/tty <<EOF
 
 Choose Aether deployment mode:
-  1) Docker Compose standard deployment (Postgres + Redis)
-  2) Docker Compose single-node deployment (PostgreSQL)
-  3) System service single-node deployment (PostgreSQL)
+  1) Docker Compose deployment (Postgres + Redis)
+  2) System service single-node deployment (PostgreSQL)
 
-Enter choice [3]:
+Enter choice [2]:
 EOF
         fi
         local choice
         IFS= read -r choice </dev/tty || choice=""
-        case "${choice:-3}" in
+        case "${choice:-2}" in
             1)
                 MODE="compose"
                 ;;
             2)
-                MODE="compose-single-node"
-                ;;
-            3)
                 MODE="single-node"
                 ;;
             *)
@@ -1630,7 +1620,7 @@ derive_local_bundle_version() {
 
 generate_first_install_env() {
     local output="$1"
-    local database_url="${AETHER_DATABASE_URL:-${DATABASE_URL:-${AETHER_GATEWAY_DATA_POSTGRES_URL:-}}}"
+    local database_url="${DATABASE_URL:-}"
     [[ -n "${database_url}" ]] || die "PostgreSQL DATABASE_URL is required for system-service installs; set DATABASE_URL or use --mode compose"
     case "${database_url}" in
         postgres://*|postgresql://*) ;;
@@ -1658,13 +1648,10 @@ APP_PORT=${APP_PORT:-8084}
 AETHER_BASE_DIR=${INSTALL_ROOT}
 AETHER_UPDATE_STRATEGY=self
 AETHER_GATEWAY_STATIC_DIR=${INSTALL_ROOT}/current/frontend
-AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE=rust-authoritative
 AETHER_GATEWAY_DATABASE_MODE=auto
 AETHER_RUNTIME_BACKEND=memory
 API_KEY_PREFIX=sk
 
-AETHER_DATABASE_DRIVER=postgres
-AETHER_DATABASE_URL=${database_url}
 DATABASE_URL=${database_url}
 
 JWT_SECRET_KEY=${jwt_key}
@@ -1739,13 +1726,6 @@ generate_compose_env() {
     replace_or_append_env "${output}" "AETHER_DOCKER_UPDATE_COMMAND" "./update.sh"
     append_compose_log_env_defaults "${output}"
     replace_or_append_env "${output}" "AETHER_GATEWAY_DATABASE_MODE" "auto"
-}
-
-generate_compose_single_node_env() {
-    local output="$1"
-    generate_compose_env "${output}"
-    replace_or_append_env "${output}" "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY" "single-node"
-    replace_or_append_env "${output}" "AETHER_DATABASE_DRIVER" "postgres"
 }
 
 install_config_dir() {
@@ -1934,7 +1914,6 @@ validate_env_file() {
     local line_no=0
     local topology="single-node"
     local node_role="all"
-    local database_driver=""
     local runtime_backend=""
     local db_password=""
     local redis_password=""
@@ -1972,13 +1951,10 @@ validate_env_file() {
             AETHER_GATEWAY_NODE_ROLE)
                 node_role="${value}"
                 ;;
-            AETHER_DATABASE_DRIVER)
-                database_driver="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
-                ;;
             AETHER_RUNTIME_BACKEND)
                 runtime_backend="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
                 ;;
-            AETHER_DATABASE_URL|DATABASE_URL|AETHER_GATEWAY_DATA_POSTGRES_URL)
+            DATABASE_URL)
                 [[ -n "${value}" ]] && database_url="${value}"
                 ;;
             REDIS_URL|AETHER_GATEWAY_DATA_REDIS_URL)
@@ -1993,7 +1969,7 @@ validate_env_file() {
             JWT_SECRET_KEY)
                 jwt_secret_key="${value}"
                 ;;
-            ENCRYPTION_KEY|AETHER_GATEWAY_DATA_ENCRYPTION_KEY)
+            ENCRYPTION_KEY)
                 [[ -n "${value}" ]] && encryption_key="${value}"
                 ;;
             AETHER_GATEWAY_STATIC_DIR)
@@ -2019,7 +1995,7 @@ validate_env_file() {
     esac
 
     [[ -n "${jwt_secret_key}" ]] || die "JWT_SECRET_KEY is required"
-    [[ -n "${encryption_key}" ]] || die "ENCRYPTION_KEY or AETHER_GATEWAY_DATA_ENCRYPTION_KEY is required"
+    [[ -n "${encryption_key}" ]] || die "ENCRYPTION_KEY is required"
 
     is_placeholder_value "${jwt_secret_key}" && die "JWT_SECRET_KEY still uses the example placeholder"
     is_placeholder_value "${encryption_key}" && die "ENCRYPTION_KEY still uses the example placeholder"
@@ -2030,10 +2006,6 @@ validate_env_file() {
         die "REDIS_URL still uses the example placeholder"
     fi
 
-    case "${database_driver}" in
-        ""|postgres|postgresql) ;;
-        *) die "only PostgreSQL database drivers are supported" ;;
-    esac
     case "${database_url}" in
         postgres://*|postgresql://*) ;;
         *) die "a PostgreSQL DATABASE_URL is required" ;;
@@ -2106,52 +2078,6 @@ install_compose_mode() {
     cat <<EOF
 
 Docker Compose files are ready:
-  ${COMPOSE_DIR}/docker-compose.yml
-  ${COMPOSE_DIR}/.env
-  ${COMPOSE_DIR}/.env.example
-  ${COMPOSE_DIR}/update.sh
-  ${COMPOSE_DIR}/generate_keys.sh
-  ${COMPOSE_DIR}/logs
-EOF
-
-    if [[ "${SKIP_START}" == "true" ]]; then
-        compose_manual_start_steps
-        return
-    fi
-
-    require_compose_runtime
-    start_compose_deployment
-    compose_next_steps
-}
-
-install_compose_single_node_mode() {
-    resolve_compose_dir
-    info "preparing Docker Compose single-node deployment in ${COMPOSE_DIR}"
-    ensure_directory "${COMPOSE_DIR}"
-    ensure_directory "${COMPOSE_DIR}/logs"
-
-    install_project_file "docker-compose.yml" "${COMPOSE_DIR}/docker-compose.yml" "0644"
-    install_project_file ".env.example" "${COMPOSE_DIR}/.env.example" "0644"
-    install_project_file "update.sh" "${COMPOSE_DIR}/update.sh" "0755"
-    install_generate_keys_script "${COMPOSE_DIR}/generate_keys.sh"
-
-    validate_managed_regular_file "${COMPOSE_DIR}/.env" false
-    if [[ -f "${COMPOSE_DIR}/.env" ]]; then
-        warn "keeping existing ${COMPOSE_DIR}/.env"
-    else
-        local generated_compose_env
-        info "generating ${COMPOSE_DIR}/.env"
-        generated_compose_env="$(mktemp)"
-        generate_compose_single_node_env "${generated_compose_env}"
-        atomic_install_managed_file \
-            "${generated_compose_env}" "${COMPOSE_DIR}/.env" 0600
-        rm -f -- "${generated_compose_env}"
-    fi
-
-
-    cat <<EOF
-
-Docker Compose single-node files are ready:
   ${COMPOSE_DIR}/docker-compose.yml
   ${COMPOSE_DIR}/.env
   ${COMPOSE_DIR}/.env.example
@@ -2681,9 +2607,6 @@ main() {
     if [[ "${MODE}" == "compose" ]]; then
         resolve_compose_release_identity
         install_compose_mode
-    elif [[ "${MODE}" == "compose-single-node" ]]; then
-        resolve_compose_release_identity
-        install_compose_single_node_mode
     else
         require_root
         require_service_manager

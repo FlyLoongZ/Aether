@@ -21,7 +21,6 @@ use aether_data::{DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
 use aether_gateway::{
     attach_static_frontend, build_router_with_state, set_gateway_frontdoor_app_port, AppState,
     FrontdoorCorsConfig, FrontdoorUserRpmConfig, GatewayDataConfig, UsageRuntimeConfig,
-    VideoTaskTruthSourceMode,
 };
 use aether_gateway_frontdoor::{
     drive_first_request_connection, http_connection_limit, FirstRequestService,
@@ -59,23 +58,6 @@ fn validate_gateway_data_encryption_key(value: Option<&str>) -> Result<(), &'sta
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
-enum VideoTaskTruthSourceArg {
-    PythonSyncReport,
-    RustAuthoritative,
-}
-
-impl From<VideoTaskTruthSourceArg> for VideoTaskTruthSourceMode {
-    fn from(value: VideoTaskTruthSourceArg) -> Self {
-        match value {
-            VideoTaskTruthSourceArg::PythonSyncReport => VideoTaskTruthSourceMode::PythonSyncReport,
-            VideoTaskTruthSourceArg::RustAuthoritative => {
-                VideoTaskTruthSourceMode::RustAuthoritative
-            }
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum DeploymentTopologyArg {
     SingleNode,
     MultiNode,
@@ -99,23 +81,6 @@ enum DatabaseDriverArg {
 enum DatabaseModeArg {
     Auto,
     VerifyOnly,
-}
-
-fn resolve_database_mode(
-    configured: Option<DatabaseModeArg>,
-    legacy_auto_prepare: Option<bool>,
-) -> DatabaseModeArg {
-    if let Some(configured) = configured {
-        return configured;
-    }
-    if let Some(legacy_auto_prepare) = legacy_auto_prepare {
-        return if legacy_auto_prepare {
-            DatabaseModeArg::Auto
-        } else {
-            DatabaseModeArg::VerifyOnly
-        };
-    }
-    DatabaseModeArg::Auto
 }
 
 impl From<DatabaseDriverArg> for DatabaseDriver {
@@ -538,13 +503,10 @@ struct GatewayDataArgs {
     #[arg(long, env = "AETHER_DATABASE_DRIVER", global = true)]
     database_driver: Option<DatabaseDriverArg>,
 
-    #[arg(long, env = "AETHER_DATABASE_URL", global = true)]
+    #[arg(long, env = "DATABASE_URL", global = true)]
     database_url: Option<String>,
 
-    #[arg(long, env = "AETHER_GATEWAY_DATA_POSTGRES_URL", global = true)]
-    postgres_url: Option<String>,
-
-    #[arg(long, env = "AETHER_GATEWAY_DATA_ENCRYPTION_KEY", global = true)]
+    #[arg(long, env = "ENCRYPTION_KEY", global = true)]
     encryption_key: Option<String>,
 
     #[arg(long, env = "AETHER_GATEWAY_DATA_REDIS_URL", global = true)]
@@ -621,29 +583,11 @@ impl GatewayDataArgs {
     }
 
     fn effective_database_url(&self) -> Option<String> {
-        let configured_url = self
-            .database_url
+        self.database_url
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
-        let legacy_postgres_url = self
-            .postgres_url
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
-        let generic_database_url = std::env::var("DATABASE_URL")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-
-        resolve_database_url(
-            self.effective_database_driver(),
-            configured_url,
-            legacy_postgres_url,
-            generic_database_url,
-        )
+            .map(ToOwned::to_owned)
     }
 
     fn effective_sql_database_config(&self) -> Option<SqlDatabaseConfig> {
@@ -719,28 +663,6 @@ impl GatewayDataArgs {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned)
-            .or_else(|| {
-                std::env::var("ENCRYPTION_KEY")
-                    .ok()
-                    .map(|value| value.trim().to_string())
-                    .filter(|value| !value.is_empty())
-            })
-    }
-
-    fn configured_encryption_key_mismatch(&self) -> bool {
-        let gateway_value = std::env::var("AETHER_GATEWAY_DATA_ENCRYPTION_KEY")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-        let default_value = std::env::var("ENCRYPTION_KEY")
-            .ok()
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty());
-
-        matches!(
-            (gateway_value, default_value),
-            (Some(gateway_value), Some(default_value)) if gateway_value != default_value
-        )
     }
 
     fn to_config(&self) -> GatewayDataConfig {
@@ -758,21 +680,6 @@ impl GatewayDataArgs {
             }
             None => config,
         }
-    }
-}
-
-fn resolve_database_url(
-    driver: Option<DatabaseDriver>,
-    configured_url: Option<String>,
-    legacy_postgres_url: Option<String>,
-    generic_database_url: Option<String>,
-) -> Option<String> {
-    if configured_url.is_some() {
-        return configured_url;
-    }
-
-    match driver {
-        Some(DatabaseDriver::Postgres) | None => legacy_postgres_url.or(generic_database_url),
     }
 }
 
@@ -1331,32 +1238,14 @@ struct Args {
     #[arg(long, hide = true, default_value_t = false)]
     apply_backfills: bool,
 
-    /// Database startup policy. Defaults to auto when neither this nor the legacy setting is set.
+    /// Database startup policy. Defaults to auto.
     #[arg(long, env = "AETHER_GATEWAY_DATABASE_MODE", value_enum)]
     database_mode: Option<DatabaseModeArg>,
-
-    /// Legacy compatibility switch. Prefer --database-mode.
-    #[arg(
-        long,
-        env = "AETHER_GATEWAY_AUTO_PREPARE_DATABASE",
-        hide = true,
-        num_args = 0..=1,
-        default_missing_value = "true"
-    )]
-    auto_prepare_database: Option<bool>,
 
     /// Path to frontend static files directory (SPA). When set, the gateway
     /// serves the frontend directly without nginx.
     #[arg(long, env = "AETHER_GATEWAY_STATIC_DIR")]
     static_dir: Option<String>,
-
-    #[arg(
-        long,
-        env = "AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE",
-        value_enum,
-        default_value = "python-sync-report"
-    )]
-    video_task_truth_source_mode: VideoTaskTruthSourceArg,
 
     #[arg(
         long,
@@ -1464,7 +1353,7 @@ struct Args {
 
 impl Args {
     fn effective_database_mode(&self) -> DatabaseModeArg {
-        resolve_database_mode(self.database_mode, self.auto_prepare_database)
+        self.database_mode.unwrap_or(DatabaseModeArg::Auto)
     }
 
     fn effective_runtime_backend(
@@ -1879,7 +1768,7 @@ fn validate_deployment_topology(
 
     let mut missing = Vec::new();
     if database.is_none() {
-        missing.push("AETHER_DATABASE_URL, DATABASE_URL, or AETHER_GATEWAY_DATA_POSTGRES_URL");
+        missing.push("DATABASE_URL");
     }
     if data_redis_url.is_none() {
         missing.push("REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL");
@@ -1929,14 +1818,6 @@ fn validate_deployment_topology(
     if env_var_trimmed("AETHER_GATEWAY_INSTANCE_ID").is_none() {
         warn!(
             "multi-node deployment started without AETHER_GATEWAY_INSTANCE_ID; task ownership and distributed locks will fall back to HOSTNAME or the process id"
-        );
-    }
-    if !matches!(
-        args.video_task_truth_source_mode,
-        VideoTaskTruthSourceArg::RustAuthoritative
-    ) {
-        warn!(
-            "multi-node deployment is still using python-sync-report video task truth source; keep rust-authoritative as the long-term cluster baseline"
         );
     }
 
@@ -2076,11 +1957,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         args.rate_limit.config()
     };
-    if args.data.configured_encryption_key_mismatch() {
-        warn!(
-            "AETHER_GATEWAY_DATA_ENCRYPTION_KEY differs from ENCRYPTION_KEY; aether-gateway will prefer the gateway-specific value"
-        );
-    }
     info!(
         event_name = "gateway_starting",
         log_type = "ops",
@@ -2102,7 +1978,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         frontdoor_mode = "compatibility_frontdoor",
         log_format = ?args.logging.log_format,
         log_destination = args.logging.log_destination.as_str(),
-        video_task_truth_source_mode = ?args.video_task_truth_source_mode,
         "aether-gateway starting"
     );
     debug!(
@@ -2191,22 +2066,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         state = state.with_body_file_store_path(path)?;
     }
     state.validate_body_file_store_config().await?;
-    state = state
-        .with_usage_runtime_config(usage_config)?
-        .with_video_task_truth_source_mode(args.video_task_truth_source_mode.into());
+    state = state.with_usage_runtime_config(usage_config)?;
     if let Some(cors_config) = args.frontdoor.cors_config() {
         state = state.with_frontdoor_cors_config(cors_config);
     }
     state = state.with_frontdoor_user_rpm_config(rate_limit_config);
-    if matches!(
-        args.video_task_truth_source_mode,
-        VideoTaskTruthSourceArg::RustAuthoritative
-    ) {
-        state = state.with_video_task_poller_config(
-            std::time::Duration::from_millis(args.video_task_poller_interval_ms.max(1)),
-            args.video_task_poller_batch_size.max(1),
-        );
-    }
+    state = state.with_video_task_poller_config(
+        std::time::Duration::from_millis(args.video_task_poller_interval_ms.max(1)),
+        args.video_task_poller_batch_size.max(1),
+    );
     if let Some(path) = args
         .video_task_store_path
         .as_deref()
@@ -2258,7 +2126,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "usage persistence requires a configured shared SQL data backend; set AETHER_DATABASE_DRIVER and AETHER_DATABASE_URL before starting aether-gateway",
+            "usage persistence requires a configured shared SQL data backend; set AETHER_DATABASE_DRIVER and DATABASE_URL before starting aether-gateway",
         )
         .into());
     }
@@ -2505,7 +2373,7 @@ fn required_sql_database_config(
     data.effective_sql_database_config().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "AETHER_DATABASE_DRIVER/AETHER_DATABASE_URL, AETHER_GATEWAY_DATA_POSTGRES_URL, or DATABASE_URL is required",
+            "AETHER_DATABASE_DRIVER and DATABASE_URL are required",
         )
         .into()
     })
@@ -2515,15 +2383,9 @@ async fn run_explicit_migrations(args: &Args) -> Result<(), Box<dyn std::error::
     if args.data.effective_sql_database_config().is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "AETHER_DATABASE_DRIVER/AETHER_DATABASE_URL, AETHER_GATEWAY_DATA_POSTGRES_URL, or DATABASE_URL is required when running --migrate",
+            "AETHER_DATABASE_DRIVER and DATABASE_URL are required when running --migrate",
         )
         .into());
-    }
-
-    if args.data.configured_encryption_key_mismatch() {
-        warn!(
-            "AETHER_GATEWAY_DATA_ENCRYPTION_KEY differs from ENCRYPTION_KEY; aether-gateway will prefer the gateway-specific value"
-        );
     }
 
     args.data.validate_encryption_key()?;
@@ -2560,7 +2422,7 @@ async fn run_explicit_backfills(args: &Args) -> Result<(), Box<dyn std::error::E
     let database = args.data.effective_sql_database_config().ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "AETHER_DATABASE_DRIVER/AETHER_DATABASE_URL, AETHER_GATEWAY_DATA_POSTGRES_URL, or DATABASE_URL is required when running --apply-backfills",
+            "AETHER_DATABASE_DRIVER and DATABASE_URL are required when running --apply-backfills",
         )
     })?;
     args.data.validate_encryption_key()?;
@@ -2736,13 +2598,12 @@ mod tests {
         automatic_gateway_request_concurrency_for_parallelism, automatic_sql_pool_config,
         automatic_sql_pool_config_for_parallelism, automatic_usage_queue_workers_for_parallelism,
         ensure_database_backfills_are_current, ensure_database_schema_is_current,
-        pending_backfills_error, pending_schema_error, resolve_database_mode,
-        resolve_healthcheck_url, usage_database_config_for_role,
-        validate_gateway_data_encryption_key, Args, DataCommand, DatabaseCommand,
-        DatabaseDriverArg, DatabaseModeArg, DeploymentTopologyArg, GatewayDataArgs,
-        GatewayFrontdoorArgs, GatewayLogDestinationArg, GatewayLogFormatArg, GatewayLogRotationArg,
-        GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs, NodeRoleArg, RuntimeBackendArg,
-        VideoTaskTruthSourceArg, DEFAULT_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
+        pending_backfills_error, pending_schema_error, resolve_healthcheck_url,
+        usage_database_config_for_role, validate_gateway_data_encryption_key, Args, DataCommand,
+        DatabaseCommand, DatabaseDriverArg, DatabaseModeArg, DeploymentTopologyArg,
+        GatewayDataArgs, GatewayFrontdoorArgs, GatewayLogDestinationArg, GatewayLogFormatArg,
+        GatewayLogRotationArg, GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs,
+        NodeRoleArg, RuntimeBackendArg, DEFAULT_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
         DEFAULT_GATEWAY_HTTP_HEADER_MAX_BYTES, DEFAULT_GATEWAY_HTTP_HEADER_READ_TIMEOUT_MS,
         DEFAULT_GATEWAY_HTTP_MAX_HEADERS, DEFAULT_GATEWAY_LISTENER_SHARDS,
         DEFAULT_GATEWAY_LISTEN_BACKLOG, MAX_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
@@ -2780,9 +2641,7 @@ mod tests {
             migrate: false,
             apply_backfills: false,
             database_mode: None,
-            auto_prepare_database: None,
             static_dir: None,
-            video_task_truth_source_mode: VideoTaskTruthSourceArg::PythonSyncReport,
             video_task_poller_interval_ms: 5_000,
             video_task_poller_batch_size: 32,
             video_task_store_path: None,
@@ -2804,7 +2663,6 @@ mod tests {
             data: GatewayDataArgs {
                 database_driver: None,
                 database_url: None,
-                postgres_url: None,
                 encryption_key: None,
                 redis_url: None,
                 redis_key_prefix: None,
@@ -3050,27 +2908,8 @@ mod tests {
     }
 
     #[test]
-    fn auto_prepare_database_runtime_config_enables_data_logs() {
-        let mut args = test_args();
-        args.auto_prepare_database = Some(true);
-        let config = args.runtime_config().expect("runtime config should build");
-        assert_eq!(
-            config.default_log_filter,
-            "aether_gateway=info,aether_data=info"
-        );
-    }
-
-    #[test]
-    fn database_mode_defaults_to_auto_and_preserves_legacy_false() {
-        assert_eq!(resolve_database_mode(None, None), DatabaseModeArg::Auto);
-        assert_eq!(
-            resolve_database_mode(None, Some(false)),
-            DatabaseModeArg::VerifyOnly
-        );
-        assert_eq!(
-            resolve_database_mode(Some(DatabaseModeArg::Auto), Some(false)),
-            DatabaseModeArg::Auto
-        );
+    fn database_mode_defaults_to_auto() {
+        assert_eq!(test_args().effective_database_mode(), DatabaseModeArg::Auto);
     }
 
     #[test]
@@ -3088,14 +2927,6 @@ mod tests {
                 .expect("verify-only mode should parse");
         assert_eq!(
             verify_only.effective_database_mode(),
-            DatabaseModeArg::VerifyOnly
-        );
-
-        let legacy_false =
-            Args::try_parse_from(["aether-gateway", "--auto-prepare-database=false"])
-                .expect("legacy false setting should parse");
-        assert_eq!(
-            legacy_false.effective_database_mode(),
             DatabaseModeArg::VerifyOnly
         );
 
@@ -3139,18 +2970,6 @@ mod tests {
             after.data.database_url.as_deref(),
             Some("postgres://localhost/after")
         );
-    }
-
-    #[test]
-    fn postgres_legacy_url_keeps_precedence_over_generic_database_url() {
-        let url = super::resolve_database_url(
-            Some(DatabaseDriver::Postgres),
-            None,
-            Some("postgres://legacy/aether".to_string()),
-            Some("postgres://generic/aether".to_string()),
-        );
-
-        assert_eq!(url.as_deref(), Some("postgres://legacy/aether"));
     }
 
     #[test]
@@ -3732,7 +3551,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn auto_prepare_database_is_noop_without_database_pool() {
+    async fn database_startup_preparation_is_noop_without_database_pool() {
         let state = AppState::new().expect("state should build");
         super::prepare_database_startup_requirements(&state, DatabaseModeArg::Auto)
             .await
@@ -3747,7 +3566,7 @@ mod tests {
             .expect_err("missing database URL should fail");
         assert!(error
             .to_string()
-            .contains("AETHER_DATABASE_DRIVER/AETHER_DATABASE_URL"));
+            .contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
     }
 
     #[tokio::test]
@@ -3757,7 +3576,7 @@ mod tests {
             .await
             .expect_err("missing database URL should fail");
         let message = error.to_string();
-        assert!(message.contains("AETHER_DATABASE_DRIVER/AETHER_DATABASE_URL"));
+        assert!(message.contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
         assert!(message.contains("--migrate"));
     }
 
@@ -3770,7 +3589,7 @@ mod tests {
             .await
             .expect_err("missing database URL should fail before any app port validation");
         let message = error.to_string();
-        assert!(message.contains("AETHER_DATABASE_DRIVER/AETHER_DATABASE_URL"));
+        assert!(message.contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
         assert!(!message.contains("APP_PORT"));
     }
 
@@ -3781,7 +3600,7 @@ mod tests {
             .await
             .expect_err("missing database URL should fail");
         let message = error.to_string();
-        assert!(message.contains("AETHER_DATABASE_DRIVER/AETHER_DATABASE_URL"));
+        assert!(message.contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
         assert!(message.contains("--apply-backfills"));
     }
 

@@ -37,16 +37,13 @@ lowercase() {
 }
 
 dev_uses_postgres_database() {
-	local driver
-	local url
-	driver="$$(lowercase "$${AETHER_DATABASE_DRIVER:-}")"
-	url="$${AETHER_DATABASE_URL:-$${DATABASE_URL:-}}"
+	local url="$${DATABASE_URL:-}"
 
-	if [[ -z "$${driver}" && -z "$${url}" ]]; then
+	if [[ -z "$${url}" ]]; then
 		return 0
 	fi
 
-	[[ "$${driver}" == "postgres" || "$${driver}" == "postgresql" || "$${url}" == postgres:* || "$${url}" == postgresql:* ]]
+	[[ "$${url}" == postgres:* || "$${url}" == postgresql:* ]]
 }
 
 dev_uses_redis_runtime() {
@@ -297,13 +294,9 @@ export APP_PORT="$${APP_PORT:-8084}"
 export RUST_LOG="$${DEV_RUST_LOG}"
 RUST_SERVICE_STARTUP_TIMEOUT_SECONDS="$${RUST_SERVICE_STARTUP_TIMEOUT_SECONDS:-180}"
 GATEWAY_STARTUP_TIMEOUT_SECONDS="$${GATEWAY_STARTUP_TIMEOUT_SECONDS:-$${RUST_SERVICE_STARTUP_TIMEOUT_SECONDS}}"
-export AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE="$${AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE:-rust-authoritative}"
 
 if dev_uses_postgres_database; then
 	export DATABASE_URL="postgresql://$${DB_USER:-postgres}:$${DB_PASSWORD:-}@$${DB_HOST:-localhost}:$${DB_PORT:-5432}/$${DB_NAME:-aether}"
-	if ! dotenv_has_key "AETHER_GATEWAY_DATA_POSTGRES_URL"; then
-		export AETHER_GATEWAY_DATA_POSTGRES_URL="$${DATABASE_URL}"
-	fi
 fi
 
 if dev_uses_redis_runtime; then
@@ -314,10 +307,6 @@ if dev_uses_redis_runtime; then
 else
 	unset REDIS_URL
 	unset AETHER_GATEWAY_DATA_REDIS_URL
-fi
-
-if ! dotenv_has_key "AETHER_GATEWAY_DATA_ENCRYPTION_KEY"; then
-	export AETHER_GATEWAY_DATA_ENCRYPTION_KEY="$${ENCRYPTION_KEY:-}"
 fi
 
 export DB_POOL_SIZE="$${DB_POOL_SIZE:-5}"
@@ -522,32 +511,18 @@ dotenv_has_key() {
 	grep -Eq "^[[:space:]]*$${key}=" .env
 }
 
-lowercase() {
-	printf '%s' "$$1" | tr '[:upper:]' '[:lower:]'
-}
-
 uses_postgres_database() {
-	local driver
-	local url
-	driver="$$(lowercase "$${AETHER_DATABASE_DRIVER:-}")"
-	url="$${AETHER_DATABASE_URL:-$${DATABASE_URL:-}}"
+	local url="$${DATABASE_URL:-}"
 
-	if [[ -z "$${driver}" && -z "$${url}" ]]; then
+	if [[ -z "$${url}" ]]; then
 		return 0
 	fi
 
-	[[ "$${driver}" == "postgres" || "$${driver}" == "postgresql" || "$${url}" == postgres:* || "$${url}" == postgresql:* ]]
+	[[ "$${url}" == postgres:* || "$${url}" == postgresql:* ]]
 }
 
 if uses_postgres_database; then
 	export DATABASE_URL="postgresql://$${DB_USER:-postgres}:$${DB_PASSWORD:-}@$${DB_HOST:-localhost}:$${DB_PORT:-5432}/$${DB_NAME:-aether}"
-	if ! dotenv_has_key "AETHER_GATEWAY_DATA_POSTGRES_URL"; then
-		export AETHER_GATEWAY_DATA_POSTGRES_URL="$${DATABASE_URL}"
-	fi
-fi
-
-if ! dotenv_has_key "AETHER_GATEWAY_DATA_ENCRYPTION_KEY"; then
-	export AETHER_GATEWAY_DATA_ENCRYPTION_KEY="$${ENCRYPTION_KEY:-}"
 fi
 
 if ! command -v cargo >/dev/null 2>&1; then

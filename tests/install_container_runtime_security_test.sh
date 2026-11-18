@@ -94,13 +94,19 @@ done
     || fail_test "installer reused a generated secret"
 
 generated_single_node_env="${TEST_ROOT}/generated-single-node.env"
-generate_compose_single_node_env "${generated_single_node_env}"
-assert_line "${generated_single_node_env}" "AETHER_DATABASE_DRIVER=postgres"
-assert_line "${generated_single_node_env}" "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY=single-node"
-assert_generated_key_output "single-node installer" "$(cat "${generated_single_node_env}")"
+(
+    DATABASE_URL="postgresql://localhost/aether"
+    generate_first_install_env "${generated_single_node_env}"
+)
+assert_line "${generated_single_node_env}" "DATABASE_URL=postgresql://localhost/aether"
+for key in JWT_SECRET_KEY ENCRYPTION_KEY; do
+    value="$(env_file_value "${generated_single_node_env}" "${key}")"
+    [[ "${value}" =~ ^[A-Za-z0-9_-]{40,}$ ]] \
+        || fail_test "single-node installer did not generate a strong URL-safe ${key}"
+done
 
 (
-    unset AETHER_DATABASE_URL DATABASE_URL AETHER_GATEWAY_DATA_POSTGRES_URL
+    unset DATABASE_URL
     native_env="${TEST_ROOT}/native.env"
     if (generate_first_install_env "${native_env}") >/dev/null 2>&1; then
         fail_test "native installer accepted a missing PostgreSQL URL"
@@ -112,15 +118,8 @@ assert_generated_key_output "single-node installer" "$(cat "${generated_single_n
     done
     [[ ! -e "${native_env}" ]] || fail_test "invalid native database config wrote an env file"
     DATABASE_URL="postgresql://localhost/aether" generate_first_install_env "${native_env}"
-    assert_line "${native_env}" "AETHER_DATABASE_DRIVER=postgres"
-    assert_line "${native_env}" "AETHER_DATABASE_URL=postgresql://localhost/aether"
+    assert_line "${native_env}" "DATABASE_URL=postgresql://localhost/aether"
     validate_env_file "${native_env}"
-    replace_or_append_env "${native_env}" "AETHER_DATABASE_DRIVER" "sqlite"
-    if (validate_env_file "${native_env}") >/dev/null 2>&1; then
-        fail_test "native env validation accepted a removed driver"
-    fi
-    replace_or_append_env "${native_env}" "AETHER_DATABASE_DRIVER" "postgres"
-    replace_or_append_env "${native_env}" "AETHER_DATABASE_URL" "sqlite::memory:"
     replace_or_append_env "${native_env}" "DATABASE_URL" "sqlite::memory:"
     if (validate_env_file "${native_env}") >/dev/null 2>&1; then
         fail_test "native env validation accepted a removed database URL"

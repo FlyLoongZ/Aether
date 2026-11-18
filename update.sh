@@ -179,19 +179,13 @@ resolve_default_compose_files() {
             COMPOSE_FILES=("docker-compose.yml")
             ;;
         single-node)
-            if [[ -f "${COMPOSE_DIR}/docker-compose.single-node.yml" ]]; then
-                COMPOSE_FILES=("docker-compose.single-node.yml")
-            else
-                COMPOSE_FILES=("docker-compose.yml")
-            fi
+            COMPOSE_FILES=("docker-compose.yml")
             ;;
         auto)
             if [[ -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
                 COMPOSE_FILES=("docker-compose.yml")
-            elif [[ -f "${COMPOSE_DIR}/docker-compose.single-node.yml" ]]; then
-                COMPOSE_FILES=("docker-compose.single-node.yml")
             else
-                die "no docker-compose.yml or docker-compose.single-node.yml found in ${COMPOSE_DIR}"
+                die "no docker-compose.yml found in ${COMPOSE_DIR}"
             fi
             ;;
     esac

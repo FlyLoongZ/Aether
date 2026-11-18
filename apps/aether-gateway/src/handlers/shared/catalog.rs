@@ -55,7 +55,7 @@ pub(crate) fn decrypt_catalog_secret_with_fallbacks(
             return Some(value);
         }
     }
-    for env_key in ["AETHER_GATEWAY_DATA_ENCRYPTION_KEY", "ENCRYPTION_KEY"] {
+    for env_key in ["ENCRYPTION_KEY"] {
         let Ok(fallback) = std::env::var(env_key) else {
             continue;
         };
@@ -84,7 +84,7 @@ pub(crate) fn effective_catalog_encryption_key_from_config(
     if !encryption_key.is_empty() {
         return Some(Cow::Borrowed(encryption_key));
     }
-    for env_key in ["AETHER_GATEWAY_DATA_ENCRYPTION_KEY", "ENCRYPTION_KEY"] {
+    for env_key in ["ENCRYPTION_KEY"] {
         let Ok(candidate) = std::env::var(env_key) else {
             continue;
         };

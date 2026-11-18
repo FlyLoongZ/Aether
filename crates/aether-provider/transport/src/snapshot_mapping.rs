@@ -227,7 +227,7 @@ fn decrypt_fernet_with_fallbacks(
 
 pub(super) fn fallback_encryption_keys(primary_encryption_key: &str) -> Vec<String> {
     let mut keys = Vec::new();
-    for env_key in ["AETHER_GATEWAY_DATA_ENCRYPTION_KEY", "ENCRYPTION_KEY"] {
+    for env_key in ["ENCRYPTION_KEY"] {
         let Ok(value) = std::env::var(env_key) else {
             continue;
         };
