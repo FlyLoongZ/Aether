@@ -83,11 +83,6 @@ pub(crate) use self::execution_runtime::{
     append_execution_contract_fields_to_value, append_local_failover_policy_to_value,
     MAX_ERROR_BODY_BYTES, MAX_STREAM_PREFETCH_FRAMES,
 };
-pub use self::execution_runtime::{
-    build_execution_runtime_router, build_execution_runtime_router_with_request_concurrency_limit,
-    build_execution_runtime_router_with_request_gates, serve_execution_runtime_tcp,
-    serve_execution_runtime_unix,
-};
 pub(crate) use self::fallback_metrics::{GatewayFallbackMetricKind, GatewayFallbackReason};
 pub use self::frontdoor_loop_guard::set_gateway_frontdoor_app_port;
 pub use self::middleware::strip_cf_headers_middleware;

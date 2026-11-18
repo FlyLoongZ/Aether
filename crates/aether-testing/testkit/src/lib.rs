@@ -5,7 +5,6 @@ mod tracing;
 mod wait;
 
 #[cfg(feature = "gateway")]
-mod execution_runtime;
 #[cfg(feature = "gateway")]
 mod gateway;
 #[cfg(feature = "postgres")]
@@ -27,7 +26,6 @@ pub use tracing::{init_test_runtime, init_test_runtime_for, test_runtime_config}
 pub use wait::wait_until;
 
 #[cfg(feature = "gateway")]
-pub use execution_runtime::{ExecutionRuntimeHarness, ExecutionRuntimeHarnessConfig};
 #[cfg(feature = "gateway")]
 pub use gateway::{GatewayHarness, GatewayHarnessConfig, GATEWAY_HARNESS_API_KEY};
 #[cfg(feature = "postgres")]

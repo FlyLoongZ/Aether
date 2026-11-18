@@ -14,7 +14,6 @@ mod oauth_retry;
 #[cfg(test)]
 pub(crate) mod remote_compat;
 mod response_header_rules;
-mod server;
 pub(crate) mod stream;
 mod stream_pump;
 mod stream_read_timeout;
@@ -126,20 +125,15 @@ mod retry_scope_tests {
         assert!(!without_exhaustion_passthrough.preserve_upstream_error);
     }
 }
-pub use server::{
-    build_execution_runtime_router, build_execution_runtime_router_with_request_concurrency_limit,
-    build_execution_runtime_router_with_request_gates, serve_execution_runtime_tcp,
-    serve_execution_runtime_unix,
-};
-
 pub(crate) use stream::execute_execution_runtime_stream_with_retry_scope;
 pub(crate) use stream_pump::build_direct_execution_frame_stream;
 pub(crate) use sync::execute_execution_runtime_sync_with_retry_scope;
 pub(crate) use transport::execute_sync_plan_with_report_context as execute_execution_runtime_sync_plan_with_report_context;
 pub(crate) use transport::{
-    execute_sync_plan as execute_execution_runtime_sync_plan, DirectSyncExecutionRuntime,
-    DirectUpstreamStreamExecution, ExecutionRuntimeTransportError,
+    execute_sync_plan as execute_execution_runtime_sync_plan, DirectUpstreamStreamExecution,
 };
+#[cfg(test)]
+pub(crate) use transport::DirectSyncExecutionRuntime;
 pub(crate) use transport_failure::{
     build_transport_error_stop_response, client_message_for_error_type,
     client_message_for_execution_error_kind, mark_stream_candidate_watchdog_terminal_started,
