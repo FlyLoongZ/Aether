@@ -27,14 +27,6 @@ if [[ -n "${AETHER_COMPOSE_DIR:-}" ]]; then
 fi
 IMAGE_REPO="${AETHER_IMAGE_REPO:-ghcr.io/fawney19/aether}"
 APP_IMAGE="${AETHER_APP_IMAGE:-}"
-SERVICE_USER_EXPLICIT="false"
-SERVICE_GROUP_EXPLICIT="false"
-if [[ -n "${SERVICE_USER:-}" ]]; then
-    SERVICE_USER_EXPLICIT="true"
-fi
-if [[ -n "${SERVICE_GROUP:-}" ]]; then
-    SERVICE_GROUP_EXPLICIT="true"
-fi
 SERVICE_USER="${SERVICE_USER:-aether}"
 SERVICE_GROUP="${SERVICE_GROUP:-aether}"
 SERVICE_NAME="aether-gateway"
@@ -49,11 +41,8 @@ COMPOSE_LOG_RETENTION_DAYS_DEFAULT="7"
 COMPOSE_LOG_MAX_FILES_DEFAULT="30"
 COMPOSE_APP_PORT_DEFAULT="8084"
 COMPOSE_CLI=()
-LAUNCHD_LABEL="${AETHER_LAUNCHD_LABEL:-com.aether.gateway}"
-LAUNCHD_LOG_DIR="${AETHER_LAUNCHD_LOG_DIR:-/var/log/aether}"
 ENV_TARGET="${CONFIG_DIR}/aether-gateway.env"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
-LAUNCHD_PLIST_PATH="/Library/LaunchDaemons/${LAUNCHD_LABEL}.plist"
 TMP_ROOT=""
 ARCHIVE_PATH=""
 BUNDLE_DIR=""
@@ -77,7 +66,6 @@ Options:
   --mode MODE          Deployment mode: compose or single-node
                       compose: Docker Compose app + Postgres + Redis
                       single-node: single-node system service
-                      Linux services use systemd; macOS services use launchd
   --channel CHANNEL    Release channel to resolve when --version is omitted: stable, latest, rc, beta, or nightly
                       stable/latest resolves the latest stable tag (default)
                       rc resolves the latest tag like v0.7.0-rc.1
@@ -102,7 +90,7 @@ Environment overrides:
   AETHER_REPO, AETHER_SOURCE_REF, AETHER_INSTALL_MODE, AETHER_CHANNEL, AETHER_VERSION
   AETHER_LANG or AETHER_LANGUAGE
   AETHER_RELEASE_ARCHIVE_URL or AETHER_DOWNLOAD_URL
-  AETHER_LAUNCHD_LABEL, AETHER_LAUNCHD_LOG_DIR, AETHER_RELEASE_KEEP
+  AETHER_RELEASE_KEEP
   AETHER_IMAGE_REPO, AETHER_APP_IMAGE
   INSTALL_ROOT, AETHER_COMPOSE_DIR, CONFIG_DIR, SERVICE_USER, SERVICE_GROUP
   ADMIN_PASSWORD (required for non-interactive first install when generating a new env)
@@ -300,32 +288,14 @@ install_os() {
         Linux)
             echo "linux"
             ;;
-        Darwin)
-            echo "macos"
-            ;;
         *)
             if ui_is_zh; then
-                die "Aether 二进制安装仅支持 Linux 和 macOS"
+                die "Aether 二进制安装仅支持 Linux"
             else
-                die "Aether binary install is only supported on Linux and macOS"
+                die "Aether binary install is only supported on Linux"
             fi
             ;;
     esac
-}
-
-is_darwin() {
-    [[ "$(install_os)" == "macos" ]]
-}
-
-apply_platform_defaults() {
-    if is_darwin; then
-        if [[ "${SERVICE_USER_EXPLICIT}" != "true" ]]; then
-            SERVICE_USER="_aether"
-        fi
-        if [[ "${SERVICE_GROUP_EXPLICIT}" != "true" ]]; then
-            SERVICE_GROUP="_aether"
-        fi
-    fi
 }
 
 require_supported_os() {
@@ -352,36 +322,12 @@ require_systemd() {
     fi
 }
 
-require_launchd() {
-    if ! command -v launchctl >/dev/null 2>&1; then
-        if ui_is_zh; then
-            die "未找到 launchctl"
-        else
-            die "launchctl not found"
-        fi
-    fi
-}
-
 require_service_manager() {
-    case "$(install_os)" in
-        linux)
-            require_systemd
-            ;;
-        macos)
-            require_launchd
-            ;;
-    esac
+    require_systemd
 }
 
 service_manager_name() {
-    case "$(install_os)" in
-        linux)
-            echo "systemd"
-            ;;
-        macos)
-            echo "launchd"
-            ;;
-    esac
+    echo "systemd"
 }
 
 select_version() {
@@ -498,13 +444,6 @@ validate_service_account_identifier() {
         || die "${kind} contains unsafe account-name characters"
 }
 
-validate_launchd_label() {
-    local value="$1"
-    [[ -n "${value}" && ${#value} -le 128 \
-        && "${value}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
-        || die "launchd label contains unsafe filesystem or service-name characters"
-}
-
 validate_managed_absolute_path() {
     local kind="$1"
     local value="$2"
@@ -530,26 +469,9 @@ validate_single_node_managed_paths() {
     validate_privileged_path_ancestor "${INSTALL_ROOT}"
     validate_privileged_path_ancestor "${CONFIG_DIR}"
     validate_managed_regular_file "${ENV_TARGET}" true
-    case "$(install_os)" in
-        linux)
-            validate_managed_absolute_path "systemd unit path" "${SYSTEMD_UNIT_PATH}"
-            validate_privileged_path_ancestor "${SYSTEMD_UNIT_PATH}"
-            validate_managed_regular_file "${SYSTEMD_UNIT_PATH}" true
-            ;;
-        macos)
-            validate_launchd_label "${LAUNCHD_LABEL}"
-            validate_managed_absolute_path "launchd plist path" "${LAUNCHD_PLIST_PATH}"
-            validate_managed_absolute_path "launchd log directory" "${LAUNCHD_LOG_DIR}"
-            validate_privileged_path_ancestor "${LAUNCHD_PLIST_PATH}"
-            validate_privileged_path_ancestor "${LAUNCHD_LOG_DIR}"
-            validate_managed_regular_file "${LAUNCHD_PLIST_PATH}" true
-            validate_managed_regular_file "$(launchd_wrapper_path)" true
-            validate_managed_regular_file \
-                "${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.out.log" false
-            validate_managed_regular_file \
-                "${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.err.log" false
-            ;;
-    esac
+    validate_managed_absolute_path "systemd unit path" "${SYSTEMD_UNIT_PATH}"
+    validate_privileged_path_ancestor "${SYSTEMD_UNIT_PATH}"
+    validate_managed_regular_file "${SYSTEMD_UNIT_PATH}" true
 }
 
 select_mode() {
@@ -558,7 +480,7 @@ select_mode() {
             MODE="compose"
             return
             ;;
-        single-node|service|systemd|launchd)
+        single-node|service|systemd)
             MODE="single-node"
             return
             ;;
@@ -1085,20 +1007,10 @@ atomic_install_managed_file() {
         rm -f -- "${temporary}"
         die "managed file target changed to an unsafe type: ${target}"
     fi
-    case "$(install_os)" in
-        linux)
-            if ! mv -fT -- "${temporary}" "${target}"; then
-                rm -f -- "${temporary}"
-                die "could not atomically replace managed file: ${target}"
-            fi
-            ;;
-        macos)
-            if ! mv -fh -- "${temporary}" "${target}"; then
-                rm -f -- "${temporary}"
-                die "could not atomically replace managed file: ${target}"
-            fi
-            ;;
-    esac
+    if ! mv -fT -- "${temporary}" "${target}"; then
+        rm -f -- "${temporary}"
+        die "could not atomically replace managed file: ${target}"
+    fi
     [[ -f "${target}" && ! -L "${target}" ]] \
         || die "managed file replacement did not produce a regular file: ${target}"
 }
@@ -1488,7 +1400,7 @@ write_generate_keys_script() {
     config_dir_normalized="${CONFIG_DIR%/}"
     [[ -n "${output_dir_normalized}" ]] || output_dir_normalized="/"
     [[ -n "${config_dir_normalized}" ]] || config_dir_normalized="/"
-    if is_darwin && [[ "${output_dir_normalized}" == "${config_dir_normalized}" ]]; then
+    if [[ "${output_dir_normalized}" == "${config_dir_normalized}" ]]; then
         install_config_dir
     else
         ensure_directory "${output_dir}"
@@ -1606,10 +1518,9 @@ derive_local_bundle_version() {
     local name
     name="$(basename "${bundle}")"
     case "${name}" in
-        aether-*-linux-*|aether-*-macos-*)
+        aether-*-linux-*)
             name="${name#aether-}"
             name="${name%-linux-*}"
-            name="${name%-macos-*}"
             ;;
     esac
     if [[ -z "${name}" || "${name}" == "." || "${name}" == "/" ]]; then
@@ -1734,11 +1645,7 @@ install_config_dir() {
     if [[ -e "${CONFIG_DIR}" && ! -d "${CONFIG_DIR}" ]]; then
         die "config directory path is not a directory: ${CONFIG_DIR}"
     fi
-    if is_darwin; then
-        install -d -o root -g "${SERVICE_GROUP}" -m 0750 "${CONFIG_DIR}"
-    else
-        install -d -o root -g root -m 0750 "${CONFIG_DIR}"
-    fi
+    install -d -o root -g root -m 0750 "${CONFIG_DIR}"
     [[ ! -L "${CONFIG_DIR}" ]] || die "config directory became a symbolic link: ${CONFIG_DIR}"
 }
 
@@ -1747,19 +1654,11 @@ install_env_target_from() {
     local owner="" group=""
     [[ -f "${source}" && ! -L "${source}" ]] \
         || die "env source must be a regular file and not a symbolic link: ${source}"
-    if is_darwin; then
-        if [[ "${EUID}" -eq 0 ]]; then
-            owner="root"
-            group="${SERVICE_GROUP}"
-        fi
-        atomic_install_managed_file "${source}" "${ENV_TARGET}" 0640 "${owner}" "${group}"
-    else
-        if [[ "${EUID}" -eq 0 ]]; then
-            owner="root"
-            group="root"
-        fi
-        atomic_install_managed_file "${source}" "${ENV_TARGET}" 0600 "${owner}" "${group}"
+    if [[ "${EUID}" -eq 0 ]]; then
+        owner="root"
+        group="root"
     fi
+    atomic_install_managed_file "${source}" "${ENV_TARGET}" 0600 "${owner}" "${group}"
 }
 
 ensure_env_target_permissions() {
@@ -1769,12 +1668,6 @@ ensure_env_target_permissions() {
     if [[ "${EUID}" -eq 0 ]]; then
         owner="root"
         group="root"
-    fi
-    if is_darwin; then
-        mode="0640"
-        if [[ "${EUID}" -eq 0 ]]; then
-            group="${SERVICE_GROUP}"
-        fi
     fi
     atomic_install_managed_file \
         "${ENV_TARGET}" "${ENV_TARGET}" "${mode}" "${owner}" "${group}"
@@ -1809,66 +1702,6 @@ ensure_service_account() {
             --home-dir "${INSTALL_ROOT}" \
             --shell "$(find_nologin_shell)" \
             "${SERVICE_USER}"
-    fi
-}
-
-macos_next_system_id() {
-    local record_type="$1"
-    local id_attr="$2"
-    dscl . -list "/${record_type}" "${id_attr}" 2>/dev/null |
-        awk '
-            $NF ~ /^[0-9]+$/ && $NF >= 350 && $NF < 500 { used[$NF] = 1 }
-            END {
-                for (i = 350; i < 500; i++) {
-                    if (!(i in used)) {
-                        print i
-                        exit
-                    }
-                }
-            }
-        '
-}
-
-macos_group_id() {
-    dscl . -read "/Groups/${SERVICE_GROUP}" PrimaryGroupID 2>/dev/null |
-        awk '/PrimaryGroupID:/ { print $2 }'
-}
-
-ensure_macos_service_account() {
-    local gid uid
-
-    if ! command -v dscl >/dev/null 2>&1; then
-        if ui_is_zh; then
-            die "未找到 dscl，无法创建 macOS 服务账号"
-        else
-            die "dscl not found; cannot create macOS service account"
-        fi
-    fi
-
-    if ! dscl . -read "/Groups/${SERVICE_GROUP}" >/dev/null 2>&1; then
-        gid="$(macos_next_system_id Groups PrimaryGroupID)"
-        [[ -n "${gid}" ]] || die "could not allocate a macOS service group id"
-        info "creating macOS group ${SERVICE_GROUP}"
-        dscl . -create "/Groups/${SERVICE_GROUP}"
-        dscl . -create "/Groups/${SERVICE_GROUP}" PrimaryGroupID "${gid}"
-        dscl . -create "/Groups/${SERVICE_GROUP}" Password "*"
-    fi
-
-    gid="$(macos_group_id)"
-    [[ -n "${gid}" ]] || die "could not resolve macOS group id for ${SERVICE_GROUP}"
-
-    if ! dscl . -read "/Users/${SERVICE_USER}" >/dev/null 2>&1; then
-        uid="$(macos_next_system_id Users UniqueID)"
-        [[ -n "${uid}" ]] || die "could not allocate a macOS service user id"
-        info "creating macOS user ${SERVICE_USER}"
-        dscl . -create "/Users/${SERVICE_USER}"
-        dscl . -create "/Users/${SERVICE_USER}" UserShell /usr/bin/false
-        dscl . -create "/Users/${SERVICE_USER}" RealName "Aether Gateway"
-        dscl . -create "/Users/${SERVICE_USER}" UniqueID "${uid}"
-        dscl . -create "/Users/${SERVICE_USER}" PrimaryGroupID "${gid}"
-        dscl . -create "/Users/${SERVICE_USER}" NFSHomeDirectory "${INSTALL_ROOT}"
-        dscl . -create "/Users/${SERVICE_USER}" IsHidden 1
-        dscl . -create "/Users/${SERVICE_USER}" Password "*"
     fi
 }
 
@@ -2128,14 +1961,7 @@ switch_current_release_link() {
     # writable by the service account, so an unprivileged process cannot race it.
     [[ ! -e "${current_link}" || -L "${current_link}" ]] \
         || die "current release path changed to a non-symbolic-link"
-    case "$(install_os)" in
-        linux)
-            mv -fT -- "${next_link}" "${current_link}"
-            ;;
-        macos)
-            mv -fh -- "${next_link}" "${current_link}"
-            ;;
-    esac
+    mv -fT -- "${next_link}" "${current_link}"
 }
 
 select_release_install_directory() {
@@ -2183,15 +2009,9 @@ install_release() {
     install -d -m 0755 "${INSTALL_ROOT}/data" "${INSTALL_ROOT}/logs"
     [[ ! -L "${INSTALL_ROOT}/data" && ! -L "${INSTALL_ROOT}/logs" ]] \
         || die "managed data or log directory became a symbolic link"
-    if is_darwin; then
-        install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 \
-            "${INSTALL_ROOT}/data" \
-            "${INSTALL_ROOT}/logs"
-    else
-        install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 \
-            "${INSTALL_ROOT}/data" \
-            "${INSTALL_ROOT}/logs"
-    fi
+    install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 \
+        "${INSTALL_ROOT}/data" \
+        "${INSTALL_ROOT}/logs"
     release_dir="$(select_release_install_directory "${release_dir}")"
     info "installing release ${VERSION} into ${release_dir}"
     install -d -m 0755 "${release_dir}/bin" "${release_dir}/frontend"
@@ -2199,11 +2019,7 @@ install_release() {
     cp -RP "${bundle}/frontend/." "${release_dir}/frontend/"
     validate_local_bundle_tree "${release_dir}"
     chmod -R u=rwX,go=rX "${release_dir}"
-    if is_darwin; then
-        chown -R root:"${SERVICE_GROUP}" "${release_dir}"
-    else
-        chown -R root:"${SERVICE_GROUP}" "${release_dir}"
-    fi
+    chown -R root:"${SERVICE_GROUP}" "${release_dir}"
     chmod -R u=rwX,go=rX "${release_dir}"
     switch_current_release_link "${release_dir}" "${current_link}"
 }
@@ -2350,218 +2166,6 @@ Current release:
 EOF
 }
 
-launchd_wrapper_path() {
-    printf '%s/bin/%s-launchd\n' "${INSTALL_ROOT}" "${SERVICE_NAME}"
-}
-
-install_launchd_support_files() {
-    install_config_dir
-    write_generate_keys_script "${CONFIG_DIR}/generate_keys.sh"
-}
-
-write_launchd_wrapper() {
-    local wrapper wrapper_dir rendered
-    wrapper="$(launchd_wrapper_path)"
-    wrapper_dir="$(dirname -- "${wrapper}")"
-    ensure_privileged_directory "${wrapper_dir}" 0755 root wheel
-    rendered="$(mktemp)"
-    {
-        cat <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-EOF
-        printf 'ENV_TARGET=%q\n' "${ENV_TARGET}"
-        printf 'AETHER_BIN=%q\n' "${INSTALL_ROOT}/current/bin/aether-gateway"
-        cat <<'EOF'
-
-trim_whitespace() {
-    local value="$1"
-    value="${value#"${value%%[![:space:]]*}"}"
-    value="${value%"${value##*[![:space:]]}"}"
-    printf '%s' "${value}"
-}
-
-strip_optional_quotes() {
-    local value="$1"
-    if [[ ${#value} -ge 2 ]]; then
-        if [[ "${value:0:1}" == "\"" && "${value: -1}" == "\"" ]]; then
-            value="${value:1:${#value}-2}"
-        elif [[ "${value:0:1}" == "'" && "${value: -1}" == "'" ]]; then
-            value="${value:1:${#value}-2}"
-        fi
-    fi
-    printf '%s' "${value}"
-}
-
-if [[ ! -r "${ENV_TARGET}" ]]; then
-    echo "Aether env file not found or not readable: ${ENV_TARGET}" >&2
-    exit 1
-fi
-
-while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
-    line="${raw_line%$'\r'}"
-    line="$(trim_whitespace "${line}")"
-    [[ -z "${line}" ]] && continue
-    [[ "${line:0:1}" == "#" ]] && continue
-
-    if [[ "${line}" == export\ * || ! "${line}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-        echo "Invalid Aether env line: ${line}" >&2
-        exit 1
-    fi
-
-    key="${line%%=*}"
-    value="${line#*=}"
-    value="$(strip_optional_quotes "${value}")"
-    export "${key}=${value}"
-done < "${ENV_TARGET}"
-
-exec "${AETHER_BIN}"
-EOF
-    } > "${rendered}"
-    atomic_install_managed_file "${rendered}" "${wrapper}" 0755 root wheel
-    rm -f -- "${rendered}"
-}
-
-xml_escape() {
-    local value="$1"
-    value="${value//&/&amp;}"
-    value="${value//</&lt;}"
-    value="${value//>/&gt;}"
-    value="${value//\"/&quot;}"
-    value="${value//\'/&apos;}"
-    printf '%s' "${value}"
-}
-
-render_launchd_plist() {
-    local wrapper label service_user service_group working_directory stdout_path stderr_path
-    wrapper="$(xml_escape "$(launchd_wrapper_path)")"
-    label="$(xml_escape "${LAUNCHD_LABEL}")"
-    service_user="$(xml_escape "${SERVICE_USER}")"
-    service_group="$(xml_escape "${SERVICE_GROUP}")"
-    working_directory="$(xml_escape "${INSTALL_ROOT}/current")"
-    stdout_path="$(xml_escape "${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.out.log")"
-    stderr_path="$(xml_escape "${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.err.log")"
-    cat <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>${label}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>${wrapper}</string>
-    </array>
-    <key>UserName</key>
-    <string>${service_user}</string>
-    <key>GroupName</key>
-    <string>${service_group}</string>
-    <key>WorkingDirectory</key>
-    <string>${working_directory}</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>${stdout_path}</string>
-    <key>StandardErrorPath</key>
-    <string>${stderr_path}</string>
-    <key>Umask</key>
-    <integer>23</integer>
-</dict>
-</plist>
-EOF
-}
-
-install_launchd_log_files() {
-    local path staged
-    local -a log_paths=(
-        "${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.out.log"
-        "${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.err.log"
-    )
-    ensure_privileged_directory "${LAUNCHD_LOG_DIR}" 0755 root wheel
-    for path in "${log_paths[@]}"; do
-        validate_managed_regular_file "${path}" false
-    done
-    for path in "${log_paths[@]}"; do
-        if [[ ! -e "${path}" ]]; then
-            staged="$(mktemp)"
-            atomic_install_managed_file \
-                "${staged}" "${path}" 0640 "${SERVICE_USER}" "${SERVICE_GROUP}"
-            rm -f -- "${staged}"
-        else
-            chown "${SERVICE_USER}:${SERVICE_GROUP}" "${path}"
-            chmod 0640 "${path}"
-            validate_managed_regular_file "${path}" false
-        fi
-    done
-}
-
-install_launchd_unit() {
-    local rendered_plist plist_dir
-    rendered_plist="$(mktemp)"
-    render_launchd_plist > "${rendered_plist}"
-    info "installing launchd plist to ${LAUNCHD_PLIST_PATH}"
-    plist_dir="$(dirname -- "${LAUNCHD_PLIST_PATH}")"
-    ensure_privileged_directory "${plist_dir}" 0755 root wheel
-    validate_managed_regular_file "${LAUNCHD_PLIST_PATH}" true
-    install_launchd_log_files
-    atomic_install_managed_file \
-        "${rendered_plist}" "${LAUNCHD_PLIST_PATH}" 0644 root wheel
-    rm -f -- "${rendered_plist}"
-}
-
-restart_launchd_if_requested() {
-    if [[ "${SKIP_START}" == "true" ]]; then
-        info "skipping launchd service restart"
-        return
-    fi
-
-    info "restarting ${LAUNCHD_LABEL} with launchd"
-    launchctl bootout system "${LAUNCHD_PLIST_PATH}" >/dev/null 2>&1 || true
-    launchctl bootstrap system "${LAUNCHD_PLIST_PATH}"
-    launchctl kickstart -k "system/${LAUNCHD_LABEL}"
-}
-
-print_launchd_next_steps() {
-    local gateway_port
-    gateway_port="$(awk -F= '/^[[:space:]]*APP_PORT=/{print $2}' "${ENV_TARGET}" | tail -n1 | tr -d '[:space:]')"
-    gateway_port="${gateway_port:-8084}"
-
-    cat <<EOF
-
-Install complete.
-
-Gateway service:
-  sudo launchctl print system/${LAUNCHD_LABEL}
-  sudo launchctl kickstart -k system/${LAUNCHD_LABEL}
-  sudo launchctl bootout system ${LAUNCHD_PLIST_PATH}
-
-Logs:
-  tail -f ${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.out.log ${LAUNCHD_LOG_DIR}/${SERVICE_NAME}.err.log
-
-Health checks:
-  curl -fsS http://127.0.0.1:${gateway_port}/health
-  curl -fsS http://127.0.0.1:${gateway_port}/readyz
-
-Install directory:
-  ${INSTALL_ROOT}
-  data: ${INSTALL_ROOT}/data
-  logs: ${INSTALL_ROOT}/logs
-
-EOF
-
-
-    cat <<EOF
-Database:
-  schema migrations and data backfills are prepared automatically before startup
-
-Current release:
-  ${INSTALL_ROOT}/current
-EOF
-}
-
 install_systemd_mode() {
     local bundle="$1"
     local env_file="$2"
@@ -2577,29 +2181,12 @@ install_systemd_mode() {
     print_systemd_next_steps
 }
 
-install_launchd_mode() {
-    local bundle="$1"
-    local env_file="$2"
-
-    ensure_macos_service_account
-    install_launchd_support_files
-    install_env_file "${env_file}"
-    validate_env_file "${ENV_TARGET}"
-    install_release "${bundle}"
-    prune_old_releases
-    write_launchd_wrapper
-    install_launchd_unit
-    restart_launchd_if_requested
-    print_launchd_next_steps
-}
-
 main() {
     local bundle env_file
 
     parse_args "$@"
     select_language
     require_supported_os
-    apply_platform_defaults
     select_version
     validate_installer_source_identifiers
     select_mode
@@ -2624,18 +2211,8 @@ main() {
             info "installing from local extracted bundle ${bundle}"
         fi
 
-        if is_darwin; then
-            ensure_macos_service_account
-        fi
         env_file="$(resolve_service_env_source "${MODE}")"
-        case "$(install_os)" in
-            linux)
-                install_systemd_mode "${bundle}" "${env_file}"
-                ;;
-            macos)
-                install_launchd_mode "${bundle}" "${env_file}"
-                ;;
-        esac
+        install_systemd_mode "${bundle}" "${env_file}"
     fi
 
     if [[ -n "${ADMIN_PASSWORD_SOURCE}" ]]; then

@@ -65,7 +65,7 @@ cd Aether
 curl -fsSL https://raw.githubusercontent.com/fawney19/Aether/main/install.sh | sudo bash -s -- --mode compose
 ```
 
-正式版和 Nightly 自动构建仅提供 Linux `amd64` / `arm64` 二进制包，Docker 镜像同样支持这两种架构。macOS 用户可使用 Docker 或自行从源码构建；安装脚本保留对历史 macOS 制品的兼容。
+正式版和 Nightly 自动构建仅提供 Linux `amd64` / `arm64` 二进制包，Docker 镜像同样支持这两种架构。macOS 用户可使用 Docker 或自行从源码构建；安装脚本仅支持 Linux。
 
 原生 Linux systemd 安装需先准备 PostgreSQL，将连接串通过 `DATABASE_URL` 传给安装进程，并选择 `--mode single-node`；不再自动创建本地数据库文件。
 
