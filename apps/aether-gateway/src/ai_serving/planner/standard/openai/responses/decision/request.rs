@@ -153,8 +153,6 @@ fn log_responses_to_chat_tool_conversion(trace_id: &str, inbound: &Value, outbou
         previous_response_id = %previous_response_id,
         inbound_call_ids = ?inbound_call_ids,
         outbound_call_ids = ?outbound_call_ids,
-        history_recovered = !previous_response_id.is_empty()
-            && outbound_call_ids.iter().any(|call_id| inbound_call_ids.contains(call_id)),
         "converted OpenAI Responses tools and continuation context to OpenAI Chat"
     );
 }

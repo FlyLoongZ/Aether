@@ -9,9 +9,6 @@ use wreq::ws::message::Message as WreqWsMessage;
 
 use super::adapter::ResponsesWebSocketRelayDirective;
 use super::client::{adapter_drain_ready, forward_client_message, RelayDisposition};
-use super::continuation::{
-    ResponsesWebSocketContinuationRecord, ResponsesWebSocketContinuationRegistry,
-};
 use super::frame::{encode_opaque_websocket_event, ParsedResponsesWebSocketFrame};
 use super::lifecycle::{
     await_pending_adapter_observation, finalize_active_turn, settle_turn_finalization,
@@ -41,7 +38,6 @@ use crate::handlers::proxy::websocket::transport::{
 use crate::AppState;
 
 const LOG_TARGET: &str = "aether_gateway::handlers::proxy::responses_ws";
-const CONTINUATION_REGISTRATION_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// 写客户端 socket 失败时记录的投递失败原因。刻意不说「客户端在终态前断开」：
 /// 供应商的终态可能已经到达，只是最后一跳没送出去。
@@ -408,22 +404,6 @@ pub(super) async fn relay_bound_connection(
                             .continuation_response_ids
                             .remember_connection_local(response_id);
                     }
-                    if let Some(registration) =
-                        prepare_persisted_continuation_registration(bound, context, frame)
-                    {
-                        if let Some(response_id) =
-                            register_persisted_continuation_before_terminal_delivery(
-                            state,
-                            context,
-                            registration,
-                        )
-                            .await
-                        {
-                            bound
-                                .continuation_response_ids
-                                .remember_persisted(response_id.as_str());
-                        }
-                    }
                 }
                 if matches!(&upstream_message, WreqWsMessage::Text(_))
                     && parsed_upstream_frame.is_none()
@@ -774,97 +754,6 @@ fn retain_disconnected_turn(bound: &mut BoundResponsesConnection) -> bool {
     true
 }
 
-struct PendingContinuationRegistration {
-    user_id: String,
-    api_key_id: String,
-    response_id: String,
-    record: ResponsesWebSocketContinuationRecord,
-}
-
-fn prepare_persisted_continuation_registration(
-    bound: &BoundResponsesConnection,
-    context: &WebSocketRequestContext,
-    frame: &ParsedResponsesWebSocketFrame<'_>,
-) -> Option<PendingContinuationRegistration> {
-    let logical = bound.turn_state.logical();
-    let response_id = persistable_terminal_response_id(logical, frame).map(str::to_string)?;
-    let logical = logical.expect("a persistable terminal requires an active logical turn");
-    let Some(auth_context) = logical
-        .turn_control
-        .as_ref()
-        .and_then(|control| control.decision.auth_context.as_ref())
-    else {
-        warn!(
-            event_name = "responses_websocket_continuation_registration_skipped",
-            log_type = "ops",
-            transport = WEBSOCKET_LOG_TRANSPORT,
-            websocket = true,
-            trace_id = %context.trace_id,
-            reason = "missing_live_auth_context",
-            "gateway did not register a persisted Responses continuation"
-        );
-        return None;
-    };
-    let Some(pinned_candidate) =
-        crate::ai_serving::ResponsesWebSocketPinnedCandidate::from_decision(
-            &bound.decision_template,
-        )
-    else {
-        warn!(
-            event_name = "responses_websocket_continuation_registration_skipped",
-            log_type = "ops",
-            transport = WEBSOCKET_LOG_TRANSPORT,
-            websocket = true,
-            trace_id = %context.trace_id,
-            reason = "missing_binding_identity",
-            "gateway did not register a persisted Responses continuation"
-        );
-        return None;
-    };
-    let record = match ResponsesWebSocketContinuationRecord::from_binding(
-        pinned_candidate,
-        bound.client_model.as_str(),
-        bound.provider_model.as_str(),
-        &bound.binding_identity,
-        &bound.body_normalization,
-        bound.redaction_restorer.has_sessions(),
-        bound.responses_lite_static_config.clone(),
-    ) {
-        Ok(record) => record,
-        Err(error) => {
-            warn!(
-                event_name = "responses_websocket_continuation_registration_skipped",
-                log_type = "ops",
-                transport = WEBSOCKET_LOG_TRANSPORT,
-                websocket = true,
-                trace_id = %context.trace_id,
-                provider_id = %bound.decision_template.provider_id.as_deref().unwrap_or("-"),
-                endpoint_id = %bound.decision_template.endpoint_id.as_deref().unwrap_or("-"),
-                key_id = %bound.decision_template.key_id.as_deref().unwrap_or("-"),
-                reason = error.kind(),
-                "gateway could not build a persisted Responses continuation record"
-            );
-            return None;
-        }
-    };
-    Some(PendingContinuationRegistration {
-        user_id: auth_context.user_id.clone(),
-        api_key_id: auth_context.api_key_id.clone(),
-        response_id,
-        record,
-    })
-}
-
-fn persistable_terminal_response_id<'a>(
-    _logical: Option<&LogicalTurn>,
-    _frame: &'a ParsedResponsesWebSocketFrame<'_>,
-) -> Option<&'a str> {
-    // `store: true` is rejected at the client boundary, so the gateway never
-    // owns a cross-connection continuation record. Connection-local
-    // continuations still use `connection_local_terminal_response_id`.
-    None
-}
-
 fn connection_local_terminal_response_id<'a>(
     logical: Option<&LogicalTurn>,
     frame: &'a ParsedResponsesWebSocketFrame<'_>,
@@ -887,81 +776,6 @@ fn evicted_default_lane_continuation_response_id<'a>(
         .get("previous_response_id")
         .and_then(Value::as_str)
         .filter(|response_id| !response_id.trim().is_empty())
-}
-
-async fn register_persisted_continuation_before_terminal_delivery(
-    state: &AppState,
-    context: &WebSocketRequestContext,
-    registration: PendingContinuationRegistration,
-) -> Option<String> {
-    let PendingContinuationRegistration {
-        user_id,
-        api_key_id,
-        response_id,
-        record,
-    } = registration;
-    let registry = ResponsesWebSocketContinuationRegistry::new(state.runtime_state.as_ref());
-    match tokio::time::timeout(
-        CONTINUATION_REGISTRATION_TIMEOUT,
-        registry.register(
-            user_id.as_str(),
-            api_key_id.as_str(),
-            response_id.as_str(),
-            &record,
-        ),
-    )
-    .await
-    {
-        Ok(Ok(())) => {
-            debug!(
-                event_name = "responses_websocket_continuation_registered",
-                log_type = "event",
-                transport = WEBSOCKET_LOG_TRANSPORT,
-                websocket = true,
-                trace_id = %context.trace_id,
-                user_id = %user_id,
-                api_key_id = %api_key_id,
-                provider_id = %record.pinned_candidate().provider_id(),
-                endpoint_id = %record.pinned_candidate().endpoint_id(),
-                key_id = %record.pinned_candidate().key_id(),
-                client_model = %record.client_model(),
-                provider_model = %record.provider_model(),
-                "gateway registered a persisted Responses continuation before terminal delivery"
-            );
-            Some(response_id)
-        }
-        Ok(Err(error)) => {
-            warn!(
-                event_name = "responses_websocket_continuation_registration_failed",
-                log_type = "ops",
-                transport = WEBSOCKET_LOG_TRANSPORT,
-                websocket = true,
-                trace_id = %context.trace_id,
-                provider_id = %record.pinned_candidate().provider_id(),
-                endpoint_id = %record.pinned_candidate().endpoint_id(),
-                key_id = %record.pinned_candidate().key_id(),
-                reason = error.kind(),
-                "gateway failed to register a persisted Responses continuation"
-            );
-            None
-        }
-        Err(_) => {
-            warn!(
-                event_name = "responses_websocket_continuation_registration_failed",
-                log_type = "ops",
-                transport = WEBSOCKET_LOG_TRANSPORT,
-                websocket = true,
-                trace_id = %context.trace_id,
-                provider_id = %record.pinned_candidate().provider_id(),
-                endpoint_id = %record.pinned_candidate().endpoint_id(),
-                key_id = %record.pinned_candidate().key_id(),
-                reason = "timeout",
-                timeout_ms = CONTINUATION_REGISTRATION_TIMEOUT.as_millis() as u64,
-                "gateway timed out registering a persisted Responses continuation"
-            );
-            None
-        }
-    }
 }
 
 pub(super) async fn wait_for_connection_permit_loss(
@@ -987,13 +801,13 @@ mod tests {
 
     use super::{
         connection_local_terminal_response_id, evicted_default_lane_continuation_response_id,
-        persistable_terminal_response_id, LogicalTurn, ParsedResponsesWebSocketFrame,
+        LogicalTurn, ParsedResponsesWebSocketFrame,
     };
 
     #[test]
-    fn cross_connection_registration_is_disabled_without_store_true_support() {
+    fn connection_local_continuations_stay_on_the_physical_socket() {
         let completed = ParsedResponsesWebSocketFrame::parse(
-            r#"{"type":"response.completed","response":{"id":"resp_persisted"}}"#,
+            r#"{"type":"response.completed","response":{"id":"resp_local"}}"#,
         )
         .expect("valid completed event");
         let failed = ParsedResponsesWebSocketFrame::parse(
@@ -1001,39 +815,18 @@ mod tests {
         )
         .expect("valid failed event");
 
-        let omitted_or_false = LogicalTurn::new(
+        let local_turn = LogicalTurn::new(
             json!({"type": "response.create", "store": false}),
             1,
             "logical-local".to_string(),
         );
         assert_eq!(
-            persistable_terminal_response_id(Some(&omitted_or_false), &completed),
-            None,
-            "store=false or an omitted provider-side store must remain connection-local"
-        );
-        assert_eq!(persistable_terminal_response_id(None, &completed), None);
-        assert_eq!(
-            connection_local_terminal_response_id(Some(&omitted_or_false), &completed),
-            Some("resp_persisted"),
+            connection_local_terminal_response_id(Some(&local_turn), &completed),
+            Some("resp_local"),
             "store=false continuations remain valid on the same physical socket"
         );
         assert_eq!(
             connection_local_terminal_response_id(None, &completed),
-            None
-        );
-
-        let persisted = LogicalTurn::new(
-            json!({"type": "response.create", "store": true}),
-            1,
-            "logical-persisted".to_string(),
-        );
-        assert_eq!(
-            persistable_terminal_response_id(Some(&persisted), &completed),
-            None,
-            "store=true is rejected at the client boundary and never creates cross-connection state"
-        );
-        assert_eq!(
-            persistable_terminal_response_id(Some(&persisted), &failed),
             None
         );
 

@@ -54,32 +54,23 @@ impl BoundedContinuationResponseIds {
     }
 }
 
-/// Principal-proved response IDs for the currently bound response chain.
+/// Response IDs observed on the currently bound physical socket.
 ///
 /// Connection-local IDs prove that the provider's current physical socket can
-/// resolve a parent, including `store=false` responses. Persisted IDs are kept
-/// separately after a successful principal-scoped registry write (or a proved
-/// cross-socket bootstrap), so a 4xx/5xx eviction of the provider's local cache
-/// does not suppress the provider's documented `store=true` hydration fallback.
-/// Starting an independent chain or replacing the physical upstream clears
-/// both bounded sets.
+/// resolve a parent, including `store=false` responses. Starting an independent
+/// chain or replacing the physical upstream clears the bounded set.
 #[derive(Debug, Default)]
 pub(super) struct ContinuationResponseIds {
     connection_local: BoundedContinuationResponseIds,
-    persisted: BoundedContinuationResponseIds,
 }
 
 impl ContinuationResponseIds {
     pub(super) fn contains(&self, response_id: &str) -> bool {
-        self.connection_local.contains(response_id) || self.persisted.contains(response_id)
+        self.connection_local.contains(response_id)
     }
 
     pub(super) fn remember_connection_local(&mut self, response_id: &str) {
         self.connection_local.remember(response_id);
-    }
-
-    pub(super) fn remember_persisted(&mut self, response_id: &str) {
-        self.persisted.remember(response_id);
     }
 
     pub(super) fn forget_connection_local(&mut self, response_id: &str) {
@@ -88,7 +79,6 @@ impl ContinuationResponseIds {
 
     pub(super) fn clear(&mut self) {
         self.connection_local.clear();
-        self.persisted.clear();
     }
 }
 
@@ -109,8 +99,7 @@ pub(super) struct BoundResponsesConnection {
     pub(super) responses_lite_static_config: Option<ResponsesLiteStaticConfig>,
     pub(super) binding_identity: UpstreamBindingIdentity,
     /// IDs observed on the current physical upstream and current independent
-    /// response chain. A continuation must reference one of these IDs; the
-    /// cross-socket bootstrap path seeds the already registry-proved parent.
+    /// response chain. A continuation must reference one of these IDs.
     pub(super) continuation_response_ids: ContinuationResponseIds,
     /// 这条连接上「有没有正在进行的 logical turn」的唯一事实来源。
     pub(super) turn_state: ResponsesTurnState,
@@ -225,27 +214,5 @@ mod tests {
         ids.clear();
         assert!(ids.connection_local.ids.is_empty());
         assert!(ids.connection_local.insertion_order.is_empty());
-        assert!(ids.persisted.ids.is_empty());
-        assert!(ids.persisted.insertion_order.is_empty());
-    }
-
-    #[test]
-    fn local_eviction_keeps_only_registered_persisted_ownership() {
-        let mut ids = ContinuationResponseIds::default();
-        ids.remember_connection_local("resp_store_false");
-        ids.remember_connection_local("resp_store_true");
-        ids.remember_persisted("resp_store_true");
-
-        ids.forget_connection_local("resp_store_false");
-        ids.forget_connection_local("resp_store_true");
-
-        assert!(
-            !ids.contains("resp_store_false"),
-            "store=false has no persisted hydration fallback after local eviction"
-        );
-        assert!(
-            ids.contains("resp_store_true"),
-            "a registered store=true parent remains eligible for persisted hydration"
-        );
     }
 }

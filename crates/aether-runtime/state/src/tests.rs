@@ -753,7 +753,7 @@ async fn redis_runtime_instances_share_ttl_kv_across_reinitialization() {
     else {
         return;
     };
-    let key_prefix = format!("aether-history-test-{}", std::process::id());
+    let key_prefix = format!("aether-kv-test-{}", std::process::id());
     let runtime_config = || RedisClientConfig {
         url: redis_url.clone(),
         key_prefix: Some(key_prefix.clone()),
@@ -764,11 +764,11 @@ async fn redis_runtime_instances_share_ttl_kv_across_reinitialization() {
     let reader = RuntimeState::redis(runtime_config(), Some(1_000))
         .await
         .expect("reader runtime should connect");
-    let history_key = "ai:responses:history:v1:shared-record";
+    let shared_key = "aether:kv:test:shared-record";
 
     writer
         .kv_set(
-            history_key,
+            shared_key,
             "persisted-history",
             Some(Duration::from_secs(30)),
         )
@@ -776,7 +776,7 @@ async fn redis_runtime_instances_share_ttl_kv_across_reinitialization() {
         .expect("writer should persist history");
     assert_eq!(
         reader
-            .kv_get(history_key)
+            .kv_get(shared_key)
             .await
             .expect("reader get")
             .as_deref(),
@@ -790,7 +790,7 @@ async fn redis_runtime_instances_share_ttl_kv_across_reinitialization() {
         .expect("restarted runtime should connect");
     assert_eq!(
         restarted
-            .kv_get(history_key)
+            .kv_get(shared_key)
             .await
             .expect("restarted get")
             .as_deref(),
@@ -798,7 +798,7 @@ async fn redis_runtime_instances_share_ttl_kv_across_reinitialization() {
     );
     assert!(matches!(
         restarted
-            .kv_ttl_seconds(history_key)
+            .kv_ttl_seconds(shared_key)
             .await
             .expect("history ttl"),
         Some(1..=30)
