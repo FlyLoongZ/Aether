@@ -994,8 +994,8 @@ async function resolveFormPermissions(): Promise<string[]> {
 
 function permissionModeText(mode?: ManagementToken['permission_mode']): string {
   switch (mode) {
-    case 'legacy_full':
-      return t('ui.legacyFullPermissions')
+    case 'invalid':
+      return t('ui.invalidPermissionsReissue')
     case 'full':
       return t('ui.fullPermissions')
     case 'read_only':

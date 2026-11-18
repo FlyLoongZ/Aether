@@ -14,7 +14,7 @@ export interface ManagementToken {
   token_display: string
   allowed_ips?: string[] | null
   permissions?: string[] | null
-  permission_mode?: 'legacy_full' | 'full' | 'read_only' | 'custom'
+  permission_mode?: 'invalid' | 'full' | 'read_only' | 'custom'
   permission_summary?: string
   expires_at?: string | null
   last_used_at?: string | null

@@ -154,7 +154,7 @@ where
         token_with_user.token.permissions.as_ref(),
     )
     .map_err(|_| ManagementTokenAuthError::Invalid)?
-    .unwrap_or_else(crate::control::legacy_full_management_token_permissions);
+    .ok_or(ManagementTokenAuthError::Invalid)?;
 
     Ok(AuthenticatedManagementToken {
         token: token_with_user.token,

@@ -16,7 +16,7 @@ pub(crate) use management_token_permissions::{
     all_assignable_management_token_permissions, management_token_required_permission,
 };
 pub(crate) use management_token_permissions::{
-    audit_admin_read_only_management_token_permissions, legacy_full_management_token_permissions,
+    audit_admin_read_only_management_token_permissions,
     management_token_permission_catalog_payload, management_token_permission_keys_from_value,
     management_token_permission_mode_and_summary, management_token_principal_has_permission,
     normalize_assignable_management_token_permissions,

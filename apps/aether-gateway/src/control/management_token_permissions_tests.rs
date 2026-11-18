@@ -133,32 +133,6 @@ fn full_assignable_token_permissions_cannot_cover_management_tokens_scope() {
 }
 
 #[test]
-fn legacy_tokens_cannot_administer_management_tokens() {
-    let decision = GatewayControlDecision::synthetic(
-        "/api/admin/management-tokens".to_string(),
-        Some("admin_proxy".to_string()),
-        Some("management_tokens_manage".to_string()),
-        Some("create_token".to_string()),
-        Some("admin:management_tokens".to_string()),
-    );
-    let permissions = legacy_full_management_token_permissions();
-
-    assert_eq!(
-        validate_management_token_admin_route_permission(
-            &http::Method::POST,
-            &decision,
-            Some(&permissions),
-        )
-        .expect_err("legacy tokens must not mint replacement credentials")
-        .required_permission,
-        "admin:management_tokens:admin"
-    );
-    assert!(!permissions
-        .iter()
-        .any(|permission| permission.starts_with("admin:management_tokens:")));
-}
-
-#[test]
 fn read_only_permissions_allow_reads_and_reject_writes() {
     let decision = GatewayControlDecision::synthetic(
         "/api/admin/providers".to_string(),
@@ -215,27 +189,11 @@ fn scoped_tokens_fail_closed_for_unclassified_admin_permissions() {
 }
 
 #[test]
-fn legacy_full_permissions_are_frozen_to_the_original_scope_catalog() {
-    let permissions = legacy_full_management_token_permissions();
-
-    for permission in [
-        "admin:system:admin",
-        "admin:oauth:admin",
-        "admin:proxy_nodes:admin",
-    ] {
-        assert!(permissions.iter().any(|item| item == permission));
-    }
-    for permission in [
-        "admin:routing_profiles:read",
-        "admin:routing_profiles:admin",
-        "admin:tasks:read",
-        "admin:tasks:admin",
-    ] {
-        assert!(
-            !permissions.iter().any(|item| item == permission),
-            "legacy token unexpectedly gained {permission}"
-        );
-    }
+fn sql_null_permissions_report_invalid_mode() {
+    assert_eq!(
+        management_token_permission_mode_and_summary(None),
+        ("invalid", "缺少权限，需重新签发".to_string())
+    );
 }
 
 #[test]

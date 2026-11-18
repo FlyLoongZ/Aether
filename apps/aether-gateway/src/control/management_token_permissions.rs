@@ -186,52 +186,6 @@ const PERMISSION_GROUPS: &[PermissionGroup] = &[
 
 const ACCESS_LEVELS: &[(&str, &str)] = &[("read", "读取"), ("write", "写入"), ("admin", "管理")];
 
-// Freeze the implicit permissions granted before per-token permissions were
-// introduced. New scopes must never expand legacy NULL-permission tokens. The
-// management_tokens scope is deliberately withheld so a legacy token cannot
-// mint an unrestricted replacement that outlives its own IP or expiry bounds.
-const LEGACY_FULL_PERMISSION_SCOPES: &[&str] = &[
-    "adaptive",
-    "announcements",
-    "api_keys",
-    "billing",
-    "endpoints_health",
-    "endpoints_manage",
-    "endpoints_rpm",
-    "gemini_files",
-    "ldap",
-    "models",
-    "modules",
-    "monitoring",
-    "oauth",
-    "payments",
-    "pool",
-    "provider_ops",
-    "provider_oauth",
-    "provider_query",
-    "provider_strategy",
-    "providers",
-    "proxy_nodes",
-    "security",
-    "stats",
-    "system",
-    "usage",
-    "users",
-    "video_tasks",
-    "wallets",
-];
-
-pub(crate) fn legacy_full_management_token_permissions() -> Vec<String> {
-    LEGACY_FULL_PERMISSION_SCOPES
-        .iter()
-        .flat_map(|scope| {
-            ACCESS_LEVELS
-                .iter()
-                .map(move |(access, _)| permission_key(scope, access).to_string())
-        })
-        .collect()
-}
-
 pub(crate) fn management_token_permission_catalog_items(
 ) -> Vec<ManagementTokenPermissionCatalogItem> {
     PERMISSION_GROUPS
@@ -355,7 +309,7 @@ pub(crate) fn management_token_permission_mode_and_summary(
 ) -> (&'static str, String) {
     let keys = match management_token_permission_keys_from_value(permissions) {
         Ok(Some(keys)) => keys,
-        Ok(None) => return ("legacy_full", "旧版全权限".to_string()),
+        Ok(None) => return ("invalid", "缺少权限，需重新签发".to_string()),
         Err(_) => return ("custom", "权限配置异常".to_string()),
     };
     let key_set = keys.iter().map(String::as_str).collect::<BTreeSet<_>>();
@@ -435,13 +389,8 @@ pub(crate) fn management_token_principal_has_permission(
         return true;
     }
 
-    let legacy_permissions;
-    let permissions = match principal.management_token_permissions.as_deref() {
-        Some(permissions) => permissions,
-        None => {
-            legacy_permissions = legacy_full_management_token_permissions();
-            legacy_permissions.as_slice()
-        }
+    let Some(permissions) = principal.management_token_permissions.as_deref() else {
+        return false;
     };
     permissions
         .iter()
