@@ -23,16 +23,11 @@ pub(crate) struct SchedulerSkippedCandidate {
 
 pub(crate) const AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON: &str =
     "auth_api_key_concurrency_limit_reached";
-pub(crate) const LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON: &str =
-    "api_key_concurrency_limit_reached";
 pub(crate) const API_KEY_CONCURRENCY_LIMIT_SKIP_REASON: &str =
     AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON;
 
 pub(crate) fn is_auth_api_key_concurrency_limit_skip_reason(reason: &str) -> bool {
-    matches!(
-        reason.trim(),
-        AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON | LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON
-    )
+    reason.trim() == AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON
 }
 
 pub(super) fn is_exact_all_skipped_by_auth_limit(

@@ -51,7 +51,6 @@ use crate::headers::{
 use crate::router::RequestAdmissionError;
 use crate::scheduler::candidate::{
     is_auth_api_key_concurrency_limit_skip_reason, AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON,
-    LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON,
 };
 use crate::stage_metrics::observe_gateway_stage_ms;
 use crate::{
@@ -1587,9 +1586,7 @@ async fn proxy_request_inner(
         let auth_api_key_concurrency_limited = diagnostic_is_auth_api_key_concurrency_limited(
             local_execution_runtime_miss_diagnostic.as_ref(),
         ) || local_execution_runtime_miss_context
-            .all_candidates_skipped_for_reason(AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON)
-            || local_execution_runtime_miss_context
-                .all_candidates_skipped_for_reason(LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON);
+            .all_candidates_skipped_for_reason(AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON);
         let provider_key_capacity_limited = local_execution_runtime_miss_diagnostic
             .as_ref()
             .map(|diagnostic| diagnostic_is_provider_key_capacity_limited(Some(diagnostic)))

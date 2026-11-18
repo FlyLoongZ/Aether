@@ -1303,15 +1303,12 @@ fn sanitize_candidate_proxy_timing(value: &serde_json::Value) -> Option<serde_js
     (!summary.is_empty()).then_some(serde_json::Value::Object(summary))
 }
 
-// Legacy tunnel values are retained below only for persisted audit snapshots.
-// The current planner no longer emits them; historical traces must remain readable.
 fn sanitize_candidate_proxy_mode(value: &str) -> Option<&'static str> {
     match value.trim().to_ascii_lowercase().as_str() {
         "direct" => Some("direct"),
         "manual" => Some("manual"),
         "node" => Some("node"),
         "system" => Some("system"),
-        "tunnel" => Some("tunnel"),
         _ => None,
     }
 }
@@ -1322,7 +1319,6 @@ fn sanitize_candidate_proxy_source(value: &str) -> Option<&'static str> {
         "key" => Some("key"),
         "provider" => Some("provider"),
         "system" => Some("system"),
-        "tunnel_affinity" => Some("tunnel_affinity"),
         _ => None,
     }
 }
@@ -1681,7 +1677,6 @@ fn sanitize_candidate_priority_mode(value: &str) -> Option<&'static str> {
 fn sanitize_candidate_promotion_reason(value: &str) -> Option<&'static str> {
     match value.trim().to_ascii_lowercase().as_str() {
         "cached_affinity" => Some("cached_affinity"),
-        "local_tunnel" => Some("local_tunnel"),
         _ => None,
     }
 }
@@ -1708,8 +1703,6 @@ fn sanitize_candidate_execution_path(value: &str) -> Option<&'static str> {
         "local_proxy_passthrough_removed" => Some("local_proxy_passthrough_removed"),
         "execution_runtime_sync" => Some("execution_runtime_sync"),
         "execution_runtime_stream" => Some("execution_runtime_stream"),
-        "control_execute_sync" => Some("control_execute_sync"),
-        "control_execute_stream" => Some("control_execute_stream"),
         "local_execution_runtime_miss" => Some("local_execution_runtime_miss"),
         "local_execution_planning_timeout" => Some("local_execution_planning_timeout"),
         "local_api_key_concurrency_limited" => Some("local_api_key_concurrency_limited"),
@@ -1721,7 +1714,6 @@ fn sanitize_candidate_execution_path(value: &str) -> Option<&'static str> {
         "distributed_overloaded" => Some("distributed_overloaded"),
         "local_ai_public" => Some("local_ai_public"),
         "local_execution_loop_detected" => Some("local_execution_loop_detected"),
-        "tunnel_affinity_forward" => Some("tunnel_affinity_forward"),
         "responses_websocket_bridge" => Some("responses_websocket_bridge"),
         _ => None,
     }

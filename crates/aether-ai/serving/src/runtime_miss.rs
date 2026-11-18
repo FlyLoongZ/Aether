@@ -41,14 +41,11 @@ pub trait AiRuntimeMissDiagnosticPort: Send + Sync {
 
 pub const AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON: &str =
     "auth_api_key_concurrency_limit_reached";
-pub const LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON: &str = "api_key_concurrency_limit_reached";
-
 fn auth_api_key_concurrency_skip_count<Diagnostic>(diagnostic: &Diagnostic) -> usize
 where
     Diagnostic: AiRuntimeMissDiagnosticFields,
 {
     diagnostic.skip_reason_count(AUTH_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON)
-        + diagnostic.skip_reason_count(LEGACY_API_KEY_CONCURRENCY_LIMIT_SKIP_REASON)
 }
 
 pub trait AiRuntimeMissDiagnosticFields {
