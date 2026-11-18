@@ -179,12 +179,6 @@ const ANTHROPIC_POST_STOP_DRAIN_MAX_FRAMES: usize = 8;
 const ANTHROPIC_POST_STOP_DRAIN_MAX_BYTES: usize = 64 * 1024;
 const POST_STOP_FRAME_READ_BUDGET_INACTIVE: usize = usize::MAX;
 const POST_STOP_MAX_EMPTY_CHUNKS_PER_POLL: usize = 32;
-const DEFAULT_DIRECT_PASSTHROUGH_CHANNEL_CAPACITY: usize = 16;
-const MAX_DIRECT_PASSTHROUGH_CHANNEL_CAPACITY: usize = 1024;
-const DIRECT_PASSTHROUGH_CHANNEL_CAPACITY_ENV: &str =
-    "AETHER_GATEWAY_DIRECT_PASSTHROUGH_CHANNEL_CAPACITY";
-const DIRECT_PASSTHROUGH_MODE_ENV: &str = "AETHER_GATEWAY_DIRECT_PASSTHROUGH_MODE";
-
 /// Retains the incomplete tail needed to recognize provider error events split across transport
 /// chunks without retaining an unbounded copy of the stream.
 #[derive(Default)]
@@ -378,29 +372,6 @@ impl Drop for StageElapsedGuard {
     }
 }
 
-fn direct_passthrough_channel_capacity() -> usize {
-    std::env::var(DIRECT_PASSTHROUGH_CHANNEL_CAPACITY_ENV)
-        .ok()
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .filter(|value| *value > 0)
-        .unwrap_or(DEFAULT_DIRECT_PASSTHROUGH_CHANNEL_CAPACITY)
-        .clamp(1, MAX_DIRECT_PASSTHROUGH_CHANNEL_CAPACITY)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DirectPassthroughMode {
-    Inline,
-    Legacy,
-}
-
-fn direct_passthrough_mode() -> DirectPassthroughMode {
-    std::env::var(DIRECT_PASSTHROUGH_MODE_ENV)
-        .ok()
-        .as_deref()
-        .map(parse_direct_passthrough_mode)
-        .unwrap_or(DirectPassthroughMode::Inline)
-}
-
 fn stream_body_buffer_limit_for_record_level(record_level: UsageRequestRecordLevel) -> usize {
     match record_level {
         UsageRequestRecordLevel::Basic => BASIC_STREAM_BODY_ANALYSIS_LIMIT_BYTES,
@@ -429,13 +400,6 @@ async fn resolve_stream_body_buffer_limit(state: &AppState) -> usize {
             );
             BASIC_STREAM_BODY_ANALYSIS_LIMIT_BYTES
         }
-    }
-}
-
-fn parse_direct_passthrough_mode(value: &str) -> DirectPassthroughMode {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "legacy" | "pump" | "mpsc" => DirectPassthroughMode::Legacy,
-        _ => DirectPassthroughMode::Inline,
     }
 }
 
@@ -1833,69 +1797,6 @@ where
         .map_err(|_| timeout)
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn forward_direct_passthrough_client_chunk(
-    tx: &mpsc::Sender<Result<Bytes, IoError>>,
-    chunk: Bytes,
-    downstream_dropped: &mut bool,
-    client_visible_stream_completed: &mut bool,
-    client_stream_completion_tracker: &mut ClientVisibleStreamCompletionTracker,
-    observe_stream_completion: bool,
-    client_stream_bytes: &mut u64,
-    buffered_body: &mut StreamBodyCapture,
-    client_body_truncated: &mut bool,
-    max_stream_body_buffer_bytes: usize,
-    stream_started_at: Instant,
-    last_client_chunk_elapsed_ms: &mut u64,
-    first_client_chunk: bool,
-    trace_id: &str,
-    request_id_for_log: &str,
-    candidate_id: Option<&str>,
-) -> bool {
-    if chunk.is_empty() {
-        return false;
-    }
-    append_budgeted_stream_capture_bytes(
-        buffered_body,
-        chunk.as_ref(),
-        max_stream_body_buffer_bytes,
-        client_body_truncated,
-    );
-    if *downstream_dropped {
-        return false;
-    }
-    let chunk_len = u64::try_from(chunk.len()).unwrap_or(u64::MAX);
-    let send_started_at = Instant::now();
-    if tx.send(Ok(chunk.clone())).await.is_err() {
-        debug!(
-            event_name = "direct_passthrough_downstream_disconnected",
-            log_type = "ops",
-            trace_id = %trace_id,
-            request_id = %request_id_for_log,
-            candidate_id = ?candidate_id,
-            "gateway direct passthrough downstream dropped; cancelling upstream stream"
-        );
-        *downstream_dropped = true;
-        return false;
-    }
-    let send_wait_ms = send_started_at.elapsed().as_millis() as u64;
-    observe_gateway_stage_ms("direct_passthrough_body_send_wait", send_wait_ms);
-    if first_client_chunk {
-        observe_gateway_stage_ms("direct_passthrough_first_client_send_wait", send_wait_ms);
-    }
-
-    if observe_stream_completion {
-        *client_visible_stream_completed |=
-            client_stream_completion_tracker.observe_chunk(chunk.as_ref());
-    }
-    *client_stream_bytes = client_stream_bytes.saturating_add(chunk_len);
-    *last_client_chunk_elapsed_ms = stream_started_at
-        .elapsed()
-        .as_millis()
-        .min(u128::from(u64::MAX)) as u64;
-    true
-}
-
 struct DirectPassthroughFinalizer {
     core: Option<DirectPassthroughFinalizerCore>,
 }
@@ -2946,9 +2847,6 @@ fn should_defer_stream_pending_for_direct_inline(
     plan_kind: &str,
     report_context: Option<&Value>,
 ) -> bool {
-    if direct_passthrough_mode() != DirectPassthroughMode::Inline {
-        return false;
-    }
     #[cfg(test)]
     if _state
         .execution_runtime_override_base_url()
@@ -3054,32 +2952,6 @@ async fn execute_stream_from_direct_passthrough(
     let max_stream_body_buffer_bytes = resolve_stream_body_buffer_limit(state).await;
     let request_candidate_status_snapshot =
         snapshot_local_request_candidate_status(&plan, report_context.as_ref());
-    let passthrough_mode = direct_passthrough_mode();
-    if passthrough_mode == DirectPassthroughMode::Legacy {
-        state.usage_runtime.record_stream_started(
-            state.usage_lifecycle_data_state().as_ref(),
-            &lifecycle_seed,
-            status_code,
-            None,
-        );
-        if let Some(snapshot) = request_candidate_status_snapshot.as_ref() {
-            record_local_request_candidate_status_snapshot(
-                state,
-                snapshot,
-                SchedulerRequestCandidateStatusUpdate {
-                    status: RequestCandidateStatus::Streaming,
-                    status_code: Some(status_code),
-                    error_type: None,
-                    error_message: None,
-                    latency_ms: None,
-                    started_at_unix_ms: Some(candidate_started_unix_secs),
-                    finished_at_unix_ms: None,
-                },
-            )
-            .await;
-        }
-    }
-
     let provider_headers = headers.clone();
     let response_header_rules_started_at = Instant::now();
     let mut headers = prepare_client_response_headers(
@@ -3108,744 +2980,79 @@ async fn execute_stream_from_direct_passthrough(
     }
     headers.remove("content-length");
 
-    if passthrough_mode == DirectPassthroughMode::Inline {
-        let direct_stream_finalize_kind =
-            resolve_core_stream_direct_finalize_report_kind(plan_kind);
-        let normalized_stream_report_context =
-            normalize_provider_private_report_context(report_context.as_ref());
-        let stream_usage_report_context = normalized_stream_report_context.clone().or_else(|| {
-            Some(serde_json::json!({
-                "provider_api_format": plan.provider_api_format.as_str(),
-                "client_api_format": plan.client_api_format.as_str(),
-            }))
-        });
-        let stream_usage_observer = stream_usage_report_context
-            .as_ref()
-            .map(|_| StreamingStandardTerminalObserver::default());
-        observe_gateway_stage_trace_ms(
-            &mut stage_trace,
-            "stream_response_ready",
-            stream_elapsed_ms_since(stream_started_at),
-        );
-        let request_diagnostics = current_request_diagnostics();
-        observe_request_accepted_stage_trace_ms(
-            &mut stage_trace,
-            request_diagnostics.as_ref(),
-            "frontdoor_to_stream_response_ready",
-        );
-        let finalizer = DirectPassthroughFinalizer::new(DirectPassthroughFinalizerCore {
-            state: state.clone(),
-            plan,
-            trace_id: trace_id.to_string(),
-            report_kind,
-            report_context,
-            lifecycle_seed,
-            direct_stream_finalize_kind,
-            stream_started_at,
-            stage_trace,
-            request_diagnostics,
-            request_id_for_log,
-            candidate_id,
-            request_candidate_status_snapshot,
-            deferred_request_candidate_status_record: None,
-            candidate_started_unix_secs,
-            status_code,
-            provider_headers,
-            headers: headers_for_report,
-            stream_usage_report_context,
-            stream_usage_observer,
-            stream_usage_observer_buffered: StreamUsageObservationBuffer::new(
-                max_stream_body_buffer_bytes,
-            ),
-            provider_error_inspection: ProviderStreamErrorInspection::default(),
-            max_stream_body_buffer_bytes,
-            provider_buffered_body: StreamBodyCapture::default(),
-            buffered_body: StreamBodyCapture::default(),
-            provider_body_truncated: false,
-            client_body_truncated: false,
-            client_stream_completion_tracker: ClientVisibleStreamCompletionTracker::default(),
-            requires_anthropic_message_stop,
-            client_visible_stream_completed: false,
-            usage_stream_telemetry: None,
-            telemetry: None,
-            provider_stream_bytes: 0,
-            client_stream_bytes: 0,
-            last_client_chunk_elapsed_ms: 0,
-            pending_recorded,
-            stream_started_recorded: false,
-            terminal_failure: None,
-            _provider_pool_in_flight_guard: in_flight_guard,
-            _upstream_target_permit: upstream_target_permit,
-        });
-        let body_stream = build_direct_passthrough_inline_body_stream(
-            finalizer,
-            prefetched_body,
-            response,
-            upstream_started_at,
-            stream_first_byte_timeout,
-        );
-        return Ok(Some(build_client_response_from_parts(
-            status_code,
-            &headers,
-            Body::from_stream(body_stream),
-            trace_id,
-            Some(decision),
-        )?));
-    }
-
-    let (tx, rx) = mpsc::channel::<Result<Bytes, IoError>>(direct_passthrough_channel_capacity());
-    let state_for_report = state.clone();
-    let plan_for_report = plan;
-    let trace_id_owned = trace_id.to_string();
-    let report_kind_owned = report_kind;
-    let report_context_owned = report_context;
-    let lifecycle_seed_for_report = lifecycle_seed;
-    let direct_stream_finalize_kind_owned =
-        resolve_core_stream_direct_finalize_report_kind(plan_kind);
-    let normalized_stream_report_context_owned =
-        normalize_provider_private_report_context(report_context_owned.as_ref());
-    let stream_started_at_for_report = stream_started_at;
+    let direct_stream_finalize_kind = resolve_core_stream_direct_finalize_report_kind(plan_kind);
+    let normalized_stream_report_context =
+        normalize_provider_private_report_context(report_context.as_ref());
+    let stream_usage_report_context = normalized_stream_report_context.clone().or_else(|| {
+        Some(serde_json::json!({
+            "provider_api_format": plan.provider_api_format.as_str(),
+            "client_api_format": plan.client_api_format.as_str(),
+        }))
+    });
+    let stream_usage_observer = stream_usage_report_context
+        .as_ref()
+        .map(|_| StreamingStandardTerminalObserver::default());
     observe_gateway_stage_trace_ms(
         &mut stage_trace,
         "stream_response_ready",
         stream_elapsed_ms_since(stream_started_at),
     );
-    let request_diagnostics_for_report = current_request_diagnostics();
+    let request_diagnostics = current_request_diagnostics();
     observe_request_accepted_stage_trace_ms(
         &mut stage_trace,
-        request_diagnostics_for_report.as_ref(),
+        request_diagnostics.as_ref(),
         "frontdoor_to_stream_response_ready",
     );
-    let stage_trace_for_report = stage_trace;
-    let _request_id_for_report = request_id.clone();
-    let request_id_for_report_log = request_id_for_log.clone();
-    let candidate_id_for_report = candidate_id.clone();
-    let provider_pool_in_flight_guard_for_report = in_flight_guard;
-    record_stream_pre_first_byte_spawn();
-    let usage_producer = state_for_report.usage_runtime.track_producer();
-    tokio::spawn(async move {
-        let _usage_producer = usage_producer;
-        let mut stage_trace_for_report = stage_trace_for_report;
-        let _stream_total_guard =
-            StageElapsedGuard::from_started_at("stream_total", stream_started_at_for_report);
-        let _provider_pool_in_flight_guard = provider_pool_in_flight_guard_for_report;
-        let _upstream_target_permit = upstream_target_permit;
-        let stream_usage_report_context =
-            normalized_stream_report_context_owned.clone().or_else(|| {
-                Some(serde_json::json!({
-                    "provider_api_format": plan_for_report.provider_api_format.as_str(),
-                    "client_api_format": plan_for_report.client_api_format.as_str(),
-                }))
-            });
-        let mut stream_usage_observer = stream_usage_report_context
-            .as_ref()
-            .map(|_| StreamingStandardTerminalObserver::default());
-        let mut stream_usage_observer_buffered =
-            StreamUsageObservationBuffer::new(max_stream_body_buffer_bytes);
-        let mut provider_error_inspection = ProviderStreamErrorInspection::default();
-        let mut provider_buffered_body = StreamBodyCapture::default();
-        let mut buffered_body = StreamBodyCapture::default();
-        let mut provider_body_truncated = false;
-        let mut client_body_truncated = false;
-        let mut upstream_control_filter = Some(SseControlBlockFilter::default());
-        let mut client_stream_completion_tracker = ClientVisibleStreamCompletionTracker::default();
-        let requires_anthropic_message_stop = requires_anthropic_message_stop;
-        let mut client_visible_stream_completed = false;
-        let mut usage_stream_telemetry: Option<ExecutionTelemetry> = None;
-        let telemetry: Option<ExecutionTelemetry> = None;
-        let mut provider_stream_bytes = 0u64;
-        let mut client_stream_bytes = 0u64;
-        let mut last_client_chunk_elapsed_ms = 0u64;
-        let mut downstream_dropped = false;
-        let mut terminal_failure: Option<StreamFailureReport> = None;
-        let mut provider_error_forwarded_to_client = false;
-        let mut upstream = direct_upstream_response_byte_stream(prefetched_body, response);
-        let mut observed_first_upstream_body = false;
-        let mut observed_first_client_send = false;
-
-        loop {
-            if downstream_dropped {
-                break;
-            }
-            let item = if usage_stream_telemetry
-                .as_ref()
-                .and_then(|telemetry| telemetry.ttfb_ms)
-                .is_none()
-            {
-                tokio::select! {
-                    biased;
-                    _ = tx.closed(), if !downstream_dropped => {
-                        downstream_dropped = true;
-                        break;
-                    }
-                    result = await_direct_passthrough_first_item(
-                        upstream.next(),
-                        upstream_started_at,
-                        stream_first_byte_timeout,
-                    ) => {
-                        match result {
-                            Ok(item) => item,
-                            Err(timeout) => {
-                                terminal_failure = Some(build_stream_transport_failure_report(
-                                    "first_byte_timeout",
-                                    stream_first_byte_timeout_message(timeout),
-                                    504,
-                                ));
-                                break;
-                            }
-                        }
-                    }
-                }
-            } else {
-                tokio::select! {
-                    biased;
-                    _ = tx.closed(), if !downstream_dropped => {
-                        downstream_dropped = true;
-                        break;
-                    }
-                    result = await_stream_idle_read(upstream.next(), stream_idle_timeout) => {
-                        match result {
-                            Ok(item) => item,
-                            Err(timeout) => {
-                                if terminal_failure.is_none()
-                                    && !client_stream_completion_tracker.successful_completion() {
-                                    terminal_failure = Some(build_stream_transport_failure_report(
-                                        "read_timeout", stream_idle_timeout_message(timeout), 504,
-                                    ));
-                                }
-                                break;
-                            }
-                        }
-                    },
-                }
-            };
-
-            let Some(item) = item else {
-                break;
-            };
-            let chunk = match item {
-                Ok(chunk) => chunk,
-                Err(message) => {
-                    if requires_anthropic_message_stop && client_visible_stream_completed {
-                        debug!(
-                            event_name = "direct_passthrough_read_error_ignored_after_anthropic_stop",
-                            log_type = "debug",
-                            trace_id = %trace_id_owned,
-                            request_id = %request_id_for_report_log,
-                            candidate_id = ?candidate_id_for_report.as_deref(),
-                            error_category = "upstream_body_read_failed",
-                            "gateway ignored direct passthrough teardown error after Anthropic message_stop"
-                        );
-                        break;
-                    }
-                    warn!(
-                        event_name = "direct_passthrough_body_read_error",
-                        log_type = "ops",
-                        trace_id = %trace_id_owned,
-                        request_id = %request_id_for_report_log,
-                        candidate_id = ?candidate_id_for_report.as_deref(),
-                        upstream_bytes = provider_stream_bytes,
-                        error_category = "upstream_body_read_failed",
-                        "gateway direct passthrough upstream body read failed"
-                    );
-                    terminal_failure = Some(build_stream_transport_failure_report(
-                        "execution_runtime_stream_read_error",
-                        message,
-                        502,
-                    ));
-                    break;
-                }
-            };
-            if chunk.is_empty() {
-                continue;
-            }
-            if requires_anthropic_message_stop && client_visible_stream_completed {
-                continue;
-            }
-
-            let mut provider_chunk = chunk;
-            if requires_anthropic_message_stop {
-                if let Some(terminal_end) = client_stream_completion_tracker
-                    .observe_anthropic_message_stop_terminal_end(provider_chunk.as_ref())
-                {
-                    provider_chunk.truncate(terminal_end);
-                    client_visible_stream_completed = true;
-                }
-            }
-
-            let observed_at = Instant::now();
-            if !observed_first_upstream_body {
-                observed_first_upstream_body = true;
-                observe_gateway_stage_trace_ms(
-                    &mut stage_trace_for_report,
-                    "direct_passthrough_upstream_body_first",
-                    stream_elapsed_ms_at(stream_started_at_for_report, observed_at),
-                );
-            }
-            maybe_record_first_stream_event_started(
-                &state_for_report,
-                &lifecycle_seed_for_report,
-                status_code,
-                stream_started_at_for_report,
-                observed_at,
-                telemetry.as_ref(),
-                &mut usage_stream_telemetry,
-            );
-            if usage_stream_telemetry
-                .as_ref()
-                .and_then(|telemetry| telemetry.ttfb_ms)
-                .is_some()
-                && provider_stream_bytes == 0
-            {
-                observe_gateway_stage_trace_ms(
-                    &mut stage_trace_for_report,
-                    "stream_first_data",
-                    stream_elapsed_ms_at(stream_started_at_for_report, observed_at),
-                );
-            }
-
-            let mut sent_client_chunk = false;
-            if let Some(client_chunk) = filter_upstream_sse_control_chunk(
-                &mut upstream_control_filter,
-                provider_chunk.clone(),
-            ) {
-                sent_client_chunk = forward_direct_passthrough_client_chunk(
-                    &tx,
-                    client_chunk,
-                    &mut downstream_dropped,
-                    &mut client_visible_stream_completed,
-                    &mut client_stream_completion_tracker,
-                    !requires_anthropic_message_stop,
-                    &mut client_stream_bytes,
-                    &mut buffered_body,
-                    &mut client_body_truncated,
-                    max_stream_body_buffer_bytes,
-                    stream_started_at_for_report,
-                    &mut last_client_chunk_elapsed_ms,
-                    !observed_first_client_send,
-                    trace_id_owned.as_str(),
-                    request_id_for_report_log.as_str(),
-                    candidate_id_for_report.as_deref(),
-                )
-                .await;
-                if sent_client_chunk && !observed_first_client_send {
-                    observed_first_client_send = true;
-                    observe_gateway_stage_trace_ms(
-                        &mut stage_trace_for_report,
-                        "direct_passthrough_first_client_send",
-                        stream_elapsed_ms_since(stream_started_at_for_report),
-                    );
-                }
-            }
-
-            provider_stream_bytes = provider_stream_bytes
-                .saturating_add(u64::try_from(provider_chunk.len()).unwrap_or(u64::MAX));
-            append_budgeted_stream_capture_bytes(
-                &mut provider_buffered_body,
-                provider_chunk.as_ref(),
-                max_stream_body_buffer_bytes,
-                &mut provider_body_truncated,
-            );
-            if let (Some(observer), Some(report_context)) = (
-                stream_usage_observer.as_mut(),
-                stream_usage_report_context.as_ref(),
-            ) {
-                observe_stream_usage_bytes(
-                    observer,
-                    report_context,
-                    &mut stream_usage_observer_buffered,
-                    provider_chunk.as_ref(),
-                );
-            }
-            let provider_private_error_body_json = provider_error_inspection.observe(
-                stream_usage_report_context.as_ref(),
-                provider_chunk.as_ref(),
-            );
-            if let Some(error_body_json) = provider_private_error_body_json {
-                provider_error_forwarded_to_client = sent_client_chunk;
-                let error_status_code = resolve_provider_stream_error_status_code(
-                    plan_for_report.provider_api_format.as_str(),
-                    status_code,
-                    &error_body_json,
-                );
-                terminal_failure = Some(build_stream_failure_from_provider_error_body(
-                    error_status_code,
-                    &error_body_json,
-                ));
-                break;
-            }
-            if requires_anthropic_message_stop && client_visible_stream_completed {
-                break;
-            }
-        }
-        drop(upstream);
-        drop(_provider_pool_in_flight_guard);
-        drop(_upstream_target_permit);
-
-        if terminal_failure.is_none()
-            && !downstream_dropped
-            && requires_anthropic_message_stop
-            && !client_visible_stream_completed
-        {
-            terminal_failure = Some(build_anthropic_premature_eof_failure(
-                "upstream Anthropic stream ended before message_stop",
-            ));
-        }
-
-        if terminal_failure.is_none() {
-            if let Some(client_chunk) =
-                flush_upstream_sse_control_filter(&mut upstream_control_filter)
-            {
-                let _ = forward_direct_passthrough_client_chunk(
-                    &tx,
-                    client_chunk,
-                    &mut downstream_dropped,
-                    &mut client_visible_stream_completed,
-                    &mut client_stream_completion_tracker,
-                    !requires_anthropic_message_stop,
-                    &mut client_stream_bytes,
-                    &mut buffered_body,
-                    &mut client_body_truncated,
-                    max_stream_body_buffer_bytes,
-                    stream_started_at_for_report,
-                    &mut last_client_chunk_elapsed_ms,
-                    !observed_first_client_send,
-                    trace_id_owned.as_str(),
-                    request_id_for_report_log.as_str(),
-                    candidate_id_for_report.as_deref(),
-                )
-                .await;
-            }
-        }
-
-        if let Some(failure) = terminal_failure
-            .as_ref()
-            .filter(|_| !downstream_dropped && !provider_error_forwarded_to_client)
-        {
-            match encode_terminal_sse_error_event_for_plan(&plan_for_report, failure) {
-                Ok(error_event) => {
-                    let _ = forward_direct_passthrough_client_chunk(
-                        &tx,
-                        error_event,
-                        &mut downstream_dropped,
-                        &mut client_visible_stream_completed,
-                        &mut client_stream_completion_tracker,
-                        true,
-                        &mut client_stream_bytes,
-                        &mut buffered_body,
-                        &mut client_body_truncated,
-                        max_stream_body_buffer_bytes,
-                        stream_started_at_for_report,
-                        &mut last_client_chunk_elapsed_ms,
-                        !observed_first_client_send,
-                        trace_id_owned.as_str(),
-                        request_id_for_report_log.as_str(),
-                        candidate_id_for_report.as_deref(),
-                    )
-                    .await;
-                }
-                Err(_err) => {
-                    warn!(
-                        event_name = "direct_passthrough_terminal_error_event_encode_failed",
-                        log_type = "ops",
-                        trace_id = %trace_id_owned,
-                        request_id = %request_id_for_report_log,
-                        candidate_id = ?candidate_id_for_report.as_deref(),
-                        error_category = "terminal_error_event_encode_failed",
-                        "gateway direct passthrough failed to encode terminal SSE error event"
-                    );
-                }
-            }
-        }
-        drop(tx);
-
-        let mut stream_terminal_summary = finalize_stream_usage_observer(
-            &mut stream_usage_observer,
-            stream_usage_report_context.as_ref(),
-            &mut stream_usage_observer_buffered,
-        );
-
-        if downstream_dropped && client_visible_stream_completed && terminal_failure.is_none() {
-            debug!(
-                event_name = "direct_passthrough_downstream_closed_after_done",
-                log_type = "debug",
-                trace_id = %trace_id_owned,
-                request_id = %request_id_for_report_log,
-                candidate_id = ?candidate_id_for_report.as_deref(),
-                "gateway treats direct passthrough downstream close after terminal SSE event as completed"
-            );
-            downstream_dropped = false;
-        }
-
-        if downstream_dropped {
-            let terminal_telemetry = Some(build_terminal_stream_telemetry(
-                stream_started_at_for_report,
-                telemetry.as_ref(),
-                usage_stream_telemetry.as_ref(),
-                provider_stream_bytes,
-            ));
-            let report_context_for_payload = report_context_with_stage_trace(
-                report_context_owned,
-                stage_trace_for_report,
-                stream_started_at_for_report,
-                terminal_telemetry.as_ref(),
-            );
-            let report_context_for_payload = report_context_with_request_diagnostics(
-                report_context_for_payload,
-                request_diagnostics_for_report.as_ref(),
-                stream_started_at_for_report,
-                terminal_telemetry.as_ref(),
-            );
-            let usage_payload = build_stream_usage_payload(
-                trace_id_owned,
-                report_kind_owned.unwrap_or_default(),
-                report_context_for_payload,
-                499,
-                provider_headers,
-                headers_for_report,
-                &provider_buffered_body,
-                provider_body_truncated,
-                &buffered_body,
-                client_body_truncated,
-                stream_terminal_summary,
-                terminal_telemetry,
-            );
-            record_stream_terminal_usage(
-                &state_for_report,
-                &plan_for_report,
-                usage_payload.report_context.as_ref(),
-                &usage_payload,
-                true,
-            )
-            .await;
-            record_local_request_candidate_status(
-                &state_for_report,
-                &plan_for_report,
-                usage_payload.report_context.as_ref(),
-                SchedulerRequestCandidateStatusUpdate {
-                    status: RequestCandidateStatus::Cancelled,
-                    status_code: Some(499),
-                    error_type: Some("downstream_disconnect".to_string()),
-                    error_message: Some("client disconnected before stream completion".to_string()),
-                    latency_ms: usage_payload
-                        .telemetry
-                        .as_ref()
-                        .and_then(|value| value.elapsed_ms),
-                    started_at_unix_ms: Some(candidate_started_unix_secs),
-                    finished_at_unix_ms: Some(current_request_candidate_unix_ms()),
-                },
-            )
-            .await;
-            return;
-        }
-
-        if let Some(failure) = terminal_failure {
-            record_manual_proxy_stream_error(&state_for_report, &plan_for_report).await;
-            let terminal_telemetry = Some(build_terminal_stream_telemetry(
-                stream_started_at_for_report,
-                telemetry.as_ref(),
-                usage_stream_telemetry.as_ref(),
-                provider_stream_bytes,
-            ));
-            let report_context_for_payload = report_context_with_stage_trace(
-                report_context_owned,
-                stage_trace_for_report,
-                stream_started_at_for_report,
-                terminal_telemetry.as_ref(),
-            );
-            let report_context_for_payload = report_context_with_request_diagnostics(
-                report_context_for_payload,
-                request_diagnostics_for_report.as_ref(),
-                stream_started_at_for_report,
-                terminal_telemetry.as_ref(),
-            );
-            submit_midstream_stream_failure(
-                &state_for_report,
-                &trace_id_owned,
-                &plan_for_report,
-                direct_stream_finalize_kind_owned.as_deref(),
-                report_context_for_payload,
-                headers_for_report,
-                terminal_telemetry,
-                &provider_buffered_body,
-                candidate_started_unix_secs,
-                failure,
-            )
-            .await;
-            return;
-        }
-
-        maybe_apply_kiro_prompt_cache_usage_to_stream_summary(
-            &state_for_report,
-            &plan_for_report,
-            report_context_owned.as_ref(),
-            &mut stream_terminal_summary,
-        )
-        .await;
-        let requires_observed_terminal_event = stream_requires_observed_terminal_event(
-            plan_for_report.provider_api_format.as_str(),
-            stream_usage_report_context.as_ref(),
-        );
-        ensure_stream_terminal_summary_for_missing_observed_finish(
-            &mut stream_terminal_summary,
-            requires_observed_terminal_event,
-        );
-        let missing_observed_finish =
-            stream_terminal_summary_missing_observed_finish_with_requirement(
-                stream_terminal_summary.as_ref(),
-                requires_observed_terminal_event,
-            );
-        let stream_failed = stream_terminal_summary_represents_failure_with_requirement(
-            stream_terminal_summary.as_ref(),
-            requires_observed_terminal_event,
-        );
-        let stream_terminal_error_message = stream_terminal_summary
-            .as_ref()
-            .and_then(|summary| summary.parser_error.clone())
-            .or_else(|| {
-                missing_observed_finish.then(|| {
-                    "execution runtime stream ended before provider terminal event".to_string()
-                })
-            });
-        let should_submit_report = report_kind_owned.is_some();
-        let terminal_telemetry = Some(build_terminal_stream_telemetry(
-            stream_started_at_for_report,
-            telemetry.as_ref(),
-            usage_stream_telemetry.as_ref(),
-            provider_stream_bytes,
-        ));
-        let report_context_for_payload = report_context_with_stage_trace(
-            report_context_owned,
-            stage_trace_for_report,
-            stream_started_at_for_report,
-            terminal_telemetry.as_ref(),
-        );
-        let report_context_for_payload = report_context_with_request_diagnostics(
-            report_context_for_payload,
-            request_diagnostics_for_report.as_ref(),
-            stream_started_at_for_report,
-            terminal_telemetry.as_ref(),
-        );
-        let usage_payload = build_stream_usage_payload(
-            trace_id_owned.clone(),
-            report_kind_owned.unwrap_or_default(),
-            report_context_for_payload,
-            status_code,
-            provider_headers,
-            headers_for_report,
-            &provider_buffered_body,
-            provider_body_truncated,
-            &buffered_body,
-            client_body_truncated,
-            stream_terminal_summary,
-            terminal_telemetry,
-        );
-        if stream_failed {
-            warn!(
-                event_name = "direct_passthrough_stream_failed",
-                log_type = "ops",
-                trace_id = %trace_id_owned,
-                request_id = %request_id_for_report_log,
-                candidate_id = ?candidate_id_for_report.as_deref(),
-                status_code,
-                error_message = stream_terminal_error_message.as_deref().unwrap_or_default(),
-                "gateway direct passthrough stream ended with a failed terminal state"
-            );
-        } else {
-            apply_local_execution_effect(
-                &state_for_report,
-                LocalExecutionEffectContext {
-                    plan: &plan_for_report,
-                    report_context: usage_payload.report_context.as_ref(),
-                },
-                LocalExecutionEffect::HealthSuccess(LocalHealthSuccessEffect),
-            )
-            .await;
-            apply_local_execution_effect(
-                &state_for_report,
-                LocalExecutionEffectContext {
-                    plan: &plan_for_report,
-                    report_context: usage_payload.report_context.as_ref(),
-                },
-                LocalExecutionEffect::AdaptiveSuccess(LocalAdaptiveSuccessEffect),
-            )
-            .await;
-            apply_local_execution_effect(
-                &state_for_report,
-                LocalExecutionEffectContext {
-                    plan: &plan_for_report,
-                    report_context: usage_payload.report_context.as_ref(),
-                },
-                LocalExecutionEffect::PoolSuccessStream {
-                    payload: &usage_payload,
-                },
-            )
-            .await;
-        }
-        record_stream_terminal_usage(
-            &state_for_report,
-            &plan_for_report,
-            usage_payload.report_context.as_ref(),
-            &usage_payload,
-            false,
-        )
-        .await;
-        record_local_request_candidate_status(
-            &state_for_report,
-            &plan_for_report,
-            usage_payload.report_context.as_ref(),
-            SchedulerRequestCandidateStatusUpdate {
-                status: if stream_failed {
-                    RequestCandidateStatus::Failed
-                } else {
-                    RequestCandidateStatus::Success
-                },
-                status_code: Some(status_code),
-                error_type: if stream_failed {
-                    if missing_observed_finish {
-                        Some("stream_missing_terminal_event".to_string())
-                    } else {
-                        Some("stream_terminal_error".to_string())
-                    }
-                } else {
-                    None
-                },
-                error_message: stream_failed
-                    .then_some(stream_terminal_error_message)
-                    .flatten(),
-                latency_ms: usage_payload
-                    .telemetry
-                    .as_ref()
-                    .and_then(|value| value.elapsed_ms),
-                started_at_unix_ms: Some(candidate_started_unix_secs),
-                finished_at_unix_ms: Some(current_request_candidate_unix_ms()),
-            },
-        )
-        .await;
-
-        if should_submit_report {
-            if let Err(_err) = submit_stream_report(&state_for_report, usage_payload).await {
-                warn!(
-                    event_name = "execution_report_submit_failed",
-                    log_type = "ops",
-                    trace_id = %trace_id_owned,
-                    request_id = %request_id_for_report_log,
-                    candidate_id = ?candidate_id_for_report.as_deref(),
-                    report_scope = "direct_passthrough_stream",
-                    error_category = "stream_report_submit_failed",
-                    "gateway failed to submit direct passthrough stream execution report"
-                );
-            }
-        }
-    });
-
-    let body_stream = build_sse_body_stream(
-        Vec::new(),
-        rx,
-        false,
-        false,
+    let finalizer = DirectPassthroughFinalizer::new(DirectPassthroughFinalizerCore {
+        state: state.clone(),
+        plan,
+        trace_id: trace_id.to_string(),
+        report_kind,
+        report_context,
+        lifecycle_seed,
+        direct_stream_finalize_kind,
+        stream_started_at,
+        stage_trace,
+        request_diagnostics,
+        request_id_for_log,
+        candidate_id,
+        request_candidate_status_snapshot,
+        deferred_request_candidate_status_record: None,
+        candidate_started_unix_secs,
+        status_code,
+        provider_headers,
+        headers: headers_for_report,
+        stream_usage_report_context,
+        stream_usage_observer,
+        stream_usage_observer_buffered: StreamUsageObservationBuffer::new(
+            max_stream_body_buffer_bytes,
+        ),
+        provider_error_inspection: ProviderStreamErrorInspection::default(),
+        max_stream_body_buffer_bytes,
+        provider_buffered_body: StreamBodyCapture::default(),
+        buffered_body: StreamBodyCapture::default(),
+        provider_body_truncated: false,
+        client_body_truncated: false,
+        client_stream_completion_tracker: ClientVisibleStreamCompletionTracker::default(),
         requires_anthropic_message_stop,
-        SSE_KEEPALIVE_INTERVAL,
+        client_visible_stream_completed: false,
+        usage_stream_telemetry: None,
+        telemetry: None,
+        provider_stream_bytes: 0,
+        client_stream_bytes: 0,
+        last_client_chunk_elapsed_ms: 0,
+        pending_recorded,
+        stream_started_recorded: false,
+        terminal_failure: None,
+        _provider_pool_in_flight_guard: in_flight_guard,
+        _upstream_target_permit: upstream_target_permit,
+    });
+    let body_stream = build_direct_passthrough_inline_body_stream(
+        finalizer,
+        prefetched_body,
+        response,
+        upstream_started_at,
+        stream_first_byte_timeout,
     );
     Ok(Some(build_client_response_from_parts(
         status_code,

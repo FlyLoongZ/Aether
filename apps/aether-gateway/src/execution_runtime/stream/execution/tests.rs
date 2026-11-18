@@ -59,8 +59,8 @@ use super::{
     execute_in_process_stream_with_oauth_retry, execute_stream_from_frame_stream,
     execute_stream_from_frame_stream_with_retry_scope, execution_stream_frame_codec,
     maybe_apply_kiro_prompt_cache_usage_to_stream_summary, merge_stream_terminal_summary,
-    normalize_declared_stream_response_headers, parse_direct_passthrough_mode,
-    prefetch_direct_stream_error_body, prefetched_openai_responses_body_has_output_boundary,
+    normalize_declared_stream_response_headers, prefetch_direct_stream_error_body,
+    prefetched_openai_responses_body_has_output_boundary,
     record_sync_terminal_usage_with_handoff_after_spawn, resolve_provider_stream_error_status_code,
     select_direct_anthropic_prefetch_wait, should_limit_direct_finalize_prefetch,
     should_normalize_declared_stream_response_headers, should_probe_success_failover_before_stream,
@@ -70,11 +70,10 @@ use super::{
     stream_terminal_summary_represents_failure_with_requirement,
     wrap_non_json_binary_stream_error_for_client, ClientVisibleStreamCompletionTracker,
     DirectPassthroughFinalizer, DirectPassthroughFinalizerCore, DirectPassthroughInlineBodyState,
-    DirectPassthroughMode, PostStopFrameReadBudget, PostStopLimitedStreamReader,
-    ProviderStreamErrorInspection, ANTHROPIC_POST_STOP_DRAIN_MAX_BYTES,
-    GEMINI_FILES_DOWNLOAD_PLAN_KIND, OPENAI_CHAT_STREAM_PLAN_KIND,
-    OPENAI_RESPONSES_STREAM_PLAN_KIND, POST_STOP_MAX_EMPTY_CHUNKS_PER_POLL,
-    PROVIDER_STREAM_ERROR_INSPECTION_MAX_BYTES,
+    PostStopFrameReadBudget, PostStopLimitedStreamReader, ProviderStreamErrorInspection,
+    ANTHROPIC_POST_STOP_DRAIN_MAX_BYTES, GEMINI_FILES_DOWNLOAD_PLAN_KIND,
+    OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_RESPONSES_STREAM_PLAN_KIND,
+    POST_STOP_MAX_EMPTY_CHUNKS_PER_POLL, PROVIDER_STREAM_ERROR_INSPECTION_MAX_BYTES,
 };
 use crate::control::GatewayControlDecision;
 use crate::stage_metrics::RequestStageTrace;
@@ -5503,26 +5502,6 @@ fn limits_prefetch_for_openai_image_and_rewritten_streams() {
         "openai_chat_stream",
         false
     ));
-}
-
-#[test]
-fn direct_passthrough_mode_defaults_inline_and_accepts_legacy() {
-    assert_eq!(
-        parse_direct_passthrough_mode(""),
-        DirectPassthroughMode::Inline
-    );
-    assert_eq!(
-        parse_direct_passthrough_mode("inline"),
-        DirectPassthroughMode::Inline
-    );
-    assert_eq!(
-        parse_direct_passthrough_mode("legacy"),
-        DirectPassthroughMode::Legacy
-    );
-    assert_eq!(
-        parse_direct_passthrough_mode("mpsc"),
-        DirectPassthroughMode::Legacy
-    );
 }
 
 #[test]
