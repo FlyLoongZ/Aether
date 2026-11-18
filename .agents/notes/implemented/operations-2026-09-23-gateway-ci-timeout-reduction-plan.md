@@ -1,9 +1,11 @@
-# Test (Gateway) CI 耗时减负方案
+# Test (Gateway) CI 耗时减负方案（历史记录）
+
+> 这是一份 2026-09-23 的已执行方案记录，保留用于追溯当时的 CI 基线。
+> 文中引用的 `system-slimming-audit-2026-09-08.md` 等临时审计文档已不在仓库中。
 
 - 文档日期：2026-09-23（Asia/Shanghai）
 - 目标 job：`.github/workflows/rust-ci.yml` 中的 `test_gateway`（显示名 `Test (Gateway)`）
 - 优化目标：**缩短 CI 耗时**，不减少安全/回归断言
-- 关联审计：`docs/operations/system-slimming-audit-2026-09-08.md`
 - **第一批（A1+A2+A4）已实施**，待 CI 前后对照确认分钟数。
 - **冗余 CI 步骤清理已实施**：移除 Nightly 空 doctest、收敛重复的 data feature / adapter 矩阵，并清掉 Tunnel 遗留的测试参数与重复 `#[cfg(test)]` 标注（见 2.1、A1、B4、C3）。
 

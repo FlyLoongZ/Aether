@@ -500,8 +500,8 @@ pub(crate) enum ExecutionRuntimeTransportError {
         sanitize_error_detail(message)
     )]
     UpstreamResponseDecode { encoding: String, message: String },
-    #[error("hub relay request failed: {}", sanitize_error_detail(.0))]
-    RelayError(String),
+    #[error("failed to compress request body: {}", sanitize_error_detail(.0))]
+    BodyCompression(String),
     #[error("upstream response is not valid JSON: {0}")]
     InvalidJson(serde_json::Error),
 }
@@ -589,8 +589,8 @@ impl std::fmt::Debug for ExecutionRuntimeTransportError {
                 .field("encoding", &sanitize_error_detail(encoding))
                 .field("message", &sanitize_error_detail(message))
                 .finish(),
-            Self::RelayError(detail) => formatter
-                .debug_tuple("RelayError")
+            Self::BodyCompression(detail) => formatter
+                .debug_tuple("BodyCompression")
                 .field(&sanitize_error_detail(detail))
                 .finish(),
             Self::InvalidJson(error) => formatter
@@ -1509,15 +1509,15 @@ fn gzip_bytes(body_bytes: &[u8]) -> Result<Vec<u8>, ExecutionRuntimeTransportErr
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder
         .write_all(body_bytes)
-        .map_err(|err| ExecutionRuntimeTransportError::RelayError(err.to_string()))?;
+        .map_err(|err| ExecutionRuntimeTransportError::BodyCompression(err.to_string()))?;
     encoder
         .finish()
-        .map_err(|err| ExecutionRuntimeTransportError::RelayError(err.to_string()))
+        .map_err(|err| ExecutionRuntimeTransportError::BodyCompression(err.to_string()))
 }
 
 fn zstd_bytes(body_bytes: &[u8]) -> Result<Vec<u8>, ExecutionRuntimeTransportError> {
     zstd::stream::encode_all(std::io::Cursor::new(body_bytes), 3)
-        .map_err(|err| ExecutionRuntimeTransportError::RelayError(err.to_string()))
+        .map_err(|err| ExecutionRuntimeTransportError::BodyCompression(err.to_string()))
 }
 
 pub(crate) fn resolve_non_stream_total_timeout_for_request(

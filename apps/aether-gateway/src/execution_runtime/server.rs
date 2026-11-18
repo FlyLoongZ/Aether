@@ -774,7 +774,7 @@ impl IntoResponse for ExecutionRuntimeAppError {
                 | ExecutionRuntimeTransportError::UpstreamRequest(_)
                 | ExecutionRuntimeTransportError::UpstreamResponseTooLarge { .. }
                 | ExecutionRuntimeTransportError::UpstreamResponseDecode { .. }
-                | ExecutionRuntimeTransportError::RelayError(_)
+                | ExecutionRuntimeTransportError::BodyCompression(_)
                 | ExecutionRuntimeTransportError::InvalidJson(_),
             ) => StatusCode::BAD_GATEWAY,
         };
@@ -805,7 +805,7 @@ impl IntoResponse for ExecutionRuntimeAppError {
                 | ExecutionRuntimeTransportError::UpstreamRequest(_)
                 | ExecutionRuntimeTransportError::UpstreamResponseTooLarge { .. }
                 | ExecutionRuntimeTransportError::UpstreamResponseDecode { .. }
-                | ExecutionRuntimeTransportError::RelayError(_)
+                | ExecutionRuntimeTransportError::BodyCompression(_)
                 | ExecutionRuntimeTransportError::InvalidJson(_),
             ) => "Upstream request failed".to_string(),
             ExecutionRuntimeServerError::Overloaded { .. } => unreachable!(),

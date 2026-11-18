@@ -360,15 +360,15 @@ fn transport_error_debug_sanitizes_dynamic_url_details() {
     assert!(!decode_display.contains("fragment-secret"));
     assert!(!decode_display.contains("127.0.0.1"));
 
-    let relay = ExecutionRuntimeTransportError::RelayError(format!(
-        "relay failed while contacting {secret_url}"
+    let compression = ExecutionRuntimeTransportError::BodyCompression(format!(
+        "compression failed while contacting {secret_url}"
     ));
-    let relay_display = format!("{relay}");
-    assert!(!relay_display.contains("upstream-user"));
-    assert!(!relay_display.contains("upstream-password"));
-    assert!(!relay_display.contains("query-secret"));
-    assert!(!relay_display.contains("fragment-secret"));
-    assert!(!relay_display.contains("127.0.0.1"));
+    let compression_display = format!("{compression}");
+    assert!(!compression_display.contains("upstream-user"));
+    assert!(!compression_display.contains("upstream-password"));
+    assert!(!compression_display.contains("query-secret"));
+    assert!(!compression_display.contains("fragment-secret"));
+    assert!(!compression_display.contains("127.0.0.1"));
 
     let source = reqwest::Proxy::all("http://[")
         .expect_err("malformed proxy should produce a reqwest error")
