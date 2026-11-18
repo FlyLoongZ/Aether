@@ -289,10 +289,14 @@ fn non_empty_decision_identity(value: Option<&str>) -> Option<String> {
 pub(crate) struct ResponsesWebSocketBodyNormalization {
     provider_type: String,
     provider_api_format: String,
+    /// Consumed only by the test-only normalization mirror below.
+    #[allow(dead_code)]
     client_api_format: String,
     mapped_model: String,
     requested_model: String,
     upstream_is_stream: bool,
+    /// Consumed only by the test-only normalization mirror below.
+    #[allow(dead_code)]
     force_body_stream_field: bool,
     body_rules: Option<serde_json::Value>,
     request_headers: http::HeaderMap,
@@ -430,44 +434,6 @@ impl ResponsesWebSocketBodyNormalization {
             && self.uses_codex_responses_lite() == other.uses_codex_responses_lite()
     }
 
-    /// Produces a versioned digest of the complete body-normalization
-    /// contract. A continuation registry stores only this digest so a new
-    /// socket can fail closed when endpoint rules, model capabilities or
-    /// header-dependent normalization has changed, without persisting request
-    /// headers or other sensitive configuration.
-    pub(crate) fn continuation_fingerprint(&self) -> [u8; 32] {
-        use sha2::Digest as _;
-
-        let mut digest = sha2::Sha256::new();
-        digest.update(b"aether-responses-websocket-normalization-v1");
-        update_normalization_string_digest(&mut digest, self.provider_type.as_str());
-        update_normalization_string_digest(&mut digest, self.provider_api_format.as_str());
-        update_normalization_string_digest(&mut digest, self.client_api_format.as_str());
-        update_normalization_string_digest(&mut digest, self.mapped_model.as_str());
-        update_normalization_string_digest(&mut digest, self.requested_model.as_str());
-        digest.update([
-            u8::from(self.upstream_is_stream),
-            u8::from(self.force_body_stream_field),
-        ]);
-        update_normalization_optional_json_digest(&mut digest, self.body_rules.as_ref());
-        update_normalization_body_rule_headers_digest(
-            &mut digest,
-            &self.request_headers,
-            self.body_rules.as_ref(),
-        );
-        update_normalization_codex_capabilities_digest(
-            &mut digest,
-            self.codex_model_capabilities.as_ref(),
-        );
-        digest.update([match self.reasoning_replay_policy {
-            crate::ai_serving::OpenAiResponsesReasoningReplayPolicy::OpenAiItemIds => 0,
-            crate::ai_serving::OpenAiResponsesReasoningReplayPolicy::DeepSeekOpaque => 1,
-            crate::ai_serving::OpenAiResponsesReasoningReplayPolicy::XaiEncrypted => 2,
-        }]);
-        update_normalization_optional_json_digest(&mut digest, self.model_directive_patch.as_ref());
-        digest.finalize().into()
-    }
-
     #[cfg(test)]
     /// Applies the same body transformations the planner applied on the turn
     /// that bound this upstream.
@@ -569,140 +535,6 @@ impl ResponsesWebSocketBodyNormalization {
         finalized.ok()?;
         Some(body)
     }
-}
-
-fn update_normalization_bytes_digest(digest: &mut sha2::Sha256, value: &[u8]) {
-    use sha2::Digest as _;
-
-    digest.update((value.len() as u64).to_be_bytes());
-    digest.update(value);
-}
-
-fn update_normalization_string_digest(digest: &mut sha2::Sha256, value: &str) {
-    update_normalization_bytes_digest(digest, value.as_bytes());
-}
-
-fn update_normalization_optional_string_digest(digest: &mut sha2::Sha256, value: Option<&str>) {
-    use sha2::Digest as _;
-
-    match value {
-        Some(value) => {
-            digest.update([1]);
-            update_normalization_string_digest(digest, value);
-        }
-        None => digest.update([0]),
-    }
-}
-
-fn update_normalization_string_vec_digest(digest: &mut sha2::Sha256, values: &[String]) {
-    use sha2::Digest as _;
-
-    digest.update((values.len() as u64).to_be_bytes());
-    for value in values {
-        update_normalization_string_digest(digest, value);
-    }
-}
-
-fn update_normalization_optional_json_digest(
-    digest: &mut sha2::Sha256,
-    value: Option<&serde_json::Value>,
-) {
-    use sha2::Digest as _;
-
-    match value {
-        Some(value) => {
-            digest.update([1]);
-            update_normalization_json_digest(digest, value);
-        }
-        None => digest.update([0]),
-    }
-}
-
-fn update_normalization_json_digest(digest: &mut sha2::Sha256, value: &serde_json::Value) {
-    use serde_json::Value;
-    use sha2::Digest as _;
-
-    match value {
-        Value::Null => digest.update(b"n"),
-        Value::Bool(value) => digest.update(if *value { b"t" } else { b"f" }),
-        Value::Number(value) => {
-            digest.update(b"d");
-            update_normalization_string_digest(digest, value.to_string().as_str());
-        }
-        Value::String(value) => {
-            digest.update(b"s");
-            update_normalization_string_digest(digest, value);
-        }
-        Value::Array(values) => {
-            digest.update(b"[");
-            digest.update((values.len() as u64).to_be_bytes());
-            for value in values {
-                update_normalization_json_digest(digest, value);
-            }
-            digest.update(b"]");
-        }
-        Value::Object(values) => {
-            digest.update(b"{");
-            digest.update((values.len() as u64).to_be_bytes());
-            let mut keys = values.keys().collect::<Vec<_>>();
-            keys.sort_unstable();
-            for key in keys {
-                update_normalization_string_digest(digest, key);
-                update_normalization_json_digest(digest, &values[key]);
-            }
-            digest.update(b"}");
-        }
-    }
-}
-
-fn update_normalization_body_rule_headers_digest(
-    digest: &mut sha2::Sha256,
-    headers: &http::HeaderMap,
-    body_rules: Option<&serde_json::Value>,
-) {
-    use sha2::Digest as _;
-
-    let dependencies =
-        crate::ai_serving::transport::rules::body_rules_request_header_dependencies(body_rules);
-    digest.update((dependencies.len() as u64).to_be_bytes());
-    for name in dependencies {
-        update_normalization_string_digest(digest, name.as_str());
-        let value = headers
-            .get(name.as_str())
-            .and_then(|value| value.to_str().ok())
-            .map(str::trim);
-        update_normalization_optional_string_digest(digest, value);
-    }
-}
-
-fn update_normalization_codex_capabilities_digest(
-    digest: &mut sha2::Sha256,
-    capabilities: Option<&crate::ai_serving::CodexResponsesModelCapabilities>,
-) {
-    use sha2::Digest as _;
-
-    let Some(capabilities) = capabilities else {
-        digest.update([0]);
-        return;
-    };
-    digest.update([1]);
-    digest.update([
-        u8::from(capabilities.use_responses_lite),
-        u8::from(capabilities.supports_reasoning_summary_parameter),
-        u8::from(capabilities.supports_parallel_tool_calls),
-        u8::from(capabilities.support_verbosity),
-    ]);
-    update_normalization_optional_string_digest(
-        digest,
-        capabilities.default_reasoning_effort.as_deref(),
-    );
-    update_normalization_optional_string_digest(
-        digest,
-        capabilities.default_reasoning_summary.as_deref(),
-    );
-    update_normalization_string_vec_digest(digest, &capabilities.supported_reasoning_efforts);
-    update_normalization_optional_string_digest(digest, capabilities.default_verbosity.as_deref());
-    update_normalization_string_vec_digest(digest, &capabilities.supported_service_tiers);
 }
 
 /// Builds one upstream decision for a Responses WebSocket turn. The session
@@ -921,116 +753,5 @@ async fn release_responses_websocket_planning_lease(
             );
             false
         }
-    }
-}
-
-#[cfg(test)]
-mod continuation_fingerprint_tests {
-    use http::HeaderValue;
-    use serde_json::json;
-
-    use super::ResponsesWebSocketBodyNormalization;
-    use crate::ai_serving::OpenAiResponsesReasoningReplayPolicy;
-
-    #[test]
-    fn normalization_fingerprint_is_stable_for_json_object_key_order() {
-        let first = ResponsesWebSocketBodyNormalization::for_tests("provider-model")
-            .with_model_directive_patch_for_tests(json!({"reasoning": {"effort": "high"}, "x": 1}));
-        let second = ResponsesWebSocketBodyNormalization::for_tests("provider-model")
-            .with_model_directive_patch_for_tests(json!({"x": 1, "reasoning": {"effort": "high"}}));
-        assert_eq!(
-            first.continuation_fingerprint(),
-            second.continuation_fingerprint()
-        );
-    }
-
-    #[test]
-    fn normalization_fingerprint_changes_with_effective_contract() {
-        let base = ResponsesWebSocketBodyNormalization::for_tests("provider-model");
-        let changed_policy = base.clone().with_reasoning_replay_policy_for_tests(
-            OpenAiResponsesReasoningReplayPolicy::DeepSeekOpaque,
-        );
-        assert_ne!(
-            base.continuation_fingerprint(),
-            changed_policy.continuation_fingerprint()
-        );
-
-        let changed_patch = base
-            .clone()
-            .with_model_directive_patch_for_tests(json!({"reasoning": {"effort": "low"}}));
-        assert_ne!(
-            base.continuation_fingerprint(),
-            changed_patch.continuation_fingerprint()
-        );
-    }
-
-    #[test]
-    fn normalization_fingerprint_ignores_unrelated_volatile_request_headers() {
-        let body_rules = json!([{
-            "action": "set",
-            "path": "store",
-            "value": false,
-            "condition": {
-                "source": "request_headers",
-                "path": "x-contract",
-                "op": "eq",
-                "value": "enabled"
-            }
-        }]);
-        let mut first = ResponsesWebSocketBodyNormalization::for_tests("provider-model")
-            .with_body_rules_for_tests(body_rules);
-        first
-            .request_headers
-            .insert("x-contract", HeaderValue::from_static("enabled"));
-        first
-            .request_headers
-            .insert("x-request-id", HeaderValue::from_static("request-1"));
-        first
-            .request_headers
-            .insert("cf-ray", HeaderValue::from_static("edge-1"));
-        let mut second = first.clone();
-        second
-            .request_headers
-            .insert("x-request-id", HeaderValue::from_static("request-2"));
-        second
-            .request_headers
-            .insert("cf-ray", HeaderValue::from_static("edge-2"));
-
-        assert_eq!(
-            first.continuation_fingerprint(),
-            second.continuation_fingerprint(),
-            "headers that no body-rule condition reads must not invalidate a persisted continuation"
-        );
-    }
-
-    #[test]
-    fn normalization_fingerprint_tracks_headers_used_by_body_rule_conditions() {
-        let body_rules = json!([{
-            "action": "set",
-            "path": "store",
-            "value": false,
-            "condition": {
-                "source": "request_headers",
-                "path": "X-Contract",
-                "op": "eq",
-                "value": "enabled"
-            }
-        }]);
-        let mut first = ResponsesWebSocketBodyNormalization::for_tests("provider-model")
-            .with_body_rules_for_tests(body_rules.clone());
-        first
-            .request_headers
-            .insert("x-contract", HeaderValue::from_static("enabled"));
-        let mut second = ResponsesWebSocketBodyNormalization::for_tests("provider-model")
-            .with_body_rules_for_tests(body_rules);
-        second
-            .request_headers
-            .insert("x-contract", HeaderValue::from_static("disabled"));
-
-        assert_ne!(
-            first.continuation_fingerprint(),
-            second.continuation_fingerprint(),
-            "a header that controls an effective body-rule condition remains part of the contract"
-        );
     }
 }

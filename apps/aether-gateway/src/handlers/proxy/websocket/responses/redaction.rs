@@ -167,10 +167,6 @@ pub(super) struct ResponsesWebSocketRedactionRestorer {
 }
 
 impl ResponsesWebSocketRedactionRestorer {
-    pub(super) fn has_sessions(&self) -> bool {
-        !self.sessions.is_empty()
-    }
-
     /// 登记这一轮的 mask session。
     pub(super) fn register(&mut self, session: RedactionSession) {
         if session.mapping_count() == 0 {
@@ -948,11 +944,11 @@ mod tests {
 
         let mut restorer = ResponsesWebSocketRedactionRestorer::default();
         restorer.register(prior.session);
-        assert!(restorer.has_sessions());
+        assert!(!restorer.sessions.is_empty());
 
         restorer.start_new_chain(None);
 
-        assert!(!restorer.has_sessions());
+        assert!(restorer.sessions.is_empty());
         assert!(restorer
             .restore_provider_frame_text(&provider_delta_frame(&prior_sentinel))
             .expect("cleared-chain restoration check must not fail")

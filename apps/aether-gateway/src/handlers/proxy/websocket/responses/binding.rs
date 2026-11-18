@@ -144,143 +144,6 @@ impl UpstreamBindingIdentity {
         changed
     }
 
-    /// Returns a versioned, one-way identity suitable for a continuation
-    /// registry. The digest covers every field used by `PartialEq`, including
-    /// effective credential and transport state, without persisting header or
-    /// credential values themselves.
-    pub(super) fn continuation_fingerprint(&self) -> [u8; 32] {
-        let mut digest = Sha256::new();
-        digest.update(b"aether-responses-websocket-binding-v1");
-        digest.update([match self.adapter_kind {
-            ResponsesWebSocketAdapter::Standard => 0,
-            ResponsesWebSocketAdapter::Codex => 1,
-        }]);
-        update_optional_string_digest(&mut digest, self.provider_id.as_deref());
-        update_optional_string_digest(&mut digest, self.endpoint_id.as_deref());
-        update_optional_string_digest(&mut digest, self.key_id.as_deref());
-        update_string_digest(&mut digest, self.upstream_url.as_str());
-        update_string_map_digest(&mut digest, &self.handshake_headers);
-        digest.update(self.credential_fingerprint);
-        update_proxy_digest(&mut digest, self.proxy.as_ref());
-        update_transport_profile_digest(&mut digest, self.transport_profile.as_ref());
-        digest.finalize().into()
-    }
-
-    pub(super) fn adapter_kind(&self) -> ResponsesWebSocketAdapter {
-        self.adapter_kind
-    }
-}
-
-fn update_bytes_digest(digest: &mut Sha256, value: &[u8]) {
-    digest.update((value.len() as u64).to_be_bytes());
-    digest.update(value);
-}
-
-fn update_string_digest(digest: &mut Sha256, value: &str) {
-    update_bytes_digest(digest, value.as_bytes());
-}
-
-fn update_optional_string_digest(digest: &mut Sha256, value: Option<&str>) {
-    match value {
-        Some(value) => {
-            digest.update([1]);
-            update_string_digest(digest, value);
-        }
-        None => digest.update([0]),
-    }
-}
-
-fn update_optional_bool_digest(digest: &mut Sha256, value: Option<bool>) {
-    digest.update([match value {
-        None => 0,
-        Some(false) => 1,
-        Some(true) => 2,
-    }]);
-}
-
-fn update_string_map_digest(digest: &mut Sha256, values: &BTreeMap<String, String>) {
-    digest.update((values.len() as u64).to_be_bytes());
-    for (name, value) in values {
-        update_string_digest(digest, name);
-        update_string_digest(digest, value);
-    }
-}
-
-fn update_optional_json_digest(digest: &mut Sha256, value: Option<&serde_json::Value>) {
-    match value {
-        Some(value) => {
-            digest.update([1]);
-            update_json_digest(digest, value);
-        }
-        None => digest.update([0]),
-    }
-}
-
-fn update_json_digest(digest: &mut Sha256, value: &serde_json::Value) {
-    use serde_json::Value;
-
-    match value {
-        Value::Null => digest.update(b"n"),
-        Value::Bool(value) => digest.update(if *value { b"t" } else { b"f" }),
-        Value::Number(value) => {
-            digest.update(b"d");
-            update_string_digest(digest, value.to_string().as_str());
-        }
-        Value::String(value) => {
-            digest.update(b"s");
-            update_string_digest(digest, value);
-        }
-        Value::Array(values) => {
-            digest.update(b"[");
-            digest.update((values.len() as u64).to_be_bytes());
-            for value in values {
-                update_json_digest(digest, value);
-            }
-            digest.update(b"]");
-        }
-        Value::Object(values) => {
-            digest.update(b"{");
-            digest.update((values.len() as u64).to_be_bytes());
-            let mut keys = values.keys().collect::<Vec<_>>();
-            keys.sort_unstable();
-            for key in keys {
-                update_string_digest(digest, key);
-                update_json_digest(digest, &values[key]);
-            }
-            digest.update(b"}");
-        }
-    }
-}
-
-fn update_proxy_digest(digest: &mut Sha256, proxy: Option<&ProxySnapshot>) {
-    let Some(proxy) = proxy else {
-        digest.update([0]);
-        return;
-    };
-    digest.update([1]);
-    update_optional_bool_digest(digest, proxy.enabled);
-    update_optional_string_digest(digest, proxy.mode.as_deref());
-    update_optional_string_digest(digest, proxy.node_id.as_deref());
-    update_optional_string_digest(digest, proxy.label.as_deref());
-    update_optional_string_digest(digest, proxy.url.as_deref());
-    update_optional_json_digest(digest, proxy.extra.as_ref());
-}
-
-fn update_transport_profile_digest(
-    digest: &mut Sha256,
-    profile: Option<&ResolvedTransportProfile>,
-) {
-    let Some(profile) = profile else {
-        digest.update([0]);
-        return;
-    };
-    digest.update([1]);
-    update_string_digest(digest, profile.profile_id.as_str());
-    update_string_digest(digest, profile.backend.as_str());
-    update_string_digest(digest, profile.http_mode.as_str());
-    update_string_digest(digest, profile.pool_scope.as_str());
-    update_optional_json_digest(digest, profile.header_fingerprint.as_ref());
-    update_optional_json_digest(digest, profile.extra.as_ref());
 }
 
 /// Excludes headers whose values identify one downstream request/turn rather
@@ -557,10 +420,6 @@ mod tests {
             let continuation_identity =
                 UpstreamBindingIdentity::from_decision(adapter, &continuation).unwrap();
             assert_eq!(first_identity, continuation_identity);
-            assert_eq!(
-                first_identity.continuation_fingerprint(),
-                continuation_identity.continuation_fingerprint()
-            );
 
             continuation
                 .provider_request_headers
@@ -628,25 +487,6 @@ mod tests {
             identity,
             UpstreamBindingIdentity::from_decision(adapter, &static_secret_rotated).unwrap()
         );
-    }
-
-    #[test]
-    fn continuation_fingerprint_changes_with_binding_and_is_not_secret_text() {
-        let adapter = resolve_responses_websocket_adapter(ResponsesWebSocketAdapter::Standard);
-        let base = decision();
-        let identity = UpstreamBindingIdentity::from_decision(adapter, &base).unwrap();
-        let mut changed = base;
-        changed
-            .provider_request_headers
-            .insert("X-Client".to_string(), "different-client".to_string());
-        let changed_identity = UpstreamBindingIdentity::from_decision(adapter, &changed).unwrap();
-        assert_ne!(
-            identity.continuation_fingerprint(),
-            changed_identity.continuation_fingerprint()
-        );
-        let digest = format!("{:?}", identity.continuation_fingerprint());
-        assert!(!digest.contains("secret"));
-        assert!(!digest.contains("api.example"));
     }
 
     #[test]
