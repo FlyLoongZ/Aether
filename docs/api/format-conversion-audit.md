@@ -24,7 +24,7 @@ Provider schema refresh is not a runtime dependency. Same-format runtime paths d
 | Area | Current behavior |
 | --- | --- |
 | Pure conversion API | `convert_request_pure` and response equivalents do not apply model override or stream policy. |
-| Legacy conversion API | `convert_request` / `convert_response` are retained for migration and may still use legacy context behavior. |
+| Runtime conversion helper | The public legacy `convert_request` / `convert_response` exports were removed. Runtime callers inside `aether-ai-formats` use the crate-private `*_with_runtime_edits` path; external callers must use the audited `*_pure` API and apply model/stream edits explicitly. |
 | Same-format provider path | Bypasses canonical conversion and copies the parsed JSON object before transport edits. |
 | Cross-format same-format-provider path | Uses `convert_request_pure`, then applies model/body/stream edits in transport. |
 | Conversion errors | Added `UnauditedField`, `UnsupportedField`, `InvalidEnumValue`, `LossyConversionBlocked`, and `InvalidTargetField`. |

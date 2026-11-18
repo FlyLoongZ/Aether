@@ -7,7 +7,7 @@ use aether_ai_formats::formats::conversion::request::{
     normalize_gemini_request_to_openai_chat_request,
     normalize_openai_responses_request_to_openai_chat_request,
 };
-use aether_ai_formats::formats::registry::{convert_request, FormatContext};
+use aether_ai_formats::formats::registry::{convert_request_with_runtime_edits, FormatContext};
 use aether_ai_formats::provider_compat::proxy::rules::apply_local_body_rules_with_request_headers;
 use serde_json::Value;
 
@@ -181,7 +181,7 @@ pub fn build_standard_request_body_with_model_directives_and_request_headers_and
         object.insert("model".to_string(), Value::String(mapped_model.to_string()));
         Value::Object(object)
     } else {
-        convert_request(
+        convert_request_with_runtime_edits(
             if antigravity_chat_body.is_some() {
                 "openai:chat"
             } else {

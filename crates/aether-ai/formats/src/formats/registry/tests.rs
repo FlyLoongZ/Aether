@@ -1,8 +1,8 @@
 use serde_json::json;
 
 use super::{
-    convert_request, convert_request_pure, convert_request_pure_with_context, convert_response,
-    convert_response_pure, FormatContext, FormatError,
+    convert_request_pure, convert_request_pure_with_context, convert_request_with_runtime_edits,
+    convert_response_pure, convert_response_with_runtime_edits, FormatContext, FormatError,
 };
 use crate::formats::id::FormatId;
 
@@ -19,8 +19,9 @@ fn converts_openai_chat_to_responses_via_registry() {
     });
     let ctx = FormatContext::default().with_mapped_model("gpt-target");
 
-    let converted = convert_request("openai:chat", "openai:responses", &body, &ctx)
-        .expect("request conversion should succeed");
+    let converted =
+        convert_request_with_runtime_edits("openai:chat", "openai:responses", &body, &ctx)
+            .expect("request conversion should succeed");
 
     assert_eq!(converted["model"], "gpt-target");
     assert_eq!(converted["input"][0]["type"], "message");
@@ -182,7 +183,7 @@ fn runtime_responses_to_gemini_rejects_mixed_tools_for_gemini_two() {
     });
     let context = FormatContext::default().with_mapped_model("gemini-2.5-pro");
 
-    let error = convert_request(
+    let error = convert_request_with_runtime_edits(
         "openai:responses",
         "gemini:generate_content",
         &body,
@@ -270,7 +271,7 @@ fn responses_namespace_tool_is_audited_consistently_for_pure_and_runtime_chat_co
     let pure = convert_request_pure("openai:responses", "openai:chat", &body)
         .expect("representable namespace should pass pure validation")
         .value;
-    let runtime = convert_request(
+    let runtime = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -321,7 +322,7 @@ fn responses_namespace_allowed_tools_and_nullable_schema_match_for_pure_and_runt
     let pure = convert_request_pure("openai:responses", "openai:chat", &body)
         .expect("allowed namespace tool choice should pass pure validation")
         .value;
-    let runtime = convert_request(
+    let runtime = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -377,7 +378,7 @@ fn responses_namespace_allowed_tools_fails_closed_when_child_name_is_ambiguous()
     });
 
     assert!(convert_request_pure("openai:responses", "openai:chat", &body).is_err());
-    assert!(convert_request(
+    assert!(convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -414,7 +415,7 @@ fn runtime_chat_response_restores_namespaced_tool_identity_from_request_context(
             }
         ]
     });
-    let chat_request = convert_request(
+    let chat_request = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &original_request,
@@ -453,7 +454,7 @@ fn runtime_chat_response_restores_namespaced_tool_identity_from_request_context(
         "original_request_body": original_request
     }));
 
-    let response = convert_response(
+    let response = convert_response_with_runtime_edits(
         "openai:chat",
         "openai:responses",
         &provider_response,
@@ -517,7 +518,7 @@ fn responses_namespace_history_uses_the_same_chat_alias_as_the_definition() {
     let pure = convert_request_pure("openai:responses", "openai:chat", &body)
         .expect("namespace history should pass pure validation")
         .value;
-    let runtime = convert_request(
+    let runtime = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -565,7 +566,7 @@ fn responses_namespace_history_rejects_non_completed_status_for_chat() {
     });
 
     assert!(convert_request_pure("openai:responses", "openai:chat", &body).is_err());
-    assert!(convert_request(
+    assert!(convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -601,7 +602,7 @@ fn responses_namespace_history_rejects_unknown_sidecars_for_pure_and_runtime() {
     });
 
     assert!(convert_request_pure("openai:responses", "openai:chat", &body).is_err());
-    assert!(convert_request(
+    assert!(convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -694,7 +695,7 @@ fn responses_namespace_tool_validation_fails_closed_for_unrepresentable_children
 
         let pure_error = convert_request_pure("openai:responses", "openai:chat", &body)
             .expect_err("pure conversion must reject an unrepresentable namespace");
-        let runtime_error = convert_request(
+        let runtime_error = convert_request_with_runtime_edits(
             "openai:responses",
             "openai:chat",
             &body,
@@ -1890,7 +1891,7 @@ fn openai_responses_additional_tools_prefix_maps_to_chat_tools() {
         convert_request_pure("openai:responses", "openai:chat", &body)
             .expect("pure conversion should map additional tools")
             .value,
-        convert_request(
+        convert_request_with_runtime_edits(
             "openai:responses",
             "openai:chat",
             &body,
@@ -1990,7 +1991,7 @@ fn runtime_openai_responses_cross_format_rejects_unknown_content_block() {
         }]
     });
 
-    let error = convert_request(
+    let error = convert_request_with_runtime_edits(
         "openai:responses",
         "claude:messages",
         &body,
@@ -2264,7 +2265,7 @@ fn runtime_openai_prompt_cache_contract_uses_mapped_provider_model() {
         "messages": [{"role": "user", "content": "hello"}],
         "prompt_cache_options": {"mode": "explicit", "ttl": "30m"}
     });
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:chat",
         "openai:responses",
         &options,
@@ -2276,7 +2277,7 @@ fn runtime_openai_prompt_cache_contract_uses_mapped_provider_model() {
         options["prompt_cache_options"]
     );
 
-    let error = convert_request(
+    let error = convert_request_with_runtime_edits(
         "openai:chat",
         "openai:responses",
         &options,
@@ -2294,7 +2295,7 @@ fn runtime_openai_prompt_cache_contract_uses_mapped_provider_model() {
         "input": "hello",
         "prompt_cache_retention": "24h"
     });
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &retention,
@@ -2303,7 +2304,7 @@ fn runtime_openai_prompt_cache_contract_uses_mapped_provider_model() {
     .expect("mapped earlier provider model should accept its retention contract");
     assert_eq!(converted["prompt_cache_retention"], "24h");
 
-    let error = convert_request(
+    let error = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &retention,
@@ -2482,7 +2483,7 @@ fn runtime_responses_cross_format_blocks_advanced_reasoning_and_caller_fields() 
             "input[0]",
         ),
     ] {
-        let error = convert_request(
+        let error = convert_request_with_runtime_edits(
             "openai:responses",
             "openai:chat",
             &body,
@@ -2664,7 +2665,7 @@ fn runtime_openai_responses_to_chat_drops_reasoning_summary() {
         }
     });
 
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -2707,7 +2708,7 @@ fn runtime_openai_cross_format_preserves_gpt_5_6_reasoning_efforts() {
                 "messages": [{"role": "user", "content": "hello"}],
                 "reasoning_effort": effort
             });
-            let responses = convert_request(
+            let responses = convert_request_with_runtime_edits(
                 "openai:chat",
                 target,
                 &chat,
@@ -2726,7 +2727,7 @@ fn runtime_reasoning_effort_is_preserved_across_concrete_model_mapping() {
         "messages": [{"role": "user", "content": "hello"}],
         "reasoning_effort": "max"
     });
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:chat",
         "openai:responses",
         &alias_to_gpt_5_6,
@@ -2741,7 +2742,7 @@ fn runtime_reasoning_effort_is_preserved_across_concrete_model_mapping() {
         "messages": [{"role": "user", "content": "hello"}],
         "reasoning_effort": "max"
     });
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:chat",
         "openai:responses",
         &gpt_5_6_to_gpt_5_4,
@@ -2791,7 +2792,7 @@ fn runtime_openai_cross_format_preserves_explicit_efforts() {
         "reasoning_effort": "minimal"
     });
     for target in ["openai:responses", "openai:responses:compact"] {
-        let converted = convert_request(
+        let converted = convert_request_with_runtime_edits(
             "openai:chat",
             target,
             &alias_minimal,
@@ -2807,7 +2808,7 @@ fn runtime_openai_cross_format_preserves_explicit_efforts() {
         "reasoning": {"effort": "future"}
     });
     for source in ["openai:responses", "openai:responses:compact"] {
-        let converted = convert_request(
+        let converted = convert_request_with_runtime_edits(
             source,
             "openai:chat",
             &custom,
@@ -2823,7 +2824,7 @@ fn runtime_openai_cross_format_preserves_explicit_efforts() {
         "reasoning": {"effort": "ultra"}
     });
     for source in ["openai:responses", "openai:responses:compact"] {
-        let converted = convert_request(
+        let converted = convert_request_with_runtime_edits(
             source,
             "openai:chat",
             &ultra,
@@ -3442,7 +3443,7 @@ fn runtime_openai_responses_to_chat_rejects_previous_response_id() {
         "stream": true
     });
 
-    let error = convert_request(
+    let error = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -3471,7 +3472,7 @@ fn runtime_openai_responses_compact_to_chat_rejects_previous_response_id() {
         "previous_response_id": "resp_123",
     });
 
-    let error = convert_request(
+    let error = convert_request_with_runtime_edits(
         "openai:responses:compact",
         "openai:chat",
         &body,
@@ -3494,7 +3495,7 @@ fn runtime_openai_responses_to_responses_preserves_previous_response_id() {
         "previous_response_id": "resp_123",
     });
 
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:responses",
         &body,
@@ -3514,7 +3515,7 @@ fn runtime_openai_responses_to_chat_drops_include() {
         "stream": true
     });
 
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         &body,
@@ -3537,8 +3538,9 @@ fn converts_openai_embedding_to_jina_without_chat_fields() {
     });
     let ctx = FormatContext::default().with_mapped_model("jina-embeddings-v3");
 
-    let converted = convert_request("openai:embedding", "jina:embedding", &body, &ctx)
-        .expect("embedding request conversion should succeed");
+    let converted =
+        convert_request_with_runtime_edits("openai:embedding", "jina:embedding", &body, &ctx)
+            .expect("embedding request conversion should succeed");
 
     assert_eq!(converted["model"], "jina-embeddings-v3");
     assert_eq!(converted["task"], "text-matching");
@@ -3554,7 +3556,7 @@ fn converts_openai_embedding_to_gemini_and_doubao_payload_shapes() {
         "dimensions": 2
     });
 
-    let gemini = convert_request(
+    let gemini = convert_request_with_runtime_edits(
         "openai:embedding",
         "gemini:embedding",
         &body,
@@ -3573,7 +3575,7 @@ fn converts_openai_embedding_to_gemini_and_doubao_payload_shapes() {
     assert_eq!(gemini["requests"][0]["outputDimensionality"], 2);
     assert!(gemini.get("messages").is_none());
 
-    let doubao = convert_request(
+    let doubao = convert_request_with_runtime_edits(
         "openai:embedding",
         "doubao:embedding",
         &body,
@@ -3602,7 +3604,7 @@ fn converts_openai_embedding_to_aliyun_multimodal_payload_shape() {
         }
     });
 
-    let converted = convert_request(
+    let converted = convert_request_with_runtime_edits(
         "openai:embedding",
         "aliyun:multimodal_embedding",
         &body,
@@ -3759,7 +3761,7 @@ fn aliyun_embedding_conversion_rejects_token_arrays() {
         "input": [1, 2, 3]
     });
 
-    assert!(convert_request(
+    assert!(convert_request_with_runtime_edits(
         "openai:embedding",
         "aliyun:multimodal_embedding",
         &body,
@@ -3779,11 +3781,32 @@ fn multimodal_embedding_conversion_is_aliyun_only() {
     });
     let ctx = FormatContext::default().with_mapped_model("qwen3-vl-embedding");
 
-    assert!(convert_request("openai:embedding", "openai:embedding", &body, &ctx).is_err());
-    assert!(convert_request("openai:embedding", "jina:embedding", &body, &ctx).is_err());
-    assert!(convert_request("openai:embedding", "gemini:embedding", &body, &ctx).is_err());
-    assert!(convert_request("openai:embedding", "doubao:embedding", &body, &ctx).is_err());
-    assert!(convert_request(
+    assert!(convert_request_with_runtime_edits(
+        "openai:embedding",
+        "openai:embedding",
+        &body,
+        &ctx
+    )
+    .is_err());
+    assert!(
+        convert_request_with_runtime_edits("openai:embedding", "jina:embedding", &body, &ctx)
+            .is_err()
+    );
+    assert!(convert_request_with_runtime_edits(
+        "openai:embedding",
+        "gemini:embedding",
+        &body,
+        &ctx
+    )
+    .is_err());
+    assert!(convert_request_with_runtime_edits(
+        "openai:embedding",
+        "doubao:embedding",
+        &body,
+        &ctx
+    )
+    .is_err());
+    assert!(convert_request_with_runtime_edits(
         "openai:embedding",
         "aliyun:multimodal_embedding",
         &body,
@@ -3842,13 +3865,23 @@ fn embedding_registry_parses_gemini_and_doubao_sources() {
     });
     let ctx = FormatContext::default();
 
-    let gemini = convert_request("gemini:embedding", "openai:embedding", &gemini_body, &ctx)
-        .expect("Gemini embedding source should parse");
+    let gemini = convert_request_with_runtime_edits(
+        "gemini:embedding",
+        "openai:embedding",
+        &gemini_body,
+        &ctx,
+    )
+    .expect("Gemini embedding source should parse");
     assert_eq!(gemini["model"], "gemini-embedding-001");
     assert_eq!(gemini["input"], "alpha");
 
-    let doubao = convert_request("doubao:embedding", "openai:embedding", &doubao_body, &ctx)
-        .expect("Doubao embedding source should parse");
+    let doubao = convert_request_with_runtime_edits(
+        "doubao:embedding",
+        "openai:embedding",
+        &doubao_body,
+        &ctx,
+    )
+    .expect("Doubao embedding source should parse");
     assert_eq!(doubao["model"], "doubao-embedding");
     assert_eq!(doubao["input"], json!(["alpha"]));
 }
@@ -3861,7 +3894,10 @@ fn embedding_registry_rejects_chat_payload_for_embedding_format() {
     });
     let ctx = FormatContext::default();
 
-    assert!(convert_request("openai:embedding", "jina:embedding", &body, &ctx).is_err());
+    assert!(
+        convert_request_with_runtime_edits("openai:embedding", "jina:embedding", &body, &ctx)
+            .is_err()
+    );
 }
 
 #[test]
@@ -3875,7 +3911,7 @@ fn converts_openai_rerank_to_jina_without_chat_fields() {
     });
     let ctx = FormatContext::default().with_mapped_model("jina-reranker-v2-base-multilingual");
 
-    let converted = convert_request("openai:rerank", "jina:rerank", &body, &ctx)
+    let converted = convert_request_with_runtime_edits("openai:rerank", "jina:rerank", &body, &ctx)
         .expect("rerank request conversion should succeed");
 
     assert_eq!(converted["model"], "jina-reranker-v2-base-multilingual");
@@ -3895,7 +3931,10 @@ fn rerank_registry_rejects_invalid_payloads() {
         json!({"model": "rerank", "query": "q", "documents": [""]}),
         json!({"model": "rerank", "query": "q", "documents": ["alpha"], "top_n": 0}),
     ] {
-        assert!(convert_request("openai:rerank", "jina:rerank", &body, &ctx).is_err());
+        assert!(
+            convert_request_with_runtime_edits("openai:rerank", "jina:rerank", &body, &ctx)
+                .is_err()
+        );
     }
 }
 

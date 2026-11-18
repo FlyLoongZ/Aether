@@ -141,7 +141,7 @@ pub fn convert_request_pure_with_context(
     Ok(Converted { value, report })
 }
 
-pub fn convert_request(
+pub(crate) fn convert_request_with_runtime_edits(
     source_format: &str,
     target_format: &str,
     body: &Value,
@@ -488,7 +488,7 @@ pub fn convert_response_pure(
     Ok(Converted { value, report })
 }
 
-pub fn convert_response(
+pub(crate) fn convert_response_with_runtime_edits(
     source_format: &str,
     target_format: &str,
     body: &Value,

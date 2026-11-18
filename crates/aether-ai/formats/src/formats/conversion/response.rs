@@ -27,7 +27,7 @@ pub fn convert_claude_chat_response_to_openai_chat(
     body_json: &Value,
     report_context: &Value,
 ) -> Option<Value> {
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "claude:messages",
         "openai:chat",
         body_json,
@@ -40,7 +40,7 @@ pub fn convert_gemini_chat_response_to_openai_chat(
     body_json: &Value,
     report_context: &Value,
 ) -> Option<Value> {
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "gemini:generate_content",
         "openai:chat",
         body_json,
@@ -53,7 +53,7 @@ pub fn convert_openai_chat_response_to_claude_chat(
     body_json: &Value,
     report_context: &Value,
 ) -> Option<Value> {
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "openai:chat",
         "claude:messages",
         body_json,
@@ -66,7 +66,7 @@ pub fn convert_openai_chat_response_to_gemini_chat(
     body_json: &Value,
     report_context: &Value,
 ) -> Option<Value> {
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "openai:chat",
         "gemini:generate_content",
         body_json,
@@ -79,7 +79,7 @@ pub fn convert_openai_responses_response_to_openai_chat(
     body_json: &Value,
     report_context: &Value,
 ) -> Option<Value> {
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "openai:responses",
         "openai:chat",
         body_json,
@@ -98,7 +98,7 @@ pub fn convert_openai_chat_response_to_openai_responses(
     } else {
         "openai:responses"
     };
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "openai:chat",
         target_format,
         body_json,
@@ -111,7 +111,7 @@ pub fn convert_claude_response_to_openai_responses(
     body_json: &Value,
     report_context: &Value,
 ) -> Option<Value> {
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "claude:messages",
         "openai:responses",
         body_json,
@@ -124,7 +124,7 @@ pub fn convert_gemini_response_to_openai_responses(
     body_json: &Value,
     report_context: &Value,
 ) -> Option<Value> {
-    registry::convert_response(
+    registry::convert_response_with_runtime_edits(
         "gemini:generate_content",
         "openai:responses",
         body_json,

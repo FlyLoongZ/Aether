@@ -1062,7 +1062,7 @@ mod tests {
             }
         });
 
-        let body = crate::formats::registry::convert_response(
+        let body = crate::formats::registry::convert_response_with_runtime_edits(
             "gemini:generate_content",
             "openai:responses",
             &gemini,

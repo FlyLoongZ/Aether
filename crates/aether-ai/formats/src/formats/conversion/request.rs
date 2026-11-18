@@ -13,7 +13,7 @@ pub fn convert_openai_chat_request_to_claude_request(
     mapped_model: &str,
     upstream_is_stream: bool,
 ) -> Option<Value> {
-    registry::convert_request(
+    registry::convert_request_with_runtime_edits(
         "openai:chat",
         "claude:messages",
         body_json,
@@ -27,7 +27,7 @@ pub fn convert_openai_chat_request_to_gemini_request(
     mapped_model: &str,
     upstream_is_stream: bool,
 ) -> Option<Value> {
-    registry::convert_request(
+    registry::convert_request_with_runtime_edits(
         "openai:chat",
         "gemini:generate_content",
         body_json,
@@ -47,7 +47,7 @@ pub fn convert_openai_chat_request_to_openai_responses_request(
     } else {
         "openai:responses"
     };
-    registry::convert_request(
+    registry::convert_request_with_runtime_edits(
         "openai:chat",
         target_format,
         body_json,
@@ -70,11 +70,17 @@ pub fn normalize_openai_responses_request_to_openai_chat_request_with_history_sc
     if let Some(history_scope) = history_scope {
         context = context.with_history_scope(history_scope);
     }
-    registry::convert_request("openai:responses", "openai:chat", body_json, &context).ok()
+    registry::convert_request_with_runtime_edits(
+        "openai:responses",
+        "openai:chat",
+        body_json,
+        &context,
+    )
+    .ok()
 }
 
 pub fn normalize_claude_request_to_openai_chat_request(body_json: &Value) -> Option<Value> {
-    registry::convert_request(
+    registry::convert_request_with_runtime_edits(
         "claude:messages",
         "openai:chat",
         body_json,
@@ -87,7 +93,7 @@ pub fn normalize_gemini_request_to_openai_chat_request(
     body_json: &Value,
     request_path: &str,
 ) -> Option<Value> {
-    registry::convert_request(
+    registry::convert_request_with_runtime_edits(
         "gemini:generate_content",
         "openai:chat",
         body_json,
@@ -784,7 +790,7 @@ mod tests {
             "max_tokens": 10,
         });
 
-        let converted = registry::convert_request(
+        let converted = registry::convert_request_with_runtime_edits(
             "claude:messages",
             "openai:responses",
             &body,
@@ -849,7 +855,7 @@ mod tests {
             "max_tokens": 128
         });
 
-        let converted = registry::convert_request(
+        let converted = registry::convert_request_with_runtime_edits(
             "claude:messages",
             "openai:responses",
             &body,
@@ -895,7 +901,7 @@ mod tests {
             "prompt_cache_key": "cache_123"
         });
 
-        let converted = registry::convert_request(
+        let converted = registry::convert_request_with_runtime_edits(
             "openai:responses",
             "openai:responses",
             &body,
@@ -920,7 +926,7 @@ mod tests {
             "max_tokens": 128,
         });
 
-        let converted = registry::convert_request(
+        let converted = registry::convert_request_with_runtime_edits(
             "claude:messages",
             "openai:responses",
             &body,
@@ -952,7 +958,7 @@ mod tests {
             ]
         });
 
-        let converted = registry::convert_request(
+        let converted = registry::convert_request_with_runtime_edits(
             "openai:responses",
             "claude:messages",
             &body,
@@ -1006,7 +1012,7 @@ mod tests {
             "max_tokens": 128,
         });
 
-        let converted = registry::convert_request(
+        let converted = registry::convert_request_with_runtime_edits(
             "claude:messages",
             "openai:responses",
             &body,
@@ -1075,7 +1081,7 @@ mod tests {
             "max_tokens": 128,
         });
 
-        let converted = registry::convert_request(
+        let converted = registry::convert_request_with_runtime_edits(
             "claude:messages",
             "openai:responses",
             &body,
@@ -1119,7 +1125,7 @@ mod tests {
             "max_tokens": 128,
         });
 
-        let error = registry::convert_request(
+        let error = registry::convert_request_with_runtime_edits(
             "claude:messages",
             "openai:responses",
             &body,
@@ -1162,7 +1168,7 @@ mod tests {
             "max_tokens": 128,
         });
 
-        let error = registry::convert_request(
+        let error = registry::convert_request_with_runtime_edits(
             "claude:messages",
             "openai:chat",
             &body,

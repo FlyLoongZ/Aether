@@ -12,7 +12,9 @@ use aether_ai_formats::formats::openai::responses::{
     openai_responses_message_item_id, openai_responses_reasoning_text_parts,
     openai_responses_synthetic_reasoning_item_id,
 };
-use aether_ai_formats::formats::registry::{convert_response, FormatContext, FormatError};
+use aether_ai_formats::formats::registry::{
+    convert_response_with_runtime_edits, FormatContext, FormatError,
+};
 use aether_ai_formats::{
     canonical_response_unknown_block_count, canonical_to_claude_response,
     canonical_to_embedding_response, canonical_to_gemini_response,
@@ -1253,7 +1255,7 @@ pub fn convert_standard_chat_response(
     client_api_format: &str,
     report_context: &Value,
 ) -> Option<Value> {
-    match convert_response(
+    match convert_response_with_runtime_edits(
         provider_api_format,
         client_api_format,
         body_json,
@@ -1327,7 +1329,7 @@ pub fn convert_standard_cli_response(
     client_api_format: &str,
     report_context: &Value,
 ) -> Option<Value> {
-    match convert_response(
+    match convert_response_with_runtime_edits(
         provider_api_format,
         client_api_format,
         body_json,

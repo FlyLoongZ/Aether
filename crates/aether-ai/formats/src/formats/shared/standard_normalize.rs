@@ -280,7 +280,7 @@ fn convert_claude_compatible_chat_endpoint_request(
     provider_api_format: &str,
     upstream_is_stream: bool,
 ) -> Option<Value> {
-    aether_ai_formats::convert_request(
+    crate::formats::registry::convert_request_with_runtime_edits(
         "claude:messages",
         provider_api_format,
         body_json,
