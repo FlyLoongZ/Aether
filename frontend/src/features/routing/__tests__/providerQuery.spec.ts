@@ -16,12 +16,10 @@ describe('routing provider query', () => {
     })
   })
 
-  it('keeps unified sorting and key sorting unfiltered', () => {
+  it('keeps unified sorting unfiltered', () => {
     const expected = { page: 1, page_size: 9999 }
 
     expect(buildRoutingProviderSummaryQuery(DEFAULT_ROUTING_POLICY_MODEL, undefined, 'provider'))
-      .toEqual(expected)
-    expect(buildRoutingProviderSummaryQuery('claude-fable-5-1', 'global-claude-fable-5-1', 'global_key'))
       .toEqual(expected)
   })
 

@@ -42,14 +42,14 @@ describe('strategy-scoped scheduling policies', () => {
 
   it('normalizes legacy Key scheduling without mutating unrelated rules, scopes, or historical priorities', () => {
     const config = createEmptyRoutingGroupConfig()
-    config.default_policy.priority_mode = 'global_key'
+    config.default_policy.priority_mode = 'provider'
     config.disabled_providers = ['disabled']
     config.model_policies = [{ ...createEmptyModelPolicy('*'), key_priority_overrides: { key: 5 }, provider_priority_overrides: { provider: 3 } }]
     config.rules = [{
       id: 'custom-rule', priority: 1, enabled: true, phase: 'client_request', stop_processing: true,
       conditions: { field: 'model', op: 'prefix', value: 'example' },
       actions: [
-        { type: 'set_scheduling', priority_mode: 'global_key', scheduling_mode: 'load_balance', sticky_key_attempts: 4 },
+        { type: 'set_scheduling', priority_mode: 'provider', scheduling_mode: 'load_balance', sticky_key_attempts: 4 },
         { type: 'set_scheduling', scheduling_mode: 'fixed_order' },
         { type: 'set_header', name: 'x-test', value: 'kept' },
       ],
@@ -90,7 +90,7 @@ describe('strategy-scoped scheduling policies', () => {
     const config = createEmptyRoutingGroupConfig()
     const entry = createSchedulingPolicy(config, 'all')
     entry.models = ['model-a', 'model-b']
-    entry.priorityMode = 'global_key'
+    entry.priorityMode = 'provider'
     entry.schedulingMode = 'load_balance'
     entry.policy.provider_priority_overrides = { provider: 2 }
     const saved = JSON.parse(JSON.stringify(writeSchedulingPolicies(config, [entry])))
@@ -107,7 +107,7 @@ describe('strategy-scoped scheduling policies', () => {
     const config = createEmptyRoutingGroupConfig()
     const entry = createSchedulingPolicy(config)
     entry.models = ['model-a', 'model-b']
-    entry.priorityMode = 'global_key'
+    entry.priorityMode = 'provider'
     entry.schedulingMode = 'fixed_order'
     entry.policy = {
       ...entry.policy,
@@ -198,7 +198,7 @@ describe('strategy-scoped scheduling policies', () => {
       config = upsertModelPolicy(config, { ...createEmptyModelPolicy(model), provider_priority_overrides: { provider: 2 } })
       config = upsertModelSchedulingRule(config, model, { priority_mode: 'provider', scheduling_mode: 'load_balance' })
     }
-    config = upsertModelSchedulingRule(config, 'model-c', { priority_mode: 'global_key', scheduling_mode: 'fixed_order' })
+    config = upsertModelSchedulingRule(config, 'model-c', { priority_mode: 'provider', scheduling_mode: 'fixed_order' })
     const entries = readSchedulingPolicies(config)
     expect(entries).toHaveLength(2)
     expect(entries[0].models).toEqual(['model-a', 'model-b'])

@@ -707,7 +707,7 @@ fn static_default_routing_policy_attaches_without_request_context() {
     };
     let group_config_json = json!({
         "default_policy": {
-            "priority_mode": "global_key",
+            "priority_mode": "provider",
             "scheduling_mode": "load_balance",
             "keep_priority_on_conversion": true
         },

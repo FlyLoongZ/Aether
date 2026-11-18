@@ -14,7 +14,6 @@ pub enum RoutingRulePhase {
 pub enum RoutingSetPriorityMode {
     #[default]
     Provider,
-    GlobalKey,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

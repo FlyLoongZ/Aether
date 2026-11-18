@@ -337,10 +337,10 @@ describe('ProviderSchedulingView top-level scheduling selection', () => {
     const strategy = group('strategy-a')
     const selected = { ...createSchedulingPolicy(strategy.config_json), models: ['model-a'], policy: { ...createEmptyModelPolicy('*'), key_priority_overrides: { legacyKey: 4 }, provider_priority_overrides: { 'provider-a': 2 } } }
     strategy.config_json = writeSchedulingPolicies(strategy.config_json, [selected])
-    strategy.config_json.default_policy.priority_mode = 'global_key'
+    strategy.config_json.default_policy.priority_mode = 'provider'
     for (const rule of strategy.config_json.rules) {
       for (const action of rule.actions) {
-        if (action && typeof action === 'object' && 'type' in action && action.type === 'set_scheduling') Object.assign(action, { priority_mode: 'global_key' })
+        if (action && typeof action === 'object' && 'type' in action && action.type === 'set_scheduling') Object.assign(action, { priority_mode: 'provider' })
       }
     }
     const root = await mountPage([strategy])

@@ -196,7 +196,7 @@ fn routing_policy_uses_pool_priority_for_pool_group_global_key_slot() {
         selection_source: "system_default".to_string(),
         requested_model: "gpt-5".to_string(),
         resolved_model: "gpt-5".to_string(),
-        priority_mode: aether_routing_core::RoutingSetPriorityMode::GlobalKey,
+        priority_mode: aether_routing_core::RoutingSetPriorityMode::Provider,
         scheduling_mode: aether_routing_core::RoutingSchedulingMode::CacheAffinity,
         keep_priority_on_conversion: false,
         sticky_key_attempts: aether_routing_core::DEFAULT_STICKY_KEY_ATTEMPTS,

@@ -25,7 +25,7 @@ const mounted: Array<{ app: App, root: HTMLElement }> = []
 
 function mountEditor(options: { modelIds?: string[], keyMode?: boolean } = {}) {
   const initial = createEmptyRoutingGroupConfig()
-  if (options.keyMode) initial.default_policy.priority_mode = 'global_key'
+  if (options.keyMode) initial.default_policy.priority_mode = 'provider'
   initial.model_policies = [{
     ...getDefaultModelPolicy(initial),
     provider_priority_overrides: { outside: 99 },

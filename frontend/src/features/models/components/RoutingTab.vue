@@ -102,173 +102,8 @@
           <!-- 展开的内容 -->
           <Transition name="collapse">
             <div v-if="isFormatExpanded(formatGroup.api_format)">
-              <!-- ========== 全局 Key 优先模式 ========== -->
-              <template v-if="isGlobalKeyMode">
-                <div class="py-2 pl-3">
-                  <template
-                    v-for="(keyGroup, groupIndex) in formatGroup.keyGroups"
-                    :key="groupIndex"
-                  >
-                    <!-- 第一组且有多个 key 时显示调度行为标签 -->
-                    <div
-                      v-if="groupIndex === 0 && keyGroup.keys.length > 1"
-                      class="ml-6 mr-3 mb-1 flex items-center gap-1 text-[10px] text-muted-foreground/60"
-                    >
-                      <span>{{ samePriorityLabel }}</span>
-                    </div>
-
-                    <!-- 该优先级组内的 Keys -->
-                    <div
-                      v-for="(keyEntry, keyIndex) in keyGroup.keys"
-                      :key="keyEntry.key.id"
-                      class="flex py-1"
-                    >
-                      <!-- 左侧：节点 + 连线 -->
-                      <div class="w-6 flex flex-col items-center shrink-0">
-                        <!-- 上半段连线 -->
-                        <div
-                          class="w-0.5 flex-1"
-                          :class="groupIndex === 0 && keyIndex === 0 ? 'bg-transparent' : 'bg-border'"
-                        />
-                        <!-- 节点圆点 -->
-                        <div
-                          class="w-3 h-3 rounded-full border-2 shrink-0"
-                          :class="getGlobalKeyNodeClass(keyEntry, groupIndex, keyIndex)"
-                        />
-                        <!-- 下半段连线 -->
-                        <div
-                          class="w-0.5 flex-1"
-                          :class="isLastKeyInFormat(formatGroup, groupIndex, keyIndex) ? 'bg-transparent' : 'bg-border'"
-                        />
-                      </div>
-
-                      <!-- Key 卡片 -->
-                      <div
-                        class="flex-1 mr-3"
-                        :class="!keyEntry.key.is_active ? 'opacity-50' : ''"
-                      >
-                        <div
-                          class="group rounded-lg transition-all px-3 py-2"
-                          :class="getGlobalKeyCardClass(keyEntry, groupIndex, keyIndex)"
-                        >
-                          <div class="flex items-center gap-3">
-                            <!-- 优先级标签 -->
-                            <div
-                              v-if="keyEntry.key.is_active"
-                              class="px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0"
-                              :class="groupIndex === 0 && keyIndex === 0
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted-foreground/20 text-muted-foreground'"
-                            >
-                              <span v-if="groupIndex === 0 && keyIndex === 0">{{ t('ui.preferred') }}</span>
-                              <span v-else>P{{ keyGroup.priority ?? '?' }}</span>
-                            </div>
-
-                            <!-- Key 信息：两行 -->
-                            <div class="min-w-0 flex-1">
-                              <!-- 第一行：Key 名称 -->
-                              <div
-                                class="text-sm font-medium truncate"
-                                :class="keyEntry.key.circuit_breaker_open ? 'text-destructive' : ''"
-                              >
-                                {{ keyEntry.key.name }}
-                              </div>
-                              <!-- 第二行：提供商名 · sk · 模型映射 -->
-                              <div class="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                <span>{{ keyEntry.provider.name }}</span>
-                                <span>·</span>
-                                <code class="text-muted-foreground/60">{{ keyEntry.key.masked_key }}</code>
-                                <!-- Key 白名单映射显示 -->
-                                <template v-if="getKeyMatchedModels(keyEntry.key).length > 0">
-                                  <span>·</span>
-                                  <span
-                                    class="text-primary/70"
-                                    :title="getKeyMatchedModels(keyEntry.key).join(', ')"
-                                  >{{ formatMatchedModels(getKeyMatchedModels(keyEntry.key)) }}</span>
-                                </template>
-                                <!-- Provider 模型映射显示 -->
-                                <template v-else-if="hasModelMapping(keyEntry.provider)">
-                                  <span>·</span>
-                                  <span class="text-primary/70">{{ keyEntry.provider.provider_model_name }}</span>
-                                </template>
-                              </div>
-                            </div>
-
-                            <!-- 熔断徽章 -->
-                            <Badge
-                              v-if="keyEntry.key.circuit_breaker_open"
-                              variant="destructive"
-                              class="text-[10px] px-1.5 py-0 shrink-0 tabular-nums"
-                            >
-                              {{ t('ui.circuitOpen') }}{{ getKeyProbeCountdown(keyEntry.key) }}
-                            </Badge>
-
-                            <!-- 健康度 -->
-                            <div class="flex items-center gap-1 shrink-0">
-                              <div class="w-10 h-1.5 bg-muted/80 rounded-full overflow-hidden">
-                                <div
-                                  class="h-full transition-all duration-300"
-                                  :class="getHealthScoreBarColor(keyEntry.key.health_score)"
-                                  :style="{ width: `${(keyEntry.key.health_score || 0) * 100}%` }"
-                                />
-                              </div>
-                              <span
-                                class="text-[10px] font-medium tabular-nums w-7 text-right"
-                                :class="getHealthScoreTextColor(keyEntry.key.health_score)"
-                              >
-                                {{ ((keyEntry.key.health_score || 0) * 100).toFixed(0) }}%
-                              </span>
-                            </div>
-
-                            <!-- 操作按钮 -->
-                            <div class="flex items-center shrink-0">
-                              <Button
-                                v-if="keyEntry.key.circuit_breaker_open || (keyEntry.key.health_score ?? 1) < 0.5"
-                                variant="ghost"
-                                size="icon"
-                                class="h-6 w-6 text-green-600"
-                                :title="t('ui.refreshHealthStatus')"
-                                @click.stop="handleRecoverKey(keyEntry.key.id, keyEntry.endpoint?.api_format || formatGroup.api_format)"
-                              >
-                                <RefreshCw class="w-3 h-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                class="h-6 w-6"
-                                :title="keyEntry.provider.model_is_active ? t('ui.disableThisLink') : t('ui.enableThisLink')"
-                                @click.stop="$emit('toggleProviderStatus', keyEntry.provider)"
-                              >
-                                <Power class="w-3 h-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- 降级标记 -->
-                    <div
-                      v-if="groupIndex < formatGroup.keyGroups.length - 1"
-                      class="flex py-0.5"
-                    >
-                      <div class="w-6 flex justify-center shrink-0">
-                        <div class="w-0.5 h-full bg-border" />
-                      </div>
-                      <div class="flex items-center gap-1 text-[10px] text-muted-foreground/50">
-                        <ArrowDown class="w-3 h-3" />
-                        <span>
-                          {{ getDemoteLabel(formatGroup.keyGroups[groupIndex + 1].keys.length) }}
-                        </span>
-                      </div>
-                    </div>
-                  </template>
-                </div>
-              </template>
-
               <!-- ========== 提供商优先模式 ========== -->
-              <template v-else>
-                <div class="py-2 pl-3">
+              <div class="py-2 pl-3">
                   <div
                     v-for="(providerEntry, providerIndex) in formatGroup.providers"
                     :key="`${providerEntry.provider.id}-${providerEntry.endpoint?.id || providerIndex}`"
@@ -552,7 +387,6 @@
                     </div>
                   </div>
                 </div>
-              </template>
             </div>
           </Transition>
         </div>
@@ -647,9 +481,6 @@ const modelMappingRegexCache = createLRURegexCache(200)
 const keyMatchedModelsCache = new Map<string, string[]>()
 const compiledGlobalModelMappingRegexes = ref<RegExp[]>([])
 
-// 是否为全局 Key 优先模式
-const isGlobalKeyMode = computed(() => routingData.value?.priority_mode === 'global_key')
-
 // ========== 数据结构定义 ==========
 
 interface FormatProviderEntry {
@@ -661,28 +492,9 @@ interface FormatProviderEntry {
   priority_api_format: string
 }
 
-// 全局 Key 模式下的 Key 条目（包含 Provider 信息）
-interface GlobalKeyEntry {
-  key: RoutingKeyInfo
-  provider: RoutingProviderInfo
-  endpoint: RoutingEndpointInfo | null
-  is_cross_format: boolean
-  priority_api_format: string
-}
-
-// 全局 Key 模式下的优先级分组
-interface GlobalKeyGroup {
-  priority: number | null
-  demote_cross_format: boolean
-  keys: GlobalKeyEntry[]
-}
-
 interface ApiFormatGroup {
   api_format: string
-  // 提供商优先模式使用
   providers: FormatProviderEntry[]
-  // 全局 Key 优先模式使用
-  keyGroups: GlobalKeyGroup[]
   total_providers: number
   active_providers: number
   total_keys: number
@@ -807,20 +619,12 @@ function shouldDemoteCrossFormat(
   return targetApiFormat !== entryApiFormat && !keepPriorityOnConversion(provider)
 }
 
-function resolvedGlobalKeyPriority(keyEntry: GlobalKeyEntry): number {
-  const priorityByFormat = keyEntry.key.global_priority_by_format
-  if (!priorityByFormat) return 999
-  const value = priorityByFormat[keyEntry.priority_api_format]
-  return typeof value === 'number' ? value : 999
-}
-
 // 按 API 格式分组的计算属性
 const apiFormatGroups = computed<ApiFormatGroup[]>(() => {
   if (!routingData.value) return []
 
   const formatMap = new Map<string, {
     providers: FormatProviderEntry[]
-    allKeys: GlobalKeyEntry[]
   }>()
 
   // 遍历所有提供商和它们的 endpoints
@@ -828,7 +632,7 @@ const apiFormatGroups = computed<ApiFormatGroup[]>(() => {
     for (const endpoint of provider.endpoints || []) {
       for (const format of targetFormatsForEndpoint(provider, endpoint)) {
         if (!formatMap.has(format)) {
-          formatMap.set(format, { providers: [], allKeys: [] })
+          formatMap.set(format, { providers: [] })
         }
 
         const data = formatMap.get(format)
@@ -843,15 +647,6 @@ const apiFormatGroups = computed<ApiFormatGroup[]>(() => {
           priority_api_format: endpoint.api_format
         })
 
-        for (const key of endpoint.keys || []) {
-          data.allKeys.push({
-            key,
-            provider,
-            endpoint,
-            is_cross_format: endpoint.api_format !== format,
-            priority_api_format: endpoint.api_format
-          })
-        }
       }
     }
   }
@@ -870,41 +665,6 @@ const apiFormatGroups = computed<ApiFormatGroup[]>(() => {
       return a.provider.provider_priority - b.provider.provider_priority
     })
 
-    // Key 按全局优先级分组排序（全局 Key 优先模式）
-    const keyGroupMap = new Map<string, GlobalKeyGroup>()
-    for (const keyEntry of data.allKeys) {
-      const priority = resolvedGlobalKeyPriority(keyEntry)
-      const demoteCrossFormat = shouldDemoteCrossFormat(format, keyEntry.priority_api_format, keyEntry.provider)
-      const groupKey = `${demoteCrossFormat ? 1 : 0}:${priority}`
-      if (!keyGroupMap.has(groupKey)) {
-        keyGroupMap.set(groupKey, {
-          priority: priority === 999 ? null : priority,
-          demote_cross_format: demoteCrossFormat,
-          keys: []
-        })
-      }
-      keyGroupMap.get(groupKey)?.keys.push(keyEntry)
-    }
-
-    // 转换为分组数组并排序
-    const keyGroups: GlobalKeyGroup[] = Array.from(keyGroupMap.values())
-      .sort((a, b) => {
-        if (a.demote_cross_format !== b.demote_cross_format) {
-          return a.demote_cross_format ? 1 : -1
-        }
-        return (a.priority ?? 999) - (b.priority ?? 999)
-      })
-      .map(group => ({
-        ...group,
-        keys: group.keys.sort((a, b) => {
-          // 同优先级内按活跃状态和健康度排序
-          const aActive = a.key.is_active && a.provider.is_active && a.provider.model_is_active
-          const bActive = b.key.is_active && b.provider.is_active && b.provider.model_is_active
-          if (aActive !== bActive) return bActive ? 1 : -1
-          return b.key.health_score - a.key.health_score
-        })
-      }))
-
     const activeProviders = sortedProviders.filter(
       e => e.provider.is_active && e.provider.model_is_active && e.endpoint?.is_active && e.active_keys > 0
     ).length
@@ -914,7 +674,6 @@ const apiFormatGroups = computed<ApiFormatGroup[]>(() => {
     groups.push({
       api_format: format,
       providers: sortedProviders,
-      keyGroups,
       total_providers: sortedProviders.length,
       active_providers: activeProviders,
       total_keys: totalKeys,
@@ -1044,8 +803,7 @@ function getDemoteLabel(nextGroupKeyCount: number): string {
 // 获取优先级模式标签
 function getPriorityModeLabel(mode: string): string {
   const labels: Record<string, string> = {
-    get provider() { return t('ui.providerFirst') },
-    get global_key() { return t('ui.globalKeyFirst') }
+    get provider() { return t('ui.providerFirst') }
   }
   return labels[mode] || mode
 }
@@ -1164,35 +922,6 @@ function getFormatProviderCardClass(entry: FormatProviderEntry, index: number): 
     return 'bg-muted/30 border border-border/40'
   }
   if (index === 0) {
-    return 'bg-primary/5 border border-primary/30 shadow-sm'
-  }
-  return 'bg-muted/20 border border-border/50 hover:border-border'
-}
-
-// 获取全局 Key 节点圆点样式（全局 Key 优先模式）
-function getGlobalKeyNodeClass(entry: GlobalKeyEntry, groupIndex: number, keyIndex: number): string {
-  if (!entry.key.is_active || !entry.provider.is_active || !entry.provider.model_is_active) {
-    return 'bg-muted border-muted-foreground/30'
-  }
-  if (groupIndex === 0 && keyIndex === 0) {
-    return 'bg-primary border-primary'
-  }
-  return 'bg-background border-border'
-}
-
-// 判断是否为格式组中的最后一个 Key
-function isLastKeyInFormat(formatGroup: ApiFormatGroup, groupIndex: number, keyIndex: number): boolean {
-  const isLastGroup = groupIndex === formatGroup.keyGroups.length - 1
-  const isLastKeyInGroup = keyIndex === formatGroup.keyGroups[groupIndex].keys.length - 1
-  return isLastGroup && isLastKeyInGroup
-}
-
-// 获取全局 Key 卡片样式（全局 Key 优先模式）
-function getGlobalKeyCardClass(entry: GlobalKeyEntry, groupIndex: number, keyIndex: number): string {
-  if (!entry.key.is_active || !entry.provider.is_active || !entry.provider.model_is_active) {
-    return 'bg-muted/30 border border-border/40'
-  }
-  if (groupIndex === 0 && keyIndex === 0) {
     return 'bg-primary/5 border border-primary/30 shadow-sm'
   }
   return 'bg-muted/20 border border-border/50 hover:border-border'

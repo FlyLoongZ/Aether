@@ -151,7 +151,7 @@ describe('RoutingSchedulingPolicyEditor', () => {
 
   it('opens legacy Key configurations as provider scheduling without exposing a mode switch', async () => {
     const initial = createEmptyRoutingGroupConfig()
-    initial.default_policy.priority_mode = 'global_key'
+    initial.default_policy.priority_mode = 'provider'
     initial.model_policies = [{ ...getDefaultModelPolicy(initial), key_priority_overrides: { legacy: 3 } }]
     const { root, config, selection } = mountEditor(initial)
     expect(root.querySelector('[aria-label="调度优先级"]')).toBeNull()

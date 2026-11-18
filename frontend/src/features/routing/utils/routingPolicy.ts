@@ -1,6 +1,6 @@
 import { normalizeRoutingFailoverPolicy, type RoutingFailoverPolicy } from './routingFailover'
 
-export type RoutingPriorityMode = 'provider' | 'global_key'
+export type RoutingPriorityMode = 'provider'
 export type RoutingSchedulingMode = 'fixed_order' | 'cache_affinity' | 'load_balance'
 export type RoutingRulePhase = 'client_request' | 'provider_request'
 export type RoutingSortingScope = 'unified' | 'per_model'

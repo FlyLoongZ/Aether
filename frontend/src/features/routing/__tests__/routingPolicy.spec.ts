@@ -53,7 +53,7 @@ describe('routingPolicy', () => {
     const config = createEmptyRoutingGroupConfig()
     config.default_policy.cancel_on_client_disconnect = true
     const updated = upsertModelSchedulingRule(config, 'gpt-5', {
-      priority_mode: 'global_key',
+      priority_mode: 'provider',
       scheduling_mode: 'fixed_order',
     })
     expect(normalizeRoutingGroupConfig(updated).default_policy.cancel_on_client_disconnect).toBe(true)
@@ -199,7 +199,7 @@ describe('routingPolicy', () => {
 
   it('stores per-model scheduling as generated routing rules', () => {
     const next = upsertModelSchedulingRule(createEmptyRoutingGroupConfig(), 'gpt-5', {
-      priority_mode: 'global_key',
+      priority_mode: 'provider',
       scheduling_mode: 'fixed_order',
     })
 
@@ -211,7 +211,7 @@ describe('routingPolicy', () => {
       value: 'gpt-5',
     })
     expect(getModelScheduling(next, 'gpt-5')).toMatchObject({
-      priority_mode: 'global_key',
+      priority_mode: 'provider',
       scheduling_mode: 'fixed_order',
     })
   })

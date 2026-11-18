@@ -101,7 +101,6 @@ pub(crate) fn resolve_gateway_static_default_routing_policy(
         selection_source: input.selection_source.to_string(),
         requested_model: input.requested_model.to_string(),
         resolved_model: input.resolved_model.to_string(),
-        // Match the full resolver even when a stored default still says global_key.
         priority_mode: RoutingSetPriorityMode::Provider,
         scheduling_mode: default_policy.scheduling_mode,
         keep_priority_on_conversion: default_policy.keep_priority_on_conversion,
@@ -227,7 +226,7 @@ mod tests {
         let config = json!({
             "billing_multiplier": 2.5,
             "default_policy": {
-                "priority_mode": "global_key",
+                "priority_mode": "provider",
                 "scheduling_mode": "load_balance",
                 "keep_priority_on_conversion": true,
                 "cancel_on_client_disconnect": true,

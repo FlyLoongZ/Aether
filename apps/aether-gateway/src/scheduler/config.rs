@@ -85,12 +85,7 @@ impl SchedulerOrderingConfig {
 
 fn scheduler_priority_mode_from_routing(mode: RoutingSetPriorityMode) -> SchedulerPriorityMode {
     match mode {
-        // Defaults and previously resolved snapshots may still carry the
-        // removed global_key mode. Keep that compatibility at this boundary,
-        // without changing the scheduler's independent GlobalKey capability.
-        RoutingSetPriorityMode::Provider | RoutingSetPriorityMode::GlobalKey => {
-            SchedulerPriorityMode::Provider
-        }
+        RoutingSetPriorityMode::Provider => SchedulerPriorityMode::Provider,
     }
 }
 
@@ -155,7 +150,7 @@ mod tests {
             "selection_source": "system_default",
             "requested_model": "model-a",
             "resolved_model": "model-a",
-            "priority_mode": "global_key",
+            "priority_mode": "provider",
             "scheduling_mode": "fixed_order",
             "keep_priority_on_conversion": true,
             "sticky_key_attempts": 4,
@@ -206,7 +201,7 @@ mod tests {
             true,
             json!({
                 "default_policy": {
-                    "priority_mode": "global_key",
+                    "priority_mode": "provider",
                     "scheduling_mode": "fixed_order",
                     "keep_priority_on_conversion": false
                 }

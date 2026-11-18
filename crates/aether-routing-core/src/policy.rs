@@ -92,8 +92,7 @@ pub fn resolve_routing_policy(
         selection_source: input.selection_source.to_string(),
         requested_model: input.requested_model.to_string(),
         resolved_model: input.resolved_model.to_string(),
-        // Legacy global_key values remain readable, but routing groups now
-        // always rank providers before their keys.
+        // Routing groups always rank providers before their keys.
         priority_mode: RoutingSetPriorityMode::Provider,
         scheduling_mode: config.default_policy.scheduling_mode,
         keep_priority_on_conversion: config.default_policy.keep_priority_on_conversion,
@@ -386,7 +385,7 @@ mod tests {
     #[test]
     fn legacy_key_scheduling_keeps_overrides_but_resolves_to_provider_ordering() {
         let config: RoutingGroupConfig = serde_json::from_value(json!({
-            "default_policy": { "priority_mode": "global_key" },
+            "default_policy": { "priority_mode": "provider" },
             "model_policies": [{
                 "model": "*",
                 "provider_priority_overrides": { "provider-a": 7 },
@@ -396,15 +395,15 @@ mod tests {
             }],
             "rules": [{
                 "id": "legacy-key-client", "phase": "client_request",
-                "actions": [{ "type": "set_scheduling", "priority_mode": "global_key", "scheduling_mode": "fixed_order" }]
+                "actions": [{ "type": "set_scheduling", "priority_mode": "provider", "scheduling_mode": "fixed_order" }]
             }]
         }))
         .expect("legacy key scheduling must stay readable");
         let stored = serde_json::to_value(&config).unwrap();
-        assert_eq!(stored["default_policy"]["priority_mode"], "global_key");
+        assert_eq!(stored["default_policy"]["priority_mode"], "provider");
         assert_eq!(
             stored["rules"][0]["actions"][0]["priority_mode"],
-            "global_key"
+            "provider"
         );
         assert_eq!(
             serde_json::from_value::<RoutingGroupConfig>(stored).unwrap(),
@@ -463,7 +462,7 @@ mod tests {
         }
         assert_eq!(
             config.default_policy.priority_mode,
-            RoutingSetPriorityMode::GlobalKey
+            RoutingSetPriorityMode::Provider
         );
     }
 
@@ -645,7 +644,7 @@ mod tests {
     fn all_model_scheduling_and_rankings_apply_to_future_models() {
         let config: RoutingGroupConfig = serde_json::from_value(json!({
             "default_policy": {
-                "priority_mode": "global_key",
+                "priority_mode": "provider",
                 "scheduling_mode": "load_balance"
             },
             "model_policies": [{
@@ -710,7 +709,7 @@ mod tests {
                 ] },
                 "actions": [{
                     "type": "set_scheduling",
-                    "priority_mode": "global_key",
+                    "priority_mode": "provider",
                     "scheduling_mode": "fixed_order"
                 }],
                 "stop_processing": false
@@ -837,7 +836,7 @@ mod tests {
             billing_multiplier: 2.5,
             disabled_providers: vec![],
             default_policy: RoutingDefaultPolicy {
-                priority_mode: RoutingSetPriorityMode::GlobalKey,
+                priority_mode: RoutingSetPriorityMode::Provider,
                 scheduling_mode: RoutingSchedulingMode::LoadBalance,
                 keep_priority_on_conversion: true,
                 sticky_key_attempts: 3,

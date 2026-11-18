@@ -632,7 +632,7 @@ describe('ProviderManagement group directory', () => {
 
   it('uses provider ranking for legacy Key groups while retaining group enablement', async () => {
     mockSortableProviders()
-    workspace.groups['group-a']!.default_policy.priority_mode = 'global_key'
+    workspace.groups['group-a']!.default_policy.priority_mode = 'provider'
     const root = await mountView()
     const priorityButton = root.querySelector<HTMLButtonElement>('button[aria-label="Provider 1 的组内优先级"]')!
     expect(priorityButton.disabled).toBe(false)
