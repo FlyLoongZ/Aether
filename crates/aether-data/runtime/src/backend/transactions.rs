@@ -1,13 +1,10 @@
 use std::fmt;
 
-#[cfg(feature = "postgres")]
 use super::PostgresBackend;
-#[cfg(feature = "postgres")]
 use crate::driver::postgres::PostgresTransactionRunner;
 
 #[derive(Clone, Default)]
 pub struct DataTransactionBackends {
-    #[cfg(feature = "postgres")]
     postgres: Option<PostgresTransactionRunner>,
 }
 
@@ -20,33 +17,22 @@ impl fmt::Debug for DataTransactionBackends {
 }
 
 impl DataTransactionBackends {
-    #[cfg(feature = "postgres")]
     pub(crate) fn from_postgres(postgres: Option<&PostgresBackend>) -> Self {
         Self {
             postgres: postgres.map(PostgresBackend::transaction_runner),
         }
     }
 
-    #[cfg(feature = "postgres")]
     pub fn postgres(&self) -> Option<PostgresTransactionRunner> {
         self.postgres.clone()
     }
 
     pub fn has_any(&self) -> bool {
-        cfg!(feature = "postgres") && {
-            #[cfg(feature = "postgres")]
-            {
-                self.postgres.is_some()
-            }
-            #[cfg(not(feature = "postgres"))]
-            {
-                false
-            }
-        }
+        self.postgres.is_some()
     }
 }
 
-#[cfg(all(test, feature = "postgres"))]
+#[cfg(test)]
 mod tests {
     use super::DataTransactionBackends;
     use crate::backend::PostgresBackend;

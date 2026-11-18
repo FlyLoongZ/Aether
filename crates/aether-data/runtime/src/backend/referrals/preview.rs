@@ -30,7 +30,6 @@ impl ReferralDataState<'_> {
         &self,
         order_id: &str,
     ) -> Result<ReferralReversalSummary, DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let row=sqlx::query("SELECT CAST(COALESCE(SUM(reversed_amount_usd),0) AS DOUBLE PRECISION) AS reversed_amount_usd,CAST(COALESCE(SUM(pending_reversal_amount_usd),0) AS DOUBLE PRECISION) AS pending_reversal_amount_usd FROM referral_rewards WHERE source_order_id=$1")
                 .bind(order_id).fetch_one(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
@@ -67,7 +66,6 @@ impl ReferralDataState<'_> {
             return Err(DataLayerError::InvalidInput("退款订单金额无效".into()));
         }
         let cumulative = (context.refunded_amount_usd + proposed_amount).min(context.amount_usd);
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let rows=sqlx::query("SELECT rw.id,rw.inviter_user_id,u.username AS inviter_username,CAST(rw.amount_usd AS DOUBLE PRECISION) AS amount_usd,CAST(rw.reversed_amount_usd AS DOUBLE PRECISION) AS reversed_amount_usd,CAST(rw.pending_reversal_amount_usd AS DOUBLE PRECISION) AS pending_reversal_amount_usd,CAST(CASE WHEN w.status='active' AND u.is_active IS TRUE AND u.is_deleted IS FALSE THEN w.gift_balance ELSE 0 END AS DOUBLE PRECISION) AS gift_balance FROM referral_rewards rw LEFT JOIN users u ON u.id=rw.inviter_user_id LEFT JOIN wallets w ON w.user_id=rw.inviter_user_id WHERE rw.source_order_id=$1 AND rw.status IN ('applied','reversed') ORDER BY rw.id")
                 .bind(order_id).fetch_all(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;

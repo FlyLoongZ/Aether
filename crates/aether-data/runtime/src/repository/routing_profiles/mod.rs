@@ -13,5 +13,4 @@ pub(crate) use aether_data_contracts::repository::routing_profiles::{
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryRoutingGroupRepository;
 
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::PostgresRoutingGroupRepository;

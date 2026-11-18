@@ -640,7 +640,6 @@ impl ReferralDataState<'_> {
         let Some(backends) = self.backends.as_ref() else {
             return Ok(false);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let affected = sqlx::query(
                 r#"
@@ -728,7 +727,6 @@ WHERE id = $1
             return Ok(ReferralAdminStats::default());
         };
 
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(
                 r#"
@@ -841,7 +839,6 @@ WHERE ($1::TEXT IS NULL OR inviter_user_id = $1)
         &self,
         order_id: &str,
     ) -> Result<Vec<ReferralRewardRecord>, DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let keys = sqlx::query_scalar::<_, String>("SELECT idempotency_key FROM referral_rewards WHERE source_order_id=$1 AND status IN ('pending','failed') AND amount_usd>0 ORDER BY created_at,id")
                 .bind(order_id).fetch_all(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
@@ -1165,7 +1162,6 @@ impl ReferralDataState<'_> {
         for _ in 0..5 {
             let code = generate_invite_code();
             let mut inserted = 0;
-            #[cfg(feature = "postgres")]
             if let Some(backend) = backends.postgres() {
                 inserted = sqlx::query(
                     r#"
@@ -1198,7 +1194,6 @@ ON CONFLICT DO NOTHING
         let Some(backends) = self.backends.as_ref() else {
             return Ok(None);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(
                 "SELECT invite_code FROM user_invite_codes WHERE user_id = $1 AND active = TRUE",
@@ -1224,7 +1219,6 @@ ON CONFLICT DO NOTHING
         let Some(backends) = self.backends.as_ref() else {
             return Ok(None);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(
                 "SELECT user_id FROM user_invite_codes WHERE invite_code = $1 AND active = TRUE",
@@ -1254,7 +1248,6 @@ ON CONFLICT DO NOTHING
         let Some(backends) = self.backends.as_ref() else {
             return Ok(false);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let affected = sqlx::query(
                 r#"
@@ -1294,7 +1287,6 @@ ON CONFLICT (invitee_user_id) DO NOTHING
             .map(|value| i64::from(value as u8))
             .unwrap_or(-1);
         let (limit, offset) = referral_page_bounds(query.limit, query.offset);
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let count = sqlx::query(
                 r#"
@@ -1363,7 +1355,6 @@ LIMIT $5 OFFSET $6
         let Some(backends) = self.backends.as_ref() else {
             return Ok(None);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(
                 r#"
@@ -1401,7 +1392,6 @@ LIMIT 1
         let Some(backends) = self.backends.as_ref() else {
             return Ok(Vec::new());
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let rows = sqlx::query(
                 r#"
@@ -1427,7 +1417,6 @@ LIMIT $1
         let Some(backends) = self.backends.as_ref() else {
             return Ok(Vec::new());
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let rows = sqlx::query(
                 r#"
@@ -1465,7 +1454,6 @@ LIMIT $1
         let Some(backends) = self.backends.as_ref() else {
             return Ok(Vec::new());
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let rows = sqlx::query(
                 r#"
@@ -1555,7 +1543,6 @@ LIMIT $1
         let Some(backends) = self.backends.as_ref() else {
             return Ok(None);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(
                 r#"
@@ -1589,7 +1576,6 @@ LIMIT 1
         let Some(backends) = self.backends.as_ref() else {
             return Ok(None);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(
                 r#"
@@ -1623,7 +1609,6 @@ LIMIT 1
         let Some(backends) = self.backends.as_ref() else {
             return Ok(Vec::new());
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let rows = sqlx::query(
                 r#"
@@ -1658,7 +1643,6 @@ ORDER BY id ASC
         let Some(backends) = self.backends.as_ref() else {
             return Ok(None);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(REFERRAL_REFUND_CONTEXT_SQL)
                 .bind(order_id)
@@ -1680,7 +1664,6 @@ ORDER BY id ASC
         let Some(backends) = self.backends.as_ref() else {
             return Ok(false);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let affected = sqlx::query(
                 r#"
@@ -1709,7 +1692,6 @@ WHERE id = $1 AND status IN ('pending', 'failed')
         &self,
         reward_id: &str,
     ) -> Result<ReferralApplyingRecovery, DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let mut tx = backend
                 .pool_clone()
@@ -1879,7 +1861,6 @@ WHERE id = $1 AND status = 'applying'
         let Some(backends) = self.backends.as_ref() else {
             return Ok(None);
         };
-        #[cfg(feature = "postgres")]
         if let Some(backend) = backends.postgres() {
             let row = sqlx::query(
                 r#"
@@ -1917,7 +1898,6 @@ WHERE rw.idempotency_key = $1
                 "referral reward amount must be finite and greater than zero".to_string(),
             ));
         }
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let mut tx = backend
                 .pool_clone()
@@ -2127,7 +2107,6 @@ WHERE id = $1
         &self,
         reward: &ReferralRewardRecord,
     ) -> Result<(), DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let mut tx = backend
                 .pool_clone()
@@ -2438,7 +2417,6 @@ fn referral_signed_gift_fact_valid(
     }
 }
 
-#[cfg(feature = "postgres")]
 #[allow(clippy::too_many_arguments)]
 async fn insert_referral_gift_ledger(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,

@@ -508,7 +508,6 @@ async fn summarize_database_pool_uses_busy_connections_for_usage_rate() {
 
     let summary = summarize_database_pool(&data).expect("pool summary should exist");
 
-    assert_eq!(summary.driver, aether_data::DatabaseDriver::Postgres);
     assert_eq!(summary.checked_out, 0);
     assert_eq!(summary.pool_size, 0);
     assert_eq!(summary.idle, 0);

@@ -19,6 +19,7 @@ mod pool;
 mod pool_scores;
 mod provider_catalog;
 mod proxy_nodes;
+mod query;
 mod quota;
 mod referrals;
 mod routing_profiles;

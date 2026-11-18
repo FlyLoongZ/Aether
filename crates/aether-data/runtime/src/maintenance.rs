@@ -13,7 +13,6 @@ pub struct DatabaseMaintenanceSummary {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DatabasePoolSummary {
-    pub driver: crate::database::DatabaseDriver,
     pub checked_out: usize,
     pub pool_size: usize,
     pub idle: usize,

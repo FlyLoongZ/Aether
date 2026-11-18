@@ -421,7 +421,7 @@ pub(super) fn run_pool_monitor_once(data: &GatewayDataState) {
         event_name = "database_pool_sampled",
         log_type = "ops",
         worker = "pool_monitor",
-        driver = %summary.driver,
+        driver = "postgres",
         checked_out = summary.checked_out,
         pool_size = summary.pool_size,
         idle = summary.idle,

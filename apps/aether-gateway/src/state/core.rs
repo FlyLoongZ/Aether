@@ -544,7 +544,7 @@ impl AppState {
             self.frontdoor_runtime_guards.auth_snapshot_load_gate_limit,
             foreground_config
                 .database()
-                .map(|database| database.pool.max_connections),
+                .map(|database| database.max_connections),
         );
         self.auth_snapshot_load_gate = auth_load_limit
             .map(|limit| Arc::new(ConcurrencyGate::new("gateway_auth_snapshot_load", limit)));
@@ -2390,7 +2390,7 @@ fn task_supervisor_metric_samples(
 }
 
 fn database_pool_metric_samples(summary: &aether_data::DatabasePoolSummary) -> Vec<MetricSample> {
-    let labels = vec![MetricLabel::new("driver", summary.driver.to_string())];
+    let labels = vec![MetricLabel::new("driver", "postgres")];
     let usage_basis_points = if summary.usage_rate.is_finite() && summary.usage_rate > 0.0 {
         (summary.usage_rate * 100.0).round() as u64
     } else {
@@ -2461,7 +2461,7 @@ fn database_pool_metric_samples(summary: &aether_data::DatabasePoolSummary) -> V
 fn background_database_pool_metric_samples(
     summary: &aether_data::DatabasePoolSummary,
 ) -> Vec<MetricSample> {
-    let labels = vec![MetricLabel::new("driver", summary.driver.to_string())];
+    let labels = vec![MetricLabel::new("driver", "postgres")];
     let usage_basis_points = if summary.usage_rate.is_finite() && summary.usage_rate > 0.0 {
         (summary.usage_rate * 100.0).round() as u64
     } else {

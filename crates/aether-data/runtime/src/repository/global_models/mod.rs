@@ -11,7 +11,6 @@ pub(crate) use aether_data_contracts::repository::global_models::{
     StoredPublicCatalogModel, StoredPublicGlobalModel, StoredPublicGlobalModelPage,
     UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxGlobalModelReadRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryGlobalModelReadRepository;

@@ -87,7 +87,6 @@ pub(super) async fn list_rewards(
     state: &ReferralDataState<'_>,
     query: &ReferralRewardListQuery,
 ) -> Result<(Vec<ReferralRewardRecord>, u64), DataLayerError> {
-    #[cfg(feature = "postgres")]
     if let Some(backend) = state.backends.and_then(DataBackends::postgres) {
         let patterns = [
             query.order_id.as_deref(),
@@ -134,7 +133,6 @@ pub(super) async fn list_rewards(
     Ok((Vec::new(), 0))
 }
 
-#[cfg(feature = "postgres")]
 fn row_string_count(row: &sqlx::postgres::PgRow, key: &str) -> Result<u64, DataLayerError> {
     Ok(row
         .try_get::<i64, _>(key)
@@ -153,7 +151,6 @@ impl ReferralDataState<'_> {
     pub async fn referral_admin_overview_stats(
         &self,
     ) -> Result<Option<ReferralAdminOverviewStats>, DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let legacy = self.referral_admin_stats_global(None).await?;
             let row = sqlx::query(r#"
@@ -186,7 +183,6 @@ FROM referral_rewards rw
         &self,
         reward_id: &str,
     ) -> Result<Option<ReferralRewardDetail>, DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let pool = backend.pool_clone();
             let sql = format!("{REWARD_SELECT} {REWARD_FROM} WHERE rw.id=$1");

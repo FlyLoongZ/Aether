@@ -4,8 +4,7 @@
 //! process startup or explicit maintenance commands.
 
 pub mod backfill;
-#[cfg(feature = "postgres")]
 pub(crate) mod bootstrap;
 pub mod migrate;
-#[cfg(all(test, feature = "postgres"))]
+#[cfg(test)]
 mod postgres_test_support;

@@ -13,8 +13,8 @@ task crates live in the sibling `../contracts` crate (`aether-data-contracts`).
 
 | Path | Responsibility |
 |---|---|
-| `src/database.rs` | Logical SQL driver selection and shared pool configuration. |
-| `src/config.rs` | Data-layer config for SQL drivers and repository wiring. |
+| `src/database.rs` | PostgreSQL pool configuration and URL validation. |
+| `src/config.rs` | Data-layer config for the PostgreSQL backend and repository wiring. |
 | `src/maintenance.rs` | Maintenance DTOs and aggregation summaries used by backend dispatch and runtime maintenance entrypoints. |
 | `src/driver/postgres.rs` | Thin compatibility facades for the selected adapter crates. Low-level pools, transactions, and leases live in `aether-data-postgres`. |
 | `src/repository` | Compatibility modules that re-export contracts and selected SQL adapters, plus concrete in-memory implementations. Driver-specific request-path SQL lives in the adapter crates. |
@@ -46,7 +46,7 @@ The crate is easiest to read as five layers:
    contract types to driver-specific SQL. `src/repository/<domain>` keeps the
    compatibility import path and owns the in-memory implementation where one
    exists.
-4. Backend composition: `backend` chooses one SQL driver from config and wires
+4. Backend composition: `backend` builds the PostgreSQL backend from config and wires
    repository implementations into app-facing handles. Backend-owned runtime
    maintenance workflows live in focused backend modules rather than in the
    driver pool files.
@@ -88,14 +88,12 @@ remain independent of SQLx, while physical SQL, pools, and migrations belong to
 
 ### Feature Matrix
 
-`aether-data` enables PostgreSQL by default. The `all-drivers` feature selects
-the same PostgreSQL backend; a no-driver build remains available for pure
-in-memory repository tests.
+`aether-data` enables PostgreSQL by default. PostgreSQL is the only production
+driver; in-memory repositories stay behind `cfg(test)` / `test-support` for
+repository tests.
 
 ```bash
 cargo check -p aether-data
-cargo check -p aether-data --no-default-features
-cargo check -p aether-data --no-default-features --features postgres
 ```
 
 Database URLs must use `postgres:` or `postgresql:`. Unsupported drivers and

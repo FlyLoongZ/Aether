@@ -17,7 +17,7 @@ use tower::{Service as _, ServiceExt as _};
 use tracing::{debug, info, warn};
 
 use aether_crypto::warm_python_fernet_secret;
-use aether_data::{DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
+use aether_data::PostgresPoolConfig;
 use aether_gateway::{
     attach_static_frontend, build_router_with_state, set_gateway_frontdoor_app_port, AppState,
     FrontdoorCorsConfig, FrontdoorUserRpmConfig, GatewayDataConfig, UsageRuntimeConfig,
@@ -73,22 +73,9 @@ impl DeploymentTopologyArg {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
-enum DatabaseDriverArg {
-    Postgres,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum DatabaseModeArg {
     Auto,
     VerifyOnly,
-}
-
-impl From<DatabaseDriverArg> for DatabaseDriver {
-    fn from(value: DatabaseDriverArg) -> Self {
-        match value {
-            DatabaseDriverArg::Postgres => DatabaseDriver::Postgres,
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -347,9 +334,9 @@ fn usage_queue_workers_for_request_concurrency(request_concurrency: usize) -> us
 
 fn usage_database_config_for_role<'a>(
     node_role: NodeRoleArg,
-    database: Option<&'a SqlDatabaseConfig>,
-    isolated_background_database: Option<&'a SqlDatabaseConfig>,
-) -> Option<&'a SqlDatabaseConfig> {
+    database: Option<&'a PostgresPoolConfig>,
+    isolated_background_database: Option<&'a PostgresPoolConfig>,
+) -> Option<&'a PostgresPoolConfig> {
     if node_role.isolates_background_database() {
         isolated_background_database.or(database)
     } else {
@@ -359,14 +346,14 @@ fn usage_database_config_for_role<'a>(
 
 fn usage_queue_worker_database_cap(
     node_role: NodeRoleArg,
-    database: Option<&SqlDatabaseConfig>,
+    database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> usize {
     let Some(database) = database else {
         return MAX_USAGE_QUEUE_WORKERS;
     };
 
-    let max_connections = database.pool.max_connections.max(1) as usize;
+    let max_connections = database.max_connections.max(1) as usize;
     // An isolated pool is already a dedicated background budget. Applying the shared-pool
     // divisor a second time would underutilize that pool.
     if database_is_isolated {
@@ -389,12 +376,12 @@ fn usage_queue_worker_database_cap(
 
 fn usage_worker_record_concurrency_database_cap(
     node_role: NodeRoleArg,
-    database: Option<&SqlDatabaseConfig>,
+    database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> Option<usize> {
     let database = database?;
 
-    let max_connections = database.pool.max_connections.max(1) as usize;
+    let max_connections = database.max_connections.max(1) as usize;
     // The isolated background pool has already been carved out of the foreground pool. Keep one
     // connection available for maintenance/health work and use the rest for usage persistence.
     if database_is_isolated {
@@ -423,7 +410,7 @@ fn automatic_usage_queue_workers_for_parallelism(
     node_role: NodeRoleArg,
     max_in_flight_requests: Option<usize>,
     distributed_request_limit: Option<usize>,
-    database: Option<&SqlDatabaseConfig>,
+    database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> usize {
     let cpu_default = parallelism.max(1).clamp(
@@ -447,7 +434,7 @@ fn automatic_usage_queue_workers(
     node_role: NodeRoleArg,
     max_in_flight_requests: Option<usize>,
     distributed_request_limit: Option<usize>,
-    database: Option<&SqlDatabaseConfig>,
+    database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> usize {
     automatic_usage_queue_workers_for_parallelism(
@@ -460,34 +447,27 @@ fn automatic_usage_queue_workers(
     )
 }
 
-fn automatic_sql_pool_config(driver: DatabaseDriver) -> SqlPoolConfig {
-    automatic_sql_pool_config_for_parallelism(driver, available_parallelism_u32())
+fn automatic_sql_pool_config() -> PostgresPoolConfig {
+    automatic_sql_pool_config_for_parallelism(available_parallelism_u32())
 }
 
-fn automatic_sql_pool_config_for_parallelism(
-    driver: DatabaseDriver,
-    parallelism: u32,
-) -> SqlPoolConfig {
-    let (min_connections, max_connections) = match driver {
-        DatabaseDriver::Postgres => {
-            let cpu_count = parallelism.max(1);
-            let max_connections = cpu_count
-                .saturating_mul(AUTO_SERVER_SQL_POOL_CONNECTIONS_PER_CPU)
-                .clamp(
-                    AUTO_SERVER_SQL_POOL_MAX_CONNECTIONS_FLOOR,
-                    AUTO_SERVER_SQL_POOL_MAX_CONNECTIONS_CAP,
-                );
-            let min_connections = cpu_count
-                .clamp(
-                    AUTO_SERVER_SQL_POOL_MIN_CONNECTIONS_FLOOR,
-                    AUTO_SERVER_SQL_POOL_MIN_CONNECTIONS_CAP,
-                )
-                .min(max_connections);
-            (min_connections, max_connections)
-        }
-    };
+fn automatic_sql_pool_config_for_parallelism(parallelism: u32) -> PostgresPoolConfig {
+    let cpu_count = parallelism.max(1);
+    let max_connections = cpu_count
+        .saturating_mul(AUTO_SERVER_SQL_POOL_CONNECTIONS_PER_CPU)
+        .clamp(
+            AUTO_SERVER_SQL_POOL_MAX_CONNECTIONS_FLOOR,
+            AUTO_SERVER_SQL_POOL_MAX_CONNECTIONS_CAP,
+        );
+    let min_connections = cpu_count
+        .clamp(
+            AUTO_SERVER_SQL_POOL_MIN_CONNECTIONS_FLOOR,
+            AUTO_SERVER_SQL_POOL_MIN_CONNECTIONS_CAP,
+        )
+        .min(max_connections);
 
-    SqlPoolConfig {
+    PostgresPoolConfig {
+        database_url: String::new(),
         min_connections,
         max_connections,
         acquire_timeout_ms: DEFAULT_SQL_POOL_ACQUIRE_TIMEOUT_MS,
@@ -500,9 +480,6 @@ fn automatic_sql_pool_config_for_parallelism(
 
 #[derive(ClapArgs, Debug, Clone)]
 struct GatewayDataArgs {
-    #[arg(long, env = "AETHER_DATABASE_DRIVER", global = true)]
-    database_driver: Option<DatabaseDriverArg>,
-
     #[arg(long, env = "DATABASE_URL", global = true)]
     database_url: Option<String>,
 
@@ -572,16 +549,6 @@ impl GatewayDataArgs {
             .map_err(|message| std::io::Error::new(std::io::ErrorKind::InvalidInput, message))
     }
 
-    fn effective_database_driver(&self) -> Option<DatabaseDriver> {
-        self.database_driver.map(Into::into).or_else(|| {
-            self.database_url
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .and_then(DatabaseDriver::from_database_url)
-        })
-    }
-
     fn effective_database_url(&self) -> Option<String> {
         self.database_url
             .as_deref()
@@ -590,22 +557,15 @@ impl GatewayDataArgs {
             .map(ToOwned::to_owned)
     }
 
-    fn effective_sql_database_config(&self) -> Option<SqlDatabaseConfig> {
+    fn effective_sql_database_config(&self) -> Option<PostgresPoolConfig> {
         let url = self.effective_database_url()?;
-        let driver = self
-            .effective_database_driver()
-            .or_else(|| DatabaseDriver::from_database_url(&url))
-            .unwrap_or(DatabaseDriver::Postgres);
-
-        Some(SqlDatabaseConfig {
-            driver,
-            url,
-            pool: self.effective_sql_pool_config(driver),
-        })
+        let mut config = self.effective_sql_pool_config();
+        config.database_url = url;
+        Some(config)
     }
 
-    fn effective_sql_pool_config(&self, driver: DatabaseDriver) -> SqlPoolConfig {
-        let auto = automatic_sql_pool_config(driver);
+    fn effective_sql_pool_config(&self) -> PostgresPoolConfig {
+        let auto = automatic_sql_pool_config();
         let mut min_connections = self
             .postgres_min_connections
             .unwrap_or(auto.min_connections);
@@ -624,7 +584,8 @@ impl GatewayDataArgs {
             _ => {}
         }
 
-        SqlPoolConfig {
+        PostgresPoolConfig {
+            database_url: String::new(),
             min_connections,
             max_connections,
             acquire_timeout_ms: self
@@ -879,7 +840,7 @@ impl GatewayUsageArgs {
         node_role: NodeRoleArg,
         max_in_flight_requests: Option<usize>,
         distributed_request_limit: Option<usize>,
-        database: Option<&SqlDatabaseConfig>,
+        database: Option<&PostgresPoolConfig>,
         database_is_isolated: bool,
     ) -> usize {
         if let Some(queue_workers) = self.queue_workers {
@@ -900,7 +861,7 @@ impl GatewayUsageArgs {
     fn effective_queue_worker_max_count(
         &self,
         node_role: NodeRoleArg,
-        database: Option<&SqlDatabaseConfig>,
+        database: Option<&PostgresPoolConfig>,
         worker_count: usize,
         database_is_isolated: bool,
     ) -> usize {
@@ -923,7 +884,7 @@ impl GatewayUsageArgs {
     fn runtime_state_blocking_stream_lanes(
         &self,
         node_role: NodeRoleArg,
-        database: Option<&SqlDatabaseConfig>,
+        database: Option<&PostgresPoolConfig>,
         worker_max_count: usize,
     ) -> Option<usize> {
         if !node_role.spawns_background_tasks()
@@ -938,7 +899,7 @@ impl GatewayUsageArgs {
     fn effective_worker_record_concurrency_limit(
         &self,
         node_role: NodeRoleArg,
-        database: Option<&SqlDatabaseConfig>,
+        database: Option<&PostgresPoolConfig>,
         database_is_isolated: bool,
     ) -> Option<usize> {
         if let Some(limit) = self.worker_record_concurrency_limit {
@@ -1358,7 +1319,7 @@ impl Args {
 
     fn effective_runtime_backend(
         &self,
-        _database: Option<&SqlDatabaseConfig>,
+        _database: Option<&PostgresPoolConfig>,
         data_redis_url: Option<&str>,
     ) -> RuntimeBackendArg {
         if let Some(runtime_backend) = self.runtime_backend {
@@ -1740,7 +1701,7 @@ async fn run_healthcheck(
 
 fn validate_deployment_topology(
     args: &Args,
-    database: Option<&SqlDatabaseConfig>,
+    database: Option<&PostgresPoolConfig>,
     data_redis_url: Option<&str>,
     runtime_backend: RuntimeBackendArg,
 ) -> Result<(), std::io::Error> {
@@ -2032,21 +1993,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .or(runtime_redis_url.as_deref())
             .is_some(),
         data_database_configured = sql_database_config.is_some(),
-        data_database_driver = sql_database_config
-            .as_ref()
-            .map(|database| database.driver.as_str())
-            .unwrap_or("-"),
+        data_database_driver = if sql_database_config.is_some() {
+            "postgres"
+        } else {
+            "-"
+        },
         data_database_pool_min_connections = sql_database_config
             .as_ref()
-            .map(|database| database.pool.min_connections)
+            .map(|database| database.min_connections)
             .unwrap_or_default(),
         data_database_pool_max_connections = sql_database_config
             .as_ref()
-            .map(|database| database.pool.max_connections)
+            .map(|database| database.max_connections)
             .unwrap_or_default(),
-        data_postgres_configured = sql_database_config
-            .as_ref()
-            .is_some_and(|database| database.driver == DatabaseDriver::Postgres),
+        data_postgres_configured = sql_database_config.is_some(),
         runtime_redis_configured = matches!(runtime_backend, RuntimeBackendArg::Redis),
         data_redis_url_supplied = data_redis_url.is_some(),
         data_has_encryption_key = data_config.encryption_key().is_some(),
@@ -2126,7 +2086,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "usage persistence requires a configured shared SQL data backend; set AETHER_DATABASE_DRIVER and DATABASE_URL before starting aether-gateway",
+            "usage persistence requires a configured shared SQL data backend; set DATABASE_URL before starting aether-gateway",
         )
         .into());
     }
@@ -2320,22 +2280,26 @@ async fn run_database_command(
 
 fn database_maintenance_state(
     data: &GatewayDataArgs,
-) -> Result<(DatabaseDriver, AppState), Box<dyn std::error::Error>> {
-    let database = required_sql_database_config(data)?;
-    let driver = database.driver;
-    let state = AppState::new()?.with_data_config(data.to_config())?;
-    Ok((driver, state))
+) -> Result<AppState, Box<dyn std::error::Error>> {
+    if data.effective_sql_database_config().is_none() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "DATABASE_URL is required",
+        )
+        .into());
+    }
+    Ok(AppState::new()?.with_data_config(data.to_config())?)
 }
 
 async fn run_database_status(data: &GatewayDataArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let (driver, state) = database_maintenance_state(data)?;
+    let state = database_maintenance_state(data)?;
     let pending_migrations = state
         .pending_database_migrations()
         .await?
         .unwrap_or_default();
 
     if let Some(next) = pending_migrations.first() {
-        println!("database {driver}: preparation required");
+        println!("database postgres: preparation required");
         println!("pending migrations: {}", pending_migrations.len());
         println!("next migration: {} ({})", next.version, next.description);
         println!("pending backfills: not checked until migrations are current");
@@ -2348,7 +2312,7 @@ async fn run_database_status(data: &GatewayDataArgs) -> Result<(), Box<dyn std::
         .await?
         .unwrap_or_default();
     if let Some(next) = pending_backfills.first() {
-        println!("database {driver}: preparation required");
+        println!("database postgres: preparation required");
         println!("pending migrations: 0");
         println!("pending backfills: {}", pending_backfills.len());
         println!("next backfill: {} ({})", next.version, next.description);
@@ -2356,34 +2320,22 @@ async fn run_database_status(data: &GatewayDataArgs) -> Result<(), Box<dyn std::
         return Ok(());
     }
 
-    println!("database {driver}: ready (schema and backfills are current)");
+    println!("database postgres: ready (schema and backfills are current)");
     Ok(())
 }
 
 async fn run_database_prepare(data: &GatewayDataArgs) -> Result<(), Box<dyn std::error::Error>> {
-    let (driver, state) = database_maintenance_state(data)?;
+    let state = database_maintenance_state(data)?;
     prepare_database_startup_requirements(&state, DatabaseModeArg::Auto).await?;
-    println!("database {driver}: ready (schema and backfills are current)");
+    println!("database postgres: ready (schema and backfills are current)");
     Ok(())
-}
-
-fn required_sql_database_config(
-    data: &GatewayDataArgs,
-) -> Result<SqlDatabaseConfig, Box<dyn std::error::Error>> {
-    data.effective_sql_database_config().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "AETHER_DATABASE_DRIVER and DATABASE_URL are required",
-        )
-        .into()
-    })
 }
 
 async fn run_explicit_migrations(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     if args.data.effective_sql_database_config().is_none() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "AETHER_DATABASE_DRIVER and DATABASE_URL are required when running --migrate",
+            "DATABASE_URL is required when running --migrate",
         )
         .into());
     }
@@ -2419,12 +2371,13 @@ async fn run_explicit_migrations(args: &Args) -> Result<(), Box<dyn std::error::
 }
 
 async fn run_explicit_backfills(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    let database = args.data.effective_sql_database_config().ok_or_else(|| {
-        std::io::Error::new(
+    if args.data.effective_sql_database_config().is_none() {
+        return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "AETHER_DATABASE_DRIVER and DATABASE_URL are required when running --apply-backfills",
+            "DATABASE_URL is required when running --apply-backfills",
         )
-    })?;
+        .into());
+    }
     args.data.validate_encryption_key()?;
     let state = AppState::new()?.with_data_config(args.data.to_config())?;
     ensure_database_schema_is_current(&state).await?;
@@ -2435,7 +2388,7 @@ async fn run_explicit_backfills(args: &Args) -> Result<(), Box<dyn std::error::E
         .unwrap_or_default();
     if pending.is_empty() {
         info!(
-            driver = %database.driver,
+            driver = "postgres",
             pending_backfills = 0,
             "database backfills already up to date"
         );
@@ -2600,17 +2553,17 @@ mod tests {
         ensure_database_backfills_are_current, ensure_database_schema_is_current,
         pending_backfills_error, pending_schema_error, resolve_healthcheck_url,
         usage_database_config_for_role, validate_gateway_data_encryption_key, Args, DataCommand,
-        DatabaseCommand, DatabaseDriverArg, DatabaseModeArg, DeploymentTopologyArg,
-        GatewayDataArgs, GatewayFrontdoorArgs, GatewayLogDestinationArg, GatewayLogFormatArg,
-        GatewayLogRotationArg, GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs,
-        NodeRoleArg, RuntimeBackendArg, DEFAULT_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
-        DEFAULT_GATEWAY_HTTP_HEADER_MAX_BYTES, DEFAULT_GATEWAY_HTTP_HEADER_READ_TIMEOUT_MS,
-        DEFAULT_GATEWAY_HTTP_MAX_HEADERS, DEFAULT_GATEWAY_LISTENER_SHARDS,
-        DEFAULT_GATEWAY_LISTEN_BACKLOG, MAX_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
-        MAX_GATEWAY_LISTENER_SHARDS, MAX_GATEWAY_LISTEN_BACKLOG,
-        MIN_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS, MIN_GATEWAY_LISTEN_BACKLOG,
+        DatabaseCommand, DatabaseModeArg, DeploymentTopologyArg, GatewayDataArgs,
+        GatewayFrontdoorArgs, GatewayLogDestinationArg, GatewayLogFormatArg, GatewayLogRotationArg,
+        GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs, NodeRoleArg, RuntimeBackendArg,
+        DEFAULT_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS, DEFAULT_GATEWAY_HTTP_HEADER_MAX_BYTES,
+        DEFAULT_GATEWAY_HTTP_HEADER_READ_TIMEOUT_MS, DEFAULT_GATEWAY_HTTP_MAX_HEADERS,
+        DEFAULT_GATEWAY_LISTENER_SHARDS, DEFAULT_GATEWAY_LISTEN_BACKLOG,
+        MAX_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS, MAX_GATEWAY_LISTENER_SHARDS,
+        MAX_GATEWAY_LISTEN_BACKLOG, MIN_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
+        MIN_GATEWAY_LISTEN_BACKLOG,
     };
-    use aether_data::{DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
+    use aether_data::PostgresPoolConfig;
     use aether_gateway::AppState;
     use bytes::Bytes;
     use clap::Parser;
@@ -2661,7 +2614,6 @@ mod tests {
             runtime_redis_key_prefix: None,
             runtime_command_timeout_ms: 1_000,
             data: GatewayDataArgs {
-                database_driver: None,
                 database_url: None,
                 encryption_key: None,
                 redis_url: None,
@@ -2724,21 +2676,13 @@ mod tests {
         }
     }
 
-    fn test_database(driver: DatabaseDriver, max_connections: u32) -> SqlDatabaseConfig {
-        let url = match driver {
-            DatabaseDriver::Postgres => "postgres://postgres:postgres@localhost/aether",
-        };
-        let max_connections = max_connections.max(1);
-        SqlDatabaseConfig::new(
-            driver,
-            url,
-            SqlPoolConfig {
-                min_connections: 1,
-                max_connections,
-                ..SqlPoolConfig::default()
-            },
-        )
-        .expect("test database config should build")
+    fn test_database(max_connections: u32) -> PostgresPoolConfig {
+        PostgresPoolConfig {
+            database_url: "postgres://postgres:postgres@localhost/aether".to_string(),
+            min_connections: 1,
+            max_connections: max_connections.max(1),
+            ..PostgresPoolConfig::default()
+        }
     }
 
     #[test]
@@ -2943,8 +2887,6 @@ mod tests {
     fn database_arguments_are_global_for_database_commands() {
         let before = Args::try_parse_from([
             "aether-gateway",
-            "--database-driver",
-            "postgres",
             "--database-url",
             "postgres://localhost/before",
             "db",
@@ -2960,8 +2902,6 @@ mod tests {
             "aether-gateway",
             "db",
             "prepare",
-            "--database-driver",
-            "postgres",
             "--database-url",
             "postgres://localhost/after",
         ])
@@ -2975,39 +2915,41 @@ mod tests {
     #[test]
     fn gateway_data_pool_auto_sizes_server_databases_from_runtime_cpu() {
         let mut args = test_args();
-        args.data.database_driver = Some(DatabaseDriverArg::Postgres);
         args.data.database_url = Some("postgres://postgres:postgres@localhost/aether".to_string());
 
         let database = args
             .data
             .effective_sql_database_config()
             .expect("postgres database config should build");
-        let auto = automatic_sql_pool_config(DatabaseDriver::Postgres);
+        let auto = automatic_sql_pool_config();
 
-        assert_eq!(database.driver, DatabaseDriver::Postgres);
-        assert_eq!(database.pool.min_connections, auto.min_connections);
-        assert_eq!(database.pool.max_connections, auto.max_connections);
+        assert_eq!(
+            database.database_url,
+            "postgres://postgres:postgres@localhost/aether"
+        );
+        assert_eq!(database.min_connections, auto.min_connections);
+        assert_eq!(database.max_connections, auto.max_connections);
     }
 
     #[test]
     fn gateway_data_pool_cpu_sizing_examples() {
-        let two_cpu = automatic_sql_pool_config_for_parallelism(DatabaseDriver::Postgres, 2);
+        let two_cpu = automatic_sql_pool_config_for_parallelism(2);
         assert_eq!(two_cpu.min_connections, 4);
         assert_eq!(two_cpu.max_connections, 32);
 
-        let four_cpu = automatic_sql_pool_config_for_parallelism(DatabaseDriver::Postgres, 4);
+        let four_cpu = automatic_sql_pool_config_for_parallelism(4);
         assert_eq!(four_cpu.min_connections, 4);
         assert_eq!(four_cpu.max_connections, 32);
 
-        let eight_cpu = automatic_sql_pool_config_for_parallelism(DatabaseDriver::Postgres, 8);
+        let eight_cpu = automatic_sql_pool_config_for_parallelism(8);
         assert_eq!(eight_cpu.min_connections, 8);
         assert_eq!(eight_cpu.max_connections, 32);
 
-        let sixteen_cpu = automatic_sql_pool_config_for_parallelism(DatabaseDriver::Postgres, 16);
+        let sixteen_cpu = automatic_sql_pool_config_for_parallelism(16);
         assert_eq!(sixteen_cpu.min_connections, 16);
         assert_eq!(sixteen_cpu.max_connections, 64);
 
-        let many_cpu = automatic_sql_pool_config_for_parallelism(DatabaseDriver::Postgres, 32);
+        let many_cpu = automatic_sql_pool_config_for_parallelism(32);
         assert_eq!(many_cpu.min_connections, 16);
         assert_eq!(many_cpu.max_connections, 100);
     }
@@ -3018,8 +2960,8 @@ mod tests {
         assert!(!NodeRoleArg::Frontdoor.isolates_background_database());
         assert!(!NodeRoleArg::Background.isolates_background_database());
 
-        let database = test_database(DatabaseDriver::Postgres, 20);
-        let isolated_background = test_database(DatabaseDriver::Postgres, 4);
+        let database = test_database(20);
+        let isolated_background = test_database(4);
         assert_eq!(
             usage_database_config_for_role(
                 NodeRoleArg::All,
@@ -3077,7 +3019,7 @@ mod tests {
     fn gateway_usage_queue_workers_manual_override_wins_and_is_capped() {
         let mut args = test_args();
         args.usage.queue_workers = Some(72);
-        let database = test_database(DatabaseDriver::Postgres, 100);
+        let database = test_database(100);
 
         let workers = args.usage.effective_queue_workers(
             NodeRoleArg::All,
@@ -3093,7 +3035,7 @@ mod tests {
 
     #[test]
     fn gateway_usage_queue_workers_auto_uses_cpu_default_without_concurrency_hint() {
-        let database = test_database(DatabaseDriver::Postgres, 100);
+        let database = test_database(100);
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             4,
@@ -3111,7 +3053,7 @@ mod tests {
     fn gateway_usage_queue_worker_autoscale_max_uses_database_cap() {
         let mut args = test_args();
         args.usage.queue_workers = None;
-        let database = test_database(DatabaseDriver::Postgres, 40);
+        let database = test_database(40);
 
         let workers = args.usage.effective_queue_workers(
             args.node_role,
@@ -3136,7 +3078,7 @@ mod tests {
         let mut args = test_args();
         args.usage.queue_workers = None;
         args.usage.queue_worker_max_count = Some(32);
-        let database = test_database(DatabaseDriver::Postgres, 200);
+        let database = test_database(200);
 
         let workers = args.usage.effective_queue_workers(
             args.node_role,
@@ -3159,7 +3101,7 @@ mod tests {
     #[test]
     fn gateway_usage_worker_record_concurrency_defaults_to_pool_reserve_share() {
         let args = test_args();
-        let database = test_database(DatabaseDriver::Postgres, 64);
+        let database = test_database(64);
 
         assert_eq!(
             args.usage.effective_worker_record_concurrency_limit(
@@ -3183,8 +3125,8 @@ mod tests {
     fn gateway_usage_isolated_database_uses_dedicated_capacity_once() {
         let mut args = test_args();
         args.usage.queue_workers = None;
-        let database = test_database(DatabaseDriver::Postgres, 64);
-        let isolated_background = test_database(DatabaseDriver::Postgres, 8);
+        let database = test_database(64);
+        let isolated_background = test_database(8);
         let usage_database = usage_database_config_for_role(
             NodeRoleArg::All,
             Some(&database),
@@ -3206,7 +3148,7 @@ mod tests {
             true,
         );
 
-        assert_eq!(usage_database.pool.max_connections, 8);
+        assert_eq!(usage_database.max_connections, 8);
         assert_eq!(workers, 7);
         assert_eq!(max_workers, 7);
         assert_eq!(
@@ -3223,7 +3165,7 @@ mod tests {
     fn gateway_usage_worker_record_concurrency_can_be_explicitly_disabled() {
         let mut args = test_args();
         args.usage.worker_record_concurrency_limit = Some(0);
-        let database = test_database(DatabaseDriver::Postgres, 64);
+        let database = test_database(64);
 
         assert_eq!(
             args.usage.effective_worker_record_concurrency_limit(
@@ -3237,7 +3179,7 @@ mod tests {
 
     #[test]
     fn gateway_usage_queue_blocking_stream_lanes_only_expand_when_worker_can_spawn() {
-        let database = test_database(DatabaseDriver::Postgres, 100);
+        let database = test_database(100);
         let args = test_args();
 
         assert_eq!(
@@ -3272,7 +3214,7 @@ mod tests {
 
     #[test]
     fn gateway_usage_queue_workers_auto_scales_from_request_concurrency() {
-        let database = test_database(DatabaseDriver::Postgres, 100);
+        let database = test_database(100);
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             8,
@@ -3288,7 +3230,7 @@ mod tests {
 
     #[test]
     fn gateway_usage_queue_workers_auto_respects_effective_request_limit() {
-        let database = test_database(DatabaseDriver::Postgres, 100);
+        let database = test_database(100);
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             8,
@@ -3304,7 +3246,7 @@ mod tests {
 
     #[test]
     fn gateway_usage_queue_workers_auto_is_capped_by_database_pool() {
-        let database = test_database(DatabaseDriver::Postgres, 20);
+        let database = test_database(20);
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             16,
@@ -3320,7 +3262,7 @@ mod tests {
 
     #[test]
     fn gateway_usage_queue_workers_auto_gives_background_nodes_more_pool_budget() {
-        let database = test_database(DatabaseDriver::Postgres, 20);
+        let database = test_database(20);
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             16,
@@ -3337,7 +3279,6 @@ mod tests {
     #[test]
     fn gateway_data_pool_explicit_values_override_auto_sizing() {
         let mut args = test_args();
-        args.data.database_driver = Some(DatabaseDriverArg::Postgres);
         args.data.database_url = Some("postgres://localhost/aether".to_string());
         args.data.postgres_min_connections = Some(2);
         args.data.postgres_max_connections = Some(8);
@@ -3348,15 +3289,14 @@ mod tests {
             .effective_sql_database_config()
             .expect("postgres database config should build");
 
-        assert_eq!(database.pool.min_connections, 2);
-        assert_eq!(database.pool.max_connections, 8);
-        assert_eq!(database.pool.acquire_timeout_ms, 2_000);
+        assert_eq!(database.min_connections, 2);
+        assert_eq!(database.max_connections, 8);
+        assert_eq!(database.acquire_timeout_ms, 2_000);
     }
 
     #[test]
     fn gateway_data_pool_partial_max_override_clamps_auto_minimum() {
         let mut args = test_args();
-        args.data.database_driver = Some(DatabaseDriverArg::Postgres);
         args.data.database_url = Some("postgres://postgres:postgres@localhost/aether".to_string());
         args.data.postgres_max_connections = Some(2);
 
@@ -3365,14 +3305,13 @@ mod tests {
             .effective_sql_database_config()
             .expect("postgres database config should build");
 
-        assert_eq!(database.pool.min_connections, 2);
-        assert_eq!(database.pool.max_connections, 2);
+        assert_eq!(database.min_connections, 2);
+        assert_eq!(database.max_connections, 2);
     }
 
     #[test]
     fn gateway_data_pool_partial_min_override_raises_auto_maximum() {
         let mut args = test_args();
-        args.data.database_driver = Some(DatabaseDriverArg::Postgres);
         args.data.database_url = Some("postgres://postgres:postgres@localhost/aether".to_string());
         args.data.postgres_min_connections = Some(128);
 
@@ -3381,14 +3320,13 @@ mod tests {
             .effective_sql_database_config()
             .expect("postgres database config should build");
 
-        assert_eq!(database.pool.min_connections, 128);
-        assert_eq!(database.pool.max_connections, 128);
+        assert_eq!(database.min_connections, 128);
+        assert_eq!(database.max_connections, 128);
     }
 
     #[test]
     fn memory_runtime_data_config_keeps_redis_out_of_data_layer() {
         let mut args = test_args();
-        args.data.database_driver = Some(DatabaseDriverArg::Postgres);
         args.data.database_url = Some("postgres://localhost/aether".to_string());
         args.data.redis_url = Some("redis://127.0.0.1/0".to_string());
 
@@ -3398,8 +3336,8 @@ mod tests {
             config
                 .database()
                 .expect("database should be configured")
-                .driver,
-            DatabaseDriver::Postgres
+                .database_url,
+            "postgres://localhost/aether"
         );
     }
 
@@ -3426,7 +3364,6 @@ mod tests {
     #[test]
     fn redis_runtime_config_owns_redis_connection() {
         let mut args = test_args();
-        args.data.database_driver = Some(DatabaseDriverArg::Postgres);
         args.data.database_url = Some("postgres://postgres:postgres@localhost/aether".to_string());
         args.data.redis_url = Some("redis://127.0.0.1/0".to_string());
 
@@ -3450,12 +3387,10 @@ mod tests {
     #[test]
     fn redis_url_defaults_to_redis_runtime_backend_for_server_database() {
         let args = test_args();
-        let database = SqlDatabaseConfig::new(
-            DatabaseDriver::Postgres,
-            "postgres://postgres:postgres@localhost/aether".to_string(),
-            SqlPoolConfig::default(),
-        )
-        .expect("postgres config should build");
+        let database = PostgresPoolConfig {
+            database_url: "postgres://postgres:postgres@localhost/aether".to_string(),
+            ..PostgresPoolConfig::default()
+        };
 
         assert_eq!(
             args.effective_runtime_backend(Some(&database), Some("redis://127.0.0.1/0")),
@@ -3468,12 +3403,10 @@ mod tests {
         let mut args = test_args();
         args.deployment_topology = DeploymentTopologyArg::MultiNode;
         args.node_role = NodeRoleArg::Frontdoor;
-        let database = SqlDatabaseConfig::new(
-            DatabaseDriver::Postgres,
-            "postgres://postgres:postgres@localhost/aether".to_string(),
-            SqlPoolConfig::default(),
-        )
-        .expect("postgres config should build");
+        let database = PostgresPoolConfig {
+            database_url: "postgres://postgres:postgres@localhost/aether".to_string(),
+            ..PostgresPoolConfig::default()
+        };
 
         let error = super::validate_deployment_topology(
             &args,
@@ -3491,12 +3424,10 @@ mod tests {
         let mut args = test_args();
         args.deployment_topology = DeploymentTopologyArg::MultiNode;
         args.node_role = NodeRoleArg::Frontdoor;
-        let database = SqlDatabaseConfig::new(
-            DatabaseDriver::Postgres,
-            "postgres://postgres:postgres@localhost/aether".to_string(),
-            SqlPoolConfig::default(),
-        )
-        .expect("postgres config should build");
+        let database = PostgresPoolConfig {
+            database_url: "postgres://postgres:postgres@localhost/aether".to_string(),
+            ..PostgresPoolConfig::default()
+        };
 
         let error = super::validate_deployment_topology(
             &args,
@@ -3564,9 +3495,7 @@ mod tests {
         let error = super::run_database_prepare(&data)
             .await
             .expect_err("missing database URL should fail");
-        assert!(error
-            .to_string()
-            .contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
+        assert!(error.to_string().contains("DATABASE_URL is required"));
     }
 
     #[tokio::test]
@@ -3576,7 +3505,7 @@ mod tests {
             .await
             .expect_err("missing database URL should fail");
         let message = error.to_string();
-        assert!(message.contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
+        assert!(message.contains("DATABASE_URL is required"));
         assert!(message.contains("--migrate"));
     }
 
@@ -3589,7 +3518,7 @@ mod tests {
             .await
             .expect_err("missing database URL should fail before any app port validation");
         let message = error.to_string();
-        assert!(message.contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
+        assert!(message.contains("DATABASE_URL is required"));
         assert!(!message.contains("APP_PORT"));
     }
 
@@ -3600,7 +3529,7 @@ mod tests {
             .await
             .expect_err("missing database URL should fail");
         let message = error.to_string();
-        assert!(message.contains("AETHER_DATABASE_DRIVER and DATABASE_URL"));
+        assert!(message.contains("DATABASE_URL is required"));
         assert!(message.contains("--apply-backfills"));
     }
 

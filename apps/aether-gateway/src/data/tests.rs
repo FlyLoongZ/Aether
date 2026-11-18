@@ -14,7 +14,6 @@ use aether_data::repository::users::{
     InMemoryUserReadRepository, StoredUserAuthRecord, StoredUserPreferenceRecord,
 };
 use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
-use aether_data::DatabaseDriver;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
@@ -56,7 +55,6 @@ fn disabled_gateway_data_state_has_no_backends() {
 #[test]
 fn maintenance_pool_pressure_keeps_idle_reserve_for_foreground_work() {
     let pool_can_still_grow = aether_data::DatabasePoolSummary {
-        driver: DatabaseDriver::Postgres,
         checked_out: 6,
         pool_size: 6,
         idle: 0,
@@ -68,7 +66,6 @@ fn maintenance_pool_pressure_keeps_idle_reserve_for_foreground_work() {
     );
 
     let reserve_idle_left = aether_data::DatabasePoolSummary {
-        driver: DatabaseDriver::Postgres,
         checked_out: 18,
         pool_size: 20,
         idle: 2,
@@ -78,7 +75,6 @@ fn maintenance_pool_pressure_keeps_idle_reserve_for_foreground_work() {
     assert!(GatewayDataState::database_pool_summary_under_maintenance_pressure(&reserve_idle_left));
 
     let above_idle_reserve = aether_data::DatabasePoolSummary {
-        driver: DatabaseDriver::Postgres,
         checked_out: 17,
         pool_size: 20,
         idle: 3,
@@ -90,7 +86,6 @@ fn maintenance_pool_pressure_keeps_idle_reserve_for_foreground_work() {
     );
 
     let idle = aether_data::DatabasePoolSummary {
-        driver: DatabaseDriver::Postgres,
         checked_out: 0,
         pool_size: 4,
         idle: 4,
@@ -103,7 +98,6 @@ fn maintenance_pool_pressure_keeps_idle_reserve_for_foreground_work() {
 #[test]
 fn usage_worker_pool_pressure_only_defers_near_pool_exhaustion() {
     let comfortable = aether_data::DatabasePoolSummary {
-        driver: DatabaseDriver::Postgres,
         checked_out: 56,
         pool_size: 64,
         idle: 8,
@@ -113,7 +107,6 @@ fn usage_worker_pool_pressure_only_defers_near_pool_exhaustion() {
     assert!(!GatewayDataState::database_pool_summary_under_usage_worker_pressure(&comfortable));
 
     let last_idle_left = aether_data::DatabasePoolSummary {
-        driver: DatabaseDriver::Postgres,
         checked_out: 63,
         pool_size: 64,
         idle: 1,
@@ -123,7 +116,6 @@ fn usage_worker_pool_pressure_only_defers_near_pool_exhaustion() {
     assert!(GatewayDataState::database_pool_summary_under_usage_worker_pressure(&last_idle_left));
 
     let exhausted = aether_data::DatabasePoolSummary {
-        driver: DatabaseDriver::Postgres,
         checked_out: 64,
         pool_size: 64,
         idle: 0,

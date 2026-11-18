@@ -66,7 +66,7 @@ fn should_defer_for_database_pressure(
         event_name = "maintenance_worker_deferred",
         log_type = "ops",
         worker,
-        driver = %summary.driver,
+        driver = "postgres",
         checked_out = summary.checked_out,
         pool_size = summary.pool_size,
         idle = summary.idle,

@@ -1,7 +1,6 @@
 use super::*;
 use crate::repository::{users::StoredUserAuthRecord, wallet::StoredWalletSnapshot};
 
-#[cfg(feature = "postgres")]
 async fn bind_in_transaction(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     invitee: &str,
@@ -61,7 +60,7 @@ async fn bind_in_transaction(
     }))
 }
 
-#[cfg(all(test, feature = "postgres"))]
+#[cfg(test)]
 mod postgres_tests {
     use super::*;
     async fn isolated_backend() -> DataBackends {
@@ -521,7 +520,6 @@ mod postgres_tests {
     }
 }
 
-#[cfg(feature = "postgres")]
 async fn insert_registration_obligation(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: &str,
@@ -550,7 +548,6 @@ impl ReferralDataState<'_> {
         };
         let code = normalize_referral_code(code)
             .ok_or_else(|| DataLayerError::InvalidInput("邀请码无效".into()))?;
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let exists=sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM user_invite_codes c JOIN users u ON u.id=c.user_id WHERE c.invite_code=$1 AND c.active=TRUE AND u.is_active=TRUE AND u.is_deleted=FALSE)").bind(code).fetch_one(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
             if !exists {
@@ -568,7 +565,6 @@ impl ReferralDataState<'_> {
         _config: Option<ReferralRewardConfig>,
         email_verified: bool,
     ) -> Result<Option<ReferralRelationshipRecord>, DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let mut tx = backend
                 .pool_clone()
@@ -600,7 +596,6 @@ impl ReferralDataState<'_> {
         &self,
         invitee: &str,
     ) -> Result<Vec<ReferralRewardRecord>, DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let keys=sqlx::query_scalar::<_,String>("SELECT idempotency_key FROM referral_rewards WHERE invitee_user_id=$1 AND source_order_id IS NULL AND status IN ('pending','failed') AND amount_usd>0 ORDER BY created_at,id").bind(invitee).fetch_all(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
             return self
@@ -614,7 +609,6 @@ impl ReferralDataState<'_> {
         &self,
         invitee: &str,
     ) -> Result<(), DataLayerError> {
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let mut tx = backend
                 .pool_clone()
@@ -728,7 +722,6 @@ impl ReferralDataState<'_> {
             gift,
             now.timestamp(),
         )?;
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let mut tx = backend
                 .pool_clone()

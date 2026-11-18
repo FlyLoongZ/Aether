@@ -36,11 +36,9 @@ pub(crate) use aether_data_contracts::repository::usage::{
     UsageRepository, UsageSettledCostSummaryQuery, UsageTimeSeriesGranularity,
     UsageTimeSeriesQuery, UsageWriteRepository,
 };
-#[cfg(feature = "postgres")]
 pub mod cleanup {
     pub use aether_data_postgres::cleanup::*;
 }
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxUsageReadRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryUsageReadRepository;

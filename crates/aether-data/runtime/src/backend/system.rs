@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-#[cfg(feature = "postgres")]
 use super::PostgresBackend;
 use crate::repository::system::{
     AdminSystemPurgeSummary, AdminSystemPurgeTarget, AdminSystemUsageAggregateImportMode,
@@ -9,7 +8,6 @@ use crate::repository::system::{
 };
 use crate::DataLayerError;
 
-#[cfg(feature = "postgres")]
 mod postgres;
 
 const ADMIN_CONFIG_PURGE_TABLES: &[&str] = &[

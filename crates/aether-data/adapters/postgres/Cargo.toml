@@ -11,7 +11,6 @@ serde.workspace = true
 aether-ai-formats.workspace = true
 aether-body-store.workspace = true
 aether-data-contracts.workspace = true
-aether-data-query.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true

@@ -9,7 +9,7 @@ use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadReposi
 use aether_data::repository::wallet::{
     InMemoryWalletRepository, StoredWalletSnapshot, WalletReadRepository,
 };
-use aether_data::{DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
+use aether_data::PostgresPoolConfig;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogProvider,
 };
@@ -101,13 +101,12 @@ async fn postgres_auth_config_nodes(
     let server = aether_testkit::ManagedPostgresServer::start()
         .await
         .expect("temporary PostgreSQL should start");
-    let pool = SqlPoolConfig {
+    let database = PostgresPoolConfig {
+        database_url: server.database_url(),
         min_connections: 0,
         max_connections: 4,
         ..Default::default()
     };
-    let database = SqlDatabaseConfig::new(DatabaseDriver::Postgres, server.database_url(), pool)
-        .expect("postgres config should build");
     let config = GatewayDataConfig::from_database_config(database);
     let first_data = GatewayDataState::from_config(config.clone())
         .expect("first data state should build")

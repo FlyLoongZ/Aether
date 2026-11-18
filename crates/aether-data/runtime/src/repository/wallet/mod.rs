@@ -46,7 +46,6 @@ pub use aether_data_contracts::repository::wallet::{
     WalletReadRepository, WalletReadSeed, WalletReadSnapshot, WalletRepository,
     WalletWriteRepository, WALLET_RECHARGE_CHECKOUT_CLAIM_LEASE_SECS,
 };
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxWalletRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryWalletRepository;

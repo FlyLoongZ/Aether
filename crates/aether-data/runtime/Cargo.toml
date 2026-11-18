@@ -8,9 +8,6 @@ description = "Runtime data-access facade and database backend composition for A
 build = "build.rs"
 
 [features]
-default = ["postgres"]
-postgres = ["dep:aether-data-postgres", "sqlx/postgres"]
-all-drivers = ["postgres"]
 # In-memory repositories are test doubles. They stay out of production builds;
 # test targets opt in through dev-dependencies.
 test-support = ["dep:aether-wallet"]
@@ -18,7 +15,7 @@ test-support = ["dep:aether-wallet"]
 [dependencies]
 aether-ai-formats.workspace = true
 aether-data-contracts.workspace = true
-aether-data-postgres = { workspace = true, optional = true }
+aether-data-postgres.workspace = true
 aether-wallet = { workspace = true, optional = true }
 async-trait.workspace = true
 chrono.workspace = true
@@ -28,7 +25,7 @@ serde.workspace = true
 serde_json.workspace = true
 hex.workspace = true
 sha2.workspace = true
-sqlx = { workspace = true, features = ["migrate", "macros", "bigdecimal"] }
+sqlx = { workspace = true, features = ["postgres", "migrate", "macros", "bigdecimal"] }
 tokio.workspace = true
 tracing.workspace = true
 uuid.workspace = true

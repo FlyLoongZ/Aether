@@ -1,4 +1,3 @@
-#[cfg(feature = "postgres")]
 mod postgres;
 
 use super::{summarize_pool, DataBackends, SqlBackendRef};
@@ -134,9 +133,6 @@ impl DataBackends {
     pub async fn postgres_observability_snapshot(
         &self,
     ) -> Result<Option<DatabasePostgresObservabilitySnapshot>, DataLayerError> {
-        #[cfg(not(feature = "postgres"))]
-        return Ok(None);
-        #[cfg(feature = "postgres")]
         match self.postgres() {
             Some(postgres) => postgres.postgres_observability_snapshot().await.map(Some),
             None => Ok(None),
@@ -147,11 +143,6 @@ impl DataBackends {
         &self,
         limit: i64,
     ) -> Result<Vec<DatabasePostgresActivityGroup>, DataLayerError> {
-        #[cfg(not(feature = "postgres"))]
-        let _ = limit;
-        #[cfg(not(feature = "postgres"))]
-        return Ok(Vec::new());
-        #[cfg(feature = "postgres")]
         match self.postgres() {
             Some(postgres) => postgres.postgres_activity_groups(limit).await,
             None => Ok(Vec::new()),
@@ -336,12 +327,9 @@ impl DataBackends {
 impl<'a> SqlBackendRef<'a> {
     async fn warm_database_pool(self) -> Result<(), DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => {
                 warm_pool(postgres.pool(), postgres.config().min_connections).await
             }
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -350,34 +338,25 @@ impl<'a> SqlBackendRef<'a> {
         table_names: &[&str],
     ) -> Result<DatabaseMaintenanceSummary, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.run_table_maintenance(table_names).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
     async fn run_database_migrations(self) -> Result<bool, MigrateError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => {
                 crate::lifecycle::migrate::run_migrations(postgres.pool()).await?;
                 Ok(true)
             }
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
     async fn run_database_backfills(self) -> Result<bool, MigrateError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => {
                 crate::lifecycle::backfill::run_backfills(postgres.pool()).await?;
                 Ok(true)
             }
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -385,12 +364,9 @@ impl<'a> SqlBackendRef<'a> {
         self,
     ) -> Result<Option<Vec<crate::lifecycle::migrate::PendingMigrationInfo>>, MigrateError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => Ok(Some(
                 crate::lifecycle::migrate::pending_migrations(postgres.pool()).await?,
             )),
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -398,12 +374,9 @@ impl<'a> SqlBackendRef<'a> {
         self,
     ) -> Result<Option<Vec<crate::lifecycle::migrate::PendingMigrationInfo>>, MigrateError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => Ok(Some(
                 crate::lifecycle::migrate::prepare_database_for_startup(postgres.pool()).await?,
             )),
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -411,26 +384,19 @@ impl<'a> SqlBackendRef<'a> {
         self,
     ) -> Result<Option<Vec<crate::lifecycle::backfill::PendingBackfillInfo>>, MigrateError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => Ok(Some(
                 crate::lifecycle::backfill::pending_backfills(postgres.pool()).await?,
             )),
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
     fn database_pool_summary(self) -> DatabasePoolSummary {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => summarize_pool(
-                crate::database::DatabaseDriver::Postgres,
                 usize::try_from(postgres.pool().size()).unwrap_or(usize::MAX),
                 postgres.pool().num_idle(),
                 postgres.config().max_connections,
             ),
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -439,10 +405,7 @@ impl<'a> SqlBackendRef<'a> {
         input: &WalletDailyUsageAggregationInput,
     ) -> Result<WalletDailyUsageAggregationResult, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.aggregate_wallet_daily_usage(input).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -451,10 +414,7 @@ impl<'a> SqlBackendRef<'a> {
         input: &StatsHourlyAggregationInput,
     ) -> Result<usize, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.rebuild_overview_buckets(input).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -463,10 +423,7 @@ impl<'a> SqlBackendRef<'a> {
         now: chrono::DateTime<chrono::Utc>,
     ) -> Result<u64, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.drain_overview_dirty_events(now).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -475,10 +432,7 @@ impl<'a> SqlBackendRef<'a> {
         input: &StatsHourlyAggregationInput,
     ) -> Result<Option<StatsHourlyAggregationSummary>, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.aggregate_stats_hourly(input).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -487,10 +441,7 @@ impl<'a> SqlBackendRef<'a> {
         input: &StatsDailyAggregationInput,
     ) -> Result<Option<StatsDailyAggregationSummary>, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.aggregate_stats_daily(input).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -499,10 +450,7 @@ impl<'a> SqlBackendRef<'a> {
         key: &str,
     ) -> Result<Option<serde_json::Value>, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.find_system_config_value(key).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -513,14 +461,11 @@ impl<'a> SqlBackendRef<'a> {
         replacement: &str,
     ) -> Result<bool, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => {
                 postgres
                     .compare_and_set_system_config_string_value(key, expected, replacement)
                     .await
             }
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -528,10 +473,7 @@ impl<'a> SqlBackendRef<'a> {
         self,
     ) -> Result<Vec<StoredSystemConfigEntry>, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.list_system_config_entries().await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -542,32 +484,23 @@ impl<'a> SqlBackendRef<'a> {
         description: Option<&str>,
     ) -> Result<StoredSystemConfigEntry, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => {
                 postgres
                     .upsert_system_config_entry(key, value, description)
                     .await
             }
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
     async fn delete_system_config_value(self, key: &str) -> Result<bool, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.delete_system_config_value(key).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
     async fn read_admin_system_stats(self) -> Result<AdminSystemStats, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.read_admin_system_stats().await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -576,10 +509,7 @@ impl<'a> SqlBackendRef<'a> {
         target: AdminSystemPurgeTarget,
     ) -> Result<AdminSystemPurgeSummary, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.purge_admin_system_data(target).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -587,10 +517,7 @@ impl<'a> SqlBackendRef<'a> {
         self,
     ) -> Result<AdminSystemUsageAggregateSnapshot, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.export_admin_system_usage_aggregates().await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -602,7 +529,6 @@ impl<'a> SqlBackendRef<'a> {
         mode: AdminSystemUsageAggregateImportMode,
     ) -> Result<AdminSystemUsageAggregateImportSummary, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => {
                 postgres
                     .import_admin_system_usage_aggregates(
@@ -613,8 +539,6 @@ impl<'a> SqlBackendRef<'a> {
                     )
                     .await
             }
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -623,10 +547,7 @@ impl<'a> SqlBackendRef<'a> {
         batch_size: usize,
     ) -> Result<AdminSystemPurgeSummary, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.purge_admin_request_bodies_batch(batch_size).await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 
@@ -634,10 +555,7 @@ impl<'a> SqlBackendRef<'a> {
         self,
     ) -> Result<AdminSystemPurgeSummary, DataLayerError> {
         match self {
-            #[cfg(feature = "postgres")]
             Self::Postgres(postgres) => postgres.purge_admin_request_bodies_all().await,
-            #[cfg(not(feature = "postgres"))]
-            Self::Disabled(_) => unreachable!("a SQL backend cannot exist without a driver"),
         }
     }
 }

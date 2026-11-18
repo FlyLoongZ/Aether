@@ -5,6 +5,7 @@ use futures_util::{future::BoxFuture, stream::TryStream, TryStreamExt};
 use sqlx::{postgres::PgRow, PgPool, Postgres, QueryBuilder, Row};
 use uuid::Uuid;
 
+use crate::query::{push_eq, push_in, push_limit, WhereClause};
 use aether_data_contracts::repository::candidates::{
     PublicHealthStatusCount, PublicHealthTimelineBucket, RequestCandidateReadRepository,
     RequestCandidateStatus, RequestCandidateWriteRepository, StoredRequestCandidate,
@@ -12,7 +13,6 @@ use aether_data_contracts::repository::candidates::{
     REQUEST_CANDIDATE_ERROR_TYPE_ALIASES, REQUEST_CANDIDATE_SKIP_REASONS,
 };
 use aether_data_contracts::DataLayerError;
-use aether_data_query::{push_eq, push_in, push_limit, WhereClause};
 
 use crate::error::SqlxResultExt;
 use crate::{PostgresTransaction, PostgresTransactionRunner};

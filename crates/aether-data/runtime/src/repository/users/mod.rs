@@ -12,7 +12,6 @@ pub use aether_data_contracts::repository::users::{
     UserExportSortOrder, UserExportSummary, UserReadRepository, LAST_ACTIVE_ADMIN_DELETE_DENIED,
     LAST_ACTIVE_ADMIN_UPDATE_DENIED,
 };
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxUserReadRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryUserReadRepository;

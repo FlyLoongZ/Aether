@@ -9,7 +9,6 @@ pub(crate) use aether_data_contracts::repository::candidate_selection::{
     StoredPoolKeyCandidateRowsQuery, StoredProviderModelMapping,
     StoredRequestedModelCandidateRowsQuery,
 };
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxMinimalCandidateSelectionReadRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryMinimalCandidateSelectionReadRepository;

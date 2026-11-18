@@ -2,13 +2,13 @@ use async_trait::async_trait;
 use futures_util::TryStreamExt;
 use sqlx::{postgres::PgRow, PgPool, Postgres, QueryBuilder, Row};
 
+use crate::query::{push_ci_contains_any, push_limit_offset, WhereClause};
 use aether_data_contracts::repository::gemini_file_mappings::{
     GeminiFileMappingListQuery, GeminiFileMappingMimeTypeCount, GeminiFileMappingReadRepository,
     GeminiFileMappingStats, GeminiFileMappingWriteRepository, StoredGeminiFileMapping,
     StoredGeminiFileMappingListPage, UpsertGeminiFileMappingRecord,
 };
 use aether_data_contracts::DataLayerError;
-use aether_data_query::{push_ci_contains_any, push_limit_offset, SqlDialect, WhereClause};
 
 use crate::error::SqlxResultExt;
 
@@ -513,7 +513,6 @@ fn apply_list_filters(
         push_ci_contains_any(
             builder,
             where_clause,
-            SqlDialect::Postgres,
             &["file_name", "COALESCE(display_name, '')"],
             search,
         );

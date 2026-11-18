@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use sqlx::{postgres::PgRow, PgPool, Postgres, QueryBuilder, Row};
 
+use crate::query::{push_eq, push_limit, push_limit_offset, push_optional_eq, WhereClause};
 use aether_data_contracts::repository::management_tokens::{
     ActivateManagementTokenIfMatches, CreateManagementTokenRecord, ManagementTokenListQuery,
     ManagementTokenReadRepository, ManagementTokenWriteRepository, RegenerateManagementTokenSecret,
@@ -8,7 +9,6 @@ use aether_data_contracts::repository::management_tokens::{
     StoredManagementTokenWithUser, UpdateManagementTokenRecord,
 };
 use aether_data_contracts::DataLayerError;
-use aether_data_query::{push_eq, push_limit, push_limit_offset, push_optional_eq, WhereClause};
 
 use crate::error::SqlxResultExt;
 

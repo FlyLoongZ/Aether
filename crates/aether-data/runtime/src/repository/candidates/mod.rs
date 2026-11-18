@@ -10,7 +10,6 @@ pub(crate) use aether_data_contracts::repository::candidates::{
     RequestCandidateTrace, RequestCandidateWriteRepository, StoredRequestCandidate,
     UpsertRequestCandidateRecord,
 };
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxRequestCandidateReadRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryRequestCandidateRepository;

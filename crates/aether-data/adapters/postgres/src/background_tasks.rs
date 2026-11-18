@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use sqlx::{postgres::PgRow, PgPool, Postgres, QueryBuilder, Row};
 
+use crate::query::{
+    push_ci_contains, push_eq, push_limit, push_limit_offset, quote_ident, WhereClause,
+};
 use aether_data_contracts::repository::background_tasks::*;
 use aether_data_contracts::DataLayerError;
-use aether_data_query::{
-    push_ci_contains, push_eq, push_limit, push_limit_offset, SqlDialect, WhereClause,
-};
 
 use crate::error::SqlxResultExt;
 
@@ -74,18 +74,12 @@ impl SqlxBackgroundTaskRepository {
             push_eq(
                 builder,
                 &mut where_clause,
-                &SqlDialect::Postgres.quote_ident("trigger"),
+                &quote_ident("trigger"),
                 trigger.to_string(),
             );
         }
         if let Some(task_key_substring) = query.task_key_substring.as_deref() {
-            push_ci_contains(
-                builder,
-                &mut where_clause,
-                SqlDialect::Postgres,
-                "task_key",
-                task_key_substring,
-            );
+            push_ci_contains(builder, &mut where_clause, "task_key", task_key_substring);
         }
     }
 }

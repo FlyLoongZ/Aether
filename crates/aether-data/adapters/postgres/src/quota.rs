@@ -1,37 +1,26 @@
 use async_trait::async_trait;
 use sqlx::{PgPool, Postgres, Row};
 
+use crate::query::{SelectColumn, SelectQuery};
 use aether_data_contracts::repository::quota::{
     ProviderQuotaReadRepository, ProviderQuotaWriteRepository, StoredProviderQuotaSnapshot,
 };
-use aether_data_query::{DialectSql, SelectColumn, SelectQuery, SqlDialect};
 
 use crate::{error::SqlxResultExt, DataLayerError};
 
 fn quota_snapshot_select() -> SelectQuery<'static> {
     SelectQuery::new("providers").select_columns([
         SelectColumn::expr("id").alias("provider_id"),
-        SelectColumn::expr(
-            DialectSql::common("billing_type").with_postgres("CAST(billing_type AS TEXT)"),
-        )
-        .alias("billing_type"),
-        SelectColumn::expr(DialectSql::common(
-            "CAST(monthly_quota_usd AS DOUBLE PRECISION)",
-        ))
-        .alias("monthly_quota_usd"),
-        SelectColumn::expr(DialectSql::common(
-            "CAST(COALESCE(monthly_used_usd, 0) AS DOUBLE PRECISION)",
-        ))
-        .alias("monthly_used_usd"),
+        SelectColumn::expr("CAST(billing_type AS TEXT)").alias("billing_type"),
+        SelectColumn::expr("CAST(monthly_quota_usd AS DOUBLE PRECISION)")
+            .alias("monthly_quota_usd"),
+        SelectColumn::expr("CAST(COALESCE(monthly_used_usd, 0) AS DOUBLE PRECISION)")
+            .alias("monthly_used_usd"),
         SelectColumn::expr("quota_reset_day"),
-        SelectColumn::expr(DialectSql::common(
-            "CAST(EXTRACT(EPOCH FROM quota_last_reset_at) AS BIGINT)",
-        ))
-        .alias("quota_last_reset_at_unix_secs"),
-        SelectColumn::expr(DialectSql::common(
-            "CAST(EXTRACT(EPOCH FROM quota_expires_at) AS BIGINT)",
-        ))
-        .alias("quota_expires_at_unix_secs"),
+        SelectColumn::expr("CAST(EXTRACT(EPOCH FROM quota_last_reset_at) AS BIGINT)")
+            .alias("quota_last_reset_at_unix_secs"),
+        SelectColumn::expr("CAST(EXTRACT(EPOCH FROM quota_expires_at) AS BIGINT)")
+            .alias("quota_expires_at_unix_secs"),
         SelectColumn::expr("is_active"),
     ])
 }
@@ -68,7 +57,7 @@ impl ProviderQuotaReadRepository for SqlxProviderQuotaRepository {
         &self,
         provider_id: &str,
     ) -> Result<Option<StoredProviderQuotaSnapshot>, DataLayerError> {
-        let mut statement = quota_snapshot_select().statement::<Postgres>(SqlDialect::Postgres);
+        let mut statement = quota_snapshot_select().statement::<Postgres>();
         statement.where_eq("id", provider_id.to_string()).limit(1);
         let row = statement
             .finish()
@@ -87,7 +76,7 @@ impl ProviderQuotaReadRepository for SqlxProviderQuotaRepository {
             return Ok(Vec::new());
         }
 
-        let mut statement = quota_snapshot_select().statement::<Postgres>(SqlDialect::Postgres);
+        let mut statement = quota_snapshot_select().statement::<Postgres>();
         statement
             .where_in("id", provider_ids)
             .order_by_sql("id ASC");

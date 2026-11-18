@@ -25,7 +25,7 @@ aether-billing.workspace = true
 aether-cache.workspace = true
 aether-contracts.workspace = true
 aether-crypto.workspace = true
-aether-data = { workspace = true, features = ["all-drivers"] }
+aether-data.workspace = true
 aether-data-contracts.workspace = true
 aether-dispatch-core.workspace = true
 aether-gateway-frontdoor.workspace = true
@@ -101,7 +101,7 @@ tikv-jemallocator = { version = "0.7", optional = true }
 tikv-jemalloc-sys = { version = "0.7", optional = true }
 
 [dev-dependencies]
-aether-data = { workspace = true, features = ["all-drivers", "test-support"] }
+aether-data = { workspace = true, features = ["test-support"] }
 aether-testkit = { workspace = true, features = ["postgres"] }
 aether-test-support.workspace = true
 aws-lc-rs.workspace = true

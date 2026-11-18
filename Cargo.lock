@@ -232,7 +232,6 @@ dependencies = [
  "aether-ai-formats",
  "aether-body-store",
  "aether-data-contracts",
- "aether-data-query",
  "async-trait",
  "chrono",
  "chrono-tz",
@@ -246,13 +245,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
-]
-
-[[package]]
-name = "aether-data-query"
-version = "0.1.0"
-dependencies = [
- "sqlx",
 ]
 
 [[package]]

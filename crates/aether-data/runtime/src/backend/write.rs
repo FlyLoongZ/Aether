@@ -1,7 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-#[cfg(feature = "postgres")]
 use super::PostgresBackend;
 use crate::repository::announcements::AnnouncementWriteRepository;
 use crate::repository::auth::AuthApiKeyWriteRepository;
@@ -73,18 +72,14 @@ impl fmt::Debug for DataWriteRepositories {
 }
 
 impl DataWriteRepositories {
-    pub(crate) fn from_backends(
-        #[cfg(feature = "postgres")] postgres: Option<&PostgresBackend>,
-    ) -> Self {
+    pub(crate) fn from_backends(postgres: Option<&PostgresBackend>) -> Self {
         let mut repositories = Self::default();
-        #[cfg(feature = "postgres")]
         if let Some(postgres) = postgres {
             repositories.install_postgres(postgres);
         }
         repositories
     }
 
-    #[cfg(feature = "postgres")]
     fn install_postgres(&mut self, backend: &PostgresBackend) {
         if self.announcements.is_none() {
             self.announcements = Some(PostgresBackend::announcement_write_repository(backend));
@@ -149,7 +144,6 @@ impl DataWriteRepositories {
     }
 
     #[cfg(test)]
-    #[cfg(feature = "postgres")]
     pub(crate) fn from_postgres(postgres: Option<&PostgresBackend>) -> Self {
         Self::from_backends(postgres)
     }
@@ -248,7 +242,7 @@ impl DataWriteRepositories {
     }
 }
 
-#[cfg(all(test, feature = "postgres"))]
+#[cfg(test)]
 mod tests {
     use super::DataWriteRepositories;
     use crate::backend::PostgresBackend;

@@ -23,9 +23,8 @@ use aether_data_contracts::repository::provider_catalog::{
 use aether_data_contracts::DataLayerError;
 
 use crate::error::{postgres_error, SqlxResultExt};
-use aether_data_query::{
-    push_ci_contains_any, push_eq, push_in, push_limit_offset, push_optional_eq, SqlDialect,
-    WhereClause,
+use crate::query::{
+    push_ci_contains_any, push_eq, push_in, push_limit_offset, push_optional_eq, WhereClause,
 };
 
 const LIST_PROVIDERS_BY_IDS_PREFIX: &str = r#"
@@ -3386,13 +3385,7 @@ fn apply_key_page_filters(
         query.provider_id.clone(),
     );
     if let Some(search) = query.search.as_deref() {
-        push_ci_contains_any(
-            builder,
-            where_clause,
-            SqlDialect::Postgres,
-            &["name", "id"],
-            search,
-        );
+        push_ci_contains_any(builder, where_clause, &["name", "id"], search);
     }
     push_optional_eq(builder, where_clause, "is_active", query.is_active);
 }

@@ -10,9 +10,7 @@ use std::path::{Path, PathBuf};
 use aether_crypto::PythonFernetCompat;
 use aether_data::repository::auth::CreateStandaloneApiKeyRecord;
 use aether_data::repository::wallet::WalletLookupKey;
-use aether_data::{
-    DataBackends, DataLayerConfig, DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig,
-};
+use aether_data::{DataBackends, DataLayerConfig, PostgresPoolConfig};
 use aether_data_contracts::repository::global_models::{
     CreateAdminGlobalModelRecord, UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
@@ -204,18 +202,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("set ENCRYPTION_KEY to the gateway's encryption key before seeding")?;
     let secret_cipher = PythonFernetCompat::from_secret(&encryption_key);
 
-    let backends = DataBackends::from_config(DataLayerConfig::from_database(SqlDatabaseConfig {
-        driver: DatabaseDriver::Postgres,
-        url: config.database_url.clone(),
-        pool: SqlPoolConfig {
-            min_connections: config.postgres_min_connections,
-            max_connections: config.postgres_max_connections,
-            acquire_timeout_ms: 5_000,
-            idle_timeout_ms: 30_000,
-            max_lifetime_ms: 300_000,
-            statement_cache_capacity: 128,
-            require_ssl: false,
-        },
+    let backends = DataBackends::from_config(DataLayerConfig::from_database(PostgresPoolConfig {
+        database_url: config.database_url.clone(),
+        min_connections: config.postgres_min_connections,
+        max_connections: config.postgres_max_connections,
+        acquire_timeout_ms: 5_000,
+        idle_timeout_ms: 30_000,
+        max_lifetime_ms: 300_000,
+        statement_cache_capacity: 128,
+        require_ssl: false,
     }))?;
 
     seed_provider_catalog(&backends, &config, &secret_cipher).await?;

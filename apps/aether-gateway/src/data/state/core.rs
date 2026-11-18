@@ -1,4 +1,4 @@
-use aether_data::{DataBackends, DataLayerError, DatabaseDriver};
+use aether_data::{DataBackends, DataLayerError};
 use aether_data_contracts::repository::candidate_selection::MinimalCandidateSelectionReadRepository;
 use aether_data_contracts::repository::candidates::RequestCandidateReadRepository;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
@@ -365,12 +365,6 @@ impl GatewayDataState {
                 .is_some_and(|backends| backends.has_system_config_backend())
     }
 
-    pub(crate) fn database_driver(&self) -> Option<DatabaseDriver> {
-        self.backends
-            .as_ref()
-            .and_then(|backends| backends.database_driver())
-    }
-
     pub(crate) fn has_provider_quota_writer(&self) -> bool {
         self.provider_quota_writer.is_some()
     }
@@ -389,7 +383,6 @@ impl GatewayDataState {
 
     pub(crate) fn has_usage_counter_flush_backend(&self) -> bool {
         self.has_usage_writer()
-            && database_driver_supports_usage_counter_flush(self.database_driver())
     }
 
     pub(crate) fn has_usage_worker_queue(&self) -> bool {
@@ -679,23 +672,5 @@ impl GatewayDataState {
             Some(backends) => backends.purge_admin_request_bodies_all().await,
             None => Ok(aether_data::repository::system::AdminSystemPurgeSummary::default()),
         }
-    }
-}
-
-fn database_driver_supports_usage_counter_flush(driver: Option<DatabaseDriver>) -> bool {
-    matches!(driver, Some(DatabaseDriver::Postgres))
-}
-
-#[cfg(test)]
-mod usage_counter_flush_backend_tests {
-    use super::database_driver_supports_usage_counter_flush;
-    use aether_data::DatabaseDriver;
-
-    #[test]
-    fn every_sql_driver_supports_usage_counter_flush() {
-        assert!(database_driver_supports_usage_counter_flush(Some(
-            DatabaseDriver::Postgres
-        )));
-        assert!(!database_driver_supports_usage_counter_flush(None));
     }
 }

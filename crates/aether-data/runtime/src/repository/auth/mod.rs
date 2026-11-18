@@ -10,7 +10,6 @@ pub use aether_data_contracts::repository::auth::{
     StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot, UpdateApiKeyRoutingGroupSelection,
     UpdateStandaloneApiKeyBasicRecord, UpdateUserApiKeyBasicRecord,
 };
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxAuthApiKeySnapshotReadRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryAuthApiKeySnapshotRepository;

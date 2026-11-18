@@ -2,9 +2,9 @@ use async_trait::async_trait;
 use chrono::{TimeZone, Utc};
 use sqlx::{postgres::PgRow, PgPool, Postgres, QueryBuilder, Row};
 
+use crate::query::{push_eq, push_limit, push_limit_offset, WhereClause};
 use aether_data_contracts::repository::announcements::*;
 use aether_data_contracts::DataLayerError;
-use aether_data_query::{push_eq, push_limit, push_limit_offset, WhereClause};
 
 use crate::error::SqlxResultExt;
 

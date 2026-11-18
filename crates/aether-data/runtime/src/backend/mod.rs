@@ -1,14 +1,13 @@
 //! Backend composition layer.
 //!
-//! `DataBackends` chooses the configured SQL driver, builds low-level pools,
-//! instantiates concrete repositories, and exposes app-facing read/write,
-//! lease, transaction, and maintenance handles. Request-path repository SQL
-//! belongs in the selected `aether-data-*` adapter; backend-owned maintenance
-//! SQL lives in focused modules such as `stats`, `wallet`, and `system`.
+//! `DataBackends` builds the PostgreSQL pool, instantiates concrete
+//! repositories, and exposes app-facing read/write, lease, transaction, and
+//! maintenance handles. Request-path repository SQL belongs in
+//! `aether-data-postgres`; backend-owned maintenance SQL lives in focused
+//! modules such as `stats`, `wallet`, and `system`.
 
 mod leases;
 mod maintenance;
-#[cfg(feature = "postgres")]
 mod postgres;
 mod read;
 mod referrals;
@@ -20,7 +19,6 @@ mod write;
 
 use crate::maintenance::DatabasePoolSummary;
 pub use leases::DataLeaseBackends;
-#[cfg(feature = "postgres")]
 pub use postgres::PostgresBackend;
 pub use read::DataReadRepositories;
 pub use referrals::{
@@ -32,24 +30,16 @@ pub use referrals::{
 pub use transactions::DataTransactionBackends;
 pub use write::DataWriteRepositories;
 
-use crate::database::DatabaseDriver;
 use crate::{DataLayerConfig, DataLayerError};
 
 #[derive(Clone, Copy)]
 enum SqlBackendRef<'a> {
-    #[cfg(feature = "postgres")]
     Postgres(&'a PostgresBackend),
-    // Keep the reference lifetime represented when this crate is built without
-    // any SQL driver features.  The no-driver build still exposes the
-    // maintenance facade, but has no concrete backend variant to carry `'a`.
-    #[cfg(not(feature = "postgres"))]
-    Disabled(std::marker::PhantomData<&'a ()>),
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct DataBackends {
     config: DataLayerConfig,
-    #[cfg(feature = "postgres")]
     postgres: Option<PostgresBackend>,
     leases: DataLeaseBackends,
     read: DataReadRepositories,
@@ -57,18 +47,12 @@ pub struct DataBackends {
     write: DataWriteRepositories,
 }
 
-fn summarize_pool(
-    driver: DatabaseDriver,
-    pool_size: usize,
-    idle: usize,
-    max_connections: u32,
-) -> DatabasePoolSummary {
+fn summarize_pool(pool_size: usize, idle: usize, max_connections: u32) -> DatabasePoolSummary {
     let max_connections = max_connections.max(1);
     let checked_out = pool_size.saturating_sub(idle);
     let usage_rate = checked_out as f64 / f64::from(max_connections) * 100.0;
 
     DatabasePoolSummary {
-        driver,
         checked_out,
         pool_size,
         idle,
@@ -77,60 +61,26 @@ fn summarize_pool(
     }
 }
 
-fn ensure_driver_enabled(driver: DatabaseDriver) -> Result<(), DataLayerError> {
-    match driver {
-        #[cfg(feature = "postgres")]
-        DatabaseDriver::Postgres => Ok(()),
-        #[cfg(not(feature = "postgres"))]
-        DatabaseDriver::Postgres => Err(DataLayerError::InvalidInput(
-            "PostgreSQL driver is not enabled for this aether-data build".to_string(),
-        )),
-    }
-}
-
 impl DataBackends {
     fn sql_backend(&self) -> Option<SqlBackendRef<'_>> {
-        #[cfg(feature = "postgres")]
-        if let Some(postgres) = self.postgres.as_ref() {
-            return Some(SqlBackendRef::Postgres(postgres));
-        }
-        None
+        self.postgres.as_ref().map(SqlBackendRef::Postgres)
     }
 
     pub fn from_config(config: DataLayerConfig) -> Result<Self, DataLayerError> {
         config.validate()?;
 
         let database = config.effective_database();
-        if let Some(database) = database.as_ref() {
-            ensure_driver_enabled(database.driver)?;
-        }
-        #[cfg(feature = "postgres")]
-        let postgres = match database.clone() {
-            Some(database) if database.driver == DatabaseDriver::Postgres => Some(
-                PostgresBackend::from_config(database.to_postgres_config()?)?,
-            ),
-            _ => None,
-        };
-        #[cfg(feature = "postgres")]
+        let postgres = database
+            .clone()
+            .map(PostgresBackend::from_config)
+            .transpose()?;
         let leases = DataLeaseBackends::from_postgres(postgres.as_ref())?;
-        #[cfg(not(feature = "postgres"))]
-        let leases = DataLeaseBackends::default();
-        let read = DataReadRepositories::from_backends(
-            #[cfg(feature = "postgres")]
-            postgres.as_ref(),
-        );
-        #[cfg(feature = "postgres")]
+        let read = DataReadRepositories::from_backends(postgres.as_ref());
         let transactions = DataTransactionBackends::from_postgres(postgres.as_ref());
-        #[cfg(not(feature = "postgres"))]
-        let transactions = DataTransactionBackends::default();
-        let write = DataWriteRepositories::from_backends(
-            #[cfg(feature = "postgres")]
-            postgres.as_ref(),
-        );
+        let write = DataWriteRepositories::from_backends(postgres.as_ref());
 
         Ok(Self {
             config,
-            #[cfg(feature = "postgres")]
             postgres,
             leases,
             read,
@@ -143,15 +93,8 @@ impl DataBackends {
         &self.config
     }
 
-    #[cfg(feature = "postgres")]
     pub fn postgres(&self) -> Option<&PostgresBackend> {
         self.postgres.as_ref()
-    }
-
-    pub fn database_driver(&self) -> Option<DatabaseDriver> {
-        self.config
-            .effective_database()
-            .map(|database| database.driver)
     }
 
     pub fn read(&self) -> &DataReadRepositories {
@@ -181,7 +124,6 @@ impl DataBackends {
 #[cfg(test)]
 mod tests {
     use super::DataBackends;
-    #[cfg(feature = "postgres")]
     use crate::driver::postgres::PostgresPoolConfig;
     use crate::DataLayerConfig;
 
@@ -191,9 +133,7 @@ mod tests {
             .expect("empty config should be accepted");
 
         assert!(!backends.has_runtime_backends());
-        #[cfg(feature = "postgres")]
         assert!(backends.postgres().is_none());
-        #[cfg(feature = "postgres")]
         assert!(backends.leases().postgres().is_none());
         assert!(backends.read().auth_api_keys().is_none());
         assert!(backends.read().auth_modules().is_none());
@@ -208,18 +148,15 @@ mod tests {
         assert!(backends.read().provider_catalog().is_none());
         assert!(backends.read().usage().is_none());
         assert!(backends.read().video_tasks().is_none());
-        #[cfg(feature = "postgres")]
         assert!(backends.transactions().postgres().is_none());
         assert!(backends.write().settlement().is_none());
         assert!(backends.write().usage().is_none());
     }
 
     #[tokio::test]
-    #[cfg(feature = "postgres")]
     async fn builds_postgres_backend_from_config() {
         let backends = DataBackends::from_config(DataLayerConfig {
-            database: None,
-            postgres: Some(PostgresPoolConfig {
+            database: Some(PostgresPoolConfig {
                 database_url: "postgres://localhost/aether".to_string(),
                 min_connections: 1,
                 max_connections: 4,
@@ -233,9 +170,7 @@ mod tests {
         .expect("postgres backend should build");
 
         assert!(backends.has_runtime_backends());
-        #[cfg(feature = "postgres")]
         assert!(backends.postgres().is_some());
-        #[cfg(feature = "postgres")]
         assert!(backends.leases().postgres().is_some());
         assert!(backends.read().auth_api_keys().is_some());
         assert!(backends.read().auth_modules().is_some());

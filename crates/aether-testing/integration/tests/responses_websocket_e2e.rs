@@ -16,9 +16,7 @@ use std::time::Duration;
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
 use aether_data::repository::auth::{CreateStandaloneApiKeyRecord, CreateUserApiKeyRecord};
 use aether_data::repository::wallet::WalletLookupKey;
-use aether_data::{
-    DataBackends, DataLayerConfig, DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig,
-};
+use aether_data::{DataBackends, DataLayerConfig, PostgresPoolConfig};
 use aether_data_contracts::repository::global_models::{
     CreateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
@@ -951,7 +949,7 @@ impl Harness {
         .await?;
 
         if let Some(price) = request_price {
-            let pool = sqlx::PgPool::connect(&database.config.url).await?;
+            let pool = sqlx::PgPool::connect(&database.config.database_url).await?;
             sqlx::query("UPDATE models SET price_per_request = $1 WHERE id = $2")
                 .bind(price)
                 .bind(PROVIDER_MODEL_ID)
@@ -1497,7 +1495,7 @@ async fn send_mock_event(socket: &mut WebSocket, event: Value) -> Result<(), axu
 
 struct TemporaryPostgres {
     _server: ManagedPostgresServer,
-    config: SqlDatabaseConfig,
+    config: PostgresPoolConfig,
 }
 
 impl TemporaryPostgres {
@@ -1506,25 +1504,22 @@ impl TemporaryPostgres {
         let database_url = server.database_url().to_string();
         Ok(Self {
             _server: server,
-            config: SqlDatabaseConfig {
-                driver: DatabaseDriver::Postgres,
-                url: database_url,
-                pool: SqlPoolConfig {
-                    min_connections: 1,
-                    max_connections: 4,
-                    acquire_timeout_ms: 5_000,
-                    idle_timeout_ms: 30_000,
-                    max_lifetime_ms: 300_000,
-                    statement_cache_capacity: 64,
-                    require_ssl: false,
-                },
+            config: PostgresPoolConfig {
+                database_url,
+                min_connections: 1,
+                max_connections: 4,
+                acquire_timeout_ms: 5_000,
+                idle_timeout_ms: 30_000,
+                max_lifetime_ms: 300_000,
+                statement_cache_capacity: 64,
+                require_ssl: false,
             },
         })
     }
 }
 
 async fn prepare_and_seed_database(
-    database: &SqlDatabaseConfig,
+    database: &PostgresPoolConfig,
     upstream_base_url: &str,
     fixture: ProviderFixture,
     redaction: PiiRedaction,
@@ -1798,7 +1793,7 @@ async fn seed_client_api_key(backends: &DataBackends, user_id: &str) -> Result<(
 }
 
 async fn seed_weekly_request_limit(
-    database: &SqlDatabaseConfig,
+    database: &PostgresPoolConfig,
     limit: u64,
 ) -> Result<(), BoxError> {
     let backends = DataBackends::from_config(DataLayerConfig::from_database(database.clone()))?;

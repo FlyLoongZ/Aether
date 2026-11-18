@@ -47,7 +47,6 @@ fn validate_settings(
     Ok(())
 }
 
-#[cfg(feature = "postgres")]
 pub(super) async fn capture_registration_config(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 ) -> Result<(Option<ReferralRewardConfig>, bool), DataLayerError> {
@@ -100,7 +99,6 @@ impl ReferralDataState<'_> {
         if values.keys().any(|key| !keys.contains(&key.as_str())) {
             return Err(DataLayerError::InvalidInput("不支持的邀请返利设置".into()));
         }
-        #[cfg(feature = "postgres")]
         if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
             let mut tx = backend
                 .pool_clone()

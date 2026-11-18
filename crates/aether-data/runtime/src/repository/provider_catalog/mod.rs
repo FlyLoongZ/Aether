@@ -16,7 +16,6 @@ pub(crate) use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogKeyMaintenanceSummary, StoredProviderCatalogKeyPage,
     StoredProviderCatalogKeyStats, StoredProviderCatalogProvider,
 };
-#[cfg(feature = "postgres")]
 pub use aether_data_postgres::SqlxProviderCatalogReadRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use memory::InMemoryProviderCatalogReadRepository;

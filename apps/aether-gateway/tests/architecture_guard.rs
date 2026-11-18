@@ -343,23 +343,23 @@ fn ai_serving_crate_owns_attempt_loop_without_gateway_runtime_deps() {
 fn data_query_helpers_belong_to_adapters_not_the_runtime_facade() {
     let data_manifest = read_workspace_file("crates/aether-data/runtime/Cargo.toml");
     assert!(
-        !data_manifest.contains("aether-data-query.workspace = true"),
-        "aether-data should not keep a direct query-helper dependency after SQL repositories move to adapters"
+        !data_manifest.contains("query"),
+        "aether-data should not keep query helpers after SQL repositories move to adapters"
     );
-    let adapter_manifest = read_workspace_file("crates/aether-data/adapters/postgres/Cargo.toml");
-    assert!(adapter_manifest.contains("aether-data-query.workspace = true"));
+    assert!(workspace_root()
+        .join("crates/aether-data/adapters/postgres/src/query.rs")
+        .exists());
 }
 
 #[test]
-fn data_facade_defaults_to_postgres_and_gateway_selects_all_drivers_explicitly() {
+fn data_facade_always_includes_postgres() {
     let data_manifest = read_workspace_file("crates/aether-data/runtime/Cargo.toml");
-    assert!(data_manifest.contains("default = [\"postgres\"]"));
-    assert!(data_manifest.contains("all-drivers = [\"postgres\"]"));
-    assert!(data_manifest.contains("aether-data-postgres = { workspace = true, optional = true }"));
+    assert!(!data_manifest.contains("all-drivers"));
+    assert!(!data_manifest.contains("postgres = ["));
+    assert!(data_manifest.contains("aether-data-postgres.workspace = true"));
 
     let gateway_manifest = read_workspace_file("apps/aether-gateway/Cargo.toml");
-    assert!(gateway_manifest
-        .contains("aether-data = { workspace = true, features = [\"all-drivers\"] }"));
+    assert!(gateway_manifest.contains("aether-data.workspace = true"));
 }
 
 #[test]

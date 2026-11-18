@@ -1,6 +1,5 @@
 //! Driver-specific wallet usage aggregation adapters.
 
-#[cfg(feature = "postgres")]
 mod postgres;
 
 use crate::DataLayerError;
@@ -10,7 +9,6 @@ pub(super) fn u64_to_i64(value: u64, field_name: &str) -> Result<i64, DataLayerE
         .map_err(|_| DataLayerError::InvalidInput(format!("invalid {field_name}: {value}")))
 }
 
-#[cfg(feature = "postgres")]
 pub(super) fn unix_secs_to_utc(
     value: u64,
     field_name: &str,

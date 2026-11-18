@@ -83,7 +83,7 @@ impl AppState {
     }
 
     pub fn has_database_wallet_data_writer(&self) -> bool {
-        self.data.has_wallet_writer() && self.data.database_driver().is_some()
+        self.data.has_wallet_writer() && self.data.has_backends()
     }
 
     pub fn has_auth_user_write_capability(&self) -> bool {

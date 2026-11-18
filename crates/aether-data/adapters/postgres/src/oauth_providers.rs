@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use sqlx::{postgres::PgRow, PgPool, Postgres, QueryBuilder, Row};
 
+use crate::query::{push_eq, push_limit, WhereClause};
 use aether_data_contracts::repository::oauth_providers::{
     OAuthProviderReadRepository, OAuthProviderWriteRepository, StoredOAuthProviderConfig,
     UpsertOAuthProviderConfigOutcome, UpsertOAuthProviderConfigRecord,
 };
 use aether_data_contracts::DataLayerError;
-use aether_data_query::{push_eq, push_limit, WhereClause};
 
 use crate::error::SqlxResultExt;
 

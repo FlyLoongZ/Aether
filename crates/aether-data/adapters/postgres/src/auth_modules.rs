@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use sqlx::{postgres::PgRow, PgPool, Postgres, QueryBuilder, Row};
 
+use crate::query::{push_eq, WhereClause};
 use aether_data_contracts::repository::auth_modules::*;
 use aether_data_contracts::DataLayerError;
-use aether_data_query::{push_eq, WhereClause};
 
 use crate::error::SqlxResultExt;
 

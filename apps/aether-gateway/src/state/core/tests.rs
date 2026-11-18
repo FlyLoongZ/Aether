@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::{DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
+use aether_data::PostgresPoolConfig;
 use aether_data_contracts::repository::usage::{
     UsageCounterHealthSnapshot, UsageCounterPendingHealthSnapshot,
 };
@@ -486,18 +486,12 @@ async fn metric_snapshot_prewarm_failure_allows_immediate_admin_retry() {
 
 #[tokio::test]
 async fn runtime_pool_can_disable_background_isolation() {
-    let config = GatewayDataConfig::from_database_config(
-        SqlDatabaseConfig::new(
-            DatabaseDriver::Postgres,
-            "postgres://localhost/aether",
-            SqlPoolConfig {
-                min_connections: 4,
-                max_connections: 20,
-                ..SqlPoolConfig::default()
-            },
-        )
-        .expect("database config should be valid"),
-    );
+    let config = GatewayDataConfig::from_database_config(PostgresPoolConfig {
+        database_url: "postgres://localhost/aether".to_string(),
+        min_connections: 4,
+        max_connections: 20,
+        ..Default::default()
+    });
 
     let state = AppState::new()
         .expect("app state should build")

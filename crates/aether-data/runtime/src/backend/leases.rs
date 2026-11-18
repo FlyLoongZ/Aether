@@ -1,15 +1,11 @@
 use std::fmt;
 
-#[cfg(feature = "postgres")]
 use super::PostgresBackend;
-#[cfg(feature = "postgres")]
 use crate::driver::postgres::{PostgresLeaseRunner, PostgresLeaseRunnerConfig};
-#[cfg(feature = "postgres")]
 use crate::DataLayerError;
 
 #[derive(Clone, Default)]
 pub struct DataLeaseBackends {
-    #[cfg(feature = "postgres")]
     postgres: Option<PostgresLeaseRunner>,
 }
 
@@ -22,7 +18,6 @@ impl fmt::Debug for DataLeaseBackends {
 }
 
 impl DataLeaseBackends {
-    #[cfg(feature = "postgres")]
     pub(crate) fn from_postgres(
         postgres: Option<&PostgresBackend>,
     ) -> Result<Self, DataLayerError> {
@@ -33,26 +28,16 @@ impl DataLeaseBackends {
         })
     }
 
-    #[cfg(feature = "postgres")]
     pub fn postgres(&self) -> Option<PostgresLeaseRunner> {
         self.postgres.clone()
     }
 
     pub fn has_any(&self) -> bool {
-        cfg!(feature = "postgres") && {
-            #[cfg(feature = "postgres")]
-            {
-                self.postgres.is_some()
-            }
-            #[cfg(not(feature = "postgres"))]
-            {
-                false
-            }
-        }
+        self.postgres.is_some()
     }
 }
 
-#[cfg(all(test, feature = "postgres"))]
+#[cfg(test)]
 mod tests {
     use super::DataLeaseBackends;
     use crate::backend::PostgresBackend;

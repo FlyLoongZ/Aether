@@ -1,7 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-#[cfg(feature = "postgres")]
 use super::PostgresBackend;
 use crate::repository::announcements::AnnouncementReadRepository;
 use crate::repository::audit::AuditLogReadRepository;
@@ -85,18 +84,14 @@ impl fmt::Debug for DataReadRepositories {
 }
 
 impl DataReadRepositories {
-    pub(crate) fn from_backends(
-        #[cfg(feature = "postgres")] postgres: Option<&PostgresBackend>,
-    ) -> Self {
+    pub(crate) fn from_backends(postgres: Option<&PostgresBackend>) -> Self {
         let mut repositories = Self::default();
-        #[cfg(feature = "postgres")]
         if let Some(postgres) = postgres {
             repositories.install_postgres(postgres);
         }
         repositories
     }
 
-    #[cfg(feature = "postgres")]
     fn install_postgres(&mut self, backend: &PostgresBackend) {
         if self.announcements.is_none() {
             self.announcements = Some(PostgresBackend::announcement_read_repository(backend));
@@ -170,7 +165,6 @@ impl DataReadRepositories {
     }
 
     #[cfg(test)]
-    #[cfg(feature = "postgres")]
     pub(crate) fn from_postgres(postgres: Option<&PostgresBackend>) -> Self {
         Self::from_backends(postgres)
     }
@@ -286,7 +280,7 @@ impl DataReadRepositories {
     }
 }
 
-#[cfg(all(test, feature = "postgres"))]
+#[cfg(test)]
 mod tests {
     use super::DataReadRepositories;
     use crate::backend::PostgresBackend;
