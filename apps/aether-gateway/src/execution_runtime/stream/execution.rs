@@ -103,7 +103,7 @@ use crate::execution_runtime::submission::{
     submit_local_core_error_or_sync_finalize,
 };
 use crate::execution_runtime::transport::{
-    decode_base64_body_with_limit, direct_upstream_response_byte_stream, format_hyper_error_chain,
+    decode_base64_body_with_limit, direct_upstream_response_byte_stream,
     format_upstream_request_error, format_wreq_upstream_request_error,
     record_manual_proxy_request_failure, record_manual_proxy_request_success,
     record_manual_proxy_stream_error, stream_first_byte_timeout_message,
@@ -1669,15 +1669,6 @@ async fn next_direct_upstream_response_chunk(
             .chunk()
             .await
             .map_err(|err| format_upstream_request_error(&err)),
-        DirectUpstreamResponse::HyperH2c(response) => loop {
-            let Some(frame) = response.body_mut().frame().await else {
-                return Ok(None);
-            };
-            let frame = frame.map_err(|err| format_hyper_error_chain(&err))?;
-            if let Ok(chunk) = frame.into_data() {
-                return Ok(Some(chunk));
-            }
-        },
         DirectUpstreamResponse::BrowserWreq(response) => loop {
             let Some(frame) = response.frame().await else {
                 return Ok(None);

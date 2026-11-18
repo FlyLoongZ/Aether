@@ -19,8 +19,7 @@ use tracing::{debug, info, warn};
 use aether_crypto::warm_python_fernet_secret;
 use aether_data::{DatabaseDriver, SqlDatabaseConfig, SqlPoolConfig};
 use aether_gateway::{
-    attach_static_frontend, build_router_with_state,
-    prewarm_direct_h2c_sender_cache_from_env_for_startup, set_gateway_frontdoor_app_port, AppState,
+    attach_static_frontend, build_router_with_state, set_gateway_frontdoor_app_port, AppState,
     FrontdoorCorsConfig, FrontdoorUserRpmConfig, GatewayDataConfig, UsageRuntimeConfig,
     VideoTaskTruthSourceMode,
 };
@@ -2317,34 +2316,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // All roles synchronize local snapshots, not just the singleton owner.
     // Keep the guard alive until main exits so shutdown cancels the task.
     let _client_profile_cache_sync = state.spawn_client_profile_cache_sync();
-    match prewarm_direct_h2c_sender_cache_from_env_for_startup().await {
-        Ok(Some(report)) => {
-            if report.failed_targets > 0 {
-                warn!(
-                    requested_urls = report.requested_urls,
-                    unique_targets = report.unique_targets,
-                    warmed_targets = report.warmed_targets,
-                    failed_targets = report.failed_targets,
-                    ready_required = report.ready_required,
-                    first_error = ?report.first_error,
-                    "direct h2c sender cache prewarm completed with failures"
-                );
-            } else {
-                info!(
-                    requested_urls = report.requested_urls,
-                    unique_targets = report.unique_targets,
-                    warmed_targets = report.warmed_targets,
-                    ready_required = report.ready_required,
-                    "direct h2c sender cache prewarmed"
-                );
-            }
-        }
-        Ok(None) => {}
-        Err(err) => {
-            return Err(std::io::Error::other(err).into());
-        }
-    }
-
     // Reclaim expired entries even from caches nothing is writing to any more.
     // Each table is bounded on its own, but a table that traffic stopped
     // touching keeps whatever it held at that moment for the life of the

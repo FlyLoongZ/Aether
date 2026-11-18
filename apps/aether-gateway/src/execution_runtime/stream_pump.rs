@@ -38,7 +38,6 @@ const UPSTREAM_STREAM_READ_ERROR_MESSAGE: &str = "Upstream response stream faile
 fn upstream_stream_error_category(response: &DirectUpstreamResponse) -> &'static str {
     match response {
         DirectUpstreamResponse::Reqwest(_) => "reqwest_body_read_failed",
-        DirectUpstreamResponse::HyperH2c(_) => "hyper_body_read_failed",
         DirectUpstreamResponse::BrowserWreq(_) => "browser_body_read_failed",
     }
 }
