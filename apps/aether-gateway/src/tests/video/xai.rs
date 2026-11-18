@@ -196,7 +196,7 @@ where
             "upstream-video-key",
             Some(json!({"enabled":true,"node_id":"video-proxy"})),
         );
-        AppState::new().expect("gateway should build").with_video_task_truth_source_mode(VideoTaskTruthSourceMode::RustAuthoritative).with_data_state_for_tests(
+        AppState::new().expect("gateway should build").with_data_state_for_tests(
             crate::data::GatewayDataState::with_auth_candidate_selection_provider_catalog_and_request_candidate_repository_for_tests(
                 auth, candidates, catalog, Arc::new(InMemoryRequestCandidateRepository::default()), DEV_FERNET_KEY
             ).attach_video_task_repository_for_tests(repository.clone())

@@ -6,8 +6,7 @@ use crate::{
     context_text, context_u64, current_unix_timestamp_secs, generate_local_short_id,
     request_body_text, GeminiVideoTaskSeed, LocalVideoTaskPersistence, LocalVideoTaskReadResponse,
     LocalVideoTaskSeed, LocalVideoTaskSnapshot, LocalVideoTaskStatus, LocalVideoTaskSuccessPlan,
-    LocalVideoTaskTransport, OpenAiVideoTaskSeed, VideoTaskSyncReportMode,
-    VideoTaskTruthSourceMode,
+    LocalVideoTaskTransport, OpenAiVideoTaskSeed,
 };
 
 impl LocalVideoTaskSeed {
@@ -125,6 +124,12 @@ impl LocalVideoTaskSeed {
             }
             _ => None,
         }?;
+        if let Self::OpenAiRemix(task) = &mut seed {
+            // A remix is a new local task even though its report context still
+            // references the source request. Reusing the source request_id
+            // would collide with the source row's unique request_id.
+            task.persistence.request_id = task.local_task_id.clone();
+        }
         if let Self::OpenAiCreate(task) | Self::OpenAiRemix(task) = &mut seed {
             task.apply_provider_body(provider_body);
         }
@@ -184,42 +189,14 @@ fn openai_video_provider_task_id(body: &Map<String, Value>) -> Option<&str> {
     })
 }
 
-impl VideoTaskTruthSourceMode {
-    pub fn prepare_sync_success(
-        self,
-        report_kind: &str,
-        provider_body: &Map<String, Value>,
-        report_context: &Map<String, Value>,
-        plan: &ExecutionPlan,
-    ) -> Option<LocalVideoTaskSuccessPlan> {
-        let seed = LocalVideoTaskSeed::from_sync_finalize(
-            report_kind,
-            provider_body,
-            report_context,
-            plan,
-        )?;
-        let report_mode = match self {
-            Self::PythonSyncReport => VideoTaskSyncReportMode::InlineSync,
-            Self::RustAuthoritative => VideoTaskSyncReportMode::Background,
-        };
-        Some(LocalVideoTaskSuccessPlan { seed, report_mode })
-    }
-}
-
 impl LocalVideoTaskSuccessPlan {
     pub fn success_report_kind(&self) -> &'static str {
         self.seed.success_report_kind()
     }
 
-    pub fn report_mode(&self) -> VideoTaskSyncReportMode {
-        self.report_mode
-    }
-
     pub fn apply_to_report_context(&self, report_context: &mut Map<String, Value>) {
         self.seed.apply_to_report_context(report_context);
-        if matches!(self.report_mode, VideoTaskSyncReportMode::Background) {
-            report_context.insert("rust_video_task_persisted".to_string(), Value::Bool(true));
-        }
+        report_context.insert("rust_video_task_persisted".to_string(), Value::Bool(true));
     }
 
     pub fn client_body_json(&self) -> Value {
@@ -389,16 +366,13 @@ mod tests {
 
     #[test]
     fn xai_native_video_protocol_survives_persistence_and_preserves_provider_fields() {
-        use crate::{
-            LocalVideoTaskContentAction, LocalVideoTaskSnapshot, VideoTaskService,
-            VideoTaskTruthSourceMode,
-        };
+        use crate::{LocalVideoTaskContentAction, LocalVideoTaskSnapshot, VideoTaskService};
         let mut plan =
             build_internal_finalize_video_plan("native-create", "openai:video", None).unwrap();
         plan.url = "https://api.x.ai/v1/videos/generations".into();
         plan.headers
             .insert("authorization".into(), "Bearer test-key".into());
-        let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+        let service = VideoTaskService::new();
         let context = json!({"local_task_id":"native-local", "user_id":"owner", "model":"grok-imagine-video", "video_client_protocol":"xai", "video_duration":6});
         let success = service
             .prepare_sync_success(
@@ -473,17 +447,14 @@ mod tests {
 
     #[test]
     fn xai_video_lifecycle_creates_polls_persists_and_downloads() {
-        use crate::{
-            LocalVideoTaskContentAction, LocalVideoTaskSnapshot, VideoTaskService,
-            VideoTaskTruthSourceMode,
-        };
+        use crate::{LocalVideoTaskContentAction, LocalVideoTaskSnapshot, VideoTaskService};
         for api_root in ["https://cli-chat-proxy.grok.com/v1", "https://api.x.ai/v1"] {
             let mut plan =
                 build_internal_finalize_video_plan("xai-create", "openai:video", None).unwrap();
             plan.url = format!("{api_root}/videos/generations");
             plan.headers
                 .insert("authorization".into(), "Bearer test-token".into());
-            let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+            let service = VideoTaskService::new();
             let context = json!({"local_task_id": "local-video", "model": "grok-imagine-video", "original_request_body": {"prompt": "A cat", "seconds": "6"}});
             let success = service
                 .prepare_sync_success(
@@ -563,7 +534,7 @@ mod tests {
 
     #[test]
     fn xai_video_errors_are_terminal_even_without_a_status() {
-        use crate::{LocalVideoTaskSnapshot, VideoTaskTruthSourceMode};
+        use crate::{LocalVideoTaskSnapshot, VideoTaskService};
         let mut plan =
             build_internal_finalize_video_plan("xai-create", "openai:video", None).unwrap();
         plan.url = "https://cli-chat-proxy.grok.com/v1/videos/generations".into();
@@ -572,7 +543,7 @@ mod tests {
             json!({"error": {"code": "content_policy_violation", "message": "Rejected"}}),
             json!({"status": "failed", "error": "Rejected"}),
         ] {
-            let mut snapshot = VideoTaskTruthSourceMode::RustAuthoritative
+            let mut snapshot = VideoTaskService::new()
                 .prepare_sync_success(
                     "openai_video_create_sync_finalize",
                     json!({"request_id": "xai-request"}).as_object().unwrap(),

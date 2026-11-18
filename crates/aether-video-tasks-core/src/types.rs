@@ -7,23 +7,9 @@ use serde_json::Value;
 pub const DEFAULT_VIDEO_TASK_POLL_INTERVAL_SECONDS: u32 = 10;
 pub const DEFAULT_VIDEO_TASK_MAX_POLL_COUNT: u32 = 360;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VideoTaskSyncReportMode {
-    InlineSync,
-    Background,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum VideoTaskTruthSourceMode {
-    #[default]
-    PythonSyncReport,
-    RustAuthoritative,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalVideoTaskSuccessPlan {
     pub seed: LocalVideoTaskSeed,
-    pub report_mode: VideoTaskSyncReportMode,
 }
 
 #[derive(Debug, Clone, PartialEq)]

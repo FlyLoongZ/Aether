@@ -7,9 +7,7 @@ use serde_json::json;
 
 use crate::api::response::build_client_response_from_parts;
 use crate::control::GatewayControlDecision;
-use crate::video_tasks::{
-    build_local_sync_finalize_read_response, LocalVideoTaskSnapshot, VideoTaskSyncReportMode,
-};
+use crate::video_tasks::{build_local_sync_finalize_read_response, LocalVideoTaskSnapshot};
 pub(crate) use crate::video_tasks::{
     resolve_local_sync_error_background_report_kind,
     resolve_local_sync_success_background_report_kind,
@@ -25,7 +23,6 @@ pub(crate) struct LocalVideoSyncSuccessOutcome {
     pub(crate) response: Response<Body>,
     pub(crate) report_payload: GatewaySyncReportRequest,
     pub(crate) original_report_context: Option<serde_json::Value>,
-    pub(crate) report_mode: VideoTaskSyncReportMode,
     pub(crate) local_task_snapshot: Option<LocalVideoTaskSnapshot>,
 }
 
@@ -126,12 +123,7 @@ pub(crate) async fn maybe_build_local_video_success_outcome(
             response,
             report_payload: payload,
             original_report_context,
-            report_mode: success_plan.report_mode(),
-            local_task_snapshot: matches!(
-                success_plan.report_mode(),
-                VideoTaskSyncReportMode::Background
-            )
-            .then(|| success_plan.to_snapshot()),
+            local_task_snapshot: Some(success_plan.to_snapshot()),
         },
     )))
 }

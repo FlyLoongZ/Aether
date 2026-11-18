@@ -73,7 +73,6 @@ pub(crate) use self::ai_serving::api::{
     GEMINI_FILES_DOWNLOAD_PLAN_KIND, OPENAI_VIDEO_CONTENT_PLAN_KIND,
 };
 pub(crate) use self::ai_serving::{AiExecutionDecision, AiExecutionPlanPayload};
-pub use self::async_task::VideoTaskTruthSourceMode;
 pub use self::backup::{
     apply_restored_backup, restore_backup_json, BackupApplyError, BackupDecryptionKey,
     BackupRestoreError, BackupRestoreLimits, BackupRestoreScope, RestoredBackupJson,

@@ -31,9 +31,7 @@ use super::{
     AppState, FrontdoorCorsConfig, FrontdoorRuntimeGuardConfig, LocalExecutionRuntimeMissDiagnostic,
 };
 
-use super::super::async_task::{
-    spawn_video_task_poller, VideoTaskPollerConfig, VideoTaskService, VideoTaskTruthSourceMode,
-};
+use super::super::async_task::{spawn_video_task_poller, VideoTaskPollerConfig, VideoTaskService};
 use super::super::cache::{
     AuthApiKeyLastUsedCache, AuthContextCache, AuthSnapshotCache, DashboardResponseCache,
     JsonValueCache, OverviewTotalCache, SchedulerAffinityCache, SchedulerAffinitySnapshotEntry,
@@ -361,9 +359,7 @@ impl AppState {
             body_file_store: None,
             request_activity: Arc::new(crate::request_activity::RequestActivity::default()),
             execution_activity: Arc::new(crate::execution_activity::ExecutionActivity::default()),
-            video_tasks: Arc::new(VideoTaskService::new(
-                VideoTaskTruthSourceMode::PythonSyncReport,
-            )),
+            video_tasks: Arc::new(VideoTaskService::new()),
             video_task_poller: None,
             frontdoor_runtime_guards: Arc::clone(&frontdoor_runtime_guards),
             request_body_buffer_budget: Arc::new(tokio::sync::Semaphore::new(
@@ -571,11 +567,6 @@ impl AppState {
 
     pub(crate) fn local_instance_id(&self) -> &str {
         &self.instance_id
-    }
-
-    pub fn with_video_task_truth_source_mode(mut self, mode: VideoTaskTruthSourceMode) -> Self {
-        self.video_tasks = Arc::new(self.video_tasks.with_truth_source_mode(mode));
-        self
     }
 
     pub fn with_usage_runtime_config(
@@ -2014,11 +2005,7 @@ impl AppState {
                 "AETHER_GATEWAY_VIDEO_TASK_STORE_PATH requires a configured encryption key",
             )
         })?;
-        self.video_tasks = Arc::new(VideoTaskService::with_file_store(
-            self.video_tasks.truth_source_mode(),
-            path,
-            encryption_key,
-        )?);
+        self.video_tasks = Arc::new(VideoTaskService::with_file_store(path, encryption_key)?);
         Ok(self)
     }
 

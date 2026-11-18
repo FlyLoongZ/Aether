@@ -65,9 +65,6 @@ pub(crate) async fn execute_video_task_refresh_plan(
 }
 
 async fn poll_video_tasks_once(state: &AppState, batch_size: usize) -> Result<usize, GatewayError> {
-    if !state.video_tasks.is_rust_authoritative() {
-        return Ok(0);
-    }
     let now_unix_secs = now_unix_secs();
     let tasks = state
         .claim_due_video_tasks(
@@ -151,10 +148,6 @@ async fn poll_video_tasks_once(state: &AppState, batch_size: usize) -> Result<us
 
 pub(crate) fn spawn_video_task_poller(state: AppState) -> Option<JoinHandle<()>> {
     let config = state.video_task_poller?;
-    if !state.video_tasks.is_rust_authoritative() {
-        return None;
-    }
-
     Some(crate::task_runtime::spawn_singleton_worker(
         state,
         crate::task_runtime::TASK_KEY_VIDEO_TASK_POLLER,

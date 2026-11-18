@@ -55,7 +55,6 @@ impl std::fmt::Debug for FileVideoTaskStore {
 }
 
 const ENCRYPTED_VIDEO_TASK_STORE_PREFIX: &str = "aether-video-tasks-v2\n";
-const LEGACY_ENCRYPTED_VIDEO_TASK_STORE_PREFIX: &str = "aether-video-tasks-v1\n";
 const VIDEO_TASK_STORE_PURPOSE: &str = "video-task-file-store";
 
 impl VideoTaskStore for InMemoryVideoTaskStore {
@@ -180,23 +179,6 @@ impl FileVideoTaskStore {
                 needs_rewrite,
             });
         }
-        if let Some(ciphertext) =
-            bytes.strip_prefix(LEGACY_ENCRYPTED_VIDEO_TASK_STORE_PREFIX.as_bytes())
-        {
-            let ciphertext = std::str::from_utf8(ciphertext)
-                .map_err(|_| invalid_store_data("encrypted video task store is not UTF-8"))?;
-            let plaintext = decrypt_python_fernet_ciphertext(encryption_key, ciphertext.trim())
-                .map_err(|_| invalid_store_data("video task store decryption failed"))?;
-            let mut registry: VideoTaskRegistry = serde_json::from_str(&plaintext)
-                .map_err(|_| invalid_store_data("decrypted video task store is invalid"))?;
-            registry.sanitize_persisted_diagnostics();
-            return Ok(LoadedVideoTaskRegistry {
-                registry,
-                persisted_file,
-                needs_rewrite: true,
-            });
-        }
-
         if bytes.starts_with(b"aether-") {
             return Err(invalid_store_data(
                 "unsupported encrypted video task store envelope",
@@ -494,63 +476,6 @@ mod tests {
     }
 
     #[test]
-    fn loading_encrypted_store_rewrites_legacy_provider_diagnostics() {
-        let path = temp_store_path("diagnostic-migration");
-        let legacy_plaintext = serde_json::to_string(&json!({
-            "openai": {},
-            "gemini": {
-                "task-sensitive": sensitive_gemini_snapshot()
-            }
-        }))
-        .expect("legacy registry should serialize");
-        let ciphertext =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, &legacy_plaintext)
-                .expect("legacy registry should encrypt");
-        std::fs::write(
-            &path,
-            format!("{LEGACY_ENCRYPTED_VIDEO_TASK_STORE_PREFIX}{ciphertext}\n"),
-        )
-        .expect("legacy encrypted registry should be written");
-
-        let store = FileVideoTaskStore::new(&path, DEVELOPMENT_ENCRYPTION_KEY)
-            .expect("legacy encrypted registry should load");
-
-        let response = store
-            .read_gemini("task-sensitive")
-            .expect("migrated task should remain readable");
-        assert_eq!(response.body_json["error"]["code"], "provider_error");
-        assert_eq!(
-            response.body_json["error"]["message"],
-            "Video generation failed"
-        );
-
-        let bytes = std::fs::read(&path).expect("migrated registry should be readable");
-        let ciphertext = bytes
-            .strip_prefix(ENCRYPTED_VIDEO_TASK_STORE_PREFIX.as_bytes())
-            .expect("migrated registry should stay encrypted");
-        let ciphertext = std::str::from_utf8(ciphertext)
-            .expect("ciphertext should be UTF-8")
-            .trim();
-        let migrated_plaintext =
-            decrypt_python_fernet_ciphertext(DEVELOPMENT_ENCRYPTION_KEY, ciphertext)
-                .expect("migrated registry should decrypt");
-        for secret in [
-            "code-secret",
-            "error-secret",
-            "metadata-secret",
-            "metadata-query-secret",
-        ] {
-            assert!(
-                !migrated_plaintext.contains(secret),
-                "migrated registry leaked {secret}"
-            );
-        }
-        assert!(migrated_plaintext.contains("transport-key-required-for-resume"));
-        assert!(migrated_plaintext.contains("provider_error"));
-        cleanup_store_path(&path);
-    }
-
-    #[test]
     fn rejects_plaintext_registry_without_rewriting_it() {
         let path = temp_store_path("plaintext-injection");
         let plaintext = serde_json::to_vec(&json!({
@@ -625,60 +550,6 @@ mod tests {
         assert_eq!(
             std::fs::read(&path).expect("tampered registry should remain readable"),
             bytes,
-        );
-        cleanup_store_path(&path);
-    }
-
-    #[test]
-    fn legacy_migration_compare_before_replace_preserves_concurrent_replacement() {
-        let path = temp_store_path("legacy-migration-race");
-        let legacy_plaintext = serde_json::to_string(&json!({
-            "openai": {},
-            "gemini": {
-                "task-sensitive": sensitive_gemini_snapshot(),
-            },
-        }))
-        .expect("legacy registry should serialize");
-        let legacy_ciphertext =
-            encrypt_python_fernet_plaintext(DEVELOPMENT_ENCRYPTION_KEY, &legacy_plaintext)
-                .expect("legacy registry should encrypt");
-        let legacy_bytes =
-            format!("{LEGACY_ENCRYPTED_VIDEO_TASK_STORE_PREFIX}{legacy_ciphertext}\n").into_bytes();
-        std::fs::write(&path, &legacy_bytes).expect("legacy registry should be written");
-
-        let loaded = FileVideoTaskStore::load_registry(&path, DEVELOPMENT_ENCRYPTION_KEY)
-            .expect("authenticated legacy registry should load");
-        assert!(loaded.needs_rewrite);
-        assert_eq!(
-            loaded.persisted_file,
-            PersistedVideoTaskStore::Bytes(legacy_bytes),
-        );
-        let store = FileVideoTaskStore {
-            path: path.clone(),
-            encryption_key: DEVELOPMENT_ENCRYPTION_KEY.to_string(),
-            registry: Mutex::new(loaded.registry),
-            persisted_file: Mutex::new(loaded.persisted_file),
-        };
-
-        let concurrent_replacement = encrypted_video_task_store_bytes(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            &VideoTaskRegistry::default(),
-        )
-        .expect("replacement registry should encrypt");
-        std::fs::write(&path, &concurrent_replacement)
-            .expect("concurrent replacement should be written");
-
-        let registry = store.registry.lock().expect("registry lock should succeed");
-        let error = store
-            .persist_registry(&registry)
-            .expect_err("stale legacy migration must report a conflict");
-        drop(registry);
-
-        assert_eq!(error.kind(), std::io::ErrorKind::WouldBlock);
-        assert_eq!(
-            std::fs::read(&path).expect("concurrent replacement should remain readable"),
-            concurrent_replacement,
-            "stale migration must not overwrite a newer exact byte snapshot",
         );
         cleanup_store_path(&path);
     }

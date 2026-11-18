@@ -13,7 +13,6 @@ use serde_json::json;
 use super::{
     build_state_with_execution_runtime_override, start_server, video_provider_catalog_repository,
     video_provider_catalog_repository_with_proxy, video_proxy_node_repository_at_url, AppState,
-    VideoTaskTruthSourceMode,
 };
 use crate::tests::DEV_FERNET_KEY;
 
@@ -189,7 +188,7 @@ async fn gateway_background_video_task_poller_refreshes_due_openai_task_from_rep
                 DEV_FERNET_KEY,
             ),
         )
-        .with_video_task_truth_source_mode(VideoTaskTruthSourceMode::RustAuthoritative)
+
         .with_video_task_poller_config(std::time::Duration::from_millis(25), 8);
     let background_tasks = gateway_state.spawn_background_tasks();
     assert!(!background_tasks.is_empty(), "poller task should spawn");
@@ -306,7 +305,7 @@ async fn gateway_background_video_task_poller_refreshes_due_openai_task_from_rep
                 DEV_FERNET_KEY,
             ).attach_proxy_node_repository_for_tests(video_proxy_node_repository_at_url(["poller-video-proxy"], &upstream_url)),
         )
-        .with_video_task_truth_source_mode(VideoTaskTruthSourceMode::RustAuthoritative)
+
         .with_video_task_poller_config(std::time::Duration::from_millis(25), 8);
     let background_tasks = gateway_state.spawn_background_tasks();
     assert!(!background_tasks.is_empty(), "poller task should spawn");

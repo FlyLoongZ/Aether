@@ -23,7 +23,7 @@ use crate::constants::TRACE_ID_HEADER;
 
 use super::{
     build_router_with_state, build_state_with_execution_runtime_override, start_server,
-    video_provider_catalog_repository, VideoTaskTruthSourceMode,
+    video_provider_catalog_repository,
 };
 
 #[tokio::test]
@@ -226,7 +226,7 @@ async fn gateway_executes_openai_video_delete_via_reconstructed_data_backed_loca
 
     let gateway = build_router_with_state(
         build_state_with_execution_runtime_override(execution_runtime_url)
-            .with_video_task_truth_source_mode(VideoTaskTruthSourceMode::RustAuthoritative)
+
             .with_data_state_for_tests(
                 crate::data::GatewayDataState::with_video_task_provider_transport_and_request_candidate_repository_for_tests(
                     repository,

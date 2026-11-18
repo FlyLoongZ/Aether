@@ -3,7 +3,7 @@ use serde_json::{json, Map, Value};
 
 use super::{
     GeminiVideoTaskSeed, LocalVideoTaskSeed, LocalVideoTaskSnapshot, LocalVideoTaskStatus,
-    OpenAiVideoTaskSeed, VideoTaskService, VideoTaskSyncReportMode, VideoTaskTruthSourceMode,
+    OpenAiVideoTaskSeed, VideoTaskService,
 };
 
 #[test]
@@ -154,38 +154,13 @@ fn gemini_video_seed_generates_short_id_and_pending_operation_name() {
 }
 
 #[test]
-fn python_backed_video_truth_source_requires_inline_sync_report() {
-    let provider_body = json!({"id": "ext-video-task-123"});
-    let report_context = json!({});
-
-    let plan = VideoTaskTruthSourceMode::PythonSyncReport
-        .prepare_sync_success(
-            "openai_video_create_sync_finalize",
-            provider_body
-                .as_object()
-                .expect("provider body should be object"),
-            report_context
-                .as_object()
-                .expect("report context should be object"),
-            &sample_plan("https://api.openai.example/v1/videos", "openai:video"),
-        )
-        .expect("plan should build");
-
-    assert_eq!(plan.report_mode(), VideoTaskSyncReportMode::InlineSync);
-    assert_eq!(
-        plan.success_report_kind(),
-        "openai_video_create_sync_success"
-    );
-}
-
-#[test]
-fn rust_authoritative_video_truth_source_can_background_success_report() {
+fn video_truth_source_can_background_success_report() {
     let provider_body = json!({"name": "operations/ext-video-task-123"});
     let report_context = json!({
         "model": "veo-3"
     });
 
-    let plan = VideoTaskTruthSourceMode::RustAuthoritative
+    let plan = VideoTaskService::new()
         .prepare_sync_success(
             "gemini_video_create_sync_finalize",
             provider_body
@@ -201,7 +176,6 @@ fn rust_authoritative_video_truth_source_can_background_success_report() {
         )
         .expect("plan should build");
 
-    assert_eq!(plan.report_mode(), VideoTaskSyncReportMode::Background);
     assert_eq!(
         plan.success_report_kind(),
         "gemini_video_create_sync_success"
@@ -216,7 +190,7 @@ fn rust_authoritative_video_truth_source_can_background_success_report() {
 
 #[test]
 fn rust_authoritative_service_reads_openai_task_from_local_registry() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     let snapshot = LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,
@@ -267,7 +241,7 @@ fn rust_authoritative_service_reads_openai_task_from_local_registry() {
 
 #[test]
 fn rust_authoritative_service_applies_cancel_and_delete_mutations() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,

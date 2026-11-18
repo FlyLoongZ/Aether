@@ -410,8 +410,10 @@ async fn gateway_executes_openai_video_create_via_local_decision_gate_with_local
         .await
         .expect("request should succeed");
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: serde_json::Value = response.json().await.expect("body should parse");
+    let status = response.status();
+    let body_text = response.text().await.expect("body should read");
+    assert_eq!(status, StatusCode::OK, "{body_text}");
+    let body: serde_json::Value = serde_json::from_str(&body_text).expect("body should parse");
     assert_eq!(body.get("object"), Some(&json!("video")));
     assert_eq!(body.get("status"), Some(&json!("queued")));
     assert_eq!(body.get("prompt"), Some(&json!("hello local video")));
@@ -752,8 +754,10 @@ async fn gateway_executes_openai_video_remix_via_data_backed_local_follow_up_wit
         .await
         .expect("request should succeed");
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: serde_json::Value = response.json().await.expect("body should parse");
+    let status = response.status();
+    let body_text = response.text().await.expect("body should read");
+    assert_eq!(status, StatusCode::OK, "{body_text}");
+    let body: serde_json::Value = serde_json::from_str(&body_text).expect("body should parse");
     assert_eq!(body.get("object"), Some(&json!("video")));
     assert_eq!(body.get("status"), Some(&json!("queued")));
     assert_eq!(body.get("prompt"), Some(&json!("remix this")));

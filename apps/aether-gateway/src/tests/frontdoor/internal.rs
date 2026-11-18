@@ -214,7 +214,6 @@ async fn internal_video_followup_planner_state(
 
     AppState::new()
         .expect("state should build")
-        .with_video_task_truth_source_mode(crate::VideoTaskTruthSourceMode::RustAuthoritative)
         .with_data_state_for_tests(data_state)
 }
 

@@ -4,12 +4,12 @@ use uuid::Uuid;
 
 use super::{
     GeminiVideoTaskSeed, LocalVideoTaskSnapshot, LocalVideoTaskStatus, OpenAiVideoTaskSeed,
-    VideoTaskService, VideoTaskTruthSourceMode,
+    VideoTaskService,
 };
 
 #[test]
 fn rust_authoritative_service_builds_openai_cancel_follow_up_plan() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,
@@ -93,7 +93,7 @@ fn rust_authoritative_service_builds_openai_cancel_follow_up_plan() {
 
 #[test]
 fn rust_authoritative_service_builds_openai_remix_follow_up_plan() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,
@@ -181,7 +181,7 @@ fn rust_authoritative_service_builds_openai_remix_follow_up_plan() {
 
 #[test]
 fn rust_authoritative_service_builds_openai_delete_follow_up_plan() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,
@@ -265,7 +265,7 @@ fn rust_authoritative_service_builds_openai_delete_follow_up_plan() {
 
 #[test]
 fn rust_authoritative_service_builds_gemini_cancel_follow_up_plan() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::Gemini(GeminiVideoTaskSeed {
         local_short_id: "localshort123".to_string(),
         upstream_operation_name: "operations/ext-video-123".to_string(),
@@ -339,7 +339,7 @@ fn rust_authoritative_service_builds_gemini_cancel_follow_up_plan() {
 
 #[test]
 fn rust_authoritative_service_builds_openai_read_refresh_plan() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,
@@ -383,7 +383,7 @@ fn rust_authoritative_service_builds_openai_read_refresh_plan() {
 
 #[test]
 fn rust_authoritative_service_builds_gemini_read_refresh_plan() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::Gemini(GeminiVideoTaskSeed {
         local_short_id: "localshort123".to_string(),
         upstream_operation_name: "operations/ext-video-123".to_string(),
@@ -417,7 +417,7 @@ fn rust_authoritative_service_builds_gemini_read_refresh_plan() {
 
 #[test]
 fn rust_authoritative_service_builds_poll_refresh_batch_for_active_tasks_only() {
-    let service = VideoTaskService::new(VideoTaskTruthSourceMode::RustAuthoritative);
+    let service = VideoTaskService::new();
     service.record_snapshot(LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,
@@ -482,12 +482,8 @@ fn file_video_task_store_persists_snapshots_across_service_rebuilds() {
     let store_path =
         std::env::temp_dir().join(format!("aether-video-task-store-{}.json", Uuid::new_v4()));
     let encryption_key = "video-task-test-encryption-key";
-    let service = VideoTaskService::with_file_store(
-        VideoTaskTruthSourceMode::RustAuthoritative,
-        &store_path,
-        encryption_key,
-    )
-    .expect("file-backed service should build");
+    let service = VideoTaskService::with_file_store(&store_path, encryption_key)
+        .expect("file-backed service should build");
     service.record_snapshot(LocalVideoTaskSnapshot::OpenAi(OpenAiVideoTaskSeed {
         local_short_id: None,
         native_response: None,
@@ -518,12 +514,8 @@ fn file_video_task_store_persists_snapshots_across_service_rebuilds() {
     assert!(stored_bytes.starts_with(b"aether-video-tasks-v2\n"));
     assert!(!String::from_utf8_lossy(&stored_bytes).contains("api.openai.example"));
 
-    let reopened = VideoTaskService::with_file_store(
-        VideoTaskTruthSourceMode::RustAuthoritative,
-        &store_path,
-        encryption_key,
-    )
-    .expect("reopened file-backed service should build");
+    let reopened = VideoTaskService::with_file_store(&store_path, encryption_key)
+        .expect("reopened file-backed service should build");
     let response = reopened
         .read_response(Some("openai"), "/v1/videos/task-file-123")
         .expect("persisted read response should exist");

@@ -6,7 +6,7 @@ use super::types::{
 };
 use super::{
     GatewayControlAuthContext, LocalVideoTaskContentAction, LocalVideoTaskSnapshot,
-    VideoTaskService, VideoTaskSyncReportMode, VideoTaskTruthSourceMode,
+    VideoTaskService,
 };
 
 mod fixtures;

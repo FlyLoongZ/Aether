@@ -1,10 +1,9 @@
 use crate::GatewayError;
 
 pub(crate) use self::service::VideoTaskService;
-pub use self::types::VideoTaskTruthSourceMode;
 pub(crate) use self::types::{
     LocalVideoTaskContentAction, LocalVideoTaskFollowUpPlan, LocalVideoTaskReadRefreshPlan,
-    LocalVideoTaskReadResponse, LocalVideoTaskSnapshot, VideoTaskSyncReportMode,
+    LocalVideoTaskReadResponse, LocalVideoTaskSnapshot,
 };
 pub(crate) use aether_video_tasks_core::{
     build_internal_finalize_video_plan, build_local_sync_finalize_read_response,

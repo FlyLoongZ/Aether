@@ -110,11 +110,10 @@ configured proxy routes must not silently turn into direct requests after restar
 
 ### Runtime configuration
 
-Standalone Rust deployments must set
-`AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE=rust-authoritative` and restart the
-gateway to enable video task retrieval, polling, and content downloads. The CLI's
-legacy default is `python-sync-report`: creation can return a task ID in that mode,
-but the local task read/refresh paths are disabled and may return HTTP 503.
+Standalone Rust deployments always use the Rust-authoritative video task path:
+local task retrieval, polling, and content downloads are enabled without a
+separate truth-source switch. The former `python-sync-report` mode has been
+removed.
 
 When the gateway also serves the frontend, `/openai/v1/videos` and its subpaths
 must bypass the static SPA handler and be mounted as API routes. Otherwise a

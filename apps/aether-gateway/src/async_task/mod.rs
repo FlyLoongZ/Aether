@@ -3,7 +3,6 @@ mod query;
 mod runtime;
 
 pub(crate) use crate::video_tasks::VideoTaskService;
-pub use crate::video_tasks::VideoTaskTruthSourceMode;
 pub(crate) use http::{
     build_video_task_video_response, cancel_video_task, cancel_video_task_record,
     cancel_video_task_record_for_user, get_video_task_detail, get_video_task_stats,

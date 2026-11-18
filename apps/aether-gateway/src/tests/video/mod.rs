@@ -17,7 +17,7 @@ use serde_json::json;
 
 use super::{
     build_router, build_router_with_state, build_state_with_execution_runtime_override,
-    start_server, AppState, VideoTaskTruthSourceMode,
+    start_server, AppState,
 };
 use crate::tests::DEV_FERNET_KEY;
 

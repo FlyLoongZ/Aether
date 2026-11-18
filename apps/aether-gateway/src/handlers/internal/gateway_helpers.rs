@@ -299,21 +299,13 @@ pub(crate) async fn maybe_build_internal_finalize_video_response(
                     response,
                     report_payload,
                     original_report_context: _,
-                    report_mode,
                     local_task_snapshot,
                 } = *outcome;
                 if let Some(snapshot) = local_task_snapshot {
                     let _ = state.upsert_video_task_snapshot(&snapshot).await?;
                     state.video_tasks.record_snapshot(snapshot);
                 }
-                match report_mode {
-                    crate::video_tasks::VideoTaskSyncReportMode::InlineSync => {
-                        crate::usage::submit_sync_report(state, report_payload).await?;
-                    }
-                    crate::video_tasks::VideoTaskSyncReportMode::Background => {
-                        crate::usage::spawn_sync_report(state.clone(), report_payload);
-                    }
-                }
+                crate::usage::spawn_sync_report(state.clone(), report_payload);
                 return Ok(Some(response));
             }
             LocalVideoSyncSuccessBuild::NotHandled(payload) => *payload,

@@ -91,7 +91,6 @@ use crate::request_diagnostics::{
     current_request_diagnostics, RequestDiagnostics,
 };
 use crate::usage::{spawn_sync_report, submit_sync_report};
-use crate::video_tasks::VideoTaskSyncReportMode;
 use crate::{usage::GatewaySyncReportRequest, AppState, GatewayError};
 
 #[path = "execution/policy.rs"]
@@ -2945,7 +2944,6 @@ async fn execute_execution_runtime_sync_impl(
                     response,
                     report_payload,
                     original_report_context,
-                    report_mode,
                     local_task_snapshot,
                 } = *outcome;
                 apply_sync_success_effects(
@@ -2969,14 +2967,7 @@ async fn execute_execution_runtime_sync_impl(
                     let _ = state.upsert_video_task_snapshot(&snapshot).await?;
                     state.video_tasks.record_snapshot(snapshot);
                 }
-                match report_mode {
-                    VideoTaskSyncReportMode::InlineSync => {
-                        submit_sync_report(state, report_payload).await?;
-                    }
-                    VideoTaskSyncReportMode::Background => {
-                        spawn_sync_report(state.clone(), report_payload);
-                    }
-                }
+                spawn_sync_report(state.clone(), report_payload);
                 return Ok(Some(attach_control_metadata_headers(
                     response,
                     request_id,
