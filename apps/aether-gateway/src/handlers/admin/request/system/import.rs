@@ -1358,119 +1358,6 @@ fn build_imported_oauth_provider_record(
     Ok(record)
 }
 
-fn is_custom_identity_oauth_provider_type(provider_type: &str) -> bool {
-    let provider_type = provider_type.trim().to_ascii_lowercase();
-    provider_type == "custom_oidc"
-        || provider_type.starts_with("custom_oidc_")
-        || provider_type.starts_with("custom_")
-        || provider_type.starts_with("oidc_")
-}
-
-fn legacy_custom_oauth_provider_type(provider_type: &str) -> String {
-    let normalized = provider_type.trim().to_ascii_lowercase();
-    let mut suffix = String::with_capacity(normalized.len());
-    let mut previous_was_separator = false;
-    for character in normalized.chars() {
-        if character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-' {
-            suffix.push(character);
-            previous_was_separator = false;
-        } else if !previous_was_separator {
-            suffix.push('_');
-            previous_was_separator = true;
-        }
-    }
-    let suffix = suffix.trim_matches(['_', '-']);
-    let candidate = format!("custom_{suffix}");
-    if !suffix.is_empty() && candidate.len() <= 64 {
-        candidate
-    } else {
-        let digest = hex::encode(Sha256::digest(normalized.as_bytes()));
-        format!("custom_legacy_{}", &digest[..16])
-    }
-}
-
-fn legacy_oauth_endpoint_domains(
-    oauth_provider: &ImportedOAuthProvider,
-) -> Result<Vec<String>, String> {
-    let mut domains = BTreeSet::new();
-    for (field, value) in [
-        (
-            "authorization_url_override",
-            oauth_provider.authorization_url_override.as_deref(),
-        ),
-        (
-            "token_url_override",
-            oauth_provider.token_url_override.as_deref(),
-        ),
-        (
-            "userinfo_url_override",
-            oauth_provider.userinfo_url_override.as_deref(),
-        ),
-    ] {
-        let value = value
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| format!("legacy custom OAuth provider is missing {field}"))?;
-        let parsed = url::Url::parse(value)
-            .map_err(|_| format!("legacy custom OAuth provider has invalid {field}"))?;
-        let host = parsed
-            .host_str()
-            .map(|host| host.trim_end_matches('.').to_ascii_lowercase())
-            .filter(|host| !host.is_empty())
-            .ok_or_else(|| format!("legacy custom OAuth provider has invalid {field}"))?;
-        domains.insert(host);
-    }
-    Ok(domains.into_iter().collect())
-}
-
-fn normalize_legacy_imported_oauth_provider(
-    mut oauth_provider: ImportedOAuthProvider,
-    source_version: &str,
-) -> Result<ImportedOAuthProvider, String> {
-    if !matches!(source_version.trim(), "2.0" | "2.1" | "2.2") {
-        return Ok(oauth_provider);
-    }
-
-    let original_provider_type =
-        trim_required(&oauth_provider.provider_type, "provider_type")?.to_ascii_lowercase();
-    if original_provider_type == "linuxdo" {
-        oauth_provider.provider_type = original_provider_type;
-        return Ok(oauth_provider);
-    }
-
-    let mut requires_review = false;
-    if is_custom_identity_oauth_provider_type(&original_provider_type) {
-        oauth_provider.provider_type = original_provider_type;
-    } else {
-        oauth_provider.provider_type = legacy_custom_oauth_provider_type(&original_provider_type);
-        requires_review = true;
-    }
-
-    let mut extra_config = match oauth_provider.extra_config.take() {
-        Some(Value::Object(config)) => config,
-        Some(_) => return Err("extra_config must be an object".to_string()),
-        None => Map::new(),
-    };
-    let has_allowed_domains = extra_config
-        .get("allowed_domains")
-        .or_else(|| extra_config.get("oauth_allowed_domains"))
-        .and_then(Value::as_array)
-        .is_some_and(|domains| !domains.is_empty());
-    if !has_allowed_domains {
-        extra_config.insert(
-            "allowed_domains".to_string(),
-            serde_json::to_value(legacy_oauth_endpoint_domains(&oauth_provider)?)
-                .map_err(|err| err.to_string())?,
-        );
-        requires_review = true;
-    }
-    oauth_provider.extra_config = Some(Value::Object(extra_config));
-    if requires_review {
-        oauth_provider.is_enabled = false;
-    }
-    Ok(oauth_provider)
-}
-
 fn find_imported_provider_key_index(
     state: &AdminAppState<'_>,
     imported_key: &ImportedProviderKey,
@@ -2656,7 +2543,6 @@ impl<'a> AdminAppState<'a> {
         }
 
         let parsed = routed!(parse_admin_system_config_import_request(request_body));
-        let source_version = parsed.request.document.version.clone();
         let root = parsed.root;
         let credentials_not_exported = invalid!(imported_config_credentials_not_exported(&root));
         let merge_mode = parsed.request.merge_mode;
@@ -3439,10 +3325,7 @@ impl<'a> AdminAppState<'a> {
             .cloned()
             .collect::<BTreeSet<_>>();
         for imported_oauth_item in imported_oauth_providers {
-            let oauth_provider = invalid!(normalize_legacy_imported_oauth_provider(
-                imported_oauth_item.value,
-                &source_version,
-            ));
+            let oauth_provider = imported_oauth_item.value;
             let provider_type = invalid!(trim_required(
                 &oauth_provider.provider_type,
                 "provider_type",
@@ -5407,7 +5290,6 @@ impl<'a> AdminAppState<'a> {
             Err(err) => return Ok(Err(err)),
         }
         let parsed = routed!(parse_admin_system_config_import_request(request_body));
-        let source_version = parsed.request.document.version.clone();
         let root = parsed.root;
         let credentials_not_exported = invalid!(imported_config_credentials_not_exported(&root));
         let merge_mode = parsed.request.merge_mode;
@@ -6605,10 +6487,6 @@ impl<'a> AdminAppState<'a> {
                 let (_, oauth_provider) = imported_oauth_item.into_parts();
                 let original_provider_type = oauth_provider.provider_type.clone();
                 let original_enabled = oauth_provider.is_enabled;
-                let oauth_provider = invalid!(normalize_legacy_imported_oauth_provider(
-                    oauth_provider,
-                    &source_version,
-                ));
                 let provider_type = invalid!(trim_required(
                     &oauth_provider.provider_type,
                     "provider_type",

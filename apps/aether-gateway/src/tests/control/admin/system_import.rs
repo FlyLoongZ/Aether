@@ -128,7 +128,7 @@ async fn referral_system_import_applies_valid_rule_groups_independent_of_item_or
             client.post(url)
                 .bearer_auth(crate::tests::test_admin_access_token())
                 .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
-                .json(&json!({"version":"2.2","merge_mode":"overwrite","global_models":[],"providers":[],"oauth_providers":[],"system_configs":configs}))
+                .json(&json!({"version":"2.3","merge_mode":"overwrite","global_models":[],"providers":[],"oauth_providers":[],"system_configs":configs}))
                 .send().await.expect("import request")
         }
     };
@@ -178,7 +178,7 @@ async fn referral_system_import_applies_valid_rule_groups_independent_of_item_or
 
 fn sample_system_import_payload() -> Value {
     json!({
-        "version": "2.2",
+        "version": "2.3",
         "merge_mode": "overwrite",
         "global_models": [{
             "name": "gpt-5",
@@ -317,7 +317,7 @@ fn sample_system_import_payload() -> Value {
 
 fn sample_oauth_system_import_payload(access_token: &str, refresh_token: &str) -> Value {
     json!({
-        "version": "2.2",
+        "version": "2.3",
         "merge_mode": "overwrite",
         "global_models": [],
         "providers": [{
@@ -345,16 +345,6 @@ fn sample_oauth_system_import_payload(access_token: &str, refresh_token: &str) -
             "models": []
         }]
     })
-}
-
-fn fixture_system_import_payload(name: &str) -> Value {
-    let raw = match name {
-        "v20" => include_str!("../../fixtures/admin_system/config_export_v20.json"),
-        "v21" => include_str!("../../fixtures/admin_system/config_export_v21.json"),
-        "v22" => include_str!("../../fixtures/admin_system/config_export_v22.json"),
-        _ => panic!("unknown fixture: {name}"),
-    };
-    serde_json::from_str(raw).expect("fixture json should parse")
 }
 
 fn sample_import_admin_user(user_id: &str) -> StoredUserAuthRecord {
@@ -822,7 +812,7 @@ async fn gateway_returns_503_for_admin_system_config_import_when_local_data_is_u
         .post(format!("{gateway_url}/api/admin/system/config/import"))
         .bearer_auth(crate::tests::test_admin_access_token())
         .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
-        .json(&json!({ "version": "2.2" }))
+        .json(&json!({ "version": "2.3" }))
         .send()
         .await
         .expect("request should succeed");
@@ -835,227 +825,6 @@ async fn gateway_returns_503_for_admin_system_config_import_when_local_data_is_u
     gateway_handle.abort();
     upstream_handle.abort();
     let _ = upstream_url;
-}
-
-#[test]
-fn gateway_imports_legacy_admin_system_config_versions_and_model_test_succeeds() {
-    run_admin_system_import_test(
-        "gateway_imports_legacy_admin_system_config_versions_and_model_test_succeeds",
-        gateway_imports_legacy_admin_system_config_versions_and_model_test_succeeds_impl,
-    );
-}
-
-async fn gateway_imports_legacy_admin_system_config_versions_and_model_test_succeeds_impl() {
-    for (
-        fixture_name,
-        expected_provider_name,
-        expected_model_name,
-        expected_api_key,
-        expected_base_url,
-    ) in [
-        (
-            "v20",
-            "legacy-provider-v20",
-            "legacy-gpt-5-v20",
-            "sk-legacy-v20",
-            "https://legacy-v20.example.com/v1",
-        ),
-        (
-            "v21",
-            "legacy-provider-v21",
-            "legacy-gpt-5-v21",
-            "sk-legacy-v21",
-            "https://legacy-v21.example.com/v1",
-        ),
-    ] {
-        assert_legacy_admin_system_config_import_model_test_succeeds(
-            fixture_name,
-            expected_provider_name,
-            expected_model_name,
-            expected_api_key,
-            expected_base_url,
-        )
-        .await;
-    }
-}
-
-async fn assert_legacy_admin_system_config_import_model_test_succeeds(
-    fixture_name: &str,
-    expected_provider_name: &str,
-    expected_model_name: &str,
-    expected_api_key: &str,
-    expected_base_url: &str,
-) {
-    let execution_runtime_hits = Arc::new(Mutex::new(0usize));
-    let execution_runtime_hits_clone = Arc::clone(&execution_runtime_hits);
-    let expected_base_url_for_runtime = expected_base_url.to_string();
-    let expected_model_for_runtime = expected_model_name.to_string();
-    let expected_bearer_for_runtime = format!("Bearer {expected_api_key}");
-    let execution_runtime = Router::new().route(
-        "/v1/execute/sync",
-        any(move |Json(plan): Json<ExecutionPlan>| {
-            let execution_runtime_hits_inner = Arc::clone(&execution_runtime_hits_clone);
-            let expected_base_url = expected_base_url_for_runtime.clone();
-            let expected_model = expected_model_for_runtime.clone();
-            let expected_bearer = expected_bearer_for_runtime.clone();
-            async move {
-                *execution_runtime_hits_inner
-                    .lock()
-                    .expect("mutex should lock") += 1;
-                assert_eq!(plan.provider_api_format, "openai:chat");
-                assert!(
-                    plan.url.starts_with(expected_base_url.as_str()),
-                    "unexpected execution url: {}",
-                    plan.url
-                );
-                assert_eq!(plan.model_name.as_deref(), Some(expected_model.as_str()));
-                assert_eq!(
-                    plan.headers.get("authorization").map(String::as_str),
-                    Some(expected_bearer.as_str())
-                );
-                assert_eq!(
-                    plan.body
-                        .json_body
-                        .as_ref()
-                        .and_then(|body| body.get("model"))
-                        .and_then(Value::as_str),
-                    Some(expected_model.as_str())
-                );
-                Json(json!({
-                    "request_id": plan.request_id,
-                    "candidate_id": plan.candidate_id,
-                    "status_code": 200,
-                    "headers": {
-                        "content-type": "application/json"
-                    },
-                    "body": {
-                        "json_body": {
-                            "id": "chatcmpl-legacy-import",
-                            "object": "chat.completion",
-                            "choices": [{
-                                "message": {
-                                    "role": "assistant",
-                                    "content": "Hello from imported provider"
-                                }
-                            }]
-                        }
-                    },
-                    "telemetry": {
-                        "elapsed_ms": 17
-                    }
-                }))
-            }
-        }),
-    );
-
-    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
-    let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
-        Vec::new(),
-        Vec::new(),
-        Vec::new(),
-    ));
-    let global_model_repository = Arc::new(InMemoryGlobalModelReadRepository::seed(Vec::<
-        StoredPublicGlobalModel,
-    >::new()));
-    let data_state = build_admin_system_data_state_with_repositories(
-        Arc::clone(&provider_catalog_repository),
-        Arc::clone(&global_model_repository),
-    );
-    let gateway = build_router_with_state(
-        build_state_with_execution_runtime_override(execution_runtime_url)
-            .with_data_state_for_tests(data_state),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-    let client = reqwest::Client::new();
-
-    let import_response = client
-        .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .bearer_auth(crate::tests::test_admin_access_token())
-        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
-        .json(&fixture_system_import_payload(fixture_name))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    let import_status = import_response.status();
-    let import_payload: Value = import_response
-        .json()
-        .await
-        .expect("json body should parse");
-    assert_eq!(import_status, StatusCode::OK, "payload={import_payload}");
-    assert_eq!(import_payload["stats"]["providers"]["created"], json!(1));
-    assert_eq!(import_payload["stats"]["endpoints"]["created"], json!(1));
-    assert_eq!(import_payload["stats"]["keys"]["created"], json!(1));
-    assert_eq!(import_payload["stats"]["models"]["created"], json!(1));
-
-    let providers = provider_catalog_repository
-        .list_providers(false)
-        .await
-        .expect("providers should load");
-    assert_eq!(providers.len(), 1);
-    assert_eq!(providers[0].name, expected_provider_name);
-    let provider_id = providers[0].id.clone();
-    let provider_ids = vec![provider_id.clone()];
-    let endpoints = provider_catalog_repository
-        .list_endpoints_by_provider_ids(&provider_ids)
-        .await
-        .expect("endpoints should load");
-    assert_eq!(endpoints.len(), 1);
-    assert_eq!(endpoints[0].base_url, expected_base_url);
-    let endpoint_id = endpoints[0].id.clone();
-
-    let keys = provider_catalog_repository
-        .list_keys_by_provider_ids(&provider_ids)
-        .await
-        .expect("keys should load");
-    assert_eq!(keys.len(), 1);
-    assert_eq!(
-        decrypt_test_provider_catalog_credential(&keys[0], ProviderCatalogCredentialField::ApiKey,),
-        expected_api_key
-    );
-
-    let provider_models = global_model_repository
-        .list_admin_provider_models(&AdminProviderModelListQuery {
-            provider_id: provider_id.clone(),
-            is_active: None,
-            offset: 0,
-            limit: 10_000,
-        })
-        .await
-        .expect("provider models should load");
-    assert_eq!(provider_models.len(), 1);
-    assert_eq!(provider_models[0].provider_model_name, expected_model_name);
-
-    let test_response = client
-        .post(format!("{gateway_url}/api/admin/provider-query/test-model"))
-        .bearer_auth(crate::tests::test_admin_access_token())
-        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
-        .json(&json!({
-            "provider_id": provider_id,
-            "endpoint_id": endpoint_id,
-            "model": expected_model_name,
-            "api_format": "openai:chat"
-        }))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(test_response.status(), StatusCode::OK);
-    let test_payload: Value = test_response.json().await.expect("json body should parse");
-    assert_eq!(test_payload["success"], json!(true));
-    assert_eq!(test_payload["model"], json!(expected_model_name));
-    assert_eq!(test_payload["error"], Value::Null);
-    assert_eq!(
-        test_payload["data"]["response"]["choices"][0]["message"]["content"],
-        json!("Hello from imported provider")
-    );
-    assert_eq!(
-        *execution_runtime_hits.lock().expect("mutex should lock"),
-        1
-    );
-
-    gateway_handle.abort();
-    execution_runtime_handle.abort();
 }
 
 #[test]
@@ -1096,7 +865,7 @@ async fn gateway_rejects_unknown_admin_system_config_import_versions_impl() {
             .as_str()
             .expect("detail should be a string");
         assert!(detail.contains(&format!("不支持的配置版本: {version}")));
-        assert!(detail.contains("支持的版本: 2.0, 2.1, 2.2, 2.3"));
+        assert!(detail.contains("支持的版本: 2.3"));
     }
 
     gateway_handle.abort();
@@ -2357,7 +2126,7 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
         .bearer_auth(crate::tests::test_admin_access_token())
         .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
-            "version": "1.4",
+            "version": "1.5",
             "merge_mode": "overwrite",
             "user_groups": [{
                 "id": "source-group-1",
@@ -2733,7 +2502,7 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
     let import_payload = json!({
-        "version": "1.4",
+        "version": "1.5",
         "merge_mode": "overwrite",
         "users": [{
             "id": "source-user-existing",
@@ -2857,78 +2626,6 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
     assert_eq!(imported_standalone_key.total_cost_usd, 6.78);
 
     gateway_handle.abort();
-}
-
-#[test]
-fn gateway_imports_admin_system_config_fixture_v22() {
-    run_admin_system_import_test(
-        "gateway_imports_admin_system_config_fixture_v22",
-        gateway_imports_admin_system_config_fixture_v22_impl,
-    );
-}
-
-async fn gateway_imports_admin_system_config_fixture_v22_impl() {
-    let gateway = build_router_with_state(
-        AppState::new()
-            .expect("gateway should build")
-            .with_data_state_for_tests(build_empty_admin_system_data_state()),
-    );
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!("{gateway_url}/api/admin/system/config/import"))
-        .bearer_auth(crate::tests::test_admin_access_token())
-        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
-        .json(&fixture_system_import_payload("v22"))
-        .send()
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let payload: Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["message"], "配置导入成功");
-
-    gateway_handle.abort();
-}
-
-#[test]
-fn gateway_imports_admin_system_config_fixtures_from_legacy_exports() {
-    run_admin_system_import_test(
-        "gateway_imports_admin_system_config_fixtures_from_legacy_exports",
-        gateway_imports_admin_system_config_fixtures_from_legacy_exports_impl,
-    );
-}
-
-async fn gateway_imports_admin_system_config_fixtures_from_legacy_exports_impl() {
-    for fixture in ["v20", "v21"] {
-        let gateway = build_router_with_state(
-            AppState::new()
-                .expect("gateway should build")
-                .with_data_state_for_tests(build_empty_admin_system_data_state()),
-        );
-        let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-        let response = reqwest::Client::new()
-            .post(format!("{gateway_url}/api/admin/system/config/import"))
-            .bearer_auth(crate::tests::test_admin_access_token())
-            .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
-            .json(&fixture_system_import_payload(fixture))
-            .send()
-            .await
-            .expect("request should succeed");
-
-        assert_eq!(
-            response.status(),
-            StatusCode::OK,
-            "fixture {fixture} should be accepted for Python migration compatibility"
-        );
-        let payload: Value = response.json().await.expect("json body should parse");
-        assert_eq!(payload["message"], "配置导入成功");
-        assert_eq!(payload["stats"]["global_models"]["created"], json!(1));
-        assert_eq!(payload["stats"]["providers"]["created"], json!(1));
-
-        gateway_handle.abort();
-    }
 }
 
 #[test]
@@ -3112,7 +2809,7 @@ async fn gateway_rejects_legacy_user_import_string_bool_field_impl() {
         .bearer_auth(crate::tests::test_admin_access_token())
         .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
-            "version": "1.3",
+            "version": "1.5",
             "merge_mode": "overwrite",
             "users": [{
                 "email": "legacy@example.com",
@@ -3151,7 +2848,7 @@ async fn gateway_reports_field_path_for_invalid_admin_system_config_import_shape
         .bearer_auth(crate::tests::test_admin_access_token())
         .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
-            "version": "2.2",
+            "version": "2.3",
             "providers": [{
                 "name": "import-openai",
                 "endpoints": [{
@@ -3876,7 +3573,7 @@ async fn gateway_skips_proxy_nodes_during_admin_system_config_import_impl() {
         .bearer_auth(crate::tests::test_admin_access_token())
         .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
-            "version": "2.2",
+            "version": "2.3",
             "merge_mode": "overwrite",
             "global_models": [],
             "providers": [],
@@ -3971,7 +3668,7 @@ async fn gateway_preserves_manual_proxy_configs_while_skipping_proxy_nodes_durin
         .bearer_auth(crate::tests::test_admin_access_token())
         .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
         .json(&json!({
-            "version": "2.2",
+            "version": "2.3",
             "merge_mode": "overwrite",
             "global_models": [],
             "providers": [{

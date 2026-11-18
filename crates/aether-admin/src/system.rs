@@ -62,11 +62,10 @@ pub fn admin_email_template_html_is_valid(value: &str) -> bool {
 }
 
 pub const ADMIN_SYSTEM_CONFIG_EXPORT_VERSION: &str = "2.3";
-pub const ADMIN_SYSTEM_CONFIG_SUPPORTED_VERSIONS: &[&str] =
-    &["2.0", "2.1", "2.2", ADMIN_SYSTEM_CONFIG_EXPORT_VERSION];
+pub const ADMIN_SYSTEM_CONFIG_SUPPORTED_VERSIONS: &[&str] = &[ADMIN_SYSTEM_CONFIG_EXPORT_VERSION];
 pub const ADMIN_SYSTEM_USERS_EXPORT_VERSION: &str = "1.6";
 pub const ADMIN_SYSTEM_USERS_SUPPORTED_VERSIONS: &[&str] =
-    &["1.3", "1.4", "1.5", ADMIN_SYSTEM_USERS_EXPORT_VERSION];
+    &["1.5", ADMIN_SYSTEM_USERS_EXPORT_VERSION];
 pub const ADMIN_SYSTEM_PROVIDER_OPS_SENSITIVE_CREDENTIAL_FIELDS: &[&str] = &[
     "api_key",
     "password",
@@ -3780,7 +3779,7 @@ mod tests {
             "debug-smtp-password",
         ];
         let document = serde_json::from_value::<AdminSystemConfigDocument>(json!({
-            "version": "2.2",
+            "version": "2.3",
             "providers": [{
                 "name": "provider",
                 "api_keys": [{
@@ -3849,7 +3848,7 @@ mod tests {
     fn parse_admin_system_config_import_request_rejects_invalid_merge_mode() {
         let err = parse_admin_system_config_import_request(
             json!({
-                "version": "2.2",
+                "version": "2.3",
                 "merge_mode": "replace_all",
             })
             .to_string()
@@ -3868,7 +3867,7 @@ mod tests {
     fn parse_admin_system_config_import_request_reports_field_path_for_shape_errors() {
         let err = parse_admin_system_config_import_request(
             json!({
-                "version": "2.2",
+                "version": "2.3",
                 "global_models": [],
                 "providers": [{
                     "name": "import-openai",
@@ -3894,7 +3893,7 @@ mod tests {
     fn parse_admin_system_config_import_request_accepts_numeric_string_fields() {
         let parsed = parse_admin_system_config_import_request(
             json!({
-                "version": "2.2",
+                "version": "2.3",
                 "global_models": [{
                     "name": "veo3.1",
                     "display_name": "Veo 3.1",
@@ -3933,7 +3932,7 @@ mod tests {
     fn parse_admin_system_config_import_request_rejects_invalid_numeric_string_fields() {
         let err = parse_admin_system_config_import_request(
             json!({
-                "version": "2.2",
+                "version": "2.3",
                 "global_models": [{
                     "name": "veo3.1",
                     "display_name": "Veo 3.1",
