@@ -143,8 +143,6 @@ const DOCKER_UPDATE_BLOCKER: &str =
     "Docker 部署请使用镜像更新：进入 docker-compose.yml 所在目录执行 ./update.sh。";
 const MANUAL_UPDATE_BLOCKER: &str =
     "当前部署策略不支持在线自更新，请手动下载 Release 或使用安装脚本更新。";
-const MULTI_NODE_UPDATE_BLOCKER: &str =
-    "多节点部署不支持在管理后台更新单个节点，请使用镜像滚动更新或外部发布编排。";
 const STORAGE_UPDATE_BLOCKER: &str =
     "当前安装目录未提供安全的自更新写权限，请使用安装脚本或受限的系统更新服务。";
 
@@ -178,33 +176,6 @@ impl UpdateStrategy {
             Self::SelfManaged => "self",
             Self::Docker => "docker",
             Self::Manual => "manual",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DeploymentTopology {
-    SingleNode,
-    MultiNode,
-}
-
-impl DeploymentTopology {
-    fn from_env_value(value: Option<&str>) -> Self {
-        match value
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_ascii_lowercase)
-            .as_deref()
-        {
-            Some("multi-node" | "multi" | "cluster") => Self::MultiNode,
-            _ => Self::SingleNode,
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::SingleNode => "single-node",
-            Self::MultiNode => "multi-node",
         }
     }
 }
@@ -835,40 +806,19 @@ pub(crate) fn current_update_strategy() -> UpdateStrategy {
     )
 }
 
-fn current_deployment_topology() -> DeploymentTopology {
-    DeploymentTopology::from_env_value(
-        std::env::var("AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY")
-            .ok()
-            .as_deref(),
-    )
-}
-
-fn self_update_supported_for(
-    release_build: bool,
-    update_strategy: UpdateStrategy,
-    deployment_topology: DeploymentTopology,
-) -> bool {
-    release_build
-        && update_strategy == UpdateStrategy::SelfManaged
-        && deployment_topology == DeploymentTopology::SingleNode
+fn self_update_supported_for(release_build: bool, update_strategy: UpdateStrategy) -> bool {
+    release_build && update_strategy == UpdateStrategy::SelfManaged
 }
 
 pub(crate) fn self_update_supported() -> bool {
-    self_update_supported_for(
-        is_release_build(),
-        current_update_strategy(),
-        current_deployment_topology(),
-    ) && self_update_storage_ready()
+    self_update_supported_for(is_release_build(), current_update_strategy())
+        && self_update_storage_ready()
 }
 
 pub(crate) fn current_self_update_blocker() -> &'static str {
     if !is_release_build() {
         return SOURCE_BUILD_UPDATE_BLOCKER;
     }
-    if current_deployment_topology() == DeploymentTopology::MultiNode {
-        return MULTI_NODE_UPDATE_BLOCKER;
-    }
-
     match current_update_strategy() {
         UpdateStrategy::SelfManaged if self_update_storage_ready() => "一键更新可用",
         UpdateStrategy::SelfManaged => STORAGE_UPDATE_BLOCKER,
@@ -966,10 +916,7 @@ fn is_safe_writable_update_directory(path: &Path) -> bool {
 pub(crate) fn build_admin_system_update_capability_payload() -> serde_json::Value {
     let build_type = current_build_type();
     let update_strategy = current_update_strategy();
-    let deployment_topology = current_deployment_topology();
-    let supported =
-        self_update_supported_for(is_release_build(), update_strategy, deployment_topology)
-            && self_update_storage_ready();
+    let supported = self_update_supported();
     let rollback_available = supported && find_rollback_target().is_some();
     let task_status = read_update_task_status();
     let docker_command = if update_strategy == UpdateStrategy::Docker {
@@ -986,8 +933,6 @@ pub(crate) fn build_admin_system_update_capability_payload() -> serde_json::Valu
         "build_type": build_type,
         "update_strategy": update_strategy.as_str(),
         "strategy": update_strategy.as_str(),
-        "deployment_topology": deployment_topology.as_str(),
-        "topology": deployment_topology.as_str(),
         "docker_update_command": docker_command,
         "message": if supported {
             "一键更新可用"
@@ -2212,32 +2157,6 @@ mod tests {
             UpdateStrategy::from_env_value(Some("unknown"), true),
             UpdateStrategy::Manual
         );
-    }
-
-    #[test]
-    fn deployment_topology_defaults_to_single_node() {
-        assert_eq!(
-            DeploymentTopology::from_env_value(None),
-            DeploymentTopology::SingleNode
-        );
-        assert_eq!(
-            DeploymentTopology::from_env_value(Some("multi-node")),
-            DeploymentTopology::MultiNode
-        );
-    }
-
-    #[test]
-    fn multi_node_topology_disables_self_update() {
-        assert!(self_update_supported_for(
-            true,
-            UpdateStrategy::SelfManaged,
-            DeploymentTopology::SingleNode,
-        ));
-        assert!(!self_update_supported_for(
-            true,
-            UpdateStrategy::SelfManaged,
-            DeploymentTopology::MultiNode,
-        ));
     }
 
     #[test]

@@ -661,40 +661,6 @@ async fn proxy_request_inner(
                 "gateway request concurrency gate {gate} is closed"
             )));
         }
-        Err(RequestAdmissionError::Distributed(
-            aether_runtime_state::RuntimeSemaphoreError::Saturated { gate, limit },
-        ))
-        | Err(RequestAdmissionError::Distributed(
-            aether_runtime_state::RuntimeSemaphoreError::Unavailable { gate, limit, .. },
-        )) => {
-            let trace_id = extract_or_generate_trace_id(request.headers());
-            let response = build_local_overloaded_response(
-                &trace_id,
-                None,
-                Some(request.uri().path()),
-                gate,
-                limit,
-            )?;
-            return Ok(finalize_gateway_response(
-                response,
-                &trace_id,
-                &remote_addr,
-                direct_client_ip,
-                request.method(),
-                request
-                    .uri()
-                    .path_and_query()
-                    .map(|value| value.as_str())
-                    .unwrap_or("/"),
-                None,
-                EXECUTION_PATH_DISTRIBUTED_OVERLOADED,
-                &started_at,
-                None,
-            ));
-        }
-        Err(RequestAdmissionError::Distributed(
-            aether_runtime_state::RuntimeSemaphoreError::InvalidConfiguration(message),
-        )) => return Err(GatewayError::Internal(message)),
     };
     let request_admission_ms = started_at.elapsed().as_millis() as u64;
     observe_gateway_stage_ms("frontdoor_admission", request_admission_ms);

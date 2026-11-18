@@ -16,9 +16,6 @@ use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelect
 use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_runtime_state::{
-    MemoryRuntimeStateConfig, RuntimeSemaphore, RuntimeSemaphoreConfig, RuntimeState,
-};
 
 use crate::data::GatewayDataState;
 use crate::tests::DEV_FERNET_KEY;
@@ -35,11 +32,6 @@ where
     );
 }
 
-fn memory_runtime_semaphore(gate: &'static str, limit: usize) -> RuntimeSemaphore {
-    RuntimeState::memory(MemoryRuntimeStateConfig::default())
-        .semaphore(gate, limit, RuntimeSemaphoreConfig::default())
-        .expect("memory runtime semaphore should build")
-}
 
 #[test]
 fn gateway_websocket_connections_use_independent_admission() {
@@ -171,101 +163,6 @@ fn build_local_openai_gateway_state(
                 DEV_FERNET_KEY,
             ),
         )
-}
-
-#[test]
-fn gateway_rejects_second_in_flight_stream_request_with_distributed_overload() {
-    run_concurrency_test(
-        "gateway_rejects_second_in_flight_stream_request_with_distributed_overload",
-        gateway_rejects_second_in_flight_stream_request_with_distributed_overload_impl,
-    );
-}
-
-async fn gateway_rejects_second_in_flight_stream_request_with_distributed_overload_impl() {
-    let execution_runtime_hits = Arc::new(AtomicUsize::new(0));
-    let execution_runtime_hits_clone = Arc::clone(&execution_runtime_hits);
-    let execution_runtime = Router::new().route(
-        "/v1/execute/stream",
-        any(move |_request: Request| {
-            let execution_runtime_hits = Arc::clone(&execution_runtime_hits_clone);
-            async move {
-                execution_runtime_hits.fetch_add(1, Ordering::SeqCst);
-                let stream = async_stream::stream! {
-                    yield Ok::<_, Infallible>(Bytes::from_static(
-                        b"{\"type\":\"headers\",\"payload\":{\"kind\":\"headers\",\"status_code\":200,\"headers\":{\"content-type\":\"text/event-stream\"}}}\n",
-                    ));
-                    yield Ok::<_, Infallible>(Bytes::from_static(
-                        b"{\"type\":\"data\",\"payload\":{\"kind\":\"data\",\"text\":\"data: {\\\"id\\\":\\\"chatcmpl-concurrency-123\\\"}\\n\\n\"}}\n",
-                    ));
-                    futures_util::future::pending::<()>().await;
-                };
-                let mut response = Response::builder()
-                    .status(StatusCode::OK)
-                    .body(Body::from_stream(stream))
-                    .expect("response should build");
-                response.headers_mut().insert(
-                    http::header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/x-ndjson"),
-                );
-                response
-            }
-        }),
-    );
-
-    let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
-    let distributed_gate = memory_runtime_semaphore("gateway_requests_distributed", 1);
-    let gateway_a = build_router_with_state(
-        build_local_openai_gateway_state(execution_runtime_url.clone())
-            .with_distributed_request_concurrency_gate(distributed_gate.clone()),
-    );
-    let gateway_b = build_router_with_state(
-        build_local_openai_gateway_state(execution_runtime_url)
-            .with_distributed_request_concurrency_gate(distributed_gate),
-    );
-    let (gateway_a_url, gateway_a_handle) = start_server(gateway_a).await;
-    let (gateway_b_url, gateway_b_handle) = start_server(gateway_b).await;
-
-    let client = reqwest::Client::new();
-    let first_response = client
-        .post(format!("{gateway_a_url}/v1/chat/completions"))
-        .header(
-            http::header::AUTHORIZATION,
-            "Bearer sk-client-openai-concurrency",
-        )
-        .header(http::header::CONTENT_TYPE, "application/json")
-        .body("{\"model\":\"gpt-5\",\"messages\":[],\"stream\":true}")
-        .send()
-        .await
-        .expect("first request should succeed");
-
-    wait_until(500, || execution_runtime_hits.load(Ordering::SeqCst) == 1).await;
-
-    let second_response = client
-        .post(format!("{gateway_b_url}/v1/chat/completions"))
-        .header(
-            http::header::AUTHORIZATION,
-            "Bearer sk-client-openai-concurrency",
-        )
-        .header(http::header::CONTENT_TYPE, "application/json")
-        .body("{\"model\":\"gpt-5\",\"messages\":[],\"stream\":true}")
-        .send()
-        .await
-        .expect("second request should complete");
-
-    assert_eq!(second_response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(
-        second_response
-            .json::<serde_json::Value>()
-            .await
-            .expect("json body should decode")["error"]["details"]["gate"],
-        "gateway_requests_distributed"
-    );
-    assert_eq!(execution_runtime_hits.load(Ordering::SeqCst), 1);
-
-    drop(first_response);
-    gateway_a_handle.abort();
-    gateway_b_handle.abort();
-    execution_runtime_handle.abort();
 }
 
 #[test]
@@ -404,15 +301,7 @@ async fn gateway_exposes_request_concurrency_metrics_impl() {
     let state = AppState::new()
         .expect("gateway state should build")
         .with_request_concurrency_limit(3)
-        .with_websocket_connection_limit(7)
-        .with_distributed_request_concurrency_gate(memory_runtime_semaphore(
-            "gateway_requests_distributed",
-            5,
-        ))
-        .with_distributed_websocket_connection_gate(memory_runtime_semaphore(
-            "gateway_websocket_connections_distributed",
-            9,
-        ));
+        .with_websocket_connection_limit(7);
     assert!(state.prewarm_metric_snapshot().await);
     let (gateway_url, gateway_handle, access_token) =
         start_authenticated_operational_server(state).await;
@@ -436,17 +325,10 @@ async fn gateway_exposes_request_concurrency_metrics_impl() {
     assert!(body.contains("service_up{service=\"aether-gateway\"} 1"));
     assert!(body.contains("concurrency_in_flight{gate=\"gateway_requests\"} 0"));
     assert!(body.contains("concurrency_available_permits{gate=\"gateway_requests\"} 3"));
-    assert!(body.contains("concurrency_in_flight{gate=\"gateway_requests_distributed\"} 0"));
-    assert!(body.contains("concurrency_available_permits{gate=\"gateway_requests_distributed\"} 5"));
     assert!(body.contains("concurrency_in_flight{gate=\"gateway_websocket_connections\"} 0"));
     assert!(
         body.contains("concurrency_available_permits{gate=\"gateway_websocket_connections\"} 7")
     );
-    assert!(body
-        .contains("concurrency_in_flight{gate=\"gateway_websocket_connections_distributed\"} 0"));
-    assert!(body.contains(
-        "concurrency_available_permits{gate=\"gateway_websocket_connections_distributed\"} 9"
-    ));
     assert!(body.contains("gateway_process_cpu_usage_basis_points "));
     assert!(body.contains("gateway_process_memory_bytes "));
     assert!(body.contains("gateway_process_threads "));

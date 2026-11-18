@@ -31,7 +31,7 @@ use aether_runtime::{
     ServiceRuntimeConfig,
 };
 use aether_runtime_state::{
-    RedisClientConfig, RuntimeSemaphoreConfig, RuntimeState, RuntimeStateBackendMode,
+    RedisClientConfig, RuntimeState, RuntimeStateBackendMode,
     RuntimeStateConfig,
 };
 
@@ -58,49 +58,9 @@ fn validate_gateway_data_encryption_key(value: Option<&str>) -> Result<(), &'sta
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
-enum DeploymentTopologyArg {
-    SingleNode,
-    MultiNode,
-}
-
-impl DeploymentTopologyArg {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::SingleNode => "single-node",
-            Self::MultiNode => "multi-node",
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum DatabaseModeArg {
     Auto,
     VerifyOnly,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
-enum NodeRoleArg {
-    All,
-    Frontdoor,
-    Background,
-}
-
-impl NodeRoleArg {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Frontdoor => "frontdoor",
-            Self::Background => "background",
-        }
-    }
-
-    const fn spawns_background_tasks(self) -> bool {
-        matches!(self, Self::All | Self::Background)
-    }
-
-    const fn isolates_background_database(self) -> bool {
-        matches!(self, Self::All)
-    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -211,9 +171,7 @@ const DEFAULT_USAGE_QUEUE_WORKERS_CAP: usize = 8;
 const AUTO_USAGE_QUEUE_WORKERS_MIN: usize = 2;
 const AUTO_USAGE_QUEUE_WORKERS_REQUESTS_PER_WORKER: usize = 128;
 const AUTO_USAGE_QUEUE_WORKERS_DB_SHARE_ALL: usize = 4;
-const AUTO_USAGE_QUEUE_WORKERS_DB_SHARE_BACKGROUND: usize = 2;
 const AUTO_USAGE_WORKER_RECORD_DB_SHARE_ALL: usize = 8;
-const AUTO_USAGE_WORKER_RECORD_DB_SHARE_BACKGROUND: usize = 4;
 const MAX_USAGE_QUEUE_WORKERS: usize = 64;
 const DEFAULT_GATEWAY_LISTEN_BACKLOG: i32 = 65_535;
 const MIN_GATEWAY_LISTEN_BACKLOG: i32 = 128;
@@ -312,17 +270,8 @@ fn soft_fd_limit() -> Option<usize> {
 
 fn usage_queue_request_concurrency_hint(
     max_in_flight_requests: Option<usize>,
-    distributed_request_limit: Option<usize>,
 ) -> Option<usize> {
-    match (
-        max_in_flight_requests.filter(|limit| *limit > 0),
-        distributed_request_limit.filter(|limit| *limit > 0),
-    ) {
-        (Some(local), Some(distributed)) => Some(local.min(distributed)),
-        (Some(local), None) => Some(local),
-        (None, Some(distributed)) => Some(distributed),
-        (None, None) => None,
-    }
+    max_in_flight_requests.filter(|limit| *limit > 0)
 }
 
 fn usage_queue_workers_for_request_concurrency(request_concurrency: usize) -> usize {
@@ -332,20 +281,7 @@ fn usage_queue_workers_for_request_concurrency(request_concurrency: usize) -> us
     workers.clamp(AUTO_USAGE_QUEUE_WORKERS_MIN, MAX_USAGE_QUEUE_WORKERS)
 }
 
-fn usage_database_config_for_role<'a>(
-    node_role: NodeRoleArg,
-    database: Option<&'a PostgresPoolConfig>,
-    isolated_background_database: Option<&'a PostgresPoolConfig>,
-) -> Option<&'a PostgresPoolConfig> {
-    if node_role.isolates_background_database() {
-        isolated_background_database.or(database)
-    } else {
-        database
-    }
-}
-
 fn usage_queue_worker_database_cap(
-    node_role: NodeRoleArg,
     database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> usize {
@@ -354,19 +290,13 @@ fn usage_queue_worker_database_cap(
     };
 
     let max_connections = database.max_connections.max(1) as usize;
-    // An isolated pool is already a dedicated background budget. Applying the shared-pool
-    // divisor a second time would underutilize that pool.
     if database_is_isolated {
         return max_connections
             .saturating_sub(1)
             .max(1)
             .clamp(1, MAX_USAGE_QUEUE_WORKERS);
     }
-    let divisor = if matches!(node_role, NodeRoleArg::Background) {
-        AUTO_USAGE_QUEUE_WORKERS_DB_SHARE_BACKGROUND
-    } else {
-        AUTO_USAGE_QUEUE_WORKERS_DB_SHARE_ALL
-    };
+    let divisor = AUTO_USAGE_QUEUE_WORKERS_DB_SHARE_ALL;
     max_connections
         .saturating_add(divisor - 1)
         .checked_div(divisor)
@@ -375,15 +305,12 @@ fn usage_queue_worker_database_cap(
 }
 
 fn usage_worker_record_concurrency_database_cap(
-    node_role: NodeRoleArg,
     database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> Option<usize> {
     let database = database?;
 
     let max_connections = database.max_connections.max(1) as usize;
-    // The isolated background pool has already been carved out of the foreground pool. Keep one
-    // connection available for maintenance/health work and use the rest for usage persistence.
     if database_is_isolated {
         return Some(
             max_connections
@@ -392,11 +319,7 @@ fn usage_worker_record_concurrency_database_cap(
                 .clamp(1, MAX_USAGE_QUEUE_WORKERS),
         );
     }
-    let divisor = if matches!(node_role, NodeRoleArg::Background) {
-        AUTO_USAGE_WORKER_RECORD_DB_SHARE_BACKGROUND
-    } else {
-        AUTO_USAGE_WORKER_RECORD_DB_SHARE_ALL
-    };
+    let divisor = AUTO_USAGE_WORKER_RECORD_DB_SHARE_ALL;
     Some(
         max_connections
             .checked_div(divisor.max(1))
@@ -407,9 +330,7 @@ fn usage_worker_record_concurrency_database_cap(
 
 fn automatic_usage_queue_workers_for_parallelism(
     parallelism: usize,
-    node_role: NodeRoleArg,
     max_in_flight_requests: Option<usize>,
-    distributed_request_limit: Option<usize>,
     database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> usize {
@@ -417,13 +338,11 @@ fn automatic_usage_queue_workers_for_parallelism(
         AUTO_USAGE_QUEUE_WORKERS_MIN,
         DEFAULT_USAGE_QUEUE_WORKERS_CAP,
     );
-    let requested =
-        usage_queue_request_concurrency_hint(max_in_flight_requests, distributed_request_limit)
-            .map(usage_queue_workers_for_request_concurrency)
-            .unwrap_or(cpu_default);
+    let requested = usage_queue_request_concurrency_hint(max_in_flight_requests)
+        .map(usage_queue_workers_for_request_concurrency)
+        .unwrap_or(cpu_default);
     requested
         .min(usage_queue_worker_database_cap(
-            node_role,
             database,
             database_is_isolated,
         ))
@@ -431,17 +350,13 @@ fn automatic_usage_queue_workers_for_parallelism(
 }
 
 fn automatic_usage_queue_workers(
-    node_role: NodeRoleArg,
     max_in_flight_requests: Option<usize>,
-    distributed_request_limit: Option<usize>,
     database: Option<&PostgresPoolConfig>,
     database_is_isolated: bool,
 ) -> usize {
     automatic_usage_queue_workers_for_parallelism(
         available_parallelism_usize(),
-        node_role,
         max_in_flight_requests,
-        distributed_request_limit,
         database,
         database_is_isolated,
     )
@@ -837,9 +752,7 @@ struct GatewayUsageArgs {
 impl GatewayUsageArgs {
     fn effective_queue_workers(
         &self,
-        node_role: NodeRoleArg,
         max_in_flight_requests: Option<usize>,
-        distributed_request_limit: Option<usize>,
         database: Option<&PostgresPoolConfig>,
         database_is_isolated: bool,
     ) -> usize {
@@ -850,9 +763,7 @@ impl GatewayUsageArgs {
             return 1;
         }
         automatic_usage_queue_workers(
-            node_role,
             max_in_flight_requests,
-            distributed_request_limit,
             database,
             database_is_isolated,
         )
@@ -860,7 +771,6 @@ impl GatewayUsageArgs {
 
     fn effective_queue_worker_max_count(
         &self,
-        node_role: NodeRoleArg,
         database: Option<&PostgresPoolConfig>,
         worker_count: usize,
         database_is_isolated: bool,
@@ -870,11 +780,10 @@ impl GatewayUsageArgs {
         }
         self.queue_worker_max_count
             .unwrap_or_else(|| {
-                usage_queue_worker_database_cap(node_role, database, database_is_isolated)
+                usage_queue_worker_database_cap(database, database_is_isolated)
             })
             .max(1)
             .min(usage_queue_worker_database_cap(
-                node_role,
                 database,
                 database_is_isolated,
             ))
@@ -883,12 +792,10 @@ impl GatewayUsageArgs {
 
     fn runtime_state_blocking_stream_lanes(
         &self,
-        node_role: NodeRoleArg,
         database: Option<&PostgresPoolConfig>,
         worker_max_count: usize,
     ) -> Option<usize> {
-        if !node_role.spawns_background_tasks()
-            || (!self.queue_terminal_events && !self.queue_lifecycle_events)
+        if (!self.queue_terminal_events && !self.queue_lifecycle_events)
             || database.is_none()
         {
             return None;
@@ -898,7 +805,6 @@ impl GatewayUsageArgs {
 
     fn effective_worker_record_concurrency_limit(
         &self,
-        node_role: NodeRoleArg,
         database: Option<&PostgresPoolConfig>,
         database_is_isolated: bool,
     ) -> Option<usize> {
@@ -911,7 +817,6 @@ impl GatewayUsageArgs {
                     .min(MAX_USAGE_QUEUE_WORKERS)
                     .min(
                         usage_worker_record_concurrency_database_cap(
-                            node_role,
                             database,
                             database_is_isolated,
                         )
@@ -920,12 +825,10 @@ impl GatewayUsageArgs {
                     .max(1),
             );
         }
-        if !node_role.spawns_background_tasks()
-            || (!self.queue_terminal_events && !self.queue_lifecycle_events)
-        {
+        if !self.queue_terminal_events && !self.queue_lifecycle_events {
             return None;
         }
-        usage_worker_record_concurrency_database_cap(node_role, database, database_is_isolated)
+        usage_worker_record_concurrency_database_cap(database, database_is_isolated)
     }
 
     fn to_config(
@@ -1177,22 +1080,6 @@ struct Args {
     )]
     healthcheck_timeout_ms: u64,
 
-    #[arg(
-        long,
-        env = "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY",
-        value_enum,
-        default_value = "single-node"
-    )]
-    deployment_topology: DeploymentTopologyArg,
-
-    #[arg(
-        long,
-        env = "AETHER_GATEWAY_NODE_ROLE",
-        value_enum,
-        default_value = "all"
-    )]
-    node_role: NodeRoleArg,
-
     #[arg(long, hide = true, default_value_t = false)]
     migrate: bool,
 
@@ -1244,42 +1131,6 @@ struct Args {
     #[arg(long, env = "AETHER_GATEWAY_MAX_WEBSOCKET_CONNECTIONS")]
     max_websocket_connections: Option<usize>,
 
-    #[arg(long, env = "AETHER_GATEWAY_DISTRIBUTED_REQUEST_LIMIT")]
-    distributed_request_limit: Option<usize>,
-
-    /// Optional distributed limit for long-lived WebSocket connections. When
-    /// omitted, the distributed request limit is reused; set it to 0 to keep
-    /// WebSocket admission local-only.
-    #[arg(long, env = "AETHER_GATEWAY_DISTRIBUTED_WEBSOCKET_CONNECTION_LIMIT")]
-    distributed_websocket_connection_limit: Option<usize>,
-
-    #[arg(long, env = "AETHER_GATEWAY_DISTRIBUTED_REQUEST_REDIS_URL")]
-    distributed_request_redis_url: Option<String>,
-
-    #[arg(long, env = "AETHER_GATEWAY_DISTRIBUTED_REQUEST_REDIS_KEY_PREFIX")]
-    distributed_request_redis_key_prefix: Option<String>,
-
-    #[arg(
-        long,
-        env = "AETHER_GATEWAY_DISTRIBUTED_REQUEST_LEASE_TTL_MS",
-        default_value_t = 30_000
-    )]
-    distributed_request_lease_ttl_ms: u64,
-
-    #[arg(
-        long,
-        env = "AETHER_GATEWAY_DISTRIBUTED_REQUEST_RENEW_INTERVAL_MS",
-        default_value_t = 10_000
-    )]
-    distributed_request_renew_interval_ms: u64,
-
-    #[arg(
-        long,
-        env = "AETHER_GATEWAY_DISTRIBUTED_REQUEST_COMMAND_TIMEOUT_MS",
-        default_value_t = 1_000
-    )]
-    distributed_request_command_timeout_ms: u64,
-
     #[arg(long, env = "AETHER_RUNTIME_BACKEND", value_enum)]
     runtime_backend: Option<RuntimeBackendArg>,
 
@@ -1326,9 +1177,6 @@ impl Args {
             if !matches!(runtime_backend, RuntimeBackendArg::Auto) {
                 return runtime_backend;
             }
-        }
-        if matches!(self.deployment_topology, DeploymentTopologyArg::MultiNode) {
-            return RuntimeBackendArg::Redis;
         }
         if data_redis_url.is_some() {
             RuntimeBackendArg::Redis
@@ -1391,9 +1239,7 @@ impl Args {
                 "aether-gateway",
                 default_log_filter,
             ))?;
-        Ok(config
-            .with_node_role(self.node_role.as_str())
-            .with_instance_id(resolve_gateway_log_instance_id()))
+        Ok(config.with_instance_id(resolve_gateway_log_instance_id()))
     }
 }
 
@@ -1699,92 +1545,6 @@ async fn run_healthcheck(
     Ok(())
 }
 
-fn validate_deployment_topology(
-    args: &Args,
-    database: Option<&PostgresPoolConfig>,
-    data_redis_url: Option<&str>,
-    runtime_backend: RuntimeBackendArg,
-) -> Result<(), std::io::Error> {
-    if matches!(args.deployment_topology, DeploymentTopologyArg::SingleNode) {
-        if database.is_none() && data_redis_url.is_none() {
-            warn!(
-                "single-node deployment is starting without SQL database or Redis; local-only mode is allowed, but admin/auth/billing persistence will be limited"
-            );
-        }
-        if matches!(runtime_backend, RuntimeBackendArg::Redis) && data_redis_url.is_none() {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "AETHER_RUNTIME_BACKEND=redis requires REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL",
-            ));
-        }
-        return Ok(());
-    }
-
-    if matches!(args.node_role, NodeRoleArg::All) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "AETHER_GATEWAY_NODE_ROLE=all is only valid for single-node deployment; use frontdoor or background when AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY=multi-node",
-        ));
-    }
-
-    let mut missing = Vec::new();
-    if database.is_none() {
-        missing.push("DATABASE_URL");
-    }
-    if data_redis_url.is_none() {
-        missing.push("REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL");
-    }
-
-    if !missing.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!(
-                "multi-node deployment requires shared data backends; missing {}",
-                missing.join(", ")
-            ),
-        ));
-    }
-
-    if matches!(runtime_backend, RuntimeBackendArg::Memory) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "AETHER_RUNTIME_BACKEND=memory is only valid for single-node deployment",
-        ));
-    }
-
-    if args
-        .video_task_store_path
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|value| !value.is_empty())
-    {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "AETHER_GATEWAY_VIDEO_TASK_STORE_PATH must be unset when AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY=multi-node; use shared SQL-backed state instead",
-        ));
-    }
-
-    if args
-        .body_file_store_path
-        .as_deref()
-        .map(str::trim)
-        .is_some_and(|value| !value.is_empty())
-    {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "AETHER_GATEWAY_BODY_FILE_STORE_PATH must be unset when AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY=multi-node; the body file store is single-node only",
-        ));
-    }
-
-    if env_var_trimmed("AETHER_GATEWAY_INSTANCE_ID").is_none() {
-        warn!(
-            "multi-node deployment started without AETHER_GATEWAY_INSTANCE_ID; task ownership and distributed locks will fall back to HOSTNAME or the process id"
-        );
-    }
-
-    Ok(())
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     aether_gateway::ensure_rustls_crypto_provider();
     let _log_shutdown = aether_runtime::LogShutdownGuard::new();
@@ -1822,28 +1582,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let data_redis_url = args.data.effective_redis_url();
     let runtime_backend =
         args.effective_runtime_backend(sql_database_config.as_ref(), data_redis_url.as_deref());
-    let runtime_redis_url = args.effective_runtime_redis_url(data_redis_url.as_deref());
-    validate_deployment_topology(
-        &args,
-        sql_database_config.as_ref(),
-        runtime_redis_url.as_deref(),
-        runtime_backend,
-    )?;
+    if sql_database_config.is_none() && data_redis_url.is_none() {
+        warn!(
+            "single-node deployment is starting without SQL database or Redis; local-only mode is allowed, but admin/auth/billing persistence will be limited"
+        );
+    }
+    if matches!(runtime_backend, RuntimeBackendArg::Redis) && data_redis_url.is_none() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "AETHER_RUNTIME_BACKEND=redis requires REDIS_URL or AETHER_GATEWAY_DATA_REDIS_URL",
+        )
+        .into());
+    }
     args.data.validate_encryption_key()?;
     let data_config = args.data.to_config();
-    let isolate_background_database = args.node_role.isolates_background_database();
-    let background_database_config = if isolate_background_database {
-        data_config.background_database_config()
-    } else {
-        None
-    };
-    let usage_database_is_isolated =
-        isolate_background_database && background_database_config.is_some();
-    let usage_database_config = usage_database_config_for_role(
-        args.node_role,
-        data_config.database(),
-        background_database_config.as_ref(),
-    );
+    let usage_database_is_isolated = false;
+    let usage_database_config = data_config.database();
     let request_concurrency_limit = args
         .max_in_flight_requests
         .filter(|limit| *limit > 0)
@@ -1859,37 +1613,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         soft_fd_limit(),
     );
     let http_connection_budget = Arc::new(HttpConnectionBudget::new(http_connection_limit));
-    let distributed_websocket_connection_limit = match args.distributed_websocket_connection_limit {
-        Some(limit) if limit > 0 => Some(limit),
-        Some(_) => None,
-        None => args.distributed_request_limit.filter(|limit| *limit > 0),
+    let usage_queue_request_concurrency_hint = usage_queue_request_concurrency_hint(Some(request_concurrency_limit));
+    let usage_queue_request_concurrency_hint_source = if args.max_in_flight_requests.is_some() {
+        "explicit"
+    } else {
+        "auto"
     };
-    let usage_queue_request_concurrency_hint = usage_queue_request_concurrency_hint(
-        Some(request_concurrency_limit),
-        args.distributed_request_limit,
-    );
-    let usage_queue_request_concurrency_hint_source =
-        if args.max_in_flight_requests.is_some() || args.distributed_request_limit.is_some() {
-            "explicit"
-        } else {
-            "auto"
-        };
     let usage_queue_workers = args.usage.effective_queue_workers(
-        args.node_role,
         Some(request_concurrency_limit),
-        args.distributed_request_limit,
         usage_database_config,
         usage_database_is_isolated,
     );
     let usage_queue_worker_max_count = args.usage.effective_queue_worker_max_count(
-        args.node_role,
         usage_database_config,
         usage_queue_workers,
         usage_database_is_isolated,
     );
     let usage_worker_record_concurrency_limit =
         args.usage.effective_worker_record_concurrency_limit(
-            args.node_role,
             usage_database_config,
             usage_database_is_isolated,
         );
@@ -1899,7 +1640,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         usage_worker_record_concurrency_limit,
     );
     let usage_blocking_stream_lanes = args.usage.runtime_state_blocking_stream_lanes(
-        args.node_role,
         usage_database_config,
         usage_config.worker_max_count,
     );
@@ -1912,20 +1652,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err.to_string()))?,
     );
-    let rate_limit_config = if matches!(args.deployment_topology, DeploymentTopologyArg::MultiNode)
-    {
-        args.rate_limit.config().with_local_fallback(false)
-    } else {
-        args.rate_limit.config()
-    };
+    let rate_limit_config = args.rate_limit.config();
     info!(
         event_name = "gateway_starting",
         log_type = "ops",
         bind = %bind_addr,
         app_port,
         environment = %args.frontdoor.environment,
-        deployment_topology = args.deployment_topology.as_str(),
-        node_role = args.node_role.as_str(),
         runtime_backend = runtime_backend.as_str(),
         usage_queue_workers = usage_config.worker_count,
         usage_queue_worker_autoscale_enabled = usage_config.worker_autoscale_enabled,
@@ -1978,20 +1711,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             "auto"
         },
-        distributed_request_limit = args.distributed_request_limit.unwrap_or_default(),
         max_websocket_connections = websocket_connection_limit,
         max_websocket_connections_source = if args.max_websocket_connections.is_some() {
             "explicit"
         } else {
             "request_concurrency_fallback"
         },
-        distributed_websocket_connection_limit =
-            distributed_websocket_connection_limit.unwrap_or_default(),
-        distributed_request_redis_configured = args
-            .distributed_request_redis_url
-            .as_deref()
-            .or(runtime_redis_url.as_deref())
-            .is_some(),
         data_database_configured = sql_database_config.is_some(),
         data_database_driver = if sql_database_config.is_some() {
             "postgres"
@@ -2016,7 +1741,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut state = AppState::new()?
         .with_runtime_state(runtime_state)
-        .with_data_config_and_background_isolation(data_config, isolate_background_database)?;
+        .with_data_config(data_config)?;
     if let Some(path) = args
         .body_file_store_path
         .as_deref()
@@ -2047,52 +1772,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .with_request_concurrency_limit(request_concurrency_limit)
         .with_websocket_connection_limit(websocket_connection_limit)
         .with_http_connection_budget(Arc::clone(&http_connection_budget));
-    if let Some(limit) = args.distributed_request_limit.filter(|limit| *limit > 0) {
-        let distributed_gate = state
-            .runtime_state()
-            .semaphore(
-                "gateway_requests_distributed",
-                limit,
-                RuntimeSemaphoreConfig {
-                    lease_ttl_ms: args.distributed_request_lease_ttl_ms.max(1),
-                    renew_interval_ms: args.distributed_request_renew_interval_ms.max(1),
-                    command_timeout_ms: Some(args.distributed_request_command_timeout_ms.max(1)),
-                },
-            )
-            .map_err(|err| {
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, err.to_string())
-            })?;
-        state = state.with_distributed_request_concurrency_gate(distributed_gate);
-    }
-    if let Some(limit) = distributed_websocket_connection_limit {
-        let distributed_gate = state
-            .runtime_state()
-            .semaphore(
-                "gateway_websocket_connections_distributed",
-                limit,
-                RuntimeSemaphoreConfig {
-                    lease_ttl_ms: args.distributed_request_lease_ttl_ms.max(1),
-                    renew_interval_ms: args.distributed_request_renew_interval_ms.max(1),
-                    command_timeout_ms: Some(args.distributed_request_command_timeout_ms.max(1)),
-                },
-            )
-            .map_err(|err| {
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, err.to_string())
-            })?;
-        state = state.with_distributed_websocket_connection_gate(distributed_gate);
-    }
-    if matches!(args.deployment_topology, DeploymentTopologyArg::MultiNode)
-        && !state.has_usage_data_writer()
-    {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "usage persistence requires a configured shared SQL data backend; set DATABASE_URL before starting aether-gateway",
-        )
-        .into());
-    }
-    if matches!(args.deployment_topology, DeploymentTopologyArg::SingleNode)
-        && !state.has_usage_data_writer()
-    {
+    if !state.has_usage_data_writer() {
         warn!(
             "usage persistence backend is not configured; single-node local-only mode will run without durable usage records"
         );
@@ -2150,15 +1830,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // process, which is exactly what an idle gateway must not do.
     aether_cache::start_housekeeper();
 
-    let background_tasks = if args.node_role.spawns_background_tasks() {
-        Some(state.spawn_background_tasks())
-    } else {
-        info!(
-            node_role = args.node_role.as_str(),
-            "background workers disabled for this node role"
-        );
-        None
-    };
+    let background_tasks = Some(state.spawn_background_tasks());
     if state.prewarm_metric_snapshot().await {
         info!("gateway metric snapshot prewarmed");
     } else {
@@ -2552,10 +2224,10 @@ mod tests {
         automatic_sql_pool_config_for_parallelism, automatic_usage_queue_workers_for_parallelism,
         ensure_database_backfills_are_current, ensure_database_schema_is_current,
         pending_backfills_error, pending_schema_error, resolve_healthcheck_url,
-        usage_database_config_for_role, validate_gateway_data_encryption_key, Args, DataCommand,
-        DatabaseCommand, DatabaseModeArg, DeploymentTopologyArg, GatewayDataArgs,
+        validate_gateway_data_encryption_key, Args, DataCommand,
+        DatabaseCommand, DatabaseModeArg, GatewayDataArgs,
         GatewayFrontdoorArgs, GatewayLogDestinationArg, GatewayLogFormatArg, GatewayLogRotationArg,
-        GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs, NodeRoleArg, RuntimeBackendArg,
+        GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs, RuntimeBackendArg,
         DEFAULT_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS, DEFAULT_GATEWAY_HTTP_HEADER_MAX_BYTES,
         DEFAULT_GATEWAY_HTTP_HEADER_READ_TIMEOUT_MS, DEFAULT_GATEWAY_HTTP_MAX_HEADERS,
         DEFAULT_GATEWAY_LISTENER_SHARDS, DEFAULT_GATEWAY_LISTEN_BACKLOG,
@@ -2589,8 +2261,6 @@ mod tests {
             usage_shutdown_timeout_ms: 30_000,
             healthcheck: false,
             healthcheck_timeout_ms: 3_000,
-            deployment_topology: DeploymentTopologyArg::SingleNode,
-            node_role: NodeRoleArg::All,
             migrate: false,
             apply_backfills: false,
             database_mode: None,
@@ -2602,13 +2272,6 @@ mod tests {
             max_in_flight_requests: None,
             max_http_connections: None,
             max_websocket_connections: None,
-            distributed_request_limit: None,
-            distributed_websocket_connection_limit: None,
-            distributed_request_redis_url: None,
-            distributed_request_redis_key_prefix: None,
-            distributed_request_lease_ttl_ms: 30_000,
-            distributed_request_renew_interval_ms: 10_000,
-            distributed_request_command_timeout_ms: 1_000,
             runtime_backend: None,
             runtime_redis_url: None,
             runtime_redis_key_prefix: None,
@@ -2955,34 +2618,6 @@ mod tests {
     }
 
     #[test]
-    fn gateway_database_pool_isolation_and_usage_capacity_follow_role() {
-        assert!(NodeRoleArg::All.isolates_background_database());
-        assert!(!NodeRoleArg::Frontdoor.isolates_background_database());
-        assert!(!NodeRoleArg::Background.isolates_background_database());
-
-        let database = test_database(20);
-        let isolated_background = test_database(4);
-        assert_eq!(
-            usage_database_config_for_role(
-                NodeRoleArg::All,
-                Some(&database),
-                Some(&isolated_background),
-            )
-            .expect("all-role usage database")
-            .max_connections,
-            4
-        );
-        for role in [NodeRoleArg::Frontdoor, NodeRoleArg::Background] {
-            assert_eq!(
-                usage_database_config_for_role(role, Some(&database), Some(&isolated_background),)
-                    .expect("single-pool role usage database")
-                    .max_connections,
-                20
-            );
-        }
-    }
-
-    #[test]
     fn gateway_usage_queue_payload_limit_preserves_cli_override_and_rejects_zero() {
         let command = <Args as clap::CommandFactory>::command();
         let argument = command
@@ -3019,13 +2654,9 @@ mod tests {
         args.usage.queue_workers = Some(72);
         let database = test_database(100);
 
-        let workers = args.usage.effective_queue_workers(
-            NodeRoleArg::All,
-            Some(10_000),
-            None,
-            Some(&database),
-            false,
-        );
+        let workers =
+            args.usage
+                .effective_queue_workers(Some(10_000), Some(&database), false);
 
         assert_eq!(workers, 64);
         assert_eq!(args.usage.to_config(workers, 64, Some(8)).worker_count, 64);
@@ -3037,8 +2668,6 @@ mod tests {
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             4,
-            NodeRoleArg::All,
-            None,
             None,
             Some(&database),
             false,
@@ -3053,15 +2682,10 @@ mod tests {
         args.usage.queue_workers = None;
         let database = test_database(40);
 
-        let workers = args.usage.effective_queue_workers(
-            args.node_role,
-            Some(1_024),
-            None,
-            Some(&database),
-            false,
-        );
+        let workers =
+            args.usage
+                .effective_queue_workers(Some(1_024), Some(&database), false);
         let max_workers = args.usage.effective_queue_worker_max_count(
-            args.node_role,
             Some(&database),
             workers,
             false,
@@ -3078,15 +2702,10 @@ mod tests {
         args.usage.queue_worker_max_count = Some(32);
         let database = test_database(200);
 
-        let workers = args.usage.effective_queue_workers(
-            args.node_role,
-            Some(1_024),
-            None,
-            Some(&database),
-            false,
-        );
+        let workers =
+            args.usage
+                .effective_queue_workers(Some(1_024), Some(&database), false);
         let max_workers = args.usage.effective_queue_worker_max_count(
-            args.node_role,
             Some(&database),
             workers,
             false,
@@ -3097,115 +2716,14 @@ mod tests {
     }
 
     #[test]
-    fn gateway_usage_worker_record_concurrency_defaults_to_pool_reserve_share() {
-        let args = test_args();
-        let database = test_database(64);
-
-        assert_eq!(
-            args.usage.effective_worker_record_concurrency_limit(
-                NodeRoleArg::All,
-                Some(&database),
-                false,
-            ),
-            Some(8)
-        );
-        assert_eq!(
-            args.usage.effective_worker_record_concurrency_limit(
-                NodeRoleArg::Background,
-                Some(&database),
-                false,
-            ),
-            Some(16)
-        );
-    }
-
-    #[test]
-    fn gateway_usage_isolated_database_uses_dedicated_capacity_once() {
-        let mut args = test_args();
-        args.usage.queue_workers = None;
-        let database = test_database(64);
-        let isolated_background = test_database(8);
-        let usage_database = usage_database_config_for_role(
-            NodeRoleArg::All,
-            Some(&database),
-            Some(&isolated_background),
-        )
-        .expect("isolated usage database");
-
-        let workers = args.usage.effective_queue_workers(
-            NodeRoleArg::All,
-            Some(5_000),
-            None,
-            Some(usage_database),
-            true,
-        );
-        let max_workers = args.usage.effective_queue_worker_max_count(
-            NodeRoleArg::All,
-            Some(usage_database),
-            workers,
-            true,
-        );
-
-        assert_eq!(usage_database.max_connections, 8);
-        assert_eq!(workers, 7);
-        assert_eq!(max_workers, 7);
-        assert_eq!(
-            args.usage.effective_worker_record_concurrency_limit(
-                NodeRoleArg::All,
-                Some(usage_database),
-                true,
-            ),
-            Some(7)
-        );
-    }
-
-    #[test]
     fn gateway_usage_worker_record_concurrency_can_be_explicitly_disabled() {
         let mut args = test_args();
         args.usage.worker_record_concurrency_limit = Some(0);
         let database = test_database(64);
 
         assert_eq!(
-            args.usage.effective_worker_record_concurrency_limit(
-                NodeRoleArg::All,
-                Some(&database),
-                false,
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn gateway_usage_queue_blocking_stream_lanes_only_expand_when_worker_can_spawn() {
-        let database = test_database(100);
-        let args = test_args();
-
-        assert_eq!(
             args.usage
-                .runtime_state_blocking_stream_lanes(NodeRoleArg::All, Some(&database), 10,),
-            Some(10)
-        );
-        assert_eq!(
-            args.usage.runtime_state_blocking_stream_lanes(
-                NodeRoleArg::Frontdoor,
-                Some(&database),
-                10,
-            ),
-            None
-        );
-        assert_eq!(
-            args.usage
-                .runtime_state_blocking_stream_lanes(NodeRoleArg::All, None, 10),
-            None
-        );
-
-        let mut disabled_queue_args = args;
-        disabled_queue_args.usage.queue_terminal_events = false;
-        disabled_queue_args.usage.queue_lifecycle_events = false;
-        assert_eq!(
-            disabled_queue_args
-                .usage
-                .runtime_state_blocking_stream_lanes(NodeRoleArg::All, Some(&database), 10,),
+                .effective_worker_record_concurrency_limit(Some(&database), false),
             None
         );
     }
@@ -3216,9 +2734,7 @@ mod tests {
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             8,
-            NodeRoleArg::All,
             Some(1_536),
-            None,
             Some(&database),
             false,
         );
@@ -3232,9 +2748,7 @@ mod tests {
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             8,
-            NodeRoleArg::All,
             Some(2_048),
-            Some(256),
             Some(&database),
             false,
         );
@@ -3248,30 +2762,12 @@ mod tests {
 
         let workers = automatic_usage_queue_workers_for_parallelism(
             16,
-            NodeRoleArg::All,
             Some(5_000),
-            None,
             Some(&database),
             false,
         );
 
         assert_eq!(workers, 5);
-    }
-
-    #[test]
-    fn gateway_usage_queue_workers_auto_gives_background_nodes_more_pool_budget() {
-        let database = test_database(20);
-
-        let workers = automatic_usage_queue_workers_for_parallelism(
-            16,
-            NodeRoleArg::Background,
-            Some(5_000),
-            None,
-            Some(&database),
-            false,
-        );
-
-        assert_eq!(workers, 10);
     }
 
     #[test]
@@ -3394,48 +2890,6 @@ mod tests {
             args.effective_runtime_backend(Some(&database), Some("redis://127.0.0.1/0")),
             RuntimeBackendArg::Redis
         );
-    }
-
-    #[test]
-    fn multi_node_rejects_memory_runtime_backend() {
-        let mut args = test_args();
-        args.deployment_topology = DeploymentTopologyArg::MultiNode;
-        args.node_role = NodeRoleArg::Frontdoor;
-        let database = PostgresPoolConfig {
-            database_url: "postgres://postgres:postgres@localhost/aether".to_string(),
-            ..PostgresPoolConfig::default()
-        };
-
-        let error = super::validate_deployment_topology(
-            &args,
-            Some(&database),
-            Some("redis://127.0.0.1/0"),
-            RuntimeBackendArg::Memory,
-        )
-        .expect_err("multi-node memory runtime should be rejected");
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
-        assert!(error.to_string().contains("AETHER_RUNTIME_BACKEND=memory"));
-    }
-
-    #[test]
-    fn multi_node_rejects_missing_redis_runtime_backend() {
-        let mut args = test_args();
-        args.deployment_topology = DeploymentTopologyArg::MultiNode;
-        args.node_role = NodeRoleArg::Frontdoor;
-        let database = PostgresPoolConfig {
-            database_url: "postgres://postgres:postgres@localhost/aether".to_string(),
-            ..PostgresPoolConfig::default()
-        };
-
-        let error = super::validate_deployment_topology(
-            &args,
-            Some(&database),
-            None,
-            RuntimeBackendArg::Redis,
-        )
-        .expect_err("multi-node should require redis");
-        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
-        assert!(error.to_string().contains("REDIS_URL"));
     }
 
     #[test]

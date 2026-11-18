@@ -1,8 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::PostgresPoolConfig;
 use aether_data_contracts::repository::usage::{
     UsageCounterHealthSnapshot, UsageCounterPendingHealthSnapshot,
 };
@@ -10,13 +8,12 @@ use serde_json::json;
 
 use super::{
     admin_usage_aggregate_import_error, database_bounded_auth_load_limit,
-    merge_usage_counter_health_snapshots, usage_counter_pending_health_metric_samples_with_timeout,
-    usage_queue_health_metric_samples_with_timeout, usage_runtime_metric_samples, AppState,
+    merge_usage_counter_health_snapshots, usage_runtime_metric_samples, AppState,
     MetricKind, MetricSample, METRIC_SNAPSHOT_TTL,
     USAGE_COUNTER_EXACT_HEALTH_METRICS_MAX_STALENESS, USAGE_COUNTER_EXACT_HEALTH_METRICS_TTL,
 };
 use crate::cache::SchedulerAffinityTarget;
-use crate::data::{GatewayDataConfig, GatewayDataState};
+use crate::data::GatewayDataState;
 
 #[test]
 fn usage_aggregate_import_invalid_input_is_projected_to_a_safe_client_message() {
@@ -485,23 +482,6 @@ async fn metric_snapshot_prewarm_failure_allows_immediate_admin_retry() {
 }
 
 #[tokio::test]
-async fn runtime_pool_can_disable_background_isolation() {
-    let config = GatewayDataConfig::from_database_config(PostgresPoolConfig {
-        database_url: "postgres://localhost/aether".to_string(),
-        min_connections: 4,
-        max_connections: 20,
-        ..Default::default()
-    });
-
-    let state = AppState::new()
-        .expect("app state should build")
-        .with_data_config_and_background_isolation(config, false)
-        .expect("data state should build");
-
-    assert!(!state.background_data_isolated);
-}
-
-#[tokio::test]
 async fn system_config_reads_use_short_lived_cache_until_app_invalidation() {
     let state = AppState::new()
         .expect("app state should build")
@@ -869,147 +849,13 @@ async fn stale_metric_samples_return_immediately_while_background_refreshes() {
     .expect("background metric refresh should replace the stale snapshot");
 }
 
-#[tokio::test]
-async fn metric_samples_fail_open_while_initial_snapshot_refresh_is_in_progress() {
-    let state = AppState::new().expect("app state should build");
-    let _refresh_guard = state.metric_snapshot_refresh.lock().await;
-
-    let samples = tokio::time::timeout(Duration::from_millis(100), state.metric_samples())
-        .await
-        .expect("contending scrape should not wait for the initial refresh");
-
-    assert_eq!(samples.len(), 1);
-    assert_eq!(samples[0].name, "service_up");
-    assert_eq!(samples[0].value, 1);
-    assert!(state.metric_snapshot.read().await.is_none());
-}
-
-#[tokio::test]
-async fn usage_queue_health_metrics_timeout_fails_open() {
-    let samples = tokio::time::timeout(
-        Duration::from_millis(100),
-        usage_queue_health_metric_samples_with_timeout(
-            Duration::from_millis(1),
-            std::future::pending::<Result<crate::usage::UsageQueueHealthSnapshot, ()>>(),
-        ),
-    )
-    .await
-    .expect("metrics timeout wrapper should remain bounded");
-
-    assert_eq!(samples.len(), 1);
-    assert_eq!(samples[0].name, "usage_queue_health_unavailable");
-    assert_eq!(samples[0].value, 1);
-}
-
-#[tokio::test]
-async fn usage_counter_health_metrics_timeout_fails_open() {
-    let samples = tokio::time::timeout(
-        Duration::from_millis(100),
-        usage_counter_pending_health_metric_samples_with_timeout(
-            Duration::from_millis(1),
-            std::future::pending::<Result<UsageCounterPendingHealthSnapshot, ()>>(),
-            1_000,
-        ),
-    )
-    .await
-    .expect("metrics timeout wrapper should remain bounded");
-
-    assert_eq!(samples.len(), 1);
-    assert_eq!(samples[0].name, "usage_counter_health_unavailable");
-    assert_eq!(samples[0].value, 1);
-}
-
 #[test]
-fn background_worker_state_uses_isolated_data_pool() {
-    let mut state = AppState::new().expect("app state should build");
-    let foreground = Arc::new(GatewayDataState::disabled());
-    let background = Arc::new(GatewayDataState::disabled());
-    state.replace_data_states(foreground, background.clone(), true);
-
-    let worker_state = state.background_worker_state();
-
-    assert!(Arc::ptr_eq(&worker_state.data, &state.background_data));
-    assert!(!Arc::ptr_eq(&worker_state.data, &state.data));
-    assert!(worker_state.data.has_usage_worker_queue());
-    assert!(state.background_data_isolated);
-}
-
-#[test]
-fn request_candidate_queue_writer_uses_background_data_only_when_isolated() {
-    let foreground_repository = Arc::new(InMemoryRequestCandidateRepository::default());
-    let background_repository = Arc::new(InMemoryRequestCandidateRepository::default());
-    let foreground = Arc::new(
-        GatewayDataState::with_request_candidate_repository_for_tests(foreground_repository),
-    );
-    let background = Arc::new(
-        GatewayDataState::with_request_candidate_repository_for_tests(background_repository),
-    );
-    let mut state = AppState::new().expect("app state should build");
-
-    state.replace_data_states(foreground, background, true);
-
-    let selected = state.request_candidate_queue_data_state();
-    assert!(Arc::ptr_eq(selected, &state.background_data));
-    assert!(!Arc::ptr_eq(selected, &state.data));
-    let selected_writer = selected
-        .request_candidate_writer()
-        .expect("isolated background writer should exist");
-    let background_writer = state
-        .background_data
-        .request_candidate_writer()
-        .expect("background writer should exist");
-    let foreground_writer = state
-        .data
-        .request_candidate_writer()
-        .expect("foreground writer should exist");
-    assert!(Arc::ptr_eq(&selected_writer, &background_writer));
-    assert!(!Arc::ptr_eq(&selected_writer, &foreground_writer));
-
-    let shared_repository = Arc::new(InMemoryRequestCandidateRepository::default());
-    state.replace_data_state(Arc::new(
-        GatewayDataState::with_request_candidate_repository_for_tests(shared_repository),
-    ));
-
-    let selected = state.request_candidate_queue_data_state();
-    assert!(Arc::ptr_eq(selected, &state.data));
-    assert!(!state.background_data_isolated);
-    let selected_writer = selected
-        .request_candidate_writer()
-        .expect("shared writer should exist");
-    let foreground_writer = state
-        .data
-        .request_candidate_writer()
-        .expect("shared foreground writer should exist");
-    assert!(Arc::ptr_eq(&selected_writer, &foreground_writer));
-}
-
-#[test]
-fn usage_lifecycle_writes_use_background_data_only_when_isolated() {
-    let foreground = Arc::new(GatewayDataState::disabled());
-    let background = Arc::new(GatewayDataState::disabled());
-    let mut state = AppState::new().expect("app state should build");
-
-    state.replace_data_states(foreground, background, true);
-
-    let selected = state.usage_lifecycle_data_state();
-    assert!(Arc::ptr_eq(selected, &state.background_data));
-    assert!(!Arc::ptr_eq(selected, &state.data));
-
-    state.replace_data_state(Arc::new(GatewayDataState::disabled()));
-
-    let selected = state.usage_lifecycle_data_state();
-    assert!(Arc::ptr_eq(selected, &state.data));
-    assert!(!state.background_data_isolated);
-}
-
-#[test]
-fn replacing_shared_data_state_preserves_background_usage_queue() {
+fn replacing_data_state_preserves_usage_queue() {
     let mut state = AppState::new().expect("app state should build");
 
     state.replace_data_state(Arc::new(GatewayDataState::disabled()));
 
     assert!(state.data.has_usage_worker_queue());
-    assert!(state.background_data.has_usage_worker_queue());
     assert!(state
         .background_worker_state()
         .data

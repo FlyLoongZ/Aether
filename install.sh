@@ -1726,18 +1726,6 @@ env_file_value() {
     ' "${file}" | tail -n1 | tr -d '[:space:]'
 }
 
-ensure_env_matches_requested_mode() {
-    local file="$1"
-    local mode="$2"
-    local topology
-    topology="$(env_file_value "${file}" "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY")"
-    topology="${topology:-single-node}"
-
-    if [[ "${mode}" == "single-node" && "${topology}" == "multi-node" ]]; then
-        die "existing env ${file} is multi-node; cluster mode is not available in this installer"
-    fi
-}
-
 validate_env_file() {
     local env_file="$1"
     local raw_line=""
@@ -1745,8 +1733,6 @@ validate_env_file() {
     local key=""
     local value=""
     local line_no=0
-    local topology="single-node"
-    local node_role="all"
     local runtime_backend=""
     local db_password=""
     local redis_password=""
@@ -1778,12 +1764,6 @@ validate_env_file() {
         value="$(strip_optional_quotes "${value}")"
 
         case "${key}" in
-            AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY)
-                topology="${value}"
-                ;;
-            AETHER_GATEWAY_NODE_ROLE)
-                node_role="${value}"
-                ;;
             AETHER_RUNTIME_BACKEND)
                 runtime_backend="$(printf '%s' "${value}" | tr '[:upper:]' '[:lower:]')"
                 ;;
@@ -1810,22 +1790,6 @@ validate_env_file() {
                 ;;
         esac
     done < "${env_file}"
-
-    case "${topology}" in
-        single-node)
-            ;;
-        *)
-            die "AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY must be single-node; cluster mode is not available in this installer"
-            ;;
-    esac
-
-    case "${node_role}" in
-        all)
-            ;;
-        *)
-            die "AETHER_GATEWAY_NODE_ROLE must be all; split roles are not enabled by this installer"
-            ;;
-    esac
 
     [[ -n "${jwt_secret_key}" ]] || die "JWT_SECRET_KEY is required"
     [[ -n "${encryption_key}" ]] || die "ENCRYPTION_KEY is required"
@@ -1864,13 +1828,11 @@ resolve_service_env_source() {
     local mode="$1"
     if [[ -n "${ENV_SOURCE}" ]]; then
         [[ -f "${ENV_SOURCE}" ]] || die "env file not found: ${ENV_SOURCE}"
-        ensure_env_matches_requested_mode "${ENV_SOURCE}" "${mode}"
         echo "${ENV_SOURCE}"
         return
     fi
 
     if [[ -f "${ENV_TARGET}" ]]; then
-        ensure_env_matches_requested_mode "${ENV_TARGET}" "${mode}"
         echo ""
         return
     fi

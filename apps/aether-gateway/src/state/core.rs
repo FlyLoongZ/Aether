@@ -18,7 +18,7 @@ use aether_runtime::{
     MetricLabel, MetricSample,
 };
 use aether_runtime_state::{
-    MemoryRuntimeStateConfig, RedisRuntimeDiagnostics, RuntimeQueueStore, RuntimeSemaphore,
+    MemoryRuntimeStateConfig, RedisRuntimeDiagnostics, RuntimeQueueStore,
     RuntimeState,
 };
 use aether_scheduler_core::PROVIDER_KEY_RPM_WINDOW_SECS;
@@ -94,7 +94,6 @@ const POSTGRES_OBSERVABILITY_METRICS_TIMEOUT: Duration = Duration::from_secs(2);
 const POSTGRES_ACTIVITY_GROUP_METRICS_TIMEOUT: Duration = Duration::from_secs(2);
 const POSTGRES_ACTIVITY_GROUP_METRICS_LIMIT: i64 = 8;
 const REDIS_RUNTIME_METRICS_TIMEOUT: Duration = Duration::from_secs(2);
-const DISTRIBUTED_CONCURRENCY_METRICS_TIMEOUT: Duration = Duration::from_millis(500);
 const USAGE_QUEUE_HEALTH_METRICS_TIMEOUT: Duration = Duration::from_secs(2);
 const USAGE_COUNTER_HEALTH_METRICS_TIMEOUT: Duration = Duration::from_secs(2);
 const USAGE_COUNTER_EXACT_HEALTH_METRICS_TIMEOUT: Duration = Duration::from_secs(10);
@@ -253,27 +252,11 @@ impl AppState {
 
     #[cfg(any(test, feature = "testkit"))]
     pub(crate) fn replace_data_state(&mut self, data: Arc<GatewayDataState>) {
-        self.background_data = Arc::new(
+        self.data = Arc::new(
             (*data)
                 .clone()
                 .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
         );
-        self.background_data_isolated = false;
-        self.replace_foreground_data_state(data);
-    }
-
-    fn replace_data_states(
-        &mut self,
-        data: Arc<GatewayDataState>,
-        background_data: Arc<GatewayDataState>,
-        background_data_isolated: bool,
-    ) {
-        self.background_data = Arc::new(
-            (*background_data)
-                .clone()
-                .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
-        );
-        self.background_data_isolated = background_data_isolated;
         self.replace_foreground_data_state(data);
     }
 
@@ -343,8 +326,6 @@ impl AppState {
             execution_runtime_sync_override: None,
             data: Arc::clone(&data),
             instance_id: Arc::from(crate::state::resolve_gateway_instance_id()),
-            background_data: Arc::clone(&data),
-            background_data_isolated: false,
             runtime_state: runtime_state.clone(),
             usage_runtime: Arc::new(usage::UsageRuntime::disabled()),
             body_file_store: None,
@@ -374,8 +355,6 @@ impl AppState {
                     frontdoor_runtime_guards.internal_gate_queue_budget,
                 ),
             ),
-            distributed_request_gate: None,
-            distributed_websocket_connection_gate: None,
             client,
             auth_context_cache: Arc::new(AuthContextCache::default()),
             auth_snapshot_cache: Arc::new(AuthSnapshotCache::default()),
@@ -515,37 +494,24 @@ impl AppState {
     }
 
     pub fn with_data_config(
-        self,
-        config: GatewayDataConfig,
-    ) -> Result<Self, aether_data::DataLayerError> {
-        self.with_data_config_and_background_isolation(config, true)
-    }
-
-    pub fn with_data_config_and_background_isolation(
         mut self,
         config: GatewayDataConfig,
-        isolate_background: bool,
     ) -> Result<Self, aether_data::DataLayerError> {
-        let (foreground_config, background_config) = if isolate_background {
-            config.split_runtime_pools()
-        } else {
-            (config, None)
-        };
         let auth_load_limit = database_bounded_auth_load_limit(
             self.frontdoor_runtime_guards.auth_snapshot_load_gate_limit,
-            foreground_config
+            config
                 .database()
                 .map(|database| database.max_connections),
         );
         self.auth_snapshot_load_gate = auth_load_limit
             .map(|limit| Arc::new(ConcurrencyGate::new("gateway_auth_snapshot_load", limit)));
-        let background_data_isolated = background_config.is_some();
-        let foreground_data = Arc::new(GatewayDataState::from_config(foreground_config)?);
-        let background_data = match background_config {
-            Some(config) => Arc::new(GatewayDataState::from_config(config)?),
-            None => foreground_data.clone(),
-        };
-        self.replace_data_states(foreground_data, background_data, background_data_isolated);
+        let data = Arc::new(GatewayDataState::from_config(config)?);
+        self.data = Arc::new(
+            (*data)
+                .clone()
+                .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
+        );
+        self.replace_foreground_data_state(data);
         Ok(self)
     }
 
@@ -600,9 +566,6 @@ impl AppState {
 
     pub async fn warm_database_pools(&self) -> Result<(), aether_data::DataLayerError> {
         self.data.warm_database_pool().await?;
-        if self.background_data_isolated {
-            self.background_data.warm_database_pool().await?;
-        }
         Ok(())
     }
 
@@ -661,8 +624,8 @@ impl AppState {
                 .clone()
                 .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
         );
-        self.background_data = Arc::new(
-            (*self.background_data)
+        self.data = Arc::new(
+            (*self.data)
                 .clone()
                 .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
         );
@@ -690,32 +653,14 @@ impl AppState {
     }
 
     fn request_candidate_queue_data_state(&self) -> &Arc<GatewayDataState> {
-        if self.background_data_isolated {
-            &self.background_data
-        } else {
-            &self.data
-        }
+        &self.data
     }
 
     /// Route lifecycle writes away from foreground traffic when an isolated
     /// background pool is configured. With shared pools this returns the same
     /// state as the foreground path, preserving existing behavior.
     pub(crate) fn usage_lifecycle_data_state(&self) -> &Arc<GatewayDataState> {
-        if self.background_data_isolated {
-            &self.background_data
-        } else {
-            &self.data
-        }
-    }
-
-    pub fn with_distributed_request_concurrency_gate(mut self, gate: RuntimeSemaphore) -> Self {
-        self.distributed_request_gate = Some(Arc::new(gate));
-        self
-    }
-
-    pub fn with_distributed_websocket_connection_gate(mut self, gate: RuntimeSemaphore) -> Self {
-        self.distributed_websocket_connection_gate = Some(Arc::new(gate));
-        self
+        &self.data
     }
 
     pub fn with_frontdoor_cors_config(mut self, config: FrontdoorCorsConfig) -> Self {
@@ -966,7 +911,7 @@ impl AppState {
         // clear it together with the request-level auth caches so a key or
         // wallet mutation is visible immediately when refresh-on-hit is off.
         self.data.clear_auth_api_key_read_cache();
-        self.background_data.clear_auth_api_key_read_cache();
+        self.data.clear_auth_api_key_read_cache();
         self.auth_context_cache.invalidate_all();
         self.auth_snapshot_cache.clear();
         self.user_model_capability_settings_cache.clear();
@@ -1327,7 +1272,7 @@ impl AppState {
     ) -> Result<(), aether_data::DataLayerError> {
         match tokio::time::timeout(
             USAGE_COUNTER_EXACT_HEALTH_METRICS_TIMEOUT,
-            self.background_data.read_usage_counter_health(),
+            self.data.read_usage_counter_health(),
         )
         .await
         {
@@ -1416,7 +1361,7 @@ impl AppState {
         })?;
         let pending = tokio::time::timeout(
             USAGE_COUNTER_HEALTH_METRICS_TIMEOUT,
-            self.background_data.read_usage_counter_pending_health(),
+            self.data.read_usage_counter_pending_health(),
         )
         .await
         .map_err(|_| {
@@ -1512,63 +1457,10 @@ impl AppState {
         if let Some(summary) = self.data.database_pool_summary() {
             samples.extend(database_pool_metric_samples(&summary));
         }
-        samples.push(MetricSample::new(
-            "background_database_pool_isolated",
-            "Whether background workers use a database pool isolated from foreground traffic.",
-            MetricKind::Gauge,
-            u64::from(self.background_data_isolated),
-        ));
-        if self.background_data_isolated {
-            if let Some(summary) = self.background_data.database_pool_summary() {
-                samples.extend(background_database_pool_metric_samples(&summary));
-            }
-        }
-        let distributed_request_metrics = async {
-            let Some(gate) = self.distributed_request_gate.as_ref() else {
-                return Vec::new();
-            };
-            match tokio::time::timeout(DISTRIBUTED_CONCURRENCY_METRICS_TIMEOUT, gate.snapshot())
-                .await
-            {
-                Ok(Ok(snapshot)) => snapshot.to_metric_samples("gateway_requests_distributed"),
-                Ok(Err(_)) | Err(_) => vec![MetricSample::new(
-                    "concurrency_unavailable",
-                    "Whether the distributed concurrency gate is currently unavailable.",
-                    MetricKind::Gauge,
-                    1,
-                )
-                .with_labels(vec![MetricLabel::new(
-                    "gate",
-                    "gateway_requests_distributed",
-                )])],
-            }
-        };
-        let distributed_websocket_connection_metrics = async {
-            let Some(gate) = self.distributed_websocket_connection_gate.as_ref() else {
-                return Vec::new();
-            };
-            match tokio::time::timeout(DISTRIBUTED_CONCURRENCY_METRICS_TIMEOUT, gate.snapshot())
-                .await
-            {
-                Ok(Ok(snapshot)) => {
-                    snapshot.to_metric_samples("gateway_websocket_connections_distributed")
-                }
-                Ok(Err(_)) | Err(_) => vec![MetricSample::new(
-                    "concurrency_unavailable",
-                    "Whether the distributed concurrency gate is currently unavailable.",
-                    MetricKind::Gauge,
-                    1,
-                )
-                .with_labels(vec![MetricLabel::new(
-                    "gate",
-                    "gateway_websocket_connections_distributed",
-                )])],
-            }
-        };
         let postgres_observability_metrics = async {
             match tokio::time::timeout(
                 POSTGRES_OBSERVABILITY_METRICS_TIMEOUT,
-                self.background_data.postgres_observability_snapshot(),
+                self.data.postgres_observability_snapshot(),
             )
             .await
             {
@@ -1579,7 +1471,7 @@ impl AppState {
         let postgres_activity_group_metrics = async {
             match tokio::time::timeout(
                 POSTGRES_ACTIVITY_GROUP_METRICS_TIMEOUT,
-                self.background_data
+                self.data
                     .postgres_activity_groups(POSTGRES_ACTIVITY_GROUP_METRICS_LIMIT),
             )
             .await
@@ -1604,33 +1496,27 @@ impl AppState {
         let usage_queue_health_metrics = usage_queue_health_metric_samples_with_timeout(
             USAGE_QUEUE_HEALTH_METRICS_TIMEOUT,
             self.usage_runtime
-                .queue_health_snapshot(self.background_data.as_ref()),
+                .queue_health_snapshot(self.data.as_ref()),
         );
         let usage_counter_pending_health_metrics =
             usage_counter_pending_health_metric_samples_with_timeout(
                 USAGE_COUNTER_HEALTH_METRICS_TIMEOUT,
-                self.background_data.read_usage_counter_pending_health(),
+                self.data.read_usage_counter_pending_health(),
                 crate::clock::current_unix_secs(),
             );
         let (
-            distributed_request_metrics,
-            distributed_websocket_connection_metrics,
             postgres_observability_metrics,
             postgres_activity_group_metrics,
             redis_runtime_metrics,
             usage_queue_health_metrics,
             usage_counter_pending_health_metrics,
         ) = tokio::join!(
-            distributed_request_metrics,
-            distributed_websocket_connection_metrics,
             postgres_observability_metrics,
             postgres_activity_group_metrics,
             redis_runtime_metrics,
             usage_queue_health_metrics,
             usage_counter_pending_health_metrics,
         );
-        samples.extend(distributed_request_metrics);
-        samples.extend(distributed_websocket_connection_metrics);
         samples.extend(postgres_observability_metrics);
         samples.extend(postgres_activity_group_metrics);
         samples.extend(redis_runtime_metrics);
@@ -1773,15 +1659,7 @@ impl AppState {
             .map(|gate| gate.try_acquire())
             .transpose()
             .map_err(RequestAdmissionError::Local)?;
-        let distributed = match self.distributed_request_gate.as_ref() {
-            Some(gate) => Some(
-                gate.try_acquire()
-                    .await
-                    .map_err(RequestAdmissionError::Distributed)?,
-            ),
-            None => None,
-        };
-        Ok(AdmissionPermit::from_parts(local, distributed))
+        Ok(AdmissionPermit::from_parts::<aether_runtime_state::RuntimeSemaphorePermit>(local, None))
     }
 
     pub(crate) async fn try_acquire_websocket_connection_permit(
@@ -1793,15 +1671,7 @@ impl AppState {
             .map(|gate| gate.try_acquire())
             .transpose()
             .map_err(RequestAdmissionError::Local)?;
-        let distributed = match self.distributed_websocket_connection_gate.as_ref() {
-            Some(gate) => Some(
-                gate.try_acquire()
-                    .await
-                    .map_err(RequestAdmissionError::Distributed)?,
-            ),
-            None => None,
-        };
-        Ok(AdmissionPermit::from_parts(local, distributed))
+        Ok(AdmissionPermit::from_parts::<aether_runtime_state::RuntimeSemaphorePermit>(local, None))
     }
 
     pub fn has_auth_api_key_data_reader(&self) -> bool {
@@ -2002,7 +1872,7 @@ impl AppState {
 
     fn background_worker_state(&self) -> Self {
         let mut state = self.clone();
-        state.data = self.background_data.clone();
+        state.data = self.data.clone();
         state
     }
 
@@ -2449,47 +2319,6 @@ fn database_pool_metric_samples(summary: &aether_data::DatabasePoolSummary) -> V
     ]
 }
 
-fn background_database_pool_metric_samples(
-    summary: &aether_data::DatabasePoolSummary,
-) -> Vec<MetricSample> {
-    let labels = vec![MetricLabel::new("driver", "postgres")];
-    let usage_basis_points = if summary.usage_rate.is_finite() && summary.usage_rate > 0.0 {
-        (summary.usage_rate * 100.0).round() as u64
-    } else {
-        0
-    };
-
-    vec![
-        MetricSample::new(
-            "background_database_pool_checked_out_connections",
-            "Number of database connections checked out from the isolated background pool.",
-            MetricKind::Gauge,
-            summary.checked_out as u64,
-        )
-        .with_labels(labels.clone()),
-        MetricSample::new(
-            "background_database_pool_idle_connections",
-            "Number of idle database connections in the isolated background pool.",
-            MetricKind::Gauge,
-            summary.idle as u64,
-        )
-        .with_labels(labels.clone()),
-        MetricSample::new(
-            "background_database_pool_max_connections",
-            "Configured maximum connections for the isolated background database pool.",
-            MetricKind::Gauge,
-            summary.max_connections as u64,
-        )
-        .with_labels(labels.clone()),
-        MetricSample::new(
-            "background_database_pool_usage_basis_points",
-            "Background database pool usage rate in basis points, where 10000 means 100 percent.",
-            MetricKind::Gauge,
-            usage_basis_points,
-        )
-        .with_labels(labels),
-    ]
-}
 
 fn postgres_observability_metric_samples(
     snapshot: Option<&aether_data::DatabasePostgresObservabilitySnapshot>,

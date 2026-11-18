@@ -398,19 +398,10 @@ fn websocket_admission_error_response(
         RequestAdmissionError::Local(aether_runtime::ConcurrencyError::Saturated {
             gate,
             limit,
-        })
-        | RequestAdmissionError::Distributed(
-            aether_runtime_state::RuntimeSemaphoreError::Saturated { gate, limit },
-        )
-        | RequestAdmissionError::Distributed(
-            aether_runtime_state::RuntimeSemaphoreError::Unavailable { gate, limit, .. },
-        ) => build_local_overloaded_response(trace_id, Some(decision), request_path, gate, limit),
+        }) => build_local_overloaded_response(trace_id, Some(decision), request_path, gate, limit),
         RequestAdmissionError::Local(aether_runtime::ConcurrencyError::Closed { gate }) => Err(
             GatewayError::Internal(format!("gateway concurrency gate {gate} is closed")),
         ),
-        RequestAdmissionError::Distributed(
-            aether_runtime_state::RuntimeSemaphoreError::InvalidConfiguration(message),
-        ) => Err(GatewayError::Internal(message)),
     }
 }
 

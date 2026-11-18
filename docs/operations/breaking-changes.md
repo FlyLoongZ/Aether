@@ -18,6 +18,44 @@ a default.
 - `update.sh` only discovers `docker-compose.yml`; the former
   `docker-compose.single-node.yml` fallback is removed.
 
+
+## Deployment and control plane
+
+- The gateway runs in single-node mode only. `AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY`,
+  `AETHER_GATEWAY_NODE_ROLE`, split frontdoor/background roles, isolated
+  background database pools, and distributed request/WebSocket gates are
+  removed. `AETHER_GATEWAY_BACKGROUND_DB_MAX_CONNECTIONS` and
+  `AETHER_GATEWAY_DISTRIBUTED_*` are no longer read.
+- The `/api/internal/gateway/*` control plane and its
+  `AETHER_INTERNAL_GATEWAY_AUTH_SECRET` HMAC secret are removed. Management and
+  operational routes remain on their public/admin endpoints.
+- The standalone execution-runtime server, its Unix/TCP serving entry points,
+  and the `execution_runtime_harness` example are removed. Execution runs
+  in-process.
+- The macOS/launchd installer path is removed. `install.sh` supports Linux only;
+  macOS users must use Docker or build from source.
+
+## Schema maintenance
+
+- The logical-schema compiler, `crates/aether-data/schema`,
+  `runtime/schema/logical`, `runtime/schema/generated`,
+  `runtime/schema/overrides`, and `compose_schema.sh` are removed.
+  Baseline and bootstrap SQL are maintained directly as ordered fragments under
+  `runtime/schema/drivers/postgres` and `runtime/schema/bootstrap/postgres`.
+
+## Management tokens
+
+- Tokens whose `permissions` value is SQL `NULL` are rejected during
+  authentication. Legacy tokens must be reissued with explicit permissions;
+  the former frozen full-permission fallback is removed.
+
+## Request candidate traces
+
+- Legacy candidate trace values `tunnel`, `tunnel_affinity`, `local_tunnel`,
+  `control_execute_sync`, `control_execute_stream`, and
+  `tunnel_affinity_forward` are no longer retained or displayed. The legacy
+  `api_key_concurrency_limit_reached` skip reason is also removed.
+
 ## Video tasks
 
 - The `python-sync-report` truth-source mode and

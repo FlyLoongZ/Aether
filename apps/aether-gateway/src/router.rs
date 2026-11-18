@@ -22,7 +22,6 @@ use aether_gateway_frontdoor::{
     HttpConnectionBudget,
 };
 use aether_runtime::{prometheus_response, ConcurrencyError};
-use aether_runtime_state::RuntimeSemaphoreError;
 
 use super::{api, handlers::proxy::proxy_request, middleware, state::AppState};
 
@@ -156,7 +155,6 @@ pub(crate) async fn metrics(
 #[derive(Debug)]
 pub(crate) enum RequestAdmissionError {
     Local(ConcurrencyError),
-    Distributed(RuntimeSemaphoreError),
 }
 
 pub async fn serve_tcp(bind: &str) -> Result<(), Box<dyn std::error::Error>> {

@@ -10,7 +10,7 @@ use aether_data_contracts::repository::quota::StoredProviderQuotaSnapshot;
 use aether_data_contracts::repository::usage::UsageCounterHealthSnapshot;
 use aether_gateway_frontdoor::HttpConnectionBudget;
 use aether_runtime::ConcurrencyGate;
-use aether_runtime_state::{RuntimeSemaphore, RuntimeState};
+use aether_runtime_state::RuntimeState;
 use dashmap::DashMap;
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock, Semaphore};
 
@@ -380,8 +380,6 @@ pub struct AppState {
     pub(crate) execution_runtime_sync_override: Option<TestExecutionRuntimeSyncOverride>,
     pub(crate) data: Arc<GatewayDataState>,
     pub(crate) instance_id: Arc<str>,
-    pub(crate) background_data: Arc<GatewayDataState>,
-    pub(crate) background_data_isolated: bool,
     pub(crate) runtime_state: Arc<RuntimeState>,
     pub(crate) usage_runtime: Arc<usage::UsageRuntime>,
     pub(crate) body_file_store: Option<Arc<aether_body_store::BodyFileStore>>,
@@ -398,8 +396,6 @@ pub struct AppState {
     pub(crate) candidate_planning_gate: Option<Arc<ConcurrencyGate>>,
     pub(crate) upstream_execution_gate: Option<Arc<ConcurrencyGate>>,
     pub(crate) upstream_target_admission: Arc<crate::upstream_admission::UpstreamTargetAdmission>,
-    pub(crate) distributed_request_gate: Option<Arc<RuntimeSemaphore>>,
-    pub(crate) distributed_websocket_connection_gate: Option<Arc<RuntimeSemaphore>>,
     pub(crate) client: reqwest::Client,
     pub(crate) auth_context_cache: Arc<AuthContextCache>,
     pub(crate) auth_snapshot_cache: Arc<AuthSnapshotCache>,
