@@ -25,8 +25,8 @@ WITH daily AS (
     CASE WHEN COALESCE(u.request_metadata::jsonb->'usage_pricing_available','true'::jsonb)<>'false'::jsonb
       AND (s.billing_actual_total_cost_usd IS NOT NULL OR COALESCE(s.billing_status,u.billing_status)='settled')
       THEN public.usage_customer_billable_amount(u.request_metadata::jsonb,
-        COALESCE(s.billing_total_cost_usd::numeric,u.total_cost_usd::numeric),
-        COALESCE(s.billing_actual_total_cost_usd::numeric,u.actual_total_cost_usd::numeric)) END
+        COALESCE(s.billing_total_cost_usd::numeric, 0),
+        COALESCE(s.billing_actual_total_cost_usd::numeric, 0)) END
   FROM usage_billing_facts b
   JOIN usage u USING (request_id)
   LEFT JOIN usage_settlement_snapshots s USING (request_id)

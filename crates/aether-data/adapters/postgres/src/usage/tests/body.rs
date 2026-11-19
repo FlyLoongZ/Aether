@@ -97,7 +97,7 @@ fn usage_sql_uses_json_null_placeholders_for_usage_payload_columns() {
         assert!(sql.contains("AS client_family"));
         assert!(sql.contains("request_metadata->'client_session_affinity'->>'client_family'"));
         assert!(sql.contains("request_metadata->>'client_family'"));
-        assert!(sql.contains("CAST(\"usage\".input_tokens AS INTEGER) AS input_tokens"));
+        assert!(sql.contains("CAST(COALESCE(billing.input_tokens, 0) AS INTEGER) AS input_tokens"));
         assert!(sql.contains(
             "usage_settlement_snapshots.billing_input_tokens AS settlement_billing_input_tokens"
         ));
@@ -163,7 +163,7 @@ fn usage_sql_websocket_filter_compares_json_metadata_without_boolean_casts() {
 #[test]
 fn usage_sql_casts_json_payload_bind_parameters_explicitly() {
     assert!(
-        super::super::UPSERT_SQL.contains("$40::jsonb"),
+        super::super::UPSERT_SQL.contains("$29::jsonb"),
         "request metadata must be bound as jsonb"
     );
 }
@@ -204,7 +204,7 @@ fn usage_sql_capture_guard_covers_metadata_and_the_capture_tables() {
     // Bodies are not columns of `usage` any more: the accounting row only guards
     // its metadata, and the capture tables own the bytes.
     assert!(super::super::UPSERT_SQL
-        .contains("request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $43"));
+        .contains("request_metadata = CASE WHEN \"usage\".billing_status = 'pending' AND $32"));
     for body in [
         "request_body",
         "provider_request_body",

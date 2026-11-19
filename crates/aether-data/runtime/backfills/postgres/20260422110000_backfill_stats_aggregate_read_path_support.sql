@@ -57,7 +57,7 @@ WITH raw AS (
                  OR usage.error_message IS NOT NULL THEN 1
             ELSE 0
         END::BIGINT AS error_flag
-    FROM usage
+    FROM usage_billing_facts AS usage
 ),
 derived AS (
     SELECT
@@ -1059,7 +1059,7 @@ WITH raw AS (
         GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::BIGINT AS cache_read_tokens_safe,
         COALESCE(usage.total_cost_usd, 0)::DOUBLE PRECISION AS total_cost_safe,
         COALESCE(usage.actual_total_cost_usd, 0)::DOUBLE PRECISION AS actual_total_cost_safe
-    FROM usage
+    FROM usage_billing_facts AS usage
 ),
 derived AS (
     SELECT
@@ -1395,7 +1395,7 @@ FROM (
         usage.total_tokens,
         usage.total_cost_usd,
         usage.response_time_ms
-    FROM usage
+    FROM usage_billing_facts AS usage
     WHERE usage.status NOT IN ('pending', 'streaming')
       AND usage.provider_name IS NOT NULL
       AND usage.provider_name <> ''
@@ -1481,7 +1481,7 @@ FROM (
         usage.total_tokens,
         usage.total_cost_usd,
         usage.response_time_ms
-    FROM usage
+    FROM usage_billing_facts AS usage
     WHERE usage.user_id IS NOT NULL
       AND usage.status NOT IN ('pending', 'streaming')
       AND usage.provider_name IS NOT NULL
@@ -1515,7 +1515,7 @@ WITH aggregated AS (
             AS cache_creation_ephemeral_5m_tokens,
         COALESCE(SUM(GREATEST(COALESCE(usage.cache_creation_input_tokens_1h, 0), 0)), 0)::BIGINT
             AS cache_creation_ephemeral_1h_tokens
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_daily_ephemeral_cache_context AS context
     WHERE usage.created_at < context.current_day_utc
       AND usage.status NOT IN ('pending', 'streaming')
@@ -1544,7 +1544,7 @@ WITH aggregated AS (
             AS cache_creation_ephemeral_5m_tokens,
         COALESCE(SUM(GREATEST(COALESCE(usage.cache_creation_input_tokens_1h, 0), 0)), 0)::BIGINT
             AS cache_creation_ephemeral_1h_tokens
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_daily_ephemeral_cache_context AS context
     WHERE usage.user_id IS NOT NULL
       AND usage.created_at < context.current_day_utc
@@ -1579,7 +1579,7 @@ WITH aggregated AS (
         COUNT(*) FILTER (
             WHERE GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0) > 0
         )::BIGINT AS cache_hit_requests
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_cache_hit_request_context AS context
     WHERE usage.created_at < context.current_day_utc
     GROUP BY day_utc
@@ -1605,7 +1605,7 @@ WITH aggregated AS (
         COUNT(*) FILTER (
             WHERE GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0) > 0
         )::BIGINT AS cache_hit_requests
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_cache_hit_request_context AS context
     WHERE usage.created_at < context.current_hour_utc
     GROUP BY hour_utc
@@ -1724,7 +1724,7 @@ WITH aggregated AS (
             AS completed_cache_creation_cost,
         COALESCE(SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)), 0)
             AS completed_cache_read_cost
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_completed_cache_affinity_context AS context
     WHERE usage.created_at < context.current_day_utc
       AND usage.status = 'completed'
@@ -1845,7 +1845,7 @@ WITH aggregated AS (
             AS completed_cache_creation_cost,
         COALESCE(SUM(COALESCE(CAST(usage.cache_read_cost_usd AS DOUBLE PRECISION), 0)), 0)
             AS completed_cache_read_cost
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_completed_cache_affinity_context AS context
     WHERE usage.created_at < context.current_hour_utc
       AND usage.status = 'completed'
@@ -1908,7 +1908,7 @@ WITH aggregated AS (
             WHERE usage_settlement_snapshots.request_id = usage.request_id
         )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
     WHERE usage.created_at < context.current_day_utc
       AND usage.billing_status = 'settled'
@@ -1967,7 +1967,7 @@ WITH aggregated AS (
             WHERE usage_settlement_snapshots.request_id = usage.request_id
         )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
     WHERE usage.created_at < context.current_hour_utc
       AND usage.billing_status = 'settled'
@@ -2027,7 +2027,7 @@ WITH aggregated AS (
             WHERE usage_settlement_snapshots.request_id = usage.request_id
         )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
     WHERE usage.created_at < context.current_day_utc
       AND usage.user_id IS NOT NULL
@@ -2089,7 +2089,7 @@ WITH aggregated AS (
             WHERE usage_settlement_snapshots.request_id = usage.request_id
         )) AS BIGINT))
             AS settled_last_finalized_at_unix_secs
-    FROM usage
+    FROM usage_billing_facts AS usage
     CROSS JOIN tmp_stats_settled_cost_context AS context
     WHERE usage.created_at < context.current_hour_utc
       AND usage.user_id IS NOT NULL
@@ -2132,7 +2132,7 @@ SELECT
         0
     ) * GREATEST(COALESCE(usage.cache_read_input_tokens, 0), 0)::DOUBLE PRECISION / 1000000.0
         AS estimated_full_cost
-FROM usage
+FROM usage_billing_facts AS usage
 LEFT JOIN usage_settlement_snapshots
   ON usage_settlement_snapshots.request_id = usage.request_id
 CROSS JOIN tmp_stats_cost_savings_context AS context

@@ -112,13 +112,23 @@ a default.
   `input_context_tokens`, the unused split cost/price fields, and
   `created_at_unix_ms`), the legacy `usage` HTTP header mirrors, and the
   settlement wallet/rate/price/timestamp mirrors are dropped from
-  `public.usage`. Fresh databases never create them; upgraded databases drop
-  them in the usage retirement backfills.
+  `public.usage`. Fresh databases drop them while replaying the retirement
+  migrations; upgraded databases drop them in the same retirement backfills.
 - `usage_billing_facts` now reads wallet, rate, price, and finalized timestamp
   fields only from `usage_settlement_snapshots`. `billing_status` remains on
   `usage` as the write-arbitration state rather than a settlement mirror.
-- The billing token/cost mirrors and `username` / `api_key_name` remain in this
-  release; the display columns are historical snapshots.
+- The deprecated billing mirrors (`input_tokens`, `output_tokens`,
+  `total_tokens`, the cache token variants, `input_cost_usd`, `output_cost_usd`,
+  `cache_creation_cost_usd`, `cache_read_cost_usd`, `total_cost_usd`, and
+  `actual_total_cost_usd`) are dropped from `public.usage`. Token and cost
+  values are read only from `usage_settlement_snapshots`. Two kinds of
+  historical row therefore display zero or empty values after the upgrade:
+  rows with **no** settlement snapshot, and rows whose snapshot exists but kept
+  `billing_*` columns `NULL` (early settlements only wrote the wallet fields).
+  The drop runs before the values could be copied into the snapshot, so both
+  cases are irreversible; the mirror columns were the last copy.
+- `username` and `api_key_name` remain as historical display snapshots so
+  audit rows stay readable after users or API keys are deleted.
 
 ## Format conversion
 

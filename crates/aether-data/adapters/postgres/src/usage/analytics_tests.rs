@@ -41,10 +41,12 @@ async fn live_overview_user_finance_uses_credited_period_and_full_roster() {
                 .bind(id).bind(balance).bind(gift).bind(at).execute(&pool).await.unwrap();
         }
         for (id, user, cost) in [("a1", "alice", 1.0), ("a2", "alice", 2.0), ("b", "bob", 2.0), ("d", "deleted", 999.0)] {
-            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,status,billing_status,total_tokens,total_cost_usd,actual_total_cost_usd,created_at,request_metadata) VALUES($1,$1,$2,'model','provider','completed','settled',100,$3,$3,$4,$5)")
-                .bind(id).bind(user).bind(cost).bind(at)
+            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,status,billing_status,created_at,request_metadata) VALUES($1,$1,$2,'model','provider','completed','settled',$3,$4)")
+                .bind(id).bind(user).bind(at)
                 .bind(serde_json::json!({"analytics_attribution":{"is_standalone":false}}))
                 .execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',100,$2,$2)")
+                .bind(id).bind(cost).execute(&pool).await.unwrap();
         }
         // Old creation timestamps must not hide credits received in this period.
         // Gift orders, plans, pending orders and boundary credits stay distinct.
@@ -227,8 +229,12 @@ async fn live_overview_dashboard_all_history_and_charts_share_canonical_metrics(
             ("future",now+chrono::Duration::days(1),"future-model","future-provider","completed",Some(999.0)),
         ] {
             let metadata=serde_json::json!({"analytics_attribution":{"is_standalone":false,"record_kind":if id=="parent" {"session"}else{"request"}},"usage_pricing_available":money.is_some(),"analytics_measurement":{"source":"reported"}});
-            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_id,provider_name,status,billing_status,input_tokens,output_tokens,total_tokens,actual_total_cost_usd,total_cost_usd,created_at,request_metadata) VALUES($1,$1,'user',$2,$3,$3,$4,$5,100,20,120,$6,$6,$7,$8)")
-                .bind(id).bind(model).bind(provider).bind(status).bind(if money.is_some(){"settled"}else{"pending"}).bind(money.unwrap_or(0.0)).bind(at).bind(metadata).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_id,provider_name,status,billing_status,created_at,request_metadata) VALUES($1,$1,'user',$2,$3,$3,$4,$5,$6,$7)")
+                .bind(id).bind(model).bind(provider).bind(status).bind(if money.is_some(){"settled"}else{"pending"}).bind(at).bind(metadata).execute(&pool).await.unwrap();
+            if let Some(cost) = money {
+                sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',100,20,$2,$2)")
+                    .bind(id).bind(cost).execute(&pool).await.unwrap();
+            }
         }
         let snapshot=repo.query_dashboard_analytics(&query).await.unwrap();
         assert_eq!(snapshot.today.summary.request_count,2);
@@ -237,7 +243,7 @@ async fn live_overview_dashboard_all_history_and_charts_share_canonical_metrics(
         assert_eq!(snapshot.today.summary.billable_amount.as_deref(),Some("0.50000000"));
         assert_eq!(snapshot.today.summary.pricing_available_count,1);
         assert_eq!(snapshot.total.summary.request_count,4);
-        assert_eq!(snapshot.total.summary.total_tokens,480);
+        assert_eq!(snapshot.total.summary.total_tokens,360);
         assert_eq!(snapshot.total.summary.billable_amount.as_deref(),Some("2.70000000"));
         assert_eq!(snapshot.total.summary.enabled_users,1);
         assert_eq!(snapshot.total_from,Some(old.to_rfc3339()));
@@ -286,7 +292,8 @@ async fn live_overview_dashboard_all_history_and_charts_share_canonical_metrics(
         sqlx::query("INSERT INTO stats_daily(id,date,total_requests) VALUES('legacy-epoch',$1,1)").bind((old-chrono::Duration::days(1)).timestamp()).execute(&pool).await.unwrap();
         assert_eq!(repo.query_dashboard_analytics(&query).await.unwrap().history_complete,Some(false));
         for at in ["2026-09-05T12:00:00Z","2026-09-06T12:00:00Z","2026-09-07T12:00:00Z"] {
-            sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,total_cost_usd,actual_total_cost_usd,created_at) VALUES($1,$1,'santiago-model','santiago','completed','settled',0.1,0.1,$2)").bind(at).bind(chrono::DateTime::parse_from_rfc3339(at).unwrap()).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at) VALUES($1,$1,'santiago-model','santiago','completed','settled',$2)").bind(at).bind(chrono::DateTime::parse_from_rfc3339(at).unwrap()).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',0.1,0.1)").bind(at).execute(&pool).await.unwrap();
         }
         let santiago=repo.query_usage_analytics(&UsageAnalyticsQuery{from_unix_ms:chrono::DateTime::parse_from_rfc3339("2026-09-05T04:00:00Z").unwrap().timestamp_millis()as u64,to_unix_ms:chrono::DateTime::parse_from_rfc3339("2026-09-08T03:00:00Z").unwrap().timestamp_millis()as u64,timezone:"America/Santiago".into(),view:UsageAnalyticsView::DashboardCharts,model:Some("santiago-model".into()),limit:1,..Default::default()}).await.unwrap();
         assert_eq!(santiago.summary.request_count,3); assert_eq!(santiago.rows.len(),3); assert_eq!(santiago.model_rows.len(),3);
@@ -338,8 +345,16 @@ async fn live_overview_canonical_queries_and_dirty_rebuild() {
     {
         let origin = if index == 1 { "upstream" } else { "client" };
         let metadata = serde_json::json!({"analytics_attribution":{"is_standalone":false},"analytics_failure":{"origin":origin,"stage":"authentication","reason":"invalid_credentials"}});
-        sqlx::query("INSERT INTO usage(id,request_id,user_id,provider_name,model,api_format,status,billing_status,input_tokens,output_tokens,response_time_ms,first_byte_time_ms,is_stream,total_cost_usd,actual_total_cost_usd,created_at,request_metadata) VALUES($1,$1,$2,'Provider',$3,'openai:chat',$4,$5,100,20,1000,100,true,1.25000001,0.75000001,$6,$7)")
-            .bind(&request_ids[index]).bind(&user).bind(&model).bind(status).bind(if index == 0 {"settled"} else {"pending"}).bind(start + chrono::Duration::minutes(index as i64)).bind(metadata).execute(&pool).await.unwrap();
+        let billing_status = if index == 0 { "settled" } else { "pending" };
+        sqlx::query("INSERT INTO usage(id,request_id,user_id,provider_name,model,api_format,status,billing_status,response_time_ms,first_byte_time_ms,is_stream,created_at,request_metadata) VALUES($1,$1,$2,'Provider',$3,'openai:chat',$4,$5,1000,100,true,$6,$7)")
+            .bind(&request_ids[index]).bind(&user).bind(&model).bind(status).bind(billing_status).bind(start + chrono::Duration::minutes(index as i64)).bind(metadata).execute(&pool).await.unwrap();
+        let (total_cost, actual_cost) = if index == 0 {
+            (Some(1.25000001_f64), Some(0.75000001_f64))
+        } else {
+            (None, None)
+        };
+        sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,$2,100,20,$3,$4)")
+            .bind(&request_ids[index]).bind(billing_status).bind(total_cost).bind(actual_cost).execute(&pool).await.unwrap();
     }
     let mut query = UsageAnalyticsQuery {
         from_unix_ms: start.timestamp_millis() as u64,
@@ -1088,10 +1103,11 @@ async fn live_overview_cache_pricing_and_record_drilldown() {
         .unwrap();
     let metadata = serde_json::json!({"analytics_attribution":{"is_standalone":false},"analytics_measurement":{"source":"reported"}});
     for (id, latency) in [(&request, 6000), (&other, 100)] {
-        sqlx::query("INSERT INTO usage(id,request_id,user_id,api_key_id,provider_id,provider_name,model,api_format,endpoint_kind,request_type,is_stream,has_format_conversion,status,billing_status,response_time_ms,input_tokens,output_tokens,cache_read_input_tokens,request_metadata) VALUES($1,$1,$2,$2,$2,'test',$2,'openai:chat','chat','chat',true,true,'completed','settled',$3,1000,20,100,$4)")
+        sqlx::query("INSERT INTO usage(id,request_id,user_id,api_key_id,provider_id,provider_name,model,api_format,endpoint_kind,request_type,is_stream,has_format_conversion,status,billing_status,response_time_ms,request_metadata) VALUES($1,$1,$2,$2,$2,'test',$2,'openai:chat','chat','chat',true,true,'completed','settled',$3,$4)")
             .bind(id).bind(&owner).bind(latency).bind(metadata.clone()).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_cache_read_tokens) VALUES($1,'settled',1000,20,100)").bind(id).execute(&pool).await.unwrap();
     }
-    sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,input_price_per_1m,billing_cache_read_cost_usd,billing_cache_creation_cost_usd) VALUES($1,'settled',2,0.00005,0.00008)").bind(&request).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE usage_settlement_snapshots SET input_price_per_1m=2,billing_cache_read_cost_usd=0.00005,billing_cache_creation_cost_usd=0.00008 WHERE request_id=$1").bind(&request).execute(&pool).await.unwrap();
     let repo = SqlxUsageReadRepository::new(pool.clone());
     let query = UsageAnalyticsQuery {
         from_unix_ms: (Utc::now() - chrono::Duration::hours(1)).timestamp_millis() as u64,
@@ -1221,7 +1237,7 @@ fn assert_dashboard_total_matches_canonical(
 
 #[tokio::test]
 #[ignore = "requires migrated isolated AETHER_TEST_DATABASE_URL"]
-async fn live_overview_dashboard_total_matches_canonical_settlement_and_legacy_tokens() {
+async fn live_overview_dashboard_total_matches_canonical_settlement_tokens() {
     let pool = sqlx::PgPool::connect(&std::env::var("AETHER_TEST_DATABASE_URL").unwrap())
         .await
         .unwrap();
@@ -1340,14 +1356,24 @@ async fn live_overview_dashboard_total_matches_canonical_settlement_and_legacy_t
         ),
     ] {
         let request = uuid::Uuid::new_v4().to_string();
-        sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,api_format,status,billing_status,input_tokens,output_tokens,total_tokens,cache_creation_input_tokens,cache_creation_input_tokens_5m,cache_creation_input_tokens_1h,cache_read_input_tokens,total_cost_usd,actual_total_cost_usd,created_at,request_metadata) VALUES($1,$1,$2,$1,'test',$3,'completed','settled',100,20,$4,0,3,4,11,0.25,0.12500001,$5,$6)")
-            .bind(&request).bind(&user).bind(api_format).bind(stored_total).bind(start).bind(metadata)
+        sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,api_format,status,billing_status,created_at,request_metadata) VALUES($1,$1,$2,$1,'test',$3,'completed','settled',$4,$5)")
+            .bind(&request).bind(&user).bind(api_format).bind(start).bind(metadata)
             .execute(&mut *tx).await.unwrap();
         if case.starts_with("snapshot-") {
             sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_total_input_context,billing_output_tokens,billing_cache_creation_5m_tokens,billing_cache_creation_1h_tokens,billing_cache_read_tokens,billing_total_cost_usd,billing_actual_total_cost_usd,allocation_status) VALUES($1,'settled',$2,$3,2,3,5,7,1.00000001,0.90000001,'complete')")
                 .bind(&request)
                 .bind((case == "snapshot-effective").then_some(10_i64))
                 .bind((case == "snapshot-context").then_some(1000_i64))
+                .execute(&mut *tx).await.unwrap();
+        } else {
+            let effective = if case == "explicit-total" {
+                stored_total - 20
+            } else {
+                100
+            };
+            let cache_read = if case == "anthropic-cache" { 18 } else { 0 };
+            sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_cache_read_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',$2,20,$3,0.25,0.125)")
+                .bind(&request).bind(effective).bind(cache_read)
                 .execute(&mut *tx).await.unwrap();
         }
         let query = UsageAnalyticsQuery {
@@ -1437,10 +1463,12 @@ async fn live_customer_billing_amount_matches_canonical_and_dashboard_facts() {
         ),
     ] {
         let request = uuid::Uuid::new_v4().to_string();
-        sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,total_cost_usd,actual_total_cost_usd,created_at,request_metadata) VALUES($1,$1,$1,'billing-test','completed','settled',2,0.5,$2,$3)")
+        sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at,request_metadata) VALUES($1,$1,$1,'billing-test','completed','settled',$2,$3)")
             .bind(&request).bind(start).bind(metadata).execute(&mut *tx).await.unwrap();
+        sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',2,0.5)")
+            .bind(&request).execute(&mut *tx).await.unwrap();
         if case == "settlement-base" {
-            sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',4,0.25)")
+            sqlx::query("UPDATE usage_settlement_snapshots SET billing_total_cost_usd=4,billing_actual_total_cost_usd=0.25 WHERE request_id=$1")
                 .bind(&request).execute(&mut *tx).await.unwrap();
         }
         let amount: Option<String> = sqlx::query_scalar(

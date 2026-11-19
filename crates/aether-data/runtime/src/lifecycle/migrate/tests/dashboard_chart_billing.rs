@@ -106,12 +106,14 @@ async fn dashboard_charts_match_summary_customer_charges_and_request_scope() {
             json!({}),
         ),
     ] {
-        query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,total_cost_usd,actual_total_cost_usd,total_tokens,created_at,request_metadata,response_time_ms) VALUES($1,$1,'model',$2,$3,$4,$5,$6,10,$7,$8,1000)")
-            .bind(id).bind(provider).bind(status).bind(billing).bind(base).bind(actual)
+        query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at,request_metadata,response_time_ms) VALUES($1,$1,'model',$2,$3,$4,$5,$6,1000)")
+            .bind(id).bind(provider).bind(status).bind(billing)
             .bind(start + Duration::seconds(1)).bind(metadata).execute(&pool).await.unwrap();
+        query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,$2,10,$3,$4)")
+            .bind(id).bind(billing).bind(base).bind(actual).execute(&pool).await.unwrap();
     }
     // The captured settlement cost, rather than the mutable audit float, is rated.
-    query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES('composite','settled',12,4)")
+    query("UPDATE usage_settlement_snapshots SET billing_total_cost_usd=12,billing_actual_total_cost_usd=4 WHERE request_id='composite'")
         .execute(&pool).await.unwrap();
     query(
         "UPDATE usage_attribution_snapshots SET record_kind='session' WHERE request_id='session'",
@@ -124,8 +126,10 @@ async fn dashboard_charts_match_summary_customer_charges_and_request_scope() {
         ("before", start - Duration::seconds(1)),
         ("after", start + Duration::days(1)),
     ] {
-        query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,total_cost_usd,actual_total_cost_usd,created_at) VALUES($1,$1,'outside','outside','completed','settled',999,999,$2)")
+        query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at) VALUES($1,$1,'outside','outside','completed','settled',$2)")
             .bind(id).bind(at).execute(&pool).await.unwrap();
+        query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',10,999,999)")
+            .bind(id).execute(&pool).await.unwrap();
     }
     let summary = repo.query_dashboard_summary(&summary_query).await.unwrap();
     let charts = repo

@@ -2104,17 +2104,6 @@ INSERT INTO "usage" (
   has_format_conversion,
   is_stream,
   upstream_is_stream,
-  input_tokens,
-  output_tokens,
-  total_tokens,
-  cache_creation_input_tokens,
-  cache_creation_input_tokens_5m,
-  cache_creation_input_tokens_1h,
-  cache_read_input_tokens,
-  cache_creation_cost_usd,
-  cache_read_cost_usd,
-  total_cost_usd,
-  actual_total_cost_usd,
   status_code,
   error_message,
   error_category,
@@ -2226,9 +2215,7 @@ WITH updated_usage AS (
         status_code = $3,
         error_message = NULL,
         error_category = $4,
-        billing_status = 'void',
-        total_cost_usd = 0,
-        actual_total_cost_usd = 0
+        billing_status = 'void'
     WHERE request_id = $1
     RETURNING request_id
 )
@@ -2290,13 +2277,6 @@ type PartitionedFirstByteUsages = (Vec<PreparedFirstByteUsage>, Vec<(usize, Upse
 struct PreparedPendingUsage {
     usage: UpsertUsageRecord,
     prepared: PreparedUsageUpsert,
-    input_tokens: i32,
-    output_tokens: i32,
-    total_tokens: i32,
-    cache_creation_input_tokens: i32,
-    cache_creation_ephemeral_5m_input_tokens: i32,
-    cache_creation_ephemeral_1h_input_tokens: i32,
-    cache_read_input_tokens: i32,
     response_time_ms: Option<i32>,
     first_byte_time_ms: Option<i32>,
     routing_candidate_index: Option<i32>,
@@ -2323,54 +2303,6 @@ impl PreparedPendingUsage {
         // Prepare captures before the accounting sanitizer removes HTTP bodies/headers/states.
         let (usage, prepared) = prepare_usage_for_persistence(usage);
         let prepared = prepared?;
-        let input_tokens = usage
-            .input_tokens
-            .map(to_i32)
-            .transpose()?
-            .unwrap_or_default();
-        let output_tokens = usage
-            .output_tokens
-            .map(to_i32)
-            .transpose()?
-            .unwrap_or_default();
-        let cache_creation_input_tokens = usage
-            .cache_creation_input_tokens
-            .map(to_i32)
-            .transpose()?
-            .unwrap_or_default();
-        let cache_creation_ephemeral_5m_input_tokens = usage
-            .cache_creation_ephemeral_5m_input_tokens
-            .map(to_i32)
-            .transpose()?
-            .unwrap_or_default();
-        let cache_creation_ephemeral_1h_input_tokens = usage
-            .cache_creation_ephemeral_1h_input_tokens
-            .map(to_i32)
-            .transpose()?
-            .unwrap_or_default();
-        let cache_read_input_tokens = usage
-            .cache_read_input_tokens
-            .map(to_i32)
-            .transpose()?
-            .unwrap_or_default();
-        let categorized_cache_creation_tokens = checked_pending_usage_sum(&[
-            cache_creation_ephemeral_5m_input_tokens,
-            cache_creation_ephemeral_1h_input_tokens,
-        ])?;
-        let effective_cache_creation_tokens = if cache_creation_input_tokens == 0 {
-            categorized_cache_creation_tokens
-        } else {
-            cache_creation_input_tokens
-        };
-        let total_tokens = match usage.total_tokens {
-            Some(value) => to_i32(value)?,
-            None => checked_pending_usage_sum(&[
-                input_tokens,
-                output_tokens,
-                effective_cache_creation_tokens,
-                cache_read_input_tokens,
-            ])?,
-        };
         let response_time_ms = usage.response_time_ms.map(to_i32).transpose()?;
         let first_byte_time_ms = usage.first_byte_time_ms.map(to_i32).transpose()?;
         let routing_candidate_index = prepared
@@ -2389,13 +2321,6 @@ impl PreparedPendingUsage {
         Ok(Self {
             usage,
             prepared,
-            input_tokens,
-            output_tokens,
-            total_tokens,
-            cache_creation_input_tokens,
-            cache_creation_ephemeral_5m_input_tokens,
-            cache_creation_ephemeral_1h_input_tokens,
-            cache_read_input_tokens,
             response_time_ms,
             first_byte_time_ms,
             routing_candidate_index,
@@ -2403,20 +2328,6 @@ impl PreparedPendingUsage {
             updated_at_unix_secs,
         })
     }
-}
-
-fn checked_pending_usage_sum(values: &[i32]) -> Result<i32, DataLayerError> {
-    let value = values
-        .iter()
-        .try_fold(0_i64, |total, value| total.checked_add(i64::from(*value)))
-        .ok_or_else(|| {
-            DataLayerError::UnexpectedValue("pending usage token total overflowed".to_string())
-        })?;
-    i32::try_from(value).map_err(|_| {
-        DataLayerError::UnexpectedValue(format!(
-            "pending usage token total exceeds integer range: {value}"
-        ))
-    })
 }
 
 impl PreparedFirstByteUsage {
@@ -8838,27 +8749,6 @@ ORDER BY "usage".user_id ASC
                         .bind(&usage.provider_endpoint_kind)
                         .bind(usage.has_format_conversion)
                         .bind(usage.is_stream)
-                        .bind(usage.input_tokens.map(to_i32).transpose()?)
-                        .bind(usage.output_tokens.map(to_i32).transpose()?)
-                        .bind(usage.total_tokens.map(to_i32).transpose()?)
-                        .bind(usage.cache_creation_input_tokens.map(to_i32).transpose()?)
-                        .bind(
-                            usage
-                                .cache_creation_ephemeral_5m_input_tokens
-                                .map(to_i32)
-                                .transpose()?,
-                        )
-                        .bind(
-                            usage
-                                .cache_creation_ephemeral_1h_input_tokens
-                                .map(to_i32)
-                                .transpose()?,
-                        )
-                        .bind(usage.cache_read_input_tokens.map(to_i32).transpose()?)
-                        .bind(usage.cache_creation_cost_usd)
-                        .bind(usage.cache_read_cost_usd)
-                        .bind(usage.total_cost_usd)
-                        .bind(usage.actual_total_cost_usd)
                         .bind(usage.status_code.map(i32::from))
                         .bind(&usage.error_message)
                         .bind(&usage.error_category)
@@ -9238,17 +9128,6 @@ ORDER BY "usage".user_id ASC
                 .push_unseparated(" AS jsonb)->>'upstream_is_stream')::boolean ELSE NULL END, ")
                 .push_bind_unseparated(row.usage.is_stream.unwrap_or(false))
                 .push_unseparated(")")
-                .push_bind(row.input_tokens)
-                .push_bind(row.output_tokens)
-                .push_bind(row.total_tokens)
-                .push_bind(row.cache_creation_input_tokens)
-                .push_bind(row.cache_creation_ephemeral_5m_input_tokens)
-                .push_bind(row.cache_creation_ephemeral_1h_input_tokens)
-                .push_bind(row.cache_read_input_tokens)
-                .push_bind(row.usage.cache_creation_cost_usd.unwrap_or_default())
-                .push_bind(row.usage.cache_read_cost_usd)
-                .push_bind(row.usage.total_cost_usd.unwrap_or_default())
-                .push_bind(row.usage.actual_total_cost_usd)
                 .push_bind(row.usage.status_code.map(i32::from))
                 .push_bind(row.usage.error_message.clone())
                 .push_bind(row.usage.error_category.clone())

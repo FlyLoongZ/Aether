@@ -29,15 +29,15 @@ SELECT u.created_at,u.model,u.provider_id,u.provider_name,u.status,u.response_ti
   CASE WHEN CASE WHEN c.request_id IS NOT NULL THEN (c.metrics->>'pricing_available_count')::bigint>0
     ELSE COALESCE(metadata.value->'usage_pricing_available','true'::jsonb)<>'false'::jsonb END
     AND (s.billing_total_cost_usd IS NOT NULL OR COALESCE(s.billing_status,u.billing_status)='settled')
-    THEN round(COALESCE(s.billing_total_cost_usd::numeric,u.total_cost_usd::numeric),8) END AS rated_amount,
+    THEN round(COALESCE(s.billing_total_cost_usd::numeric, 0),8) END AS rated_amount,
   CASE WHEN c.request_id IS NOT NULL THEN
     CASE WHEN (c.metrics->>'pricing_available_count')::bigint>0
       THEN round((c.metrics->>'billable_amount')::numeric,8) END
   WHEN COALESCE(metadata.value->'usage_pricing_available','true'::jsonb)<>'false'::jsonb
     AND (s.billing_actual_total_cost_usd IS NOT NULL OR COALESCE(s.billing_status,u.billing_status)='settled')
     THEN public.usage_customer_billable_amount(metadata.value,
-      COALESCE(s.billing_total_cost_usd::numeric,u.total_cost_usd::numeric),
-      COALESCE(s.billing_actual_total_cost_usd::numeric,u.actual_total_cost_usd::numeric)) END AS billable_amount
+      COALESCE(s.billing_total_cost_usd::numeric, 0),
+      COALESCE(s.billing_actual_total_cost_usd::numeric, 0)) END AS billable_amount
 FROM public.usage u
 LEFT JOIN public.dashboard_request_contributions c USING(request_id)
 LEFT JOIN public.usage_settlement_snapshots s USING(request_id)

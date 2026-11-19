@@ -71,23 +71,30 @@ async fn live_dashboard_restores_legacy_history_without_replaying_or_double_coun
         }
         // Retained detail below the cutoff must not be counted a second time;
         // a request exactly at the cutoff must still be included once.
-        sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,input_tokens,output_tokens,total_tokens,cache_creation_input_tokens,cache_read_input_tokens,actual_total_cost_usd,created_at) VALUES('overlap','overlap','m','p','completed','settled',999,999,1998,0,0,999,$1),('boundary','boundary','m','p','completed','settled',100,20,127,3,4,0.10000001,$2)")
+        sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at) VALUES('overlap','overlap','m','p','completed','settled',$1),('boundary','boundary','m','p','completed','settled',$2)")
             .bind(recent_history + Duration::hours(12)).bind(cutoff)
             .execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,input_tokens,output_tokens,total_tokens,actual_total_cost_usd,created_at) VALUES('pending','pending','m','p','pending','pending',999,999,1998,999,$1),('unknown','unknown','m','unknown','completed','settled',999,999,1998,999,$1)")
+        sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES('overlap','settled',999,999,999,999),('boundary','settled',100,20,0.10000001,0.10000001)")
+            .execute(&pool).await.unwrap();
+        sqlx::query("UPDATE usage_settlement_snapshots SET billing_cache_creation_tokens=3,billing_cache_read_tokens=4 WHERE request_id='boundary'").execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at) VALUES('pending','pending','m','p','pending','pending',$1),('unknown','unknown','m','unknown','completed','settled',$1)")
             .bind(cutoff + Duration::hours(12)).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES('pending','pending',999,999,999,999),('unknown','settled',999,999,999,999)")
+            .execute(&pool).await.unwrap();
         for (id, user, at) in [
             ("before-shared", "shared", before_activation),
             ("before-unique", "before-only", before_activation),
             ("before-deleted", "deleted", before_activation),
             ("after-shared", "shared", after_activation),
         ] {
-            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,status,billing_status,input_tokens,output_tokens,total_tokens,actual_total_cost_usd,total_cost_usd,created_at,first_byte_time_ms,response_time_ms,upstream_is_stream) VALUES($1,$1,$2,'m','p','completed','settled',100,20,120,0.25,0.25,$3,100,800,true)")
+            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,status,billing_status,created_at,first_byte_time_ms,response_time_ms,upstream_is_stream) VALUES($1,$1,$2,'m','p','completed','settled',$3,100,800,true)")
                 .bind(id).bind(user).bind(at).execute(&pool).await.unwrap();
+            sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',100,20,0.25,0.25)")
+                .bind(id).execute(&pool).await.unwrap();
         }
         // Today's missing prefix must use final settlement facts, just like
         // the already-active projection, instead of stale capture counters.
-        sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_input_tokens,billing_effective_input_tokens,billing_output_tokens,billing_cache_read_tokens,billing_cache_creation_tokens,billing_total_input_context,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES('before-shared','settled',100,100,30,40,10,150,0.12345678,0.12345678)")
+        sqlx::query("UPDATE usage_settlement_snapshots SET billing_input_tokens=100,billing_effective_input_tokens=100,billing_output_tokens=30,billing_cache_read_tokens=40,billing_cache_creation_tokens=10,billing_total_input_context=150,billing_total_cost_usd=0.12345678,billing_actual_total_cost_usd=0.12345678 WHERE request_id='before-shared'")
             .execute(&pool).await.unwrap();
 
         let restored = repo.query_dashboard_summary(&query).await.unwrap();

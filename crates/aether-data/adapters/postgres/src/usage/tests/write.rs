@@ -152,14 +152,14 @@ fn stale_pending_cleanup_index_matches_the_batch_filter_and_order() {
 #[test]
 fn usage_sql_insert_values_aligns_request_metadata_and_timestamps() {
     let sql = normalize_newlines(super::super::UPSERT_SQL);
-    assert!(sql.contains("\n  $40::jsonb,\n  COALESCE(TO_TIMESTAMP($41::double precision)"));
-    assert!(sql.contains("NULLIF($42::bigint, 0)"));
+    assert!(sql.contains("\n  $29::jsonb,\n  COALESCE(TO_TIMESTAMP($30::double precision)"));
+    assert!(sql.contains("NULLIF($31::bigint, 0)"));
 }
 
 #[test]
 fn usage_sql_upsert_materializes_upstream_stream_mode() {
     assert!(super::super::UPSERT_SQL.contains("upstream_is_stream,"));
-    assert!(super::super::UPSERT_SQL.contains("$40::jsonb->>'upstream_is_stream'"));
+    assert!(super::super::UPSERT_SQL.contains("$29::jsonb->>'upstream_is_stream'"));
     assert!(super::super::UPSERT_SQL.contains("COALESCE($21, FALSE)"));
     assert!(super::super::UPSERT_SQL.contains("upstream_is_stream = CASE"));
 }
@@ -186,9 +186,9 @@ fn usage_sql_writes_usage_settlement_pricing_snapshots() {
 #[test]
 fn usage_sql_upsert_recovers_missing_provider_links_after_billing_finalizes() {
     for assignment in [
-        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $43) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
-        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $43) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
-        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $43) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
+        "provider_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $32) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_id IS NULL AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_id, \"usage\".provider_id) ELSE \"usage\".provider_id END",
+        "provider_endpoint_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $32) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_endpoint_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_api_key_id IS NULL OR \"usage\".provider_api_key_id = EXCLUDED.provider_api_key_id)) THEN COALESCE(EXCLUDED.provider_endpoint_id, \"usage\".provider_endpoint_id) ELSE \"usage\".provider_endpoint_id END",
+        "provider_api_key_id = CASE WHEN (\"usage\".billing_status = 'pending' AND $32) OR (\"usage\".billing_status <> 'pending' AND \"usage\".provider_api_key_id IS NULL AND (\"usage\".provider_id IS NULL OR \"usage\".provider_id = EXCLUDED.provider_id) AND (\"usage\".provider_endpoint_id IS NULL OR \"usage\".provider_endpoint_id = EXCLUDED.provider_endpoint_id)) THEN COALESCE(EXCLUDED.provider_api_key_id, \"usage\".provider_api_key_id) ELSE \"usage\".provider_api_key_id END",
     ] {
         assert!(
             super::super::UPSERT_SQL.contains(assignment),
@@ -198,7 +198,7 @@ fn usage_sql_upsert_recovers_missing_provider_links_after_billing_finalizes() {
 }
 
 #[test]
-fn usage_sql_updates_usage_mirror_columns_from_terminal_events_only() {
+fn usage_sql_does_not_update_retired_billing_mirror_columns() {
     for field in [
         "input_tokens",
         "output_tokens",
@@ -212,23 +212,19 @@ fn usage_sql_updates_usage_mirror_columns_from_terminal_events_only() {
         "total_cost_usd",
         "actual_total_cost_usd",
     ] {
-        let assignment = format!(
-            "{field} = CASE WHEN \"usage\".billing_status = 'pending' AND EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN GREATEST(\"usage\".{field}, EXCLUDED.{field}) ELSE \"usage\".{field} END"
+        assert!(
+            !super::super::UPSERT_SQL.contains(format!("{field} = ").as_str()),
+            "retired billing mirror must not be written: {field}"
         );
         assert!(
-            super::super::UPSERT_SQL.contains(assignment.as_str()),
-            "missing terminal mirror assignment: {assignment}"
-        );
-        assert!(
-            !super::super::UPSERT_SQL
-                .contains(format!("{field} = CASE WHEN EXCLUDED.status IN").as_str()),
-            "terminal mirror assignment must keep pending billing guard: {field}"
+            !super::super::UPSERT_SQL.contains(format!("EXCLUDED.{field}").as_str()),
+            "retired billing mirror must not be read from EXCLUDED: {field}"
         );
     }
 }
 
 #[test]
-fn usage_sql_binds_usage_mirror_values_for_terminal_upserts() {
+fn usage_sql_does_not_bind_retired_billing_mirror_values() {
     let source = include_str!("../mod.rs");
     for binding in [
         ".bind(usage.input_tokens.map(to_i32).transpose()?)",
@@ -242,8 +238,8 @@ fn usage_sql_binds_usage_mirror_values_for_terminal_upserts() {
         ".bind(usage.actual_total_cost_usd)",
     ] {
         assert!(
-            source.contains(binding),
-            "missing usage upsert bind: {binding}"
+            !source.contains(binding),
+            "retired billing mirror must not be bound: {binding}"
         );
     }
 }
@@ -291,7 +287,7 @@ fn usage_sql_does_not_reference_retired_header_columns() {
 #[test]
 fn usage_sql_terminal_snapshots_replace_sparse_routing_and_settlement_facts() {
     assert!(super::super::UPSERT_SQL.contains(
-        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $43 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
+        "target_model = CASE WHEN \"usage\".billing_status = 'pending' AND $32 THEN CASE WHEN EXCLUDED.status IN ('completed', 'failed', 'cancelled') THEN EXCLUDED.target_model"
     ));
     let routing = super::super::UPSERT_USAGE_ROUTING_SNAPSHOT_SQL;
     assert!(routing.contains("candidate_id = CASE WHEN $14 THEN EXCLUDED.candidate_id"));

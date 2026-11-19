@@ -38,15 +38,17 @@ async fn dashboard_chart_history_coverage_matches_legacy_request_scope_without_r
         ("partial-pending", 1, "pending", "provider", false),
         ("partial-unknown", 1, "failed", "unknown", false),
     ] {
-        query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,total_cost_usd,actual_total_cost_usd,created_at,request_metadata) VALUES($1,$1,'model',$2,$3,'settled',2,1,$4,$5)")
+        query("INSERT INTO usage(id,request_id,model,provider_name,status,billing_status,created_at,request_metadata) VALUES($1,$1,'model',$2,$3,'settled',$4,$5)")
             .bind(id).bind(provider).bind(status)
             .bind(start + Duration::days(day) + Duration::seconds(1))
             .bind(json!({"routing_group_billing_multiplier":2,"analytics_attribution":{"record_kind":if session { "session" } else { "request" }}}))
             .execute(&pool).await.unwrap();
+        if id != "retained-request" {
+            query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',2,1)")
+                .bind(id).execute(&pool).await.unwrap();
+        }
     }
-    query("UPDATE usage SET total_tokens=999,input_tokens=90,output_tokens=20,cache_creation_input_tokens=11,cache_read_input_tokens=13 WHERE id='retained-request'")
-        .execute(&pool).await.unwrap();
-    query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_cache_creation_tokens,billing_cache_read_tokens) VALUES('retained-request','settled',7,3,5,2)")
+    query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_cache_creation_tokens,billing_cache_read_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES('retained-request','settled',7,3,5,2,2,1)")
         .execute(&pool).await.unwrap();
     let day_query = |day| UsageAnalyticsQuery {
         from_unix_ms: (start + Duration::days(day)).timestamp_millis() as u64,

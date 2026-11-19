@@ -1,7 +1,7 @@
 use sqlx::{query, query_scalar, PgPool};
 
 use super::{pending_backfills, pending_backfills_from_applied, run_backfills, AppliedBackfill};
-use crate::lifecycle::migrate::prepare_database_for_startup;
+use crate::lifecycle::migrate::{prepare_database_for_startup, run_migrations};
 use crate::lifecycle::postgres_test_support::ManagedPostgresServer;
 
 const LEGACY_SYNC_ENABLED_ACTIVE_FLAGS_VERSION: i64 = 20260517012000;
@@ -371,15 +371,6 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
                 request_id,
                 provider_name,
                 model,
-                input_tokens,
-                output_tokens,
-                cache_creation_input_tokens,
-                cache_read_input_tokens,
-                cache_creation_input_tokens_5m,
-                cache_creation_input_tokens_1h,
-                cache_read_cost_usd,
-                total_cost_usd,
-                actual_total_cost_usd,
                 status,
                 billing_status,
                 created_at,
@@ -395,15 +386,6 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
                 'req-backfill-1',
                 'openai',
                 'gpt-4o-mini',
-                120,
-                30,
-                50,
-                20,
-                40,
-                10,
-                0.0,
-                1.25,
-                1.10,
                 'completed',
                 'settled',
                 TIMESTAMPTZ '2024-05-06 07:08:09+00',
@@ -425,12 +407,36 @@ async fn run_backfills_rebuilds_stats_and_records_execution() {
                 request_id,
                 billing_status,
                 finalized_at,
+                billing_input_tokens,
+                billing_effective_input_tokens,
+                billing_output_tokens,
+                billing_cache_creation_tokens,
+                billing_cache_creation_5m_tokens,
+                billing_cache_creation_1h_tokens,
+                billing_cache_read_tokens,
+                billing_total_input_context,
+                billing_cache_creation_cost_usd,
+                billing_cache_read_cost_usd,
+                billing_total_cost_usd,
+                billing_actual_total_cost_usd,
                 input_price_per_1m,
                 output_price_per_1m
             ) VALUES (
                 'req-backfill-1',
                 'settled',
                 TIMESTAMPTZ '2024-05-06 07:18:09+00',
+                120,
+                NULL,
+                30,
+                50,
+                40,
+                10,
+                20,
+                120,
+                0.0,
+                0.0,
+                1.25,
+                1.10,
                 50.0,
                 50.0
             )
@@ -1156,4 +1162,49 @@ ORDER BY total_tokens
         .await
         .expect("backfill count should load");
     assert_eq!(applied_count, 10);
+}
+
+#[tokio::test]
+async fn fresh_database_migrations_keep_historical_backfills_runnable() {
+    let Some(server) = ManagedPostgresServer::try_start()
+        .await
+        .expect("postgres backfill test should start or skip")
+    else {
+        return;
+    };
+
+    let pool = PgPool::connect(server.database_url())
+        .await
+        .expect("pool should connect");
+    prepare_database_for_startup(&pool)
+        .await
+        .expect("schema should prepare");
+    run_migrations(&pool)
+        .await
+        .expect("schema migrations should apply");
+
+    let retired_usage_column: bool = query_scalar(
+        "SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'usage'
+              AND column_name = 'input_tokens'
+        )",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("usage column presence should load");
+    assert!(!retired_usage_column);
+
+    run_backfills(&pool)
+        .await
+        .expect("historical backfills must tolerate retired usage mirrors");
+
+    let billing_view_exists: bool =
+        query_scalar("SELECT to_regclass('public.usage_billing_facts') IS NOT NULL")
+            .fetch_one(&pool)
+            .await
+            .expect("billing view presence should load");
+    assert!(billing_view_exists);
 }

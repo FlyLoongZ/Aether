@@ -20,134 +20,18 @@ SELECT
   "usage".provider_endpoint_kind,
   COALESCE("usage".has_format_conversion, FALSE) AS has_format_conversion,
   COALESCE("usage".is_stream, FALSE) AS is_stream,
-  CAST("usage".input_tokens AS INTEGER) AS input_tokens,
-  CAST(COALESCE(usage_settlement_snapshots.billing_output_tokens, "usage".output_tokens) AS INTEGER) AS output_tokens,
-  CAST(COALESCE(
-    CASE
-      WHEN usage_settlement_snapshots.billing_effective_input_tokens IS NOT NULL
-      THEN GREATEST(usage_settlement_snapshots.billing_effective_input_tokens, 0)
-        + GREATEST(
-            COALESCE(usage_settlement_snapshots.billing_output_tokens, "usage".output_tokens, 0),
-            0
-          )
-        + GREATEST(
-            COALESCE(
-              usage_settlement_snapshots.billing_cache_creation_tokens,
-              CASE
-                WHEN usage_settlement_snapshots.billing_cache_creation_5m_tokens IS NOT NULL
-                  OR usage_settlement_snapshots.billing_cache_creation_1h_tokens IS NOT NULL
-                THEN COALESCE(usage_settlement_snapshots.billing_cache_creation_5m_tokens, 0)
-                  + COALESCE(usage_settlement_snapshots.billing_cache_creation_1h_tokens, 0)
-              END,
-              CASE
-                WHEN COALESCE("usage".cache_creation_input_tokens, 0) = 0
-                     AND (
-                       COALESCE("usage".cache_creation_input_tokens_5m, 0)
-                       + COALESCE("usage".cache_creation_input_tokens_1h, 0)
-                     ) > 0
-                THEN COALESCE("usage".cache_creation_input_tokens_5m, 0)
-                  + COALESCE("usage".cache_creation_input_tokens_1h, 0)
-                ELSE COALESCE("usage".cache_creation_input_tokens, 0)
-              END,
-              0
-            ),
-            0
-          )
-        + GREATEST(
-            COALESCE(
-              usage_settlement_snapshots.billing_cache_read_tokens,
-              "usage".cache_read_input_tokens,
-              0
-            ),
-            0
-          )
-      WHEN usage_settlement_snapshots.billing_total_input_context IS NOT NULL
-      THEN GREATEST(usage_settlement_snapshots.billing_total_input_context, 0)
-        + GREATEST(
-            COALESCE(usage_settlement_snapshots.billing_output_tokens, "usage".output_tokens, 0),
-            0
-          )
-    END,
-    NULLIF(GREATEST(COALESCE("usage".total_tokens, 0), 0), 0),
-    CASE
-      WHEN split_part(lower(COALESCE(COALESCE("usage".endpoint_api_format, "usage".api_format), '')), ':', 1)
-           IN ('openai', 'gemini', 'google')
-      THEN GREATEST(COALESCE("usage".input_tokens, 0), 0)
-        + GREATEST(COALESCE("usage".output_tokens, 0), 0)
-      ELSE GREATEST(COALESCE("usage".input_tokens, 0), 0)
-        + GREATEST(COALESCE("usage".output_tokens, 0), 0)
-        + GREATEST(
-            CASE
-              WHEN COALESCE("usage".cache_creation_input_tokens, 0) = 0
-                   AND (
-                     COALESCE("usage".cache_creation_input_tokens_5m, 0)
-                     + COALESCE("usage".cache_creation_input_tokens_1h, 0)
-                   ) > 0
-              THEN COALESCE("usage".cache_creation_input_tokens_5m, 0)
-                + COALESCE("usage".cache_creation_input_tokens_1h, 0)
-              ELSE COALESCE("usage".cache_creation_input_tokens, 0)
-            END,
-            0
-          )
-        + GREATEST(COALESCE("usage".cache_read_input_tokens, 0), 0)
-    END
-  ) AS INTEGER) AS total_tokens,
-  CAST(COALESCE(
-    usage_settlement_snapshots.billing_cache_creation_tokens,
-    CASE
-      WHEN usage_settlement_snapshots.billing_cache_creation_5m_tokens IS NOT NULL
-        OR usage_settlement_snapshots.billing_cache_creation_1h_tokens IS NOT NULL
-      THEN COALESCE(usage_settlement_snapshots.billing_cache_creation_5m_tokens, 0)
-        + COALESCE(usage_settlement_snapshots.billing_cache_creation_1h_tokens, 0)
-    END,
-    CASE
-      WHEN COALESCE("usage".cache_creation_input_tokens, 0) = 0
-           AND (
-             COALESCE("usage".cache_creation_input_tokens_5m, 0)
-             + COALESCE("usage".cache_creation_input_tokens_1h, 0)
-           ) > 0
-      THEN COALESCE("usage".cache_creation_input_tokens_5m, 0)
-        + COALESCE("usage".cache_creation_input_tokens_1h, 0)
-      ELSE COALESCE("usage".cache_creation_input_tokens, 0)
-    END,
-    0
-  ) AS INTEGER) AS cache_creation_input_tokens,
-  CAST(COALESCE(
-    usage_settlement_snapshots.billing_cache_creation_5m_tokens,
-    "usage".cache_creation_input_tokens_5m,
-    0
-  ) AS INTEGER) AS cache_creation_ephemeral_5m_input_tokens,
-  CAST(COALESCE(
-    usage_settlement_snapshots.billing_cache_creation_1h_tokens,
-    "usage".cache_creation_input_tokens_1h,
-    0
-  ) AS INTEGER) AS cache_creation_ephemeral_1h_input_tokens,
-  CAST(COALESCE(
-    usage_settlement_snapshots.billing_cache_read_tokens,
-    "usage".cache_read_input_tokens,
-    0
-  ) AS INTEGER) AS cache_read_input_tokens,
-  COALESCE(
-    CAST(usage_settlement_snapshots.billing_cache_creation_cost_usd AS DOUBLE PRECISION),
-    CAST("usage".cache_creation_cost_usd AS DOUBLE PRECISION),
-    0
-  ) AS cache_creation_cost_usd,
-  COALESCE(
-    CAST(usage_settlement_snapshots.billing_cache_read_cost_usd AS DOUBLE PRECISION),
-    CAST("usage".cache_read_cost_usd AS DOUBLE PRECISION),
-    0
-  ) AS cache_read_cost_usd,
-  CAST(usage_settlement_snapshots.output_price_per_1m AS DOUBLE PRECISION) AS output_price_per_1m,
-  COALESCE(
-    CAST(usage_settlement_snapshots.billing_total_cost_usd AS DOUBLE PRECISION),
-    CAST("usage".total_cost_usd AS DOUBLE PRECISION),
-    0
-  ) AS total_cost_usd,
-  COALESCE(
-    CAST(usage_settlement_snapshots.billing_actual_total_cost_usd AS DOUBLE PRECISION),
-    CAST("usage".actual_total_cost_usd AS DOUBLE PRECISION),
-    0
-  ) AS actual_total_cost_usd,
+  CAST(COALESCE(billing.input_tokens, 0) AS INTEGER) AS input_tokens,
+  CAST(COALESCE(billing.output_tokens, 0) AS INTEGER) AS output_tokens,
+  CAST(COALESCE(billing.total_tokens, 0) AS INTEGER) AS total_tokens,
+  CAST(COALESCE(billing.cache_creation_input_tokens, 0) AS INTEGER) AS cache_creation_input_tokens,
+  CAST(COALESCE(billing.cache_creation_input_tokens_5m, 0) AS INTEGER) AS cache_creation_ephemeral_5m_input_tokens,
+  CAST(COALESCE(billing.cache_creation_input_tokens_1h, 0) AS INTEGER) AS cache_creation_ephemeral_1h_input_tokens,
+  CAST(COALESCE(billing.cache_read_input_tokens, 0) AS INTEGER) AS cache_read_input_tokens,
+  billing.cache_creation_cost_usd,
+  billing.cache_read_cost_usd,
+  billing.output_price_per_1m,
+  billing.total_cost_usd,
+  billing.actual_total_cost_usd,
   "usage".status_code,
   "usage".error_message,
   "usage".error_category,
@@ -210,6 +94,8 @@ SELECT
   ) AS updated_at_unix_secs,
   CAST(EXTRACT(EPOCH FROM usage_settlement_snapshots.finalized_at) AS BIGINT) AS finalized_at_unix_secs
 FROM "usage"
+LEFT JOIN usage_billing_facts billing
+  ON billing.request_id = "usage".request_id
 LEFT JOIN usage_http_headers
   ON usage_http_headers.request_id = "usage".request_id
 -- Bodies are attached separately (see attach_usage_http_bodies): the detail

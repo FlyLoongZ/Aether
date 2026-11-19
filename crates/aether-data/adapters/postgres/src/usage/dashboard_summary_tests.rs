@@ -38,8 +38,10 @@ async fn live_future_dashboard_is_incremental_idempotent_and_survives_retention(
         sqlx::query("INSERT INTO users(id,username,email_verified,is_active) VALUES('future-user','future-user',false,false)").execute(&pool).await.unwrap();
         let mut tx = pool.begin().await.unwrap();
         for (id,at) in [("old",since-Duration::days(500)),("new",Utc::now()),("second",Utc::now())] {
-            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,status,billing_status,input_tokens,output_tokens,total_tokens,actual_total_cost_usd,total_cost_usd,created_at,request_metadata,first_byte_time_ms,response_time_ms,upstream_is_stream) VALUES($1,$1,'future-user','m','p','completed','settled',100,20,120,0.25,0.25,$2,'{\"analytics_attribution\":{\"is_standalone\":false},\"upstream_is_stream\":true}',100,800,true)")
+            sqlx::query("INSERT INTO usage(id,request_id,user_id,model,provider_name,status,billing_status,created_at,request_metadata,first_byte_time_ms,response_time_ms,upstream_is_stream) VALUES($1,$1,'future-user','m','p','completed','settled',$2,'{\"analytics_attribution\":{\"is_standalone\":false},\"upstream_is_stream\":true}',100,800,true)")
                 .bind(id).bind(at).execute(&mut *tx).await.unwrap();
+            sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_effective_input_tokens,billing_output_tokens,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES($1,'settled',100,20,0.25,0.25)")
+                .bind(id).execute(&mut *tx).await.unwrap();
         }
         tx.commit().await.unwrap();
         let first = repo.query_dashboard_summary(&query).await.unwrap();
@@ -54,12 +56,12 @@ async fn live_future_dashboard_is_incremental_idempotent_and_survives_retention(
         assert_eq!(first.active_days,1);
         assert_eq!(first.consecutive_active_days,1);
         assert_eq!(first.activity_days.iter().map(|d| d.requests).sum::<u64>(),2);
-        sqlx::query("UPDATE usage SET output_tokens=999 WHERE request_id='old'").execute(&pool).await.unwrap();
+        sqlx::query("UPDATE usage_settlement_snapshots SET billing_output_tokens=999 WHERE request_id='old'").execute(&pool).await.unwrap();
         let mut rollback = pool.begin().await.unwrap();
-        sqlx::query("UPDATE usage SET total_tokens=999 WHERE request_id='second'").execute(&mut *rollback).await.unwrap();
+        sqlx::query("UPDATE usage_settlement_snapshots SET billing_output_tokens=999 WHERE request_id='second'").execute(&mut *rollback).await.unwrap();
         rollback.rollback().await.unwrap();
         assert_eq!(repo.query_dashboard_summary(&query).await.unwrap().total,first.total);
-        sqlx::query("INSERT INTO usage_settlement_snapshots(request_id,billing_status,billing_input_tokens,billing_effective_input_tokens,billing_output_tokens,billing_cache_read_tokens,billing_cache_creation_tokens,billing_total_input_context,billing_total_cost_usd,billing_actual_total_cost_usd) VALUES('new','settled',100,100,30,40,10,150,0.12345678,0.12345678)").execute(&pool).await.unwrap();
+        sqlx::query("UPDATE usage_settlement_snapshots SET billing_input_tokens=100,billing_effective_input_tokens=100,billing_output_tokens=30,billing_cache_read_tokens=40,billing_cache_creation_tokens=10,billing_total_input_context=150,billing_total_cost_usd=0.12345678,billing_actual_total_cost_usd=0.12345678 WHERE request_id='new'").execute(&pool).await.unwrap();
         let settled = repo.query_dashboard_summary(&query).await.unwrap();
         assert_eq!(settled.total.request_count,2);
         assert_eq!(settled.total.total_tokens,300);

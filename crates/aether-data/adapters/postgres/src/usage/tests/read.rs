@@ -226,11 +226,14 @@ fn usage_billing_facts_total_tokens_uses_canonical_effective_input() {
     assert!(!migration.contains("THEN COALESCE(settlement.billing_input_tokens, 0)"));
 
     // The snapshot is a pg_dump re-render: extra parentheses and explicit casts
-    // are expected, but the canonical-input guard must still be spelled out.
-    assert!(bootstrap.contains("WHEN (settlement.billing_effective_input_tokens IS NOT NULL)"));
-    assert!(bootstrap.contains("GREATEST(settlement.billing_effective_input_tokens, (0)::bigint)"));
-    assert!(bootstrap.contains("WHEN (settlement.billing_total_input_context IS NOT NULL)"));
-    assert!(bootstrap.contains("NULLIF(GREATEST(COALESCE(usage_rows.total_tokens, 0), 0), 0)"));
+    // are expected. The view now reads settlement billing values only.
+    assert!(
+        bootstrap.contains("GREATEST(COALESCE(settlement.billing_effective_input_tokens, 0), 0)")
+    );
+    assert!(bootstrap.contains("COALESCE(settlement.billing_total_input_context,"));
+    assert!(!bootstrap.contains("usage_rows.total_tokens"));
+    assert!(!bootstrap.contains("usage_rows.input_tokens"));
+    assert!(!bootstrap.contains("usage_rows.total_cost_usd"));
     assert!(!bootstrap.contains("THEN COALESCE(settlement.billing_input_tokens, 0)"));
 }
 
@@ -248,18 +251,14 @@ fn usage_sql_reads_settlement_snapshots_for_single_record_fetches() {
         super::super::LIST_USAGE_AUDITS_PREFIX,
         super::super::LIST_RECENT_USAGE_AUDITS_PREFIX,
     ] {
-        assert!(sql.contains("CAST(\"usage\".input_tokens AS INTEGER) AS input_tokens"));
+        assert!(sql.contains("CAST(COALESCE(billing.input_tokens, 0) AS INTEGER) AS input_tokens"));
+        assert!(sql.contains("LEFT JOIN usage_billing_facts billing"));
         assert!(sql.contains(
             "usage_settlement_snapshots.billing_input_tokens AS settlement_billing_input_tokens"
         ));
-        assert!(sql.contains(
-            "WHEN usage_settlement_snapshots.billing_effective_input_tokens IS NOT NULL"
-        ));
-        assert!(
-            sql.contains("WHEN usage_settlement_snapshots.billing_total_input_context IS NOT NULL")
-        );
-        assert!(sql.contains("NULLIF(GREATEST(COALESCE(\"usage\".total_tokens, 0), 0), 0)"));
-        assert!(!sql.contains("THEN COALESCE(usage_settlement_snapshots.billing_input_tokens, 0)"));
+        assert!(!sql.contains("\"usage\".input_tokens"));
+        assert!(!sql.contains("\"usage\".total_tokens"));
+        assert!(!sql.contains("\"usage\".total_cost_usd"));
         assert!(sql.contains("usage_settlement_snapshots.billing_cache_creation_5m_tokens"));
         assert!(sql.contains(
             "CAST(usage_settlement_snapshots.billing_total_cost_usd AS DOUBLE PRECISION)"

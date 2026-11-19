@@ -2886,8 +2886,9 @@ pub trait UsageReadRepository: Send + Sync {
 /// Repository write model for a single usage aggregate.
 ///
 /// Request/response headers and bodies here are capture inputs that the repository persists into
-/// the dedicated HTTP audit/body stores. Deprecated mirror columns on `public.usage` remain in the
-/// schema for compatibility only and are not the intended long-term destination for new writes.
+/// the dedicated HTTP audit/body stores. Deprecated billing mirror fields remain on this write
+/// model for legacy callers, but repository write paths no longer persist them to
+/// `public.usage`; canonical billing values are written to settlement snapshots.
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UpsertUsageRecord {
     pub request_id: String,
@@ -2930,11 +2931,11 @@ pub struct UpsertUsageRecord {
     pub response_time_ms: Option<u64>,
     pub first_byte_time_ms: Option<u64>,
     pub status: String,
-    // Settlement state is also projected into `public.usage_settlement_snapshots`; the base usage
-    // row mirror exists for compatibility and indexing until a later schema cleanup.
+    // Settlement state is authoritative in `public.usage_settlement_snapshots`; the base usage
+    // row keeps `billing_status` as the write-arbitration state.
     pub billing_status: String,
     // HTTP capture payload. Canonical persistence goes through `usage_http_headers` and
-    // `usage_http_bodies`; any remaining `public.usage` body/header columns are compatibility-only.
+    // `usage_http_bodies`.
     pub request_headers: Option<Value>,
     pub request_body: Option<CapturedBody>,
     pub provider_request_headers: Option<Value>,

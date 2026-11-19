@@ -83,10 +83,10 @@ WHERE version=20260919000000;
     .unwrap();
 
     let historical_records = rows_snapshot(&pool, "_sqlx_migrations").await;
+    // Users and usage intentionally lose retired policy/billing mirror columns
+    // during this upgrade window; their surviving rows are covered elsewhere.
     let preserved_tables = [
-        "users",
         "api_keys",
-        "usage",
         "usage_attribution_snapshots",
         "stats_bucket_state",
         "stats_overview_hourly",
@@ -132,6 +132,8 @@ WHERE version=20260919000000;
             20261103000000,
             20261117000000,
             20261118000000,
+            20261119010000,
+            20261119020000,
         ]
     );
     assert_eq!(

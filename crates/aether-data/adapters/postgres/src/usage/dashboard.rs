@@ -28,8 +28,8 @@ SELECT u.created_at, u.api_key_id, u.model, u.provider_id, u.api_format, u.endpo
   CASE WHEN COALESCE(metadata.value->'usage_pricing_available', 'true'::jsonb) <> 'false'::jsonb
     AND (s.billing_actual_total_cost_usd IS NOT NULL OR COALESCE(s.billing_status, u.billing_status) = 'settled')
     THEN public.usage_customer_billable_amount(metadata.value,
-      COALESCE(s.billing_total_cost_usd::numeric, u.total_cost_usd::numeric),
-      COALESCE(s.billing_actual_total_cost_usd::numeric, u.actual_total_cost_usd::numeric)) END AS billable_amount,
+      COALESCE(s.billing_total_cost_usd::numeric, 0),
+      COALESCE(s.billing_actual_total_cost_usd::numeric, 0)) END AS billable_amount,
   s.allocation_status
 FROM public.usage u
 LEFT JOIN public.usage_settlement_snapshots s USING (request_id)

@@ -23,7 +23,7 @@ WITH aggregated AS (
         )::BIGINT AS total_tokens,
         COALESCE(SUM(COALESCE(usage.total_cost_usd, 0)), 0)::NUMERIC(20,8) AS total_cost_usd,
         MAX(usage.created_at) AS last_used_at
-    FROM public.usage
+    FROM public.usage_billing_facts AS usage
     WHERE usage.api_key_id IS NOT NULL
       AND BTRIM(usage.api_key_id) <> ''
     GROUP BY usage.api_key_id

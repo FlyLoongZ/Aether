@@ -39,6 +39,7 @@ async fn stored_rows(pool: &PgPool) -> Vec<Value> {
 }
 
 #[tokio::test]
+#[ignore = "historical usage_billing_facts mirror fallback is retired"]
 async fn overview_fact_metadata_optimization_preserves_facts_without_backfill() {
     let Some(server) = ManagedPostgresServer::try_start().await.unwrap() else {
         return;

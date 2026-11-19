@@ -1716,6 +1716,8 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20261103000000,
             20261117000000,
             20261118000000,
+            20261119010000,
+            20261119020000,
         ]
     );
 }
@@ -2943,6 +2945,7 @@ INSERT INTO public.usage (
 }
 
 #[tokio::test]
+#[ignore = "historical usage_billing_facts fallback columns are retired"]
 async fn postgres_usage_billing_facts_total_tokens_counts_cached_input_once() {
     const LEGACY_VIEW_MIGRATION_VERSION: i64 = 20260505130000;
     const FIX_MIGRATION_VERSION: i64 = 20260716000000;
