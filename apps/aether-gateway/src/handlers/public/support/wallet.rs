@@ -78,7 +78,7 @@ pub(in crate::handlers::public::support) use self::reads::{
 use self::reads::{
     build_wallet_daily_usage_payload_from_ledger, build_wallet_payload,
     build_wallet_zero_today_entry, handle_wallet_balance, handle_wallet_today_cost,
-    handle_wallet_transactions, parse_wallet_limit, parse_wallet_offset, wallet_fixed_offset,
+    handle_wallet_transactions, parse_wallet_limit, parse_wallet_offset,
     wallet_transaction_payload_from_record,
 };
 #[cfg(test)]
@@ -99,7 +99,9 @@ use self::refunds::{
     wallet_refund_detail_path_matches,
 };
 
-const WALLET_LEGACY_TIMEZONE: &str = "Asia/Shanghai";
+pub(super) fn wallet_timezone() -> chrono_tz::Tz {
+    crate::maintenance::maintenance_timezone()
+}
 const WALLET_RECHARGE_STORAGE_UNAVAILABLE_DETAIL: &str = "钱包充值后端暂不可用";
 const WALLET_REFUND_STORAGE_UNAVAILABLE_DETAIL: &str = "钱包退款后端暂不可用";
 const WALLET_SAFE_GATEWAY_RESPONSE_KEYS: &[&str] = &[

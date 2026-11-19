@@ -130,6 +130,15 @@ a default.
 - `username` and `api_key_name` remain as historical display snapshots so
   audit rows stay readable after users or API keys are deleted.
 
+## Wallet
+
+- Wallet daily usage reads now use `APP_TIMEZONE` (the maintenance timezone)
+  instead of the fixed `Asia/Shanghai` calendar. Historical ledger rows written
+  under a different timezone are not rewritten, so those dates may no longer
+  appear in the current calendar view.
+- Wallet today windows, flow grouping, and zero-value today entries all use the
+  configured timezone, including DST-aware local-midnight boundaries.
+
 ## Format conversion
 
 - The public `convert_request` / `convert_response` legacy exports are removed.

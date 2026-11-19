@@ -1,9 +1,8 @@
 use super::{
     build_auth_json_response, build_wallet_daily_usage_payload_from_ledger,
     build_wallet_live_today_usage_payload_for_user, build_wallet_payload,
-    build_wallet_zero_today_entry, http, wallet_fixed_offset,
-    wallet_transaction_payload_from_record, AppState, Body, GatewayPublicRequestContext, Response,
-    WALLET_LEGACY_TIMEZONE,
+    build_wallet_zero_today_entry, http, wallet_timezone, wallet_transaction_payload_from_record,
+    AppState, Body, GatewayPublicRequestContext, Response,
 };
 use serde_json::json;
 
@@ -35,7 +34,7 @@ fn wallet_flow_sort_key(item_type: &str, payload: &serde_json::Value) -> (String
                 .ok()
                 .map(|value| {
                     value
-                        .with_timezone(&wallet_fixed_offset())
+                        .with_timezone(&wallet_timezone())
                         .date_naive()
                         .to_string()
                 })
@@ -87,7 +86,7 @@ pub(super) async fn handle_wallet_flow(
         == 0
     {
         if let Ok(Some(today_usage)) = state
-            .find_wallet_today_usage(&wallet.id, WALLET_LEGACY_TIMEZONE)
+            .find_wallet_today_usage(&wallet.id, wallet_timezone().name())
             .await
         {
             today_entry = build_wallet_daily_usage_payload_from_ledger(&today_usage, true);
@@ -100,7 +99,7 @@ pub(super) async fn handle_wallet_flow(
         .await
         .unwrap_or((Vec::new(), 0));
     let daily_page = state
-        .list_wallet_daily_usage_history(&wallet.id, WALLET_LEGACY_TIMEZONE, fetch_size)
+        .list_wallet_daily_usage_history(&wallet.id, wallet_timezone().name(), fetch_size)
         .await
         .unwrap_or_default();
 

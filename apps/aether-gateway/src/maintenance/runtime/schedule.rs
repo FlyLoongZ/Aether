@@ -30,7 +30,7 @@ pub(super) async fn provider_checkin_schedule(
     }))
 }
 
-pub(super) fn maintenance_timezone() -> Tz {
+pub(crate) fn maintenance_timezone() -> Tz {
     let configured = std::env::var("APP_TIMEZONE")
         .ok()
         .map(|value| value.trim().to_string())

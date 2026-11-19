@@ -1,7 +1,7 @@
 use super::{
     build_auth_error_response, build_auth_json_response, build_auth_wallet_summary_payload, http,
-    query_param_value, resolve_authenticated_local_user, unix_secs_to_rfc3339, AppState, Body,
-    GatewayPublicRequestContext, Response, WALLET_LEGACY_TIMEZONE,
+    query_param_value, resolve_authenticated_local_user, unix_secs_to_rfc3339, wallet_timezone,
+    AppState, Body, GatewayPublicRequestContext, Response,
 };
 use crate::handlers::shared::round_to;
 use aether_data_contracts::repository::usage::UsageSettledCostSummaryQuery;
@@ -158,32 +158,36 @@ pub(super) fn parse_wallet_offset(query: Option<&str>) -> Result<usize, String> 
     }
 }
 
-pub(super) fn wallet_fixed_offset() -> chrono::FixedOffset {
-    chrono::FixedOffset::east_opt(8 * 3600).expect("Asia/Shanghai offset should be valid")
-}
-
 pub(super) fn wallet_today_billing_date_string() -> String {
     Utc::now()
-        .with_timezone(&wallet_fixed_offset())
+        .with_timezone(&wallet_timezone())
         .date_naive()
         .to_string()
 }
 
 fn wallet_today_usage_window() -> Result<(String, String, u64, u64), String> {
-    let offset = wallet_fixed_offset();
-    let today = Utc::now().with_timezone(&offset).date_naive();
+    let timezone = wallet_timezone();
+    let today = Utc::now().with_timezone(&timezone).date_naive();
     let Some(local_start_naive) = today.and_hms_opt(0, 0, 0) else {
         return Err("wallet today start is invalid".to_string());
     };
-    let Some(local_start) = offset.from_local_datetime(&local_start_naive).single() else {
-        return Err("wallet today local start is ambiguous".to_string());
+    let Some(next_day) = today.checked_add_days(chrono::Days::new(1)) else {
+        return Err("wallet today end is invalid".to_string());
     };
-    let local_end = local_start + chrono::Duration::days(1);
+    let Some(next_start_naive) = next_day.and_hms_opt(0, 0, 0) else {
+        return Err("wallet today end is invalid".to_string());
+    };
+    let Some(local_start) = timezone.from_local_datetime(&local_start_naive).earliest() else {
+        return Err("wallet today local start is invalid".to_string());
+    };
+    let Some(local_end) = timezone.from_local_datetime(&next_start_naive).earliest() else {
+        return Err("wallet today local end is invalid".to_string());
+    };
     let start_unix_secs = local_start.timestamp().max(0) as u64;
     let end_unix_secs = local_end.timestamp().max(0) as u64;
     Ok((
         today.to_string(),
-        WALLET_LEGACY_TIMEZONE.to_string(),
+        timezone.name().to_string(),
         start_unix_secs,
         end_unix_secs,
     ))
@@ -276,7 +280,7 @@ pub(super) fn build_wallet_zero_today_entry() -> serde_json::Value {
     build_wallet_daily_usage_payload(WalletDailyUsagePayload {
         id: None,
         date: wallet_today_billing_date_string(),
-        timezone: WALLET_LEGACY_TIMEZONE.to_string(),
+        timezone: wallet_timezone().name().to_string(),
         total_cost: 0.0,
         total_requests: 0,
         input_tokens: 0,

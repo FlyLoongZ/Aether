@@ -80,6 +80,7 @@ pub(crate) use provider_quota_alert::perform_provider_quota_alert_once;
 use request_candidate_cleanup::*;
 use runners::*;
 pub(crate) use runners::{start_manual_usage_cleanup_task, ManualUsageCleanupError};
+pub(crate) use schedule::maintenance_timezone;
 use schedule::*;
 use stats_daily::*;
 use stats_hourly::*;
