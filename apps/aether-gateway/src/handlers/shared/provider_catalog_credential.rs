@@ -240,8 +240,7 @@ mod tests {
 
         let stripped = sealed
             .strip_prefix(PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2)
-            .and_then(|value| value.strip_prefix("aether-runtime-secret-v1:"))
-            .expect("test value should contain both envelope layers");
+            .expect("test value should contain the business envelope layer");
         assert!(open_provider_catalog_credential(
             &state,
             "provider-1",

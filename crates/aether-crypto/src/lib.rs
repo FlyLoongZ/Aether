@@ -8,6 +8,4 @@ pub use python_fernet::{
     PythonFernetError, APP_SALT_HEX, APP_SALT_SEED, DEVELOPMENT_ENCRYPTION_KEY,
 };
 pub use rsa_pkcs1_sha256::{rsa_pkcs1_sha256_sign, rsa_pkcs1_sha256_verify, RsaPkcs1Sha256Error};
-pub use secret::{
-    SecretContext, SecretKey, SecretEnvelopeError, SECRET_ENVELOPE_PREFIX,
-};
+pub use secret::{SecretContext, SecretEnvelopeError, SecretKey, SECRET_ENVELOPE_PREFIX};

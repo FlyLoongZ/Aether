@@ -322,8 +322,7 @@ mod tests {
 
         let stripped = sealed
             .strip_prefix(PAYMENT_GATEWAY_SECRET_ENVELOPE_V3)
-            .and_then(|value| value.strip_prefix("aether-runtime-secret-v1:"))
-            .expect("test value should contain both envelope layers");
+            .expect("test value should contain the business envelope layer");
         assert!(open_payment_gateway_secret(&state, &binding, stripped).is_err());
 
         let mut tampered = sealed.into_bytes();

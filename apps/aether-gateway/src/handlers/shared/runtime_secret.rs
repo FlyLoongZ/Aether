@@ -1,8 +1,10 @@
 use crate::AppState;
+use aether_crypto::{SecretContext, SecretKey};
 
+#[cfg(test)]
+use super::catalog::encrypt_catalog_secret_with_fallbacks;
 use super::catalog::{
-    decrypt_catalog_secret_with_fallbacks, encrypt_catalog_secret_with_configured_key_fallbacks,
-    encrypt_catalog_secret_with_fallbacks,
+    decrypt_catalog_secret_with_fallbacks, effective_catalog_encryption_key_from_config,
 };
 
 const RUNTIME_SECRET_ENVELOPE_PREFIX: &str = "aether-runtime-secret-v1:";
@@ -16,8 +18,7 @@ pub(crate) fn seal_runtime_secret_payload(
         return None;
     }
     let protected = format!("{purpose}\0{plaintext}");
-    encrypt_catalog_secret_with_fallbacks(state, &protected)
-        .map(|ciphertext| format!("{RUNTIME_SECRET_ENVELOPE_PREFIX}{ciphertext}"))
+    seal_runtime_secret_plaintext(state.encryption_key(), &purpose, &protected)
 }
 
 pub(crate) fn seal_runtime_secret_payload_with_encryption_key(
@@ -29,8 +30,7 @@ pub(crate) fn seal_runtime_secret_payload_with_encryption_key(
         return None;
     }
     let protected = format!("{purpose}\0{plaintext}");
-    encrypt_catalog_secret_with_configured_key_fallbacks(encryption_key, &protected)
-        .map(|ciphertext| format!("{RUNTIME_SECRET_ENVELOPE_PREFIX}{ciphertext}"))
+    seal_runtime_secret_plaintext(encryption_key, &purpose, &protected)
 }
 
 pub(crate) fn open_runtime_secret_payload(
@@ -49,14 +49,31 @@ pub(crate) fn open_runtime_secret_payload_with_encryption_key(
     if purpose.is_empty() {
         return None;
     }
-    let ciphertext = stored.strip_prefix(RUNTIME_SECRET_ENVELOPE_PREFIX)?;
-    let protected = decrypt_catalog_secret_with_fallbacks(encryption_key, ciphertext)?;
+    let protected = if SecretKey::matches_envelope(stored) {
+        let encryption_key = effective_catalog_encryption_key_from_config(encryption_key)?;
+        SecretKey::from_secret(encryption_key.as_ref())
+            .open(SecretContext::Custom(purpose), stored)
+            .ok()?
+    } else {
+        let ciphertext = stored.strip_prefix(RUNTIME_SECRET_ENVELOPE_PREFIX)?;
+        decrypt_catalog_secret_with_fallbacks(encryption_key, ciphertext)?
+    };
     let plaintext = protected.strip_prefix(purpose)?.strip_prefix('\0')?;
     (!plaintext.contains('\0')).then(|| plaintext.to_owned())
 }
 
 pub(crate) fn runtime_secret_payload_is_sealed(value: &str) -> bool {
-    value.starts_with(RUNTIME_SECRET_ENVELOPE_PREFIX)
+    SecretKey::matches_envelope(value) || value.starts_with(RUNTIME_SECRET_ENVELOPE_PREFIX)
+}
+
+fn seal_runtime_secret_plaintext(
+    encryption_key: Option<&str>,
+    purpose: &str,
+    protected: &str,
+) -> Option<String> {
+    let encryption_key = effective_catalog_encryption_key_from_config(encryption_key)?;
+    let key = SecretKey::from_secret(encryption_key.as_ref());
+    key.seal(SecretContext::Custom(purpose), protected).ok()
 }
 
 #[cfg(test)]
@@ -76,7 +93,7 @@ mod tests {
         let sealed = seal_runtime_secret_payload(&state, "identity-oauth-state", payload)
             .expect("runtime secret should encrypt");
 
-        assert!(sealed.starts_with("aether-runtime-secret-v1:"));
+        assert!(sealed.starts_with("aether-secret:v1:"));
         assert!(!sealed.contains("pkce-runtime-secret-marker"));
         assert_eq!(
             open_runtime_secret_payload(&state, "identity-oauth-state", &sealed).as_deref(),

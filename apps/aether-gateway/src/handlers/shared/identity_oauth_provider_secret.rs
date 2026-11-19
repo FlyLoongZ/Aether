@@ -511,18 +511,6 @@ mod tests {
             &other_runtime,
         )
         .is_err());
-        let stripped = other_runtime
-            .strip_prefix("aether-runtime-secret-v1:")
-            .expect("runtime envelope should contain its Fernet payload");
-        assert!(
-            open_identity_oauth_provider_client_secret(
-                &state,
-                &sample_provider("linuxdo", stripped),
-                stripped
-            )
-            .is_err(),
-            "stripping a foreign runtime envelope must not turn it into a legacy secret",
-        );
     }
 
     #[tokio::test]

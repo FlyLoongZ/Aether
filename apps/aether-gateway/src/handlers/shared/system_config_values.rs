@@ -1,7 +1,9 @@
-use super::catalog::decrypt_catalog_secret_with_fallbacks;
+use super::catalog::{
+    decrypt_catalog_secret_with_fallbacks, effective_catalog_encryption_key_from_config,
+};
 use super::runtime_secret::{open_runtime_secret_payload, seal_runtime_secret_payload};
 use crate::{AppState, GatewayError};
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretContext, SecretKey};
 use std::future::Future;
 use url::Url;
 
@@ -90,7 +92,6 @@ pub(crate) fn encrypt_smtp_password(
         return None;
     }
     seal_runtime_secret_payload(state, &smtp_password_purpose(binding), plaintext)
-        .map(|sealed| format!("{SMTP_PASSWORD_V3_PREFIX}{sealed}"))
 }
 
 fn decrypt_smtp_password_v3(
@@ -98,7 +99,11 @@ fn decrypt_smtp_password_v3(
     binding: &SmtpPasswordBinding,
     stored: &str,
 ) -> Option<String> {
-    let sealed = stored.strip_prefix(SMTP_PASSWORD_V3_PREFIX)?;
+    let sealed = if SecretKey::matches_envelope(stored) {
+        stored
+    } else {
+        stored.strip_prefix(SMTP_PASSWORD_V3_PREFIX)?
+    };
     open_runtime_secret_payload(state, &smtp_password_purpose(binding), sealed)
         .filter(|plaintext| !plaintext.contains('\0'))
 }
@@ -111,8 +116,9 @@ pub(crate) async fn decrypt_or_migrate_smtp_password(
     if let Some(plaintext) = decrypt_smtp_password_v3(state, binding, stored.trim()) {
         return Ok(plaintext);
     }
-    if stored.trim().starts_with(SMTP_PASSWORD_V3_PREFIX)
-        || stored.trim().starts_with("aether-smtp-password-")
+    if !SecretKey::matches_envelope(stored.trim())
+        && (stored.trim().starts_with(SMTP_PASSWORD_V3_PREFIX)
+            || stored.trim().starts_with("aether-smtp-password-"))
     {
         return Err(system_config_secret_error(
             "stored SMTP password cannot be decrypted",
@@ -162,9 +168,11 @@ pub(crate) fn encrypt_system_config_secret(
     if plaintext.contains('\0') {
         return None;
     }
-    let purpose = system_config_secret_purpose(key);
-    seal_runtime_secret_payload(state, &purpose, plaintext)
-        .map(|sealed| format!("{SYSTEM_CONFIG_SECRET_V2_PREFIX}{sealed}"))
+    let encryption_key = effective_catalog_encryption_key_from_config(state.encryption_key())?;
+    let normalized = aether_admin::system::normalize_admin_system_config_key(key);
+    SecretKey::from_secret(encryption_key.as_ref())
+        .seal(SecretContext::SystemConfig(&normalized), plaintext)
+        .ok()
 }
 
 pub(crate) fn decrypt_system_config_secret(
@@ -172,6 +180,14 @@ pub(crate) fn decrypt_system_config_secret(
     key: &str,
     stored: &str,
 ) -> Option<String> {
+    if SecretKey::matches_envelope(stored) {
+        let encryption_key = effective_catalog_encryption_key_from_config(state.encryption_key())?;
+        let normalized = aether_admin::system::normalize_admin_system_config_key(key);
+        return SecretKey::from_secret(encryption_key.as_ref())
+            .open(SecretContext::SystemConfig(&normalized), stored)
+            .ok()
+            .filter(|plaintext| !plaintext.contains('\0'));
+    }
     let sealed = stored.strip_prefix(SYSTEM_CONFIG_SECRET_V2_PREFIX)?;
     let purpose = system_config_secret_purpose(key);
     open_runtime_secret_payload(state, &purpose, sealed)
@@ -290,7 +306,6 @@ pub(crate) fn encrypt_ldap_bind_password(
     }
     let binding = ldap_bind_password_binding(config)?;
     seal_runtime_secret_payload(state, &ldap_bind_password_purpose_v3(&binding), plaintext)
-        .map(|sealed| format!("{LDAP_BIND_PASSWORD_V3_PREFIX}{sealed}"))
 }
 
 fn decrypt_ldap_bind_password_v2(state: &AppState, stored: &str) -> Option<String> {
@@ -304,14 +319,19 @@ fn decrypt_ldap_bind_password_v3(
     config: &aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig,
     stored: &str,
 ) -> Option<String> {
-    let sealed = stored.strip_prefix(LDAP_BIND_PASSWORD_V3_PREFIX)?;
+    let sealed = if SecretKey::matches_envelope(stored) {
+        stored
+    } else {
+        stored.strip_prefix(LDAP_BIND_PASSWORD_V3_PREFIX)?
+    };
     let binding = ldap_bind_password_binding(config)?;
     open_runtime_secret_payload(state, &ldap_bind_password_purpose_v3(&binding), sealed)
         .filter(|plaintext| !plaintext.contains('\0'))
 }
 
 fn stored_secret_uses_known_envelope_family(value: &str) -> bool {
-    value.starts_with(SYSTEM_CONFIG_SECRET_ENVELOPE_FAMILY_PREFIX)
+    SecretKey::matches_envelope(value)
+        || value.starts_with(SYSTEM_CONFIG_SECRET_ENVELOPE_FAMILY_PREFIX)
         || value.starts_with(LDAP_BIND_PASSWORD_ENVELOPE_FAMILY_PREFIX)
         || value.starts_with(RUNTIME_SECRET_ENVELOPE_FAMILY_PREFIX)
         || value.starts_with("aether-")
@@ -425,7 +445,6 @@ pub(crate) fn encrypt_bark_device_key(
         return None;
     }
     seal_runtime_secret_payload(state, &bark_device_key_purpose(binding), plaintext)
-        .map(|sealed| format!("{BARK_DEVICE_KEY_V2_PREFIX}{sealed}"))
 }
 
 fn decrypt_bark_device_key_v2(
@@ -433,7 +452,11 @@ fn decrypt_bark_device_key_v2(
     binding: &BarkDeviceKeyBinding,
     stored: &str,
 ) -> Option<String> {
-    let sealed = stored.strip_prefix(BARK_DEVICE_KEY_V2_PREFIX)?;
+    let sealed = if SecretKey::matches_envelope(stored) {
+        stored
+    } else {
+        stored.strip_prefix(BARK_DEVICE_KEY_V2_PREFIX)?
+    };
     open_runtime_secret_payload(state, &bark_device_key_purpose(binding), sealed)
         .filter(|plaintext| !plaintext.contains('\0'))
 }
@@ -452,7 +475,8 @@ pub(crate) async fn decrypt_or_migrate_bark_device_key(
             continue;
         }
         let observed = observed_raw.trim();
-        if observed.starts_with(BARK_DEVICE_KEY_V2_PREFIX) {
+        if SecretKey::matches_envelope(observed) || observed.starts_with(BARK_DEVICE_KEY_V2_PREFIX)
+        {
             return decrypt_bark_device_key_v2(state, binding, observed).ok_or_else(|| {
                 system_config_secret_error("stored Bark device key cannot be decrypted")
             });
@@ -534,7 +558,9 @@ pub(crate) async fn decrypt_or_migrate_ldap_bind_password(
             return Ok(None);
         };
         let observed = observed_raw.trim();
-        if observed.starts_with(LDAP_BIND_PASSWORD_V3_PREFIX) {
+        if SecretKey::matches_envelope(observed)
+            || observed.starts_with(LDAP_BIND_PASSWORD_V3_PREFIX)
+        {
             let plaintext =
                 decrypt_ldap_bind_password_v3(state, &current, observed).ok_or_else(|| {
                     ldap_bind_password_error("stored LDAP bind password cannot be decrypted")
@@ -626,7 +652,9 @@ where
         }
         let observed = observed_raw.trim();
 
-        if observed.starts_with(SYSTEM_CONFIG_SECRET_V2_PREFIX) {
+        if SecretKey::matches_envelope(observed)
+            || observed.starts_with(SYSTEM_CONFIG_SECRET_V2_PREFIX)
+        {
             let plaintext =
                 decrypt_system_config_secret(state, key, observed).ok_or_else(|| {
                     system_config_secret_error(
@@ -776,7 +804,7 @@ mod tests {
                 .expect("SMTP password should read")
                 .and_then(|value| value.as_str().map(ToOwned::to_owned))
                 .expect("SMTP password should be a string");
-            assert!(migrated.starts_with(SMTP_PASSWORD_V3_PREFIX));
+            assert!(migrated.starts_with("aether-secret:v1:"));
             assert_ne!(migrated, legacy);
             assert_eq!(
                 decrypt_or_migrate_smtp_password(&state, &binding, migrated.clone())
@@ -1008,7 +1036,7 @@ mod tests {
             .expect("LDAP config should read")
             .and_then(|config| config.bind_password_encrypted)
             .expect("LDAP bind password should exist");
-        assert!(stored.starts_with(LDAP_BIND_PASSWORD_V3_PREFIX));
+        assert!(stored.starts_with("aether-secret:v1:"));
         assert_eq!(
             decrypt_ldap_bind_password_v3(&state, &config, &stored)
                 .expect("migrated LDAP password should decrypt"),
@@ -1073,35 +1101,27 @@ mod tests {
         .expect_err("LDAP ciphertext must not become a system config secret");
         assert!(system_error.into_message().contains("cannot be decrypted"));
 
-        let stripped_system = system_sealed
-            .strip_prefix(SYSTEM_CONFIG_SECRET_V2_PREFIX)
-            .and_then(|value| value.strip_prefix("aether-runtime-secret-v1:"))
-            .expect("system secret should contain a nested runtime envelope");
+        let stripped_system = system_sealed.clone();
         let (ldap_with_stripped_system, repository) =
-            state_with_ldap_bind_password(stripped_system);
+            state_with_ldap_bind_password(&stripped_system);
         let config = repository
             .get_ldap_config()
             .await
             .expect("LDAP config should read")
             .expect("LDAP config should exist");
-        let error = decrypt_or_migrate_ldap_bind_password(&ldap_with_stripped_system, &config)
+        decrypt_or_migrate_ldap_bind_password(&ldap_with_stripped_system, &config)
             .await
             .expect_err("stripped system framing must not become an LDAP password");
-        assert!(error.into_message().contains("reserved secret framing"));
 
-        let stripped_ldap = ldap_sealed
-            .strip_prefix(LDAP_BIND_PASSWORD_V3_PREFIX)
-            .and_then(|value| value.strip_prefix("aether-runtime-secret-v1:"))
-            .expect("LDAP secret should contain a nested runtime envelope");
-        let system_with_stripped_ldap = state_with_stored_secret(stripped_ldap);
-        let error = decrypt_or_migrate_system_config_secret(
+        let stripped_ldap = ldap_sealed.clone();
+        let system_with_stripped_ldap = state_with_stored_secret(&stripped_ldap);
+        decrypt_or_migrate_system_config_secret(
             &system_with_stripped_ldap,
             TEST_KEY,
             stripped_ldap.to_string(),
         )
         .await
         .expect_err("stripped LDAP framing must not become a system secret");
-        assert!(error.into_message().contains("reserved secret framing"));
     }
 
     #[tokio::test]
@@ -1121,7 +1141,7 @@ mod tests {
             .and_then(|value| value.as_str().map(ToOwned::to_owned))
             .expect("stored secret should be a string");
         assert_ne!(stored, TEST_SECRET);
-        assert!(stored.starts_with(SYSTEM_CONFIG_SECRET_V2_PREFIX));
+        assert!(stored.starts_with("aether-secret:v1:"));
         assert_eq!(
             decrypt_system_config_secret(&state, TEST_KEY, &stored)
                 .expect("migrated secret should decrypt"),
@@ -1390,7 +1410,7 @@ mod tests {
             .expect("Bark device key should read")
             .and_then(|value| value.as_str().map(ToOwned::to_owned))
             .expect("Bark device key should remain a string");
-        assert!(stored.starts_with("aether-bark-device-key-v2:"));
+        assert!(stored.starts_with("aether-secret:v1:"));
         assert_eq!(
             decrypt_bark_device_key_v2(&state, &binding, &stored).as_deref(),
             Some(TEST_SECRET)
