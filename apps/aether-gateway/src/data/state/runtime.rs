@@ -2756,14 +2756,15 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-    use aether_data::repository::users::{InMemoryUserReadRepository, StoredUserExportRow};
     use aether_data_contracts::repository::billing::{
         BillingReadRepository, StoredBillingModelContext,
     };
     use aether_data_contracts::repository::global_models::{
         StoredAdminGlobalModel, StoredPublicGlobalModel, UpdateAdminGlobalModelRecord,
     };
+    use aether_data_contracts::repository::users::StoredUserExportRow;
+    use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+    use aether_data_memory::users::InMemoryUserReadRepository;
     use async_trait::async_trait;
     use serde_json::json;
     use tokio::sync::Barrier;

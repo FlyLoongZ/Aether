@@ -306,15 +306,17 @@ impl AppState {
         }
 
         Ok(self
-            .adjust_wallet_balance(aether_data_contracts::repository::wallet::AdjustWalletBalanceInput {
-                wallet_id: wallet_id.to_string(),
-                amount_usd,
-                balance_type: balance_type.to_string(),
-                operator_id: operator_id.map(ToOwned::to_owned),
-                description: description.map(ToOwned::to_owned),
-                clamp_deduction_to_available_balance,
-                batch_context: None,
-            })
+            .adjust_wallet_balance(
+                aether_data_contracts::repository::wallet::AdjustWalletBalanceInput {
+                    wallet_id: wallet_id.to_string(),
+                    amount_usd,
+                    balance_type: balance_type.to_string(),
+                    operator_id: operator_id.map(ToOwned::to_owned),
+                    description: description.map(ToOwned::to_owned),
+                    clamp_deduction_to_available_balance,
+                    batch_context: None,
+                },
+            )
             .await?
             .map(|(wallet, transaction)| {
                 (

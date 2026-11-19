@@ -14,7 +14,7 @@ jemalloc = [
     "tikv-jemallocator/stats",
     "tikv-jemalloc-sys/stats",
 ]
-testkit = ["aether-data/test-support"]
+testkit = ["dep:aether-data-memory"]
 
 [dependencies]
 aether-admin.workspace = true
@@ -28,6 +28,7 @@ aether-crypto.workspace = true
 aether-data.workspace = true
 aether-data-contracts.workspace = true
 aether-data-postgres.workspace = true
+aether-data-memory = { workspace = true, optional = true }
 aether-dispatch-core.workspace = true
 aether-gateway-frontdoor.workspace = true
 aether-gateway-control.workspace = true
@@ -102,7 +103,7 @@ tikv-jemallocator = { version = "0.7", optional = true }
 tikv-jemalloc-sys = { version = "0.7", optional = true }
 
 [dev-dependencies]
-aether-data = { workspace = true, features = ["test-support"] }
+aether-data-memory.workspace = true
 aether-testkit = { workspace = true, features = ["postgres"] }
 aether-test-support.workspace = true
 aws-lc-rs.workspace = true

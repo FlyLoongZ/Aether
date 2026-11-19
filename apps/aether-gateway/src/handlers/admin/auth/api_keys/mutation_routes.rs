@@ -74,9 +74,9 @@ async fn compensate_standalone_api_key_creation(
     api_key_id: &str,
 ) -> Result<(), GatewayError> {
     let wallet = state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
-            api_key_id,
-        ))
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id),
+        )
         .await?;
     if let Some(wallet) = wallet {
         let removed = state
@@ -87,9 +87,11 @@ async fn compensate_standalone_api_key_creation(
             .await?;
         if !removed
             && state
-                .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
-                    &wallet.id,
-                ))
+                .find_wallet(
+                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
+                        &wallet.id,
+                    ),
+                )
                 .await?
                 .is_some()
         {
@@ -451,9 +453,9 @@ pub(super) async fn build_admin_update_api_key_response(
     }
 
     let mut wallet = state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
-            &api_key_id,
-        ))
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(&api_key_id),
+        )
         .await?;
     if field_presence.contains("unlimited_balance") {
         if !state.has_auth_wallet_write_capability() {
@@ -528,9 +530,9 @@ pub(super) async fn build_admin_update_api_key_response(
 
     if wallet.is_none() {
         wallet = state
-            .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
-                &api_key_id,
-            ))
+            .find_wallet(
+                aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(&api_key_id),
+            )
             .await?;
     }
     let mut payload = build_admin_api_key_detail_payload(state, &updated, wallet.as_ref());
@@ -636,11 +638,11 @@ mod tests {
     use crate::data::GatewayDataState;
     use crate::handlers::admin::request::AdminAppState;
     use crate::state::AppState;
-    use aether_data::repository::auth::{
+    use aether_data_contracts::repository::auth::{
         AuthApiKeyReadRepository, AuthApiKeyWriteRepository, CreateStandaloneApiKeyRecord,
-        InMemoryAuthApiKeySnapshotRepository,
     };
     use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
     use std::sync::Arc;
 
     async fn seed_standalone_key(

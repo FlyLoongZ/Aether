@@ -6,8 +6,7 @@ pub(crate) use self::types::{
     LocalVideoTaskReadResponse, LocalVideoTaskSnapshot,
 };
 pub(crate) use aether_video_tasks_core::{
-    build_local_sync_finalize_read_response,
-    resolve_local_sync_error_background_report_kind,
+    build_local_sync_finalize_read_response, resolve_local_sync_error_background_report_kind,
     resolve_local_sync_success_background_report_kind,
 };
 

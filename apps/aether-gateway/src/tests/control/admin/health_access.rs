@@ -2,14 +2,15 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::auth_modules::InMemoryAuthModuleReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::management_tokens::{
-    InMemoryManagementTokenRepository, ManagementTokenListQuery, ManagementTokenReadRepository,
-};
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::candidates::RequestCandidateStatus;
+use aether_data_contracts::repository::management_tokens::{
+    ManagementTokenListQuery, ManagementTokenReadRepository,
+};
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
+use aether_data_memory::auth_modules::InMemoryAuthModuleReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::management_tokens::InMemoryManagementTokenRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};
@@ -1527,7 +1528,11 @@ async fn gateway_rejects_constrained_full_management_token_creating_unconstraine
         .expect("legacy request should succeed");
     let legacy_status = legacy_response.status();
     let legacy_body = legacy_response.text().await.expect("body should read");
-    assert_eq!(legacy_status, StatusCode::UNAUTHORIZED, "body={legacy_body}");
+    assert_eq!(
+        legacy_status,
+        StatusCode::UNAUTHORIZED,
+        "body={legacy_body}"
+    );
     let legacy_payload: serde_json::Value =
         serde_json::from_str(&legacy_body).expect("json body should parse");
     assert_eq!(legacy_payload["detail"], "admin authentication required");

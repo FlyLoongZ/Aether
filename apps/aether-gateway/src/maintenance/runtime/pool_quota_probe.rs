@@ -2295,7 +2295,7 @@ mod tests {
     #[tokio::test]
     async fn pool_quota_probe_replenish_public_spawn_returns_none_for_merged_triggers() {
         let repository = Arc::new(
-            aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository::seed(
+            aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository::seed(
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),

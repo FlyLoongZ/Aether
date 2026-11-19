@@ -116,20 +116,28 @@ impl AppState {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let owner_matches =
-                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| match owner {
-                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
-                        !user_id.trim().is_empty()
-                            && wallet.id == wallet_id
-                            && wallet.user_id.as_deref() == Some(user_id)
-                            && wallet.api_key_id.is_none()
+                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| {
+                    match owner {
+                        aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
+                            user_id,
+                        ) => {
+                            !user_id.trim().is_empty()
+                                && wallet.id == wallet_id
+                                && wallet.user_id.as_deref() == Some(user_id)
+                                && wallet.api_key_id.is_none()
+                        }
+                        aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
+                            api_key_id,
+                        ) => {
+                            !api_key_id.trim().is_empty()
+                                && wallet.id == wallet_id
+                                && wallet.api_key_id.as_deref() == Some(api_key_id)
+                                && wallet.user_id.is_none()
+                        }
+                        aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => {
+                            false
+                        }
                     }
-                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
-                        !api_key_id.trim().is_empty()
-                            && wallet.id == wallet_id
-                            && wallet.api_key_id.as_deref() == Some(api_key_id)
-                            && wallet.user_id.is_none()
-                    }
-                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => false,
                 };
             if matches!(
                 owner,
@@ -222,20 +230,28 @@ impl AppState {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let owner_matches =
-                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| match owner {
-                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
-                        !user_id.trim().is_empty()
-                            && wallet.id == expected.id
-                            && wallet.user_id.as_deref() == Some(user_id)
-                            && wallet.api_key_id.is_none()
+                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| {
+                    match owner {
+                        aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
+                            user_id,
+                        ) => {
+                            !user_id.trim().is_empty()
+                                && wallet.id == expected.id
+                                && wallet.user_id.as_deref() == Some(user_id)
+                                && wallet.api_key_id.is_none()
+                        }
+                        aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
+                            api_key_id,
+                        ) => {
+                            !api_key_id.trim().is_empty()
+                                && wallet.id == expected.id
+                                && wallet.api_key_id.as_deref() == Some(api_key_id)
+                                && wallet.user_id.is_none()
+                        }
+                        aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => {
+                            false
+                        }
                     }
-                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
-                        !api_key_id.trim().is_empty()
-                            && wallet.id == expected.id
-                            && wallet.api_key_id.as_deref() == Some(api_key_id)
-                            && wallet.user_id.is_none()
-                    }
-                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => false,
                 };
             if matches!(
                 owner,
@@ -325,18 +341,26 @@ impl AppState {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let owner_matches =
-                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| match owner {
-                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
-                        !user_id.trim().is_empty()
-                            && wallet.user_id.as_deref() == Some(user_id)
-                            && wallet.api_key_id.is_none()
+                |wallet: &aether_data_contracts::repository::wallet::StoredWalletSnapshot| {
+                    match owner {
+                        aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
+                            user_id,
+                        ) => {
+                            !user_id.trim().is_empty()
+                                && wallet.user_id.as_deref() == Some(user_id)
+                                && wallet.api_key_id.is_none()
+                        }
+                        aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
+                            api_key_id,
+                        ) => {
+                            !api_key_id.trim().is_empty()
+                                && wallet.api_key_id.as_deref() == Some(api_key_id)
+                                && wallet.user_id.is_none()
+                        }
+                        aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => {
+                            false
+                        }
                     }
-                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
-                        !api_key_id.trim().is_empty()
-                            && wallet.api_key_id.as_deref() == Some(api_key_id)
-                            && wallet.user_id.is_none()
-                    }
-                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(_) => false,
                 };
             if matches!(
                 owner,
@@ -644,7 +668,8 @@ impl AppState {
         logged_in_at: chrono::DateTime<chrono::Utc>,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
+    {
         Ok(self
             .get_or_create_ldap_auth_user_with_wallet_outcome(
                 email,
@@ -820,7 +845,8 @@ impl AppState {
         user_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             if user_id.trim().is_empty() {
@@ -893,8 +919,10 @@ impl AppState {
         user_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>,
+        GatewayError,
+    > {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             if user_id.trim().is_empty() {
@@ -970,7 +998,8 @@ impl AppState {
         api_key_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             if api_key_id.trim().is_empty() {
@@ -1048,8 +1077,10 @@ impl AppState {
         api_key_id: &str,
         initial_gift_usd: f64,
         unlimited: bool,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::InitializeAuthWalletOutcome>,
+        GatewayError,
+    > {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             if api_key_id.trim().is_empty() {
@@ -1129,7 +1160,8 @@ impl AppState {
         &self,
         user_id: &str,
         limit_mode: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");
@@ -1163,7 +1195,8 @@ impl AppState {
         &self,
         api_key_id: &str,
         limit_mode: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");
@@ -1207,7 +1240,8 @@ impl AppState {
         total_refunded: f64,
         total_adjusted: f64,
         updated_at_unix_secs: Option<u64>,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");
@@ -1272,7 +1306,8 @@ impl AppState {
         total_refunded: f64,
         total_adjusted: f64,
         updated_at_unix_secs: Option<u64>,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_wallet_store.as_ref() {
             let mut guard = store.lock().expect("auth wallet store should lock");

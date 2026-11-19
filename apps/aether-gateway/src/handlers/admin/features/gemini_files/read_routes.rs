@@ -76,7 +76,9 @@ async fn admin_gemini_files_username_map<'a, I>(
     mappings: I,
 ) -> Result<BTreeMap<String, String>, GatewayError>
 where
-    I: Iterator<Item = &'a aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping>,
+    I: Iterator<
+        Item = &'a aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping,
+    >,
 {
     let user_ids = mappings
         .filter_map(|mapping| mapping.user_id.clone())

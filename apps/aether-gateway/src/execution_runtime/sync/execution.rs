@@ -3311,10 +3311,10 @@ async fn execute_sync_via_remote_execution_runtime(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-    use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::candidates::RequestCandidateReadRepository;
     use aether_data_contracts::repository::usage::UsageReadRepository;
+    use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+    use aether_data_memory::usage::InMemoryUsageReadRepository;
     use aether_usage_runtime::UsageRuntimeConfig;
     use futures_util::pin_mut;
     use serde_json::json;

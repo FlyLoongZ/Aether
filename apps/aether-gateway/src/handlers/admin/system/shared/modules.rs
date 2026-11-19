@@ -188,7 +188,8 @@ pub(crate) struct AdminSetModuleEnabledRequest {
 }
 
 pub(crate) struct AdminModuleRuntimeState {
-    oauth_providers: Vec<aether_data_contracts::repository::auth_modules::StoredOAuthProviderModuleConfig>,
+    oauth_providers:
+        Vec<aether_data_contracts::repository::auth_modules::StoredOAuthProviderModuleConfig>,
     ldap_config: Option<aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
     gemini_files_has_capable_key: bool,
     important_notification_configured: bool,

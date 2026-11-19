@@ -1,14 +1,13 @@
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskStatus, VideoTaskWriteRepository,
 };
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 use axum::body::{to_bytes, Body};
 use axum::response::Response;
 use axum::routing::any;

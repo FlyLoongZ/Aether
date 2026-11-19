@@ -382,10 +382,11 @@ mod tests {
     };
 
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-    use aether_data::repository::oauth_providers::{
-        EncryptedSecretUpdate, InMemoryOAuthProviderRepository, OAuthProviderReadRepository,
-        OAuthProviderWriteRepository, StoredOAuthProviderConfig, UpsertOAuthProviderConfigRecord,
+    use aether_data_contracts::repository::oauth_providers::{
+        EncryptedSecretUpdate, OAuthProviderReadRepository, OAuthProviderWriteRepository,
+        StoredOAuthProviderConfig, UpsertOAuthProviderConfigRecord,
     };
+    use aether_data_memory::oauth_providers::InMemoryOAuthProviderRepository;
 
     use super::{
         decrypt_or_migrate_identity_oauth_provider_client_secret,

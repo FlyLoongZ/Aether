@@ -5,16 +5,14 @@ use aether_ai_serving::{
     ai_ranking_context, build_ai_rankable_candidate, AiRankableCandidateParts,
 };
 use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-use aether_data::repository::{
-    provider_catalog::InMemoryProviderCatalogReadRepository,
-    routing_profiles::InMemoryRoutingGroupRepository,
-};
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
 use aether_data_contracts::repository::routing_profiles::{
     CreateRoutingGroupRecord, RoutingGroupWriteRepository,
 };
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_scheduler_core::{
     apply_scheduler_candidate_ranking,
     build_scheduler_affinity_cache_key_for_api_key_id_with_client_session, ClientSessionAffinity,

@@ -236,8 +236,8 @@ mod tests {
     }
 
     fn state_with_response_rules(plan: &ExecutionPlan) -> AppState {
-        use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
         use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
+        use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
         let mut endpoint = StoredProviderCatalogEndpoint::new(
             plan.endpoint_id.clone(),
             plan.provider_id.clone(),

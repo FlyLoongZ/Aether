@@ -1,13 +1,12 @@
 use super::*;
 use crate::tests::DEV_FERNET_KEY;
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -103,8 +102,9 @@ async fn xai_video_native_and_compatibility_http_lifecycle_postgres() {
         .execute(&pool)
         .await
         .expect("isolated video task table should be created");
-    let repository =
-        Arc::new(aether_data::repository::video_tasks::SqlxVideoTaskRepository::new(pool.clone()));
+    let repository = Arc::new(aether_data_postgres::SqlxVideoTaskRepository::new(
+        pool.clone(),
+    ));
     Box::pin(assert_xai_video_http_lifecycle(repository)).await;
     pool.close().await;
 }

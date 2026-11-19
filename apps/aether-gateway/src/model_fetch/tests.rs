@@ -4,8 +4,6 @@ use std::time::Duration;
 
 use aether_contracts::ExecutionPlan;
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::global_models::{
     AdminProviderModelListQuery, GlobalModelReadRepository, StoredAdminGlobalModel,
     StoredAdminProviderModel,
@@ -14,6 +12,8 @@ use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogReadRepository, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
     StoredProviderCatalogProvider,
 };
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};
 use serde_json::json;

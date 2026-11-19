@@ -1,8 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::auth_modules::{
-    InMemoryAuthModuleReadRepository, StoredOAuthProviderModuleConfig,
-};
+use aether_data_contracts::repository::auth_modules::StoredOAuthProviderModuleConfig;
+use aether_data_memory::auth_modules::InMemoryAuthModuleReadRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

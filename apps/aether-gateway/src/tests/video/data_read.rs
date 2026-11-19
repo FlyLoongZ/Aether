@@ -1,12 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskStatus, VideoTaskWriteRepository,
 };
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};

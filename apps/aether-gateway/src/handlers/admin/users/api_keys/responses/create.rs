@@ -161,27 +161,29 @@ pub(crate) async fn build_admin_create_user_api_key_response(
     };
 
     let Some(created) = state
-        .create_user_api_key(aether_data_contracts::repository::auth::CreateUserApiKeyRecord {
-            user_id: target_user_id.clone(),
-            api_key_id,
-            key_hash,
-            key_encrypted: Some(key_encrypted),
-            name: Some(name.clone()),
-            allowed_providers,
-            allowed_api_formats: None,
-            allowed_models: None,
-            ip_rules,
-            rate_limit,
-            concurrent_limit,
-            force_capabilities: None,
-            feature_settings,
-            is_active: true,
-            expires_at_unix_secs: None,
-            auto_delete_on_expiry: false,
-            total_requests: 0,
-            total_tokens: 0,
-            total_cost_usd: 0.0,
-        })
+        .create_user_api_key(
+            aether_data_contracts::repository::auth::CreateUserApiKeyRecord {
+                user_id: target_user_id.clone(),
+                api_key_id,
+                key_hash,
+                key_encrypted: Some(key_encrypted),
+                name: Some(name.clone()),
+                allowed_providers,
+                allowed_api_formats: None,
+                allowed_models: None,
+                ip_rules,
+                rate_limit,
+                concurrent_limit,
+                force_capabilities: None,
+                feature_settings,
+                is_active: true,
+                expires_at_unix_secs: None,
+                auto_delete_on_expiry: false,
+                total_requests: 0,
+                total_tokens: 0,
+                total_cost_usd: 0.0,
+            },
+        )
         .await?
     else {
         return Ok(build_admin_users_data_unavailable_response());

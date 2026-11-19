@@ -1,8 +1,8 @@
 use std::fmt;
 
 use super::PostgresBackend;
-use aether_data_postgres::{PostgresLeaseRunner, PostgresLeaseRunnerConfig};
 use crate::DataLayerError;
+use aether_data_postgres::{PostgresLeaseRunner, PostgresLeaseRunnerConfig};
 
 #[derive(Clone, Default)]
 pub struct DataLeaseBackends {

@@ -129,11 +129,11 @@ pub(crate) use stream::execute_execution_runtime_stream_with_retry_scope;
 pub(crate) use stream_pump::build_direct_execution_frame_stream;
 pub(crate) use sync::execute_execution_runtime_sync_with_retry_scope;
 pub(crate) use transport::execute_sync_plan_with_report_context as execute_execution_runtime_sync_plan_with_report_context;
+#[cfg(test)]
+pub(crate) use transport::DirectSyncExecutionRuntime;
 pub(crate) use transport::{
     execute_sync_plan as execute_execution_runtime_sync_plan, DirectUpstreamStreamExecution,
 };
-#[cfg(test)]
-pub(crate) use transport::DirectSyncExecutionRuntime;
 pub(crate) use transport_failure::{
     build_transport_error_stop_response, client_message_for_error_type,
     client_message_for_execution_error_kind, mark_stream_candidate_watchdog_terminal_started,

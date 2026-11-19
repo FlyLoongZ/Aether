@@ -427,7 +427,7 @@ mod tests {
     async fn enriches_completed_usage_event_with_billing_snapshot() {
         let state = GatewayDataState::with_billing_reader_for_tests(
             std::sync::Arc::new(
-                aether_data::repository::billing::InMemoryBillingReadRepository::seed(vec![
+                aether_data_memory::billing::InMemoryBillingReadRepository::seed(vec![
                     aether_data_contracts::repository::billing::StoredBillingModelContext::new(
                         "provider-1".to_string(),
                         Some("pay_as_you_go".to_string()),

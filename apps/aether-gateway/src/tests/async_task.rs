@@ -1,6 +1,4 @@
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
@@ -8,6 +6,8 @@ use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskLookupKey, VideoTaskReadRepository, VideoTaskStatus,
     VideoTaskWriteRepository,
 };
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 
 use super::{
     any, authenticated_operational_client, build_state_with_execution_runtime_override, json,

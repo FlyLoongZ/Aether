@@ -2,27 +2,27 @@ use std::fmt;
 use std::sync::Arc;
 
 use super::PostgresBackend;
-use crate::repository::announcements::AnnouncementReadRepository;
-use crate::repository::auth::AuthApiKeyReadRepository;
-use crate::repository::auth_modules::AuthModuleReadRepository;
-use crate::repository::background_tasks::BackgroundTaskReadRepository;
-use crate::repository::billing::BillingReadRepository;
-use crate::repository::candidate_selection::MinimalCandidateSelectionReadRepository;
-use crate::repository::candidates::RequestCandidateReadRepository;
-use crate::repository::gemini_file_mappings::GeminiFileMappingReadRepository;
-use crate::repository::global_models::GlobalModelReadRepository;
-use crate::repository::management_tokens::ManagementTokenReadRepository;
-use crate::repository::oauth_providers::OAuthProviderReadRepository;
-use crate::repository::pool_scores::PoolScoreReadRepository;
-use crate::repository::provider_catalog::ProviderCatalogReadRepository;
-use crate::repository::proxy_nodes::ProxyNodeReadRepository;
-use crate::repository::quota::ProviderQuotaReadRepository;
-use crate::repository::routing_profiles::RoutingGroupReadRepository;
-use crate::repository::usage::UsageReadRepository;
-use crate::repository::users::UserReadRepository;
-use crate::repository::video_tasks::VideoTaskReadRepository;
-use crate::repository::wallet::WalletReadRepository;
+use aether_data_contracts::repository::announcements::AnnouncementReadRepository;
 use aether_data_contracts::repository::audit::AuditLogReadRepository;
+use aether_data_contracts::repository::auth::AuthApiKeyReadRepository;
+use aether_data_contracts::repository::auth_modules::AuthModuleReadRepository;
+use aether_data_contracts::repository::background_tasks::BackgroundTaskReadRepository;
+use aether_data_contracts::repository::billing::BillingReadRepository;
+use aether_data_contracts::repository::candidate_selection::MinimalCandidateSelectionReadRepository;
+use aether_data_contracts::repository::candidates::RequestCandidateReadRepository;
+use aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingReadRepository;
+use aether_data_contracts::repository::global_models::GlobalModelReadRepository;
+use aether_data_contracts::repository::management_tokens::ManagementTokenReadRepository;
+use aether_data_contracts::repository::oauth_providers::OAuthProviderReadRepository;
+use aether_data_contracts::repository::pool_scores::PoolScoreReadRepository;
+use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
+use aether_data_contracts::repository::proxy_nodes::ProxyNodeReadRepository;
+use aether_data_contracts::repository::quota::ProviderQuotaReadRepository;
+use aether_data_contracts::repository::routing_profiles::RoutingGroupReadRepository;
+use aether_data_contracts::repository::usage::UsageReadRepository;
+use aether_data_contracts::repository::users::UserReadRepository;
+use aether_data_contracts::repository::video_tasks::VideoTaskReadRepository;
+use aether_data_contracts::repository::wallet::WalletReadRepository;
 
 #[derive(Clone, Default)]
 pub struct DataReadRepositories {

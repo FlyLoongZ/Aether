@@ -110,7 +110,9 @@ impl AppState {
         &self,
         record: &aether_data_contracts::repository::management_tokens::CreateManagementTokenRecord,
     ) -> Result<
-        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
+        >,
         GatewayError,
     > {
         self.data
@@ -123,7 +125,9 @@ impl AppState {
         &self,
         record: &aether_data_contracts::repository::management_tokens::UpdateManagementTokenRecord,
     ) -> Result<
-        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
+        >,
         GatewayError,
     > {
         self.data
@@ -137,7 +141,9 @@ impl AppState {
         record: &aether_data_contracts::repository::management_tokens::UpdateManagementTokenRecord,
         user_id: &str,
     ) -> Result<
-        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
+        >,
         GatewayError,
     > {
         self.data
@@ -214,7 +220,9 @@ impl AppState {
         &self,
         mutation: &aether_data_contracts::repository::management_tokens::RegenerateManagementTokenSecret,
     ) -> Result<
-        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
+        >,
         GatewayError,
     > {
         self.data
@@ -228,7 +236,9 @@ impl AppState {
         mutation: &aether_data_contracts::repository::management_tokens::RegenerateManagementTokenSecret,
         user_id: &str,
     ) -> Result<
-        LocalMutationOutcome<aether_data_contracts::repository::management_tokens::StoredManagementToken>,
+        LocalMutationOutcome<
+            aether_data_contracts::repository::management_tokens::StoredManagementToken,
+        >,
         GatewayError,
     > {
         self.data
@@ -1293,10 +1303,6 @@ mod tests {
     };
     use std::time::Duration;
 
-    use aether_data::repository::{
-        global_models::InMemoryGlobalModelReadRepository,
-        provider_catalog::InMemoryProviderCatalogReadRepository,
-    };
     use aether_data::DataLayerError;
     use aether_data_contracts::repository::candidate_selection::{
         MinimalCandidateSelectionReadRepository, StoredMinimalCandidateSelectionRow,
@@ -1309,6 +1315,8 @@ mod tests {
     use aether_data_contracts::repository::provider_catalog::{
         StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use async_trait::async_trait;
 
     use crate::cache::{CandidatePageCacheKey, SchedulerAffinityTarget};

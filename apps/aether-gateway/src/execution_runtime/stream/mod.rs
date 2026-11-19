@@ -5,6 +5,5 @@ mod execution;
 mod usage_fallback;
 
 pub(crate) use execution::{
-    execute_execution_runtime_stream_with_retry_scope,
-    ClientVisibleStreamCompletionTracker,
+    execute_execution_runtime_stream_with_retry_scope, ClientVisibleStreamCompletionTracker,
 };

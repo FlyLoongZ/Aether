@@ -1,15 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
-};
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data::repository::users::{
-    InMemoryUserReadRepository, StoredUserAuthRecord, StoredUserExportRow,
-};
+use aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
 };
@@ -17,6 +9,12 @@ use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
+use aether_data_contracts::repository::users::{StoredUserAuthRecord, StoredUserExportRow};
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
+use aether_data_memory::users::InMemoryUserReadRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 
-use aether_data_contracts::repository::users::StoredUserGroup;
 use aether_data_contracts::repository::billing::UserDailyQuotaAvailabilityRecord;
 use aether_data_contracts::repository::quota::StoredProviderQuotaSnapshot;
 use aether_data_contracts::repository::usage::UsageCounterHealthSnapshot;
+use aether_data_contracts::repository::users::StoredUserGroup;
 use aether_gateway_frontdoor::HttpConnectionBudget;
 use aether_runtime::ConcurrencyGate;
 use aether_runtime_state::RuntimeState;
@@ -469,14 +469,22 @@ pub struct AppState {
     pub(crate) auth_email_delivery_store: Option<Arc<StdMutex<Vec<serde_json::Value>>>>,
     #[cfg(test)]
     pub(crate) auth_user_store: Option<
-        Arc<StdMutex<HashMap<String, aether_data_contracts::repository::users::StoredUserAuthRecord>>>,
+        Arc<
+            StdMutex<
+                HashMap<String, aether_data_contracts::repository::users::StoredUserAuthRecord>,
+            >,
+        >,
     >,
     #[cfg(test)]
     pub(crate) auth_user_model_capability_store:
         Option<Arc<StdMutex<HashMap<String, serde_json::Value>>>>,
     #[cfg(test)]
     pub(crate) auth_wallet_store: Option<
-        Arc<StdMutex<HashMap<String, aether_data_contracts::repository::wallet::StoredWalletSnapshot>>>,
+        Arc<
+            StdMutex<
+                HashMap<String, aether_data_contracts::repository::wallet::StoredWalletSnapshot>,
+            >,
+        >,
     >,
     #[cfg(test)]
     pub(crate) auth_wallet_adjustment_error_for_tests: Option<String>,

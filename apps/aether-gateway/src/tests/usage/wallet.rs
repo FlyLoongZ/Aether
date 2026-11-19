@@ -10,7 +10,7 @@ use super::{
     WalletLookupKey, WalletReadRepository, TRACE_ID_HEADER,
 };
 use crate::tests::DEV_FERNET_KEY;
-use aether_data::repository::settlement::InMemorySettlementRepository;
+use aether_data_memory::settlement::InMemorySettlementRepository;
 
 fn run_async_test_on_large_stack<F>(name: &'static str, future: F)
 where

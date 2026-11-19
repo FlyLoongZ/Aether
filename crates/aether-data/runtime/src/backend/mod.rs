@@ -124,8 +124,8 @@ impl DataBackends {
 #[cfg(test)]
 mod tests {
     use super::DataBackends;
-    use crate::PostgresPoolConfig;
     use crate::DataLayerConfig;
+    use crate::PostgresPoolConfig;
 
     #[test]
     fn builds_empty_backends_from_default_config() {

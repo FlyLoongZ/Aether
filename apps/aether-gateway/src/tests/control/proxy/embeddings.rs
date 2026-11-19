@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aether_contracts::{ExecutionPlan, ExecutionResult, ResponseBody};
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use base64::Engine as _;
 use http::StatusCode;
 use serde_json::json;

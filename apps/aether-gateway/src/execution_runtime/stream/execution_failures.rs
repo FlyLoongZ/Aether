@@ -1095,8 +1095,8 @@ mod tests {
     use std::sync::Arc;
 
     use aether_contracts::{ExecutionError, ExecutionErrorKind, ExecutionPhase};
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use base64::Engine as _;
     use serde_json::json;
 

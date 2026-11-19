@@ -271,9 +271,9 @@ pub(super) async fn handle_wallet_refund_detail(
         );
     };
     let wallet = match state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-            &auth.user.id,
-        ))
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::UserId(&auth.user.id),
+        )
         .await
     {
         Ok(value) => value,
@@ -348,9 +348,9 @@ pub(super) async fn handle_wallet_create_refund(
     };
 
     let wallet = match state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-            &auth.user.id,
-        ))
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::UserId(&auth.user.id),
+        )
         .await
     {
         Ok(value) => value,

@@ -2,12 +2,10 @@ use crate::tests::{
     any, build_router, build_router_with_state, start_server, AppState, Arc, Body, Mutex, Request,
     Router, StatusCode,
 };
-use aether_data::repository::oauth_providers::{
-    InMemoryOAuthProviderRepository, StoredOAuthProviderConfig,
-};
-use aether_data::repository::users::{
-    InMemoryUserReadRepository, StoredUserAuthRecord, StoredUserSessionRecord,
-};
+use aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig;
+use aether_data_contracts::repository::users::{StoredUserAuthRecord, StoredUserSessionRecord};
+use aether_data_memory::oauth_providers::InMemoryOAuthProviderRepository;
+use aether_data_memory::users::InMemoryUserReadRepository;
 use aether_runtime_state::{MemoryRuntimeStateConfig, RuntimeState};
 use base64::Engine as _;
 use hmac::{KeyInit as _, Mac as _};

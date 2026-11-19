@@ -1,7 +1,9 @@
 use super::shared::*;
 use crate::handlers::admin::request::AdminAppState;
 use crate::GatewayError;
-use aether_data_contracts::repository::auth_modules::{LdapBindPasswordUpdate, StoredLdapModuleConfig};
+use aether_data_contracts::repository::auth_modules::{
+    LdapBindPasswordUpdate, StoredLdapModuleConfig,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

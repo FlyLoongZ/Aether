@@ -4,8 +4,8 @@ use super::{
     GatewayPublicRequestContext, Response, WALLET_LEGACY_TIMEZONE,
 };
 use crate::handlers::shared::round_to;
-use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use aether_data_contracts::repository::usage::UsageSettledCostSummaryQuery;
+use aether_data_contracts::repository::wallet::stored_timestamp_unix_secs;
 use chrono::{TimeZone, Utc};
 use serde_json::json;
 

@@ -50,9 +50,11 @@ pub(in super::super) async fn build_admin_wallet_refund_requests_response(
         );
         if owner.owner_name.is_none() {
             if let Some(wallet) = state
-                .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
-                    &refund.wallet_id,
-                ))
+                .find_wallet(
+                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
+                        &refund.wallet_id,
+                    ),
+                )
                 .await?
             {
                 owner = resolve_admin_wallet_owner_summary(state, &wallet).await?;

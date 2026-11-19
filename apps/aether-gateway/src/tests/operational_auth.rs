@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use aether_data::repository::management_tokens::{
-    InMemoryManagementTokenRepository, StoredManagementToken, StoredManagementTokenUserSummary,
-    StoredManagementTokenWithUser,
+use aether_data_contracts::repository::management_tokens::{
+    StoredManagementToken, StoredManagementTokenUserSummary, StoredManagementTokenWithUser,
 };
+use aether_data_memory::management_tokens::InMemoryManagementTokenRepository;
 use base64::Engine as _;
 use hmac::{KeyInit, Mac};
 use sha2::{Digest, Sha256};
@@ -34,7 +34,10 @@ async fn issue_operational_session_access_token_and_user(
     state: &AppState,
     client_device_id: &str,
     role: &str,
-) -> (String, aether_data_contracts::repository::users::StoredUserAuthRecord) {
+) -> (
+    String,
+    aether_data_contracts::repository::users::StoredUserAuthRecord,
+) {
     let user = state
         .create_local_auth_user_with_settings(
             Some(format!("operational-{role}@example.com")),

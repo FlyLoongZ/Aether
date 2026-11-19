@@ -50,10 +50,10 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use aether_data::repository::quota::InMemoryProviderQuotaRepository;
     use aether_data_contracts::repository::quota::{
         ProviderQuotaReadRepository, StoredProviderQuotaSnapshot,
     };
+    use aether_data_memory::quota::InMemoryProviderQuotaRepository;
 
     use super::{reset_due_provider_quotas_once, spawn_provider_quota_reset_worker};
     use crate::data::GatewayDataState;

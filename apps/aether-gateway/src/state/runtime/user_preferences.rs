@@ -37,7 +37,7 @@ impl AppState {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
-    use aether_data::repository::users::InMemoryUserReadRepository;
+    use aether_data_memory::users::InMemoryUserReadRepository;
 
     use super::*;
     use crate::data::GatewayDataState;

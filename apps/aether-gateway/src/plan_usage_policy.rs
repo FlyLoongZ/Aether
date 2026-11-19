@@ -1410,11 +1410,12 @@ mod tests {
     use serde_json::json;
 
     fn fallback_test_state(enabled: bool, balance: f64) -> AppState {
-        use aether_data::repository::billing::InMemoryBillingReadRepository;
-        use aether_data::repository::settlement::InMemorySettlementRepository;
-        use aether_data::repository::usage::InMemoryUsageReadRepository;
-        use aether_data::repository::wallet::{InMemoryWalletRepository, StoredWalletSnapshot};
         use aether_data_contracts::repository::billing::StoredBillingModelContext;
+        use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
+        use aether_data_memory::billing::InMemoryBillingReadRepository;
+        use aether_data_memory::settlement::InMemorySettlementRepository;
+        use aether_data_memory::usage::InMemoryUsageReadRepository;
+        use aether_data_memory::wallet::InMemoryWalletRepository;
         let wallet = StoredWalletSnapshot::new(
             "wallet-user-1".into(),
             Some("user-1".into()),

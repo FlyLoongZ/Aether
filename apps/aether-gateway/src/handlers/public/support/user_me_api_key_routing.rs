@@ -159,8 +159,8 @@ pub(super) fn routing_group_payload_fields(
 mod tests {
     use std::sync::Arc;
 
-    use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
     use aether_data_contracts::repository::routing_profiles::StoredRoutingGroup;
+    use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
     use serde_json::json;
 
     use super::*;

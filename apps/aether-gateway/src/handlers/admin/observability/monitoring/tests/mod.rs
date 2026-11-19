@@ -8,10 +8,10 @@ use axum::body::to_bytes;
 use serde_json::json;
 use std::sync::Arc;
 
-use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data::repository::users::InMemoryUserReadRepository;
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
+use aether_data_memory::users::InMemoryUserReadRepository;
 
 mod basics;
 

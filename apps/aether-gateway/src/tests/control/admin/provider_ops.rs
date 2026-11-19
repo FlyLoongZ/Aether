@@ -4,9 +4,9 @@ use aether_contracts::{
     ExecutionPlan, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER, EXECUTION_REQUEST_HTTP1_ONLY_HEADER,
 };
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::proxy_nodes::InMemoryProxyNodeRepository;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::proxy_nodes::InMemoryProxyNodeRepository;
 use aether_runtime_state::{RedisClientConfig, RuntimeState};
 use aether_test_support::ManagedRedisServer;
 use axum::body::to_bytes;

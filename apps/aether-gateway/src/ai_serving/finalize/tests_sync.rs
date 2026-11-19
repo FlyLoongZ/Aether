@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aether_ai_formats::openai_responses_message_item_id;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::to_bytes;
 use base64::Engine as _;
 use serde_json::json;

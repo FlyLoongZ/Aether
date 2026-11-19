@@ -8,6 +8,8 @@ mod dashboard_summary;
 mod health;
 mod metadata_policy;
 mod policy;
+#[cfg(test)]
+mod repository_tests;
 mod types;
 
 pub use analytics::*;

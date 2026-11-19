@@ -1575,10 +1575,10 @@ pub(crate) fn parse_local_request_body(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-    use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::usage::CapturedBody;
     use aether_data_contracts::repository::usage::UsageReadRepository;
+    use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+    use aether_data_memory::usage::InMemoryUsageReadRepository;
     use aether_usage_runtime::UsageRuntimeConfig;
     use futures_util::StreamExt;
     use std::sync::atomic::{AtomicUsize, Ordering};

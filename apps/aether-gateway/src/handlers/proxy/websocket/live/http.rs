@@ -800,8 +800,8 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use aether_contracts::{ExecutionPlan, ExecutionResult, ResponseBody};
-    use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::usage::UsageReadRepository;
+    use aether_data_memory::usage::InMemoryUsageReadRepository;
     use axum::body::to_bytes;
     use tracing_subscriber::filter::LevelFilter;
     use tracing_subscriber::prelude::*;

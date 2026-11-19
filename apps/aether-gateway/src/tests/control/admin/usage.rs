@@ -1,18 +1,16 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data::repository::users::{
-    InMemoryUserReadRepository, StoredUserAuthRecord, StoredUserSummary,
-};
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
 };
 use aether_data_contracts::repository::usage::{CapturedBody, StoredRequestUsageAudit};
+use aether_data_contracts::repository::users::{StoredUserAuthRecord, StoredUserSummary};
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
+use aether_data_memory::users::InMemoryUserReadRepository;
 use axum::body::{to_bytes, Body, Bytes};
 use axum::routing::any;
 use axum::{extract::Request, Router};

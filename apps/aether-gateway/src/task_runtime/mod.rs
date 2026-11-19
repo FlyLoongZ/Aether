@@ -800,11 +800,11 @@ mod worker_boot_run_id_tests {
         BACKGROUND_TASK_RUN_ID_MAX_BYTES,
     };
     use crate::{data::GatewayDataState, AppState};
-    use aether_data::repository::background_tasks::InMemoryBackgroundTaskRepository;
     use aether_data_contracts::repository::background_tasks::{
         BackgroundTaskKind, BackgroundTaskListQuery, BackgroundTaskReadRepository,
         BackgroundTaskStatus,
     };
+    use aether_data_memory::background_tasks::InMemoryBackgroundTaskRepository;
 
     #[test]
     fn worker_boot_run_id_is_keyed_only_by_task() {

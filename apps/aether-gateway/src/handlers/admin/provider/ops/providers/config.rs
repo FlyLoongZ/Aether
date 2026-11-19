@@ -644,10 +644,10 @@ mod tests {
     use crate::tests::DEV_FERNET_KEY;
     use crate::AppState;
     use aether_crypto::{encrypt_python_fernet_plaintext, looks_like_python_fernet_ciphertext};
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogReadRepository, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use serde_json::json;
     use std::sync::Arc;
 

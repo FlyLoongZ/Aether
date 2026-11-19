@@ -6,7 +6,10 @@ pub(super) async fn admin_monitoring_list_export_api_key_records_by_ids(
     state: &AdminAppState<'_>,
     api_key_ids: &[String],
 ) -> Result<
-    std::collections::BTreeMap<String, aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord>,
+    std::collections::BTreeMap<
+        String,
+        aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
+    >,
     GatewayError,
 > {
     if api_key_ids.is_empty() {
@@ -49,7 +52,10 @@ pub(super) async fn admin_monitoring_load_affinity_identity_maps(
             String,
             aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord,
         >,
-        std::collections::BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>,
+        std::collections::BTreeMap<
+            String,
+            aether_data_contracts::repository::users::StoredUserSummary,
+        >,
     ),
     GatewayError,
 > {

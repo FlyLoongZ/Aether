@@ -12,10 +12,10 @@ use aether_data_contracts::repository::usage::{
 };
 
 use aether_data_contracts::repository::auth::AuthApiKeyReadRepository;
-use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::routing_profiles::{
     StoredRoutingGroup, StoredRoutingGroupBinding, StoredRoutingGroupVersion,
 };
+use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_routing_core::RoutingGroupConfig;
 
 use super::{GatewayDataConfig, GatewayDataState};

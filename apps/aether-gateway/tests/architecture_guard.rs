@@ -373,12 +373,10 @@ fn testkit_gateway_harness_is_opt_in() {
     ));
 
     let lib = read_workspace_file("crates/aether-testing/testkit/src/lib.rs").replace("\r\n", "\n");
-    for module in ["execution_runtime", "gateway"] {
-        assert!(
-            lib.contains(&format!("#[cfg(feature = \"gateway\")]\nmod {module};")),
-            "aether-testkit::{module} should be feature-gated"
-        );
-    }
+    assert!(
+        lib.contains("#[cfg(feature = \"gateway\")]\nmod gateway;"),
+        "aether-testkit::gateway should be feature-gated"
+    );
     assert!(
         lib.contains("#[cfg(feature = \"postgres\")]\nmod postgres;"),
         "the Postgres helper should be feature-gated"

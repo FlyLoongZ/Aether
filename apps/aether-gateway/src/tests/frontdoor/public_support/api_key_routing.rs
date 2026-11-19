@@ -1,9 +1,9 @@
 use super::*;
 use crate::tests::DEV_FERNET_KEY;
-use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::routing_profiles::{
     CreateRoutingGroupRecord, RoutingGroupWriteRepository, UpdateRoutingGroupRecord,
 };
+use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
 
 #[tokio::test]
 async fn users_me_api_key_routing_selection_round_trips_and_cannot_bypass_visibility() {

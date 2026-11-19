@@ -127,9 +127,9 @@ pub(in super::super) async fn build_admin_wallet_complete_refund_response(
     }
 
     let Some(wallet) = state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
-            &wallet_id,
-        ))
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(&wallet_id),
+        )
         .await?
     else {
         return Ok(build_admin_wallet_not_found_response());

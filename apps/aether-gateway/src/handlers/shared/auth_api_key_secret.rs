@@ -159,14 +159,15 @@ pub(crate) async fn decrypt_or_migrate_auth_api_key_secret(
         let observed = current.key_encrypted.clone().ok_or_else(|| {
             api_key_secret_error("stored API-key ciphertext disappeared during migration")
         })?;
-        let mutation = aether_data_contracts::repository::auth::CompareAndSwapAuthApiKeyCiphertext {
-            user_id: identity.0.clone(),
-            api_key_id: identity.1.clone(),
-            key_hash: identity.2.clone(),
-            is_standalone: identity.3,
-            expected_key_encrypted: observed,
-            key_encrypted: projection.protected,
-        };
+        let mutation =
+            aether_data_contracts::repository::auth::CompareAndSwapAuthApiKeyCiphertext {
+                user_id: identity.0.clone(),
+                api_key_id: identity.1.clone(),
+                key_hash: identity.2.clone(),
+                is_standalone: identity.3,
+                expected_key_encrypted: observed,
+                key_encrypted: projection.protected,
+            };
         if state.compare_and_swap_api_key_ciphertext(&mutation).await? {
             return Ok(projection.plaintext);
         }

@@ -375,7 +375,8 @@ impl AppState {
     pub(crate) async fn list_users_by_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserSummary>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserSummary>, GatewayError>
+    {
         self.data
             .list_users_by_ids(user_ids)
             .await

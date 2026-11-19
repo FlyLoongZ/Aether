@@ -31,10 +31,10 @@ pub(crate) async fn read_request_candidate_trace(
 mod tests {
     use super::super::GatewayDataState;
     use super::{read_request_candidate_trace, RequestCandidateFinalStatus};
-    use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
     use aether_data_contracts::repository::candidates::{
         derive_request_candidate_final_status, RequestCandidateStatus, StoredRequestCandidate,
     };
+    use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
     use std::sync::Arc;
 
     fn sample_candidate(

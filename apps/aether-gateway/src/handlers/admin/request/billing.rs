@@ -115,7 +115,8 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn find_wallet(
         &self,
         lookup: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         self.app.find_wallet(lookup).await
     }
 
@@ -123,8 +124,10 @@ impl<'a> AdminAppState<'a> {
         &self,
         wallet_id: &str,
         refund_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>,
+        GatewayError,
+    > {
         self.app.find_wallet_refund(wallet_id, refund_id).await
     }
 
@@ -322,7 +325,8 @@ impl<'a> AdminAppState<'a> {
         status: Option<&str>,
         limit: usize,
         offset: usize,
-    ) -> Result<aether_data_contracts::repository::wallet::StoredAdminRedeemCodePage, GatewayError> {
+    ) -> Result<aether_data_contracts::repository::wallet::StoredAdminRedeemCodePage, GatewayError>
+    {
         self.app
             .list_admin_redeem_codes(batch_id, status, limit, offset)
             .await
@@ -373,7 +377,9 @@ impl<'a> AdminAppState<'a> {
         code_id: &str,
         operator_id: Option<&str>,
     ) -> Result<
-        crate::AdminWalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminRedeemCode>,
+        crate::AdminWalletMutationOutcome<
+            aether_data_contracts::repository::wallet::StoredAdminRedeemCode,
+        >,
         GatewayError,
     > {
         self.app

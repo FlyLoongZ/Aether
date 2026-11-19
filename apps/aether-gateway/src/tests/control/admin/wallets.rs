@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::users::{InMemoryUserReadRepository, StoredUserAuthRecord};
-use aether_data::repository::wallet::InMemoryWalletRepository;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
+use aether_data_contracts::repository::users::StoredUserAuthRecord;
 use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::users::InMemoryUserReadRepository;
+use aether_data_memory::wallet::InMemoryWalletRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

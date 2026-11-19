@@ -10,14 +10,16 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn create_manual_proxy_node(
         &self,
         mutation: &aether_data_contracts::repository::proxy_nodes::ProxyNodeManualCreateMutation,
-    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError>
+    {
         self.app.create_manual_proxy_node(mutation).await
     }
 
     pub(crate) async fn update_manual_proxy_node(
         &self,
         mutation: &aether_data_contracts::repository::proxy_nodes::ProxyNodeManualUpdateMutation,
-    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError>
+    {
         self.app.update_manual_proxy_node(mutation).await
     }
 
@@ -62,7 +64,8 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn delete_proxy_node(
         &self,
         node_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError>
+    {
         self.app.delete_proxy_node(node_id).await
     }
 }

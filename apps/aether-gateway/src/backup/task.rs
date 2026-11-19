@@ -796,10 +796,10 @@ mod tests {
     use std::sync::Arc;
 
     use aether_crypto::encrypt_python_fernet_plaintext;
-    use aether_data::repository::background_tasks::InMemoryBackgroundTaskRepository;
     use aether_data_contracts::repository::background_tasks::{
         BackgroundTaskKind, BackgroundTaskStatus, StoredBackgroundTaskRun,
     };
+    use aether_data_memory::background_tasks::InMemoryBackgroundTaskRepository;
 
     use crate::data::GatewayDataState;
     use crate::handlers::shared::decrypt_system_config_secret;

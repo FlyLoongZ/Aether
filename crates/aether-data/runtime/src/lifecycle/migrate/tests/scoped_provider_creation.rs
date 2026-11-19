@@ -18,10 +18,8 @@ async fn postgres_scoped_provider_creation_rolls_back_and_serializes_group_saves
     };
     let pool = PgPool::connect(server.database_url()).await.unwrap();
     prepare_and_apply_clean_postgres_database(&pool).await;
-    let groups =
-        crate::repository::routing_profiles::PostgresRoutingGroupRepository::new(pool.clone());
-    let providers =
-        crate::repository::provider_catalog::SqlxProviderCatalogReadRepository::new(pool.clone());
+    let groups = aether_data_postgres::PostgresRoutingGroupRepository::new(pool.clone());
+    let providers = aether_data_postgres::SqlxProviderCatalogReadRepository::new(pool.clone());
     for id in ["selected", "other"] {
         groups
             .create_routing_group(CreateRoutingGroupRecord {

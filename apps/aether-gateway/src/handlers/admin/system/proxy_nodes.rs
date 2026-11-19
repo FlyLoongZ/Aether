@@ -661,7 +661,10 @@ async fn test_manual_proxy_connectivity_with_probe_url(
 fn validate_manual_create_request(
     input: ManualProxyNodeCreateRequest,
     request_context: &AdminRequestContext<'_>,
-) -> Result<aether_data_contracts::repository::proxy_nodes::ProxyNodeManualCreateMutation, crate::ApiError> {
+) -> Result<
+    aether_data_contracts::repository::proxy_nodes::ProxyNodeManualCreateMutation,
+    crate::ApiError,
+> {
     let endpoint = normalize_manual_proxy_endpoint(&input.proxy_url)?;
     let registered_by = request_context
         .decision()
@@ -686,7 +689,10 @@ fn validate_manual_create_request(
 fn validate_manual_update_request(
     node_id: String,
     input: ManualProxyNodeUpdateRequest,
-) -> Result<aether_data_contracts::repository::proxy_nodes::ProxyNodeManualUpdateMutation, crate::ApiError> {
+) -> Result<
+    aether_data_contracts::repository::proxy_nodes::ProxyNodeManualUpdateMutation,
+    crate::ApiError,
+> {
     let endpoint = match input.proxy_url.as_deref() {
         Some(proxy_url) => Some(normalize_manual_proxy_endpoint(proxy_url)?),
         None => None,

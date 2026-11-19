@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use aether_data_contracts::repository::auth::{AuthApiKeyLookupKey, ResolvedAuthApiKeySnapshotReader};
+use aether_data_contracts::repository::auth::{
+    AuthApiKeyLookupKey, ResolvedAuthApiKeySnapshotReader,
+};
 
 use std::time::Duration;
 
@@ -56,7 +58,8 @@ impl AppState {
     pub(crate) async fn resolve_auth_api_key_snapshots_by_ids(
         &self,
         api_key_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot>, GatewayError>
+    {
         if !self.has_auth_api_key_data_reader() {
             return Ok(Vec::new());
         }
@@ -175,11 +178,11 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
-    use aether_data::repository::auth::{
+    use aether_data_contracts::repository::auth::{
         AuthApiKeyExportSummary, AuthApiKeyLookupKey, AuthApiKeyReadRepository,
-        InMemoryAuthApiKeySnapshotRepository, StandaloneApiKeyExportListQuery,
-        StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
+        StandaloneApiKeyExportListQuery, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
     };
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
     use async_trait::async_trait;
 
     use crate::AppState;

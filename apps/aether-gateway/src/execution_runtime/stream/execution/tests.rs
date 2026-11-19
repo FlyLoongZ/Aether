@@ -13,10 +13,9 @@ use aether_contracts::{
     ExecutionStreamTerminalSummary, ExecutionTelemetry, ExecutionTimeouts, RequestBody,
     StandardizedUsage, StreamFrame, StreamFramePayload, StreamFrameType,
 };
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 
-use aether_data::repository::usage::InMemoryUsageReadRepository;
 use aether_data_contracts::repository::candidates::{
     PublicHealthStatusCount, PublicHealthTimelineBucket, RequestCandidateReadRepository,
     RequestCandidateStatus, RequestCandidateWriteRepository, StoredRequestCandidate,
@@ -32,6 +31,7 @@ use aether_data_contracts::repository::usage::{
     UsageBodyField,
 };
 use aether_data_contracts::DataLayerError;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
 use aether_usage_runtime::{
     apply_usage_body_capture_policy_to_event, UsageBillingEventEnricher, UsageBodyCapturePolicy,
     UsageEvent, UsageEventData, UsageEventType, UsageRecordWriter, UsageRequestRecordLevel,

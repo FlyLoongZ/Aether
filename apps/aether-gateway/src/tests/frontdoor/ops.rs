@@ -7,11 +7,11 @@ use crate::tests::{
     any, build_router_with_state, build_state_with_execution_runtime_override, json, start_server,
     AppState, Arc, Body, FrontdoorCorsConfig, Mutex, Request, Router, StatusCode,
 };
-use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
 use axum::Json;
 
 use crate::data::GatewayDataState;

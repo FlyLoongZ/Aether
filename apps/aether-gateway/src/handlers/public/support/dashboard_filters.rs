@@ -1145,9 +1145,11 @@ pub(super) async fn handle_dashboard_stats_get(
 
     let wallet = if state.has_wallet_data_reader() {
         match state
-            .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-                auth.user.id.as_str(),
-            ))
+            .find_wallet(
+                aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
+                    auth.user.id.as_str(),
+                ),
+            )
             .await
         {
             Ok(value) => value,

@@ -68,8 +68,10 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn summarize_gemini_file_mappings(
         &self,
         now_unix_secs: u64,
-    ) -> Result<aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingStats, GatewayError>
-    {
+    ) -> Result<
+        aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingStats,
+        GatewayError,
+    > {
         self.app.summarize_gemini_file_mappings(now_unix_secs).await
     }
 

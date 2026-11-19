@@ -2109,12 +2109,12 @@ mod tests {
     use std::collections::VecDeque;
     use std::sync::Arc;
 
-    use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
     use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
-    use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-    use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::candidates::RequestCandidateStatus;
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+    use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+    use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_provider_transport::snapshot::{
         GatewayProviderTransportEndpoint, GatewayProviderTransportKey,
         GatewayProviderTransportProvider,

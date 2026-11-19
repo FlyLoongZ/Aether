@@ -16,9 +16,6 @@ use crate::tests::{
 };
 use aether_contracts::{ExecutionResult, ExecutionTelemetry, ResponseBody};
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::auth::AuthApiKeyWriteRepository;
 use aether_data_contracts::repository::candidate_selection::{
@@ -33,6 +30,9 @@ use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogProvider,
 };
 use aether_data_contracts::repository::usage::{UsageAuditListQuery, UsageReadRepository};
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
 use async_trait::async_trait;
 use axum::extract::ws::{Message as AxumWsMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::State;

@@ -4,7 +4,9 @@ use super::payment_shared::{
     payment_callback_persistence_projection, payment_callback_success_response,
     NormalizedPaymentCallbackRequest,
 };
-use aether_data_contracts::repository::wallet::{ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome};
+use aether_data_contracts::repository::wallet::{
+    ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome,
+};
 use axum::{body::Body, http, response::Response};
 
 use super::{

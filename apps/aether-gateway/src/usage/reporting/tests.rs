@@ -2,16 +2,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::gemini_file_mappings::{
-    GeminiFileMappingReadRepository, InMemoryGeminiFileMappingRepository,
-};
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus, StoredRequestCandidate,
 };
+use aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogReadRepository, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
@@ -19,6 +13,11 @@ use aether_data_contracts::repository::usage::UsageBodyCaptureState;
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskStatus, VideoTaskWriteRepository,
 };
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::gemini_file_mappings::InMemoryGeminiFileMappingRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 use base64::Engine as _;
 use serde_json::json;
 
@@ -1073,14 +1072,15 @@ async fn submit_sync_report_deletes_gemini_file_mapping_locally_on_success() {
             "req-gemini-files-delete-123",
         ),
     ]));
-    let mut mapping = aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping::new(
-        "mapping-gemini-files-delete-123".to_string(),
-        "files/delete-me".to_string(),
-        "key-reporting-tests-123".to_string(),
-        1_700_000_000,
-        1_700_172_800,
-    )
-    .expect("gemini file mapping should build");
+    let mut mapping =
+        aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping::new(
+            "mapping-gemini-files-delete-123".to_string(),
+            "files/delete-me".to_string(),
+            "key-reporting-tests-123".to_string(),
+            1_700_000_000,
+            1_700_172_800,
+        )
+        .expect("gemini file mapping should build");
     mapping.user_id = Some("user-reporting-tests-123".to_string());
     let gemini_file_mapping_repository =
         Arc::new(InMemoryGeminiFileMappingRepository::seed([mapping]));

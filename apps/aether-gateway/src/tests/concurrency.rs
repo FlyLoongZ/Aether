@@ -11,11 +11,11 @@ use super::{
     GatewayFallbackReason, HeaderValue, Infallible, Request, Response, Router, StatusCode,
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS,
 };
-use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
 
 use crate::data::GatewayDataState;
 use crate::tests::DEV_FERNET_KEY;
@@ -31,7 +31,6 @@ where
         make_future,
     );
 }
-
 
 #[test]
 fn gateway_websocket_connections_use_independent_admission() {

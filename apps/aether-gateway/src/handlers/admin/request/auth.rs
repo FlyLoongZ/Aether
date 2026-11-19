@@ -4,8 +4,10 @@ use crate::GatewayError;
 impl<'a> AdminAppState<'a> {
     pub(crate) async fn get_ldap_module_config(
         &self,
-    ) -> Result<Option<aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
+        GatewayError,
+    > {
         self.app.get_ldap_module_config().await
     }
 
@@ -43,7 +45,9 @@ impl<'a> AdminAppState<'a> {
         record: &aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
         force_disable: bool,
     ) -> Result<
-        Option<aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
+        Option<
+            aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome,
+        >,
         GatewayError,
     > {
         self.app

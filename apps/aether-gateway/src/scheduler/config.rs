@@ -133,11 +133,11 @@ pub(crate) async fn read_system_default_routing_ordering_config(
 mod tests {
     use std::sync::Arc;
 
-    use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
     use aether_data_contracts::repository::routing_profiles::{
         CreateRoutingGroupRecord, RoutingGroupLookupKey, RoutingGroupReadRepository,
         RoutingGroupWriteRepository,
     };
+    use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
     use serde_json::json;
 
     use super::*;

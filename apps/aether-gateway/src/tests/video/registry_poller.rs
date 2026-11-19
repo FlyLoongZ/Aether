@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskLookupKey, VideoTaskReadRepository, VideoTaskStatus,
     VideoTaskWriteRepository,
 };
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 use axum::body::to_bytes;
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};

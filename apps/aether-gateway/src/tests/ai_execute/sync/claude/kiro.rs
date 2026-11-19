@@ -11,8 +11,8 @@ use crate::tests::hash_api_key;
 use crate::tests::support::encode_event_frame;
 use crate::tests::support::sample_auth_snapshot_kiro as sample_auth_snapshot;
 use crate::tests::DEV_FERNET_KEY;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
 use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UsageReadRepository};
+use aether_data_memory::usage::InMemoryUsageReadRepository;
 use aether_usage_runtime::UsageRuntimeConfig;
 
 fn run_kiro_claude_cli_sync_test<F, Fut>(test_name: &'static str, make_future: F)

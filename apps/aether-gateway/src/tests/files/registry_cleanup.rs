@@ -1,7 +1,8 @@
 use super::{AppState, Arc, InMemoryRequestCandidateRepository};
-use aether_data::repository::gemini_file_mappings::{
-    GeminiFileMappingReadRepository, InMemoryGeminiFileMappingRepository, StoredGeminiFileMapping,
+use aether_data_contracts::repository::gemini_file_mappings::{
+    GeminiFileMappingReadRepository, StoredGeminiFileMapping,
 };
+use aether_data_memory::gemini_file_mappings::InMemoryGeminiFileMappingRepository;
 
 #[test]
 fn gateway_background_gemini_file_mapping_cleanup_deletes_expired_entries() {

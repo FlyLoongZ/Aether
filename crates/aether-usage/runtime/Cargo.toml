@@ -21,4 +21,4 @@ tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-aether-data = { workspace = true, features = ["test-support"] }
+aether-data-memory.workspace = true

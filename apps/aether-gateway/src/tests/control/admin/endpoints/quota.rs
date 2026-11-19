@@ -2,15 +2,15 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::proxy_nodes::InMemoryProxyNodeRepository;
 use aether_data_contracts::repository::global_models::{
     AdminGlobalModelListQuery, AdminProviderModelListQuery, GlobalModelReadRepository,
 };
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogReadRepository, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::proxy_nodes::InMemoryProxyNodeRepository;
 use axum::body::{to_bytes, Body};
 use axum::routing::{any, post};
 use axum::{extract::Request, Json, Router};

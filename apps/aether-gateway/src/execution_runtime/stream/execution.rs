@@ -4788,7 +4788,6 @@ fn usage_refresh_telemetry(
     }
 }
 
-
 fn build_terminal_stream_telemetry(
     stream_started_at: Instant,
     telemetry: Option<&ExecutionTelemetry>,

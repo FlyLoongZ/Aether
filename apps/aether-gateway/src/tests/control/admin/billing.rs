@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::users::InMemoryUserReadRepository;
+use aether_data_memory::users::InMemoryUserReadRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};
@@ -29,11 +29,11 @@ async fn send_admin_billing_request(
 
 #[tokio::test]
 async fn user_account_history_http_filters_wallet_and_plan_history() {
-    use aether_data::repository::{
-        billing::{InMemoryBillingReadRepository, UserPlanEntitlementRecord},
-        users::StoredUserAuthRecord,
-        wallet::{InMemoryWalletRepository, StoredWalletSnapshot},
-    };
+    use aether_data_contracts::repository::billing::UserPlanEntitlementRecord;
+    use aether_data_contracts::repository::users::StoredUserAuthRecord;
+    use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
+    use aether_data_memory::billing::InMemoryBillingReadRepository;
+    use aether_data_memory::wallet::InMemoryWalletRepository;
 
     let users = ["user-1", "user-2"].map(|id| {
         StoredUserAuthRecord::new(
@@ -737,11 +737,9 @@ async fn gateway_handles_admin_billing_collector_routes_locally_with_trusted_adm
 
 #[tokio::test]
 async fn provider_expense_http_contract_requires_admin_and_records_retries_only_once() {
-    use aether_data::repository::{
-        billing::InMemoryBillingReadRepository,
-        provider_catalog::InMemoryProviderCatalogReadRepository,
-    };
     use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogProvider;
+    use aether_data_memory::billing::InMemoryBillingReadRepository;
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     let provider = StoredProviderCatalogProvider::new(
         "provider-1".into(),
         "=Supplier".into(),

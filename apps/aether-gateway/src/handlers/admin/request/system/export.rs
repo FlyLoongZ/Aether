@@ -775,10 +775,10 @@ pub(crate) fn is_interactive_export_private_system_config_key(key: &str) -> bool
 #[cfg(test)]
 mod tests {
     use super::{is_interactive_export_private_system_config_key, AdminAppState, SystemExportMode};
-    use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
     use aether_data_contracts::repository::global_models::{
         StoredAdminGlobalModel, StoredAdminProviderModel,
     };
+    use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
     use std::sync::Arc;
 
     #[test]

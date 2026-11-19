@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskStatus, VideoTaskWriteRepository,
 };
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 use axum::body::{to_bytes, Body};
 use axum::response::Response;
 use axum::routing::any;

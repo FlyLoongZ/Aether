@@ -1,5 +1,5 @@
-use aether_data::PostgresPoolConfig;
 use aether_data::DataLayerConfig;
+use aether_data::PostgresPoolConfig;
 use std::fmt;
 
 #[derive(Clone, Default)]
@@ -78,5 +78,4 @@ impl GatewayDataConfig {
             database: self.database.clone(),
         }
     }
-
 }

@@ -2,24 +2,24 @@ use std::fmt;
 use std::sync::Arc;
 
 use super::PostgresBackend;
-use crate::repository::announcements::AnnouncementWriteRepository;
-use crate::repository::auth::AuthApiKeyWriteRepository;
-use crate::repository::auth_modules::AuthModuleWriteRepository;
-use crate::repository::background_tasks::BackgroundTaskWriteRepository;
-use crate::repository::candidates::RequestCandidateWriteRepository;
-use crate::repository::gemini_file_mappings::GeminiFileMappingWriteRepository;
-use crate::repository::global_models::GlobalModelWriteRepository;
-use crate::repository::management_tokens::ManagementTokenWriteRepository;
-use crate::repository::oauth_providers::OAuthProviderWriteRepository;
-use crate::repository::pool_scores::PoolMemberScoreWriteRepository;
-use crate::repository::provider_catalog::ProviderCatalogWriteRepository;
-use crate::repository::proxy_nodes::ProxyNodeWriteRepository;
-use crate::repository::quota::ProviderQuotaWriteRepository;
-use crate::repository::routing_profiles::RoutingGroupWriteRepository;
-use crate::repository::settlement::SettlementWriteRepository;
-use crate::repository::usage::UsageWriteRepository;
-use crate::repository::video_tasks::VideoTaskWriteRepository;
-use crate::repository::wallet::WalletWriteRepository;
+use aether_data_contracts::repository::announcements::AnnouncementWriteRepository;
+use aether_data_contracts::repository::auth::AuthApiKeyWriteRepository;
+use aether_data_contracts::repository::auth_modules::AuthModuleWriteRepository;
+use aether_data_contracts::repository::background_tasks::BackgroundTaskWriteRepository;
+use aether_data_contracts::repository::candidates::RequestCandidateWriteRepository;
+use aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingWriteRepository;
+use aether_data_contracts::repository::global_models::GlobalModelWriteRepository;
+use aether_data_contracts::repository::management_tokens::ManagementTokenWriteRepository;
+use aether_data_contracts::repository::oauth_providers::OAuthProviderWriteRepository;
+use aether_data_contracts::repository::pool_scores::PoolMemberScoreWriteRepository;
+use aether_data_contracts::repository::provider_catalog::ProviderCatalogWriteRepository;
+use aether_data_contracts::repository::proxy_nodes::ProxyNodeWriteRepository;
+use aether_data_contracts::repository::quota::ProviderQuotaWriteRepository;
+use aether_data_contracts::repository::routing_profiles::RoutingGroupWriteRepository;
+use aether_data_contracts::repository::settlement::SettlementWriteRepository;
+use aether_data_contracts::repository::usage::UsageWriteRepository;
+use aether_data_contracts::repository::video_tasks::VideoTaskWriteRepository;
+use aether_data_contracts::repository::wallet::WalletWriteRepository;
 
 #[derive(Clone, Default)]
 pub struct DataWriteRepositories {

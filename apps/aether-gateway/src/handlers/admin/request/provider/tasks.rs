@@ -893,10 +893,10 @@ mod automatic_cleanup_tests {
         seal_provider_catalog_credential, ProviderCatalogCredentialField,
     };
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogReadRepository, StoredProviderCatalogKey, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use std::sync::Arc;
 
     fn provider(provider_type: &str) -> StoredProviderCatalogProvider {

@@ -1,13 +1,14 @@
 use std::sync::{Arc, Mutex};
 
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+use aether_data_contracts::repository::proxy_nodes::StoredProxyNode;
 use aether_data_contracts::repository::video_tasks::VideoTaskLookupKey;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::proxy_nodes::InMemoryProxyNodeRepository;
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 
 use axum::body::to_bytes;
 use axum::routing::any;

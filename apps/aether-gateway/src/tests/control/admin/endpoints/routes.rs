@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

@@ -355,10 +355,10 @@ mod tests {
     use std::collections::BTreeSet;
 
     use aether_contracts::{ExecutionError, ExecutionErrorKind, ExecutionPhase, ExecutionResult};
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 
     use super::{
         analyze_local_candidate_failover_sync, resolve_core_stream_error_finalize_report_kind,

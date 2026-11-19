@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::global_models::{
     AdminProviderModelListQuery, GlobalModelReadRepository,
 };
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

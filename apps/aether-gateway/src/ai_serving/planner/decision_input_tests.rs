@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use super::*;
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::routing_profiles::{
     CreateRoutingGroupBindingRecord, CreateRoutingGroupRecord, RoutingGroupBindingSubject,
     RoutingGroupWriteRepository, UpdateRoutingGroupRecord,
 };
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_provider_transport::snapshot::{
     GatewayProviderTransportEndpoint, GatewayProviderTransportKey, GatewayProviderTransportProvider,
 };

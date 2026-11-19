@@ -4,7 +4,6 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogKeyAdminCasUpdate, ProviderCatalogKeyListQuery,
     ProviderCatalogKeyOAuthCredentialFence, ProviderCatalogReadRepository,
@@ -13,6 +12,7 @@ use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogKeyStats, StoredProviderCatalogProvider,
 };
 use aether_data_contracts::DataLayerError;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use async_trait::async_trait;
 use serde_json::json;
 use tokio::sync::Notify;

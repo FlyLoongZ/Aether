@@ -592,8 +592,10 @@ impl AppState {
 
     pub(crate) async fn get_ldap_module_config(
         &self,
-    ) -> Result<Option<aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::auth_modules::StoredLdapModuleConfig>,
+        GatewayError,
+    > {
         self.data
             .get_ldap_module_config()
             .await
@@ -760,7 +762,9 @@ impl AppState {
         record: &aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigRecord,
         force_disable: bool,
     ) -> Result<
-        Option<aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
+        Option<
+            aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome,
+        >,
         GatewayError,
     > {
         let _mutation_guard = crate::oauth::lock_identity_oauth_mutation().await;

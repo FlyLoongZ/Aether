@@ -75,11 +75,13 @@ pub(super) async fn handle_wallet_redeem(
     };
 
     let outcome = match state
-        .redeem_wallet_code(aether_data_contracts::repository::wallet::RedeemWalletCodeInput {
-            code,
-            user_id: auth.user.id.clone(),
-            order_no: wallet_build_redeem_order_no(Utc::now()),
-        })
+        .redeem_wallet_code(
+            aether_data_contracts::repository::wallet::RedeemWalletCodeInput {
+                code,
+                user_id: auth.user.id.clone(),
+                order_no: wallet_build_redeem_order_no(Utc::now()),
+            },
+        )
         .await
     {
         Ok(Some(value)) => value,

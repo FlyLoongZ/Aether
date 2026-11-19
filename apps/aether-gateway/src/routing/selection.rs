@@ -237,12 +237,12 @@ fn default_binding_candidates<'a>(
 
 #[cfg(test)]
 mod tests {
-    use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
     use aether_data_contracts::repository::routing_profiles::{
         CreateRoutingGroupBindingRecord, CreateRoutingGroupRecord, RoutingGroupWriteRepository,
         StoredRoutingGroupBinding, StoredRoutingGroupVersion,
     };
     use aether_data_contracts::DataLayerError;
+    use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
     use async_trait::async_trait;
     use serde_json::json;
 

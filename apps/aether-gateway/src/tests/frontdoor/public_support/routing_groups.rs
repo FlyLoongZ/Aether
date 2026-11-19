@@ -1,8 +1,8 @@
 use super::*;
-use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::routing_profiles::{
     CreateRoutingGroupRecord, RoutingGroupWriteRepository, UpdateRoutingGroupRecord,
 };
+use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
 
 #[tokio::test]
 async fn users_me_routing_groups_requires_auth_and_exposes_only_public_enabled_summaries() {

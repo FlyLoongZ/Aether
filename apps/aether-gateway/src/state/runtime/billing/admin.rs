@@ -687,10 +687,10 @@ mod tests {
     use std::time::Duration;
 
     use aether_crypto::encrypt_python_fernet_plaintext;
-    use aether_data::repository::billing::InMemoryBillingReadRepository;
     use aether_data_contracts::repository::billing::{
         BillingReadRepository, PaymentGatewayConfigWriteInput,
     };
+    use aether_data_memory::billing::InMemoryBillingReadRepository;
     use serde_json::json;
 
     use super::{

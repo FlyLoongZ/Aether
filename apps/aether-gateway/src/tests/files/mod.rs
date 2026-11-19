@@ -4,25 +4,24 @@ use super::{
     Request, Response, Router, StatusCode, EXECUTION_PATH_HEADER, TRACE_ID_HEADER,
 };
 use crate::tests::DEV_FERNET_KEY;
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::gemini_file_mappings::{
-    InMemoryGeminiFileMappingRepository, StoredGeminiFileMapping,
-};
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
+use aether_data_contracts::repository::auth::StoredAuthApiKeySnapshot;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
+use aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+use aether_data_contracts::repository::proxy_nodes::StoredProxyNode;
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::gemini_file_mappings::InMemoryGeminiFileMappingRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::proxy_nodes::InMemoryProxyNodeRepository;
 
 mod registry_cleanup;
 mod stream;

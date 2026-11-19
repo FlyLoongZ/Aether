@@ -28,7 +28,8 @@ pub(crate) const TEST_ADMIN_CREATED_AT_RFC3339: &str = "2024-01-01T00:00:00+00:0
 /// Test-only fallback: the fixed administrator identity exists outside the
 /// regular auth user/session stores so it never appears in user lists or
 /// last-active-admin counts.
-pub(crate) fn test_admin_user_record() -> aether_data_contracts::repository::users::StoredUserAuthRecord {
+pub(crate) fn test_admin_user_record(
+) -> aether_data_contracts::repository::users::StoredUserAuthRecord {
     let created_at = chrono::DateTime::parse_from_rfc3339(TEST_ADMIN_CREATED_AT_RFC3339)
         .expect("test admin created_at should parse")
         .with_timezone(&chrono::Utc);

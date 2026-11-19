@@ -1,74 +1,84 @@
 use std::sync::Arc;
 
-use crate::repository::announcements::{
-    AnnouncementReadRepository, AnnouncementWriteRepository, SqlxAnnouncementReadRepository,
-};
-use crate::repository::auth::{
-    AuthApiKeyReadRepository, AuthApiKeyWriteRepository, SqlxAuthApiKeySnapshotReadRepository,
-};
-use crate::repository::auth_modules::{
-    AuthModuleReadRepository, AuthModuleWriteRepository, SqlxAuthModuleReadRepository,
-    SqlxAuthModuleRepository,
-};
-use crate::repository::background_tasks::{
-    BackgroundTaskReadRepository, BackgroundTaskWriteRepository, SqlxBackgroundTaskRepository,
-};
-use crate::repository::billing::{BillingReadRepository, SqlxBillingReadRepository};
-use crate::repository::candidate_selection::{
-    MinimalCandidateSelectionReadRepository, SqlxMinimalCandidateSelectionReadRepository,
-};
-use crate::repository::candidates::{
-    RequestCandidateReadRepository, RequestCandidateWriteRepository,
-    SqlxRequestCandidateReadRepository,
-};
-use crate::repository::gemini_file_mappings::{
-    GeminiFileMappingReadRepository, GeminiFileMappingWriteRepository,
-    SqlxGeminiFileMappingRepository,
-};
-use crate::repository::global_models::{
-    GlobalModelReadRepository, GlobalModelWriteRepository, SqlxGlobalModelReadRepository,
-};
-use crate::repository::management_tokens::{
-    ManagementTokenReadRepository, ManagementTokenWriteRepository, SqlxManagementTokenRepository,
-};
-use crate::repository::oauth_providers::{
-    OAuthProviderReadRepository, OAuthProviderWriteRepository, SqlxOAuthProviderRepository,
-};
-use crate::repository::pool_scores::{
-    PoolMemberScoreWriteRepository, PoolScoreReadRepository, PostgresPoolMemberScoreRepository,
-};
-use crate::repository::provider_catalog::{
-    ProviderCatalogReadRepository, ProviderCatalogWriteRepository,
-    SqlxProviderCatalogReadRepository,
-};
-use crate::repository::proxy_nodes::{
-    ProxyNodeReadRepository, ProxyNodeWriteRepository, SqlxProxyNodeRepository,
-};
-use crate::repository::quota::{
-    ProviderQuotaReadRepository, ProviderQuotaWriteRepository, SqlxProviderQuotaRepository,
-};
-use crate::repository::routing_profiles::{
-    PostgresRoutingGroupRepository, RoutingGroupReadRepository, RoutingGroupWriteRepository,
-};
-use crate::repository::settlement::{SettlementWriteRepository, SqlxSettlementRepository};
-use crate::repository::usage::{
-    SqlxUsageReadRepository, UsageReadRepository, UsageWriteRepository,
-};
-use crate::repository::users::{SqlxUserReadRepository, UserReadRepository};
-use crate::repository::video_tasks::{
-    SqlxVideoTaskReadRepository, SqlxVideoTaskRepository, VideoTaskReadRepository,
-    VideoTaskWriteRepository,
-};
-use crate::repository::wallet::{
-    SqlxWalletRepository, WalletReadRepository, WalletWriteRepository,
-};
 use crate::DataLayerError;
+use aether_data_contracts::repository::announcements::{
+    AnnouncementReadRepository, AnnouncementWriteRepository,
+};
 use aether_data_contracts::repository::audit::AuditLogReadRepository;
+use aether_data_contracts::repository::auth::{
+    AuthApiKeyReadRepository, AuthApiKeyWriteRepository,
+};
+use aether_data_contracts::repository::auth_modules::{
+    AuthModuleReadRepository, AuthModuleWriteRepository,
+};
+use aether_data_contracts::repository::background_tasks::{
+    BackgroundTaskReadRepository, BackgroundTaskWriteRepository,
+};
+use aether_data_contracts::repository::billing::BillingReadRepository;
+use aether_data_contracts::repository::candidate_selection::MinimalCandidateSelectionReadRepository;
+use aether_data_contracts::repository::candidates::{
+    RequestCandidateReadRepository, RequestCandidateWriteRepository,
+};
+use aether_data_contracts::repository::gemini_file_mappings::{
+    GeminiFileMappingReadRepository, GeminiFileMappingWriteRepository,
+};
+use aether_data_contracts::repository::global_models::{
+    GlobalModelReadRepository, GlobalModelWriteRepository,
+};
+use aether_data_contracts::repository::management_tokens::{
+    ManagementTokenReadRepository, ManagementTokenWriteRepository,
+};
+use aether_data_contracts::repository::oauth_providers::{
+    OAuthProviderReadRepository, OAuthProviderWriteRepository,
+};
+use aether_data_contracts::repository::pool_scores::{
+    PoolMemberScoreWriteRepository, PoolScoreReadRepository,
+};
+use aether_data_contracts::repository::provider_catalog::{
+    ProviderCatalogReadRepository, ProviderCatalogWriteRepository,
+};
+use aether_data_contracts::repository::proxy_nodes::{
+    ProxyNodeReadRepository, ProxyNodeWriteRepository,
+};
+use aether_data_contracts::repository::quota::{
+    ProviderQuotaReadRepository, ProviderQuotaWriteRepository,
+};
+use aether_data_contracts::repository::routing_profiles::{
+    RoutingGroupReadRepository, RoutingGroupWriteRepository,
+};
+use aether_data_contracts::repository::settlement::SettlementWriteRepository;
+use aether_data_contracts::repository::usage::{UsageReadRepository, UsageWriteRepository};
+use aether_data_contracts::repository::users::UserReadRepository;
+use aether_data_contracts::repository::video_tasks::{
+    VideoTaskReadRepository, VideoTaskWriteRepository,
+};
+use aether_data_contracts::repository::wallet::{WalletReadRepository, WalletWriteRepository};
 use aether_data_postgres::PostgresAuditLogReadRepository;
+use aether_data_postgres::PostgresPoolMemberScoreRepository;
+use aether_data_postgres::PostgresRoutingGroupRepository;
+use aether_data_postgres::SqlxAnnouncementReadRepository;
+use aether_data_postgres::SqlxAuthApiKeySnapshotReadRepository;
+use aether_data_postgres::SqlxBackgroundTaskRepository;
+use aether_data_postgres::SqlxBillingReadRepository;
+use aether_data_postgres::SqlxGeminiFileMappingRepository;
+use aether_data_postgres::SqlxGlobalModelReadRepository;
+use aether_data_postgres::SqlxManagementTokenRepository;
+use aether_data_postgres::SqlxMinimalCandidateSelectionReadRepository;
+use aether_data_postgres::SqlxOAuthProviderRepository;
+use aether_data_postgres::SqlxProviderCatalogReadRepository;
+use aether_data_postgres::SqlxProviderQuotaRepository;
+use aether_data_postgres::SqlxProxyNodeRepository;
+use aether_data_postgres::SqlxRequestCandidateReadRepository;
+use aether_data_postgres::SqlxSettlementRepository;
+use aether_data_postgres::SqlxUsageReadRepository;
+use aether_data_postgres::SqlxUserReadRepository;
+use aether_data_postgres::SqlxWalletRepository;
 use aether_data_postgres::{
     PostgresLeaseRunner, PostgresLeaseRunnerConfig, PostgresPool, PostgresPoolConfig,
     PostgresPoolFactory, PostgresTransactionRunner,
 };
+use aether_data_postgres::{SqlxAuthModuleReadRepository, SqlxAuthModuleRepository};
+use aether_data_postgres::{SqlxVideoTaskReadRepository, SqlxVideoTaskRepository};
 
 #[derive(Debug, Clone)]
 pub struct PostgresBackend {

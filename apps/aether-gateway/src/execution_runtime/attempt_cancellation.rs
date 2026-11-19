@@ -252,12 +252,12 @@ impl Drop for AttemptCancellationGuard {
 mod tests {
     use super::*;
     use aether_contracts::RequestBody;
-    use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-    use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::candidates::RequestCandidateReadRepository;
     use aether_data_contracts::repository::usage::{
         CapturedBody, StoredRequestUsageAudit, UsageReadRepository, UsageWriteRepository,
     };
+    use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+    use aether_data_memory::usage::InMemoryUsageReadRepository;
     use aether_usage_runtime::{
         build_lifecycle_usage_seed, build_pending_usage_record, UsageRuntimeConfig,
     };

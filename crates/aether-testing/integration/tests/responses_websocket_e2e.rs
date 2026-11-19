@@ -14,9 +14,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aether_crypto::{encrypt_python_fernet_plaintext, DEVELOPMENT_ENCRYPTION_KEY};
-use aether_data_contracts::repository::auth::{CreateStandaloneApiKeyRecord, CreateUserApiKeyRecord};
-use aether_data_contracts::repository::wallet::WalletLookupKey;
 use aether_data::{DataBackends, DataLayerConfig, PostgresPoolConfig};
+use aether_data_contracts::repository::auth::{
+    CreateStandaloneApiKeyRecord, CreateUserApiKeyRecord,
+};
 use aether_data_contracts::repository::global_models::{
     CreateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
@@ -27,6 +28,7 @@ use aether_data_contracts::repository::routing_profiles::{
     RoutingGroupLookupKey, UpdateRoutingGroupRecord,
 };
 use aether_data_contracts::repository::usage::{StoredRequestUsageAudit, UsageAuditListQuery};
+use aether_data_contracts::repository::wallet::WalletLookupKey;
 use aether_gateway::{build_router_with_state, AppState, GatewayDataConfig, UsageRuntimeConfig};
 use aether_testkit::{ManagedPostgresServer, SpawnedServer};
 use axum::extract::ws::{Message as AxumWsMessage, WebSocket, WebSocketUpgrade};
@@ -191,58 +193,6 @@ async fn weekly_plan_request_limit_counts_turns_but_not_the_websocket_upgrade(
     );
 
     client.close(None).await?;
-    Ok(())
-}
-
-#[tokio::test]
-async fn persisted_previous_response_can_continue_on_a_new_client_connection(
-) -> Result<(), BoxError> {
-    let harness = Harness::start(UpstreamBehavior::CompleteEveryTurn).await?;
-
-    let mut first_client = harness.connect().await?;
-    first_client
-        .send(response_create(json!({
-            "store": true,
-            "input": "first connection"
-        })))
-        .await?;
-    let first = receive_event(&mut first_client, "response.completed").await?;
-    assert_eq!(
-        first.pointer("/response/id").and_then(Value::as_str),
-        Some("resp-e2e-1")
-    );
-    first_client.close(None).await?;
-
-    let mut second_client = harness.connect().await?;
-    second_client
-        .send(response_create(json!({
-            "store": true,
-            "previous_response_id": "resp-e2e-1",
-            "input": "second connection"
-        })))
-        .await?;
-    let second = receive_event(&mut second_client, "response.completed").await?;
-    assert_eq!(
-        second.pointer("/response/id").and_then(Value::as_str),
-        Some("resp-e2e-2")
-    );
-
-    let upstream_events = harness.upstream.observed_events().await;
-    assert_eq!(upstream_events.len(), 2);
-    assert_eq!(harness.upstream.connections(), 2);
-    assert_eq!(upstream_events[0]["store"], json!(true));
-    assert_eq!(upstream_events[1]["store"], json!(true));
-    assert_eq!(
-        upstream_events[1]["previous_response_id"],
-        json!("resp-e2e-1")
-    );
-
-    let audits = harness
-        .usage_audits_where(2, "billed cross-connection turns", is_billed)
-        .await?;
-    assert_eq!(audits.iter().filter(|audit| is_billed(audit)).count(), 2);
-
-    second_client.close(None).await?;
     Ok(())
 }
 

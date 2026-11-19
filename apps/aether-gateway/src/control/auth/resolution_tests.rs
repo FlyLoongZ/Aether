@@ -1,18 +1,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aether_data::repository::auth::{
-    AuthApiKeyWriteRepository, CreateUserApiKeyRecord, InMemoryAuthApiKeySnapshotRepository,
-    StoredAuthApiKeySnapshot,
-};
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::wallet::{
-    InMemoryWalletRepository, StoredWalletSnapshot, WalletReadRepository,
-};
 use aether_data::PostgresPoolConfig;
+use aether_data_contracts::repository::auth::{
+    AuthApiKeyWriteRepository, CreateUserApiKeyRecord, StoredAuthApiKeySnapshot,
+};
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogProvider,
 };
+use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletReadRepository};
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::wallet::InMemoryWalletRepository;
 use aether_runtime::ConcurrencyGate;
 use axum::http::{HeaderMap, Uri};
 use futures_util::future::join_all;

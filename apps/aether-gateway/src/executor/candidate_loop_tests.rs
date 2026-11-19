@@ -3,17 +3,18 @@ use std::sync::{Arc, Mutex as StdMutex};
 use aether_contracts::{
     ExecutionPlan, ExecutionResult, ExecutionTimeouts, RequestBody, ResponseBody,
 };
-use aether_data::repository::settlement::{
-    InMemorySettlementRepository, ReserveUsagePolicyCostInput, ReserveUsagePolicyCostOutcome,
-    SettlementWriteRepository, UsagePolicyCostReservationState, UsagePolicyCostWindow,
-};
 use aether_data_contracts::repository::billing::{
     BillingReadRepository, StoredBillingModelContext, UserPlanEntitlementRecord,
 };
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, UpsertRequestCandidateRecord,
 };
+use aether_data_contracts::repository::settlement::{
+    ReserveUsagePolicyCostInput, ReserveUsagePolicyCostOutcome, SettlementWriteRepository,
+    UsagePolicyCostReservationState, UsagePolicyCostWindow,
+};
 use aether_data_contracts::DataLayerError;
+use aether_data_memory::settlement::InMemorySettlementRepository;
 use async_trait::async_trait;
 use serde_json::json;
 use tokio::sync::Mutex;

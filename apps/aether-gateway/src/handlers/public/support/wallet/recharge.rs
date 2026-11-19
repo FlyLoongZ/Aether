@@ -660,7 +660,9 @@ struct WalletPaymentOrderPayload {
 }
 
 impl WalletPaymentOrderPayload {
-    fn from_record(record: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder) -> Self {
+    fn from_record(
+        record: &aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
+    ) -> Self {
         // The order history is durable, but checkout capabilities are not. An
         // expired, paid, or credited order must not keep advertising a URL/form
         // that the callback path will no longer accept.
@@ -1153,15 +1155,15 @@ async fn reclaim_wallet_recharge_checkout(
         })
         .await
     {
-        Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(order))) => {
-            Ok(order)
-        }
+        Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(
+            order,
+        ))) => Ok(order),
         Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound)) => {
             Err("充值订单已不存在".to_string())
         }
-        Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail))) => {
-            Err(detail)
-        }
+        Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(
+            detail,
+        ))) => Err(detail),
         Ok(None) => Err("钱包充值后端暂不可用".to_string()),
         Err(err) => Err(format!("wallet recharge checkout reclaim failed: {err:?}")),
     }
@@ -1531,9 +1533,9 @@ pub(super) async fn handle_wallet_create_recharge(
     }
 
     let wallet = match state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-            &auth.user.id,
-        ))
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::UserId(&auth.user.id),
+        )
         .await
     {
         Ok(value) => value,
@@ -1968,10 +1970,12 @@ pub(super) async fn handle_wallet_create_recharge(
             )
             .await
         {
-            Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(order))) => {
-                order
-            }
-            Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound)) => {
+            Ok(Some(
+                aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(order),
+            )) => order,
+            Ok(Some(
+                aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound,
+            )) => {
                 best_effort_fail_wallet_recharge_checkout(
                     state,
                     &order_record,
@@ -1985,7 +1989,9 @@ pub(super) async fn handle_wallet_create_recharge(
                     false,
                 );
             }
-            Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail))) => {
+            Ok(Some(
+                aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail),
+            )) => {
                 if let Some(order) = settled_wallet_recharge_after_checkout_conflict(
                     state,
                     &auth.user.id,
@@ -2460,10 +2466,12 @@ pub(super) async fn handle_wallet_create_recharge(
             )
             .await
         {
-            Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(order))) => {
-                order
-            }
-            Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound)) => {
+            Ok(Some(
+                aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(order),
+            )) => order,
+            Ok(Some(
+                aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound,
+            )) => {
                 best_effort_mark_wallet_recharge_checkout_uncertain(
                     state,
                     &order_record,
@@ -2477,7 +2485,9 @@ pub(super) async fn handle_wallet_create_recharge(
                     false,
                 );
             }
-            Ok(Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail))) => {
+            Ok(Some(
+                aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail),
+            )) => {
                 if let Some(order) = settled_wallet_recharge_after_checkout_conflict(
                     state,
                     &auth.user.id,
@@ -2755,11 +2765,12 @@ mod tests {
         STRIPE_CLIENT_SECRET_ENCRYPTED_KEY, WALLET_RECHARGE_ORDER_KIND,
     };
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-    use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
-    use aether_data::repository::wallet::{
-        CreateWalletRechargeOrderInput, CreateWalletRechargeOrderOutcome, InMemoryWalletRepository,
-        StoredAdminPaymentOrder, WalletReadRepository, WalletWriteRepository,
+    use aether_data_contracts::repository::wallet::{
+        CreateWalletRechargeOrderInput, CreateWalletRechargeOrderOutcome, StoredAdminPaymentOrder,
+        WalletReadRepository, WalletWriteRepository,
     };
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+    use aether_data_memory::wallet::InMemoryWalletRepository;
     use chrono::Utc;
     use serde_json::json;
     use std::sync::Arc;

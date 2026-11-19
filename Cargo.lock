@@ -60,7 +60,6 @@ dependencies = [
  "aether-ai-formats",
  "aether-billing",
  "aether-contracts",
- "aether-data",
  "aether-data-contracts",
  "aether-provider-pool",
  "aether-provider-transport",
@@ -184,7 +183,6 @@ dependencies = [
  "aether-ai-formats",
  "aether-data-contracts",
  "aether-data-postgres",
- "aether-wallet",
  "async-trait",
  "chrono",
  "chrono-tz",
@@ -219,6 +217,25 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "aether-data-memory"
+version = "0.1.0"
+dependencies = [
+ "aether-ai-formats",
+ "aether-data-contracts",
+ "aether-wallet",
+ "async-trait",
+ "chrono",
+ "chrono-tz",
+ "futures-util",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tokio",
  "uuid",
 ]
 
@@ -269,6 +286,7 @@ dependencies = [
  "aether-crypto",
  "aether-data",
  "aether-data-contracts",
+ "aether-data-memory",
  "aether-data-postgres",
  "aether-dispatch-core",
  "aether-gateway-control",
@@ -653,8 +671,8 @@ dependencies = [
  "aether-ai-formats",
  "aether-body-store",
  "aether-contracts",
- "aether-data",
  "aether-data-contracts",
+ "aether-data-memory",
  "aether-runtime-state",
  "async-trait",
  "base64 0.23.1",

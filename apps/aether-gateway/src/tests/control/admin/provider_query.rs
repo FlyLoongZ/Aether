@@ -1,15 +1,15 @@
 use std::sync::{Arc, Mutex};
 
 use aether_contracts::ExecutionPlan;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus,
 };
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogReadRepository, StoredProviderCatalogEndpoint,
 };
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};

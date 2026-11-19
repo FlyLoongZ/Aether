@@ -21,7 +21,7 @@ async fn postgres_provider_expense_ledger_migration_preserves_exact_sums_idempot
         .execute(&pool)
         .await
         .unwrap();
-    let repository = crate::repository::billing::SqlxBillingReadRepository::new(pool.clone());
+    let repository = aether_data_postgres::SqlxBillingReadRepository::new(pool.clone());
     let input = ProviderExpenseInput {
         client_request_id: uuid::Uuid::new_v4().to_string(),
         provider_id: "deleted-later".into(),

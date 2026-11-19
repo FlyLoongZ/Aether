@@ -16,11 +16,11 @@ mod payment_direct;
 pub(crate) use payment_direct::set_refund_failure_stub_for_tests;
 mod payment_gateway_config;
 mod payment_gateway_secret;
-mod proxy_execution_path;
 mod payment_order_stripe_secret;
 mod provider_catalog_credential;
 mod provider_ops_credential;
 pub(crate) mod provider_pool;
+mod proxy_execution_path;
 mod request_utils;
 mod runtime_secret;
 mod stateless_policy;
@@ -99,7 +99,6 @@ pub(crate) use self::payment_gateway_secret::{
     open_payment_gateway_secret, payment_gateway_secret_is_legacy_unbound,
     seal_payment_gateway_secret, PaymentGatewaySecretBinding,
 };
-pub(crate) use self::proxy_execution_path::resolve_local_proxy_execution_path;
 pub(crate) use self::payment_order_stripe_secret::{
     normalize_stripe_client_secret, open_payment_order_stripe_client_secret,
     seal_payment_order_stripe_client_secret, PaymentOrderStripeSecretBinding,
@@ -116,6 +115,7 @@ pub(crate) use self::provider_ops_credential::{
     ProviderOpsCredentialBinding, PROVIDER_OPS_PERSISTENT_SECRET_FIELDS,
     PROVIDER_OPS_TRANSIENT_METADATA_FIELDS, PROVIDER_OPS_TRANSIENT_SECRET_FIELDS,
 };
+pub(crate) use self::proxy_execution_path::resolve_local_proxy_execution_path;
 pub(crate) use self::request_utils::{
     json_string_list, local_proxy_route_requires_buffered_body,
     mark_external_models_official_providers, query_param_bool, query_param_optional_bool,

@@ -41,7 +41,9 @@ pub(in super::super) async fn build_admin_list_users_response(
         .and_then(|value| aether_data_contracts::repository::users::UserExportSortBy::parse(&value))
         .unwrap_or_default();
     let sort_order = query_param_value(request_context.query_string(), "sort_order")
-        .and_then(|value| aether_data_contracts::repository::users::UserExportSortOrder::parse(&value))
+        .and_then(|value| {
+            aether_data_contracts::repository::users::UserExportSortOrder::parse(&value)
+        })
         .unwrap_or_default();
 
     let query = aether_data_contracts::repository::users::UserExportListQuery {
@@ -156,9 +158,7 @@ pub(in super::super) async fn build_admin_get_user_response(
     };
 
     let wallet = state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-            &user_id,
-        ))
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(&user_id))
         .await?;
     let export_row = find_admin_export_user(state, &user_id).await?;
     let groups = state.list_user_groups_for_user(&user_id).await?;

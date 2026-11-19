@@ -644,9 +644,11 @@ async fn build_admin_user_wallet_balance_batch_response(
             }
             Ok(Some(_)) => {
                 let wallet = match state
-                    .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-                        &item.user_id,
-                    ))
+                    .find_wallet(
+                        aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
+                            &item.user_id,
+                        ),
+                    )
                     .await
                 {
                     Ok(Some(wallet)) => wallet,
@@ -995,17 +997,19 @@ async fn resolve_admin_user_selection(
                 || filters.group_id.is_some()
         }) {
             state
-                .list_export_users_page(&aether_data_contracts::repository::users::UserExportListQuery {
-                    skip: 0,
-                    limit: 100_000,
-                    role: filters.as_ref().and_then(|filters| filters.role.clone()),
-                    is_active: filters.as_ref().and_then(|filters| filters.is_active),
-                    search: filters.as_ref().and_then(|filters| filters.search.clone()),
-                    group_id: filters
-                        .as_ref()
-                        .and_then(|filters| filters.group_id.clone()),
-                    ..Default::default()
-                })
+                .list_export_users_page(
+                    &aether_data_contracts::repository::users::UserExportListQuery {
+                        skip: 0,
+                        limit: 100_000,
+                        role: filters.as_ref().and_then(|filters| filters.role.clone()),
+                        is_active: filters.as_ref().and_then(|filters| filters.is_active),
+                        search: filters.as_ref().and_then(|filters| filters.search.clone()),
+                        group_id: filters
+                            .as_ref()
+                            .and_then(|filters| filters.group_id.clone()),
+                        ..Default::default()
+                    },
+                )
                 .await
                 .map_err(|_| "用户数据不可用".to_string())?
         } else {
@@ -1302,9 +1306,7 @@ async fn apply_batch_user_wallet_limit_mode(
 ) -> Result<bool, AdminBatchWalletLimitModeError> {
     let desired_limit_mode = if unlimited { "unlimited" } else { "finite" };
     let wallet = state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-            user_id,
-        ))
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id))
         .await
         .map_err(|_| AdminBatchWalletLimitModeError::WalletLookup)?;
     match wallet {
@@ -1334,9 +1336,7 @@ async fn apply_batch_user_wallet_balance_adjustment(
 ) -> Result<bool, AdminBatchWalletBalanceAdjustmentError> {
     // Resolve only the wallet ID; the repository clamps the deduction under its row lock.
     let Some(wallet) = state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-            user_id,
-        ))
+        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id))
         .await
         .map_err(|_| AdminBatchWalletBalanceAdjustmentError::WalletLookup)?
     else {

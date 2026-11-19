@@ -166,7 +166,9 @@ fn is_fixed_linuxdo_oauth_origin(url: &reqwest::Url) -> bool {
 fn admin_oauth_test_allowed_domains(
     provider_type: &str,
     payload: &serde_json::Value,
-    persisted_config: Option<&aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
+    persisted_config: Option<
+        &aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig,
+    >,
 ) -> Vec<String> {
     if let Some(domains) = admin_oauth_builtin_allowed_domains(provider_type) {
         return domains.iter().map(|domain| (*domain).to_string()).collect();
@@ -184,7 +186,9 @@ fn admin_oauth_test_allowed_domains(
 
 fn management_token_may_configure_frontend_callback(
     request_context: &AdminRequestContext<'_>,
-    existing: Option<&aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig>,
+    existing: Option<
+        &aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig,
+    >,
     requested_callback: &str,
 ) -> bool {
     let Some(principal) = request_context

@@ -12,8 +12,8 @@ use crate::{AppState, GatewayError};
 
 mod context;
 pub(crate) mod failure;
-use context::resolve_locally_actionable_report_context;
 pub(crate) use context::attach_plan_wallet_fallback_context;
+use context::resolve_locally_actionable_report_context;
 
 use aether_usage_runtime::{
     is_local_ai_stream_report_kind, is_local_ai_sync_report_kind, report_request_id,

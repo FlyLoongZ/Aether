@@ -1,10 +1,11 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::settlement::{
-    InMemorySettlementRepository, ReserveUsagePolicyCostInput, ReserveUsagePolicyRequestInput,
-    SettlementWriteRepository, UsagePolicyCostWindow, UsagePolicyRequestWindow,
+use aether_data_contracts::repository::settlement::{
+    ReserveUsagePolicyCostInput, ReserveUsagePolicyRequestInput, SettlementWriteRepository,
+    UsagePolicyCostWindow, UsagePolicyRequestWindow,
 };
+use aether_data_memory::settlement::InMemorySettlementRepository;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use serde_json::json;

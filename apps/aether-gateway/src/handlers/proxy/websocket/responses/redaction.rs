@@ -243,9 +243,8 @@ mod tests {
     use std::sync::Arc;
 
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-    use aether_data::repository::auth::{
-        InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
-    };
+    use aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord;
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
     use axum::http::{HeaderMap, Uri};
     use serde_json::{json, Value};
 

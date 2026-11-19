@@ -23,9 +23,6 @@ use crate::handlers::shared::provider_pool::{
 };
 use crate::orchestration::LocalExecutionCandidateMetadata;
 use crate::{AppState, LocalExecutionRuntimeMissDiagnostic};
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::pool_scores::InMemoryPoolMemberScoreRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredPoolKeyCandidateOrder,
 };
@@ -35,6 +32,9 @@ use aether_data_contracts::repository::pool_scores::{
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::pool_scores::InMemoryPoolMemberScoreRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_pool_core::POOL_ACCOUNT_EXHAUSTED_SKIP_REASON;
 use aether_provider_pool::ProviderPoolService;
 use aether_provider_transport::snapshot::{

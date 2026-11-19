@@ -290,7 +290,18 @@ async fn maybe_build_admin_auth_gate_response(
     uri: &http::Uri,
     client_ip: std::net::IpAddr,
 ) -> Result<Option<Response<Body>>, GatewayError> {
-    if !request_path_targets_admin_namespace(&request_context.request_path) {
+    let admin_route = request_path_targets_admin_namespace(&request_context.request_path)
+        || request_context
+            .control_decision
+            .as_ref()
+            .is_some_and(|decision| {
+                decision.route_class.as_deref() == Some("admin_proxy")
+                    || decision
+                        .auth_endpoint_signature
+                        .as_deref()
+                        .is_some_and(|signature| signature.starts_with("admin:"))
+            });
+    if !admin_route {
         return Ok(None);
     }
     if request_context

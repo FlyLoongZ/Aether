@@ -716,9 +716,10 @@ mod tests {
     use crate::tests::DEV_FERNET_KEY;
     use crate::AppState;
     use aether_crypto::{encrypt_python_fernet_plaintext, looks_like_python_fernet_ciphertext};
-    use aether_data::repository::auth_modules::{
-        AuthModuleReadRepository, InMemoryAuthModuleReadRepository, StoredLdapModuleConfig,
+    use aether_data_contracts::repository::auth_modules::{
+        AuthModuleReadRepository, StoredLdapModuleConfig,
     };
+    use aether_data_memory::auth_modules::InMemoryAuthModuleReadRepository;
     use futures_util::future::join_all;
     use serde_json::json;
     use std::sync::{

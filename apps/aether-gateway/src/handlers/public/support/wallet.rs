@@ -52,9 +52,9 @@ pub(super) async fn resolve_wallet_request_scope(
         build_auth_error_response(http::StatusCode::BAD_REQUEST, detail, false)
     })?;
     let wallet = state
-        .find_wallet(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-            &auth.user.id,
-        ))
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::UserId(&auth.user.id),
+        )
         .await
         .map_err(|err| {
             build_auth_error_response(

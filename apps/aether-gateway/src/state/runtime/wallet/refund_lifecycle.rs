@@ -215,9 +215,9 @@ impl AppState {
             Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                 Ok(AdminWalletMutationOutcome::NotFound)
             }
-            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
-                Ok(AdminWalletMutationOutcome::Invalid(detail))
-            }
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(
+                detail,
+            )) => Ok(AdminWalletMutationOutcome::Invalid(detail)),
             None => Ok(AdminWalletMutationOutcome::Unavailable),
         }
     }
@@ -303,15 +303,17 @@ impl AppState {
             )
             .await?
         {
-            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(refund)) => Ok(
-                AdminWalletMutationOutcome::Applied(stored_admin_wallet_refund_to_gateway(refund)),
-            ),
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Applied(
+                refund,
+            )) => Ok(AdminWalletMutationOutcome::Applied(
+                stored_admin_wallet_refund_to_gateway(refund),
+            )),
             Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                 Ok(AdminWalletMutationOutcome::NotFound)
             }
-            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
-                Ok(AdminWalletMutationOutcome::Invalid(detail))
-            }
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(
+                detail,
+            )) => Ok(AdminWalletMutationOutcome::Invalid(detail)),
             None => Ok(AdminWalletMutationOutcome::Unavailable),
         }
     }
@@ -552,9 +554,9 @@ impl AppState {
             Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::NotFound) => {
                 Ok(AdminWalletMutationOutcome::NotFound)
             }
-            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(detail)) => {
-                Ok(AdminWalletMutationOutcome::Invalid(detail))
-            }
+            Some(aether_data_contracts::repository::wallet::WalletMutationOutcome::Invalid(
+                detail,
+            )) => Ok(AdminWalletMutationOutcome::Invalid(detail)),
             None => Ok(AdminWalletMutationOutcome::Unavailable),
         }
     }

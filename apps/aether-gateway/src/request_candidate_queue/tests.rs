@@ -8,12 +8,12 @@ use super::{
     RequestCandidateTerminalQueueRecord, RequestCandidateWriteErrorDisposition,
     MAX_CONSECUTIVE_ACTIVE_FLUSHES, MAX_CONSECUTIVE_PRIORITY_FLUSHES,
 };
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
 use aether_data::DataLayerError;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus, RequestCandidateWriteRepository,
     StoredRequestCandidate, UpsertRequestCandidateRecord,
 };
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

@@ -8,9 +8,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use aether_crypto::PythonFernetCompat;
-use aether_data_contracts::repository::auth::CreateStandaloneApiKeyRecord;
-use aether_data_contracts::repository::wallet::WalletLookupKey;
 use aether_data::{DataBackends, DataLayerConfig, PostgresPoolConfig};
+use aether_data_contracts::repository::auth::CreateStandaloneApiKeyRecord;
 use aether_data_contracts::repository::global_models::{
     CreateAdminGlobalModelRecord, UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
 };
@@ -18,6 +17,7 @@ use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogKeyAdminCasUpdate, ProviderCatalogKeyOAuthCredentialFence,
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+use aether_data_contracts::repository::wallet::WalletLookupKey;
 use serde_json::json;
 use sha2::Digest;
 
@@ -817,9 +817,10 @@ fn validate_private_output_directory(directory: &Path, owner_uid: u32) -> io::Re
     while let Some(path) = ancestor {
         let metadata = fs::symlink_metadata(path)?;
         let mode = metadata.mode();
+        let sticky_world_writable = (mode & 0o002 != 0) && (mode & 0o1000 != 0);
         if !metadata.is_dir()
             || metadata.file_type().is_symlink()
-            || (metadata.uid() != owner_uid && metadata.uid() != 0)
+            || (metadata.uid() != owner_uid && metadata.uid() != 0 && !sticky_world_writable)
             || (mode & 0o022 != 0 && mode & 0o1000 == 0)
         {
             return Err(io::Error::other(format!(

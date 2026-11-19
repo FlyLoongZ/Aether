@@ -11,10 +11,11 @@ use super::{
     UsageRuntimeConfig, TRACE_ID_HEADER,
 };
 use crate::tests::DEV_FERNET_KEY;
-use aether_data::repository::billing::InMemoryBillingReadRepository;
-use aether_data::repository::wallet::{InMemoryWalletRepository, StoredWalletSnapshot};
 use aether_data_contracts::repository::billing::StoredBillingModelContext;
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
+use aether_data_memory::billing::InMemoryBillingReadRepository;
+use aether_data_memory::wallet::InMemoryWalletRepository;
 use serde_json::Value;
 use tokio::task::JoinHandle;
 

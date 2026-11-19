@@ -1,5 +1,5 @@
-use aether_data_contracts::PostgresPoolConfig;
 use crate::DataLayerError;
+use aether_data_contracts::PostgresPoolConfig;
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct DataLayerConfig {

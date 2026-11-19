@@ -875,8 +875,8 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogEndpoint;
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use axum::body::to_bytes;
     use serde_json::json;
 

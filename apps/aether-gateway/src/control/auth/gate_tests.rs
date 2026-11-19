@@ -4,15 +4,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aether_contracts::{ExecutionPlan, RequestBody};
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 use aether_data_contracts::repository::billing::{
     BillingReadRepository, StoredBillingModelContext, UserDailyQuotaAvailabilityRecord,
 };
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 use aether_data_contracts::DataLayerError;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_runtime::ConcurrencyGate;
 use async_trait::async_trait;
 use axum::body::Bytes;

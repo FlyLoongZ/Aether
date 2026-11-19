@@ -2,13 +2,13 @@ use crate::tests::DEV_FERNET_KEY;
 use std::sync::{Arc, Mutex};
 
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateReadRepository, RequestCandidateStatus, RequestCandidateWriteRepository,
     UpsertRequestCandidateRecord,
 };
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogProvider;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::Body;
 use axum::http::StatusCode;
 use axum::routing::{get, post};

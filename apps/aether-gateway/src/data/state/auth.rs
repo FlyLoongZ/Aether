@@ -108,7 +108,8 @@ impl GatewayDataState {
 
     pub(crate) async fn list_user_groups(
         &self,
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => repository.list_user_groups().await,
             None => Ok(Vec::new()),
@@ -118,7 +119,8 @@ impl GatewayDataState {
     pub(crate) async fn find_user_group_by_id(
         &self,
         group_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => repository.find_user_group_by_id(group_id).await,
             None => Ok(None),
@@ -128,7 +130,8 @@ impl GatewayDataState {
     pub(crate) async fn list_user_groups_by_ids(
         &self,
         group_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => repository.list_user_groups_by_ids(group_ids).await,
             None => Ok(Vec::new()),
@@ -138,7 +141,8 @@ impl GatewayDataState {
     pub(crate) async fn create_user_group(
         &self,
         record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => repository.create_user_group(record).await,
             None => Ok(None),
@@ -149,7 +153,8 @@ impl GatewayDataState {
         &self,
         group_id: &str,
         record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => repository.update_user_group(group_id, record).await,
             None => Ok(None),
@@ -181,7 +186,8 @@ impl GatewayDataState {
     pub(crate) async fn list_user_group_members(
         &self,
         group_id: &str,
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => repository.list_user_group_members(group_id).await,
             None => Ok(Vec::new()),
@@ -192,7 +198,8 @@ impl GatewayDataState {
         &self,
         group_id: &str,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => {
                 repository
@@ -206,7 +213,8 @@ impl GatewayDataState {
     pub(crate) async fn list_user_groups_for_user(
         &self,
         user_id: &str,
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => repository.list_user_groups_for_user(user_id).await,
             None => Ok(Vec::new()),
@@ -216,8 +224,10 @@ impl GatewayDataState {
     pub(crate) async fn list_user_group_memberships_by_user_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMembership>, DataLayerError>
-    {
+    ) -> Result<
+        Vec<aether_data_contracts::repository::users::StoredUserGroupMembership>,
+        DataLayerError,
+    > {
         match &self.user_reader {
             Some(repository) => {
                 repository
@@ -232,7 +242,8 @@ impl GatewayDataState {
         &self,
         user_id: &str,
         group_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         match &self.user_reader {
             Some(repository) => {
                 repository
@@ -1098,9 +1109,7 @@ impl GatewayDataState {
         };
 
         if repository
-            .find(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-                user_id,
-            ))
+            .find(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id))
             .await?
             .is_some()
         {
@@ -1128,13 +1137,15 @@ impl GatewayDataState {
         // A single-row page is enough to establish that an API-key wallet
         // exists while avoiding an unbounded read during error compensation.
         let page = repository
-            .list_admin_wallets(&aether_data_contracts::repository::wallet::AdminWalletListQuery {
-                user_id: None,
-                status: None,
-                owner_type: Some("api_key".to_string()),
-                limit: 1,
-                offset: 0,
-            })
+            .list_admin_wallets(
+                &aether_data_contracts::repository::wallet::AdminWalletListQuery {
+                    user_id: None,
+                    status: None,
+                    owner_type: Some("api_key".to_string()),
+                    limit: 1,
+                    offset: 0,
+                },
+            )
             .await?;
         Ok(page.total > 0)
     }
@@ -1170,9 +1181,11 @@ impl GatewayDataState {
                 // for provisional cleanup.
                 let exact_wallet_exists = match &self.wallet_reader {
                     Some(repository) => repository
-                        .find(aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
-                            wallet_id,
-                        ))
+                        .find(
+                            aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
+                                wallet_id,
+                            ),
+                        )
                         .await?
                         .is_some(),
                     None => self.wallet_writer.is_some(),
@@ -1508,7 +1521,9 @@ impl GatewayDataState {
         force_disable: bool,
         locked_users_snapshot: usize,
     ) -> Result<
-        Option<aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome>,
+        Option<
+            aether_data_contracts::repository::oauth_providers::UpsertOAuthProviderConfigOutcome,
+        >,
         DataLayerError,
     > {
         match &self.oauth_provider_writer {
@@ -1945,7 +1960,8 @@ impl GatewayDataState {
         &self,
         user_ids: &[String],
         now_unix_secs: u64,
-    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError>
+    {
         match &self.auth_api_key_reader {
             Some(repository) => {
                 repository
@@ -1959,7 +1975,8 @@ impl GatewayDataState {
     pub(crate) async fn summarize_auth_api_key_export_non_standalone_records(
         &self,
         now_unix_secs: u64,
-    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError>
+    {
         match &self.auth_api_key_reader {
             Some(repository) => {
                 repository
@@ -1982,7 +1999,8 @@ impl GatewayDataState {
     pub(crate) async fn summarize_auth_api_key_export_standalone_records(
         &self,
         now_unix_secs: u64,
-    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::auth::AuthApiKeyExportSummary, DataLayerError>
+    {
         match &self.auth_api_key_reader {
             Some(repository) => {
                 repository
@@ -2430,7 +2448,8 @@ impl GatewayDataState {
     async fn effective_user_groups_for_user(
         &self,
         user_id: &str,
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroup>, DataLayerError>
+    {
         let Some(repository) = self.user_reader.as_ref() else {
             return Ok(Vec::new());
         };
@@ -2713,17 +2732,16 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use aether_data::repository::auth::{
-        InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
-        StoredAuthApiKeySnapshot,
+    use aether_data_contracts::repository::auth::{
+        StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
     };
-    use aether_data::repository::users::{
-        InMemoryUserReadRepository, StoredUserAuthRecord, StoredUserGroup, UpsertUserGroupRecord,
-        UserReadRepository,
+    use aether_data_contracts::repository::users::{
+        StoredUserAuthRecord, StoredUserGroup, UpsertUserGroupRecord, UserReadRepository,
     };
-    use aether_data::repository::wallet::{
-        InMemoryWalletRepository, WalletLookupKey, WalletReadRepository,
-    };
+    use aether_data_contracts::repository::wallet::{WalletLookupKey, WalletReadRepository};
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+    use aether_data_memory::users::InMemoryUserReadRepository;
+    use aether_data_memory::wallet::InMemoryWalletRepository;
 
     use crate::data::GatewayDataState;
 

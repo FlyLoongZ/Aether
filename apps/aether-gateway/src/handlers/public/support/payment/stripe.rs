@@ -168,7 +168,8 @@ fn stripe_callback_projection(
 async fn build_stripe_callback_input(
     state: &AppState,
     event: Value,
-) -> Result<Option<aether_data_contracts::repository::wallet::ProcessPaymentCallbackInput>, String> {
+) -> Result<Option<aether_data_contracts::repository::wallet::ProcessPaymentCallbackInput>, String>
+{
     let event_type = stripe_string_field(&event, "type").unwrap_or("");
     if event_type != "payment_intent.succeeded" {
         return Ok(None);

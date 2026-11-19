@@ -1,12 +1,11 @@
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::gemini_file_mappings::{
-    GeminiFileMappingReadRepository, InMemoryGeminiFileMappingRepository,
-};
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::gemini_file_mappings::InMemoryGeminiFileMappingRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::{to_bytes, Body};
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};

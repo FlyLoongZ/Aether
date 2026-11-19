@@ -978,15 +978,14 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use aether_contracts::{ExecutionPlan, RequestBody};
-    use aether_data::repository::auth::{
-        InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord,
-    };
-    use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-    use aether_data::repository::usage::InMemoryUsageReadRepository;
+    use aether_data_contracts::repository::auth::StoredAuthApiKeyExportRecord;
     use aether_data_contracts::repository::candidates::{
         RequestCandidateReadRepository, RequestCandidateStatus, StoredRequestCandidate,
         UpsertRequestCandidateRecord,
     };
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+    use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+    use aether_data_memory::usage::InMemoryUsageReadRepository;
     use aether_scheduler_core::SchedulerMinimalCandidateSelectionCandidate;
     use serde_json::json;
 

@@ -26,7 +26,11 @@ impl AppState {
         &self,
         input: UpdateWalletRechargeCheckoutInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<
+            WalletMutationOutcome<
+                aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
+            >,
+        >,
         GatewayError,
     > {
         self.data
@@ -49,7 +53,11 @@ impl AppState {
         &self,
         input: FailWalletRechargeCheckoutInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<
+            WalletMutationOutcome<
+                aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
+            >,
+        >,
         GatewayError,
     > {
         self.data
@@ -62,7 +70,11 @@ impl AppState {
         &self,
         input: ReclaimWalletRechargeCheckoutInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<
+            WalletMutationOutcome<
+                aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
+            >,
+        >,
         GatewayError,
     > {
         self.data
@@ -176,7 +188,11 @@ impl AppState {
         &self,
         input: CompleteAdminWalletRefundInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>>,
+        Option<
+            WalletMutationOutcome<
+                aether_data_contracts::repository::wallet::StoredAdminWalletRefund,
+            >,
+        >,
         GatewayError,
     > {
         self.data
@@ -189,7 +205,11 @@ impl AppState {
         &self,
         input: UpdateAdminWalletRefundGatewayInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>>,
+        Option<
+            WalletMutationOutcome<
+                aether_data_contracts::repository::wallet::StoredAdminWalletRefund,
+            >,
+        >,
         GatewayError,
     > {
         self.data
@@ -247,7 +267,11 @@ impl AppState {
         &self,
         order_id: &str,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>>,
+        Option<
+            WalletMutationOutcome<
+                aether_data_contracts::repository::wallet::StoredAdminPaymentOrder,
+            >,
+        >,
         GatewayError,
     > {
         self.data

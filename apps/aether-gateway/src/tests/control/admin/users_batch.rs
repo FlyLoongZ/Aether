@@ -1,9 +1,10 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use aether_data::repository::management_tokens::InMemoryManagementTokenRepository;
-use aether_data::repository::users::{InMemoryUserReadRepository, StoredUserAuthRecord};
+use aether_data_contracts::repository::users::StoredUserAuthRecord;
 use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
+use aether_data_memory::management_tokens::InMemoryManagementTokenRepository;
+use aether_data_memory::users::InMemoryUserReadRepository;
 use axum::http::StatusCode;
 use chrono::Utc;
 use reqwest::{Client, RequestBuilder, Response};

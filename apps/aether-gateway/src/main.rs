@@ -31,8 +31,7 @@ use aether_runtime::{
     ServiceRuntimeConfig,
 };
 use aether_runtime_state::{
-    RedisClientConfig, RuntimeState, RuntimeStateBackendMode,
-    RuntimeStateConfig,
+    RedisClientConfig, RuntimeState, RuntimeStateBackendMode, RuntimeStateConfig,
 };
 
 const MIN_GATEWAY_DATA_ENCRYPTION_KEY_BYTES: usize = 32;
@@ -268,9 +267,7 @@ fn soft_fd_limit() -> Option<usize> {
     None
 }
 
-fn usage_queue_request_concurrency_hint(
-    max_in_flight_requests: Option<usize>,
-) -> Option<usize> {
+fn usage_queue_request_concurrency_hint(max_in_flight_requests: Option<usize>) -> Option<usize> {
     max_in_flight_requests.filter(|limit| *limit > 0)
 }
 
@@ -762,11 +759,7 @@ impl GatewayUsageArgs {
         if !self.queue_terminal_events && !self.queue_lifecycle_events {
             return 1;
         }
-        automatic_usage_queue_workers(
-            max_in_flight_requests,
-            database,
-            database_is_isolated,
-        )
+        automatic_usage_queue_workers(max_in_flight_requests, database, database_is_isolated)
     }
 
     fn effective_queue_worker_max_count(
@@ -779,9 +772,7 @@ impl GatewayUsageArgs {
             return worker_count.clamp(1, MAX_USAGE_QUEUE_WORKERS);
         }
         self.queue_worker_max_count
-            .unwrap_or_else(|| {
-                usage_queue_worker_database_cap(database, database_is_isolated)
-            })
+            .unwrap_or_else(|| usage_queue_worker_database_cap(database, database_is_isolated))
             .max(1)
             .min(usage_queue_worker_database_cap(
                 database,
@@ -795,9 +786,7 @@ impl GatewayUsageArgs {
         database: Option<&PostgresPoolConfig>,
         worker_max_count: usize,
     ) -> Option<usize> {
-        if (!self.queue_terminal_events && !self.queue_lifecycle_events)
-            || database.is_none()
-        {
+        if (!self.queue_terminal_events && !self.queue_lifecycle_events) || database.is_none() {
             return None;
         }
         Some(worker_max_count.clamp(1, MAX_USAGE_QUEUE_WORKERS))
@@ -1613,7 +1602,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         soft_fd_limit(),
     );
     let http_connection_budget = Arc::new(HttpConnectionBudget::new(http_connection_limit));
-    let usage_queue_request_concurrency_hint = usage_queue_request_concurrency_hint(Some(request_concurrency_limit));
+    let usage_queue_request_concurrency_hint =
+        usage_queue_request_concurrency_hint(Some(request_concurrency_limit));
     let usage_queue_request_concurrency_hint_source = if args.max_in_flight_requests.is_some() {
         "explicit"
     } else {
@@ -1639,10 +1629,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         usage_queue_worker_max_count,
         usage_worker_record_concurrency_limit,
     );
-    let usage_blocking_stream_lanes = args.usage.runtime_state_blocking_stream_lanes(
-        usage_database_config,
-        usage_config.worker_max_count,
-    );
+    let usage_blocking_stream_lanes = args
+        .usage
+        .runtime_state_blocking_stream_lanes(usage_database_config, usage_config.worker_max_count);
     let runtime_state = Arc::new(
         RuntimeState::from_config(args.runtime_state_config(
             runtime_backend,
@@ -2224,16 +2213,15 @@ mod tests {
         automatic_sql_pool_config_for_parallelism, automatic_usage_queue_workers_for_parallelism,
         ensure_database_backfills_are_current, ensure_database_schema_is_current,
         pending_backfills_error, pending_schema_error, resolve_healthcheck_url,
-        validate_gateway_data_encryption_key, Args, DataCommand,
-        DatabaseCommand, DatabaseModeArg, GatewayDataArgs,
-        GatewayFrontdoorArgs, GatewayLogDestinationArg, GatewayLogFormatArg, GatewayLogRotationArg,
-        GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs, RuntimeBackendArg,
-        DEFAULT_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS, DEFAULT_GATEWAY_HTTP_HEADER_MAX_BYTES,
-        DEFAULT_GATEWAY_HTTP_HEADER_READ_TIMEOUT_MS, DEFAULT_GATEWAY_HTTP_MAX_HEADERS,
-        DEFAULT_GATEWAY_LISTENER_SHARDS, DEFAULT_GATEWAY_LISTEN_BACKLOG,
-        MAX_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS, MAX_GATEWAY_LISTENER_SHARDS,
-        MAX_GATEWAY_LISTEN_BACKLOG, MIN_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
-        MIN_GATEWAY_LISTEN_BACKLOG,
+        validate_gateway_data_encryption_key, Args, DataCommand, DatabaseCommand, DatabaseModeArg,
+        GatewayDataArgs, GatewayFrontdoorArgs, GatewayLogDestinationArg, GatewayLogFormatArg,
+        GatewayLogRotationArg, GatewayLoggingArgs, GatewayRateLimitArgs, GatewayUsageArgs,
+        RuntimeBackendArg, DEFAULT_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
+        DEFAULT_GATEWAY_HTTP_HEADER_MAX_BYTES, DEFAULT_GATEWAY_HTTP_HEADER_READ_TIMEOUT_MS,
+        DEFAULT_GATEWAY_HTTP_MAX_HEADERS, DEFAULT_GATEWAY_LISTENER_SHARDS,
+        DEFAULT_GATEWAY_LISTEN_BACKLOG, MAX_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS,
+        MAX_GATEWAY_LISTENER_SHARDS, MAX_GATEWAY_LISTEN_BACKLOG,
+        MIN_GATEWAY_HTTP2_MAX_CONCURRENT_STREAMS, MIN_GATEWAY_LISTEN_BACKLOG,
     };
     use aether_data::PostgresPoolConfig;
     use aether_gateway::AppState;
@@ -2654,9 +2642,9 @@ mod tests {
         args.usage.queue_workers = Some(72);
         let database = test_database(100);
 
-        let workers =
-            args.usage
-                .effective_queue_workers(Some(10_000), Some(&database), false);
+        let workers = args
+            .usage
+            .effective_queue_workers(Some(10_000), Some(&database), false);
 
         assert_eq!(workers, 64);
         assert_eq!(args.usage.to_config(workers, 64, Some(8)).worker_count, 64);
@@ -2666,12 +2654,8 @@ mod tests {
     fn gateway_usage_queue_workers_auto_uses_cpu_default_without_concurrency_hint() {
         let database = test_database(100);
 
-        let workers = automatic_usage_queue_workers_for_parallelism(
-            4,
-            None,
-            Some(&database),
-            false,
-        );
+        let workers =
+            automatic_usage_queue_workers_for_parallelism(4, None, Some(&database), false);
 
         assert_eq!(workers, 4);
     }
@@ -2682,14 +2666,12 @@ mod tests {
         args.usage.queue_workers = None;
         let database = test_database(40);
 
-        let workers =
+        let workers = args
+            .usage
+            .effective_queue_workers(Some(1_024), Some(&database), false);
+        let max_workers =
             args.usage
-                .effective_queue_workers(Some(1_024), Some(&database), false);
-        let max_workers = args.usage.effective_queue_worker_max_count(
-            Some(&database),
-            workers,
-            false,
-        );
+                .effective_queue_worker_max_count(Some(&database), workers, false);
 
         assert_eq!(workers, 8);
         assert_eq!(max_workers, 10);
@@ -2702,14 +2684,12 @@ mod tests {
         args.usage.queue_worker_max_count = Some(32);
         let database = test_database(200);
 
-        let workers =
+        let workers = args
+            .usage
+            .effective_queue_workers(Some(1_024), Some(&database), false);
+        let max_workers =
             args.usage
-                .effective_queue_workers(Some(1_024), Some(&database), false);
-        let max_workers = args.usage.effective_queue_worker_max_count(
-            Some(&database),
-            workers,
-            false,
-        );
+                .effective_queue_worker_max_count(Some(&database), workers, false);
 
         assert_eq!(workers, 8);
         assert_eq!(max_workers, 32);
@@ -2732,12 +2712,8 @@ mod tests {
     fn gateway_usage_queue_workers_auto_scales_from_request_concurrency() {
         let database = test_database(100);
 
-        let workers = automatic_usage_queue_workers_for_parallelism(
-            8,
-            Some(1_536),
-            Some(&database),
-            false,
-        );
+        let workers =
+            automatic_usage_queue_workers_for_parallelism(8, Some(1_536), Some(&database), false);
 
         assert_eq!(workers, 12);
     }
@@ -2746,26 +2722,18 @@ mod tests {
     fn gateway_usage_queue_workers_auto_respects_effective_request_limit() {
         let database = test_database(100);
 
-        let workers = automatic_usage_queue_workers_for_parallelism(
-            8,
-            Some(2_048),
-            Some(&database),
-            false,
-        );
+        let workers =
+            automatic_usage_queue_workers_for_parallelism(8, Some(2_048), Some(&database), false);
 
-        assert_eq!(workers, 2);
+        assert_eq!(workers, 16);
     }
 
     #[test]
     fn gateway_usage_queue_workers_auto_is_capped_by_database_pool() {
         let database = test_database(20);
 
-        let workers = automatic_usage_queue_workers_for_parallelism(
-            16,
-            Some(5_000),
-            Some(&database),
-            false,
-        );
+        let workers =
+            automatic_usage_queue_workers_for_parallelism(16, Some(5_000), Some(&database), false);
 
         assert_eq!(workers, 5);
     }

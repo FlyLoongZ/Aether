@@ -2,11 +2,6 @@ use crate::tests::hash_api_key;
 use crate::tests::support::sample_auth_snapshot_video as sample_auth_snapshot;
 use crate::tests::DEV_FERNET_KEY;
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::video_tasks::InMemoryVideoTaskRepository;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
@@ -19,6 +14,11 @@ use aether_data_contracts::repository::provider_catalog::{
 use aether_data_contracts::repository::video_tasks::{
     UpsertVideoTask, VideoTaskStatus, VideoTaskWriteRepository,
 };
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 use axum::body::{to_bytes, Body};
 use axum::routing::any;
 use axum::{extract::Request, Json, Router};

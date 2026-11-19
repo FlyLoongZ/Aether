@@ -1,4 +1,3 @@
-use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data_contracts::repository::auth_modules::{
     StoredLdapModuleConfig, StoredOAuthProviderModuleConfig,
 };
@@ -6,7 +5,6 @@ use aether_data_contracts::repository::management_tokens::{
     StoredManagementToken, StoredManagementTokenUserSummary, StoredManagementTokenWithUser,
 };
 use aether_data_contracts::repository::oauth_providers::StoredOAuthProviderConfig;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::proxy_nodes::StoredProxyNode;
 use aether_data_contracts::repository::{
     candidates::{RequestCandidateStatus, StoredRequestCandidate},
@@ -17,6 +15,8 @@ use aether_data_contracts::repository::{
     provider_catalog::{StoredProviderCatalogEndpoint, StoredProviderCatalogKey},
     quota::StoredProviderQuotaSnapshot,
 };
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::routing::any;
 use axum::{Json, Router};
 

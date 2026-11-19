@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use aether_data::repository::pool_scores::PostgresPoolMemberScoreRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_postgres::PostgresPoolMemberScoreRepository;
 use serde_json::json;
 
 use super::{

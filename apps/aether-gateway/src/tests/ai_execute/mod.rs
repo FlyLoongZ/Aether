@@ -1,8 +1,9 @@
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogProvider;
+use aether_data_contracts::repository::proxy_nodes::StoredProxyNode;
+use aether_data_memory::proxy_nodes::InMemoryProxyNodeRepository;
 use axum::body::{to_bytes, Body, Bytes};
 use axum::response::Response;
 use axum::routing::any;

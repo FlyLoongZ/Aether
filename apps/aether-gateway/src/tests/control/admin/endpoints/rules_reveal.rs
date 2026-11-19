@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use axum::body::Body;
 use http::{HeaderMap, HeaderValue, Method, Request, StatusCode};
 use http_body_util::BodyExt;

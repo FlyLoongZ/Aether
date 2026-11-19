@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     is_locked boolean DEFAULT false NOT NULL,
+    ip_rules jsonb,
     CONSTRAINT ck_api_keys_standalone_not_locked CHECK (((NOT is_standalone) OR (NOT is_locked)))
 );
 

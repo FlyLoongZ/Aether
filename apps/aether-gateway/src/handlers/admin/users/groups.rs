@@ -375,22 +375,24 @@ fn parse_group_record(
     let allowed_api_formats = normalize_admin_user_api_formats(payload.allowed_api_formats)?;
     let allowed_models =
         normalize_admin_user_string_list(payload.allowed_models, "allowed_models")?;
-    Ok(aether_data_contracts::repository::users::UpsertUserGroupRecord {
-        name,
-        description: payload
-            .description
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty()),
-        priority: 0,
-        allowed_providers,
-        allowed_providers_mode: normalize_list_mode(&payload.allowed_providers_mode)?,
-        allowed_api_formats,
-        allowed_api_formats_mode: normalize_list_mode(&payload.allowed_api_formats_mode)?,
-        allowed_models,
-        allowed_models_mode: normalize_list_mode(&payload.allowed_models_mode)?,
-        rate_limit: payload.rate_limit,
-        rate_limit_mode: normalize_rate_mode(&payload.rate_limit_mode)?,
-    })
+    Ok(
+        aether_data_contracts::repository::users::UpsertUserGroupRecord {
+            name,
+            description: payload
+                .description
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
+            priority: 0,
+            allowed_providers,
+            allowed_providers_mode: normalize_list_mode(&payload.allowed_providers_mode)?,
+            allowed_api_formats,
+            allowed_api_formats_mode: normalize_list_mode(&payload.allowed_api_formats_mode)?,
+            allowed_models,
+            allowed_models_mode: normalize_list_mode(&payload.allowed_models_mode)?,
+            rate_limit: payload.rate_limit,
+            rate_limit_mode: normalize_rate_mode(&payload.rate_limit_mode)?,
+        },
+    )
 }
 
 fn parse_members_payload(

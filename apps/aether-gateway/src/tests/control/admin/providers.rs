@@ -1,16 +1,16 @@
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::quota::InMemoryProviderQuotaRepository;
 use aether_data_contracts::repository::candidates::RequestCandidateStatus;
 use aether_data_contracts::repository::global_models::GlobalModelReadRepository;
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogReadRepository, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
     StoredProviderCatalogProvider,
 };
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::quota::InMemoryProviderQuotaRepository;
 use axum::body::{Body, Bytes};
 use axum::routing::any;
 use axum::{extract::Request, Router};
@@ -36,10 +36,10 @@ mod health;
 
 #[tokio::test]
 async fn gateway_creates_provider_in_selected_routing_group_and_rejects_stale_saves() {
-    use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
     use aether_data_contracts::repository::routing_profiles::{
         CreateRoutingGroupRecord, RoutingGroupReadRepository, RoutingGroupWriteRepository,
     };
+    use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
     let groups = Arc::new(InMemoryRoutingGroupRepository::default());
     for id in ["selected", "other"] {
         groups

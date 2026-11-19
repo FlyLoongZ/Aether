@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
-use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::candidates::RequestCandidateRepository;
 use aether_data_contracts::repository::pool_scores::PoolMemberScoreRepository;
 use aether_data_contracts::repository::quota::ProviderQuotaRepository;
@@ -9,6 +8,7 @@ use aether_data_contracts::repository::routing_profiles::{
     StoredRoutingGroup, StoredRoutingGroupBinding, StoredRoutingGroupVersion,
 };
 use aether_data_contracts::repository::usage::UsageRepository;
+use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_routing_core::RoutingGroupConfig;
 
 use super::{
@@ -299,7 +299,8 @@ impl GatewayDataState {
     ) -> Self
     where
         T: RequestCandidateRepository + 'static,
-        U: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
+        U: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository
+            + 'static,
     {
         let request_candidate_reader: Arc<dyn RequestCandidateReadRepository> =
             request_candidate_repository.clone();
@@ -805,7 +806,8 @@ impl GatewayDataState {
     where
         T: RequestCandidateRepository + 'static,
         U: ProviderCatalogReadRepository + ProviderCatalogWriteRepository + 'static,
-        V: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
+        V: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository
+            + 'static,
     {
         GatewayDataStateFixture::new()
             .with_encryption_key(encryption_key)
@@ -1082,7 +1084,8 @@ impl GatewayDataStateFixture {
 
     pub(crate) fn with_gemini_file_mapping_repository<T>(mut self, repository: Arc<T>) -> Self
     where
-        T: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository + 'static,
+        T: aether_data_contracts::repository::gemini_file_mappings::GeminiFileMappingRepository
+            + 'static,
     {
         self.state.gemini_file_mapping_reader = Some(repository.clone());
         self.state.gemini_file_mapping_writer = Some(repository);

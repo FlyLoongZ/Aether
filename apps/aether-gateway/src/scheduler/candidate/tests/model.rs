@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::quota::InMemoryProviderQuotaRepository;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
 use aether_data_contracts::repository::global_models::StoredPublicGlobalModel;
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::quota::InMemoryProviderQuotaRepository;
 use aether_scheduler_core::{
     resolve_requested_global_model_name, SchedulerMinimalCandidateSelectionCandidate,
 };

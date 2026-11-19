@@ -261,12 +261,12 @@ mod tests {
 
     use aether_contracts::{ExecutionPlan, RequestBody};
     use aether_crypto::encrypt_python_fernet_plaintext;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogKeyAdminCasUpdate, ProviderCatalogKeyOAuthCredentialFence,
         ProviderCatalogReadRepository, ProviderCatalogWriteRepository,
         StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use axum::routing::post;
     use axum::{extract::Request, Json, Router};
     use http::StatusCode;

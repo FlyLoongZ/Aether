@@ -1,7 +1,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use aether_data::repository::proxy_nodes::{InMemoryProxyNodeRepository, StoredProxyNode};
+use aether_data_contracts::repository::proxy_nodes::StoredProxyNode;
+use aether_data_memory::proxy_nodes::InMemoryProxyNodeRepository;
 use axum::body::Body;
 use axum::routing::any;
 use axum::{extract::Request, Router};

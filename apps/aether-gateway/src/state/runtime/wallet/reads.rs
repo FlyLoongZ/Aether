@@ -4,11 +4,14 @@ impl AppState {
     pub(crate) async fn find_wallet(
         &self,
         lookup: aether_data_contracts::repository::wallet::WalletLookupKey<'_>,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(failed_user_id) = self.auth_wallet_lookup_error_for_tests.as_deref() {
             let lookup_user_id = match &lookup {
-                aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => Some(*user_id),
+                aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
+                    Some(*user_id)
+                }
                 _ => None,
             };
             if lookup_user_id == Some(failed_user_id) {
@@ -23,19 +26,21 @@ impl AppState {
             let wallet = {
                 let wallets = store.lock().expect("auth wallet store should lock");
                 match lookup {
-                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(wallet_id) => {
-                        wallets.get(wallet_id).cloned()
-                    }
-                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => wallets
-                        .values()
-                        .find(|wallet| wallet.user_id.as_deref() == Some(user_id))
-                        .cloned(),
-                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id) => {
+                    aether_data_contracts::repository::wallet::WalletLookupKey::WalletId(
+                        wallet_id,
+                    ) => wallets.get(wallet_id).cloned(),
+                    aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id) => {
                         wallets
                             .values()
-                            .find(|wallet| wallet.api_key_id.as_deref() == Some(api_key_id))
+                            .find(|wallet| wallet.user_id.as_deref() == Some(user_id))
                             .cloned()
                     }
+                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
+                        api_key_id,
+                    ) => wallets
+                        .values()
+                        .find(|wallet| wallet.api_key_id.as_deref() == Some(api_key_id))
+                        .cloned(),
                 }
             };
             if wallet.is_some() {
@@ -54,7 +59,8 @@ impl AppState {
         user_id: &str,
         api_key_id: &str,
         api_key_is_standalone: bool,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         let user_id = user_id.trim();
         let api_key_id = api_key_id.trim();
         let lookup = if api_key_is_standalone {
@@ -63,7 +69,9 @@ impl AppState {
             } else {
                 Some((
                     format!("api_key:{api_key_id}"),
-                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id),
+                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
+                        api_key_id,
+                    ),
                 ))
             }
         } else if !user_id.is_empty() {
@@ -104,25 +112,24 @@ impl AppState {
         user_id: &str,
         api_key_id: &str,
         api_key_is_standalone: bool,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         let user_id = user_id.trim();
         let api_key_id = api_key_id.trim();
         let lookup = if api_key_is_standalone {
             if api_key_id.is_empty() {
                 None
             } else {
-                Some(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
-                    api_key_id,
-                ))
+                Some(
+                    aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
+                        api_key_id,
+                    ),
+                )
             }
         } else if !user_id.is_empty() {
-            Some(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(
-                user_id,
-            ))
+            Some(aether_data_contracts::repository::wallet::WalletLookupKey::UserId(user_id))
         } else if !api_key_id.is_empty() {
-            Some(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(
-                api_key_id,
-            ))
+            Some(aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(api_key_id))
         } else {
             None
         };
@@ -138,7 +145,8 @@ impl AppState {
     pub(crate) async fn list_wallet_snapshots_by_user_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         self.data
             .list_wallets_by_user_ids(user_ids)
             .await
@@ -148,7 +156,8 @@ impl AppState {
     pub(crate) async fn list_wallet_snapshots_by_api_key_ids(
         &self,
         api_key_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::wallet::StoredWalletSnapshot>, GatewayError>
+    {
         self.data
             .list_wallets_by_api_key_ids(api_key_ids)
             .await
@@ -159,8 +168,10 @@ impl AppState {
         &self,
         wallet_id: &str,
         billing_timezone: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredWalletDailyUsageLedger>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredWalletDailyUsageLedger>,
+        GatewayError,
+    > {
         self.data
             .find_wallet_today_usage(wallet_id, billing_timezone)
             .await
@@ -172,8 +183,10 @@ impl AppState {
         wallet_id: &str,
         billing_timezone: &str,
         limit: usize,
-    ) -> Result<aether_data_contracts::repository::wallet::StoredWalletDailyUsageLedgerPage, GatewayError>
-    {
+    ) -> Result<
+        aether_data_contracts::repository::wallet::StoredWalletDailyUsageLedgerPage,
+        GatewayError,
+    > {
         self.data
             .list_wallet_daily_usage_history(wallet_id, billing_timezone, limit)
             .await
@@ -185,7 +198,8 @@ impl AppState {
         user_id: &str,
         limit: usize,
         offset: usize,
-    ) -> Result<aether_data_contracts::repository::wallet::StoredAdminPaymentOrderPage, GatewayError> {
+    ) -> Result<aether_data_contracts::repository::wallet::StoredAdminPaymentOrderPage, GatewayError>
+    {
         self.data
             .list_wallet_payment_orders_by_user_id(user_id, limit, offset)
             .await
@@ -196,8 +210,10 @@ impl AppState {
         &self,
         user_id: &str,
         order_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>,
+        GatewayError,
+    > {
         self.data
             .find_wallet_payment_order_by_user_id(user_id, order_id)
             .await
@@ -208,8 +224,10 @@ impl AppState {
         &self,
         user_id: &str,
         order_no: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>,
+        GatewayError,
+    > {
         self.data
             .find_wallet_recharge_order_by_order_no(user_id, order_no)
             .await
@@ -220,8 +238,10 @@ impl AppState {
         &self,
         user_id: &str,
         product_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>,
+        GatewayError,
+    > {
         self.data
             .find_pending_plan_purchase_order_by_user_id(user_id, product_id)
             .await
@@ -231,8 +251,10 @@ impl AppState {
     pub(crate) async fn find_payment_order_by_order_no(
         &self,
         order_no: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>,
+        GatewayError,
+    > {
         self.data
             .find_payment_order_by_order_no(order_no)
             .await
@@ -242,8 +264,10 @@ impl AppState {
     pub(crate) async fn find_payment_order_by_id(
         &self,
         order_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminPaymentOrder>,
+        GatewayError,
+    > {
         self.data
             .find_admin_payment_order(order_id)
             .await
@@ -254,8 +278,10 @@ impl AppState {
         &self,
         wallet_id: &str,
         refund_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>, GatewayError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>,
+        GatewayError,
+    > {
         #[cfg(test)]
         if let Some(store) = self.admin_wallet_refund_store.as_ref() {
             return Ok(store

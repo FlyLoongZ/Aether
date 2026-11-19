@@ -450,8 +450,6 @@ mod tests {
 
     use std::sync::Arc;
 
-    use aether_data::repository::pool_scores::InMemoryPoolMemberScoreRepository;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::pool_scores::PoolMemberIdentity;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogKeyListQuery, ProviderCatalogReadRepository,
@@ -459,6 +457,8 @@ mod tests {
         StoredProviderCatalogKeyStats,
     };
     use aether_data_contracts::DataLayerError;
+    use aether_data_memory::pool_scores::InMemoryPoolMemberScoreRepository;
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use serde_json::json;
 
     use crate::data::GatewayDataState;

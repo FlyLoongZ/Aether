@@ -2,8 +2,8 @@ use super::super::test_support::{request_context, sample_key, sample_provider, s
 use super::local_monitoring_response;
 use crate::AppState;
 use aether_admin::observability::monitoring::{match_admin_monitoring_route, AdminMonitoringRoute};
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::usage::InMemoryUsageReadRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::usage::InMemoryUsageReadRepository;
 use axum::body::to_bytes;
 use serde_json::json;
 use std::sync::Arc;

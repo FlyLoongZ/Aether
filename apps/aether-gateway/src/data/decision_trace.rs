@@ -65,14 +65,14 @@ fn unique_ids<'a>(items: impl Iterator<Item = &'a String>) -> Vec<String> {
 mod tests {
     use std::sync::Arc;
 
-    use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::candidates::{
         RequestCandidateStatus, StoredRequestCandidate,
     };
     use aether_data_contracts::repository::provider_catalog::{
         StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 
     use super::{read_decision_trace, DecisionTrace, DecisionTraceCandidate};
     use crate::data::candidates::RequestCandidateFinalStatus;

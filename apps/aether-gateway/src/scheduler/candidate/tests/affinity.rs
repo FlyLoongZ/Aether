@@ -1,14 +1,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::quota::InMemoryProviderQuotaRepository;
 use aether_data_contracts::repository::candidate_selection::StoredProviderModelMapping;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
 };
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::quota::InMemoryProviderQuotaRepository;
 use aether_scheduler_core::{
     apply_scheduler_candidate_ranking, candidate_affinity_hash,
     enumerate_minimal_candidate_selection, ClientSessionAffinity,

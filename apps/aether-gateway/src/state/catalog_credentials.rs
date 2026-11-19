@@ -217,11 +217,11 @@ mod tests {
     use std::sync::Arc;
 
     use aether_crypto::encrypt_python_fernet_plaintext;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogKeyCredentialsCasUpdate, ProviderCatalogReadRepository,
         ProviderCatalogWriteRepository, StoredProviderCatalogKey, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 
     use crate::{data::GatewayDataState, AppState};
 

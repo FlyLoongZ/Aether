@@ -5,8 +5,8 @@ pub(crate) use aether_usage_runtime::write_event_record;
 mod tests {
     use std::sync::Arc;
 
-    use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::usage::UsageReadRepository;
+    use aether_data_memory::usage::InMemoryUsageReadRepository;
 
     use super::write_event_record;
     use crate::data::GatewayDataState;

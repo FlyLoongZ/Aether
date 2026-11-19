@@ -631,7 +631,6 @@ fn management_tokens_json_columns_are_normalized_to_jsonb_in_postgres_schema_pat
     assert!(driver_schema.contains("allowed_ips jsonb,"));
     assert!(driver_schema.contains("permissions jsonb,"));
     assert!(driver_schema.contains("jsonb_array_length(allowed_ips)"));
-
 }
 
 #[test]
@@ -1938,8 +1937,7 @@ WHERE table_schema = 'public'
         })
     );
 
-    let repository =
-        crate::repository::provider_catalog::SqlxProviderCatalogReadRepository::new(pool.clone());
+    let repository = aether_data_postgres::SqlxProviderCatalogReadRepository::new(pool.clone());
     assert!(repository
         .upsert_key_upstream_metadata_namespace(
             "metadata-migration-key",
@@ -1954,7 +1952,7 @@ WHERE table_schema = 'public'
             "metadata-migration-key",
             Some(&serde_json::json!(["gpt-5.6-sol"])),
             1_740_000_002,
-            &[crate::repository::provider_catalog::ProviderCatalogUpstreamMetadataNamespaceUpdate {
+            &[aether_data_contracts::repository::provider_catalog::ProviderCatalogUpstreamMetadataNamespaceUpdate {
                 namespace: "codex_models".to_string(),
                 value: serde_json::json!({
                     "cards": {

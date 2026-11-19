@@ -3,21 +3,23 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use aether_contracts::ExecutionPlan;
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::auth::{
-    InMemoryAuthApiKeySnapshotRepository, StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
+use aether_data_contracts::repository::auth::{
+    StoredAuthApiKeyExportRecord, StoredAuthApiKeySnapshot,
 };
-use aether_data::repository::auth_modules::{
-    AuthModuleReadRepository, InMemoryAuthModuleReadRepository, StoredOAuthProviderModuleConfig,
+use aether_data_contracts::repository::auth_modules::{
+    AuthModuleReadRepository, StoredOAuthProviderModuleConfig,
 };
-use aether_data::repository::global_models::InMemoryGlobalModelReadRepository;
-use aether_data::repository::oauth_providers::{
-    InMemoryOAuthProviderRepository, OAuthProviderReadRepository, StoredOAuthProviderConfig,
+use aether_data_contracts::repository::oauth_providers::{
+    OAuthProviderReadRepository, StoredOAuthProviderConfig,
 };
-use aether_data::repository::pool_scores::InMemoryPoolMemberScoreRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::users::StoredUserAuthRecord;
+use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::auth_modules::InMemoryAuthModuleReadRepository;
+use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
+use aether_data_memory::oauth_providers::InMemoryOAuthProviderRepository;
+use aether_data_memory::pool_scores::InMemoryPoolMemberScoreRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 
-use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
 use aether_data_contracts::repository::global_models::{
     AdminGlobalModelListQuery, AdminProviderModelListQuery, GlobalModelReadRepository,
     StoredPublicGlobalModel,
@@ -27,6 +29,7 @@ use aether_data_contracts::repository::pool_scores::{
     PoolScoreReadRepository,
 };
 use aether_data_contracts::repository::provider_catalog::ProviderCatalogReadRepository;
+use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
 use axum::body::{Body, Bytes};
 use axum::http::HeaderMap;
 use axum::routing::{any, post};
@@ -930,7 +933,7 @@ fn gateway_prevalidates_aggregate_user_data_before_config_mutation() {
 async fn gateway_prevalidates_aggregate_user_data_before_config_mutation_impl() {
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let provider_catalog_repository = Arc::new(InMemoryProviderCatalogReadRepository::seed(
         Vec::new(),
         Vec::new(),
@@ -1092,7 +1095,7 @@ fn gateway_prevalidates_nested_user_key_before_user_mutation() {
 async fn gateway_prevalidates_nested_user_key_before_user_mutation_impl() {
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1149,7 +1152,7 @@ fn gateway_rejects_credentials_in_v16_user_import_before_mutation() {
 async fn gateway_rejects_credentials_in_v16_user_import_before_mutation_impl() {
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1246,7 +1249,7 @@ fn gateway_prevalidates_usage_integer_storage_before_user_mutation() {
 async fn gateway_prevalidates_usage_integer_storage_before_user_mutation_impl() {
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1319,7 +1322,7 @@ fn gateway_prevalidates_duplicate_usage_dimensions_before_user_mutation() {
 async fn gateway_prevalidates_duplicate_usage_dimensions_before_user_mutation_impl() {
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1427,7 +1430,7 @@ async fn gateway_user_import_allows_chained_username_release_impl() {
     .expect("second user should build");
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1519,7 +1522,7 @@ async fn gateway_user_import_preserves_omitted_email_in_simulated_state_impl() {
     .expect("existing user should build");
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1635,7 +1638,7 @@ async fn authenticated_recovery_restores_password_and_api_key_login_material_imp
     .expect("backup should authenticate");
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -1780,7 +1783,7 @@ async fn authenticated_recovery_reencrypts_existing_api_key_impl() {
             .expect("existing key export should build")]),
     );
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -2022,7 +2025,7 @@ async fn gateway_user_import_password_hash_overwrite_revokes_existing_sessions_i
     let old_session = sample_import_user_session("user-existing", "old-session");
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
@@ -2107,7 +2110,7 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
 
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let (upstream_url, upstream_handle) = start_server(upstream).await;
     let state = AppState::new()
         .expect("gateway should build")
@@ -2488,7 +2491,7 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
         ]),
     );
     let user_repository =
-        Arc::new(aether_data::repository::users::InMemoryUserReadRepository::default());
+        Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(

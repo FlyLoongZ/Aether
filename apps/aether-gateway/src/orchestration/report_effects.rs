@@ -767,10 +767,10 @@ pub(crate) fn clear_local_report_effect_caches_for_tests() {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         StoredProviderCatalogKey, StoredProviderCatalogProvider,
     };
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use serde_json::json;
     use std::sync::Arc;
 

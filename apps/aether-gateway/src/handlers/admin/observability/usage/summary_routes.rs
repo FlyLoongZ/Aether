@@ -1097,8 +1097,10 @@ pub(super) async fn maybe_build_local_admin_usage_summary_response(
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect();
-            let users_by_id: BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary> =
-                state.resolve_auth_user_summaries_by_ids(&user_ids).await?;
+            let users_by_id: BTreeMap<
+                String,
+                aether_data_contracts::repository::users::StoredUserSummary,
+            > = state.resolve_auth_user_summaries_by_ids(&user_ids).await?;
             let api_key_names = admin_usage_api_key_names(state, &usage).await?;
             let provider_key_names = admin_usage_provider_key_names(state, &usage).await?;
             let attempt_flags_by_usage_id =

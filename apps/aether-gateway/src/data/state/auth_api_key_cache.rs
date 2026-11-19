@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aether_cache::{optional_strings_weight, value_weight, CacheWeight, OnceMap};
-use aether_data_contracts::repository::auth::*;
 use aether_data::DataLayerError;
+use aether_data_contracts::repository::auth::*;
 use async_trait::async_trait;
 
 tokio::task_local! {
@@ -283,7 +283,7 @@ impl AuthApiKeyReadRepository for CachedAuthApiKeyReadRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aether_data::repository::auth::InMemoryAuthApiKeySnapshotRepository;
+    use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
 
     fn sample_snapshot(api_key_id: &str, user_id: &str) -> StoredAuthApiKeySnapshot {
         StoredAuthApiKeySnapshot::new(

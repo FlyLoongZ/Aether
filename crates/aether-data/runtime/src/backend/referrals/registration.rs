@@ -1,5 +1,6 @@
 use super::*;
-use crate::repository::{users::StoredUserAuthRecord, wallet::StoredWalletSnapshot};
+use aether_data_contracts::repository::users::StoredUserAuthRecord;
+use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
 
 async fn bind_in_transaction(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -64,17 +65,15 @@ async fn bind_in_transaction(
 mod postgres_tests {
     use super::*;
     async fn isolated_backend() -> DataBackends {
-        let backend = crate::backend::PostgresBackend::from_config(
-            crate::PostgresPoolConfig {
-                database_url: std::env::var("AETHER_TEST_DATABASE_URL")
-                    .expect("explicit test database required"),
-                min_connections: 0,
-                max_connections: 1,
-                idle_timeout_ms: 86_400_000,
-                max_lifetime_ms: 86_400_000,
-                ..Default::default()
-            },
-        )
+        let backend = crate::backend::PostgresBackend::from_config(crate::PostgresPoolConfig {
+            database_url: std::env::var("AETHER_TEST_DATABASE_URL")
+                .expect("explicit test database required"),
+            min_connections: 0,
+            max_connections: 1,
+            idle_timeout_ms: 86_400_000,
+            max_lifetime_ms: 86_400_000,
+            ..Default::default()
+        })
         .unwrap();
         let pool = backend.pool_clone();
         sqlx::query("SET search_path=pg_temp,public")

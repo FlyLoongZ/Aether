@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use aether_data::repository::settlement::InMemorySettlementRepository;
+use aether_data_memory::settlement::InMemorySettlementRepository;
 use aether_data_contracts::repository::settlement::{
     ReconcileUsagePolicyCostInput, StoredUsagePolicyCostReservation, StoredUsageSettlement,
     UsagePolicyCostReservationState,
@@ -645,8 +645,13 @@ async fn concurrent_same_user_worker_and_direct_writes_each_reconcile_once() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_duplicate_delivery_debits_real_memory_wallet_only_once() {
-    use aether_data::repository::wallet::{
-        InMemoryWalletRepository, StoredWalletSnapshot, WalletLookupKey, WalletReadRepository,
+    use aether_data_memory::wallet::{
+        InMemoryWalletRepository,
+    };
+    use aether_data_contracts::repository::wallet::{
+        StoredWalletSnapshot,
+        WalletLookupKey,
+        WalletReadRepository,
     };
     use aether_data_contracts::repository::settlement::{
         ReserveUsagePolicyCostInput, ReserveUsagePolicyCostOutcome, SettlementWriteRepository,

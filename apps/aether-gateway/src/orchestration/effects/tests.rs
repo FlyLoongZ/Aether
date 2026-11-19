@@ -4,8 +4,6 @@ use std::sync::Arc;
 
 use aether_contracts::{ExecutionPlan, RequestBody};
 use aether_crypto::encrypt_python_fernet_plaintext;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_contracts::repository::candidates::{
     RequestCandidateStatus, StoredRequestCandidate,
 };
@@ -14,6 +12,8 @@ use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogKeyAdaptiveState, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
     StoredProviderCatalogProvider,
 };
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_test_support::ManagedRedisServer;
 use aether_usage_runtime::GatewaySyncReportRequest;
 use serde_json::{json, Value};

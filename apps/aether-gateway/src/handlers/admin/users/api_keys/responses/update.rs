@@ -112,21 +112,23 @@ pub(crate) async fn build_admin_update_user_api_key_response(
     let concurrent_limit_present = concurrent_limit.is_some();
 
     let Some(updated) = state
-        .update_user_api_key_basic(aether_data_contracts::repository::auth::UpdateUserApiKeyBasicRecord {
-            user_id: user_id.clone(),
-            api_key_id: api_key_id.clone(),
-            key_encrypted: None,
-            key_encrypted_present: false,
-            name,
-            name_present,
-            rate_limit: payload.rate_limit,
-            rate_limit_present,
-            concurrent_limit,
-            concurrent_limit_present,
-            ip_rules,
-            feature_settings,
-            routing_group_selection: None,
-        })
+        .update_user_api_key_basic(
+            aether_data_contracts::repository::auth::UpdateUserApiKeyBasicRecord {
+                user_id: user_id.clone(),
+                api_key_id: api_key_id.clone(),
+                key_encrypted: None,
+                key_encrypted_present: false,
+                name,
+                name_present,
+                rate_limit: payload.rate_limit,
+                rate_limit_present,
+                concurrent_limit,
+                concurrent_limit_present,
+                ip_rules,
+                feature_settings,
+                routing_group_selection: None,
+            },
+        )
         .await?
     else {
         return Ok((

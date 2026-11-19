@@ -1065,11 +1065,11 @@ mod tests {
     use std::sync::Arc;
 
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-    use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
     use aether_data_contracts::repository::provider_catalog::{
         ProviderCatalogReadRepository, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
         StoredProviderCatalogProvider,
     };
+    use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use serde_json::{json, Value};
 
     use super::{

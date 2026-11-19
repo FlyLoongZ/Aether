@@ -10,9 +10,8 @@ use aether_contracts::{
     TRANSPORT_HTTP_MODE_H2C_PRIOR_KNOWLEDGE, TRANSPORT_HTTP_MODE_HTTP1_ONLY,
 };
 
-use aether_data::repository::proxy_nodes::{
-    InMemoryProxyNodeRepository, ProxyNodeReadRepository, StoredProxyNode,
-};
+use aether_data_contracts::repository::proxy_nodes::{ProxyNodeReadRepository, StoredProxyNode};
+use aether_data_memory::proxy_nodes::InMemoryProxyNodeRepository;
 use axum::body::{Body, Bytes};
 
 use axum::http::HeaderMap as AxumHeaderMap;

@@ -729,8 +729,8 @@ mod tests {
     use std::sync::Arc;
 
     use aether_contracts::{ExecutionTimeouts, RequestBody};
-    use aether_data::repository::usage::InMemoryUsageReadRepository;
     use aether_data_contracts::repository::usage::{UsageAuditListQuery, UsageReadRepository};
+    use aether_data_memory::usage::InMemoryUsageReadRepository;
     use aether_usage_runtime::build_upsert_usage_record_from_event;
 
     use crate::control::{GatewayControlAuthContext, GatewayControlDecision};

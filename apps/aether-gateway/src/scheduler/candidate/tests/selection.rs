@@ -2,11 +2,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-use aether_data::repository::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
-use aether_data::repository::candidates::InMemoryRequestCandidateRepository;
-use aether_data::repository::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data::repository::quota::InMemoryProviderQuotaRepository;
-use aether_data::repository::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_data_contracts::repository::candidate_selection::{
     StoredMinimalCandidateSelectionRow, StoredProviderModelMapping,
 };
@@ -18,6 +13,11 @@ use aether_data_contracts::repository::quota::StoredProviderQuotaSnapshot;
 use aether_data_contracts::repository::routing_profiles::{
     CreateRoutingGroupRecord, RoutingGroupWriteRepository,
 };
+use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
+use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
+use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
+use aether_data_memory::quota::InMemoryProviderQuotaRepository;
+use aether_data_memory::routing_profiles::InMemoryRoutingGroupRepository;
 use aether_scheduler_core::{ClientSessionAffinity, SchedulerMinimalCandidateSelectionCandidate};
 use serde_json::json;
 

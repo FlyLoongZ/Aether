@@ -102,8 +102,10 @@ impl AppState {
     pub(crate) async fn resolve_auth_user_summaries_by_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>, GatewayError>
-    {
+    ) -> Result<
+        BTreeMap<String, aether_data_contracts::repository::users::StoredUserSummary>,
+        GatewayError,
+    > {
         let user_ids = user_ids
             .iter()
             .map(|value| value.trim())
@@ -142,7 +144,8 @@ impl AppState {
     pub(crate) async fn search_auth_user_summaries_by_username(
         &self,
         username_search: &str,
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserSummary>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserSummary>, GatewayError>
+    {
         let username_search = username_search.trim();
         if username_search.is_empty() {
             return Ok(Vec::new());
@@ -183,7 +186,8 @@ impl AppState {
     pub(crate) async fn find_user_auth_by_id(
         &self,
         user_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
+    {
         #[cfg(test)]
         if user_id == crate::tests::TEST_ADMIN_USER_ID {
             return Ok(Some(crate::tests::test_admin_user_record()));
@@ -208,7 +212,8 @@ impl AppState {
     pub(crate) async fn find_user_auth_by_identifier(
         &self,
         identifier: &str,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_user_store.as_ref() {
             let identifier = identifier.trim();
@@ -244,7 +249,8 @@ impl AppState {
     pub(crate) async fn find_user_group_by_id(
         &self,
         group_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError>
+    {
         self.data
             .find_user_group_by_id(group_id)
             .await
@@ -264,7 +270,8 @@ impl AppState {
     pub(crate) async fn create_user_group(
         &self,
         record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError>
+    {
         let group = self
             .data
             .create_user_group(record)
@@ -280,7 +287,8 @@ impl AppState {
         &self,
         group_id: &str,
         record: aether_data_contracts::repository::users::UpsertUserGroupRecord,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserGroup>, GatewayError>
+    {
         let group = self
             .data
             .update_user_group(group_id, record)
@@ -323,7 +331,8 @@ impl AppState {
     pub(crate) async fn list_user_group_members(
         &self,
         group_id: &str,
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, GatewayError>
+    {
         self.data
             .list_user_group_members(group_id)
             .await
@@ -334,7 +343,8 @@ impl AppState {
         &self,
         group_id: &str,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMember>, GatewayError>
+    {
         let members = self
             .data
             .replace_user_group_members(group_id, user_ids)
@@ -368,7 +378,10 @@ impl AppState {
     pub(crate) async fn list_user_group_memberships_by_user_ids(
         &self,
         user_ids: &[String],
-    ) -> Result<Vec<aether_data_contracts::repository::users::StoredUserGroupMembership>, GatewayError> {
+    ) -> Result<
+        Vec<aether_data_contracts::repository::users::StoredUserGroupMembership>,
+        GatewayError,
+    > {
         self.data
             .list_user_group_memberships_by_user_ids(user_ids)
             .await
@@ -475,7 +488,8 @@ impl AppState {
         email: Option<String>,
         email_verified: Option<bool>,
         username: Option<String>,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_user_store.as_ref() {
             let existing = {
@@ -876,7 +890,8 @@ impl AppState {
         allowed_api_formats: Option<Vec<String>>,
         allowed_models: Option<Vec<String>>,
         rate_limit: Option<i32>,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_user_store.as_ref() {
             let now = chrono::Utc::now();
@@ -935,7 +950,8 @@ impl AppState {
         rate_limit_present: bool,
         rate_limit: Option<i32>,
         is_active: Option<bool>,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_user_store.as_ref() {
             let mut users = store.lock().expect("auth user store should lock");
@@ -1006,7 +1022,9 @@ impl AppState {
             )
             .await
             .map_err(|err| {
-                if aether_data_contracts::repository::users::is_last_active_admin_update_denied(&err) {
+                if aether_data_contracts::repository::users::is_last_active_admin_update_denied(
+                    &err,
+                ) {
                     GatewayError::LastActiveAdminUpdateDenied
                 } else {
                     GatewayError::Internal(err.to_string())
@@ -1025,7 +1043,8 @@ impl AppState {
         allowed_api_formats_mode: Option<String>,
         allowed_models_mode: Option<String>,
         rate_limit_mode: Option<String>,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
+    {
         #[cfg(test)]
         if let Some(store) = self.auth_user_store.as_ref() {
             let mut guard = store.lock().expect("auth user store should lock");
@@ -1116,7 +1135,9 @@ impl AppState {
             .delete_local_auth_user(user_id)
             .await
             .map_err(|err| {
-                if aether_data_contracts::repository::users::is_last_active_admin_delete_denied(&err) {
+                if aether_data_contracts::repository::users::is_last_active_admin_delete_denied(
+                    &err,
+                ) {
                     GatewayError::LastActiveAdminDeleteDenied
                 } else {
                     GatewayError::Internal(err.to_string())
@@ -1239,7 +1260,8 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use aether_data::repository::users::{InMemoryUserReadRepository, UpsertUserGroupRecord};
+    use aether_data_contracts::repository::users::UpsertUserGroupRecord;
+    use aether_data_memory::users::InMemoryUserReadRepository;
 
     use crate::control::GatewayControlAuthContext;
     use crate::data::GatewayDataState;
