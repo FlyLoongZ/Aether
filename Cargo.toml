@@ -9,6 +9,7 @@ members = [
     "crates/aether-body-store",
     "crates/aether-data/contracts",
     "crates/aether-data/adapters/postgres",
+    "crates/aether-data/memory",
     "crates/aether-dispatch-core",
     "crates/aether-cache",
     "crates/aether-billing",
@@ -57,6 +58,7 @@ aether-routing-core = { path = "crates/aether-routing-core" }
 aether-body-store = { path = "crates/aether-body-store" }
 aether-data-contracts = { path = "crates/aether-data/contracts" }
 aether-data-postgres = { path = "crates/aether-data/adapters/postgres" }
+aether-data-memory = { path = "crates/aether-data/memory" }
 aether-dispatch-core = { path = "crates/aether-dispatch-core" }
 aether-cache = { path = "crates/aether-cache" }
 aether-billing = { path = "crates/aether-billing" }
