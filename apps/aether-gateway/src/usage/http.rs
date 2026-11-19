@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::{AppState, GatewayError};
-use aether_data::repository::audit::RequestAuditBundle;
+use aether_data_contracts::repository::audit::RequestAuditBundle;
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 
 #[derive(Debug, Deserialize)]

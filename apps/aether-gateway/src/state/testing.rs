@@ -134,7 +134,9 @@ impl AppState {
 
     pub(crate) fn with_request_audit_data_readers_for_tests(
         mut self,
-        auth_api_key_repository: Arc<dyn aether_data_contracts::repository::auth::AuthApiKeyReadRepository>,
+        auth_api_key_repository: Arc<
+            dyn aether_data_contracts::repository::auth::AuthApiKeyReadRepository,
+        >,
         request_candidate_repository: Arc<dyn RequestCandidateReadRepository>,
         provider_catalog_repository: Arc<dyn ProviderCatalogReadRepository>,
         usage_repository: Arc<dyn UsageReadRepository>,
@@ -218,7 +220,7 @@ impl AppState {
         nonce: &str,
         payload: serde_json::Value,
     ) -> Self {
-        let key = aether_data::repository::provider_oauth::provider_oauth_state_storage_key(nonce);
+        let key = crate::provider_oauth::provider_oauth_state_storage_key(nonce);
         let plaintext = payload.to_string();
         let purpose = format!("provider-oauth-state:{key}");
         let sealed =
@@ -235,7 +237,7 @@ impl AppState {
             &key,
             sealed,
             Some(Duration::from_secs(
-                aether_data::repository::provider_oauth::PROVIDER_OAUTH_STATE_TTL_SECS,
+                crate::provider_oauth::PROVIDER_OAUTH_STATE_TTL_SECS,
             )),
         );
         self
@@ -260,15 +262,10 @@ impl AppState {
                 .entry("initiated_by_management_token_id".to_string())
                 .or_insert_with(|| serde_json::Value::Null);
         }
-        let key =
-            aether_data::repository::provider_oauth::provider_oauth_device_session_storage_key(
-                session_id,
-            );
+        let key = crate::provider_oauth::provider_oauth_device_session_storage_key(session_id);
         let plaintext = payload.to_string();
         let purpose =
-            aether_data::repository::provider_oauth::provider_oauth_device_session_secret_purpose(
-                session_id,
-            );
+            crate::provider_oauth::provider_oauth_device_session_secret_purpose(session_id);
         let sealed =
             crate::handlers::shared::seal_runtime_secret_payload(&self, &purpose, &plaintext)
                 .expect("test provider OAuth device session should seal");
@@ -289,13 +286,9 @@ impl AppState {
         task_id: &str,
         payload: serde_json::Value,
     ) -> Self {
-        let key =
-            aether_data::repository::provider_oauth::provider_oauth_batch_task_storage_key(task_id);
+        let key = crate::provider_oauth::provider_oauth_batch_task_storage_key(task_id);
         let plaintext = payload.to_string();
-        let purpose =
-            aether_data::repository::provider_oauth::provider_oauth_batch_task_secret_purpose(
-                task_id,
-            );
+        let purpose = crate::provider_oauth::provider_oauth_batch_task_secret_purpose(task_id);
         let sealed =
             crate::handlers::shared::seal_runtime_secret_payload(&self, &purpose, &plaintext)
                 .expect("test provider OAuth batch task should seal");
@@ -310,7 +303,7 @@ impl AppState {
             &key,
             sealed,
             Some(Duration::from_secs(
-                aether_data::repository::provider_oauth::PROVIDER_OAUTH_BATCH_TASK_TTL_SECS,
+                crate::provider_oauth::PROVIDER_OAUTH_BATCH_TASK_TTL_SECS,
             )),
         );
         self

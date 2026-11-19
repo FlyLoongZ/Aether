@@ -2,7 +2,7 @@ use super::super::super::errors::build_internal_control_error_response;
 use super::super::super::state::parse_provider_oauth_callback_params;
 use crate::control::GatewayAdminPrincipalContext;
 use crate::handlers::admin::request::AdminRequestContext;
-use aether_data::repository::provider_oauth::StoredAdminProviderOAuthState;
+use crate::provider_oauth::StoredAdminProviderOAuthState;
 use axum::{body::Bytes, http};
 
 pub(super) struct AdminProviderOAuthCompleteRequest {
@@ -145,7 +145,7 @@ pub(super) fn parse_admin_provider_oauth_complete_callback(
 mod tests {
     use super::admin_provider_oauth_state_matches_resolved_principal;
     use crate::control::GatewayAdminPrincipalContext;
-    use aether_data::repository::provider_oauth::StoredAdminProviderOAuthState;
+    use crate::provider_oauth::StoredAdminProviderOAuthState;
 
     fn state() -> StoredAdminProviderOAuthState {
         StoredAdminProviderOAuthState {

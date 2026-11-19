@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
 use super::PostgresBackend;
-use crate::repository::system::{
+use crate::DataLayerError;
+use aether_data_contracts::repository::system::{
     AdminSystemPurgeSummary, AdminSystemPurgeTarget, AdminSystemUsageAggregateImportMode,
     AdminSystemUsageAggregateImportSummary, AdminSystemUsageAggregateSnapshot,
     StoredSystemConfigEntry,
 };
-use crate::DataLayerError;
 
 mod postgres;
 
@@ -121,7 +121,7 @@ fn u64_from_i64(value: i64) -> u64 {
 }
 
 fn add_aggregate_import_count(
-    counter: &mut crate::repository::system::AdminSystemUsageAggregateImportCounter,
+    counter: &mut aether_data_contracts::repository::system::AdminSystemUsageAggregateImportCounter,
     existed: bool,
 ) {
     if existed {

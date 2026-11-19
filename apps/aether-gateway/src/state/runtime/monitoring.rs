@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use aether_admin::observability::usage::admin_usage_safe_metadata_value;
-use aether_data::repository::audit::AuditLogListQuery;
+use aether_data_contracts::repository::audit::AuditLogListQuery;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use super::PostgresBackend;
 use crate::repository::announcements::AnnouncementReadRepository;
-use crate::repository::audit::AuditLogReadRepository;
 use crate::repository::auth::AuthApiKeyReadRepository;
 use crate::repository::auth_modules::AuthModuleReadRepository;
 use crate::repository::background_tasks::BackgroundTaskReadRepository;
@@ -23,6 +22,7 @@ use crate::repository::usage::UsageReadRepository;
 use crate::repository::users::UserReadRepository;
 use crate::repository::video_tasks::VideoTaskReadRepository;
 use crate::repository::wallet::WalletReadRepository;
+use aether_data_contracts::repository::audit::AuditLogReadRepository;
 
 #[derive(Clone, Default)]
 pub struct DataReadRepositories {

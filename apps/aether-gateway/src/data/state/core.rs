@@ -602,11 +602,12 @@ impl GatewayDataState {
 
     pub(crate) async fn purge_admin_system_data(
         &self,
-        target: aether_data::repository::system::AdminSystemPurgeTarget,
-    ) -> Result<aether_data::repository::system::AdminSystemPurgeSummary, DataLayerError> {
+        target: aether_data_contracts::repository::system::AdminSystemPurgeTarget,
+    ) -> Result<aether_data_contracts::repository::system::AdminSystemPurgeSummary, DataLayerError>
+    {
         let purges_config = matches!(
             &target,
-            aether_data::repository::system::AdminSystemPurgeTarget::Config
+            aether_data_contracts::repository::system::AdminSystemPurgeTarget::Config
         );
         if purges_config {
             if let Some(values) = &self.system_config_values {
@@ -614,38 +615,42 @@ impl GatewayDataState {
                 let deleted = values.len() as u64;
                 values.clear();
                 let mut summary =
-                    aether_data::repository::system::AdminSystemPurgeSummary::default();
+                    aether_data_contracts::repository::system::AdminSystemPurgeSummary::default();
                 summary.add("system_configs", deleted);
                 return Ok(summary);
             }
         }
         let result = match self.backends.as_ref() {
             Some(backends) => backends.purge_admin_system_data(target).await,
-            None => Ok(aether_data::repository::system::AdminSystemPurgeSummary::default()),
+            None => {
+                Ok(aether_data_contracts::repository::system::AdminSystemPurgeSummary::default())
+            }
         };
         result
     }
 
     pub(crate) async fn export_admin_system_usage_aggregates(
         &self,
-    ) -> Result<aether_data::repository::system::AdminSystemUsageAggregateSnapshot, DataLayerError>
-    {
+    ) -> Result<
+        aether_data_contracts::repository::system::AdminSystemUsageAggregateSnapshot,
+        DataLayerError,
+    > {
         match self.backends.as_ref() {
             Some(backends) => backends.export_admin_system_usage_aggregates().await,
             None => {
-                Ok(aether_data::repository::system::AdminSystemUsageAggregateSnapshot::default())
+                Ok(aether_data_contracts::repository::system::AdminSystemUsageAggregateSnapshot::default())
             }
         }
     }
 
     pub(crate) async fn import_admin_system_usage_aggregates(
         &self,
-        snapshot: &aether_data::repository::system::AdminSystemUsageAggregateSnapshot,
+        snapshot: &aether_data_contracts::repository::system::AdminSystemUsageAggregateSnapshot,
         user_id_map: &std::collections::BTreeMap<String, String>,
         api_key_id_map: &std::collections::BTreeMap<String, String>,
-        mode: aether_data::repository::system::AdminSystemUsageAggregateImportMode,
+        mode: aether_data_contracts::repository::system::AdminSystemUsageAggregateImportMode,
     ) -> Result<
-        aether_data::repository::system::AdminSystemUsageAggregateImportSummary,
+        aether_data_contracts::repository::system::AdminSystemUsageAggregateImportSummary,
         DataLayerError,
     > {
         match self.backends.as_ref() {
@@ -660,17 +665,20 @@ impl GatewayDataState {
                     .await
             }
             None => Ok(
-                aether_data::repository::system::AdminSystemUsageAggregateImportSummary::default(),
+                aether_data_contracts::repository::system::AdminSystemUsageAggregateImportSummary::default(),
             ),
         }
     }
 
     pub(crate) async fn purge_admin_request_bodies_all(
         &self,
-    ) -> Result<aether_data::repository::system::AdminSystemPurgeSummary, DataLayerError> {
+    ) -> Result<aether_data_contracts::repository::system::AdminSystemPurgeSummary, DataLayerError>
+    {
         match self.backends.as_ref() {
             Some(backends) => backends.purge_admin_request_bodies_all().await,
-            None => Ok(aether_data::repository::system::AdminSystemPurgeSummary::default()),
+            None => {
+                Ok(aether_data_contracts::repository::system::AdminSystemPurgeSummary::default())
+            }
         }
     }
 }

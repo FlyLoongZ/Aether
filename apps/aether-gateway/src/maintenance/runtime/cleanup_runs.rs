@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use aether_data::repository::system::{AdminSystemPurgeSummary, AdminSystemPurgeTarget};
+use aether_data_contracts::repository::system::{AdminSystemPurgeSummary, AdminSystemPurgeTarget};
 use aether_data_contracts::DataLayerError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

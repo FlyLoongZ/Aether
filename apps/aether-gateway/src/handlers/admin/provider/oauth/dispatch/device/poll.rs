@@ -22,9 +22,9 @@ use crate::handlers::admin::provider::oauth::state::{
 };
 use crate::handlers::admin::provider::shared::paths::admin_provider_oauth_device_poll_provider_id;
 use crate::handlers::admin::request::{AdminAppState, AdminKiroAuthConfig, AdminRequestContext};
+use crate::provider_oauth::StoredAdminProviderOAuthDeviceSession;
 use crate::GatewayError;
 use aether_contracts::ProxySnapshot;
-use aether_data::repository::provider_oauth::StoredAdminProviderOAuthDeviceSession;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogProvider,
 };
@@ -1058,7 +1058,7 @@ async fn handle_admin_provider_oauth_kiro_social_device_poll(
 mod tests {
     use super::admin_provider_oauth_device_session_matches_resolved_principal;
     use crate::control::GatewayAdminPrincipalContext;
-    use aether_data::repository::provider_oauth::StoredAdminProviderOAuthDeviceSession;
+    use crate::provider_oauth::StoredAdminProviderOAuthDeviceSession;
 
     #[test]
     fn kiro_social_key_name_preserves_email_and_auth_method() {

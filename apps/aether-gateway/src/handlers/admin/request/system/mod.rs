@@ -64,31 +64,36 @@ impl<'a> AdminAppState<'a> {
 
     pub(crate) async fn list_proxy_nodes(
         &self,
-    ) -> Result<Vec<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
+    ) -> Result<Vec<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError>
+    {
         self.app.list_proxy_nodes().await
     }
 
     pub(crate) async fn read_admin_system_stats(
         &self,
-    ) -> Result<aether_data::repository::system::AdminSystemStats, GatewayError> {
+    ) -> Result<aether_data_contracts::repository::system::AdminSystemStats, GatewayError> {
         self.app.read_admin_system_stats().await
     }
 
     pub(crate) async fn export_admin_system_usage_aggregates(
         &self,
-    ) -> Result<aether_data::repository::system::AdminSystemUsageAggregateSnapshot, GatewayError>
-    {
+    ) -> Result<
+        aether_data_contracts::repository::system::AdminSystemUsageAggregateSnapshot,
+        GatewayError,
+    > {
         self.app.export_admin_system_usage_aggregates().await
     }
 
     pub(crate) async fn import_admin_system_usage_aggregates(
         &self,
-        snapshot: &aether_data::repository::system::AdminSystemUsageAggregateSnapshot,
+        snapshot: &aether_data_contracts::repository::system::AdminSystemUsageAggregateSnapshot,
         user_id_map: &std::collections::BTreeMap<String, String>,
         api_key_id_map: &std::collections::BTreeMap<String, String>,
-        mode: aether_data::repository::system::AdminSystemUsageAggregateImportMode,
-    ) -> Result<aether_data::repository::system::AdminSystemUsageAggregateImportSummary, GatewayError>
-    {
+        mode: aether_data_contracts::repository::system::AdminSystemUsageAggregateImportMode,
+    ) -> Result<
+        aether_data_contracts::repository::system::AdminSystemUsageAggregateImportSummary,
+        GatewayError,
+    > {
         self.app
             .import_admin_system_usage_aggregates(snapshot, user_id_map, api_key_id_map, mode)
             .await
@@ -103,7 +108,8 @@ impl<'a> AdminAppState<'a> {
     pub(crate) async fn find_proxy_node(
         &self,
         node_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError> {
+    ) -> Result<Option<aether_data_contracts::repository::proxy_nodes::StoredProxyNode>, GatewayError>
+    {
         self.app.find_proxy_node(node_id).await
     }
 

@@ -18,8 +18,7 @@ use aether_runtime::{
     MetricLabel, MetricSample,
 };
 use aether_runtime_state::{
-    MemoryRuntimeStateConfig, RedisRuntimeDiagnostics, RuntimeQueueStore,
-    RuntimeState,
+    MemoryRuntimeStateConfig, RedisRuntimeDiagnostics, RuntimeQueueStore, RuntimeState,
 };
 use aether_scheduler_core::PROVIDER_KEY_RPM_WINDOW_SECS;
 use dashmap::DashMap;
@@ -499,9 +498,7 @@ impl AppState {
     ) -> Result<Self, aether_data::DataLayerError> {
         let auth_load_limit = database_bounded_auth_load_limit(
             self.frontdoor_runtime_guards.auth_snapshot_load_gate_limit,
-            config
-                .database()
-                .map(|database| database.max_connections),
+            config.database().map(|database| database.max_connections),
         );
         self.auth_snapshot_load_gate = auth_load_limit
             .map(|limit| Arc::new(ConcurrencyGate::new("gateway_auth_snapshot_load", limit)));
@@ -953,7 +950,7 @@ impl AppState {
 
     pub(crate) async fn read_admin_system_stats(
         &self,
-    ) -> Result<aether_data::repository::system::AdminSystemStats, GatewayError> {
+    ) -> Result<aether_data_contracts::repository::system::AdminSystemStats, GatewayError> {
         self.data
             .read_admin_system_stats()
             .await
@@ -962,8 +959,9 @@ impl AppState {
 
     pub(crate) async fn purge_admin_system_data(
         &self,
-        target: aether_data::repository::system::AdminSystemPurgeTarget,
-    ) -> Result<aether_data::repository::system::AdminSystemPurgeSummary, GatewayError> {
+        target: aether_data_contracts::repository::system::AdminSystemPurgeTarget,
+    ) -> Result<aether_data_contracts::repository::system::AdminSystemPurgeSummary, GatewayError>
+    {
         let summary = self
             .data
             .purge_admin_system_data(target)
@@ -971,10 +969,10 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))?;
         if matches!(
             target,
-            aether_data::repository::system::AdminSystemPurgeTarget::Config
-                | aether_data::repository::system::AdminSystemPurgeTarget::Users
-                | aether_data::repository::system::AdminSystemPurgeTarget::Usage
-                | aether_data::repository::system::AdminSystemPurgeTarget::Stats
+            aether_data_contracts::repository::system::AdminSystemPurgeTarget::Config
+                | aether_data_contracts::repository::system::AdminSystemPurgeTarget::Users
+                | aether_data_contracts::repository::system::AdminSystemPurgeTarget::Usage
+                | aether_data_contracts::repository::system::AdminSystemPurgeTarget::Stats
         ) {
             self.system_config_cache.invalidate_all();
             self.invalidate_provider_routing_caches();
@@ -984,8 +982,10 @@ impl AppState {
 
     pub(crate) async fn export_admin_system_usage_aggregates(
         &self,
-    ) -> Result<aether_data::repository::system::AdminSystemUsageAggregateSnapshot, GatewayError>
-    {
+    ) -> Result<
+        aether_data_contracts::repository::system::AdminSystemUsageAggregateSnapshot,
+        GatewayError,
+    > {
         self.data
             .export_admin_system_usage_aggregates()
             .await
@@ -994,12 +994,14 @@ impl AppState {
 
     pub(crate) async fn import_admin_system_usage_aggregates(
         &self,
-        snapshot: &aether_data::repository::system::AdminSystemUsageAggregateSnapshot,
+        snapshot: &aether_data_contracts::repository::system::AdminSystemUsageAggregateSnapshot,
         user_id_map: &std::collections::BTreeMap<String, String>,
         api_key_id_map: &std::collections::BTreeMap<String, String>,
-        mode: aether_data::repository::system::AdminSystemUsageAggregateImportMode,
-    ) -> Result<aether_data::repository::system::AdminSystemUsageAggregateImportSummary, GatewayError>
-    {
+        mode: aether_data_contracts::repository::system::AdminSystemUsageAggregateImportMode,
+    ) -> Result<
+        aether_data_contracts::repository::system::AdminSystemUsageAggregateImportSummary,
+        GatewayError,
+    > {
         self.data
             .import_admin_system_usage_aggregates(snapshot, user_id_map, api_key_id_map, mode)
             .await
@@ -1495,8 +1497,7 @@ impl AppState {
         };
         let usage_queue_health_metrics = usage_queue_health_metric_samples_with_timeout(
             USAGE_QUEUE_HEALTH_METRICS_TIMEOUT,
-            self.usage_runtime
-                .queue_health_snapshot(self.data.as_ref()),
+            self.usage_runtime.queue_health_snapshot(self.data.as_ref()),
         );
         let usage_counter_pending_health_metrics =
             usage_counter_pending_health_metric_samples_with_timeout(
@@ -1659,7 +1660,9 @@ impl AppState {
             .map(|gate| gate.try_acquire())
             .transpose()
             .map_err(RequestAdmissionError::Local)?;
-        Ok(AdmissionPermit::from_parts::<aether_runtime_state::RuntimeSemaphorePermit>(local, None))
+        Ok(AdmissionPermit::from_parts::<
+            aether_runtime_state::RuntimeSemaphorePermit,
+        >(local, None))
     }
 
     pub(crate) async fn try_acquire_websocket_connection_permit(
@@ -1671,7 +1674,9 @@ impl AppState {
             .map(|gate| gate.try_acquire())
             .transpose()
             .map_err(RequestAdmissionError::Local)?;
-        Ok(AdmissionPermit::from_parts::<aether_runtime_state::RuntimeSemaphorePermit>(local, None))
+        Ok(AdmissionPermit::from_parts::<
+            aether_runtime_state::RuntimeSemaphorePermit,
+        >(local, None))
     }
 
     pub fn has_auth_api_key_data_reader(&self) -> bool {
@@ -2318,7 +2323,6 @@ fn database_pool_metric_samples(summary: &aether_data::DatabasePoolSummary) -> V
         .with_labels(labels),
     ]
 }
-
 
 fn postgres_observability_metric_samples(
     snapshot: Option<&aether_data::DatabasePostgresObservabilitySnapshot>,

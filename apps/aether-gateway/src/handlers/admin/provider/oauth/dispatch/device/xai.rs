@@ -10,11 +10,11 @@ use crate::handlers::admin::provider::oauth::state::{
     current_unix_secs, generate_provider_oauth_nonce,
 };
 use crate::handlers::admin::request::AdminAppState;
-use crate::GatewayError;
-use aether_contracts::ProxySnapshot;
-use aether_data::repository::provider_oauth::{
+use crate::provider_oauth::{
     StoredAdminProviderOAuthDeviceSession, KIRO_DEVICE_AUTH_SESSION_TTL_BUFFER_SECS,
 };
+use crate::GatewayError;
+use aether_contracts::ProxySnapshot;
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogProvider,
 };

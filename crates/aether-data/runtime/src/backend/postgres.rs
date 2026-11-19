@@ -1,13 +1,8 @@
 use std::sync::Arc;
 
-use aether_data_postgres::{
-    PostgresLeaseRunner, PostgresLeaseRunnerConfig, PostgresPool, PostgresPoolConfig,
-    PostgresPoolFactory, PostgresTransactionRunner,
-};
 use crate::repository::announcements::{
     AnnouncementReadRepository, AnnouncementWriteRepository, SqlxAnnouncementReadRepository,
 };
-use crate::repository::audit::{AuditLogReadRepository, PostgresAuditLogReadRepository};
 use crate::repository::auth::{
     AuthApiKeyReadRepository, AuthApiKeyWriteRepository, SqlxAuthApiKeySnapshotReadRepository,
 };
@@ -68,6 +63,12 @@ use crate::repository::wallet::{
     SqlxWalletRepository, WalletReadRepository, WalletWriteRepository,
 };
 use crate::DataLayerError;
+use aether_data_contracts::repository::audit::AuditLogReadRepository;
+use aether_data_postgres::PostgresAuditLogReadRepository;
+use aether_data_postgres::{
+    PostgresLeaseRunner, PostgresLeaseRunnerConfig, PostgresPool, PostgresPoolConfig,
+    PostgresPoolFactory, PostgresTransactionRunner,
+};
 
 #[derive(Debug, Clone)]
 pub struct PostgresBackend {

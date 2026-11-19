@@ -59,18 +59,18 @@ use aether_admin::system::{
 use aether_data_contracts::repository::auth_modules::{
     CompareAndSwapLdapConfigResult, LdapBindPasswordUpdate, StoredLdapModuleConfig,
 };
+use aether_data_contracts::repository::global_models::{
+    CreateAdminGlobalModelRecord, UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
+};
 use aether_data_contracts::repository::oauth_providers::{
     EncryptedSecretUpdate, UpsertOAuthProviderConfigRecord,
 };
-use aether_data::repository::system::{
+use aether_data_contracts::repository::pool_scores::PoolMemberScoreUpsertMode;
+use aether_data_contracts::repository::system::{
     AdminSystemStatsUserDailyAggregate, AdminSystemUsageAggregateImportMode,
     AdminSystemUsageAggregateImportSummary, AdminSystemUsageAggregateSnapshot,
 };
 use aether_data_contracts::repository::wallet::{StoredWalletSnapshot, WalletLookupKey};
-use aether_data_contracts::repository::global_models::{
-    CreateAdminGlobalModelRecord, UpdateAdminGlobalModelRecord, UpsertAdminProviderModelRecord,
-};
-use aether_data_contracts::repository::pool_scores::PoolMemberScoreUpsertMode;
 use axum::{body::Bytes, http};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -3521,8 +3521,10 @@ impl<'a> AdminAppState<'a> {
             .into_iter()
             .map(|group| {
                 (
-                    aether_data_contracts::repository::users::normalize_user_group_name(&group.name)
-                        .to_ascii_lowercase(),
+                    aether_data_contracts::repository::users::normalize_user_group_name(
+                        &group.name,
+                    )
+                    .to_ascii_lowercase(),
                     group,
                 )
             })
@@ -6897,8 +6899,10 @@ impl<'a> AdminAppState<'a> {
             .into_iter()
             .map(|group| {
                 (
-                    aether_data_contracts::repository::users::normalize_user_group_name(&group.name)
-                        .to_ascii_lowercase(),
+                    aether_data_contracts::repository::users::normalize_user_group_name(
+                        &group.name,
+                    )
+                    .to_ascii_lowercase(),
                     group,
                 )
             })
@@ -7769,29 +7773,31 @@ impl<'a> AdminAppState<'a> {
                     false,
                 ));
                 let created = self
-                    .create_user_api_key(aether_data_contracts::repository::auth::CreateUserApiKeyRecord {
-                        user_id: user_id.clone(),
-                        // Preserve a checkpoint API-key ID when a missing row must be recreated;
-                        // ordinary imports continue to receive fresh IDs.
-                        api_key_id,
-                        key_hash: key_hash.clone(),
-                        key_encrypted,
-                        name,
-                        allowed_providers,
-                        allowed_api_formats,
-                        allowed_models,
-                        ip_rules,
-                        rate_limit,
-                        concurrent_limit,
-                        force_capabilities,
-                        feature_settings: feature_settings.clone(),
-                        is_active: mode.preserves_active_state() && is_active,
-                        expires_at_unix_secs,
-                        auto_delete_on_expiry,
-                        total_requests,
-                        total_tokens,
-                        total_cost_usd,
-                    })
+                    .create_user_api_key(
+                        aether_data_contracts::repository::auth::CreateUserApiKeyRecord {
+                            user_id: user_id.clone(),
+                            // Preserve a checkpoint API-key ID when a missing row must be recreated;
+                            // ordinary imports continue to receive fresh IDs.
+                            api_key_id,
+                            key_hash: key_hash.clone(),
+                            key_encrypted,
+                            name,
+                            allowed_providers,
+                            allowed_api_formats,
+                            allowed_models,
+                            ip_rules,
+                            rate_limit,
+                            concurrent_limit,
+                            force_capabilities,
+                            feature_settings: feature_settings.clone(),
+                            is_active: mode.preserves_active_state() && is_active,
+                            expires_at_unix_secs,
+                            auto_delete_on_expiry,
+                            total_requests,
+                            total_tokens,
+                            total_cost_usd,
+                        },
+                    )
                     .await?;
                 let Some(created) = created else {
                     return Ok(Err((

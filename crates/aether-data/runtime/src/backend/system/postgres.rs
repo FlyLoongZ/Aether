@@ -2,11 +2,11 @@ use futures_util::TryStreamExt;
 use sqlx::Row;
 
 use crate::error::SqlxResultExt;
-use crate::repository::system::{
+use crate::DataLayerError;
+use aether_data_contracts::repository::system::{
     AdminSystemStats, AdminSystemStatsDailyAggregate, AdminSystemStatsDailyApiKeyAggregate,
     AdminSystemStatsUserDailyAggregate,
 };
-use crate::DataLayerError;
 
 use super::u64_from_i64;
 use super::*;

@@ -18,7 +18,7 @@ use aether_data_contracts::repository::announcements::{
     AnnouncementListQuery, AnnouncementReadRepository, AnnouncementWriteRepository,
     CreateAnnouncementRecord, StoredAnnouncement, StoredAnnouncementPage, UpdateAnnouncementRecord,
 };
-use aether_data::repository::audit::{
+use aether_data_contracts::repository::audit::{
     AuditLogListQuery, RequestAuditBundle, StoredAdminAuditLogPage, StoredSuspiciousActivity,
     StoredUserAuditLogPage,
 };
@@ -48,7 +48,9 @@ use aether_data_contracts::repository::proxy_nodes::{
     ProxyNodeManualCreateMutation, ProxyNodeManualUpdateMutation, ProxyNodeReadRepository,
     ProxyNodeTrafficMutation, ProxyNodeWriteRepository, StoredProxyNode,
 };
-pub(crate) use aether_data::repository::system::{AdminSystemStats, StoredSystemConfigEntry};
+pub(crate) use aether_data_contracts::repository::system::{
+    AdminSystemStats, StoredSystemConfigEntry,
+};
 use aether_data_contracts::repository::users::{
     StoredUserAuthRecord, StoredUserExportRow, StoredUserOAuthLinkSummary, StoredUserSummary,
     UserReadRepository,

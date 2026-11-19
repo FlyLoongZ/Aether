@@ -1,11 +1,11 @@
+use aether_data_contracts::repository::provider_catalog::{
+    StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
+};
+use aether_data_contracts::repository::system::StoredSystemConfigEntry;
 use aether_data_contracts::repository::{
     auth_modules::{StoredLdapModuleConfig, StoredOAuthProviderModuleConfig},
     proxy_nodes::StoredProxyNode,
     wallet::StoredWalletSnapshot,
-};
-use aether_data::repository::system::StoredSystemConfigEntry;
-use aether_data_contracts::repository::provider_catalog::{
-    StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
 };
 use axum::http;
 use axum::{

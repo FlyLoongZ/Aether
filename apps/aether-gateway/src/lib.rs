@@ -42,6 +42,7 @@ mod process_metrics;
 mod provider_key_auth;
 mod provider_pool_demand;
 pub(crate) use aether_provider_transport as provider_transport;
+pub(crate) mod provider_oauth;
 mod rate_limit;
 mod request_activity;
 mod request_candidate_queue;

@@ -7,12 +7,12 @@ use crate::maintenance::{
     StatsDailyAggregationSummary, StatsHourlyAggregationInput, StatsHourlyAggregationSummary,
     WalletDailyUsageAggregationInput, WalletDailyUsageAggregationResult,
 };
-use crate::repository::system::{
+use crate::DataLayerError;
+use aether_data_contracts::repository::system::{
     AdminSystemPurgeSummary, AdminSystemPurgeTarget, AdminSystemStats,
     AdminSystemUsageAggregateImportMode, AdminSystemUsageAggregateImportSummary,
     AdminSystemUsageAggregateSnapshot, StoredSystemConfigEntry,
 };
-use crate::DataLayerError;
 use sqlx::migrate::MigrateError;
 
 async fn warm_pool<DB>(pool: &sqlx::Pool<DB>, min_connections: u32) -> Result<(), DataLayerError>

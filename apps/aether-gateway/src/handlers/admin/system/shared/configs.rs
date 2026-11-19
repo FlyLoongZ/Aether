@@ -112,7 +112,7 @@ fn legacy_admin_system_config_fallback_key(normalized_key: &str) -> Option<&'sta
 }
 
 pub(crate) fn build_admin_system_configs_payload(
-    entries: &[aether_data::repository::system::StoredSystemConfigEntry],
+    entries: &[aether_data_contracts::repository::system::StoredSystemConfigEntry],
 ) -> serde_json::Value {
     let visible_entries = entries
         .iter()

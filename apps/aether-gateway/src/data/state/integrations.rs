@@ -1,10 +1,10 @@
 use aether_billing::enrich_usage_event_with_billing;
 use aether_billing::BillingModelContextLookup;
-use aether_data::repository::audit::RequestAuditReader;
+use aether_data::DataLayerError;
+use aether_data_contracts::repository::audit::RequestAuditReader;
 use aether_data_contracts::repository::auth::{
     AuthApiKeyLookupKey, ResolvedAuthApiKeySnapshotReader, StoredAuthApiKeySnapshot,
 };
-use aether_data::DataLayerError;
 use aether_data_contracts::repository::billing::StoredBillingModelContext;
 use aether_data_contracts::repository::candidate_selection::StoredMinimalCandidateSelectionRow;
 use aether_data_contracts::repository::candidates::DecisionTrace;
@@ -82,8 +82,10 @@ impl RequestAuditReader for GatewayDataState {
         user_id: &str,
         api_key_id: &str,
         now_unix_secs: u64,
-    ) -> Result<Option<aether_data_contracts::repository::auth::ResolvedAuthApiKeySnapshot>, DataLayerError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::auth::ResolvedAuthApiKeySnapshot>,
+        DataLayerError,
+    > {
         GatewayDataState::read_auth_api_key_snapshot(self, user_id, api_key_id, now_unix_secs).await
     }
 }

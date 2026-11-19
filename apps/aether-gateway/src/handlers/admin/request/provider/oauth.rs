@@ -1,13 +1,13 @@
 use super::*;
 use crate::handlers::admin::provider::oauth::errors::build_internal_control_error_response;
-use aether_contracts::{ProxySnapshot, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER};
-use aether_data::repository::provider_oauth::{
+use crate::provider_oauth::{
     build_provider_oauth_batch_task_status_payload, provider_oauth_batch_task_secret_purpose,
     provider_oauth_batch_task_storage_key, provider_oauth_device_session_secret_purpose,
     provider_oauth_device_session_storage_key, provider_oauth_state_storage_key,
     StoredAdminProviderOAuthDeviceSession, StoredAdminProviderOAuthState,
     PROVIDER_OAUTH_BATCH_TASK_TTL_SECS, PROVIDER_OAUTH_STATE_TTL_SECS,
 };
+use aether_contracts::{ProxySnapshot, EXECUTION_REQUEST_FOLLOW_REDIRECTS_HEADER};
 use axum::http;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -856,7 +856,7 @@ mod response_decode_tests {
         project_kiro_device_oidc_response, read_admin_provider_oauth_decoder_with_limit,
     };
 
-    use aether_data::repository::provider_oauth::{
+    use crate::provider_oauth::{
         provider_oauth_batch_task_secret_purpose, provider_oauth_device_session_secret_purpose,
         StoredAdminProviderOAuthDeviceSession, StoredAdminProviderOAuthState,
     };

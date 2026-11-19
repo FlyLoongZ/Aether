@@ -315,8 +315,10 @@ impl GatewayDataState {
         &self,
         user_id: &str,
         query: &aether_data_contracts::repository::announcements::UserAnnouncementListQuery,
-    ) -> Result<aether_data_contracts::repository::announcements::StoredUserAnnouncementPage, DataLayerError>
-    {
+    ) -> Result<
+        aether_data_contracts::repository::announcements::StoredUserAnnouncementPage,
+        DataLayerError,
+    > {
         match &self.announcement_reader {
             Some(repository) => repository.list_user_announcements(user_id, query).await,
             None => Ok(Default::default()),
@@ -911,8 +913,10 @@ impl GatewayDataState {
         &self,
         wallet_id: &str,
         refund_id: &str,
-    ) -> Result<Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>, DataLayerError>
-    {
+    ) -> Result<
+        Option<aether_data_contracts::repository::wallet::StoredAdminWalletRefund>,
+        DataLayerError,
+    > {
         match &self.wallet_reader {
             Some(repository) => repository.find_wallet_refund(wallet_id, refund_id).await,
             None => Ok(None),
@@ -1253,7 +1257,9 @@ impl GatewayDataState {
         &self,
         input: DisableAdminRedeemCodeInput,
     ) -> Result<
-        Option<WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminRedeemCode>>,
+        Option<
+            WalletMutationOutcome<aether_data_contracts::repository::wallet::StoredAdminRedeemCode>,
+        >,
         DataLayerError,
     > {
         match &self.wallet_writer {
@@ -2629,7 +2635,7 @@ impl GatewayDataState {
         attempted_only: bool,
         now_unix_secs: u64,
     ) -> Result<Option<RequestAuditBundle>, DataLayerError> {
-        aether_data::repository::audit::read_request_audit_bundle(
+        aether_data_contracts::repository::audit::read_request_audit_bundle(
             self,
             request_id,
             attempted_only,

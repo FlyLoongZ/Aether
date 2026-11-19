@@ -8,10 +8,10 @@ use crate::handlers::admin::provider::oauth::state::{
 };
 use crate::handlers::admin::provider::shared::paths::admin_provider_oauth_device_authorize_provider_id;
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
-use crate::GatewayError;
-use aether_data::repository::provider_oauth::{
+use crate::provider_oauth::{
     StoredAdminProviderOAuthDeviceSession, KIRO_DEVICE_AUTH_SESSION_TTL_BUFFER_SECS,
 };
+use crate::GatewayError;
 use axum::{
     body::{Body, Bytes},
     http,
