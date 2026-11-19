@@ -21,9 +21,9 @@ use crate::constants::{
     EXECUTION_PATH_LOCAL_AI_PUBLIC, EXECUTION_PATH_LOCAL_API_KEY_CONCURRENCY_LIMITED,
     EXECUTION_PATH_LOCAL_AUTH_DENIED, EXECUTION_PATH_LOCAL_EXECUTION_PLANNING_TIMEOUT,
     EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS, EXECUTION_PATH_LOCAL_INVALID_REQUEST,
-    EXECUTION_PATH_LOCAL_OVERLOADED, EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED,
-    EXECUTION_PATH_LOCAL_RATE_LIMITED, EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND,
-    EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH, LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
+    EXECUTION_PATH_LOCAL_OVERLOADED, EXECUTION_PATH_LOCAL_RATE_LIMITED,
+    EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND, EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH,
+    LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER,
 };
 
 use crate::control::{
@@ -79,8 +79,6 @@ const GEMINI_PUBLIC_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
 const GEMINI_FILES_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
     "当前 Gemini Files 请求无法在本地执行：没有匹配到可用的执行路径";
 const LOCAL_ROUTE_NOT_FOUND_DETAIL: &str = "Route not found";
-const LOCAL_PROXY_PASSTHROUGH_REMOVED_DETAIL: &str =
-    "Route matched a removed compatibility passthrough; implement it in Rust or retire the route";
 const AUTH_API_KEY_CONCURRENCY_LIMIT_REACHED_DETAIL: &str =
     "当前调用方 API Key 并发请求数已达上限，请稍后重试";
 const PROVIDER_KEY_CAPACITY_LIMIT_REACHED_DETAIL: &str =
@@ -1712,17 +1710,18 @@ async fn proxy_request_inner(
         ));
     }
 
-    let response = build_local_http_error_response(
+    let response = build_local_http_error_response_with_request_path(
         &trace_id,
         control_decision,
-        http::StatusCode::NOT_IMPLEMENTED,
-        LOCAL_PROXY_PASSTHROUGH_REMOVED_DETAIL,
+        Some(request_context.request_path.as_str()),
+        http::StatusCode::NOT_FOUND,
+        LOCAL_ROUTE_NOT_FOUND_DETAIL,
     )?;
     Ok(finalize_gateway_response_with_context(
         response,
         &remote_addr,
         &request_context,
-        EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED,
+        EXECUTION_PATH_LOCAL_ROUTE_NOT_FOUND,
         &started_at,
         request_permit.take(),
     ))

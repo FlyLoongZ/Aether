@@ -48,7 +48,6 @@ export const AUTH_TYPE_PROVIDER_LABEL_MAP: Record<string, string> = {
   kiro: 'Kiro',
   antigravity: 'Antigravity',
   claude_code: 'Claude Code',
-  gemini_cli: 'Gemini CLI',
 }
 
 export const getProviderDisplayName = (
@@ -61,8 +60,8 @@ export const getProviderDisplayName = (
   if (providerName) return providerName
   if (allowAuthTypeFallback) {
     const authType = String(attempt.key_auth_type || '').trim().toLowerCase()
-    if (authType && AUTH_TYPE_PROVIDER_LABEL_MAP[authType]) {
-      return AUTH_TYPE_PROVIDER_LABEL_MAP[authType]
+    if (authType) {
+      return AUTH_TYPE_PROVIDER_LABEL_MAP[authType] || authType
     }
   }
   return translate('chart.unknown')

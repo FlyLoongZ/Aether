@@ -419,9 +419,11 @@ const userRows = computed<UserManagementRow[]>(() =>
       walletStatusVariant: walletStatusBadge(walletStatus),
       requestCountLabel: formatNumber(user.request_count),
       tokensLabel: formatTokens(user.total_tokens ?? 0),
-      rateLimitLabel: formatRateLimitInheritable(user.rate_limit),
+      rateLimitLabel: formatRateLimitInheritable(user.effective_policy?.rate_limit?.value ?? null),
       rateLimitSource: formatUserEffectiveRateLimitSource(user),
-      rateLimitAsBadge: isRateLimitInherited(user.rate_limit) || isRateLimitUnlimited(user.rate_limit),
+      rateLimitAsBadge:
+        isRateLimitInherited(user.effective_policy?.rate_limit?.value ?? null) ||
+        isRateLimitUnlimited(user.effective_policy?.rate_limit?.value ?? null),
       createdAtLabel: formatDateShort(user.created_at),
       statusLabel: user.is_active ? t('ui.activee85e590') : t('ui.disable'),
       statusVariant: user.is_active ? 'success' : 'destructive',

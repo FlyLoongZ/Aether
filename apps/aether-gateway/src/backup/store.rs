@@ -38,8 +38,6 @@ pub(crate) trait BackupObjectStore: Send + Sync {
         max_bytes: usize,
     ) -> Result<Bytes, BackupStoreError>;
 
-    async fn delete_object(&self, key: &str) -> Result<(), BackupStoreError>;
-
     async fn list_keys_limited(
         &self,
         prefix: &str,
@@ -120,11 +118,6 @@ impl BackupObjectStore for FakeBackupObjectStore {
             )));
         }
         Ok(bytes)
-    }
-
-    async fn delete_object(&self, key: &str) -> Result<(), BackupStoreError> {
-        self.objects.write().await.remove(key);
-        Ok(())
     }
 
     async fn list_keys_limited(
@@ -266,13 +259,6 @@ impl BackupObjectStore for ObjectStoreS3BackupStore {
             bytes.extend_from_slice(&chunk);
         }
         Ok(bytes.freeze())
-    }
-
-    async fn delete_object(&self, key: &str) -> Result<(), BackupStoreError> {
-        self.store
-            .delete(&Path::from(key))
-            .await
-            .map_err(|error| BackupStoreError::object_store("delete", key, error))
     }
 
     async fn list_keys_limited(

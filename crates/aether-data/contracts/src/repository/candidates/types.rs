@@ -1700,7 +1700,6 @@ fn sanitize_candidate_source(value: &str) -> Option<&'static str> {
 fn sanitize_candidate_execution_path(value: &str) -> Option<&'static str> {
     match value.trim().to_ascii_lowercase().as_str() {
         "public_proxy_passthrough" => Some("public_proxy_passthrough"),
-        "local_proxy_passthrough_removed" => Some("local_proxy_passthrough_removed"),
         "execution_runtime_sync" => Some("execution_runtime_sync"),
         "execution_runtime_stream" => Some("execution_runtime_stream"),
         "local_execution_runtime_miss" => Some("local_execution_runtime_miss"),

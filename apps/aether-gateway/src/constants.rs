@@ -5,8 +5,6 @@ pub(crate) const DEPENDENCY_REASON_HEADER: &str = "x-aether-dependency-reason";
 pub(crate) const LOCAL_EXECUTION_RUNTIME_MISS_REASON_HEADER: &str =
     "x-aether-local-execution-runtime-miss-reason";
 pub(crate) const EXECUTION_PATH_PUBLIC_PROXY_PASSTHROUGH: &str = "public_proxy_passthrough";
-pub(crate) const EXECUTION_PATH_LOCAL_PROXY_PASSTHROUGH_REMOVED: &str =
-    "local_proxy_passthrough_removed";
 pub(crate) const EXECUTION_PATH_EXECUTION_RUNTIME_SYNC: &str = "execution_runtime_sync";
 pub(crate) const EXECUTION_PATH_EXECUTION_RUNTIME_STREAM: &str = "execution_runtime_stream";
 pub(crate) const EXECUTION_PATH_LOCAL_EXECUTION_RUNTIME_MISS: &str = "local_execution_runtime_miss";

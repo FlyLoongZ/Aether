@@ -520,7 +520,6 @@ export const formatAuthTypeWithPlan = (authType: string, planType?: string): str
     'codex': 'Codex',
     'antigravity': 'Antigravity',
     'claude_code': 'Claude Code',
-    'gemini_cli': 'Gemini CLI',
   }
   const typeName = labels[authType] || authType
   if (planType) {

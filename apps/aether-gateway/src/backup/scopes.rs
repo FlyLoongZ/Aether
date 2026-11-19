@@ -1,7 +1,6 @@
 use std::fmt;
 
 const ENCRYPTED_BACKUP_FILE_SUFFIX: &str = ".json.zst.aes256gcm";
-const LEGACY_PLAINTEXT_BACKUP_FILE_SUFFIX: &str = ".json.zst";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BackupScope {
@@ -96,14 +95,7 @@ impl BackupScope {
         prefix: &str,
         keys: impl IntoIterator<Item = String>,
     ) -> Vec<String> {
-        self.matching_backup_keys_with_suffixes(
-            prefix,
-            keys,
-            &[
-                ENCRYPTED_BACKUP_FILE_SUFFIX,
-                LEGACY_PLAINTEXT_BACKUP_FILE_SUFFIX,
-            ],
-        )
+        self.matching_backup_keys_with_suffixes(prefix, keys, &[ENCRYPTED_BACKUP_FILE_SUFFIX])
     }
 
     pub(crate) fn matching_encrypted_backup_keys(
@@ -112,18 +104,6 @@ impl BackupScope {
         keys: impl IntoIterator<Item = String>,
     ) -> Vec<String> {
         self.matching_backup_keys_with_suffixes(prefix, keys, &[ENCRYPTED_BACKUP_FILE_SUFFIX])
-    }
-
-    pub(crate) fn matching_legacy_plaintext_backup_keys(
-        self,
-        prefix: &str,
-        keys: impl IntoIterator<Item = String>,
-    ) -> Vec<String> {
-        self.matching_backup_keys_with_suffixes(
-            prefix,
-            keys,
-            &[LEGACY_PLAINTEXT_BACKUP_FILE_SUFFIX],
-        )
     }
 
     fn matching_backup_keys_with_suffixes(
@@ -279,12 +259,9 @@ mod tests {
 
         assert_eq!(
             matched,
-            vec![
-                "prod/aether-users-backup-20260524-010000.json.zst".to_string(),
-                format!(
-                    "prod/aether-users-backup-20260524-010000-{collision_digest}.json.zst.aes256gcm"
-                ),
-            ]
+            vec![format!(
+                "prod/aether-users-backup-20260524-010000-{collision_digest}.json.zst.aes256gcm"
+            )]
         );
     }
 
@@ -300,19 +277,19 @@ mod tests {
         );
 
         let keys = vec![
+            "prod/aether-config-backup-20260524-010000.json.zst.aes256gcm".to_string(),
+            "prod//aether-config-backup-20260524-010000.json.zst.aes256gcm".to_string(),
+            "prod-backups/aether-config-backup-20260524-010000.json.zst.aes256gcm".to_string(),
             "prod/aether-config-backup-20260524-010000.json.zst".to_string(),
-            "prod//aether-config-backup-20260524-010000.json.zst".to_string(),
-            "prod-backups/aether-config-backup-20260524-010000.json.zst".to_string(),
-            "prod/aether-config-backup-20260524-010000.json".to_string(),
-            "prod/aether-config-backup-.json.zst".to_string(),
-            "aether-config-backup-20260524-010000.json.zst".to_string(),
+            "prod/aether-config-backup-.json.zst.aes256gcm".to_string(),
+            "aether-config-backup-20260524-010000.json.zst.aes256gcm".to_string(),
         ];
 
         let matched = BackupScope::Config.matching_backup_keys("prod", keys);
 
         assert_eq!(
             matched,
-            vec!["prod/aether-config-backup-20260524-010000.json.zst"]
+            vec!["prod/aether-config-backup-20260524-010000.json.zst.aes256gcm"]
         );
     }
 

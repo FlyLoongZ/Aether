@@ -15,7 +15,6 @@ export function formatClientFamily(value: string | null | undefined): string {
   if (normalized === 'cherrystudio') return 'Cherry Studio'
   if (normalized === 'openui') return 'OpenUI'
   if (normalized === 'cursor') return 'Cursor'
-  if (normalized === 'windsurf') return 'Windsurf'
   if (normalized === 'continue') return 'Continue'
   if (normalized === 'cline') return 'Cline'
   if (normalized === 'aider') return 'Aider'

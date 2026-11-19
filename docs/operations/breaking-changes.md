@@ -101,11 +101,13 @@ a default.
 
 ## Backups
 
-- Backup restores accept only the v2 AES-256-GCM envelope with a key ID.
+- Backup restores accept the v2 and v3 AES-256-GCM envelopes with a key ID.
   Version 1 backups, the keyring `legacy_v1` field, and legacy v1 key
   candidates are no longer supported.
-- Legacy plaintext backup objects are still migrated to encrypted objects by
-  the backup task; that security migration is independent of v1 restore.
+- New backups use the v3 envelope and a 600k + HKDF-derived root key.
+- Automatic migration of legacy plaintext backup objects is removed.
+  Pre-existing plaintext objects are left untouched for explicit operator
+  cleanup.
 
 ## Configuration import
 
@@ -113,6 +115,12 @@ a default.
 - User exports use `1.7`; versions `1.5` and `1.6` remain importable for
   recovery. Versions `1.3` and `1.4` are rejected.
 - Legacy OAuth provider normalization for exports `2.0`-`2.2` is removed.
+
+## Local proxy fallback
+
+- The removed `local_proxy_passthrough_removed` execution path is gone. An
+  unmatched local route now returns the ordinary `404 Route not found`
+  response instead of `501`.
 
 ## Routing
 

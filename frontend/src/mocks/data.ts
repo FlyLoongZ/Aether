@@ -54,9 +54,6 @@ export const MOCK_ADMIN_USER: User = {
   role: 'admin',
   is_active: true,
   billing: MOCK_ADMIN_BILLING,
-  allowed_providers: null,
-  allowed_api_formats: null,
-  allowed_models: null,
   created_at: '2024-01-01T00:00:00Z',
   last_login_at: new Date().toISOString()
 }
@@ -68,9 +65,6 @@ export const MOCK_NORMAL_USER: User = {
   role: 'user',
   is_active: true,
   billing: MOCK_USER_BILLING,
-  allowed_providers: null,
-  allowed_api_formats: null,
-  allowed_models: null,
   created_at: '2024-06-01T00:00:00Z',
   last_login_at: new Date().toISOString()
 }
@@ -300,10 +294,7 @@ export const MOCK_ALL_USERS: AdminUser[] = [
     role: 'admin',
     unlimited: true,
     is_active: true,
-    allowed_providers: null,
-    allowed_api_formats: null,
-    allowed_models: null,
-    created_at: '2024-01-01T00:00:00Z'
+          created_at: '2024-01-01T00:00:00Z'
   },
   {
     id: 'demo-user-uuid-0002',
@@ -312,10 +303,7 @@ export const MOCK_ALL_USERS: AdminUser[] = [
     role: 'user',
     unlimited: false,
     is_active: true,
-    allowed_providers: null,
-    allowed_api_formats: null,
-    allowed_models: null,
-    created_at: '2024-06-01T00:00:00Z'
+          created_at: '2024-06-01T00:00:00Z'
   },
   {
     id: 'demo-user-uuid-0003',
@@ -324,10 +312,7 @@ export const MOCK_ALL_USERS: AdminUser[] = [
     role: 'user',
     unlimited: false,
     is_active: true,
-    allowed_providers: null,
-    allowed_api_formats: null,
-    allowed_models: null,
-    created_at: '2024-03-15T00:00:00Z'
+          created_at: '2024-03-15T00:00:00Z'
   },
   {
     id: 'demo-user-uuid-0004',
@@ -336,10 +321,7 @@ export const MOCK_ALL_USERS: AdminUser[] = [
     role: 'user',
     unlimited: false,
     is_active: true,
-    allowed_providers: null,
-    allowed_api_formats: null,
-    allowed_models: null,
-    created_at: '2024-02-20T00:00:00Z'
+          created_at: '2024-02-20T00:00:00Z'
   },
   {
     id: 'demo-user-uuid-0005',
@@ -348,10 +330,7 @@ export const MOCK_ALL_USERS: AdminUser[] = [
     role: 'user',
     unlimited: false,
     is_active: false,
-    allowed_providers: null,
-    allowed_api_formats: null,
-    allowed_models: null,
-    created_at: '2024-04-10T00:00:00Z'
+          created_at: '2024-04-10T00:00:00Z'
   }
 ]
 

@@ -27,7 +27,6 @@ const BACKUP_KEY_ID_CONTEXT: &[u8] = b"aether-s3-backup-key-id-v1";
 const BACKUP_ENCRYPTION_NAME: &str = "aes-256-gcm-v3";
 const MAX_V2_CANDIDATES: usize = 256;
 const MAX_BACKUP_OBJECTS_PER_PREFIX: usize = 10_000;
-const MAX_ENCRYPTED_VARIANTS_PER_LEGACY_OBJECT: usize = 32;
 const ZSTD_MAX_WINDOW_LOG: u32 = 27;
 const MIN_NEW_BACKUP_ENCRYPTION_SECRET_BYTES: usize = 32;
 const INSECURE_NEW_BACKUP_ENCRYPTION_SECRETS: &[&str] = &[
@@ -189,20 +188,8 @@ pub(crate) struct BackupRunResult {
     pub(crate) compression: String,
     pub(crate) encryption: String,
     pub(crate) key_id: String,
-    pub(crate) legacy_encrypted_copies_created: usize,
-    pub(crate) legacy_encrypted_copies_verified: usize,
-    pub(crate) legacy_plaintext_objects_deleted: usize,
-    pub(crate) legacy_plaintext_objects_retained: usize,
     pub(crate) retention_cleanup_candidates: usize,
     pub(crate) versioned_storage_cleanup_required: bool,
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-struct LegacyMigrationResult {
-    encrypted_copies_created: usize,
-    encrypted_copies_verified: usize,
-    plaintext_objects_deleted: usize,
-    plaintext_objects_retained: usize,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -224,11 +211,6 @@ pub(crate) enum BackupExecutionError {
 
     #[error("S3 backup compression `{0}` is not supported; expected `zstd`")]
     UnknownCompression(String),
-
-    #[error(
-        "legacy backup `{key}` has more than {limit} encrypted variants; refusing unbounded verification"
-    )]
-    TooManyEncryptedVariants { key: String, limit: usize },
 }
 
 pub(crate) async fn run_backup_with_store<S>(
@@ -264,8 +246,6 @@ where
         Bytes::from(upload_bytes),
     )
     .await?;
-    let legacy_migration =
-        migrate_legacy_plaintext_backups(config, store, encryption_secret).await?;
     let retention_cleanup_candidates =
         count_retention_cleanup_candidates(config, store, &object_key).await?;
 
@@ -280,14 +260,8 @@ where
         compression,
         encryption: BACKUP_ENCRYPTION_NAME.to_string(),
         key_id: encode_key_id(&key_id),
-        legacy_encrypted_copies_created: legacy_migration.encrypted_copies_created,
-        legacy_encrypted_copies_verified: legacy_migration.encrypted_copies_verified,
-        legacy_plaintext_objects_deleted: legacy_migration.plaintext_objects_deleted,
-        legacy_plaintext_objects_retained: legacy_migration.plaintext_objects_retained,
         retention_cleanup_candidates,
-        versioned_storage_cleanup_required: legacy_migration.plaintext_objects_deleted > 0
-            || legacy_migration.plaintext_objects_retained > 0
-            || retention_cleanup_candidates > 0,
+        versioned_storage_cleanup_required: retention_cleanup_candidates > 0,
     })
 }
 
@@ -631,113 +605,6 @@ fn decompress_backup_json(
     Ok(json_bytes)
 }
 
-async fn migrate_legacy_plaintext_backups<S>(
-    config: &S3BackupConfig,
-    store: &S,
-    encryption_secret: &str,
-) -> Result<LegacyMigrationResult, BackupExecutionError>
-where
-    S: BackupObjectStore + ?Sized,
-{
-    let keys = store
-        .list_keys_limited(&config.prefix, MAX_BACKUP_OBJECTS_PER_PREFIX)
-        .await?;
-    let mut legacy_plaintext_keys = Vec::new();
-    let mut encrypted_keys = Vec::new();
-    for scope in [BackupScope::Config, BackupScope::Users, BackupScope::Data] {
-        legacy_plaintext_keys.extend(
-            scope.matching_legacy_plaintext_backup_keys(&config.prefix, keys.iter().cloned()),
-        );
-        encrypted_keys
-            .extend(scope.matching_encrypted_backup_keys(&config.prefix, keys.iter().cloned()));
-    }
-    legacy_plaintext_keys.sort();
-    legacy_plaintext_keys.dedup();
-    encrypted_keys.sort();
-    encrypted_keys.dedup();
-
-    let mut result = LegacyMigrationResult::default();
-    for key in legacy_plaintext_keys {
-        let plaintext = store
-            .get_object_limited(&key, DEFAULT_BACKUP_MAX_ENCRYPTED_BYTES)
-            .await?;
-        let candidates: Vec<_> = encrypted_keys
-            .iter()
-            .filter(|encrypted_key| is_encrypted_variant_of_legacy_key(&key, encrypted_key))
-            .collect();
-        if candidates.len() > MAX_ENCRYPTED_VARIANTS_PER_LEGACY_OBJECT {
-            return Err(BackupExecutionError::TooManyEncryptedVariants {
-                key,
-                limit: MAX_ENCRYPTED_VARIANTS_PER_LEGACY_OBJECT,
-            });
-        }
-        let mut matching_encrypted_copy_exists = false;
-        for candidate in candidates {
-            let existing = store
-                .get_object_limited(candidate, DEFAULT_BACKUP_MAX_ENCRYPTED_BYTES)
-                .await?;
-            if decrypt_backup_bytes(encryption_secret, candidate, &existing)
-                .is_ok_and(|decrypted| decrypted.as_slice() == &plaintext[..])
-            {
-                matching_encrypted_copy_exists = true;
-                break;
-            }
-        }
-
-        if matching_encrypted_copy_exists {
-            result.encrypted_copies_verified += 1;
-            store.delete_object(&key).await?;
-            result.plaintext_objects_deleted += 1;
-            continue;
-        }
-
-        let encrypted_key = format!("{key}.aes256gcm");
-        let (encrypted, _) = encrypt_backup_bytes(encryption_secret, &encrypted_key, &plaintext)?;
-        let created_key =
-            put_encrypted_object_without_overwrite(store, &encrypted_key, Bytes::from(encrypted))
-                .await?;
-        let stored_encrypted = store
-            .get_object_limited(&created_key, DEFAULT_BACKUP_MAX_ENCRYPTED_BYTES)
-            .await?;
-        let verified_plaintext =
-            decrypt_backup_bytes(encryption_secret, &created_key, stored_encrypted.as_ref())
-                .map_err(|_| BackupExecutionError::Encryption)?;
-        if verified_plaintext.as_slice() != plaintext.as_ref() {
-            return Err(BackupExecutionError::Encryption);
-        }
-        encrypted_keys.push(created_key);
-        result.encrypted_copies_created += 1;
-        store.delete_object(&key).await?;
-        result.plaintext_objects_deleted += 1;
-    }
-    Ok(result)
-}
-
-fn is_encrypted_variant_of_legacy_key(legacy_key: &str, encrypted_key: &str) -> bool {
-    const LEGACY_SUFFIX: &str = ".json.zst";
-    const ENCRYPTED_SUFFIX: &str = ".json.zst.aes256gcm";
-
-    if encrypted_key == format!("{legacy_key}.aes256gcm") {
-        return true;
-    }
-
-    let Some(legacy_stem) = legacy_key.strip_suffix(LEGACY_SUFFIX) else {
-        return false;
-    };
-    let Some(digest) = encrypted_key
-        .strip_prefix(legacy_stem)
-        .and_then(|rest| rest.strip_prefix('-'))
-        .and_then(|rest| rest.strip_suffix(ENCRYPTED_SUFFIX))
-    else {
-        return false;
-    };
-
-    digest.len() == 64
-        && digest
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
 async fn count_retention_cleanup_candidates<S>(
     config: &S3BackupConfig,
     store: &S,
@@ -870,7 +737,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn backup_executor_encrypts_then_deletes_legacy_plaintext_objects() {
+    async fn backup_executor_encrypts_without_touching_legacy_plaintext_objects() {
         let store = FakeBackupObjectStore::default();
         store
             .put_object(
@@ -922,24 +789,17 @@ mod tests {
         assert_eq!(result.encryption, "aes-256-gcm-v3");
         assert_eq!(result.key_id.len(), 32);
         assert!(result.key_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
-        assert_eq!(result.legacy_encrypted_copies_created, 2);
-        assert_eq!(result.legacy_encrypted_copies_verified, 0);
-        assert_eq!(result.legacy_plaintext_objects_deleted, 2);
-        assert_eq!(result.legacy_plaintext_objects_retained, 0);
-        assert_eq!(result.retention_cleanup_candidates, 1);
-        assert!(result.versioned_storage_cleanup_required);
+        assert_eq!(result.retention_cleanup_candidates, 0);
+        assert!(!result.versioned_storage_cleanup_required);
 
         let keys = store.list_keys_limited("prod/", 10).await.unwrap();
         assert!(keys
-            .iter()
-            .any(|key| key == "prod/aether-config-backup-20260524-010000.json.zst.aes256gcm"));
-        assert!(!keys
             .iter()
             .any(|key| key == "prod/aether-config-backup-20260524-010000.json.zst"));
         assert!(keys
             .iter()
             .any(|key| key == "prod/aether-data-backup-20260523-191500.json.zst.aes256gcm"));
-        assert!(!keys
+        assert!(keys
             .iter()
             .any(|key| key == "prod/aether-data-backup-20260524-010000.json.zst"));
 
@@ -962,109 +822,6 @@ mod tests {
         let decoded: serde_json::Value =
             serde_json::from_slice(&decoded).expect("decrypted backup should contain JSON");
         assert_eq!(decoded["version"], "1.0");
-
-        let migrated_copy = store
-            .object_bytes("prod/aether-config-backup-20260524-010000.json.zst.aes256gcm")
-            .await
-            .expect("legacy backup should be migrated");
-        assert_eq!(
-            decrypt_backup_bytes(
-                TEST_NEW_BACKUP_ENCRYPTION_SECRET,
-                "prod/aether-config-backup-20260524-010000.json.zst.aes256gcm",
-                &migrated_copy,
-            )
-            .expect("migrated backup should decrypt")
-            .as_slice(),
-            b"keep-config".as_slice()
-        );
-    }
-
-    #[tokio::test]
-    async fn legacy_migration_never_overwrites_an_existing_encrypted_object() {
-        let store = FakeBackupObjectStore::default();
-        let legacy_key = "prod/aether-data-backup-20260524-010000.json.zst";
-        let preferred_encrypted_key = "prod/aether-data-backup-20260524-010000.json.zst.aes256gcm";
-        store
-            .put_object(legacy_key, Bytes::from_static(b"legacy payload"))
-            .await
-            .unwrap();
-        store
-            .put_object(
-                preferred_encrypted_key,
-                Bytes::from_static(b"existing encrypted object"),
-            )
-            .await
-            .unwrap();
-
-        let config = sample_backup_config(BackupScope::Data, 10);
-        let migration =
-            super::migrate_legacy_plaintext_backups(&config, &store, DEVELOPMENT_ENCRYPTION_KEY)
-                .await
-                .expect("legacy backup should migrate without overwriting");
-
-        assert_eq!(migration.encrypted_copies_created, 1);
-        assert_eq!(migration.encrypted_copies_verified, 0);
-        assert_eq!(migration.plaintext_objects_deleted, 1);
-        assert_eq!(migration.plaintext_objects_retained, 0);
-        assert!(store.object_bytes(legacy_key).await.is_none());
-        assert_eq!(
-            store.object_bytes(preferred_encrypted_key).await.as_deref(),
-            Some(b"existing encrypted object".as_slice())
-        );
-
-        let keys = store.list_keys_limited("prod/", 10).await.unwrap();
-        let collision_key = keys
-            .iter()
-            .find(|key| {
-                key.starts_with("prod/aether-data-backup-20260524-010000-")
-                    && key.ends_with(".json.zst.aes256gcm")
-            })
-            .expect("migration should create a collision-safe encrypted object");
-        let migrated_bytes = store.object_bytes(collision_key).await.unwrap();
-        assert_eq!(
-            decrypt_backup_bytes(DEVELOPMENT_ENCRYPTION_KEY, collision_key, &migrated_bytes)
-                .expect("collision-safe backup should decrypt")
-                .as_slice(),
-            b"legacy payload".as_slice()
-        );
-    }
-
-    #[tokio::test]
-    async fn legacy_migration_retry_reuses_matching_encrypted_copy() {
-        let store = FakeBackupObjectStore::default();
-        let legacy_key = "prod/aether-users-backup-20260524-010000.json.zst";
-        let encrypted_key = "prod/aether-users-backup-20260524-010000.json.zst.aes256gcm";
-        let (encrypted, _) = super::encrypt_backup_bytes(
-            DEVELOPMENT_ENCRYPTION_KEY,
-            encrypted_key,
-            b"legacy payload",
-        )
-        .expect("test payload should encrypt");
-        store
-            .put_object(legacy_key, Bytes::from_static(b"legacy payload"))
-            .await
-            .unwrap();
-        store
-            .put_object(encrypted_key, Bytes::from(encrypted.clone()))
-            .await
-            .unwrap();
-
-        let config = sample_backup_config(BackupScope::Data, 10);
-        let migration =
-            super::migrate_legacy_plaintext_backups(&config, &store, DEVELOPMENT_ENCRYPTION_KEY)
-                .await
-                .expect("retry should recognize the existing encrypted copy");
-
-        assert_eq!(migration.encrypted_copies_created, 0);
-        assert_eq!(migration.encrypted_copies_verified, 1);
-        assert_eq!(migration.plaintext_objects_deleted, 1);
-        assert_eq!(migration.plaintext_objects_retained, 0);
-        assert!(store.object_bytes(legacy_key).await.is_none());
-        assert_eq!(
-            store.object_bytes(encrypted_key).await.as_deref(),
-            Some(encrypted.as_slice())
-        );
-        assert_eq!(store.list_keys_limited("prod/", 10).await.unwrap().len(), 1);
     }
 
     #[tokio::test]

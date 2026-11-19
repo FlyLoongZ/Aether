@@ -776,15 +776,8 @@ fn backup_run_result_json(result: &BackupRunResult) -> Value {
         "exported_at": result.exported_at,
         "compression": result.compression,
         "encryption": result.encryption,
-        "legacy_encrypted_copies_created": result.legacy_encrypted_copies_created,
-        "legacy_encrypted_copies_verified": result.legacy_encrypted_copies_verified,
-        "legacy_plaintext_objects_deleted": result.legacy_plaintext_objects_deleted,
-        "legacy_plaintext_objects_retained": result.legacy_plaintext_objects_retained,
         "retention_cleanup_candidates": result.retention_cleanup_candidates,
-        "automatic_deletions": result.legacy_plaintext_objects_deleted,
-        "object_cleanup_mode": "legacy_plaintext_deleted_after_verified_encryption",
         "versioned_storage_cleanup_required": result.versioned_storage_cleanup_required,
-        "versioned_storage_cleanup_notice": "legacy_plaintext_versions_require_external_cleanup",
     })
 }
 

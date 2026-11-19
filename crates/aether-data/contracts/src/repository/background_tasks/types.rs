@@ -7,7 +7,6 @@ const BACKGROUND_TASK_DEFAULT_ERROR_CODE: &str = "background_task_failed";
 const BACKGROUND_TASK_UNCLASSIFIED_EVENT: &str = "unclassified_event";
 const MAX_BACKGROUND_TASK_METADATA_FIELDS: usize = 48;
 const SAFE_BACKGROUND_TASK_METADATA_FIELDS: &[&str] = &[
-    "automatic_deletions",
     "bytes",
     "compression",
     "created_count",
@@ -19,11 +18,6 @@ const SAFE_BACKGROUND_TASK_METADATA_FIELDS: &[&str] = &[
     "exported_at",
     "failed",
     "import_kind",
-    "legacy_encrypted_copies_created",
-    "legacy_encrypted_copies_verified",
-    "legacy_plaintext_objects_deleted",
-    "legacy_plaintext_objects_retained",
-    "object_cleanup_mode",
     "partition",
     "provider_type",
     "replaced_count",
@@ -38,7 +32,6 @@ const SAFE_BACKGROUND_TASK_METADATA_FIELDS: &[&str] = &[
     "total_endpoints",
     "total_keys",
     "trigger",
-    "versioned_storage_cleanup_notice",
     "versioned_storage_cleanup_required",
 ];
 
@@ -345,16 +338,11 @@ fn sanitize_background_task_metadata(value: Option<Value>) -> Option<Value> {
 
 fn sanitize_background_task_metadata_value(key: &str, value: Value) -> Option<Value> {
     match key {
-        "automatic_deletions"
-        | "bytes"
+        "bytes"
         | "created_count"
         | "deleted_endpoints"
         | "deleted_keys"
         | "failed"
-        | "legacy_encrypted_copies_created"
-        | "legacy_encrypted_copies_verified"
-        | "legacy_plaintext_objects_deleted"
-        | "legacy_plaintext_objects_retained"
         | "partition"
         | "replaced_count"
         | "retention_cleanup_candidates"
@@ -369,7 +357,9 @@ fn sanitize_background_task_metadata_value(key: &str, value: Value) -> Option<Va
             .map(Value::String),
         "scope" => sanitize_background_task_metadata_enum(value, &["config", "data", "users"]),
         "compression" => sanitize_background_task_metadata_enum(value, &["zstd"]),
-        "encryption" => sanitize_background_task_metadata_enum(value, &["aes-256-gcm-v2"]),
+        "encryption" => {
+            sanitize_background_task_metadata_enum(value, &["aes-256-gcm-v2", "aes-256-gcm-v3"])
+        }
         "trigger" => sanitize_background_task_metadata_enum(value, &["manual", "scheduled"]),
         "import_kind" => sanitize_background_task_metadata_enum(
             value,
@@ -408,18 +398,10 @@ fn sanitize_background_task_metadata_value(key: &str, value: Value) -> Option<Va
                 "skipped",
             ],
         ),
-        "object_cleanup_mode" => sanitize_background_task_metadata_enum(
-            value,
-            &["legacy_plaintext_deleted_after_verified_encryption"],
-        ),
         "sha256" => sanitize_background_task_metadata_hex(value, 64, 64),
         "export_version" => sanitize_background_task_metadata_version(value),
         "exported_at" => sanitize_background_task_metadata_rfc3339(value),
         "scheduled_slot" => sanitize_background_task_metadata_scheduled_slot(value),
-        "versioned_storage_cleanup_notice" => sanitize_background_task_metadata_enum(
-            value,
-            &["legacy_plaintext_versions_require_external_cleanup"],
-        ),
         _ => None,
     }
 }
