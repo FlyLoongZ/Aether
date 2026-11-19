@@ -2379,19 +2379,10 @@ SELECT EXISTS (
         Ok(true)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn update_local_auth_user_admin_fields(
         &self,
         user_id: &str,
         role: Option<String>,
-        allowed_providers_present: bool,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats_present: bool,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models_present: bool,
-        allowed_models: Option<Vec<String>>,
-        rate_limit_present: bool,
-        rate_limit: Option<i32>,
         is_active: Option<bool>,
     ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
         let mut tx = self.pool.begin().await.map_postgres_err()?;
@@ -2434,35 +2425,6 @@ SELECT EXISTS (
         }
         let security_state_changed =
             !current_role.eq_ignore_ascii_case(next_role) || current_active != next_active;
-        let allowed_providers_mode = if allowed_providers
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
-        {
-            "specific"
-        } else {
-            "unrestricted"
-        };
-        let allowed_api_formats_mode = if allowed_api_formats
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
-        {
-            "specific"
-        } else {
-            "unrestricted"
-        };
-        let allowed_models_mode = if allowed_models
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
-        {
-            "specific"
-        } else {
-            "unrestricted"
-        };
-        let rate_limit_mode = if rate_limit.is_some() {
-            "custom"
-        } else {
-            "system"
-        };
         let result = sqlx::query(
             r#"
 UPDATE users
@@ -2470,43 +2432,11 @@ SET role = CASE
         WHEN $2::BOOLEAN AND $3 IS NOT NULL THEN $3::userrole
         ELSE role
     END,
-    allowed_providers = CASE
-        WHEN $4::BOOLEAN THEN $5::jsonb
-        ELSE allowed_providers
-    END,
-    allowed_providers_mode = CASE
-        WHEN $4::BOOLEAN THEN $6
-        ELSE allowed_providers_mode
-    END,
-    allowed_api_formats = CASE
-        WHEN $7::BOOLEAN THEN $8::jsonb
-        ELSE allowed_api_formats
-    END,
-    allowed_api_formats_mode = CASE
-        WHEN $7::BOOLEAN THEN $9
-        ELSE allowed_api_formats_mode
-    END,
-    allowed_models = CASE
-        WHEN $10::BOOLEAN THEN $11::jsonb
-        ELSE allowed_models
-    END,
-    allowed_models_mode = CASE
-        WHEN $10::BOOLEAN THEN $12
-        ELSE allowed_models_mode
-    END,
-    rate_limit = CASE
-        WHEN $13::BOOLEAN THEN $14
-        ELSE rate_limit
-    END,
-    rate_limit_mode = CASE
-        WHEN $13::BOOLEAN THEN $15
-        ELSE rate_limit_mode
-    END,
     is_active = CASE
-        WHEN $16::BOOLEAN AND $17 IS NOT NULL THEN $17
+        WHEN $4::BOOLEAN AND $5 IS NOT NULL THEN $5
         ELSE is_active
     END,
-    security_version = security_version + CASE WHEN $18::BOOLEAN THEN 1 ELSE 0 END,
+    security_version = security_version + CASE WHEN $6::BOOLEAN THEN 1 ELSE 0 END,
     updated_at = NOW()
 WHERE id = $1
 "#,
@@ -2514,18 +2444,6 @@ WHERE id = $1
         .bind(user_id)
         .bind(role.is_some())
         .bind(role)
-        .bind(allowed_providers_present)
-        .bind(allowed_providers.map(serde_json::Value::from))
-        .bind(allowed_providers_mode)
-        .bind(allowed_api_formats_present)
-        .bind(allowed_api_formats.map(serde_json::Value::from))
-        .bind(allowed_api_formats_mode)
-        .bind(allowed_models_present)
-        .bind(allowed_models.map(serde_json::Value::from))
-        .bind(allowed_models_mode)
-        .bind(rate_limit_present)
-        .bind(rate_limit)
-        .bind(rate_limit_mode)
         .bind(is_active.is_some())
         .bind(is_active)
         .bind(security_state_changed)
@@ -2560,55 +2478,6 @@ WHERE id = $1
             .map_postgres_err()?;
         }
         tx.commit().await.map_postgres_err()?;
-        self.find_user_auth_by_id(user_id).await
-    }
-
-    pub async fn update_local_auth_user_policy_modes(
-        &self,
-        user_id: &str,
-        allowed_providers_mode: Option<String>,
-        allowed_api_formats_mode: Option<String>,
-        allowed_models_mode: Option<String>,
-        rate_limit_mode: Option<String>,
-    ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-        let result = sqlx::query(
-            r#"
-UPDATE users
-SET allowed_providers_mode = CASE
-        WHEN $2::BOOLEAN THEN $3
-        ELSE allowed_providers_mode
-    END,
-    allowed_api_formats_mode = CASE
-        WHEN $4::BOOLEAN THEN $5
-        ELSE allowed_api_formats_mode
-    END,
-    allowed_models_mode = CASE
-        WHEN $6::BOOLEAN THEN $7
-        ELSE allowed_models_mode
-    END,
-    rate_limit_mode = CASE
-        WHEN $8::BOOLEAN THEN $9
-        ELSE rate_limit_mode
-    END,
-    updated_at = NOW()
-WHERE id = $1
-"#,
-        )
-        .bind(user_id)
-        .bind(allowed_providers_mode.is_some())
-        .bind(allowed_providers_mode)
-        .bind(allowed_api_formats_mode.is_some())
-        .bind(allowed_api_formats_mode)
-        .bind(allowed_models_mode.is_some())
-        .bind(allowed_models_mode)
-        .bind(rate_limit_mode.is_some())
-        .bind(rate_limit_mode)
-        .execute(&self.pool)
-        .await
-        .map_postgres_err()?;
-        if result.rows_affected() == 0 {
-            return Ok(None);
-        }
         self.find_user_auth_by_id(user_id).await
     }
 
@@ -2674,12 +2543,10 @@ WHERE id = $1
             r#"
 INSERT INTO users (
   id, email, email_verified, username, password_hash, role, auth_source,
-  allowed_providers_mode, allowed_api_formats_mode, allowed_models_mode, rate_limit_mode,
   is_active, is_deleted, created_at, updated_at
 )
 VALUES (
   $1, $2, $3, $4, $5, 'user'::userrole, 'local'::authsource,
-  'inherit', 'inherit', 'inherit', 'inherit',
   TRUE, FALSE, NOW(), NOW()
 )
 "#,
@@ -2695,7 +2562,6 @@ VALUES (
         self.find_user_auth_by_id(&user_id).await
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn create_local_auth_user_with_settings(
         &self,
         email: Option<String>,
@@ -2703,54 +2569,16 @@ VALUES (
         username: String,
         password_hash: String,
         role: String,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models: Option<Vec<String>>,
-        rate_limit: Option<i32>,
     ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
         let user_id = uuid::Uuid::new_v4().to_string();
-        let allowed_providers_mode = if allowed_providers
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
-        {
-            "specific"
-        } else {
-            "unrestricted"
-        };
-        let allowed_api_formats_mode = if allowed_api_formats
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
-        {
-            "specific"
-        } else {
-            "unrestricted"
-        };
-        let allowed_models_mode = if allowed_models
-            .as_ref()
-            .is_some_and(|values| !values.is_empty())
-        {
-            "specific"
-        } else {
-            "unrestricted"
-        };
-        let rate_limit_mode = if rate_limit.is_some() {
-            "custom"
-        } else {
-            "system"
-        };
         sqlx::query(
             r#"
 INSERT INTO users (
   id, email, email_verified, username, password_hash, role, auth_source,
-  allowed_providers, allowed_providers_mode,
-  allowed_api_formats, allowed_api_formats_mode,
-  allowed_models, allowed_models_mode,
-  rate_limit, rate_limit_mode,
   is_active, is_deleted, created_at, updated_at
 )
 VALUES (
   $1, $2, $3, $4, $5, $6::userrole, 'local'::authsource,
-  $7::jsonb, $8, $9::jsonb, $10, $11::jsonb, $12, $13, $14,
   TRUE, FALSE, NOW(), NOW()
 )
 "#,
@@ -2761,14 +2589,6 @@ VALUES (
         .bind(username)
         .bind(password_hash)
         .bind(role)
-        .bind(allowed_providers.map(serde_json::Value::from))
-        .bind(allowed_providers_mode)
-        .bind(allowed_api_formats.map(serde_json::Value::from))
-        .bind(allowed_api_formats_mode)
-        .bind(allowed_models.map(serde_json::Value::from))
-        .bind(allowed_models_mode)
-        .bind(rate_limit)
-        .bind(rate_limit_mode)
         .execute(&self.pool)
         .await
         .map_postgres_err()?;
@@ -4029,48 +3849,10 @@ FOR UPDATE OF users, user_sessions
         &self,
         user_id: &str,
         role: Option<String>,
-        allowed_providers_present: bool,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats_present: bool,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models_present: bool,
-        allowed_models: Option<Vec<String>>,
-        rate_limit_present: bool,
-        rate_limit: Option<i32>,
         is_active: Option<bool>,
     ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-        self.update_local_auth_user_admin_fields(
-            user_id,
-            role,
-            allowed_providers_present,
-            allowed_providers,
-            allowed_api_formats_present,
-            allowed_api_formats,
-            allowed_models_present,
-            allowed_models,
-            rate_limit_present,
-            rate_limit,
-            is_active,
-        )
-        .await
-    }
-
-    async fn update_local_auth_user_policy_modes(
-        &self,
-        user_id: &str,
-        allowed_providers_mode: Option<String>,
-        allowed_api_formats_mode: Option<String>,
-        allowed_models_mode: Option<String>,
-        rate_limit_mode: Option<String>,
-    ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-        self.update_local_auth_user_policy_modes(
-            user_id,
-            allowed_providers_mode,
-            allowed_api_formats_mode,
-            allowed_models_mode,
-            rate_limit_mode,
-        )
-        .await
+        self.update_local_auth_user_admin_fields(user_id, role, is_active)
+            .await
     }
 
     async fn update_user_model_capability_settings(
@@ -4108,10 +3890,6 @@ FOR UPDATE OF users, user_sessions
         username: String,
         password_hash: String,
         role: String,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models: Option<Vec<String>>,
-        rate_limit: Option<i32>,
     ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
         self.create_local_auth_user_with_settings(
             email,
@@ -4119,10 +3897,6 @@ FOR UPDATE OF users, user_sessions
             username,
             password_hash,
             role,
-            allowed_providers,
-            allowed_api_formats,
-            allowed_models,
-            rate_limit,
         )
         .await
     }

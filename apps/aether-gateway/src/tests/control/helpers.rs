@@ -37,10 +37,6 @@ pub(in crate::tests) async fn issue_test_admin_access_token(
             "admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")

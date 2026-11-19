@@ -1441,10 +1441,6 @@ async fn gateway_rejects_constrained_full_management_token_creating_unconstraine
             "admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")

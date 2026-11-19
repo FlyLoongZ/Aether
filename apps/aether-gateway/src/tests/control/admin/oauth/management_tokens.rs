@@ -17,10 +17,6 @@ async fn gateway_requires_oauth_admin_management_token_to_configure_frontend_cal
             "oauth-callback-admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")
@@ -265,10 +261,6 @@ async fn gateway_creates_updates_and_regenerates_admin_management_token_locally_
             "admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")
@@ -408,10 +400,6 @@ async fn gateway_allows_management_token_with_pool_write_for_provider_oauth_batc
             "admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")
@@ -478,10 +466,6 @@ async fn gateway_rejects_management_token_without_pool_write_for_provider_oauth_
             "admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")
@@ -685,10 +669,6 @@ async fn gateway_rejects_partial_management_token_for_admin_management_token_rou
             "admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")

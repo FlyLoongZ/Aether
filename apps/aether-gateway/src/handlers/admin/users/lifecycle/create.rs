@@ -196,17 +196,7 @@ pub(in super::super) async fn build_admin_create_user_response(
     };
 
     let Some(user) = state
-        .create_local_auth_user_with_settings(
-            email,
-            false,
-            username,
-            password_hash,
-            role,
-            None,
-            None,
-            None,
-            None,
-        )
+        .create_local_auth_user_with_settings(email, false, username, password_hash, role)
         .await?
     else {
         return Ok(build_admin_users_read_only_response(
@@ -364,8 +354,7 @@ pub(in super::super) async fn build_admin_create_user_response(
         None
     };
 
-    let mut payload =
-        build_admin_user_payload_with_groups(&user, None, None, payload.unlimited, &groups);
+    let mut payload = build_admin_user_payload_with_groups(&user, payload.unlimited, &groups);
     payload["feature_settings"] = feature_settings.unwrap_or(Value::Null);
 
     Ok(attach_admin_audit_response(

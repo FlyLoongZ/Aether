@@ -63,9 +63,8 @@ pub fn admin_email_template_html_is_valid(value: &str) -> bool {
 
 pub const ADMIN_SYSTEM_CONFIG_EXPORT_VERSION: &str = "2.3";
 pub const ADMIN_SYSTEM_CONFIG_SUPPORTED_VERSIONS: &[&str] = &[ADMIN_SYSTEM_CONFIG_EXPORT_VERSION];
-pub const ADMIN_SYSTEM_USERS_EXPORT_VERSION: &str = "1.6";
-pub const ADMIN_SYSTEM_USERS_SUPPORTED_VERSIONS: &[&str] =
-    &["1.5", ADMIN_SYSTEM_USERS_EXPORT_VERSION];
+pub const ADMIN_SYSTEM_USERS_EXPORT_VERSION: &str = "1.7";
+pub const ADMIN_SYSTEM_USERS_SUPPORTED_VERSIONS: &[&str] = &["1.5", "1.6", "1.7"];
 pub const ADMIN_SYSTEM_PROVIDER_OPS_SENSITIVE_CREDENTIAL_FIELDS: &[&str] = &[
     "api_key",
     "password",

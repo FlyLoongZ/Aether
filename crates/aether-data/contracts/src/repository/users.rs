@@ -1380,29 +1380,11 @@ pub trait UserReadRepository: Send + Sync {
         changed_at: DateTime<Utc>,
     ) -> Result<bool, crate::DataLayerError>;
 
-    #[allow(clippy::too_many_arguments)]
     async fn update_local_auth_user_admin_fields(
         &self,
         user_id: &str,
         role: Option<String>,
-        allowed_providers_present: bool,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats_present: bool,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models_present: bool,
-        allowed_models: Option<Vec<String>>,
-        rate_limit_present: bool,
-        rate_limit: Option<i32>,
         is_active: Option<bool>,
-    ) -> Result<Option<StoredUserAuthRecord>, crate::DataLayerError>;
-
-    async fn update_local_auth_user_policy_modes(
-        &self,
-        user_id: &str,
-        allowed_providers_mode: Option<String>,
-        allowed_api_formats_mode: Option<String>,
-        allowed_models_mode: Option<String>,
-        rate_limit_mode: Option<String>,
     ) -> Result<Option<StoredUserAuthRecord>, crate::DataLayerError>;
 
     async fn update_user_model_capability_settings(
@@ -1425,7 +1407,6 @@ pub trait UserReadRepository: Send + Sync {
         password_hash: String,
     ) -> Result<Option<StoredUserAuthRecord>, crate::DataLayerError>;
 
-    #[allow(clippy::too_many_arguments)]
     async fn create_local_auth_user_with_settings(
         &self,
         email: Option<String>,
@@ -1433,10 +1414,6 @@ pub trait UserReadRepository: Send + Sync {
         username: String,
         password_hash: String,
         role: String,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models: Option<Vec<String>>,
-        rate_limit: Option<i32>,
     ) -> Result<Option<StoredUserAuthRecord>, crate::DataLayerError>;
 
     async fn delete_local_auth_user(&self, user_id: &str) -> Result<bool, crate::DataLayerError>;

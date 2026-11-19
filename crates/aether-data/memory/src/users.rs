@@ -1932,14 +1932,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
         &self,
         user_id: &str,
         role: Option<String>,
-        allowed_providers_present: bool,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats_present: bool,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models_present: bool,
-        allowed_models: Option<Vec<String>>,
-        rate_limit_present: bool,
-        rate_limit: Option<i32>,
         is_active: Option<bool>,
     ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
         if self.read_only {
@@ -1980,42 +1972,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
         if let Some(role) = role {
             user.role = role;
         }
-        if allowed_providers_present {
-            user.allowed_providers = allowed_providers;
-            user.allowed_providers_mode = if user
-                .allowed_providers
-                .as_ref()
-                .is_some_and(|values| !values.is_empty())
-            {
-                "specific".to_string()
-            } else {
-                "unrestricted".to_string()
-            };
-        }
-        if allowed_api_formats_present {
-            user.allowed_api_formats = allowed_api_formats;
-            user.allowed_api_formats_mode = if user
-                .allowed_api_formats
-                .as_ref()
-                .is_some_and(|values| !values.is_empty())
-            {
-                "specific".to_string()
-            } else {
-                "unrestricted".to_string()
-            };
-        }
-        if allowed_models_present {
-            user.allowed_models = allowed_models;
-            user.allowed_models_mode = if user
-                .allowed_models
-                .as_ref()
-                .is_some_and(|values| !values.is_empty())
-            {
-                "specific".to_string()
-            } else {
-                "unrestricted".to_string()
-            };
-        }
         if let Some(is_active) = is_active {
             user.is_active = is_active;
         }
@@ -2054,72 +2010,7 @@ impl UserReadRepository for InMemoryUserReadRepository {
             .find(|row| row.id == user_id)
         {
             row.role = updated.role.clone();
-            row.allowed_providers = updated.allowed_providers.clone();
-            row.allowed_providers_mode = updated.allowed_providers_mode.clone();
-            row.allowed_api_formats = updated.allowed_api_formats.clone();
-            row.allowed_api_formats_mode = updated.allowed_api_formats_mode.clone();
-            row.allowed_models = updated.allowed_models.clone();
-            row.allowed_models_mode = updated.allowed_models_mode.clone();
-            if rate_limit_present {
-                row.rate_limit = rate_limit;
-                row.rate_limit_mode = if row.rate_limit.is_some() {
-                    "custom".to_string()
-                } else {
-                    "system".to_string()
-                };
-            }
             row.is_active = updated.is_active;
-        }
-        Ok(Some(updated))
-    }
-
-    async fn update_local_auth_user_policy_modes(
-        &self,
-        user_id: &str,
-        allowed_providers_mode: Option<String>,
-        allowed_api_formats_mode: Option<String>,
-        allowed_models_mode: Option<String>,
-        rate_limit_mode: Option<String>,
-    ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-        if self.read_only {
-            return Ok(None);
-        }
-
-        let mut auth_by_id = self.auth_by_id.write().expect("user repository lock");
-        let Some(user) = auth_by_id.get_mut(user_id) else {
-            return Ok(None);
-        };
-        if let Some(mode) = allowed_providers_mode.clone() {
-            user.allowed_providers_mode = mode;
-        }
-        if let Some(mode) = allowed_api_formats_mode.clone() {
-            user.allowed_api_formats_mode = mode;
-        }
-        if let Some(mode) = allowed_models_mode.clone() {
-            user.allowed_models_mode = mode;
-        }
-        let updated = user.clone();
-        drop(auth_by_id);
-
-        if let Some(row) = self
-            .export_rows
-            .write()
-            .expect("user repository lock")
-            .iter_mut()
-            .find(|row| row.id == user_id)
-        {
-            if let Some(mode) = allowed_providers_mode {
-                row.allowed_providers_mode = mode;
-            }
-            if let Some(mode) = allowed_api_formats_mode {
-                row.allowed_api_formats_mode = mode;
-            }
-            if let Some(mode) = allowed_models_mode {
-                row.allowed_models_mode = mode;
-            }
-            if let Some(mode) = rate_limit_mode {
-                row.rate_limit_mode = mode;
-            }
         }
         Ok(Some(updated))
     }
@@ -2271,10 +2162,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
         username: String,
         password_hash: String,
         role: String,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models: Option<Vec<String>>,
-        _rate_limit: Option<i32>,
     ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
         if self.read_only {
             return Ok(None);
@@ -2289,9 +2176,9 @@ impl UserReadRepository for InMemoryUserReadRepository {
             Some(password_hash),
             role,
             "local".to_string(),
-            allowed_providers.map(serde_json::Value::from),
-            allowed_api_formats.map(serde_json::Value::from),
-            allowed_models.map(serde_json::Value::from),
+            None,
+            None,
+            None,
             true,
             false,
             Some(now),

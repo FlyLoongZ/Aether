@@ -311,58 +311,12 @@ async fn updates_local_auth_user_profile_and_password_in_memory() {
         .expect("password update should return user");
     assert_eq!(password_updated.password_hash.as_deref(), Some("new-hash"));
     let admin_updated = repository
-        .update_local_auth_user_admin_fields(
-            "user-1",
-            Some("admin".to_string()),
-            true,
-            Some(vec!["openai".to_string()]),
-            true,
-            None,
-            true,
-            Some(vec!["gpt-4.1".to_string()]),
-            true,
-            Some(50),
-            Some(false),
-        )
+        .update_local_auth_user_admin_fields("user-1", Some("admin".to_string()), Some(false))
         .await
         .expect("admin fields update should succeed")
         .expect("admin fields update should return user");
     assert_eq!(admin_updated.role, "admin");
-    assert_eq!(
-        admin_updated.allowed_providers,
-        Some(vec!["openai".to_string()])
-    );
-    assert_eq!(admin_updated.allowed_api_formats, None);
-    assert_eq!(
-        admin_updated.allowed_models,
-        Some(vec!["gpt-4.1".to_string()])
-    );
     assert!(!admin_updated.is_active);
-    assert_eq!(
-        repository
-            .find_export_user_by_id("user-1")
-            .await
-            .expect("export lookup should succeed")
-            .expect("export row should exist")
-            .rate_limit,
-        Some(50)
-    );
-    repository
-        .update_local_auth_user_admin_fields(
-            "user-1", None, false, None, false, None, false, None, true, None, None,
-        )
-        .await
-        .expect("rate limit clear should succeed")
-        .expect("rate limit clear should return user");
-    assert_eq!(
-        repository
-            .find_export_user_by_id("user-1")
-            .await
-            .expect("export lookup should succeed")
-            .expect("export row should exist")
-            .rate_limit,
-        None
-    );
     assert_eq!(
         repository
             .update_user_model_capability_settings(
@@ -603,10 +557,6 @@ async fn hard_delete_preserves_last_admin_then_cleans_owned_memory_state() {
             "admin-keeper".to_string(),
             "password-hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("second admin creation should succeed")
@@ -709,18 +659,11 @@ async fn creates_local_auth_users_in_memory() {
             "admin".to_string(),
             "admin-hash".to_string(),
             "admin".to_string(),
-            Some(vec!["openai".to_string()]),
-            Some(vec!["chat".to_string()]),
-            Some(vec!["gpt-4.1".to_string()]),
-            Some(10),
         )
         .await
         .expect("admin create should succeed")
         .expect("admin create should return user");
     assert_eq!(admin.role, "admin");
-    assert_eq!(admin.allowed_providers, Some(vec!["openai".to_string()]));
-    assert_eq!(admin.allowed_api_formats, Some(vec!["chat".to_string()]));
-    assert_eq!(admin.allowed_models, Some(vec!["gpt-4.1".to_string()]));
     assert_eq!(
         repository
             .find_user_auth_by_username("admin")
@@ -1487,19 +1430,7 @@ async fn security_state_change_revokes_sessions_without_reactivation() {
         InMemoryUserReadRepository::seed_auth_users([user]).with_user_sessions([session.clone()]);
 
     repository
-        .update_local_auth_user_admin_fields(
-            "security-state-user",
-            None,
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
-            Some(false),
-        )
+        .update_local_auth_user_admin_fields("security-state-user", None, Some(false))
         .await
         .expect("disable should succeed")
         .expect("user should exist");
@@ -1515,19 +1446,7 @@ async fn security_state_change_revokes_sessions_without_reactivation() {
     );
 
     repository
-        .update_local_auth_user_admin_fields(
-            "security-state-user",
-            None,
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
-            Some(true),
-        )
+        .update_local_auth_user_admin_fields("security-state-user", None, Some(true))
         .await
         .expect("reactivation should succeed")
         .expect("user should exist");
@@ -1560,14 +1479,6 @@ async fn security_state_change_revokes_sessions_without_reactivation() {
         .update_local_auth_user_admin_fields(
             "security-state-user",
             Some("audit_admin".to_string()),
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
             None,
         )
         .await
@@ -1625,14 +1536,6 @@ async fn unchanged_security_state_preserves_sessions() {
         .update_local_auth_user_admin_fields(
             "unchanged-security-user",
             Some("USER".to_string()),
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
-            false,
-            None,
             Some(true),
         )
         .await

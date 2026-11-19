@@ -19,7 +19,7 @@ use super::{
     prepare_imported_secret_safe_header_rules, prepare_imported_secret_safe_json,
     resolve_imported_password_hash, seed_imported_oauth_pool_score,
     validate_imported_provider_key_credential_state, validate_imported_system_users_export_version,
-    validate_imported_system_users_export_version_for_mode, ImportedProviderKey, SystemImportMode,
+    ImportedProviderKey, SystemImportMode,
 };
 use crate::admin_api::AdminAppState;
 use crate::data::GatewayDataState;
@@ -33,7 +33,7 @@ fn users_import_requires_supported_export_version() {
     assert!(validate_imported_system_users_export_version(Some(&json!("1.6"))).is_ok());
     assert_eq!(
         validate_imported_system_users_export_version(Some(&json!("2.2"))).unwrap_err(),
-        "不支持的用户数据版本: 2.2，支持的版本: 1.5, 1.6"
+        "不支持的用户数据版本: 2.2，支持的版本: 1.5, 1.6, 1.7"
     );
     assert_eq!(
         validate_imported_system_users_export_version(Some(&json!(null))).unwrap_err(),
@@ -42,19 +42,16 @@ fn users_import_requires_supported_export_version() {
 }
 
 #[test]
-fn recovery_users_import_requires_v15_and_valid_bcrypt() {
+fn recovery_users_import_accepts_supported_versions_and_valid_bcrypt() {
     assert_eq!(
-        validate_imported_system_users_export_version_for_mode(
-            Some(&json!("1.5")),
-            SystemImportMode::RecoveryBackup,
-        ),
+        validate_imported_system_users_export_version(Some(&json!("1.5"))),
         Ok((1, 5)),
     );
-    assert!(validate_imported_system_users_export_version_for_mode(
-        Some(&json!("1.4")),
-        SystemImportMode::RecoveryBackup,
-    )
-    .is_err());
+    assert_eq!(
+        validate_imported_system_users_export_version(Some(&json!("1.7"))),
+        Ok((1, 7)),
+    );
+    assert!(validate_imported_system_users_export_version(Some(&json!("1.4"))).is_err());
     assert!(resolve_imported_password_hash(
         json!({ "password_hash": "attacker-controlled" })
             .as_object()

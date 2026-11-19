@@ -1680,10 +1680,6 @@ async fn seed_user(backends: &DataBackends) -> Result<String, BoxError> {
             "responses-ws-e2e".to_string(),
             "disabled-password".to_string(),
             "user".to_string(),
-            Some(vec![PROVIDER_ID.to_string()]),
-            Some(vec!["openai:responses".to_string()]),
-            Some(vec![PUBLIC_MODEL.to_string()]),
-            None,
         )
         .await?
         .ok_or("failed to create E2E user")?;

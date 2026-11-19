@@ -78,8 +78,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-const ADMIN_SYSTEM_USERS_RECOVERY_IMPORT_VERSION: (u32, u32) = (1, 5);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SystemImportMode {
     InteractiveUpload,
@@ -1656,21 +1654,6 @@ fn validate_imported_system_users_export_version(
     Ok(parsed)
 }
 
-fn validate_imported_system_users_export_version_for_mode(
-    version: Option<&Value>,
-    mode: SystemImportMode,
-) -> Result<(u32, u32), String> {
-    let parsed = validate_imported_system_users_export_version(version)?;
-    if mode.restores_credentials() && parsed != ADMIN_SYSTEM_USERS_RECOVERY_IMPORT_VERSION {
-        return Err(format!(
-            "恢复备份仅支持用户数据版本 {}.{}",
-            ADMIN_SYSTEM_USERS_RECOVERY_IMPORT_VERSION.0,
-            ADMIN_SYSTEM_USERS_RECOVERY_IMPORT_VERSION.1,
-        ));
-    }
-    Ok(parsed)
-}
-
 fn usage_aggregate_import_mode(
     merge_mode: AdminImportMergeMode,
 ) -> AdminSystemUsageAggregateImportMode {
@@ -1928,36 +1911,6 @@ fn legacy_imported_rate_limit_policy_mode(value: Option<i32>) -> String {
     } else {
         "system".to_string()
     }
-}
-
-fn imported_user_list_policy_mode(
-    object: &Map<String, Value>,
-    mode_field: &str,
-    value_field: &str,
-    values: &Option<Vec<String>>,
-) -> Result<Option<String>, String> {
-    imported_optional_list_policy_mode(object.get(mode_field), mode_field).map(|mode| {
-        mode.or_else(|| {
-            object
-                .contains_key(value_field)
-                .then(|| legacy_imported_list_policy_mode(values))
-        })
-    })
-}
-
-fn imported_user_rate_limit_policy_mode(
-    object: &Map<String, Value>,
-    mode_field: &str,
-    value_field: &str,
-    value: Option<i32>,
-) -> Result<Option<String>, String> {
-    imported_optional_rate_limit_policy_mode(object.get(mode_field), mode_field).map(|mode| {
-        mode.or_else(|| {
-            object
-                .contains_key(value_field)
-                .then(|| legacy_imported_rate_limit_policy_mode(value))
-        })
-    })
 }
 
 fn build_imported_user_usage_total_aggregates(
@@ -3476,9 +3429,9 @@ impl<'a> AdminAppState<'a> {
                 )))
             }
         };
-        let users_export_version = invalid!(
-            validate_imported_system_users_export_version_for_mode(root.get("version"), mode)
-        );
+        let users_export_version = invalid!(validate_imported_system_users_export_version(
+            root.get("version")
+        ));
         let empty = Vec::new();
         let users = match root.get("users") {
             Some(Value::Array(items)) => items,
@@ -3703,41 +3656,6 @@ impl<'a> AdminAppState<'a> {
                 user,
                 users_export_version,
                 mode,
-            ));
-            let allowed_providers = invalid!(normalize_imported_user_string_list(
-                user,
-                "allowed_providers"
-            ));
-            let allowed_api_formats = invalid!(normalize_imported_user_api_formats(
-                user,
-                "allowed_api_formats"
-            ));
-            let allowed_models =
-                invalid!(normalize_imported_user_string_list(user, "allowed_models"));
-            let rate_limit = invalid!(imported_optional_i32(user.get("rate_limit"), "rate_limit"));
-            invalid!(imported_user_list_policy_mode(
-                user,
-                "allowed_providers_mode",
-                "allowed_providers",
-                &allowed_providers,
-            ));
-            invalid!(imported_user_list_policy_mode(
-                user,
-                "allowed_api_formats_mode",
-                "allowed_api_formats",
-                &allowed_api_formats,
-            ));
-            invalid!(imported_user_list_policy_mode(
-                user,
-                "allowed_models_mode",
-                "allowed_models",
-                &allowed_models,
-            ));
-            invalid!(imported_user_rate_limit_policy_mode(
-                user,
-                "rate_limit_mode",
-                "rate_limit",
-                rate_limit,
             ));
             let group_ids = invalid!(resolve_imported_user_group_ids(
                 user,
@@ -6876,9 +6794,9 @@ impl<'a> AdminAppState<'a> {
             };
         }
 
-        let users_export_version = invalid_value!(
-            validate_imported_system_users_export_version_for_mode(root.get("version"), mode)
-        );
+        let users_export_version = invalid_value!(validate_imported_system_users_export_version(
+            root.get("version")
+        ));
 
         let supplemental_user_usage_aggregates = if mode.is_rollback_checkpoint() {
             // Rollback checkpoints must not mutate runtime usage state. In particular, do not
@@ -7061,42 +6979,6 @@ impl<'a> AdminAppState<'a> {
                 users_export_version,
                 mode,
             ));
-            let allowed_providers = invalid_value!(normalize_imported_user_string_list(
-                user,
-                "allowed_providers"
-            ));
-            let allowed_api_formats = invalid_value!(normalize_imported_user_api_formats(
-                user,
-                "allowed_api_formats"
-            ));
-            let allowed_models =
-                invalid_value!(normalize_imported_user_string_list(user, "allowed_models"));
-            let rate_limit =
-                invalid_value!(imported_optional_i32(user.get("rate_limit"), "rate_limit"));
-            let allowed_providers_mode = invalid_value!(imported_user_list_policy_mode(
-                user,
-                "allowed_providers_mode",
-                "allowed_providers",
-                &allowed_providers,
-            ));
-            let allowed_api_formats_mode = invalid_value!(imported_user_list_policy_mode(
-                user,
-                "allowed_api_formats_mode",
-                "allowed_api_formats",
-                &allowed_api_formats,
-            ));
-            let allowed_models_mode = invalid_value!(imported_user_list_policy_mode(
-                user,
-                "allowed_models_mode",
-                "allowed_models",
-                &allowed_models,
-            ));
-            let rate_limit_mode = invalid_value!(imported_user_rate_limit_policy_mode(
-                user,
-                "rate_limit_mode",
-                "rate_limit",
-                rate_limit,
-            ));
             let imported_user_group_ids = invalid_value!(resolve_imported_user_group_ids(
                 user,
                 &imported_group_id_map,
@@ -7268,14 +7150,6 @@ impl<'a> AdminAppState<'a> {
                             .update_local_auth_user_admin_fields(
                                 &existing.id,
                                 Some(role.clone()),
-                                user.contains_key("allowed_providers"),
-                                allowed_providers.clone(),
-                                user.contains_key("allowed_api_formats"),
-                                allowed_api_formats.clone(),
-                                user.contains_key("allowed_models"),
-                                allowed_models.clone(),
-                                user.contains_key("rate_limit"),
-                                rate_limit,
                                 Some(is_active),
                             )
                             .await?;
@@ -7334,32 +7208,6 @@ impl<'a> AdminAppState<'a> {
                             )
                             .await?;
                         }
-                        if allowed_providers_mode.is_some()
-                            || allowed_api_formats_mode.is_some()
-                            || allowed_models_mode.is_some()
-                            || rate_limit_mode.is_some()
-                        {
-                            let updated_policy_modes = self
-                                .update_local_auth_user_policy_modes(
-                                    &existing.id,
-                                    allowed_providers_mode.clone(),
-                                    allowed_api_formats_mode.clone(),
-                                    allowed_models_mode.clone(),
-                                    rate_limit_mode.clone(),
-                                )
-                                .await?;
-                            if updated_policy_modes.is_none() {
-                                return Ok(Err((
-                                    http::StatusCode::SERVICE_UNAVAILABLE,
-                                    json!({ "detail": "Admin system data unavailable" }),
-                                )));
-                            }
-                            self.refresh_existing_user_mutation(
-                                mutation_journal.as_deref_mut(),
-                                &existing.id,
-                            )
-                            .await?;
-                        }
                         if let Some(group_ids) = group_ids.as_ref() {
                             let persisted_groups = self
                                 .replace_user_groups_for_user(&existing.id, group_ids)
@@ -7397,10 +7245,6 @@ impl<'a> AdminAppState<'a> {
                         username.clone(),
                         password_hash.unwrap_or_else(imported_password_tombstone),
                         role.clone(),
-                        allowed_providers.clone(),
-                        allowed_api_formats.clone(),
-                        allowed_models.clone(),
-                        rate_limit,
                     )
                     .await?;
                 let Some(created) = created else {
@@ -7437,30 +7281,7 @@ impl<'a> AdminAppState<'a> {
                         )));
                     }
                 }
-                let created = if allowed_providers_mode.is_some()
-                    || allowed_api_formats_mode.is_some()
-                    || allowed_models_mode.is_some()
-                    || rate_limit_mode.is_some()
-                {
-                    let Some(updated_policy_modes) = self
-                        .update_local_auth_user_policy_modes(
-                            &created.id,
-                            allowed_providers_mode.clone(),
-                            allowed_api_formats_mode.clone(),
-                            allowed_models_mode.clone(),
-                            rate_limit_mode.clone(),
-                        )
-                        .await?
-                    else {
-                        return Ok(Err((
-                            http::StatusCode::SERVICE_UNAVAILABLE,
-                            json!({ "detail": "Admin system data unavailable" }),
-                        )));
-                    };
-                    updated_policy_modes
-                } else {
-                    created
-                };
+                let created = created;
                 if let Some(group_ids) = group_ids.as_ref() {
                     let persisted_groups = self
                         .replace_user_groups_for_user(&created.id, group_ids)

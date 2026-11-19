@@ -262,7 +262,6 @@ impl<'a> AdminAppState<'a> {
             .await
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn create_local_auth_user_with_settings(
         &self,
         email: Option<String>,
@@ -270,10 +269,6 @@ impl<'a> AdminAppState<'a> {
         username: String,
         password_hash: String,
         role: String,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models: Option<Vec<String>>,
-        rate_limit: Option<i32>,
     ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
     {
         self.app
@@ -283,10 +278,6 @@ impl<'a> AdminAppState<'a> {
                 username,
                 password_hash,
                 role,
-                allowed_providers,
-                allowed_api_formats,
-                allowed_models,
-                rate_limit,
             )
             .await
     }
@@ -442,56 +433,15 @@ impl<'a> AdminAppState<'a> {
             .await
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn update_local_auth_user_admin_fields(
         &self,
         user_id: &str,
         role: Option<String>,
-        allowed_providers_present: bool,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats_present: bool,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models_present: bool,
-        allowed_models: Option<Vec<String>>,
-        rate_limit_present: bool,
-        rate_limit: Option<i32>,
         is_active: Option<bool>,
     ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
     {
         self.app
-            .update_local_auth_user_admin_fields(
-                user_id,
-                role,
-                allowed_providers_present,
-                allowed_providers,
-                allowed_api_formats_present,
-                allowed_api_formats,
-                allowed_models_present,
-                allowed_models,
-                rate_limit_present,
-                rate_limit,
-                is_active,
-            )
-            .await
-    }
-
-    pub(crate) async fn update_local_auth_user_policy_modes(
-        &self,
-        user_id: &str,
-        allowed_providers_mode: Option<String>,
-        allowed_api_formats_mode: Option<String>,
-        allowed_models_mode: Option<String>,
-        rate_limit_mode: Option<String>,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
-    {
-        self.app
-            .update_local_auth_user_policy_modes(
-                user_id,
-                allowed_providers_mode,
-                allowed_api_formats_mode,
-                allowed_models_mode,
-                rate_limit_mode,
-            )
+            .update_local_auth_user_admin_fields(user_id, role, is_active)
             .await
     }
 

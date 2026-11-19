@@ -146,14 +146,6 @@ export interface UserExport {
   username: string
   password_hash?: string | null
   role: string
-  allowed_providers?: string[] | null
-  allowed_providers_mode?: 'inherit' | 'unrestricted' | 'specific' | 'deny_all'
-  allowed_api_formats?: string[] | null
-  allowed_api_formats_mode?: 'inherit' | 'unrestricted' | 'specific' | 'deny_all'
-  allowed_models?: string[] | null
-  allowed_models_mode?: 'inherit' | 'unrestricted' | 'specific' | 'deny_all'
-  rate_limit?: number | null  // null = 跟随系统默认，0 = 不限制
-  rate_limit_mode?: 'inherit' | 'system' | 'custom'
   model_capability_settings?: Record<string, Record<string, boolean>>
   feature_settings?: Record<string, unknown> | null
   group_ids?: string[]

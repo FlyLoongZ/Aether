@@ -878,7 +878,6 @@ impl AppState {
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn create_local_auth_user_with_settings(
         &self,
         email: Option<String>,
@@ -886,10 +885,6 @@ impl AppState {
         username: String,
         password_hash: String,
         role: String,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models: Option<Vec<String>>,
-        rate_limit: Option<i32>,
     ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
     {
         #[cfg(test)]
@@ -903,9 +898,9 @@ impl AppState {
                 Some(password_hash),
                 role,
                 "local".to_string(),
-                allowed_providers.map(serde_json::Value::from),
-                allowed_api_formats.map(serde_json::Value::from),
-                allowed_models.map(serde_json::Value::from),
+                None,
+                None,
+                None,
                 true,
                 false,
                 Some(now),
@@ -916,7 +911,6 @@ impl AppState {
                 .lock()
                 .expect("auth user store should lock")
                 .insert(user.id.clone(), user.clone());
-            let _ = rate_limit;
             return Ok(Some(user));
         }
 
@@ -927,28 +921,15 @@ impl AppState {
                 username,
                 password_hash,
                 role,
-                allowed_providers,
-                allowed_api_formats,
-                allowed_models,
-                rate_limit,
             )
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn update_local_auth_user_admin_fields(
         &self,
         user_id: &str,
         role: Option<String>,
-        allowed_providers_present: bool,
-        allowed_providers: Option<Vec<String>>,
-        allowed_api_formats_present: bool,
-        allowed_api_formats: Option<Vec<String>>,
-        allowed_models_present: bool,
-        allowed_models: Option<Vec<String>>,
-        rate_limit_present: bool,
-        rate_limit: Option<i32>,
         is_active: Option<bool>,
     ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
     {
@@ -969,15 +950,6 @@ impl AppState {
             if let Some(role) = role {
                 user.role = role;
             }
-            if allowed_providers_present {
-                user.allowed_providers = allowed_providers;
-            }
-            if allowed_api_formats_present {
-                user.allowed_api_formats = allowed_api_formats;
-            }
-            if allowed_models_present {
-                user.allowed_models = allowed_models;
-            }
             if let Some(is_active) = is_active {
                 user.is_active = is_active;
             }
@@ -997,7 +969,6 @@ impl AppState {
                     }
                 }
             }
-            let _ = (rate_limit_present, rate_limit);
             let user = user.clone();
             drop(sessions);
             drop(users);
@@ -1007,19 +978,7 @@ impl AppState {
 
         let user = self
             .data
-            .update_local_auth_user_admin_fields(
-                user_id,
-                role,
-                allowed_providers_present,
-                allowed_providers,
-                allowed_api_formats_present,
-                allowed_api_formats,
-                allowed_models_present,
-                allowed_models,
-                rate_limit_present,
-                rate_limit,
-                is_active,
-            )
+            .update_local_auth_user_admin_fields(user_id, role, is_active)
             .await
             .map_err(|err| {
                 if aether_data_contracts::repository::users::is_last_active_admin_update_denied(
@@ -1030,54 +989,6 @@ impl AppState {
                     GatewayError::Internal(err.to_string())
                 }
             })?;
-        if user.is_some() {
-            self.invalidate_auth_context_cache();
-        }
-        Ok(user)
-    }
-
-    pub(crate) async fn update_local_auth_user_policy_modes(
-        &self,
-        user_id: &str,
-        allowed_providers_mode: Option<String>,
-        allowed_api_formats_mode: Option<String>,
-        allowed_models_mode: Option<String>,
-        rate_limit_mode: Option<String>,
-    ) -> Result<Option<aether_data_contracts::repository::users::StoredUserAuthRecord>, GatewayError>
-    {
-        #[cfg(test)]
-        if let Some(store) = self.auth_user_store.as_ref() {
-            let mut guard = store.lock().expect("auth user store should lock");
-            let Some(user) = guard.get_mut(user_id) else {
-                return Ok(None);
-            };
-            if let Some(mode) = allowed_providers_mode {
-                user.allowed_providers_mode = mode;
-            }
-            if let Some(mode) = allowed_api_formats_mode {
-                user.allowed_api_formats_mode = mode;
-            }
-            if let Some(mode) = allowed_models_mode {
-                user.allowed_models_mode = mode;
-            }
-            let _ = rate_limit_mode;
-            let user = user.clone();
-            drop(guard);
-            self.invalidate_auth_context_cache();
-            return Ok(Some(user));
-        }
-
-        let user = self
-            .data
-            .update_local_auth_user_policy_modes(
-                user_id,
-                allowed_providers_mode,
-                allowed_api_formats_mode,
-                allowed_models_mode,
-                rate_limit_mode,
-            )
-            .await
-            .map_err(|err| GatewayError::Internal(err.to_string()))?;
         if user.is_some() {
             self.invalidate_auth_context_cache();
         }

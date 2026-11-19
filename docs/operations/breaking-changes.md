@@ -75,8 +75,8 @@ a default.
 ## Configuration import
 
 - Admin config exports accept only version `2.3`.
-- User exports accept `1.5` (recovery backups) and `1.6`; versions `1.3` and
-  `1.4` are rejected.
+- User exports use `1.7`; versions `1.5` and `1.6` remain importable for
+  recovery. Versions `1.3` and `1.4` are rejected.
 - Legacy OAuth provider normalization for exports `2.0`-`2.2` is removed.
 
 ## Routing

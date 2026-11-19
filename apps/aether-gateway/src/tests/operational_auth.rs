@@ -45,10 +45,6 @@ async fn issue_operational_session_access_token_and_user(
             format!("operational_{role}"),
             "hash".to_string(),
             role.to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("operational user should be created")
@@ -159,10 +155,6 @@ async fn state_with_management_tokens_for_role(
             "operational_admin".to_string(),
             "hash".to_string(),
             role.to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")

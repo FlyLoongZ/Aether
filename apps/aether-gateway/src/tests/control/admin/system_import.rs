@@ -2247,19 +2247,10 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
         Some("argon2:imported-user-hash")
     );
     assert_eq!(imported_user.role, "user");
-    assert_eq!(
-        imported_user.allowed_providers,
-        Some(vec!["openai".to_string()])
-    );
-    assert_eq!(
-        imported_user.allowed_api_formats,
-        Some(vec!["openai:chat".to_string()])
-    );
-    assert_eq!(
-        imported_user.allowed_models,
-        Some(vec!["gpt-5".to_string()])
-    );
-    assert_eq!(imported_user.allowed_models_mode, "specific");
+    assert_eq!(imported_user.allowed_providers, None);
+    assert_eq!(imported_user.allowed_api_formats, None);
+    assert_eq!(imported_user.allowed_models, None);
+    assert_eq!(imported_user.allowed_models_mode, "unrestricted");
     assert!(imported_user.is_active);
 
     let imported_groups = state

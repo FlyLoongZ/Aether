@@ -40,14 +40,6 @@ export interface User {
   is_active: boolean
   unlimited: boolean
   feature_settings?: FeatureSettings | null
-  allowed_providers: string[] | null  // 允许使用的提供商 ID 列表
-  allowed_providers_mode?: ListPolicyMode
-  allowed_api_formats: string[] | null  // 允许使用的 API 格式列表
-  allowed_api_formats_mode?: ListPolicyMode
-  allowed_models: string[] | null  // 允许使用的模型名称列表
-  allowed_models_mode?: ListPolicyMode
-  rate_limit?: number | null  // null = 跟随系统默认，0 = 不限制
-  rate_limit_mode?: RateLimitPolicyMode
   groups?: UserGroupSummary[]
   effective_policy?: UserEffectivePolicy
   created_at: string

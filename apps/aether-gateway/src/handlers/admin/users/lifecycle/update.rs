@@ -312,19 +312,7 @@ pub(in super::super) async fn build_admin_update_user_response(
 
     if (role.is_some() || payload.is_active.is_some())
         && state
-            .update_local_auth_user_admin_fields(
-                &user_id,
-                role,
-                false,
-                None,
-                false,
-                None,
-                false,
-                None,
-                false,
-                None,
-                payload.is_active,
-            )
+            .update_local_auth_user_admin_fields(&user_id, role, payload.is_active)
             .await?
             .is_none()
     {
@@ -384,15 +372,7 @@ pub(in super::super) async fn build_admin_update_user_response(
         .is_some_and(|wallet| wallet.limit_mode.eq_ignore_ascii_case("unlimited"));
     let export_row = find_admin_export_user(state, &user_id).await?;
     let groups = state.list_user_groups_for_user(&user_id).await?;
-    let rate_limit = export_row.as_ref().and_then(|row| row.rate_limit);
-
-    let mut payload = build_admin_user_payload_with_groups(
-        &user,
-        rate_limit,
-        export_row.as_ref().map(|row| row.rate_limit_mode.as_str()),
-        unlimited,
-        &groups,
-    );
+    let mut payload = build_admin_user_payload_with_groups(&user, unlimited, &groups);
     payload["feature_settings"] = export_row
         .as_ref()
         .and_then(|row| row.feature_settings.clone())

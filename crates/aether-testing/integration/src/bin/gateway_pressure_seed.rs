@@ -616,19 +616,7 @@ async fn seed_operator_user(
 
     let user = match user_reader.find_user_auth_by_username(&username).await? {
         Some(user) => user_reader
-            .update_local_auth_user_admin_fields(
-                &user.id,
-                Some("admin".to_string()),
-                true,
-                Some(vec![config.provider_id.clone()]),
-                true,
-                Some(vec!["openai:chat".to_string()]),
-                true,
-                Some(vec![config.model.clone()]),
-                true,
-                None,
-                Some(true),
-            )
+            .update_local_auth_user_admin_fields(&user.id, Some("admin".to_string()), Some(true))
             .await?
             .unwrap_or(user),
         None => user_reader
@@ -638,10 +626,6 @@ async fn seed_operator_user(
                 username,
                 "local-pressure-password-disabled".to_string(),
                 "admin".to_string(),
-                Some(vec![config.provider_id.clone()]),
-                Some(vec!["openai:chat".to_string()]),
-                Some(vec![config.model.clone()]),
-                None,
             )
             .await?
             .ok_or("failed to create pressure operator user")?,

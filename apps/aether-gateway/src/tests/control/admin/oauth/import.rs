@@ -2055,10 +2055,6 @@ async fn gateway_prevents_pool_write_token_from_importing_agent_identity_via_bat
             "admin".to_string(),
             "hash".to_string(),
             "admin".to_string(),
-            None,
-            None,
-            None,
-            None,
         )
         .await
         .expect("admin user should be created")

@@ -313,10 +313,6 @@ impl AppState {
                 username.clone(),
                 password_hash,
                 "admin".to_string(),
-                None,
-                None,
-                None,
-                None,
             )
             .await
         {

@@ -30,7 +30,6 @@ use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) const ADMIN_SYSTEM_EXPORT_CREDENTIALS_NOT_EXPORTED: &str = "not_exported";
-const ADMIN_SYSTEM_USERS_RECOVERY_EXPORT_VERSION: &str = "1.5";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SystemExportMode {
@@ -56,11 +55,7 @@ impl SystemExportMode {
     }
 
     fn users_export_version(self) -> &'static str {
-        if self.credentials_are_exported() {
-            ADMIN_SYSTEM_USERS_RECOVERY_EXPORT_VERSION
-        } else {
-            ADMIN_SYSTEM_USERS_EXPORT_VERSION
-        }
+        ADMIN_SYSTEM_USERS_EXPORT_VERSION
     }
 }
 
@@ -608,14 +603,6 @@ impl<'a> AdminAppState<'a> {
                     "email_verified": user.email_verified,
                     "username": user.username.clone(),
                     "role": user.role.clone(),
-                    "allowed_providers": user.allowed_providers.clone(),
-                    "allowed_providers_mode": user.allowed_providers_mode.clone(),
-                    "allowed_api_formats": user.allowed_api_formats.clone(),
-                    "allowed_api_formats_mode": user.allowed_api_formats_mode.clone(),
-                    "allowed_models": user.allowed_models.clone(),
-                    "allowed_models_mode": user.allowed_models_mode.clone(),
-                    "rate_limit": user.rate_limit,
-                    "rate_limit_mode": user.rate_limit_mode.clone(),
                     "model_capability_settings": user.model_capability_settings.clone(),
                     "feature_settings": user.feature_settings.clone(),
                     "group_ids": group_ids,
@@ -786,11 +773,11 @@ mod tests {
         assert!(!SystemExportMode::InteractiveDownload.credentials_are_exported());
         assert_eq!(
             SystemExportMode::InteractiveDownload.users_export_version(),
-            "1.6"
+            "1.7"
         );
         assert_eq!(
             SystemExportMode::RecoveryBackup.users_export_version(),
-            "1.5"
+            "1.7"
         );
         assert!(SystemExportMode::RecoveryBackup.credentials_are_exported());
         assert!(!SystemExportMode::InteractiveDownload.preserves_active_state());

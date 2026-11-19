@@ -34,8 +34,6 @@ pub(super) async fn find_admin_export_user(
 
 pub(super) fn build_admin_user_payload_with_groups(
     user: &aether_data_contracts::repository::users::StoredUserAuthRecord,
-    rate_limit: Option<i32>,
-    rate_limit_mode: Option<&str>,
     unlimited: bool,
     groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
@@ -44,31 +42,13 @@ pub(super) fn build_admin_user_payload_with_groups(
         "email": user.email,
         "username": user.username,
         "role": user.role,
-        "allowed_providers": user.allowed_providers,
-        "allowed_providers_mode": user.allowed_providers_mode,
-        "allowed_api_formats": user.allowed_api_formats,
-        "allowed_api_formats_mode": user.allowed_api_formats_mode,
-        "allowed_models": user.allowed_models,
-        "allowed_models_mode": user.allowed_models_mode,
-        "rate_limit": rate_limit,
-        "rate_limit_mode": rate_limit_mode.unwrap_or("system"),
         "unlimited": unlimited,
         "is_active": user.is_active,
         "created_at": format_optional_datetime_iso8601(user.created_at),
         "updated_at": serde_json::Value::Null,
         "last_login_at": format_optional_datetime_iso8601(user.last_login_at),
         "groups": groups.iter().map(user_group_badge_payload).collect::<Vec<_>>(),
-        "effective_policy": effective_policy_payload(
-            user.allowed_providers.as_ref(),
-            &user.allowed_providers_mode,
-            user.allowed_api_formats.as_ref(),
-            &user.allowed_api_formats_mode,
-            user.allowed_models.as_ref(),
-            &user.allowed_models_mode,
-            rate_limit,
-            rate_limit_mode.unwrap_or("system"),
-            groups,
-        ),
+        "effective_policy": effective_policy_payload(groups),
     })
 }
 
@@ -87,14 +67,6 @@ pub(super) fn build_admin_user_export_payload(
         "email": row.email,
         "username": row.username,
         "role": row.role,
-        "allowed_providers": row.allowed_providers,
-        "allowed_providers_mode": row.allowed_providers_mode,
-        "allowed_api_formats": row.allowed_api_formats,
-        "allowed_api_formats_mode": row.allowed_api_formats_mode,
-        "allowed_models": row.allowed_models,
-        "allowed_models_mode": row.allowed_models_mode,
-        "rate_limit": row.rate_limit,
-        "rate_limit_mode": row.rate_limit_mode,
         "feature_settings": row.feature_settings,
         "unlimited": unlimited,
         "is_active": row.is_active,
@@ -104,17 +76,7 @@ pub(super) fn build_admin_user_export_payload(
         "request_count": request_count,
         "total_tokens": total_tokens,
         "groups": groups.iter().map(user_group_badge_payload).collect::<Vec<_>>(),
-        "effective_policy": effective_policy_payload(
-            row.allowed_providers.as_ref(),
-            &row.allowed_providers_mode,
-            row.allowed_api_formats.as_ref(),
-            &row.allowed_api_formats_mode,
-            row.allowed_models.as_ref(),
-            &row.allowed_models_mode,
-            row.rate_limit,
-            &row.rate_limit_mode,
-            groups,
-        ),
+        "effective_policy": effective_policy_payload(groups),
     })
 }
 
@@ -127,16 +89,7 @@ pub(super) fn user_group_badge_payload(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
 fn effective_policy_payload(
-    allowed_providers: Option<&Vec<String>>,
-    allowed_providers_mode: &str,
-    allowed_api_formats: Option<&Vec<String>>,
-    allowed_api_formats_mode: &str,
-    allowed_models: Option<&Vec<String>>,
-    allowed_models_mode: &str,
-    rate_limit: Option<i32>,
-    rate_limit_mode: &str,
     groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
     let mut sorted_groups = groups.to_vec();
@@ -147,30 +100,22 @@ fn effective_policy_payload(
     });
     json!({
         "allowed_providers": effective_list_policy_payload(
-            allowed_providers,
-            allowed_providers_mode,
             &sorted_groups,
             |group| (&group.allowed_providers_mode, group.allowed_providers.as_ref()),
         ),
         "allowed_api_formats": effective_list_policy_payload(
-            allowed_api_formats,
-            allowed_api_formats_mode,
             &sorted_groups,
             |group| (&group.allowed_api_formats_mode, group.allowed_api_formats.as_ref()),
         ),
         "allowed_models": effective_list_policy_payload(
-            allowed_models,
-            allowed_models_mode,
             &sorted_groups,
             |group| (&group.allowed_models_mode, group.allowed_models.as_ref()),
         ),
-        "rate_limit": effective_rate_limit_policy_payload(rate_limit, rate_limit_mode, &sorted_groups),
+        "rate_limit": effective_rate_limit_policy_payload(&sorted_groups),
     })
 }
 
 fn effective_list_policy_payload(
-    user_values: Option<&Vec<String>>,
-    user_mode: &str,
     groups: &[aether_data_contracts::repository::users::StoredUserGroup],
     group_field: impl Fn(
         &aether_data_contracts::repository::users::StoredUserGroup,
@@ -185,24 +130,17 @@ fn effective_list_policy_payload(
             group_sources.push(group);
         }
     }
-    let mut has_user_source = false;
-    if let Some(restriction) = list_restriction_from_mode(user_mode, user_values.cloned()) {
-        effective = intersect_list_policies(effective, Some(restriction));
-        has_user_source = true;
-    }
 
     let (mode, value) = match effective {
         Some(values) if values.is_empty() => ("deny_all", json!(Vec::<String>::new())),
         Some(values) => ("specific", json!(values)),
         None => ("unrestricted", serde_json::Value::Null),
     };
-    let source = combined_policy_source(has_user_source, group_sources.len(), "fallback");
+    let source = combined_policy_source(group_sources.len(), "fallback");
     policy_payload(mode, value, source, group_sources.as_slice())
 }
 
 fn effective_rate_limit_policy_payload(
-    user_rate_limit: Option<i32>,
-    user_mode: &str,
     groups: &[aether_data_contracts::repository::users::StoredUserGroup],
 ) -> serde_json::Value {
     let mut effective = None;
@@ -215,13 +153,8 @@ fn effective_rate_limit_policy_payload(
             group_sources.push(group);
         }
     }
-    let mut has_user_source = false;
-    if let Some(restriction) = rate_limit_restriction_from_mode(user_mode, user_rate_limit) {
-        effective = intersect_rate_limit_policies(effective, Some(restriction));
-        has_user_source = true;
-    }
 
-    let source = combined_policy_source(has_user_source, group_sources.len(), "fallback");
+    let source = combined_policy_source(group_sources.len(), "fallback");
     match rate_limit_policy_value(effective) {
         Some(rate_limit) => policy_payload("custom", json!(rate_limit), source, &group_sources),
         None => policy_payload("system", serde_json::Value::Null, source, &group_sources),
@@ -327,14 +260,12 @@ fn rate_limit_policy_value(policy: Option<RateLimitRestriction>) -> Option<i32> 
 }
 
 fn combined_policy_source(
-    has_user_source: bool,
     group_source_count: usize,
     fallback_source: &'static str,
 ) -> &'static str {
-    match (has_user_source, group_source_count) {
-        (true, 0) => "user",
-        (false, 1) => "group",
-        (false, 0) => fallback_source,
+    match group_source_count {
+        0 => fallback_source,
+        1 => "group",
         _ => "combined",
     }
 }

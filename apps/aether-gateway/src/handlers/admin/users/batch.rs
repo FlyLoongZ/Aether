@@ -362,14 +362,6 @@ pub(in super::super) async fn build_admin_user_batch_action_response(
                 .update_local_auth_user_admin_fields(
                     &item.user_id,
                     mutation.role.clone(),
-                    false,
-                    None,
-                    false,
-                    None,
-                    false,
-                    None,
-                    false,
-                    None,
                     mutation.is_active,
                 )
                 .await
