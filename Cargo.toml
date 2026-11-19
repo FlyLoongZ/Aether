@@ -86,6 +86,7 @@ aether-http = { path = "crates/aether-http" }
 aether-runtime = { path = "crates/aether-runtime/base" }
 aether-testkit = { path = "crates/aether-testing/testkit" }
 aes = "0.9"
+zeroize = { version = "1", features = ["alloc"] }
 aes-gcm = "0.11"
 aws-lc-rs = { version = "1.19.0", default-features = false, features = ["alloc", "aws-lc-sys"] }
 async-stream = "0.3"
