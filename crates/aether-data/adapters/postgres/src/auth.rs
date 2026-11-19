@@ -21,10 +21,6 @@ SELECT
   users.auth_source::text AS user_auth_source,
   users.is_active AS user_is_active,
   users.is_deleted AS user_is_deleted,
-  users.rate_limit AS user_rate_limit,
-  users.allowed_providers AS user_allowed_providers,
-  users.allowed_api_formats AS user_allowed_api_formats,
-  users.allowed_models AS user_allowed_models,
   api_keys.id AS api_key_id,
   api_keys.name AS api_key_name,
   api_keys.is_active AS api_key_is_active,
@@ -52,10 +48,6 @@ SELECT
   users.auth_source::text AS user_auth_source,
   users.is_active AS user_is_active,
   users.is_deleted AS user_is_deleted,
-  users.rate_limit AS user_rate_limit,
-  users.allowed_providers AS user_allowed_providers,
-  users.allowed_api_formats AS user_allowed_api_formats,
-  users.allowed_models AS user_allowed_models,
   api_keys.id AS api_key_id,
   api_keys.name AS api_key_name,
   api_keys.is_active AS api_key_is_active,
@@ -83,10 +75,6 @@ SELECT
   users.auth_source::text AS user_auth_source,
   users.is_active AS user_is_active,
   users.is_deleted AS user_is_deleted,
-  users.rate_limit AS user_rate_limit,
-  users.allowed_providers AS user_allowed_providers,
-  users.allowed_api_formats AS user_allowed_api_formats,
-  users.allowed_models AS user_allowed_models,
   api_keys.id AS api_key_id,
   api_keys.name AS api_key_name,
   api_keys.is_active AS api_key_is_active,
@@ -114,10 +102,6 @@ SELECT
   users.auth_source::text AS user_auth_source,
   users.is_active AS user_is_active,
   users.is_deleted AS user_is_deleted,
-  users.rate_limit AS user_rate_limit,
-  users.allowed_providers AS user_allowed_providers,
-  users.allowed_api_formats AS user_allowed_api_formats,
-  users.allowed_models AS user_allowed_models,
   api_keys.id AS api_key_id,
   api_keys.name AS api_key_name,
   api_keys.is_active AS api_key_is_active,
@@ -2024,9 +2008,9 @@ fn map_auth_api_key_snapshot_row(
         row_get(row, "user_auth_source")?,
         row_get(row, "user_is_active")?,
         row_get(row, "user_is_deleted")?,
-        row_get(row, "user_allowed_providers")?,
-        row_get(row, "user_allowed_api_formats")?,
-        row_get(row, "user_allowed_models")?,
+        None,
+        None,
+        None,
         row_get(row, "api_key_id")?,
         row_get(row, "api_key_name")?,
         row_get(row, "api_key_is_active")?,
@@ -2040,7 +2024,7 @@ fn map_auth_api_key_snapshot_row(
         row_get(row, "api_key_allowed_models")?,
     )?
     .with_api_key_ip_rules(row_get(row, "api_key_ip_rules")?)?;
-    Ok(snapshot.with_user_rate_limit(row_get(row, "user_rate_limit")?))
+    Ok(snapshot.with_user_rate_limit(None))
 }
 
 fn map_auth_api_key_export_row(

@@ -898,9 +898,6 @@ impl AppState {
                 Some(password_hash),
                 role,
                 "local".to_string(),
-                None,
-                None,
-                None,
                 true,
                 false,
                 Some(now),
@@ -1086,19 +1083,10 @@ impl AppState {
                 Some(password_hash),
                 "user".to_string(),
                 "local".to_string(),
-                None,
-                None,
-                None,
                 true,
                 false,
                 Some(now),
                 None,
-            )
-            .map_err(|err| GatewayError::Internal(err.to_string()))?
-            .with_policy_modes(
-                "inherit".to_string(),
-                "inherit".to_string(),
-                "inherit".to_string(),
             )
             .map_err(|err| GatewayError::Internal(err.to_string()))?;
             let gift_balance = if unlimited {

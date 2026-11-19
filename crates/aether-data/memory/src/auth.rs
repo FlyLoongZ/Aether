@@ -76,9 +76,9 @@ impl From<&StoredUserAuthRecord> for MemoryAuthApiKeyOwnerSnapshot {
             user_is_active: user.is_active,
             user_is_deleted: user.is_deleted,
             user_rate_limit: None,
-            user_allowed_providers: user.allowed_providers.clone(),
-            user_allowed_api_formats: user.allowed_api_formats.clone(),
-            user_allowed_models: user.allowed_models.clone(),
+            user_allowed_providers: None,
+            user_allowed_api_formats: None,
+            user_allowed_models: None,
         }
     }
 }

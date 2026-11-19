@@ -1098,21 +1098,12 @@ async fn gateway_handles_admin_system_users_export_locally_with_trusted_admin_pr
             Some("argon2-hash".to_string()),
             "user".to_string(),
             "local".to_string(),
-            Some(json!(["openai"])),
-            Some(json!(["openai:chat"])),
-            Some(json!(["gpt-5"])),
             true,
             false,
             Some(chrono::Utc::now()),
             None,
         )
-        .expect("user export row should build")
-        .with_policy_modes(
-            "specific".to_string(),
-            "specific".to_string(),
-            "specific".to_string(),
-        )
-        .expect("user policy modes should build"),
+        .expect("user export row should build"),
     ]));
     let user_group = user_repository
         .create_user_group(UpsertUserGroupRecord {

@@ -2963,10 +2963,6 @@ mod tests {
                 Some("hash".to_string()),
                 "user".to_string(),
                 "local".to_string(),
-                Some(serde_json::json!(["openai"])),
-                Some(serde_json::json!(["openai:chat"])),
-                Some(serde_json::json!(["gpt-4.1"])),
-                Some(60),
                 Some(serde_json::json!({"gpt-4.1": {"cache_1h": true}})),
                 true,
             )
@@ -2983,7 +2979,6 @@ mod tests {
         assert_eq!(rows[0].username, "alice");
         assert!(rows[0].email_verified);
         assert_eq!(rows[0].password_hash.as_deref(), Some("hash"));
-        assert_eq!(rows[0].allowed_models, Some(vec!["gpt-4.1".to_string()]));
         assert_eq!(
             rows[0].model_capability_settings,
             Some(serde_json::json!({"gpt-4.1": {"cache_1h": true}}))

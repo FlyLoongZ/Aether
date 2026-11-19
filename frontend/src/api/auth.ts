@@ -123,9 +123,6 @@ export interface User {
   role: string  // 'admin' or 'user'
   is_active: boolean
   billing?: BillingSummary
-  allowed_providers?: string[] | null  // 允许使用的提供商 ID 列表
-  allowed_api_formats?: string[] | null  // 允许使用的 API 格式列表
-  allowed_models?: string[] | null  // 允许使用的模型名称列表
   created_at: string
   last_login_at?: string
   preferences?: UserPreferences

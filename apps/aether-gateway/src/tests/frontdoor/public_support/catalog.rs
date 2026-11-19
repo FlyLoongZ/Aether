@@ -309,9 +309,7 @@ async fn gateway_handles_users_me_usage_search_with_model_and_api_key_keywords()
 #[tokio::test]
 async fn gateway_handles_users_me_providers_locally_without_proxying_upstream() {
     let now = Utc::now();
-    let mut user = sample_auth_user(now);
-    user.allowed_providers = Some(vec!["claude".to_string()]);
-    user.allowed_providers_mode = "specific".to_string();
+    let user = sample_auth_user(now);
     let access_token = build_test_auth_token(
         "access",
         serde_json::Map::from_iter([
@@ -530,9 +528,7 @@ async fn gateway_handles_users_me_available_models_locally_without_proxying_upst
 #[tokio::test]
 async fn gateway_refreshes_users_me_available_models_after_group_assignment() {
     let now = Utc::now();
-    let mut user = sample_auth_user(now);
-    user.allowed_providers = None;
-    user.allowed_providers_mode = "unrestricted".to_string();
+    let user = sample_auth_user(now);
     // Keep the legacy gpt-5 personal policy from sample_auth_user. Group policies are the
     // authority now, so this stale field must not narrow the user catalog.
     let access_token = build_test_auth_token(
@@ -649,11 +645,7 @@ async fn gateway_refreshes_users_me_available_models_after_group_assignment() {
 #[tokio::test]
 async fn gateway_returns_no_users_me_available_models_when_group_denies_all_models() {
     let now = Utc::now();
-    let mut user = sample_auth_user(now);
-    user.allowed_providers = None;
-    user.allowed_providers_mode = "unrestricted".to_string();
-    user.allowed_models = None;
-    user.allowed_models_mode = "unrestricted".to_string();
+    let user = sample_auth_user(now);
     let access_token = build_test_auth_token(
         "access",
         serde_json::Map::from_iter([

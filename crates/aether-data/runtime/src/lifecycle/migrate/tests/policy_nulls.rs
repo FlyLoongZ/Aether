@@ -289,12 +289,6 @@ VALUES (
         .to_string()
         .contains("api_keys.allowed_providers contains JSON null"));
     assert!(users_repository
-        .find_user_auth_by_id("legacy-policy-user")
-        .await
-        .expect_err("legacy user JSON null should fail strict policy decoding")
-        .to_string()
-        .contains("users.allowed_providers contains JSON null"));
-    assert!(users_repository
         .find_user_group_by_id("legacy-policy-group")
         .await
         .expect_err("legacy group JSON null should fail strict policy decoding")
@@ -335,15 +329,6 @@ VALUES (
     assert_eq!(exported_keys.len(), 1);
     assert!(exported_keys[0].allowed_providers.is_none());
 
-    let user = users_repository
-        .find_user_auth_by_id("legacy-policy-user")
-        .await
-        .expect("upgraded user should decode")
-        .expect("upgraded user should still exist");
-    assert!(user.allowed_providers.is_none());
-    assert!(user.allowed_api_formats.is_none());
-    assert!(user.allowed_models.is_none());
-    assert_eq!(user.allowed_models_mode, "deny_all");
     let group = users_repository
         .find_user_group_by_id("legacy-policy-group")
         .await

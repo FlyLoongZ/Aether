@@ -176,22 +176,10 @@ fn synthetic_rollback_export_row(
         auth.password_hash.clone(),
         auth.role.clone(),
         auth.auth_source.clone(),
-        auth.allowed_providers.clone().map(Value::from),
-        auth.allowed_api_formats.clone().map(Value::from),
-        auth.allowed_models.clone().map(Value::from),
-        None,
         model_capability_settings,
         auth.is_active,
     )
     .map(|row| row.with_feature_settings(feature_settings))
-    .and_then(|row| {
-        row.with_policy_modes(
-            auth.allowed_providers_mode.clone(),
-            auth.allowed_api_formats_mode.clone(),
-            auth.allowed_models_mode.clone(),
-            "system".to_string(),
-        )
-    })
     .map_err(|err| GatewayError::Internal(err.to_string()))
 }
 
@@ -4954,8 +4942,6 @@ impl<'a> AdminAppState<'a> {
             let export_state_changed = match (&mutation.before_export, &mutation.after_export) {
                 (Some(before_export), Some(after_export)) => {
                     !before_export.matches_restore_state(after_export)
-                        || before_export.rate_limit != after_export.rate_limit
-                        || before_export.rate_limit_mode != after_export.rate_limit_mode
                 }
                 (None, None) => false,
                 _ => true,

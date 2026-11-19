@@ -693,15 +693,11 @@ impl ReferralDataState<'_> {
             Some(password_hash.clone()),
             "user".into(),
             "local".into(),
-            None,
-            None,
-            None,
             true,
             false,
             Some(now),
             None,
-        )?
-        .with_policy_modes("inherit".into(), "inherit".into(), "inherit".into())?;
+        )?;
         let wallet = StoredWalletSnapshot::new(
             wallet_id.clone(),
             Some(user_id.clone()),
@@ -727,7 +723,7 @@ impl ReferralDataState<'_> {
                 .begin()
                 .await
                 .map_err(DataLayerError::postgres)?;
-            sqlx::query("INSERT INTO users(id,email,email_verified,username,password_hash,role,auth_source,allowed_providers_mode,allowed_api_formats_mode,allowed_models_mode,rate_limit_mode,is_active,is_deleted,privacy_policy_accepted_version,privacy_policy_accepted_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,'user'::userrole,'local'::authsource,'inherit','inherit','inherit','inherit',TRUE,FALSE,$6,CASE WHEN $6::TEXT IS NULL THEN NULL ELSE NOW() END,NOW(),NOW())")
+            sqlx::query("INSERT INTO users(id,email,email_verified,username,password_hash,role,auth_source,is_active,is_deleted,privacy_policy_accepted_version,privacy_policy_accepted_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,'user'::userrole,'local'::authsource,TRUE,FALSE,$6,CASE WHEN $6::TEXT IS NULL THEN NULL ELSE NOW() END,NOW(),NOW())")
                 .bind(&user_id).bind(email).bind(email_verified).bind(username).bind(password_hash).bind(privacy_version).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;
             sqlx::query("INSERT INTO wallets(id,user_id,balance,gift_balance,limit_mode,currency,status,total_recharged,total_consumed,total_refunded,total_adjusted,created_at,updated_at) VALUES($1,$2,0,$3,$4,'USD','active',0,0,0,$3,NOW(),NOW())")
                 .bind(&wallet_id).bind(&user_id).bind(gift).bind(&wallet.limit_mode).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;

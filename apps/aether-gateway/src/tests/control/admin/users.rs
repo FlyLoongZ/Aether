@@ -56,9 +56,6 @@ fn sample_admin_user_with_role_and_created_at(
         Some("hash".to_string()),
         role.to_string(),
         "local".to_string(),
-        Some(json!(["openai"])),
-        Some(json!(["openai:chat"])),
-        Some(json!(["gpt-4.1"])),
         true,
         false,
         Some(created_at),
@@ -86,10 +83,6 @@ fn sample_admin_export_user_with(
         Some("hash".to_string()),
         role.to_string(),
         "local".to_string(),
-        Some(json!(["openai"])),
-        Some(json!(["openai:chat"])),
-        Some(json!(["gpt-4.1"])),
-        Some(60),
         None,
         is_active,
     )
@@ -438,10 +431,10 @@ async fn gateway_handles_admin_users_root_locally_with_trusted_admin_principal()
     assert_eq!(items[0]["email"], "alice@example.com");
     assert_eq!(items[0]["username"], "alice");
     assert_eq!(items[0]["role"], "user");
-    assert_eq!(items[0]["allowed_providers"], json!(["openai"]));
-    assert_eq!(items[0]["allowed_api_formats"], json!(["openai:chat"]));
-    assert_eq!(items[0]["allowed_models"], json!(["gpt-4.1"]));
-    assert_eq!(items[0]["rate_limit"], 60);
+    assert!(items[0].get("allowed_providers").is_none());
+    assert!(items[0].get("allowed_api_formats").is_none());
+    assert!(items[0].get("allowed_models").is_none());
+    assert!(items[0].get("rate_limit").is_none());
     assert_eq!(items[0]["unlimited"], true);
     assert_eq!(items[0]["is_active"], true);
     assert_eq!(items[0]["request_count"], 2);
@@ -1186,10 +1179,10 @@ async fn gateway_handles_admin_users_root_locally_with_bearer_admin_session() {
     assert_eq!(items[0]["email"], "alice@example.com");
     assert_eq!(items[0]["username"], "alice");
     assert_eq!(items[0]["role"], "user");
-    assert_eq!(items[0]["allowed_providers"], json!(["openai"]));
-    assert_eq!(items[0]["allowed_api_formats"], json!(["openai:chat"]));
-    assert_eq!(items[0]["allowed_models"], json!(["gpt-4.1"]));
-    assert_eq!(items[0]["rate_limit"], 60);
+    assert!(items[0].get("allowed_providers").is_none());
+    assert!(items[0].get("allowed_api_formats").is_none());
+    assert!(items[0].get("allowed_models").is_none());
+    assert!(items[0].get("rate_limit").is_none());
     assert_eq!(items[0]["unlimited"], true);
     assert_eq!(items[0]["is_active"], true);
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
@@ -1652,10 +1645,10 @@ async fn gateway_handles_admin_user_detail_locally_with_trusted_admin_principal(
     assert_eq!(payload["email"], "alice@example.com");
     assert_eq!(payload["username"], "alice");
     assert_eq!(payload["role"], "user");
-    assert_eq!(payload["allowed_providers"], json!(["openai"]));
-    assert_eq!(payload["allowed_api_formats"], json!(["openai:chat"]));
-    assert_eq!(payload["allowed_models"], json!(["gpt-4.1"]));
-    assert_eq!(payload["rate_limit"], 60);
+    assert!(payload.get("allowed_providers").is_none());
+    assert!(payload.get("allowed_api_formats").is_none());
+    assert!(payload.get("allowed_models").is_none());
+    assert!(payload.get("rate_limit").is_none());
     assert_eq!(payload["unlimited"], true);
     assert_eq!(payload["is_active"], true);
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);

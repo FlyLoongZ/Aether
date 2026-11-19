@@ -359,9 +359,6 @@ fn sample_import_admin_user(user_id: &str) -> StoredUserAuthRecord {
         Some("admin-hash".to_string()),
         "admin".to_string(),
         "local".to_string(),
-        None,
-        None,
-        None,
         true,
         false,
         Some(chrono::Utc::now()),
@@ -1402,9 +1399,6 @@ async fn gateway_user_import_allows_chained_username_release_impl() {
         Some("hash-a".to_string()),
         "user".to_string(),
         "local".to_string(),
-        None,
-        None,
-        None,
         true,
         false,
         Some(chrono::Utc::now()),
@@ -1419,9 +1413,6 @@ async fn gateway_user_import_allows_chained_username_release_impl() {
         Some("hash-b".to_string()),
         "user".to_string(),
         "local".to_string(),
-        None,
-        None,
-        None,
         true,
         false,
         Some(chrono::Utc::now()),
@@ -1511,9 +1502,6 @@ async fn gateway_user_import_preserves_omitted_email_in_simulated_state_impl() {
         Some("existing-hash".to_string()),
         "user".to_string(),
         "local".to_string(),
-        None,
-        None,
-        None,
         true,
         false,
         Some(chrono::Utc::now()),
@@ -1725,9 +1713,6 @@ async fn authenticated_recovery_reencrypts_existing_api_key_impl() {
         Some(bcrypt::hash("old-password", 4).expect("old password should hash")),
         "user".to_string(),
         "local".to_string(),
-        None,
-        None,
-        None,
         true,
         false,
         Some(chrono::Utc::now()),
@@ -2013,9 +1998,6 @@ async fn gateway_user_import_password_hash_overwrite_revokes_existing_sessions_i
         Some("old-password-hash".to_string()),
         "user".to_string(),
         "local".to_string(),
-        None,
-        None,
-        None,
         true,
         false,
         Some(chrono::Utc::now()),
@@ -2247,10 +2229,6 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
         Some("argon2:imported-user-hash")
     );
     assert_eq!(imported_user.role, "user");
-    assert_eq!(imported_user.allowed_providers, None);
-    assert_eq!(imported_user.allowed_api_formats, None);
-    assert_eq!(imported_user.allowed_models, None);
-    assert_eq!(imported_user.allowed_models_mode, "unrestricted");
     assert!(imported_user.is_active);
 
     let imported_groups = state
@@ -2374,9 +2352,6 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
         Some("existing-hash".to_string()),
         "user".to_string(),
         "local".to_string(),
-        None,
-        None,
-        None,
         true,
         false,
         Some(chrono::Utc::now()),

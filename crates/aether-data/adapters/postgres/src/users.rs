@@ -29,6 +29,14 @@ WHERE id = ANY($1::text[])
 ORDER BY id ASC
 "#;
 
+const POSTGRES_LDAP_USER_FOR_UPDATE_SELECT_COLUMNS: &str = r#"
+SELECT
+  id, email, email_verified, username, password_hash, role::text AS role,
+  auth_source::text AS auth_source,
+  is_active, is_deleted, security_version, created_at, last_login_at
+FROM users
+"#;
+
 const POSTGRES_LOCK_ACTIVE_ADMINS_SQL: &str = r#"
 SELECT id
 FROM users
@@ -138,14 +146,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
-  rate_limit,
-  rate_limit_mode,
   model_capability_settings,
   feature_settings,
   is_active
@@ -164,14 +164,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
-  rate_limit,
-  rate_limit_mode,
   model_capability_settings,
   feature_settings,
   is_active
@@ -189,14 +181,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
-  rate_limit,
-  rate_limit_mode,
   model_capability_settings,
   feature_settings,
   is_active
@@ -239,14 +223,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
-  rate_limit,
-  rate_limit_mode,
   model_capability_settings,
   feature_settings,
   is_active
@@ -265,12 +241,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
   is_active,
   is_deleted,
   security_version,
@@ -290,12 +260,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
   is_active,
   is_deleted,
   security_version,
@@ -315,12 +279,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
   is_active,
   is_deleted,
   security_version,
@@ -340,12 +298,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
   is_active,
   is_deleted,
   security_version,
@@ -365,12 +317,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
   is_active,
   is_deleted,
   security_version,
@@ -391,12 +337,6 @@ SELECT
   password_hash,
   role::text AS role,
   auth_source::text AS auth_source,
-  allowed_providers,
-  allowed_providers_mode,
-  allowed_api_formats,
-  allowed_api_formats_mode,
-  allowed_models,
-  allowed_models_mode,
   is_active,
   is_deleted,
   security_version,
@@ -432,12 +372,6 @@ SELECT
   users.password_hash,
   users.role::text AS role,
   users.auth_source::text AS auth_source,
-  users.allowed_providers,
-  users.allowed_providers_mode,
-  users.allowed_api_formats,
-  users.allowed_api_formats_mode,
-  users.allowed_models,
-  users.allowed_models_mode,
   users.is_active,
   users.is_deleted,
   users.security_version,
@@ -1601,12 +1535,10 @@ WHERE user_group_members.user_id IN (
             r#"
 INSERT INTO users (
   id, email, email_verified, username, password_hash, role, auth_source,
-  allowed_providers_mode, allowed_api_formats_mode, allowed_models_mode, rate_limit_mode,
   is_active, is_deleted, created_at, updated_at, last_login_at
 )
 VALUES (
   $1, $2, $3, $4, NULL, 'user'::userrole, 'oauth'::authsource,
-  'inherit', 'inherit', 'inherit', 'inherit',
   TRUE, FALSE, $5, $5, $5
 )
 "#,
@@ -1925,8 +1857,7 @@ SET email = $2,
 WHERE id = $1
 RETURNING
   id, email, email_verified, username, password_hash, role::text AS role,
-  auth_source::text AS auth_source, allowed_providers, allowed_providers_mode,
-  allowed_api_formats, allowed_api_formats_mode, allowed_models, allowed_models_mode,
+  auth_source::text AS auth_source,
   is_active, is_deleted, security_version, created_at, last_login_at
 "#,
             )
@@ -1977,8 +1908,7 @@ INSERT INTO users (
 VALUES ($1, $2, TRUE, $3, NULL, 'user'::userrole, 'ldap'::authsource, $4, $5, TRUE, FALSE, $6, $6, $6)
 RETURNING
   id, email, email_verified, username, password_hash, role::text AS role,
-  auth_source::text AS auth_source, allowed_providers, allowed_providers_mode,
-  allowed_api_formats, allowed_api_formats_mode, allowed_models, allowed_models_mode,
+  auth_source::text AS auth_source,
   is_active, is_deleted, security_version, created_at, last_login_at
 "#,
             )
@@ -2103,8 +2033,6 @@ WHERE id = $1
         let current_export = map_user_export_row(&export_row)?;
         if !current_auth.matches_restore_state(expected_auth)
             || !current_export.matches_restore_state(expected_export)
-            || current_export.rate_limit != expected_export.rate_limit
-            || current_export.rate_limit_mode != expected_export.rate_limit_mode
             || current_export.model_capability_settings.as_ref()
                 != expected_model_capability_settings
             || current_export.feature_settings.as_ref() != expected_feature_settings
@@ -2124,24 +2052,6 @@ WHERE id = $1
         }
         let security_state_changed = expected_auth.role != restored_auth.role
             || expected_auth.is_active != restored_auth.is_active;
-        let allowed_providers = restored_auth
-            .allowed_providers
-            .as_ref()
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|err| DataLayerError::UnexpectedValue(err.to_string()))?;
-        let allowed_api_formats = restored_auth
-            .allowed_api_formats
-            .as_ref()
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|err| DataLayerError::UnexpectedValue(err.to_string()))?;
-        let allowed_models = restored_auth
-            .allowed_models
-            .as_ref()
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|err| DataLayerError::UnexpectedValue(err.to_string()))?;
         let result = sqlx::query(
             r#"
 UPDATE users
@@ -2149,18 +2059,10 @@ SET email = $2,
     email_verified = $3,
     username = $4,
     role = $5::userrole,
-    allowed_providers = $6::jsonb,
-    allowed_providers_mode = $7,
-    allowed_api_formats = $8::jsonb,
-    allowed_api_formats_mode = $9,
-    allowed_models = $10::jsonb,
-    allowed_models_mode = $11,
-    rate_limit = $12,
-    rate_limit_mode = $13,
-    model_capability_settings = $14::jsonb,
-    feature_settings = $15::jsonb,
-    is_active = $16,
-    security_version = security_version + CASE WHEN $17 THEN 1 ELSE 0 END,
+    model_capability_settings = $6::jsonb,
+    feature_settings = $7::jsonb,
+    is_active = $8,
+    security_version = security_version + CASE WHEN $9 THEN 1 ELSE 0 END,
     updated_at = NOW()
 WHERE id = $1
 "#,
@@ -2170,14 +2072,6 @@ WHERE id = $1
         .bind(restored_auth.email_verified)
         .bind(&restored_auth.username)
         .bind(&restored_auth.role)
-        .bind(allowed_providers)
-        .bind(&restored_auth.allowed_providers_mode)
-        .bind(allowed_api_formats)
-        .bind(&restored_auth.allowed_api_formats_mode)
-        .bind(allowed_models)
-        .bind(&restored_auth.allowed_models_mode)
-        .bind(restored_export.rate_limit)
-        .bind(&restored_export.rate_limit_mode)
         .bind(restored_model_capability_settings.clone())
         .bind(restored_feature_settings.clone())
         .bind(restored_auth.is_active)
@@ -3103,14 +2997,7 @@ async fn find_postgres_ldap_user_for_update(
     ldap_username: Option<&str>,
     email: &str,
 ) -> Result<Option<StoredUserAuthRecord>, DataLayerError> {
-    let select_columns = r#"
-SELECT
-  id, email, email_verified, username, password_hash, role::text AS role,
-  auth_source::text AS auth_source, allowed_providers, allowed_providers_mode,
-  allowed_api_formats, allowed_api_formats_mode, allowed_models, allowed_models_mode,
-  is_active, is_deleted, created_at, last_login_at
-FROM users
-"#;
+    let select_columns = POSTGRES_LDAP_USER_FOR_UPDATE_SELECT_COLUMNS;
     if let Some(ldap_dn) = ldap_dn.filter(|value| !value.trim().is_empty()) {
         let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{select_columns} WHERE auth_source = 'ldap'::authsource AND ldap_dn = $1 LIMIT 1 FOR UPDATE"
@@ -3166,23 +3053,11 @@ fn map_user_export_row(row: &sqlx::postgres::PgRow) -> Result<StoredUserExportRo
         row.try_get("password_hash").map_postgres_err()?,
         row.try_get("role").map_postgres_err()?,
         row.try_get("auth_source").map_postgres_err()?,
-        row.try_get("allowed_providers").map_postgres_err()?,
-        row.try_get("allowed_api_formats").map_postgres_err()?,
-        row.try_get("allowed_models").map_postgres_err()?,
-        row.try_get("rate_limit").map_postgres_err()?,
         row.try_get("model_capability_settings")
             .map_postgres_err()?,
         row.try_get("is_active").map_postgres_err()?,
     )
     .map(|record| record.with_feature_settings(feature_settings))
-    .and_then(|record| {
-        record.with_policy_modes(
-            row.try_get("allowed_providers_mode").map_postgres_err()?,
-            row.try_get("allowed_api_formats_mode").map_postgres_err()?,
-            row.try_get("allowed_models_mode").map_postgres_err()?,
-            row.try_get("rate_limit_mode").map_postgres_err()?,
-        )
-    })
 }
 
 fn map_user_auth_row(row: &sqlx::postgres::PgRow) -> Result<StoredUserAuthRecord, DataLayerError> {
@@ -3194,9 +3069,6 @@ fn map_user_auth_row(row: &sqlx::postgres::PgRow) -> Result<StoredUserAuthRecord
         row.try_get("password_hash").map_postgres_err()?,
         row.try_get("role").map_postgres_err()?,
         row.try_get("auth_source").map_postgres_err()?,
-        row.try_get("allowed_providers").map_postgres_err()?,
-        row.try_get("allowed_api_formats").map_postgres_err()?,
-        row.try_get("allowed_models").map_postgres_err()?,
         row.try_get("is_active").map_postgres_err()?,
         row.try_get("is_deleted").map_postgres_err()?,
         row.try_get("created_at").map_postgres_err()?,
@@ -3204,13 +3076,6 @@ fn map_user_auth_row(row: &sqlx::postgres::PgRow) -> Result<StoredUserAuthRecord
     )
     .and_then(|record| {
         record.with_security_version(row.try_get("security_version").map_postgres_err()?)
-    })
-    .and_then(|record| {
-        record.with_policy_modes(
-            row.try_get("allowed_providers_mode").map_postgres_err()?,
-            row.try_get("allowed_api_formats_mode").map_postgres_err()?,
-            row.try_get("allowed_models_mode").map_postgres_err()?,
-        )
     })
 }
 
@@ -4041,8 +3906,35 @@ FOR UPDATE OF users, user_sessions
 mod admin_invariant_tests {
     use super::{
         POSTGRES_ANONYMIZE_USER_API_KEY_HISTORY_SQL, POSTGRES_ANONYMIZE_USER_HISTORY_SQL,
-        POSTGRES_DELETE_USER_DEPENDENTS_SQL, POSTGRES_LOCK_ACTIVE_ADMINS_SQL,
+        POSTGRES_DELETE_USER_DEPENDENTS_SQL, POSTGRES_LDAP_USER_FOR_UPDATE_SELECT_COLUMNS,
+        POSTGRES_LOCK_ACTIVE_ADMINS_SQL,
     };
+
+    #[test]
+    fn ldap_user_lock_selects_only_current_user_columns() {
+        let normalized = POSTGRES_LDAP_USER_FOR_UPDATE_SELECT_COLUMNS
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        for retired in [
+            "allowed_providers",
+            "allowed_providers_mode",
+            "allowed_api_formats",
+            "allowed_api_formats_mode",
+            "allowed_models",
+            "allowed_models_mode",
+            "rate_limit",
+            "rate_limit_mode",
+        ] {
+            assert!(
+                !normalized.contains(retired),
+                "LDAP user lock select must not read retired users.{retired}"
+            );
+        }
+        assert!(normalized.contains("security_version"));
+        assert!(normalized.contains("FROM users"));
+    }
 
     #[test]
     fn active_admin_mutations_use_a_deterministic_postgres_row_lock() {

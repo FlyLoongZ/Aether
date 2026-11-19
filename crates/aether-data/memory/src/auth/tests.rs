@@ -71,9 +71,6 @@ fn sample_authoritative_user(
         Some("server-managed-password-hash".to_string()),
         "admin".to_string(),
         "oauth".to_string(),
-        Some(serde_json::json!(["openai"])),
-        Some(serde_json::json!(["openai:chat"])),
-        Some(serde_json::json!(["gpt-5"])),
         is_active,
         is_deleted,
         None,
@@ -113,8 +110,8 @@ async fn authoritative_owner_sync_allows_first_key_without_synthesizing_owner_fi
     assert!(snapshot.user_is_active);
     assert!(!snapshot.user_is_deleted);
     assert_eq!(
-        snapshot.user_allowed_providers,
-        Some(vec!["openai".to_string()])
+        snapshot.user_allowed_providers, None,
+        "per-user provider policy is no longer part of the authoritative user record"
     );
     assert_eq!(
         snapshot.api_key_allowed_providers,

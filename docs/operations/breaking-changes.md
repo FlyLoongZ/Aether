@@ -49,6 +49,24 @@ a default.
   authentication. Legacy tokens must be reissued with explicit permissions;
   the former frozen full-permission fallback is removed.
 
+## Users
+
+- User exports use version `1.7`. Versions `1.5`, `1.6` and `1.7` are
+  importable; per-user policy fields in older payloads are ignored.
+- User imports may carry `password_hash` and API key material. Credentials are
+  validated before use (bcrypt password hash, canonical lowercase SHA-256 key
+  hash, plaintext matching the key hash) and are written as-is; payloads that
+  declare `credential_state=not_exported` while carrying credentials are
+  rejected. Payloads without credentials still import a tombstone, so the
+  account must reset its password.
+- Per-user access policies are no longer supported. User authorization is
+  derived from user groups only.
+- The `public.users` columns `allowed_providers`, `allowed_providers_mode`,
+  `allowed_api_formats`, `allowed_api_formats_mode`, `allowed_models`,
+  `allowed_models_mode`, `rate_limit`, and `rate_limit_mode` are dropped.
+- Admin user responses no longer include top-level per-user policy fields;
+  `effective_policy` remains the read-only, group-derived policy view.
+
 ## Request candidate traces
 
 - Legacy candidate trace values `tunnel`, `tunnel_affinity`, `local_tunnel`,

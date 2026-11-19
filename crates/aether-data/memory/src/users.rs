@@ -460,7 +460,7 @@ fn memory_export_row_from_auth_user(
         .expect("user repository lock")
         .get(&user.id)
         .cloned();
-    StoredUserExportRow::new(
+    Ok(StoredUserExportRow::new(
         user.id.clone(),
         user.email.clone(),
         user.email_verified,
@@ -468,22 +468,10 @@ fn memory_export_row_from_auth_user(
         user.password_hash.clone(),
         user.role.clone(),
         user.auth_source.clone(),
-        user.allowed_providers.clone().map(serde_json::Value::from),
-        user.allowed_api_formats
-            .clone()
-            .map(serde_json::Value::from),
-        user.allowed_models.clone().map(serde_json::Value::from),
-        None,
         model_capability_settings,
         user.is_active,
     )?
-    .with_feature_settings(feature_settings)
-    .with_policy_modes(
-        user.allowed_providers_mode.clone(),
-        user.allowed_api_formats_mode.clone(),
-        user.allowed_models_mode.clone(),
-        "system".to_string(),
-    )
+    .with_feature_settings(feature_settings))
 }
 
 #[async_trait]
@@ -1163,18 +1151,10 @@ impl UserReadRepository for InMemoryUserReadRepository {
             None,
             "user".to_string(),
             "oauth".to_string(),
-            None,
-            None,
-            None,
             true,
             false,
             Some(created_at),
             Some(created_at),
-        )?
-        .with_policy_modes(
-            "inherit".to_string(),
-            "inherit".to_string(),
-            "inherit".to_string(),
         )?;
         self.insert_auth_user(user).map(Some)
     }
@@ -1523,9 +1503,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
                 None,
                 "user".to_string(),
                 "ldap".to_string(),
-                None,
-                None,
-                None,
                 true,
                 false,
                 Some(logged_in_at),
@@ -1659,20 +1636,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
         {
             return Ok(false);
         }
-        let current_export = self
-            .export_rows
-            .read()
-            .expect("user repository lock")
-            .iter()
-            .find(|row| row.id == expected_auth.id)
-            .cloned();
-        if current_export.as_ref().is_some_and(|row| {
-            row.rate_limit != expected_export.rate_limit
-                || row.rate_limit_mode != expected_export.rate_limit_mode
-        }) {
-            return Ok(false);
-        }
-
         let removes_active_admin = current.role.eq_ignore_ascii_case("admin")
             && current.is_active
             && !current.is_deleted
@@ -1702,12 +1665,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
         user.email_verified = restored_auth.email_verified;
         user.username = restored_auth.username.clone();
         user.role = restored_auth.role.clone();
-        user.allowed_providers = restored_auth.allowed_providers.clone();
-        user.allowed_providers_mode = restored_auth.allowed_providers_mode.clone();
-        user.allowed_api_formats = restored_auth.allowed_api_formats.clone();
-        user.allowed_api_formats_mode = restored_auth.allowed_api_formats_mode.clone();
-        user.allowed_models = restored_auth.allowed_models.clone();
-        user.allowed_models_mode = restored_auth.allowed_models_mode.clone();
         user.is_active = restored_auth.is_active;
         if security_state_changed {
             user.security_version = user.security_version.checked_add(1).ok_or_else(|| {
@@ -1784,14 +1741,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
             row.username = updated.username.clone();
             row.role = updated.role.clone();
             row.auth_source = updated.auth_source.clone();
-            row.allowed_providers = updated.allowed_providers.clone();
-            row.allowed_providers_mode = updated.allowed_providers_mode.clone();
-            row.allowed_api_formats = updated.allowed_api_formats.clone();
-            row.allowed_api_formats_mode = updated.allowed_api_formats_mode.clone();
-            row.allowed_models = updated.allowed_models.clone();
-            row.allowed_models_mode = updated.allowed_models_mode.clone();
-            row.rate_limit = restored_export.rate_limit;
-            row.rate_limit_mode = restored_export.rate_limit_mode.clone();
             row.model_capability_settings = restored_model_capability_settings.clone();
             row.feature_settings = restored_feature_settings.clone();
             row.is_active = updated.is_active;
@@ -2139,18 +2088,10 @@ impl UserReadRepository for InMemoryUserReadRepository {
             Some(password_hash),
             "user".to_string(),
             "local".to_string(),
-            None,
-            None,
-            None,
             true,
             false,
             Some(now),
             None,
-        )?
-        .with_policy_modes(
-            "inherit".to_string(),
-            "inherit".to_string(),
-            "inherit".to_string(),
         )?;
         self.insert_auth_user(user).map(Some)
     }
@@ -2176,9 +2117,6 @@ impl UserReadRepository for InMemoryUserReadRepository {
             Some(password_hash),
             role,
             "local".to_string(),
-            None,
-            None,
-            None,
             true,
             false,
             Some(now),

@@ -72,12 +72,6 @@ pub struct StoredUserAuthRecord {
     pub password_hash: Option<String>,
     pub role: String,
     pub auth_source: String,
-    pub allowed_providers: Option<Vec<String>>,
-    pub allowed_providers_mode: String,
-    pub allowed_api_formats: Option<Vec<String>>,
-    pub allowed_api_formats_mode: String,
-    pub allowed_models: Option<Vec<String>>,
-    pub allowed_models_mode: String,
     pub is_active: bool,
     pub is_deleted: bool,
     #[serde(default)]
@@ -100,12 +94,6 @@ impl std::fmt::Debug for StoredUserAuthRecord {
             )
             .field("role", &self.role)
             .field("auth_source", &self.auth_source)
-            .field("allowed_providers", &self.allowed_providers)
-            .field("allowed_providers_mode", &self.allowed_providers_mode)
-            .field("allowed_api_formats", &self.allowed_api_formats)
-            .field("allowed_api_formats_mode", &self.allowed_api_formats_mode)
-            .field("allowed_models", &self.allowed_models)
-            .field("allowed_models_mode", &self.allowed_models_mode)
             .field("is_active", &self.is_active)
             .field("is_deleted", &self.is_deleted)
             .field("security_version", &self.security_version)
@@ -125,9 +113,6 @@ impl StoredUserAuthRecord {
         password_hash: Option<String>,
         role: String,
         auth_source: String,
-        allowed_providers: Option<Value>,
-        allowed_api_formats: Option<Value>,
-        allowed_models: Option<Value>,
         is_active: bool,
         is_deleted: bool,
         created_at: Option<DateTime<Utc>>,
@@ -162,39 +147,12 @@ impl StoredUserAuthRecord {
             password_hash,
             role,
             auth_source,
-            allowed_providers: parse_string_list(allowed_providers, "users.allowed_providers")?,
-            allowed_providers_mode: "unrestricted".to_string(),
-            allowed_api_formats: parse_string_list(
-                allowed_api_formats,
-                "users.allowed_api_formats",
-            )?,
-            allowed_api_formats_mode: "unrestricted".to_string(),
-            allowed_models: parse_string_list(allowed_models, "users.allowed_models")?,
-            allowed_models_mode: "unrestricted".to_string(),
             is_active,
             is_deleted,
             security_version: 0,
             created_at,
             last_login_at,
         })
-        .map(|record| record.with_legacy_policy_modes())
-    }
-
-    pub fn with_policy_modes(
-        mut self,
-        allowed_providers_mode: String,
-        allowed_api_formats_mode: String,
-        allowed_models_mode: String,
-    ) -> Result<Self, crate::DataLayerError> {
-        self.allowed_providers_mode =
-            normalize_list_policy_mode(&allowed_providers_mode, "users.allowed_providers_mode")?;
-        self.allowed_api_formats_mode = normalize_list_policy_mode(
-            &allowed_api_formats_mode,
-            "users.allowed_api_formats_mode",
-        )?;
-        self.allowed_models_mode =
-            normalize_list_policy_mode(&allowed_models_mode, "users.allowed_models_mode")?;
-        Ok(self)
     }
 
     pub fn with_security_version(
@@ -221,21 +179,8 @@ impl StoredUserAuthRecord {
             && self.username == expected.username
             && self.role == expected.role
             && self.auth_source == expected.auth_source
-            && self.allowed_providers == expected.allowed_providers
-            && self.allowed_providers_mode == expected.allowed_providers_mode
-            && self.allowed_api_formats == expected.allowed_api_formats
-            && self.allowed_api_formats_mode == expected.allowed_api_formats_mode
-            && self.allowed_models == expected.allowed_models
-            && self.allowed_models_mode == expected.allowed_models_mode
             && self.is_active == expected.is_active
             && self.is_deleted == expected.is_deleted
-    }
-
-    fn with_legacy_policy_modes(mut self) -> Self {
-        self.allowed_providers_mode = legacy_list_policy_mode(&self.allowed_providers);
-        self.allowed_api_formats_mode = legacy_list_policy_mode(&self.allowed_api_formats);
-        self.allowed_models_mode = legacy_list_policy_mode(&self.allowed_models);
-        self
     }
 
     pub fn to_summary(&self) -> Result<StoredUserSummary, crate::DataLayerError> {
@@ -430,14 +375,6 @@ pub struct StoredUserExportRow {
     pub password_hash: Option<String>,
     pub role: String,
     pub auth_source: String,
-    pub allowed_providers: Option<Vec<String>>,
-    pub allowed_providers_mode: String,
-    pub allowed_api_formats: Option<Vec<String>>,
-    pub allowed_api_formats_mode: String,
-    pub allowed_models: Option<Vec<String>>,
-    pub allowed_models_mode: String,
-    pub rate_limit: Option<i32>,
-    pub rate_limit_mode: String,
     pub model_capability_settings: Option<Value>,
     pub feature_settings: Option<Value>,
     pub is_active: bool,
@@ -457,14 +394,6 @@ impl std::fmt::Debug for StoredUserExportRow {
             )
             .field("role", &self.role)
             .field("auth_source", &self.auth_source)
-            .field("allowed_providers", &self.allowed_providers)
-            .field("allowed_providers_mode", &self.allowed_providers_mode)
-            .field("allowed_api_formats", &self.allowed_api_formats)
-            .field("allowed_api_formats_mode", &self.allowed_api_formats_mode)
-            .field("allowed_models", &self.allowed_models)
-            .field("allowed_models_mode", &self.allowed_models_mode)
-            .field("rate_limit", &self.rate_limit)
-            .field("rate_limit_mode", &self.rate_limit_mode)
             .field("model_capability_settings", &self.model_capability_settings)
             .field("feature_settings", &self.feature_settings)
             .field("is_active", &self.is_active)
@@ -482,10 +411,6 @@ impl StoredUserExportRow {
         password_hash: Option<String>,
         role: String,
         auth_source: String,
-        allowed_providers: Option<Value>,
-        allowed_api_formats: Option<Value>,
-        allowed_models: Option<Value>,
-        rate_limit: Option<i32>,
         model_capability_settings: Option<Value>,
         is_active: bool,
     ) -> Result<Self, crate::DataLayerError> {
@@ -518,42 +443,10 @@ impl StoredUserExportRow {
             password_hash,
             role,
             auth_source,
-            allowed_providers: parse_string_list(allowed_providers, "users.allowed_providers")?,
-            allowed_providers_mode: "unrestricted".to_string(),
-            allowed_api_formats: parse_string_list(
-                allowed_api_formats,
-                "users.allowed_api_formats",
-            )?,
-            allowed_api_formats_mode: "unrestricted".to_string(),
-            allowed_models: parse_string_list(allowed_models, "users.allowed_models")?,
-            allowed_models_mode: "unrestricted".to_string(),
-            rate_limit,
-            rate_limit_mode: "system".to_string(),
             model_capability_settings: normalize_optional_json(model_capability_settings),
             feature_settings: None,
             is_active,
         })
-        .map(|record| record.with_legacy_policy_modes())
-    }
-
-    pub fn with_policy_modes(
-        mut self,
-        allowed_providers_mode: String,
-        allowed_api_formats_mode: String,
-        allowed_models_mode: String,
-        rate_limit_mode: String,
-    ) -> Result<Self, crate::DataLayerError> {
-        self.allowed_providers_mode =
-            normalize_list_policy_mode(&allowed_providers_mode, "users.allowed_providers_mode")?;
-        self.allowed_api_formats_mode = normalize_list_policy_mode(
-            &allowed_api_formats_mode,
-            "users.allowed_api_formats_mode",
-        )?;
-        self.allowed_models_mode =
-            normalize_list_policy_mode(&allowed_models_mode, "users.allowed_models_mode")?;
-        self.rate_limit_mode =
-            normalize_rate_limit_policy_mode(&rate_limit_mode, "users.rate_limit_mode")?;
-        Ok(self)
     }
 
     /// Compare the identity and policy fields that an aggregate import may
@@ -566,29 +459,11 @@ impl StoredUserExportRow {
             && self.username == expected.username
             && self.role == expected.role
             && self.auth_source == expected.auth_source
-            && self.allowed_providers == expected.allowed_providers
-            && self.allowed_providers_mode == expected.allowed_providers_mode
-            && self.allowed_api_formats == expected.allowed_api_formats
-            && self.allowed_api_formats_mode == expected.allowed_api_formats_mode
-            && self.allowed_models == expected.allowed_models
-            && self.allowed_models_mode == expected.allowed_models_mode
             && self.is_active == expected.is_active
     }
 
     pub fn with_feature_settings(mut self, feature_settings: Option<Value>) -> Self {
         self.feature_settings = normalize_optional_json(feature_settings);
-        self
-    }
-
-    fn with_legacy_policy_modes(mut self) -> Self {
-        self.allowed_providers_mode = legacy_list_policy_mode(&self.allowed_providers);
-        self.allowed_api_formats_mode = legacy_list_policy_mode(&self.allowed_api_formats);
-        self.allowed_models_mode = legacy_list_policy_mode(&self.allowed_models);
-        self.rate_limit_mode = if self.rate_limit.is_some() {
-            "custom".to_string()
-        } else {
-            "system".to_string()
-        };
         self
     }
 }
@@ -1559,14 +1434,6 @@ pub fn normalize_rate_limit_policy_mode(
     }
 }
 
-fn legacy_list_policy_mode(values: &Option<Vec<String>>) -> String {
-    if values.as_ref().is_some_and(|items| !items.is_empty()) {
-        "specific".to_string()
-    } else {
-        "unrestricted".to_string()
-    }
-}
-
 fn parse_string_list(
     value: Option<Value>,
     field_name: &str,
@@ -1643,9 +1510,9 @@ mod tests {
     use chrono::{Duration, Utc};
 
     use super::{
-        is_valid_bcrypt_hash, last_oauth_unbind_denial, legacy_list_policy_mode,
-        DeleteUserOAuthLinkOutcome, StoredUserAuthRecord, StoredUserExportRow,
-        StoredUserPreferenceRecord, StoredUserSessionRecord,
+        is_valid_bcrypt_hash, last_oauth_unbind_denial, DeleteUserOAuthLinkOutcome,
+        StoredUserAuthRecord, StoredUserExportRow, StoredUserPreferenceRecord,
+        StoredUserSessionRecord,
     };
 
     #[test]
@@ -1692,137 +1559,6 @@ mod tests {
     }
 
     #[test]
-    fn builds_user_export_row_with_allowed_lists() {
-        let row = StoredUserExportRow::new(
-            "user-1".to_string(),
-            Some("alice@example.com".to_string()),
-            true,
-            "alice".to_string(),
-            Some("hash".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            Some(serde_json::json!(["openai", "anthropic"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-4.1"])),
-            Some(60),
-            Some(serde_json::json!({"gpt-4.1": {"cache_1h": true}})),
-            true,
-        )
-        .expect("row should build");
-
-        assert_eq!(
-            row.allowed_providers,
-            Some(vec!["openai".to_string(), "anthropic".to_string()])
-        );
-        assert_eq!(
-            row.allowed_api_formats,
-            Some(vec!["openai:chat".to_string()])
-        );
-        assert_eq!(row.allowed_models, Some(vec!["gpt-4.1".to_string()]));
-        assert_eq!(
-            row.model_capability_settings,
-            Some(serde_json::json!({"gpt-4.1": {"cache_1h": true}}))
-        );
-    }
-
-    #[test]
-    fn accepts_embedded_string_lists_for_user_export_row() {
-        let row = StoredUserExportRow::new(
-            "user-1".to_string(),
-            None,
-            false,
-            "alice".to_string(),
-            None,
-            "user".to_string(),
-            "local".to_string(),
-            Some(serde_json::json!("[\"openai\"]")),
-            None,
-            Some(serde_json::json!("gpt-4.1")),
-            None,
-            Some(Value::Null),
-            true,
-        )
-        .expect("row should build");
-
-        assert_eq!(row.allowed_providers, Some(vec!["openai".to_string()]));
-        assert_eq!(row.allowed_api_formats, None);
-        assert_eq!(row.allowed_models, Some(vec!["gpt-4.1".to_string()]));
-        assert_eq!(row.model_capability_settings, None);
-    }
-
-    #[test]
-    fn stored_user_security_lists_distinguish_sql_null_from_malformed_json_null() {
-        assert_eq!(
-            super::parse_string_list(None, "users.allowed_providers")
-                .expect("SQL NULL should remain an unset policy"),
-            None
-        );
-        assert!(
-            super::parse_string_list(Some(serde_json::Value::Null), "users.allowed_providers")
-                .is_err()
-        );
-        assert!(super::parse_string_list(
-            Some(serde_json::json!("null")),
-            "users.allowed_providers"
-        )
-        .is_err());
-        assert!(super::parse_string_list(
-            Some(serde_json::json!([" "])),
-            "users.allowed_providers"
-        )
-        .is_err());
-    }
-
-    #[test]
-    fn rejects_object_allowed_providers_for_user_export_row() {
-        let result = StoredUserExportRow::new(
-            "user-1".to_string(),
-            None,
-            false,
-            "alice".to_string(),
-            None,
-            "user".to_string(),
-            "local".to_string(),
-            Some(serde_json::json!({"bad": true})),
-            None,
-            None,
-            None,
-            None,
-            true,
-        );
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn builds_user_auth_record_with_allowed_lists() {
-        let row = StoredUserAuthRecord::new(
-            "user-1".to_string(),
-            Some("alice@example.com".to_string()),
-            true,
-            "alice".to_string(),
-            Some("hash".to_string()),
-            "user".to_string(),
-            "local".to_string(),
-            Some(serde_json::json!(["openai"])),
-            Some(serde_json::json!(["openai:chat"])),
-            Some(serde_json::json!(["gpt-4.1"])),
-            true,
-            false,
-            None,
-            None,
-        )
-        .expect("auth row should build");
-
-        assert_eq!(row.allowed_providers, Some(vec!["openai".to_string()]));
-        assert_eq!(
-            row.allowed_api_formats,
-            Some(vec!["openai:chat".to_string()])
-        );
-        assert_eq!(row.allowed_models, Some(vec!["gpt-4.1".to_string()]));
-    }
-
-    #[test]
     fn user_record_debug_output_redacts_password_and_refresh_hashes() {
         let password_hash = "debug-secret-password-hash";
         let auth = StoredUserAuthRecord::new(
@@ -1833,9 +1569,6 @@ mod tests {
             Some(password_hash.to_string()),
             "user".to_string(),
             "local".to_string(),
-            None,
-            None,
-            None,
             true,
             false,
             None,
@@ -1850,10 +1583,6 @@ mod tests {
             Some(password_hash.to_string()),
             "user".to_string(),
             "local".to_string(),
-            None,
-            None,
-            None,
-            None,
             None,
             true,
         )
@@ -1887,16 +1616,6 @@ mod tests {
         assert!(!rendered.contains(current_hash));
         assert!(!rendered.contains(previous_hash));
         assert!(rendered.contains("[REDACTED]"));
-    }
-
-    #[test]
-    fn legacy_policy_mode_treats_empty_lists_as_unrestricted() {
-        assert_eq!(legacy_list_policy_mode(&None), "unrestricted");
-        assert_eq!(legacy_list_policy_mode(&Some(Vec::new())), "unrestricted");
-        assert_eq!(
-            legacy_list_policy_mode(&Some(vec!["openai".to_string()])),
-            "specific"
-        );
     }
 
     #[test]
