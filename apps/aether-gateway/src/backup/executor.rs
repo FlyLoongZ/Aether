@@ -1,6 +1,6 @@
 use aes_gcm::aead::{Aead, Generate, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
-use aether_crypto::derive_python_fernet_key;
+use aether_crypto::{derive_python_fernet_key, derive_root_key, derive_subkey};
 use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
 use hmac::{Hmac, Mac};
@@ -18,11 +18,13 @@ use super::BackupRestoreScope;
 // V2: magic || version || fixed-length key ID || nonce || ciphertext/tag.
 const BACKUP_ENVELOPE_MAGIC: &[u8; 8] = b"AETHERBK";
 const BACKUP_ENVELOPE_VERSION_V2: u8 = 2;
+const BACKUP_ENVELOPE_VERSION_V3: u8 = 3;
 const BACKUP_ENVELOPE_KEY_ID_LEN: usize = 16;
 const BACKUP_ENVELOPE_NONCE_LEN: usize = 12;
 const BACKUP_ENCRYPTION_CONTEXT_V2: &[u8] = b"aether-s3-backup-aes-256-gcm-v2";
+const BACKUP_ENCRYPTION_CONTEXT_V3: &[u8] = b"aether-s3-backup-aes-256-gcm-v3";
 const BACKUP_KEY_ID_CONTEXT: &[u8] = b"aether-s3-backup-key-id-v1";
-const BACKUP_ENCRYPTION_NAME: &str = "aes-256-gcm-v2";
+const BACKUP_ENCRYPTION_NAME: &str = "aes-256-gcm-v3";
 const MAX_V2_CANDIDATES: usize = 256;
 const MAX_BACKUP_OBJECTS_PER_PREFIX: usize = 10_000;
 const MAX_ENCRYPTED_VARIANTS_PER_LEGACY_OBJECT: usize = 32;
@@ -40,6 +42,7 @@ type HmacSha256 = Hmac<Sha256>;
 pub struct BackupDecryptionKey {
     secret: String,
     v2_key_id: [u8; BACKUP_ENVELOPE_KEY_ID_LEN],
+    v3_key_id: [u8; BACKUP_ENVELOPE_KEY_ID_LEN],
 }
 
 impl BackupDecryptionKey {
@@ -56,7 +59,15 @@ impl BackupDecryptionKey {
             .map_err(|_| BackupRestoreError::InvalidKeyMaterial)?;
         let v2_key_id =
             derive_backup_key_id(&v2_key).map_err(|_| BackupRestoreError::InvalidKeyMaterial)?;
-        Ok(Self { secret, v2_key_id })
+        let v3_key = derive_backup_encryption_key_v3(&secret, BACKUP_ENCRYPTION_CONTEXT_V3)
+            .map_err(|_| BackupRestoreError::InvalidKeyMaterial)?;
+        let v3_key_id =
+            derive_backup_key_id(&v3_key).map_err(|_| BackupRestoreError::InvalidKeyMaterial)?;
+        Ok(Self {
+            secret,
+            v2_key_id,
+            v3_key_id,
+        })
     }
 }
 
@@ -66,6 +77,7 @@ impl std::fmt::Debug for BackupDecryptionKey {
             .debug_struct("BackupDecryptionKey")
             .field("secret", &"[REDACTED]")
             .field("v2_key_id", &encode_key_id(&self.v2_key_id))
+            .field("v3_key_id", &encode_key_id(&self.v3_key_id))
             .finish()
     }
 }
@@ -301,11 +313,11 @@ pub(crate) fn encrypt_backup_bytes(
     object_key: &str,
     plaintext: &[u8],
 ) -> Result<(Vec<u8>, [u8; BACKUP_ENVELOPE_KEY_ID_LEN]), BackupExecutionError> {
-    let key = derive_backup_encryption_key(encryption_secret, BACKUP_ENCRYPTION_CONTEXT_V2)?;
+    let key = derive_backup_encryption_key_v3(encryption_secret, BACKUP_ENCRYPTION_CONTEXT_V3)?;
     let key_id = derive_backup_key_id(&key)?;
     let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| BackupExecutionError::Encryption)?;
     let nonce = Nonce::try_generate().map_err(|_| BackupExecutionError::Encryption)?;
-    let aad = backup_envelope_aad(BACKUP_ENVELOPE_VERSION_V2, Some(&key_id), object_key)?;
+    let aad = backup_envelope_aad(BACKUP_ENVELOPE_VERSION_V3, Some(&key_id), object_key)?;
     let ciphertext = cipher
         .encrypt(
             &nonce,
@@ -337,6 +349,19 @@ fn derive_backup_encryption_key(
         .map_err(|_| BackupExecutionError::Encryption)?;
     mac.update(context);
     Ok(mac.finalize().into_bytes().into())
+}
+
+fn derive_backup_encryption_key_v3(
+    encryption_secret: &str,
+    context: &[u8],
+) -> Result<[u8; 32], BackupExecutionError> {
+    let encryption_secret = encryption_secret.trim();
+    if encryption_secret.is_empty() {
+        return Err(BackupExecutionError::Encryption);
+    }
+    let root_key = derive_root_key(encryption_secret);
+    let salt = Sha256::digest(b"aether-s3-backup:v3");
+    Ok(derive_subkey(&root_key, &salt, context))
 }
 
 fn derive_backup_key_id(
@@ -452,10 +477,11 @@ fn decrypt_backup_bytes(
         .get(BACKUP_ENVELOPE_MAGIC.len())
         .copied()
         .ok_or(BackupExecutionError::Encryption)?;
-    if version != BACKUP_ENVELOPE_VERSION_V2 {
-        return Err(BackupExecutionError::Encryption);
-    }
-    let context = BACKUP_ENCRYPTION_CONTEXT_V2;
+    let context = match version {
+        BACKUP_ENVELOPE_VERSION_V2 => BACKUP_ENCRYPTION_CONTEXT_V2,
+        BACKUP_ENVELOPE_VERSION_V3 => BACKUP_ENCRYPTION_CONTEXT_V3,
+        _ => return Err(BackupExecutionError::Encryption),
+    };
     let key_id_len = BACKUP_ENVELOPE_KEY_ID_LEN;
     let envelope_header_len = BACKUP_ENVELOPE_MAGIC.len() + 1 + key_id_len;
     let header_len = envelope_header_len + BACKUP_ENVELOPE_NONCE_LEN;
@@ -469,7 +495,11 @@ fn decrypt_backup_bytes(
     if envelope.get(..envelope_header_len) != Some(&aad[..envelope_header_len]) {
         return Err(BackupExecutionError::Encryption);
     }
-    let key = derive_backup_encryption_key(encryption_secret, context)?;
+    let key = if version == BACKUP_ENVELOPE_VERSION_V3 {
+        derive_backup_encryption_key_v3(encryption_secret, context)?
+    } else {
+        derive_backup_encryption_key(encryption_secret, context)?
+    };
     if key_id.is_some_and(|expected| derive_backup_key_id(&key).ok() != Some(expected)) {
         return Err(BackupExecutionError::Encryption);
     }
@@ -511,7 +541,7 @@ pub fn restore_backup_json(
 
     let version = envelope[BACKUP_ENVELOPE_MAGIC.len()];
     let (compressed, key_id) = match version {
-        BACKUP_ENVELOPE_VERSION_V2 => {
+        BACKUP_ENVELOPE_VERSION_V2 | BACKUP_ENVELOPE_VERSION_V3 => {
             let key_id_start = BACKUP_ENVELOPE_MAGIC.len() + 1;
             let key_id_end = key_id_start + BACKUP_ENVELOPE_KEY_ID_LEN;
             let key_id_bytes = envelope
@@ -522,7 +552,13 @@ pub fn restore_backup_json(
             let encoded_key_id = encode_key_id(&key_id);
             let candidate = candidates
                 .iter()
-                .find(|candidate| candidate.v2_key_id == key_id)
+                .find(|candidate| {
+                    if version == BACKUP_ENVELOPE_VERSION_V3 {
+                        candidate.v3_key_id == key_id
+                    } else {
+                        candidate.v2_key_id == key_id
+                    }
+                })
                 .ok_or_else(|| BackupRestoreError::UnknownKeyId(encoded_key_id.clone()))?;
             let compressed = decrypt_backup_bytes(&candidate.secret, object_key, envelope)
                 .map_err(|_| BackupRestoreError::AuthenticationFailed)?;
@@ -753,7 +789,7 @@ mod tests {
     use super::{
         decrypt_backup_bytes, encrypt_backup_bytes, restore_backup_json, run_backup_with_store,
         validate_new_backup_encryption_secret, BackupDecryptionKey, BackupRestoreError,
-        BackupRestoreLimits, BACKUP_ENVELOPE_MAGIC, BACKUP_ENVELOPE_VERSION_V2,
+        BackupRestoreLimits, BACKUP_ENVELOPE_MAGIC, BACKUP_ENVELOPE_VERSION_V3,
     };
     use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
     use bytes::Bytes;
@@ -782,6 +818,55 @@ mod tests {
             schedule: BackupSchedule::default(),
             retention_count,
         }
+    }
+
+    #[tokio::test]
+    async fn legacy_v2_backup_envelope_still_restores() {
+        use aes_gcm::aead::{Aead, KeyInit};
+        use aes_gcm::{Aes256Gcm, Nonce};
+
+        let object_key = "prod/aether-data-backup-20260524-010000.json.zst.aes256gcm";
+        let compressed = compressed_json(
+            json!({"version": "1.0", "exported_at": "2026-05-24T03:15:00Z", "value": 7}),
+        );
+        let secret = TEST_NEW_BACKUP_ENCRYPTION_SECRET;
+        let key = super::derive_backup_encryption_key(secret, super::BACKUP_ENCRYPTION_CONTEXT_V2)
+            .unwrap();
+        let key_id = super::derive_backup_key_id(&key).unwrap();
+        let aad = super::backup_envelope_aad(
+            super::BACKUP_ENVELOPE_VERSION_V2,
+            Some(&key_id),
+            object_key,
+        )
+        .unwrap();
+        let cipher = Aes256Gcm::new_from_slice(&key).unwrap();
+        let nonce_bytes = [0_u8; super::BACKUP_ENVELOPE_NONCE_LEN];
+        let nonce = <&Nonce<_>>::try_from(nonce_bytes.as_slice()).unwrap();
+        let ciphertext = cipher
+            .encrypt(
+                nonce,
+                aes_gcm::aead::Payload {
+                    msg: &compressed,
+                    aad: &aad,
+                },
+            )
+            .unwrap();
+        let header_len = super::BACKUP_ENVELOPE_MAGIC.len() + 1 + super::BACKUP_ENVELOPE_KEY_ID_LEN;
+        let mut envelope = Vec::new();
+        envelope.extend_from_slice(&aad[..header_len]);
+        envelope.extend_from_slice(&nonce_bytes);
+        envelope.extend_from_slice(&ciphertext);
+
+        let restored = restore_backup_json(
+            object_key,
+            &envelope,
+            &[BackupDecryptionKey::current(secret).unwrap()],
+            BackupRestoreLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(restored.envelope_version, super::BACKUP_ENVELOPE_VERSION_V2);
+        let json: serde_json::Value = serde_json::from_slice(restored.json_bytes()).unwrap();
+        assert_eq!(json["value"], 7);
     }
 
     #[tokio::test]
@@ -834,7 +919,7 @@ mod tests {
         assert_eq!(result.export_version, "1.0");
         assert_eq!(result.exported_at, "2026-05-24T03:15:00Z");
         assert_eq!(result.compression, "zstd");
-        assert_eq!(result.encryption, "aes-256-gcm-v2");
+        assert_eq!(result.encryption, "aes-256-gcm-v3");
         assert_eq!(result.key_id.len(), 32);
         assert!(result.key_id.bytes().all(|byte| byte.is_ascii_hexdigit()));
         assert_eq!(result.legacy_encrypted_copies_created, 2);
@@ -1064,7 +1149,7 @@ mod tests {
 
         assert_eq!(
             first[BACKUP_ENVELOPE_MAGIC.len()],
-            BACKUP_ENVELOPE_VERSION_V2
+            BACKUP_ENVELOPE_VERSION_V3
         );
         assert_eq!(first_id, second_id);
         assert_ne!(
@@ -1085,7 +1170,7 @@ mod tests {
             BackupRestoreLimits::default(),
         )
         .unwrap();
-        assert_eq!(restored.envelope_version, BACKUP_ENVELOPE_VERSION_V2);
+        assert_eq!(restored.envelope_version, BACKUP_ENVELOPE_VERSION_V3);
         assert_eq!(restored.scope(), super::BackupRestoreScope::Data);
         let expected_key_id = super::encode_key_id(&first_id);
         assert_eq!(restored.key_id.as_deref(), Some(expected_key_id.as_str()));

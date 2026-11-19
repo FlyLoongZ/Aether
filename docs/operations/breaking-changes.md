@@ -19,6 +19,23 @@ a default.
   `docker-compose.single-node.yml` fallback is removed.
 
 
+## Secrets
+
+- New secret writes use the `aether-secret:v1` envelope: AES-256-GCM with a
+  PBKDF2-HMAC-SHA256 (600k) root key, HKDF-SHA256 per-message keys, and
+  associated data binding the envelope version, key id, and typed field
+  context. `AETHER_SECRET`-style business prefixes are no longer added to new
+  writes.
+- Existing `aether-*-v2/v3/v4` prefixes and legacy Python-Fernet ciphertexts
+  remain readable. They are lazy-migrated only on the existing read paths that
+  already rewrite a record; there is no destructive bulk rewrite.
+- System configuration secrets (`system_config`, SMTP, LDAP bind, Bark device
+  key) are now written as `aether-secret:v1`; plaintext legacy values continue
+  to migrate on read.
+- S3 backup files now use the `v3` envelope and a 600k + HKDF-derived root key.
+  Existing `v2` backup envelopes remain readable until the legacy Fernet
+  compatibility layer is removed.
+
 ## Deployment and control plane
 
 - The gateway runs in single-node mode only. `AETHER_GATEWAY_DEPLOYMENT_TOPOLOGY`,

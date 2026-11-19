@@ -1301,6 +1301,7 @@ const WALLET_CHECKOUT_SAFE_EPAY_PARAM_KEYS: &[&str] = &[
     "sign",
 ];
 const STRIPE_CLIENT_SECRET_ENCRYPTED_KEY: &str = "_stripe_client_secret_encrypted";
+const AETHER_SECRET_V1_PREFIX: &str = "aether-secret:v1:";
 const PAYMENT_ORDER_STRIPE_CLIENT_SECRET_V2_PREFIX: &str =
     "aether-payment-order-stripe-client-secret-v2:aether-runtime-secret-v1:";
 pub const WALLET_RECHARGE_CHECKOUT_CLAIM_LEASE_SECS: u64 = 120;
@@ -2103,7 +2104,12 @@ pub fn payment_order_stripe_client_secret_cas_replacement(
 ) -> Result<Option<serde_json::Value>, String> {
     let replacement_ciphertext = input
         .replacement_client_secret_encrypted
-        .strip_prefix(PAYMENT_ORDER_STRIPE_CLIENT_SECRET_V2_PREFIX);
+        .strip_prefix(AETHER_SECRET_V1_PREFIX)
+        .or_else(|| {
+            input
+                .replacement_client_secret_encrypted
+                .strip_prefix(PAYMENT_ORDER_STRIPE_CLIENT_SECRET_V2_PREFIX)
+        });
     if input.replacement_client_secret_encrypted.len() > 8192
         || replacement_ciphertext.is_none_or(|ciphertext| ciphertext.is_empty())
         || input
