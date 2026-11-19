@@ -1,4 +1,4 @@
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 
 use crate::AppState;
 
@@ -131,9 +131,8 @@ pub(crate) fn seal_payment_order_stripe_client_secret(
     let plaintext = normalize_stripe_client_secret(plaintext)
         .ok_or("Stripe client secret format is invalid")?;
     let purpose = payment_order_stripe_secret_purpose(binding)?;
-    let sealed = seal_runtime_secret_payload(state, &purpose, plaintext)
-        .ok_or("payment order Stripe client secret encryption key is not configured")?;
-    Ok(format!("{PAYMENT_ORDER_STRIPE_SECRET_ENVELOPE_V2}{sealed}"))
+    seal_runtime_secret_payload(state, &purpose, plaintext)
+        .ok_or("payment order Stripe client secret encryption key is not configured")
 }
 
 pub(crate) fn open_payment_order_stripe_client_secret(
@@ -148,9 +147,26 @@ pub(crate) fn open_payment_order_stripe_client_secret(
         return Err("payment order Stripe client secret ciphertext is empty");
     }
 
-    let (plaintext, protected, migration_required) = if let Some(sealed) =
-        stored.strip_prefix(PAYMENT_ORDER_STRIPE_SECRET_ENVELOPE_V2)
-    {
+    let (plaintext, protected, migration_required) = if SecretKey::matches_envelope(stored) {
+        let opened = super::open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            &purpose,
+            stored,
+        )
+        .ok_or("payment order Stripe client secret authentication failed")?;
+        if opened.sealed_with_current_key {
+            (
+                opened.plaintext,
+                stored.to_string(),
+                observed.as_bytes() != stored.as_bytes(),
+            )
+        } else {
+            // Sealed by the previous root key: re-seal so the rotation drains.
+            let protected =
+                seal_payment_order_stripe_client_secret(state, binding, &opened.plaintext)?;
+            (opened.plaintext, protected, true)
+        }
+    } else if let Some(sealed) = stored.strip_prefix(PAYMENT_ORDER_STRIPE_SECRET_ENVELOPE_V2) {
         let plaintext = open_runtime_secret_payload(state, &purpose, sealed)
             .ok_or("payment order Stripe client secret authentication failed")?;
         (
@@ -244,9 +260,7 @@ mod tests {
         let opened = open_payment_order_stripe_client_secret(&state, &binding, &legacy)
             .expect("real legacy Fernet should open");
         assert!(opened.migration_required);
-        assert!(opened
-            .protected
-            .starts_with("aether-payment-order-stripe-client-secret-v2:"));
+        assert!(opened.protected.starts_with("aether-secret:v1:"));
 
         for stored in [
             "plaintext-secret",

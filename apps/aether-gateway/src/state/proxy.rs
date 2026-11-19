@@ -1,12 +1,12 @@
 use aether_contracts::{ProxySnapshot, PROXY_NODE_GENERATION_EXTRA_KEY};
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 use serde_json::{Map, Value};
 use std::future::Future;
 
 use super::AppState;
 use crate::handlers::shared::{
     open_runtime_secret_payload_with_encryption_key, runtime_secret_payload_is_sealed,
-    seal_runtime_secret_payload_with_encryption_key,
+    runtime_secret_uses_previous_key, seal_runtime_secret_payload_with_encryption_key,
 };
 use crate::provider_transport::GatewayProviderTransportSnapshot;
 use crate::GatewayError;
@@ -41,7 +41,7 @@ fn proxy_node_password_error() -> GatewayError {
 }
 
 fn proxy_node_secret_is_v2(value: &str) -> bool {
-    value.starts_with(PROXY_NODE_SECRET_V2_PREFIX)
+    SecretKey::matches_envelope(value) || value.starts_with(PROXY_NODE_SECRET_V2_PREFIX)
 }
 
 fn proxy_node_bound_secret_purpose(scope: &str, field: &str, node_id: &str) -> String {
@@ -62,7 +62,6 @@ fn seal_proxy_node_secret_v2_with_encryption_key(
 ) -> Option<String> {
     let purpose = proxy_node_bound_secret_purpose(scope, field, node_id);
     seal_runtime_secret_payload_with_encryption_key(encryption_key, &purpose, plaintext)
-        .map(|sealed| format!("{PROXY_NODE_SECRET_V2_PREFIX}{sealed}"))
 }
 
 fn open_proxy_node_secret_v2_with_encryption_key(
@@ -74,14 +73,19 @@ fn open_proxy_node_secret_v2_with_encryption_key(
 ) -> Option<String> {
     // The distinct outer envelope is security-significant. A v2 binding
     // failure must never be retried with the unbound legacy purpose.
-    let sealed = stored.strip_prefix(PROXY_NODE_SECRET_V2_PREFIX)?;
     let purpose = proxy_node_bound_secret_purpose(scope, field, node_id);
+    let sealed = if SecretKey::matches_envelope(stored) {
+        stored
+    } else {
+        stored.strip_prefix(PROXY_NODE_SECRET_V2_PREFIX)?
+    };
     open_runtime_secret_payload_with_encryption_key(encryption_key, &purpose, sealed)
 }
 
 fn incoming_proxy_node_secret_is_ciphertext(value: &str) -> bool {
     let value = value.trim();
-    value.starts_with(PROXY_NODE_SECRET_ENVELOPE_FAMILY_PREFIX)
+    SecretKey::matches_envelope(value)
+        || value.starts_with(PROXY_NODE_SECRET_ENVELOPE_FAMILY_PREFIX)
         || value.starts_with(RUNTIME_SECRET_ENVELOPE_FAMILY_PREFIX)
         || looks_like_python_fernet_ciphertext(value)
 }
@@ -134,35 +138,42 @@ impl AppState {
             let Some(observed) = node.proxy_password else {
                 return Ok(None);
             };
-            if proxy_node_secret_is_v2(&observed) {
-                return open_proxy_node_secret_v2_with_encryption_key(
+            let observed_shape = observed.trim();
+            let plaintext = if proxy_node_secret_is_v2(&observed) {
+                let sealed = observed
+                    .strip_prefix(PROXY_NODE_SECRET_V2_PREFIX)
+                    .unwrap_or(&observed);
+                let plaintext = open_proxy_node_secret_v2_with_encryption_key(
                     self.encryption_key(),
                     PROXY_NODE_PASSWORD_SCOPE,
                     PROXY_NODE_PASSWORD_FIELD,
                     &persistent_node_id,
                     &observed,
                 )
-                .map(Some)
-                .ok_or_else(proxy_node_password_error);
-            }
-            let observed_shape = observed.trim();
-            if observed_shape.starts_with(PROXY_NODE_SECRET_ENVELOPE_FAMILY_PREFIX)
-                || (observed_shape.starts_with(RUNTIME_SECRET_ENVELOPE_FAMILY_PREFIX)
-                    && !runtime_secret_payload_is_sealed(&observed))
-                || looks_like_python_fernet_ciphertext(&observed)
-            {
-                return Err(proxy_node_password_error());
-            }
-
-            let plaintext = if runtime_secret_payload_is_sealed(&observed) {
-                open_runtime_secret_payload_with_encryption_key(
-                    self.encryption_key(),
-                    PROXY_NODE_PASSWORD_LEGACY_SECRET_PURPOSE,
-                    &observed,
-                )
-                .ok_or_else(proxy_node_password_error)?
+                .ok_or_else(proxy_node_password_error)?;
+                if !runtime_secret_uses_previous_key(self.encryption_key(), sealed) {
+                    return Ok(Some(plaintext));
+                }
+                // Sealed by the previous root key: re-seal below.
+                plaintext
             } else {
-                observed.clone()
+                if observed_shape.starts_with(PROXY_NODE_SECRET_ENVELOPE_FAMILY_PREFIX)
+                    || (observed_shape.starts_with(RUNTIME_SECRET_ENVELOPE_FAMILY_PREFIX)
+                        && !runtime_secret_payload_is_sealed(&observed))
+                    || looks_like_python_fernet_ciphertext(&observed)
+                {
+                    return Err(proxy_node_password_error());
+                }
+                if runtime_secret_payload_is_sealed(&observed) {
+                    open_runtime_secret_payload_with_encryption_key(
+                        self.encryption_key(),
+                        PROXY_NODE_PASSWORD_LEGACY_SECRET_PURPOSE,
+                        &observed,
+                    )
+                    .ok_or_else(proxy_node_password_error)?
+                } else {
+                    observed.clone()
+                }
             };
             let encrypted = seal_proxy_node_secret_v2_with_encryption_key(
                 self.encryption_key(),

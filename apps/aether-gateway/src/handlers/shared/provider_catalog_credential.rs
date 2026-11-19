@@ -1,4 +1,4 @@
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 
 use crate::AppState;
 
@@ -63,9 +63,8 @@ pub(crate) fn seal_provider_catalog_credential(
         return Err("provider catalog credential contains reserved framing");
     }
     let purpose = provider_catalog_credential_purpose(provider_id, key_id, field)?;
-    let sealed = seal_runtime_secret_payload(state, &purpose, plaintext)
-        .ok_or("provider catalog credential encryption key is not configured")?;
-    Ok(format!("{PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2}{sealed}"))
+    seal_runtime_secret_payload(state, &purpose, plaintext)
+        .ok_or("provider catalog credential encryption key is not configured")
 }
 
 pub(crate) fn open_provider_catalog_credential(
@@ -76,6 +75,37 @@ pub(crate) fn open_provider_catalog_credential(
     stored: &str,
 ) -> Result<ProviderCatalogCredentialProjection, &'static str> {
     let purpose = provider_catalog_credential_purpose(provider_id, key_id, field)?;
+    if SecretKey::matches_envelope(stored) {
+        let opened = super::open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            &purpose,
+            stored,
+        )
+        .ok_or("Provider catalog credential authentication failed")?;
+        if opened.plaintext.contains('\0') {
+            return Err("reserved secret framing");
+        }
+        if !opened.sealed_with_current_key {
+            // Sealed by the previous root key: re-seal so the rotation drains.
+            let protected = seal_provider_catalog_credential(
+                state,
+                provider_id,
+                key_id,
+                field,
+                &opened.plaintext,
+            )?;
+            return Ok(ProviderCatalogCredentialProjection {
+                plaintext: opened.plaintext,
+                protected,
+                migration_required: true,
+            });
+        }
+        return Ok(ProviderCatalogCredentialProjection {
+            plaintext: opened.plaintext,
+            protected: stored.to_string(),
+            migration_required: false,
+        });
+    }
     if let Some(sealed) = stored.strip_prefix(PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2) {
         let plaintext = open_runtime_secret_payload(state, &purpose, sealed)
             .ok_or("provider catalog credential authentication failed")?;
@@ -118,7 +148,7 @@ pub(crate) fn open_provider_catalog_credential(
 mod tests {
     use super::{
         open_provider_catalog_credential, seal_provider_catalog_credential,
-        ProviderCatalogCredentialField, PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2,
+        ProviderCatalogCredentialField,
     };
     use crate::handlers::shared::{
         encrypt_catalog_secret_with_fallbacks, seal_runtime_secret_payload,
@@ -144,7 +174,7 @@ mod tests {
                 "secret-value",
             )
             .expect("credential should seal");
-            assert!(sealed.starts_with(PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2));
+            assert!(sealed.starts_with("aether-secret:v1:"));
             assert_eq!(
                 open_provider_catalog_credential(&state, "provider-1", "key-1", field, &sealed,)
                     .expect("credential should open")
@@ -237,18 +267,6 @@ mod tests {
             &other_runtime,
         )
         .is_err());
-
-        let stripped = sealed
-            .strip_prefix(PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2)
-            .expect("test value should contain the business envelope layer");
-        assert!(open_provider_catalog_credential(
-            &state,
-            "provider-1",
-            "key-1",
-            ProviderCatalogCredentialField::ApiKey,
-            stripped,
-        )
-        .is_err());
     }
 
     #[test]
@@ -266,8 +284,6 @@ mod tests {
         .expect("legacy credential should migrate");
         assert_eq!(opened.plaintext, "legacy-secret");
         assert!(opened.migration_required);
-        assert!(opened
-            .protected
-            .starts_with(PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2));
+        assert!(opened.protected.starts_with("aether-secret:v1:"));
     }
 }

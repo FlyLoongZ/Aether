@@ -934,7 +934,7 @@ mod automatic_cleanup_tests {
     #[tokio::test]
     async fn cleanup_removes_existing_hard_invalid_codex_key() {
         let provider = provider("codex");
-        let credential_state = crate::tests::support::credential_fixture_state();
+        let credential_state = crate::tests::support::development_credential_fixture_state();
         let key_id = "key-codex-invalid";
         let encrypted_api_key = seal_provider_catalog_credential(
             &credential_state,

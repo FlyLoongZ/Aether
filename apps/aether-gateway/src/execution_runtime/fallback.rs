@@ -432,7 +432,7 @@ mod tests {
     }
 
     fn sample_key() -> StoredProviderCatalogKey {
-        let credential_state = crate::tests::support::credential_fixture_state();
+        let credential_state = crate::tests::support::development_credential_fixture_state();
         let encrypted_api_key = credential_state
             .seal_provider_catalog_key_api_key("provider-1", "key-1", "plain-upstream-key")
             .expect("api key should encrypt");

@@ -113,31 +113,43 @@ pub(crate) async fn decrypt_or_migrate_smtp_password(
     binding: &SmtpPasswordBinding,
     stored: String,
 ) -> Result<String, GatewayError> {
-    if let Some(plaintext) = decrypt_smtp_password_v3(state, binding, stored.trim()) {
-        return Ok(plaintext);
-    }
-    if !SecretKey::matches_envelope(stored.trim())
-        && (stored.trim().starts_with(SMTP_PASSWORD_V3_PREFIX)
-            || stored.trim().starts_with("aether-smtp-password-"))
-    {
-        return Err(system_config_secret_error(
-            "stored SMTP password cannot be decrypted",
-        ));
-    }
-    let plaintext = decrypt_system_config_secret(state, "smtp_password", stored.trim())
-        .or_else(|| {
-            if stored_secret_uses_known_envelope_family(stored.trim()) {
-                return None;
+    let observed = stored.trim();
+    let sealed = observed
+        .strip_prefix(SMTP_PASSWORD_V3_PREFIX)
+        .unwrap_or(observed);
+    let plaintext = match decrypt_smtp_password_v3(state, binding, observed) {
+        // A destination-bound secret under the previous root key must be
+        // re-sealed, so it falls through to the migration below.
+        Some(plaintext) if !stored_envelope_uses_previous_key(state, sealed) => {
+            return Ok(plaintext);
+        }
+        Some(plaintext) => plaintext,
+        None => {
+            if !SecretKey::matches_envelope(observed)
+                && (observed.starts_with(SMTP_PASSWORD_V3_PREFIX)
+                    || observed.starts_with("aether-smtp-password-"))
+            {
+                return Err(system_config_secret_error(
+                    "stored SMTP password cannot be decrypted",
+                ));
             }
-            decrypt_catalog_secret_with_fallbacks(state.encryption_key(), stored.trim()).or_else(
-                || {
-                    (!stored.trim().is_empty()
-                        && !looks_like_python_fernet_ciphertext(stored.trim()))
-                    .then(|| stored.trim().to_string())
-                },
-            )
-        })
-        .ok_or_else(|| system_config_secret_error("stored SMTP password cannot be decrypted"))?;
+            decrypt_system_config_secret(state, "smtp_password", observed)
+                .or_else(|| {
+                    if stored_secret_uses_known_envelope_family(observed) {
+                        return None;
+                    }
+                    decrypt_catalog_secret_with_fallbacks(state.encryption_key(), observed).or_else(
+                        || {
+                            (!observed.is_empty() && !looks_like_python_fernet_ciphertext(observed))
+                                .then(|| observed.to_string())
+                        },
+                    )
+                })
+                .ok_or_else(|| {
+                    system_config_secret_error("stored SMTP password cannot be decrypted")
+                })?
+        }
+    };
     if plaintext.contains('\0') {
         return Err(system_config_secret_error(
             "stored SMTP password contains reserved secret framing",
@@ -329,6 +341,16 @@ fn decrypt_ldap_bind_password_v3(
         .filter(|plaintext| !plaintext.contains('\0'))
 }
 
+/// True when `stored` is an `aether-secret:v1` envelope sealed by a key other
+/// than the configured current one.
+///
+/// Rotation is only observable through the key id: an envelope written under
+/// the previous root key still decrypts, so the migration decision has to look
+/// at who sealed it rather than at whether decryption succeeded.
+fn stored_envelope_uses_previous_key(state: &AppState, stored: &str) -> bool {
+    super::runtime_secret_uses_previous_key(state.encryption_key(), stored)
+}
+
 fn stored_secret_uses_known_envelope_family(value: &str) -> bool {
     SecretKey::matches_envelope(value)
         || value.starts_with(SYSTEM_CONFIG_SECRET_ENVELOPE_FAMILY_PREFIX)
@@ -475,16 +497,24 @@ pub(crate) async fn decrypt_or_migrate_bark_device_key(
             continue;
         }
         let observed = observed_raw.trim();
-        if SecretKey::matches_envelope(observed) || observed.starts_with(BARK_DEVICE_KEY_V2_PREFIX)
-        {
-            return decrypt_bark_device_key_v2(state, binding, observed).ok_or_else(|| {
-                system_config_secret_error("stored Bark device key cannot be decrypted")
-            });
-        }
-
         // Older Bark entries were written by the generic system-config secret
         // path. They may migrate once, but all new writes are destination-bound.
-        let plaintext = if let Some(plaintext) =
+        let plaintext = if SecretKey::matches_envelope(observed)
+            || observed.starts_with(BARK_DEVICE_KEY_V2_PREFIX)
+        {
+            let branded =
+                decrypt_bark_device_key_v2(state, binding, observed).ok_or_else(|| {
+                    system_config_secret_error("stored Bark device key cannot be decrypted")
+                })?;
+            let sealed = observed
+                .strip_prefix(BARK_DEVICE_KEY_V2_PREFIX)
+                .unwrap_or(observed);
+            if !stored_envelope_uses_previous_key(state, sealed) {
+                return Ok(branded);
+            }
+            // Sealed by the previous root key: re-seal below.
+            branded
+        } else if let Some(plaintext) =
             decrypt_system_config_secret(state, BARK_DEVICE_KEY_CONFIG_KEY, observed)
         {
             plaintext
@@ -565,7 +595,31 @@ pub(crate) async fn decrypt_or_migrate_ldap_bind_password(
                 decrypt_ldap_bind_password_v3(state, &current, observed).ok_or_else(|| {
                     ldap_bind_password_error("stored LDAP bind password cannot be decrypted")
                 })?;
-            return Ok((!plaintext.trim().is_empty()).then_some(plaintext));
+            let sealed = observed
+                .strip_prefix(LDAP_BIND_PASSWORD_V3_PREFIX)
+                .unwrap_or(observed);
+            if !stored_envelope_uses_previous_key(state, sealed) {
+                return Ok((!plaintext.trim().is_empty()).then_some(plaintext));
+            }
+            // Sealed by the previous root key: re-seal with the current one so a
+            // completed rotation can drop it.
+            if plaintext.trim().is_empty() {
+                return Ok(None);
+            }
+            let encrypted =
+                encrypt_ldap_bind_password(state, &current, &plaintext).ok_or_else(|| {
+                    ldap_bind_password_error("LDAP bind password migration is unavailable")
+                })?;
+            if state
+                .compare_and_swap_ldap_bind_password(observed_raw, &encrypted)
+                .await?
+            {
+                return Ok(Some(plaintext));
+            }
+            current = state.get_ldap_module_config().await?.ok_or_else(|| {
+                ldap_bind_password_error("stored LDAP configuration is unavailable")
+            })?;
+            continue;
         }
         if observed.starts_with(LDAP_BIND_PASSWORD_V2_PREFIX) {
             let plaintext = decrypt_ldap_bind_password_v2(state, observed).ok_or_else(|| {
@@ -652,7 +706,7 @@ where
         }
         let observed = observed_raw.trim();
 
-        if SecretKey::matches_envelope(observed)
+        let plaintext = if SecretKey::matches_envelope(observed)
             || observed.starts_with(SYSTEM_CONFIG_SECRET_V2_PREFIX)
         {
             let plaintext =
@@ -661,14 +715,20 @@ where
                         "stored system configuration secret cannot be decrypted",
                     )
                 })?;
-            return Ok(plaintext);
-        }
-        if stored_secret_uses_known_envelope_family(observed) {
-            return Err(system_config_secret_error(
-                "stored system configuration secret cannot be decrypted",
-            ));
-        }
-        let plaintext =
+            let sealed = observed
+                .strip_prefix(SYSTEM_CONFIG_SECRET_V2_PREFIX)
+                .unwrap_or(observed);
+            if !stored_envelope_uses_previous_key(state, sealed) {
+                return Ok(plaintext);
+            }
+            // Sealed by the previous root key: re-seal below.
+            plaintext
+        } else {
+            if stored_secret_uses_known_envelope_family(observed) {
+                return Err(system_config_secret_error(
+                    "stored system configuration secret cannot be decrypted",
+                ));
+            }
             match decrypt_catalog_secret_with_fallbacks(state.encryption_key(), observed) {
                 Some(plaintext) => plaintext,
                 None if looks_like_python_fernet_ciphertext(observed) => {
@@ -677,7 +737,8 @@ where
                     ));
                 }
                 None => observed.to_string(),
-            };
+            }
+        };
         if plaintext.contains('\0') {
             return Err(system_config_secret_error(
                 "stored system configuration secret contains reserved secret framing",
@@ -737,8 +798,7 @@ mod tests {
         decrypt_or_migrate_system_config_secret_with_before_compare, decrypt_system_config_secret,
         encrypt_bark_device_key, encrypt_ldap_bind_password, encrypt_smtp_password,
         encrypt_system_config_secret, ldap_module_config_is_valid,
-        normalize_ldap_transport_server_url, smtp_password_binding, LDAP_BIND_PASSWORD_V3_PREFIX,
-        SMTP_PASSWORD_V3_PREFIX, SYSTEM_CONFIG_SECRET_V2_PREFIX,
+        normalize_ldap_transport_server_url, smtp_password_binding,
     };
     use crate::data::GatewayDataState;
     use crate::tests::DEV_FERNET_KEY;

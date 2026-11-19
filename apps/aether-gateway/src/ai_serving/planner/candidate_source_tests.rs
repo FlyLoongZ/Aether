@@ -1038,7 +1038,7 @@ fn provider_catalog_for_standard_row(
         None,
     )
     .expect("endpoint transport should build");
-    let credential_state = crate::tests::support::credential_fixture_state();
+    let credential_state = crate::tests::support::development_credential_fixture_state();
     let encrypted_api_key = credential_state
         .seal_provider_catalog_key_api_key(
             row.provider_id.as_str(),

@@ -1,10 +1,11 @@
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 use sha2::{Digest, Sha256};
 
 use crate::{AppState, GatewayError};
 
 use super::{
-    decrypt_catalog_secret_with_fallbacks, open_runtime_secret_payload, seal_runtime_secret_payload,
+    decrypt_catalog_secret_with_fallbacks, open_runtime_secret_payload_with_key_state,
+    seal_runtime_secret_payload,
 };
 
 const AUTH_API_KEY_SECRET_MIGRATION_RETRIES: usize = 8;
@@ -59,9 +60,8 @@ pub(crate) fn seal_auth_api_key_secret(
         return Err("API-key plaintext does not match its hash");
     }
     let purpose = auth_api_key_secret_purpose(user_id, api_key_id, key_hash, is_standalone)?;
-    let sealed = seal_runtime_secret_payload(state, &purpose, plaintext)
-        .ok_or("API-key encryption key is not configured")?;
-    Ok(format!("{AUTH_API_KEY_SECRET_ENVELOPE_V2}{sealed}"))
+    seal_runtime_secret_payload(state, &purpose, plaintext)
+        .ok_or("API-key encryption key is not configured")
 }
 
 pub(crate) fn open_auth_api_key_secret(
@@ -83,39 +83,62 @@ pub(crate) fn open_auth_api_key_secret(
         record.is_standalone,
     )?;
 
-    let (plaintext, protected, migration_required) =
-        if let Some(sealed) = stored.strip_prefix(AUTH_API_KEY_SECRET_ENVELOPE_V2) {
-            let plaintext = open_runtime_secret_payload(state, &purpose, sealed)
+    let (plaintext, protected, migration_required) = if SecretKey::matches_envelope(stored)
+        || stored.starts_with(AUTH_API_KEY_SECRET_ENVELOPE_V2)
+    {
+        let sealed = if SecretKey::matches_envelope(stored) {
+            stored
+        } else {
+            stored
+                .strip_prefix(AUTH_API_KEY_SECRET_ENVELOPE_V2)
+                .expect("checked API-key envelope prefix")
+        };
+        let opened =
+            open_runtime_secret_payload_with_key_state(state.encryption_key(), &purpose, sealed)
                 .ok_or("API-key secret authentication failed")?;
+        if opened.sealed_with_current_key {
             (
-                plaintext,
+                opened.plaintext,
                 stored.to_string(),
                 observed_raw.as_bytes() != stored.as_bytes(),
             )
         } else {
-            if stored.starts_with(AUTH_API_KEY_SECRET_ENVELOPE_FAMILY) {
-                return Err("unsupported API-key secret envelope");
-            }
-            // Every purpose-bound secret family in Aether uses an `aether-` envelope. Never feed
-            // a foreign or future envelope into the legacy Fernet path.
-            if stored.starts_with(AETHER_ENVELOPE_FAMILY) {
-                return Err("secret envelope has the wrong purpose");
-            }
-            if !looks_like_python_fernet_ciphertext(stored) {
-                return Err("API-key secret is not an authenticated ciphertext");
-            }
-            let plaintext = decrypt_catalog_secret_with_fallbacks(state.encryption_key(), stored)
-                .ok_or("legacy API-key secret authentication failed")?;
+            // Sealed by the previous root key (or wrapped in a legacy prefix):
+            // re-seal under the current key so the rotation can drain.
             let protected = seal_auth_api_key_secret(
                 state,
                 &record.user_id,
                 &record.api_key_id,
                 &record.key_hash,
                 record.is_standalone,
-                &plaintext,
+                &opened.plaintext,
             )?;
-            (plaintext, protected, true)
-        };
+            (opened.plaintext, protected, true)
+        }
+    } else {
+        if stored.starts_with(AUTH_API_KEY_SECRET_ENVELOPE_FAMILY) {
+            return Err("unsupported API-key secret envelope");
+        }
+        // Every purpose-bound secret family in Aether uses an `aether-` envelope. Never feed
+        // a foreign or future envelope into the legacy Fernet path.
+        if stored.starts_with(AETHER_ENVELOPE_FAMILY) {
+            return Err("secret envelope has the wrong purpose");
+        }
+        if !looks_like_python_fernet_ciphertext(stored) {
+            return Err("API-key secret is not an authenticated ciphertext");
+        }
+        let plaintext = decrypt_catalog_secret_with_fallbacks(state.encryption_key(), stored)
+            .ok_or("legacy API-key secret authentication failed")?;
+        let protected = seal_auth_api_key_secret(
+            state,
+            &record.user_id,
+            &record.api_key_id,
+            &record.key_hash,
+            record.is_standalone,
+            &plaintext,
+        )?;
+        (plaintext, protected, true)
+    };
 
     if plaintext.contains('\0') {
         return Err("API-key plaintext contains reserved secret framing");
@@ -317,9 +340,7 @@ mod tests {
             open_auth_api_key_secret(&state, &source).expect("legacy secret should open");
         assert_eq!(projection.plaintext, plaintext);
         assert!(projection.migration_required);
-        assert!(projection
-            .protected
-            .starts_with("aether-auth-api-key-secret-v2:"));
+        assert!(projection.protected.starts_with("aether-secret:v1:"));
 
         let copied = record(
             "another-record-secret",

@@ -147,7 +147,7 @@ async fn gateway_handles_admin_modules_status_with_legacy_smtp_password() {
     assert!(stored
         .as_str()
         .unwrap()
-        .starts_with("aether-smtp-password-v3:"));
+        .starts_with("aether-secret:v1:"));
     let smtp = crate::email_delivery::read_smtp_delivery_config(&state)
         .await
         .expect("migrated SMTP config should load")

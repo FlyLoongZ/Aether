@@ -12,9 +12,9 @@ use aether_admin::provider::redaction::{
     admin_provider_upstream_metadata_safe_json, admin_secret_safe_json, admin_secret_safe_proxy,
 };
 use aether_admin::provider::status as admin_provider_status_pure;
+use aether_crypto::decrypt_python_fernet_ciphertext;
 #[cfg(test)]
-use aether_crypto::DEVELOPMENT_ENCRYPTION_KEY;
-use aether_crypto::{decrypt_python_fernet_ciphertext, encrypt_python_fernet_plaintext};
+use aether_crypto::encrypt_python_fernet_plaintext;
 
 use aether_data_contracts::repository::provider_catalog::StoredProviderCatalogKey;
 use aether_provider_pool::provider_pool_codex_metadata_has_account_quota;
@@ -67,13 +67,14 @@ pub(crate) fn effective_catalog_encryption_key_from_config(
         }
     }
     #[cfg(test)]
-    const FALLBACK_ENCRYPTION_KEY: Option<&str> = Some(DEVELOPMENT_ENCRYPTION_KEY);
+    const FALLBACK_ENCRYPTION_KEY: Option<&str> = Some(crate::tests::DEV_FERNET_KEY);
     #[cfg(not(test))]
     const FALLBACK_ENCRYPTION_KEY: Option<&str> = None;
 
     FALLBACK_ENCRYPTION_KEY.map(Cow::Borrowed)
 }
 
+#[cfg(test)]
 pub(crate) fn encrypt_catalog_secret_with_fallbacks(
     state: &AppState,
     plaintext: &str,
@@ -81,6 +82,7 @@ pub(crate) fn encrypt_catalog_secret_with_fallbacks(
     encrypt_catalog_secret_with_configured_key_fallbacks(state.encryption_key(), plaintext)
 }
 
+#[cfg(test)]
 pub(crate) fn encrypt_catalog_secret_with_configured_key_fallbacks(
     encryption_key: Option<&str>,
     plaintext: &str,

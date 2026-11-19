@@ -34,6 +34,35 @@ const MAX_SECRET_PLAINTEXT_BYTES: usize = 16 * 1024 * 1024;
 static ROOT_KEY_CACHE: LazyLock<RwLock<RootKeyCache>> =
     LazyLock::new(|| RwLock::new(RootKeyCache::default()));
 
+/// Process-wide previous root secret. Writes always use the configured current
+/// key; reads fall back to this one so a rotation does not strand existing
+/// envelopes. Only one previous key is kept: rotation is a two-step operation
+/// (old -> new, then drop the old key once the rewrite has drained it).
+static PREVIOUS_SECRET: LazyLock<RwLock<Option<Zeroizing<String>>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+/// Registers the previous encryption secret used for read fallback.
+pub fn configure_previous_secret(secret: Option<&str>) {
+    let value = secret
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| Zeroizing::new(value.to_string()));
+    *PREVIOUS_SECRET
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = value;
+}
+
+/// Whether a previous secret is registered for read fallback.
+///
+/// Diagnostics need this to tell "the row is broken" apart from "the operator
+/// forgot to keep the previous key configured".
+pub fn previous_secret_configured() -> bool {
+    PREVIOUS_SECRET
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .is_some()
+}
+
 const APP_SALT: &[u8] = APP_SALT_SEED;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -268,10 +297,60 @@ impl SecretKey {
         String::from_utf8(plaintext.to_vec()).map_err(SecretEnvelopeError::InvalidUtf8)
     }
 
+    /// Opens with the current key and, when the envelope belongs to the
+    /// previous key, retries with the process-wide previous secret.
+    pub fn open_with_previous(
+        &self,
+        context: SecretContext<'_>,
+        envelope: &str,
+    ) -> Result<String, SecretEnvelopeError> {
+        match self.open(context, envelope) {
+            Ok(plaintext) => Ok(plaintext),
+            Err(SecretEnvelopeError::KeyIdMismatch) => {
+                let previous = PREVIOUS_SECRET
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner())
+                    .clone();
+                match previous {
+                    Some(previous) => {
+                        SecretKey::from_secret(previous.as_str()).open(context, envelope)
+                    }
+                    None => Err(SecretEnvelopeError::KeyIdMismatch),
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     /// Returns true when the value already uses the `aether-secret:v1` format.
     pub fn matches_envelope(value: &str) -> bool {
         value.starts_with(SECRET_ENVELOPE_PREFIX)
     }
+
+    /// Returns true when this key sealed the envelope.
+    ///
+    /// Rotation needs this: a row that still opens under the *previous* key is
+    /// readable but not yet migrated, and only a key id comparison can tell.
+    /// `open` deliberately does not report it, because a mismatch is an error
+    /// there rather than information.
+    pub fn sealed_envelope(&self, envelope: &str) -> bool {
+        envelope_key_id(envelope).is_some_and(|key_id| key_id == self.key_id)
+    }
+}
+
+/// Returns the key id stored in an `aether-secret:v1` envelope.
+///
+/// Returns `None` for anything that is not a well-formed envelope of this
+/// scheme, so a legacy or foreign value is never mistaken for "sealed by some
+/// other key".
+pub fn envelope_key_id(envelope: &str) -> Option<&str> {
+    let rest = envelope.strip_prefix(SECRET_SCHEME_PREFIX)?;
+    let (version, rest) = rest.split_once(':')?;
+    if version.as_bytes() != ENVELOPE_VERSION {
+        return None;
+    }
+    let (key_id, _) = rest.split_once(':')?;
+    (!key_id.is_empty()).then_some(key_id)
 }
 
 fn associated_data(key_id: &str, context: SecretContext<'_>) -> Vec<u8> {
@@ -470,6 +549,26 @@ mod tests {
             error,
             SecretEnvelopeError::PlaintextTooLarge { .. }
         ));
+    }
+
+    #[test]
+    fn envelope_key_id_distinguishes_the_sealing_key() {
+        let current = SecretKey::from_secret("current-rotation-secret");
+        let previous = SecretKey::from_secret("previous-rotation-secret");
+        let sealed = previous
+            .seal(SecretContext::Runtime, "rotation-marker")
+            .expect("previous key should seal");
+
+        assert_eq!(
+            envelope_key_id(&sealed),
+            Some(previous.key_id()),
+            "the envelope must expose the key that sealed it"
+        );
+        assert!(previous.sealed_envelope(&sealed));
+        assert!(!current.sealed_envelope(&sealed));
+        // Legacy and foreign values must not look like "sealed by a key".
+        assert_eq!(envelope_key_id("aether-runtime-secret-v1:abc"), None);
+        assert_eq!(envelope_key_id("plain-text-secret"), None);
     }
 
     #[test]

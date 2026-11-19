@@ -18,7 +18,7 @@ pub(crate) fn seal_runtime_secret_payload(
         return None;
     }
     let protected = format!("{purpose}\0{plaintext}");
-    seal_runtime_secret_plaintext(state.encryption_key(), &purpose, &protected)
+    seal_runtime_secret_plaintext(state.encryption_key(), purpose, &protected)
 }
 
 pub(crate) fn seal_runtime_secret_payload_with_encryption_key(
@@ -30,7 +30,18 @@ pub(crate) fn seal_runtime_secret_payload_with_encryption_key(
         return None;
     }
     let protected = format!("{purpose}\0{plaintext}");
-    seal_runtime_secret_plaintext(encryption_key, &purpose, &protected)
+    seal_runtime_secret_plaintext(encryption_key, purpose, &protected)
+}
+
+/// A decrypted runtime secret plus the rotation state of its envelope.
+pub(crate) struct OpenedRuntimeSecret {
+    pub(crate) plaintext: String,
+    /// True when the stored envelope was sealed with the current root key.
+    ///
+    /// A row that opens under the previous key is readable but not migrated;
+    /// callers fold this into their `migration_required` decision so a rotation
+    /// drains the data instead of leaving it stranded on the old key.
+    pub(crate) sealed_with_current_key: bool,
 }
 
 pub(crate) fn open_runtime_secret_payload(
@@ -38,7 +49,8 @@ pub(crate) fn open_runtime_secret_payload(
     purpose: &str,
     stored: &str,
 ) -> Option<String> {
-    open_runtime_secret_payload_with_encryption_key(state.encryption_key(), purpose, stored)
+    open_runtime_secret_payload_with_key_state(state.encryption_key(), purpose, stored)
+        .map(|opened| opened.plaintext)
 }
 
 pub(crate) fn open_runtime_secret_payload_with_encryption_key(
@@ -46,20 +58,73 @@ pub(crate) fn open_runtime_secret_payload_with_encryption_key(
     purpose: &str,
     stored: &str,
 ) -> Option<String> {
+    open_runtime_secret_payload_with_key_state(encryption_key, purpose, stored)
+        .map(|opened| opened.plaintext)
+}
+
+pub(crate) fn open_runtime_secret_payload_with_key_state(
+    encryption_key: Option<&str>,
+    purpose: &str,
+    stored: &str,
+) -> Option<OpenedRuntimeSecret> {
     if purpose.is_empty() {
         return None;
     }
-    let protected = if SecretKey::matches_envelope(stored) {
-        let encryption_key = effective_catalog_encryption_key_from_config(encryption_key)?;
-        SecretKey::from_secret(encryption_key.as_ref())
-            .open(SecretContext::Custom(purpose), stored)
-            .ok()?
+    let (protected, sealed_with_current_key) = if SecretKey::matches_envelope(stored) {
+        let Some(encryption_key) = effective_catalog_encryption_key_from_config(encryption_key)
+        else {
+            return None;
+        };
+        let key = SecretKey::from_secret(encryption_key.as_ref());
+        // Read the key id before opening: `open_with_previous` succeeds for both
+        // keys and would otherwise hide which one produced the plaintext.
+        let sealed_with_current_key = key.sealed_envelope(stored);
+        let plaintext = match key.open_with_previous(SecretContext::Custom(purpose), stored) {
+            Ok(plaintext) => plaintext,
+            Err(_) => return None,
+        };
+        (plaintext, sealed_with_current_key)
     } else {
-        let ciphertext = stored.strip_prefix(RUNTIME_SECRET_ENVELOPE_PREFIX)?;
-        decrypt_catalog_secret_with_fallbacks(encryption_key, ciphertext)?
+        // Legacy prefixes carry no key id, so they always need a rewrite.
+        let Some(ciphertext) = stored.strip_prefix(RUNTIME_SECRET_ENVELOPE_PREFIX) else {
+            return None;
+        };
+        match decrypt_catalog_secret_with_fallbacks(encryption_key, ciphertext) {
+            Some(plaintext) => (plaintext, false),
+            None => return None,
+        }
     };
-    let plaintext = protected.strip_prefix(purpose)?.strip_prefix('\0')?;
-    (!plaintext.contains('\0')).then(|| plaintext.to_owned())
+    let Some(plaintext) = protected.strip_prefix(purpose) else {
+        return None;
+    };
+    let Some(plaintext) = plaintext.strip_prefix('\0') else {
+        return None;
+    };
+    if plaintext.contains('\0') {
+        return None;
+    }
+    Some(OpenedRuntimeSecret {
+        plaintext: plaintext.to_owned(),
+        sealed_with_current_key,
+    })
+}
+
+/// True when `stored` is an `aether-secret:v1` envelope sealed by a key other
+/// than the configured current one.
+///
+/// Rotation is only observable through the key id: an envelope written under
+/// the previous root key still decrypts, so every migration decision has to ask
+/// *who* sealed it instead of whether decryption succeeded.
+pub(crate) fn runtime_secret_uses_previous_key(encryption_key: Option<&str>, stored: &str) -> bool {
+    if !SecretKey::matches_envelope(stored) {
+        return false;
+    }
+    match effective_catalog_encryption_key_from_config(encryption_key) {
+        Some(encryption_key) => {
+            !SecretKey::from_secret(encryption_key.as_ref()).sealed_envelope(stored)
+        }
+        None => false,
+    }
 }
 
 pub(crate) fn runtime_secret_payload_is_sealed(value: &str) -> bool {
@@ -100,6 +165,48 @@ mod tests {
             Some(payload)
         );
         assert!(open_runtime_secret_payload(&state, "provider-oauth-state", &sealed).is_none());
+    }
+
+    #[test]
+    fn previous_key_payloads_are_flagged_for_rewrite() {
+        use aether_crypto::{configure_previous_secret, SecretContext, SecretKey};
+
+        let state = state_with_encryption_key();
+        let purpose = "identity-oauth-state";
+
+        let current = seal_runtime_secret_payload(&state, purpose, "current-key-marker")
+            .expect("runtime secret should encrypt");
+        let opened = super::open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            purpose,
+            &current,
+        )
+        .expect("current key should open");
+        assert!(opened.sealed_with_current_key);
+
+        // A value sealed by another key still opens once that key is registered
+        // as the previous one, and must report that it needs a rewrite.
+        let previous_secret = "previous-runtime-secret-for-rotation-test";
+        let stale = SecretKey::from_secret(previous_secret)
+            .seal(
+                SecretContext::Custom(purpose),
+                &format!("{purpose}\0previous-key-marker"),
+            )
+            .expect("previous key should seal");
+        configure_previous_secret(Some(previous_secret));
+        let opened = super::open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            purpose,
+            &stale,
+        )
+        .expect("previous key should open");
+        configure_previous_secret(None);
+
+        assert_eq!(opened.plaintext, "previous-key-marker");
+        assert!(
+            !opened.sealed_with_current_key,
+            "a previous-key envelope must be flagged for rewrite"
+        );
     }
 
     #[test]

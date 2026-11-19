@@ -124,7 +124,8 @@ pub(crate) use self::request_utils::{
 
 pub(crate) use self::runtime_secret::{
     open_runtime_secret_payload, open_runtime_secret_payload_with_encryption_key,
-    runtime_secret_payload_is_sealed, seal_runtime_secret_payload,
+    open_runtime_secret_payload_with_key_state, runtime_secret_payload_is_sealed,
+    runtime_secret_uses_previous_key, seal_runtime_secret_payload,
     seal_runtime_secret_payload_with_encryption_key,
 };
 pub(crate) use self::stateless_policy::{

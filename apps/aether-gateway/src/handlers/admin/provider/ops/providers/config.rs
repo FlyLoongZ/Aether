@@ -742,7 +742,7 @@ mod tests {
         // New migrations use a binding-aware runtime-secret envelope.  Keep
         // the legacy Fernet assertion below only for the tamper fixture; a
         // migrated value must no longer be treated as an unbound Fernet blob.
-        assert!(ciphertext.starts_with("aether-provider-ops-credential-v2:"));
+        assert!(ciphertext.starts_with("aether-secret:v1:"));
         assert_eq!(
             open_provider_ops_credential(&state, &snapshot.binding, "api_key", ciphertext)
                 .expect("migrated Provider Ops API key should decrypt")

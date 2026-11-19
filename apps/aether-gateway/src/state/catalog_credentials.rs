@@ -370,11 +370,11 @@ mod tests {
         assert!(stored
             .encrypted_api_key
             .as_deref()
-            .is_some_and(|value| value.starts_with("aether-provider-catalog-credential-v2:")));
+            .is_some_and(|value| value.starts_with("aether-secret:v1:")));
         assert!(stored
             .encrypted_auth_config
             .as_deref()
-            .is_some_and(|value| value.starts_with("aether-provider-catalog-credential-v2:")));
+            .is_some_and(|value| value.starts_with("aether-secret:v1:")));
     }
 
     #[tokio::test]

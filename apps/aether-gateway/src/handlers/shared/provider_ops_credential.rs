@@ -1,4 +1,4 @@
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -212,9 +212,8 @@ pub(crate) fn seal_provider_ops_credential(
         return Err("Provider Ops credential 包含保留分隔符");
     }
     let purpose = provider_ops_credential_purpose(binding, field)?;
-    let sealed = seal_runtime_secret_payload(state, &purpose, plaintext)
-        .ok_or("gateway 未配置 Provider Ops 加密密钥")?;
-    Ok(format!("{PROVIDER_OPS_CREDENTIAL_ENVELOPE_V2}{sealed}"))
+    seal_runtime_secret_payload(state, &purpose, plaintext)
+        .ok_or("gateway 未配置 Provider Ops 加密密钥")
 }
 
 pub(crate) fn open_provider_ops_credential(
@@ -224,6 +223,31 @@ pub(crate) fn open_provider_ops_credential(
     stored: &str,
 ) -> Result<ProviderOpsCredentialProjection, &'static str> {
     let purpose = provider_ops_credential_purpose(binding, field)?;
+    if SecretKey::matches_envelope(stored) {
+        let opened = super::open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            &purpose,
+            stored,
+        )
+        .ok_or("Provider Ops credential 认证或绑定校验失败")?;
+        if opened.plaintext.contains('\0') {
+            return Err("Provider Ops credential 包含保留分隔符");
+        }
+        if !opened.sealed_with_current_key {
+            // Sealed by the previous root key: re-seal so the rotation drains.
+            let protected = seal_provider_ops_credential(state, binding, field, &opened.plaintext)?;
+            return Ok(ProviderOpsCredentialProjection {
+                plaintext: opened.plaintext,
+                protected,
+                migration_required: true,
+            });
+        }
+        return Ok(ProviderOpsCredentialProjection {
+            plaintext: opened.plaintext,
+            protected: stored.to_string(),
+            migration_required: false,
+        });
+    }
     if let Some(sealed) = stored.strip_prefix(PROVIDER_OPS_CREDENTIAL_ENVELOPE_V2) {
         let plaintext = open_runtime_secret_payload(state, &purpose, sealed)
             .ok_or("Provider Ops credential 认证或绑定校验失败")?;

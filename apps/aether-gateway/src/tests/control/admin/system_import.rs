@@ -1670,7 +1670,7 @@ async fn authenticated_recovery_restores_password_and_api_key_login_material_imp
     assert!(keys[0]
         .key_encrypted
         .as_deref()
-        .is_some_and(|value| value.starts_with("aether-auth-api-key-secret-v2:")));
+        .is_some_and(|value| value.starts_with("aether-secret:v1:")));
     let decrypted = open_auth_api_key_secret(&state, &keys[0])
         .ok()
         .map(|projection| projection.plaintext);

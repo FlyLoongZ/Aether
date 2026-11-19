@@ -2,7 +2,7 @@ use aether_admin::provider::redaction::{
     admin_json_field_has_contextual_secrets, admin_json_field_is_sensitive,
     admin_proxy_credential_field, AdminProxyCredentialField,
 };
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 use aether_data_contracts::repository::provider_catalog::{
     ProviderCatalogProxyCasUpdate, StoredProviderCatalogEndpoint, StoredProviderCatalogKey,
     StoredProviderCatalogProvider,
@@ -14,7 +14,8 @@ use url::Url;
 
 use super::AppState;
 use crate::handlers::shared::{
-    open_runtime_secret_payload, runtime_secret_payload_is_sealed, seal_runtime_secret_payload,
+    open_runtime_secret_payload, runtime_secret_payload_is_sealed,
+    runtime_secret_uses_previous_key, seal_runtime_secret_payload,
 };
 use crate::GatewayError;
 
@@ -547,10 +548,23 @@ impl AppState {
         if source == CatalogProxySource::Stored && catalog_proxy_secret_is_v2(value) {
             let plaintext = open_catalog_proxy_secret_v2(self, scope, record_id, field, value)
                 .ok_or_else(|| catalog_proxy_storage_error(scope))?;
+            let sealed = value
+                .strip_prefix(CATALOG_PROXY_SECRET_V2_PREFIX)
+                .unwrap_or(value);
+            if !runtime_secret_uses_previous_key(self.encryption_key(), sealed) {
+                return Ok(Some(CatalogProxyCredential {
+                    plaintext,
+                    protected: value.to_string(),
+                    migration_required: false,
+                }));
+            }
+            // Sealed by the previous root key: re-seal under the current one.
+            let protected = seal_catalog_proxy_secret_v2(self, scope, record_id, field, &plaintext)
+                .ok_or_else(|| catalog_proxy_encryption_error(scope))?;
             return Ok(Some(CatalogProxyCredential {
                 plaintext,
-                protected: value.to_string(),
-                migration_required: false,
+                protected,
+                migration_required: true,
             }));
         }
         if source == CatalogProxySource::Stored && runtime_secret_payload_is_sealed(value) {
@@ -588,7 +602,7 @@ impl AppState {
 }
 
 fn catalog_proxy_secret_is_v2(value: &str) -> bool {
-    value.starts_with(CATALOG_PROXY_SECRET_V2_PREFIX)
+    SecretKey::matches_envelope(value) || value.starts_with(CATALOG_PROXY_SECRET_V2_PREFIX)
 }
 
 fn catalog_proxy_bound_purpose(scope: CatalogProxyScope, record_id: &str, field: &str) -> String {
@@ -611,7 +625,6 @@ fn seal_catalog_proxy_secret_v2(
     }
     let purpose = catalog_proxy_bound_purpose(scope, record_id, field);
     seal_runtime_secret_payload(state, &purpose, plaintext)
-        .map(|sealed| format!("{CATALOG_PROXY_SECRET_V2_PREFIX}{sealed}"))
 }
 
 fn open_catalog_proxy_secret_v2(
@@ -623,8 +636,12 @@ fn open_catalog_proxy_secret_v2(
 ) -> Option<String> {
     // The distinct outer envelope is security-significant: a v2 binding failure
     // must never be retried with the unbound legacy purpose.
-    let sealed = stored.strip_prefix(CATALOG_PROXY_SECRET_V2_PREFIX)?;
     let purpose = catalog_proxy_bound_purpose(scope, record_id, field);
+    let sealed = if SecretKey::matches_envelope(stored) {
+        stored
+    } else {
+        stored.strip_prefix(CATALOG_PROXY_SECRET_V2_PREFIX)?
+    };
     open_runtime_secret_payload(state, &purpose, sealed)
         .filter(|plaintext| !plaintext.contains('\0'))
 }
@@ -1072,6 +1089,8 @@ mod tests {
     use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
     use serde_json::{json, Value};
 
+    use crate::handlers::shared::encrypt_catalog_secret_with_fallbacks;
+
     use super::{
         catalog_proxy_secret_is_v2, open_catalog_proxy_secret_v2, seal_catalog_proxy_secret_v2,
         CatalogProxyScope, ENDPOINT_PROXY_PASSWORD_PURPOSE, PROVIDER_PROXY_PASSWORD_PURPOSE,
@@ -1149,7 +1168,11 @@ mod tests {
     }
 
     fn encryption_state() -> AppState {
-        crate::tests::support::credential_fixture_state()
+        state_with_repository(Arc::new(InMemoryProviderCatalogReadRepository::seed(
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )))
     }
 
     #[tokio::test]
@@ -1245,12 +1268,14 @@ mod tests {
     #[tokio::test]
     async fn legacy_unbound_proxy_ciphertext_is_migrated_to_record_bound_v2_with_cas() {
         let encryptor = encryption_state();
-        let legacy_password = seal_runtime_secret_payload(
-            &encryptor,
-            PROVIDER_PROXY_PASSWORD_PURPOSE,
-            "legacy-unbound-password",
-        )
-        .expect("legacy password should seal");
+        let legacy_password = format!(
+            "aether-runtime-secret-v1:{}",
+            encrypt_catalog_secret_with_fallbacks(
+                &encryptor,
+                &format!("{PROVIDER_PROXY_PASSWORD_PURPOSE}\0legacy-unbound-password"),
+            )
+            .expect("legacy password should seal")
+        );
         let provider = sample_provider(
             "provider-legacy-envelope",
             Some(json!({

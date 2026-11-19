@@ -1,4 +1,4 @@
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 
 use crate::AppState;
 
@@ -188,9 +188,8 @@ pub(crate) fn seal_payment_gateway_secret(
         return Err("payment gateway secret contains reserved framing");
     }
     let purpose = payment_gateway_secret_purpose_v3(binding)?;
-    let sealed = seal_runtime_secret_payload(state, &purpose, plaintext)
-        .ok_or("payment gateway secret encryption key is not configured")?;
-    Ok(format!("{PAYMENT_GATEWAY_SECRET_ENVELOPE_V3}{sealed}"))
+    seal_runtime_secret_payload(state, &purpose, plaintext)
+        .ok_or("payment gateway secret encryption key is not configured")
 }
 
 pub(crate) fn open_payment_gateway_secret(
@@ -199,6 +198,32 @@ pub(crate) fn open_payment_gateway_secret(
     stored: &str,
 ) -> Result<PaymentGatewaySecretProjection, &'static str> {
     let purpose = payment_gateway_secret_purpose_v3(binding)?;
+    if SecretKey::matches_envelope(stored) {
+        let opened = super::open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            &purpose,
+            stored,
+        )
+        .ok_or("payment gateway secret authentication or binding failed")?;
+        if opened.plaintext.contains('\0') {
+            return Err("payment gateway secret contains reserved framing");
+        }
+        if !opened.sealed_with_current_key {
+            // Sealed by the previous root key: re-seal so a completed rotation can
+            // drop that key.
+            let protected = seal_payment_gateway_secret(state, binding, &opened.plaintext)?;
+            return Ok(PaymentGatewaySecretProjection {
+                plaintext: opened.plaintext,
+                protected,
+                migration_required: true,
+            });
+        }
+        return Ok(PaymentGatewaySecretProjection {
+            plaintext: opened.plaintext,
+            protected: stored.to_string(),
+            migration_required: false,
+        });
+    }
     if let Some(sealed) = stored.strip_prefix(PAYMENT_GATEWAY_SECRET_ENVELOPE_V3) {
         let plaintext = open_runtime_secret_payload(state, &purpose, sealed)
             .ok_or("payment gateway secret authentication or binding failed")?;
@@ -258,8 +283,7 @@ pub(crate) fn open_payment_gateway_secret(
 mod tests {
     use super::{
         open_payment_gateway_secret, seal_payment_gateway_secret, PaymentGatewaySecretBinding,
-        PAYMENT_GATEWAY_SECRET_ENVELOPE_V2, PAYMENT_GATEWAY_SECRET_ENVELOPE_V3,
-        STRIPE_DEFAULT_API_URL,
+        PAYMENT_GATEWAY_SECRET_ENVELOPE_V2, STRIPE_DEFAULT_API_URL,
     };
     use crate::handlers::shared::{
         encrypt_catalog_secret_with_fallbacks, seal_runtime_secret_payload,
@@ -320,11 +344,6 @@ mod tests {
         )
         .is_err());
 
-        let stripped = sealed
-            .strip_prefix(PAYMENT_GATEWAY_SECRET_ENVELOPE_V3)
-            .expect("test value should contain the business envelope layer");
-        assert!(open_payment_gateway_secret(&state, &binding, stripped).is_err());
-
         let mut tampered = sealed.into_bytes();
         let last = tampered
             .last_mut()
@@ -349,9 +368,7 @@ mod tests {
             .expect("legacy secret should migrate");
         assert_eq!(opened.plaintext, "legacy-secret");
         assert!(opened.migration_required);
-        assert!(opened
-            .protected
-            .starts_with("aether-payment-gateway-secret-v3:"));
+        assert!(opened.protected.starts_with("aether-secret:v1:"));
 
         let old_v2 = seal_runtime_secret_payload(
             &state,
@@ -364,9 +381,7 @@ mod tests {
             .expect("legacy v2 secret should migrate");
         assert_eq!(migrated.plaintext, "v2-secret");
         assert!(migrated.migration_required);
-        assert!(migrated
-            .protected
-            .starts_with(PAYMENT_GATEWAY_SECRET_ENVELOPE_V3));
+        assert!(migrated.protected.starts_with("aether-secret:v1:"));
 
         assert!(open_payment_gateway_secret(
             &state,

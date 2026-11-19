@@ -1,4 +1,6 @@
-use aether_crypto::{decrypt_python_fernet_ciphertext, looks_like_python_fernet_ciphertext};
+use aether_crypto::{
+    decrypt_python_fernet_ciphertext, looks_like_python_fernet_ciphertext, SecretContext, SecretKey,
+};
 use aether_data_contracts::repository::provider_catalog::{
     StoredProviderCatalogEndpoint, StoredProviderCatalogKey, StoredProviderCatalogProvider,
 };
@@ -141,8 +143,30 @@ fn decrypt_secret(
     field: &str,
     field_name: &str,
 ) -> Result<String, DataLayerError> {
+    if SecretKey::matches_envelope(ciphertext) {
+        return decrypt_bound_secret(
+            encryption_key,
+            fallback_encryption_keys,
+            ciphertext,
+            provider_id,
+            key_id,
+            field,
+            field_name,
+        );
+    }
     if let Some(runtime_envelope) = ciphertext.strip_prefix(PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2)
     {
+        if SecretKey::matches_envelope(runtime_envelope) {
+            return decrypt_bound_secret(
+                encryption_key,
+                fallback_encryption_keys,
+                runtime_envelope,
+                provider_id,
+                key_id,
+                field,
+                field_name,
+            );
+        }
         let inner_ciphertext = runtime_envelope
             .strip_prefix(RUNTIME_SECRET_ENVELOPE_PREFIX)
             .ok_or_else(|| {
@@ -194,6 +218,38 @@ fn decrypt_secret(
     Ok(plaintext)
 }
 
+fn decrypt_bound_secret(
+    encryption_key: &str,
+    fallback_encryption_keys: &[String],
+    ciphertext: &str,
+    provider_id: &str,
+    key_id: &str,
+    field: &str,
+    field_name: &str,
+) -> Result<String, DataLayerError> {
+    let purpose = provider_catalog_credential_purpose(provider_id, key_id, field);
+    let mut candidates = Vec::with_capacity(fallback_encryption_keys.len() + 1);
+    candidates.push(encryption_key);
+    candidates.extend(fallback_encryption_keys.iter().map(String::as_str));
+    for candidate in candidates {
+        let key = SecretKey::from_secret(candidate);
+        if let Ok(protected) = key.open(SecretContext::Custom(&purpose), ciphertext) {
+            return protected
+                .strip_prefix(&purpose)
+                .and_then(|value| value.strip_prefix('\0'))
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    DataLayerError::UnexpectedValue(format!(
+                        "{field_name} provider catalog credential authentication failed"
+                    ))
+                });
+        }
+    }
+    Err(DataLayerError::UnexpectedValue(format!(
+        "{field_name} provider catalog credential authentication failed"
+    )))
+}
+
 fn provider_catalog_credential_purpose(provider_id: &str, key_id: &str, field: &str) -> String {
     format!(
         "{PROVIDER_CATALOG_CREDENTIAL_PURPOSE_V2}\0provider-id-bytes={}\0{provider_id}\0key-id-bytes={}\0{key_id}\0field={field}",
@@ -227,7 +283,10 @@ fn decrypt_fernet_with_fallbacks(
 
 pub(super) fn fallback_encryption_keys(primary_encryption_key: &str) -> Vec<String> {
     let mut keys = Vec::new();
-    for env_key in ["ENCRYPTION_KEY"] {
+    // `ENCRYPTION_KEY_PREVIOUS` first: during a rotation the previous key is the
+    // one a still-unmigrated row was sealed with, and this path never re-seals,
+    // so it has to read both.
+    for env_key in ["ENCRYPTION_KEY_PREVIOUS", "ENCRYPTION_KEY"] {
         let Ok(value) = std::env::var(env_key) else {
             continue;
         };

@@ -814,10 +814,7 @@ mod tests {
         assert_eq!(snapshot.user_role, "admin");
         assert!(snapshot.user_is_active);
         assert!(!snapshot.user_is_deleted);
-        assert_eq!(
-            snapshot.user_allowed_providers,
-            Some(vec!["openai".to_string()])
-        );
+        assert_eq!(snapshot.user_allowed_providers, None);
         assert_eq!(
             snapshot.api_key_allowed_providers,
             Some(vec!["anthropic".to_string()])

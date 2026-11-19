@@ -1,6 +1,6 @@
 use std::future::Future;
 
-use aether_crypto::looks_like_python_fernet_ciphertext;
+use aether_crypto::{looks_like_python_fernet_ciphertext, SecretKey};
 use aether_data_contracts::repository::oauth_providers::{
     validate_oauth_redirect_uri, StoredOAuthProviderConfig, UpsertOAuthProviderConfigRecord,
 };
@@ -219,11 +219,8 @@ pub(crate) fn seal_identity_oauth_provider_client_secret(
     }
     let binding = upsert_identity_oauth_client_secret_binding(provider)?;
     let purpose = identity_oauth_client_secret_purpose_v3(&binding);
-    let sealed = seal_runtime_secret_payload(state, &purpose, plaintext)
-        .ok_or("identity OAuth client secret encryption key is not configured")?;
-    Ok(format!(
-        "{IDENTITY_OAUTH_CLIENT_SECRET_ENVELOPE_V3}{sealed}"
-    ))
+    seal_runtime_secret_payload(state, &purpose, plaintext)
+        .ok_or("identity OAuth client secret encryption key is not configured")
 }
 
 fn seal_identity_oauth_provider_client_secret_for_binding(
@@ -235,11 +232,8 @@ fn seal_identity_oauth_provider_client_secret_for_binding(
         return Err("identity OAuth client secret contains reserved framing");
     }
     let purpose = identity_oauth_client_secret_purpose_v3(binding);
-    let sealed = seal_runtime_secret_payload(state, &purpose, plaintext)
-        .ok_or("identity OAuth client secret encryption key is not configured")?;
-    Ok(format!(
-        "{IDENTITY_OAUTH_CLIENT_SECRET_ENVELOPE_V3}{sealed}"
-    ))
+    seal_runtime_secret_payload(state, &purpose, plaintext)
+        .ok_or("identity OAuth client secret encryption key is not configured")
 }
 
 fn open_identity_oauth_provider_client_secret(
@@ -249,6 +243,35 @@ fn open_identity_oauth_provider_client_secret(
 ) -> Result<IdentityOAuthClientSecretProjection, &'static str> {
     let binding = stored_identity_oauth_client_secret_binding(provider)?;
     let purpose = identity_oauth_client_secret_purpose_v3(&binding);
+    if SecretKey::matches_envelope(stored) {
+        let opened = super::open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            &purpose,
+            stored,
+        )
+        .ok_or("identity OAuth client secret authentication failed")?;
+        if opened.plaintext.contains('\0') {
+            return Err("identity OAuth client secret contains reserved framing");
+        }
+        if !opened.sealed_with_current_key {
+            // Sealed by the previous root key: re-seal so the rotation drains.
+            let protected = seal_identity_oauth_provider_client_secret_for_binding(
+                state,
+                &binding,
+                &opened.plaintext,
+            )?;
+            return Ok(IdentityOAuthClientSecretProjection {
+                plaintext: opened.plaintext,
+                protected,
+                migration_required: true,
+            });
+        }
+        return Ok(IdentityOAuthClientSecretProjection {
+            plaintext: opened.plaintext,
+            protected: stored.to_string(),
+            migration_required: false,
+        });
+    }
     if let Some(sealed) = stored.strip_prefix(IDENTITY_OAUTH_CLIENT_SECRET_ENVELOPE_V3) {
         let plaintext = open_runtime_secret_payload(state, &purpose, sealed)
             .ok_or("identity OAuth client secret authentication failed")?;
@@ -392,7 +415,6 @@ mod tests {
         decrypt_or_migrate_identity_oauth_provider_client_secret,
         decrypt_or_migrate_identity_oauth_provider_client_secret_with_before_compare,
         open_identity_oauth_provider_client_secret, seal_identity_oauth_provider_client_secret,
-        IDENTITY_OAUTH_CLIENT_SECRET_ENVELOPE_V3,
     };
     use crate::handlers::shared::{
         encrypt_catalog_secret_with_fallbacks, seal_runtime_secret_payload,
@@ -462,7 +484,7 @@ mod tests {
         let record = sample_binding_upsert();
         let sealed = seal_identity_oauth_provider_client_secret(&state, &record, "client-secret")
             .expect("client secret should seal");
-        assert!(sealed.starts_with(IDENTITY_OAUTH_CLIENT_SECRET_ENVELOPE_V3));
+        assert!(sealed.starts_with("aether-secret:v1:"));
         let provider = sample_provider(" LinuxDo ", &sealed);
         assert_eq!(
             open_identity_oauth_provider_client_secret(&state, &provider, &sealed)
@@ -541,7 +563,7 @@ mod tests {
             .expect("provider should exist")
             .client_secret_encrypted
             .expect("secret should remain configured");
-        assert!(stored.starts_with(IDENTITY_OAUTH_CLIENT_SECRET_ENVELOPE_V3));
+        assert!(stored.starts_with("aether-secret:v1:"));
     }
 
     #[tokio::test]
@@ -599,7 +621,7 @@ mod tests {
         let stored = current
             .client_secret_encrypted
             .expect("secret should remain configured");
-        assert!(stored.starts_with(IDENTITY_OAUTH_CLIENT_SECRET_ENVELOPE_V3));
+        assert!(stored.starts_with("aether-secret:v1:"));
         assert_eq!(
             open_identity_oauth_provider_client_secret(
                 &state,

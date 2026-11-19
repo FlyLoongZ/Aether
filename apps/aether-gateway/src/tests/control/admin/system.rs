@@ -1238,8 +1238,8 @@ async fn gateway_handles_admin_system_users_export_locally_with_trusted_admin_pr
     assert!(migrated_keys.iter().all(|key| key
         .key_encrypted
         .as_deref()
-        .is_some_and(|value| value.starts_with("aether-auth-api-key-secret-v2:"))));
-    assert_eq!(recovery_payload["version"], "1.5");
+        .is_some_and(|value| value.starts_with("aether-secret:v1:"))));
+    assert_eq!(recovery_payload["version"], "1.7");
     assert!(recovery_payload["users"][0]["api_keys"][0]
         .get("credential_kind")
         .is_none());
@@ -1290,7 +1290,7 @@ async fn gateway_handles_admin_system_users_export_locally_with_trusted_admin_pr
         Some("no-store")
     );
     let payload: serde_json::Value = response.json().await.expect("json body should parse");
-    assert_eq!(payload["version"], "1.6");
+    assert_eq!(payload["version"], "1.7");
     assert!(payload["users"][0]["api_keys"][0]
         .get("credential_kind")
         .is_none());
@@ -1307,11 +1307,8 @@ async fn gateway_handles_admin_system_users_export_locally_with_trusted_admin_pr
     assert_eq!(payload["users"][0]["email"], "alice@example.com");
     assert!(payload["users"][0].get("password_hash").is_none());
     assert!(!payload.to_string().contains("argon2-hash"));
-    assert_eq!(
-        payload["users"][0]["allowed_models_mode"],
-        json!("specific")
-    );
-    assert_eq!(payload["users"][0]["rate_limit_mode"], json!("system"));
+    assert!(payload["users"][0].get("allowed_models_mode").is_none());
+    assert!(payload["users"][0].get("rate_limit_mode").is_none());
     assert_eq!(
         payload["users"][0]["group_names"],
         json!(["Restricted GPT"])

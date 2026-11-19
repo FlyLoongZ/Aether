@@ -860,7 +860,7 @@ mod tests {
         assert!(migrated
             .merchant_key_encrypted
             .as_deref()
-            .is_some_and(|value| value.starts_with("aether-payment-gateway-secret-v3:")));
+            .is_some_and(|value| value.starts_with("aether-secret:v1:")));
         let stored = repository
             .find_payment_gateway_config("stripe")
             .await

@@ -167,6 +167,15 @@ pub(crate) async fn issue_access_token_for_user(
 /// Credential-only gateway state for fixtures that just seal or open a
 /// provider secret. Avoids repeating the five-line AppState::new() chain in
 /// every module that needs a key.
+pub(crate) fn development_credential_fixture_state() -> crate::AppState {
+    crate::AppState::new()
+        .expect("credential fixture state should build")
+        .with_data_state_for_tests(
+            crate::data::GatewayDataState::disabled()
+                .with_encryption_key_for_tests(aether_crypto::DEVELOPMENT_ENCRYPTION_KEY),
+        )
+}
+
 pub(crate) fn credential_fixture_state() -> crate::AppState {
     crate::AppState::new()
         .expect("credential fixture state should build")

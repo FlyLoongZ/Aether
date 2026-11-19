@@ -2993,9 +2993,7 @@ mod tests {
             .gateway_response
             .as_ref()
             .and_then(|response| response[STRIPE_CLIENT_SECRET_ENCRYPTED_KEY].as_str())
-            .is_some_and(|value| value.starts_with(
-                "aether-payment-order-stripe-client-secret-v2:aether-runtime-secret-v1:"
-            )));
+            .is_some_and(|value| value.starts_with("aether-secret:v1:")));
 
         let unknown = "aether-payment-order-stripe-client-secret-v3:unknown";
         let unknown_order = match wallet_repository
