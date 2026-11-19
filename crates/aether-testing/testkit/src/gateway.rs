@@ -1,5 +1,4 @@
 use aether_gateway::{build_router_with_state, AppState, GatewayDataConfig};
-use aether_runtime_state::RuntimeSemaphore;
 
 use crate::server::SpawnedServer;
 
@@ -10,7 +9,6 @@ pub struct GatewayHarnessConfig {
     pub upstream_base_url: String,
     pub data_config: Option<GatewayDataConfig>,
     pub max_in_flight_requests: Option<usize>,
-    pub distributed_request_gate: Option<RuntimeSemaphore>,
     pub instance_id: Option<String>,
 }
 
@@ -20,7 +18,6 @@ impl GatewayHarnessConfig {
             upstream_base_url: upstream_base_url.into(),
             data_config: None,
             max_in_flight_requests: None,
-            distributed_request_gate: None,
             instance_id: None,
         }
     }
@@ -62,9 +59,6 @@ impl GatewayHarness {
         }
         if let Some(limit) = config.max_in_flight_requests {
             state = state.with_request_concurrency_limit(limit);
-        }
-        if let Some(gate) = config.distributed_request_gate {
-            state = state.with_distributed_request_concurrency_gate(gate);
         }
         let router = build_router_with_state(state.clone());
         let server = match port {

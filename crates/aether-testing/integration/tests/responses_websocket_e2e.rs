@@ -906,7 +906,7 @@ impl Harness {
         let data_config = GatewayDataConfig::from_database_config(harness.database.config.clone())
             .with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY);
         let state = AppState::new()?
-            .with_data_config_and_background_isolation(data_config, false)?
+            .with_data_config(data_config)?
             .with_usage_runtime_config(UsageRuntimeConfig {
                 enabled: true,
                 ..UsageRuntimeConfig::default()
@@ -961,7 +961,7 @@ impl Harness {
         let data_config = GatewayDataConfig::from_database_config(database.config.clone())
             .with_encryption_key(DEVELOPMENT_ENCRYPTION_KEY);
         let state = AppState::new()?
-            .with_data_config_and_background_isolation(data_config, false)?
+            .with_data_config(data_config)?
             // The usage runtime defaults to disabled, which silently turns every
             // terminal usage write into a no-op. Without this the suite could
             // not observe billing at all. Queueing stays off so the terminal

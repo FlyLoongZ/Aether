@@ -1527,17 +1527,10 @@ async fn gateway_rejects_constrained_full_management_token_creating_unconstraine
         .expect("legacy request should succeed");
     let legacy_status = legacy_response.status();
     let legacy_body = legacy_response.text().await.expect("body should read");
-    assert_eq!(legacy_status, StatusCode::FORBIDDEN, "body={legacy_body}");
+    assert_eq!(legacy_status, StatusCode::UNAUTHORIZED, "body={legacy_body}");
     let legacy_payload: serde_json::Value =
         serde_json::from_str(&legacy_body).expect("json body should parse");
-    assert_eq!(
-        legacy_payload["detail"],
-        "management token permission denied"
-    );
-    assert_eq!(
-        legacy_payload["required_permission"],
-        "admin:management_tokens:admin"
-    );
+    assert_eq!(legacy_payload["detail"], "admin authentication required");
 
     let tokens = management_token_repository
         .list_management_tokens(&ManagementTokenListQuery {

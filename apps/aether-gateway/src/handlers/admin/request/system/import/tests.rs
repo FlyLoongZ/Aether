@@ -27,13 +27,13 @@ use crate::AppState;
 
 #[test]
 fn users_import_requires_supported_export_version() {
-    assert!(validate_imported_system_users_export_version(Some(&json!("1.3"))).is_ok());
-    assert!(validate_imported_system_users_export_version(Some(&json!("1.4"))).is_ok());
+    assert!(validate_imported_system_users_export_version(Some(&json!("1.3"))).is_err());
+    assert!(validate_imported_system_users_export_version(Some(&json!("1.4"))).is_err());
     assert!(validate_imported_system_users_export_version(Some(&json!("1.5"))).is_ok());
     assert!(validate_imported_system_users_export_version(Some(&json!("1.6"))).is_ok());
     assert_eq!(
         validate_imported_system_users_export_version(Some(&json!("2.2"))).unwrap_err(),
-        "不支持的用户数据版本: 2.2，支持的版本: 1.3, 1.4, 1.5, 1.6"
+        "不支持的用户数据版本: 2.2，支持的版本: 1.5, 1.6"
     );
     assert_eq!(
         validate_imported_system_users_export_version(Some(&json!(null))).unwrap_err(),
