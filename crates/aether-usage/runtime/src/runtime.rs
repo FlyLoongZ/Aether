@@ -138,6 +138,7 @@ pub struct UsageRuntime {
     shutdown: Arc<UsageShutdownState>,
     body_policy_cache: Arc<tokio::sync::Mutex<Option<UsageBodyCapturePolicyCacheEntry>>>,
     body_file_store: Option<Arc<aether_body_store::BodyFileStore>>,
+    body_file_switch_disabled: Arc<std::sync::atomic::AtomicBool>,
     enqueue_retry: Arc<UsageEnqueueRetryDispatcher>,
     worker_supervisor_state: Arc<UsageWorkerSupervisorState>,
     worker_record_gate: Option<Arc<UsageWorkerRecordConcurrencyGate>>,
@@ -3501,6 +3502,7 @@ impl UsageRuntime {
             shutdown: Arc::new(UsageShutdownState::default()),
             body_policy_cache: Arc::new(tokio::sync::Mutex::new(None)),
             body_file_store: None,
+            body_file_switch_disabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             enqueue_retry: UsageEnqueueRetryDispatcher::disabled(),
             worker_supervisor_state: Arc::new(UsageWorkerSupervisorState::default()),
             worker_record_gate: None,
@@ -3567,6 +3569,7 @@ impl UsageRuntime {
             shutdown,
             body_policy_cache: Arc::new(tokio::sync::Mutex::new(None)),
             body_file_store: None,
+            body_file_switch_disabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             enqueue_retry,
             worker_supervisor_state: Arc::new(UsageWorkerSupervisorState::default()),
             worker_record_gate,
@@ -4528,6 +4531,36 @@ impl UsageRuntime {
         .await;
     }
 
+    /// Writes `body_file_store_enabled=false` back to the system config once per
+    /// process when the switch is on but the store is missing.
+    async fn disable_body_file_store_switch_once(&self) {
+        use std::sync::atomic::Ordering;
+        if self.body_file_switch_disabled.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let Some(result) = crate::body_file_store_switch::disable_body_file_store_switch().await
+        else {
+            return;
+        };
+        match result {
+            Ok(()) => {
+                warn!(
+                    event_name = "usage_body_file_store_switch_disabled",
+                    log_type = "ops",
+                    "body file store is enabled without a configured path; wrote the switch back to false"
+                );
+            }
+            Err(error) => {
+                warn!(
+                    event_name = "usage_body_file_store_switch_disable_failed",
+                    log_type = "ops",
+                    error = %error,
+                    "body file store is enabled without a configured path and the switch could not be disabled"
+                );
+            }
+        }
+    }
+
     async fn apply_body_capture_policy_with_budget<T>(
         &self,
         data: &T,
@@ -4574,32 +4607,12 @@ impl UsageRuntime {
             return;
         }
         let Some(store) = self.body_file_store.as_ref() else {
-            warn!(
-                event_name = "usage_body_file_store_not_configured",
-                log_type = "event",
-                request_id = %event.request_id,
-                "body file store is enabled but no store path is configured; marking captured bodies unavailable"
-            );
-            for side in [
-                UsageBodyField::RequestBody,
-                UsageBodyField::ProviderRequestBody,
-                UsageBodyField::ResponseBody,
-                UsageBodyField::ClientResponseBody,
-            ] {
-                let Some(body) = take_body(&mut event.data, side) else {
-                    continue;
-                };
-                if matches!(body, CapturedBody::Bytes { .. }) {
-                    set_body(&mut event.data, side, CapturedBody::Unavailable);
-                    crate::body_capture::mark_body_capture_unavailable(
-                        &mut event.data.request_metadata,
-                        side,
-                        "body_file_store_not_configured",
-                    );
-                } else {
-                    set_body(&mut event.data, side, body);
-                }
-            }
+            // The switch lives in the database and the store path lives in the
+            // process environment, so a mid-flight config change can observe
+            // "enabled" without a store. Falling back to database storage keeps
+            // the bodies instead of discarding them; the switch is written back
+            // to `false` once so the state stops claiming file storage.
+            self.disable_body_file_store_switch_once().await;
             return;
         };
         let Some(day) = aether_body_store::day_from_unix_ms(event.timestamp_ms) else {

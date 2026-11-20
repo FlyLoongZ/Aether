@@ -133,7 +133,7 @@ DO UPDATE SET
   END ELSE "usage".status END,
   billing_status = CASE WHEN "usage".billing_status = 'pending' THEN EXCLUDED.billing_status ELSE "usage".billing_status END,
   request_metadata = CASE WHEN "usage".billing_status = 'pending' AND $32 THEN COALESCE(EXCLUDED.request_metadata, "usage".request_metadata) ELSE "usage".request_metadata END,
-  updated_at_unix_secs = CASE WHEN "usage".billing_status = 'pending' THEN
+  updated_at_unix_secs = CASE WHEN "usage".billing_status = 'pending' AND $33 THEN
     GREATEST(
       COALESCE(NULLIF("usage".updated_at_unix_secs, 0), 0),
       COALESCE(NULLIF(EXCLUDED.updated_at_unix_secs, 0), 0),

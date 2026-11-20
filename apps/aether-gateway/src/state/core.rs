@@ -500,6 +500,24 @@ impl AppState {
         self.auth_snapshot_load_gate = auth_load_limit
             .map(|limit| Arc::new(ConcurrencyGate::new("gateway_auth_snapshot_load", limit)));
         let data = Arc::new(GatewayDataState::from_config(config)?);
+        {
+            let state = self.clone();
+            aether_usage_runtime::configure_body_file_store_switch_disabler(Arc::new(move || {
+                let state = state.clone();
+                Box::pin(async move {
+                    state
+                        .data
+                        .upsert_system_config_value(
+                            "body_file_store_enabled",
+                            &serde_json::json!(false),
+                            None,
+                        )
+                        .await
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                })
+            }));
+        }
         self.data = Arc::new(
             (*data)
                 .clone()

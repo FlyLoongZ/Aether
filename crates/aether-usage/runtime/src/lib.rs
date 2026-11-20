@@ -1,4 +1,5 @@
 mod body_capture;
+mod body_file_store_switch;
 pub mod config;
 mod dead_letter_encoding;
 pub mod event;
@@ -23,6 +24,7 @@ pub use body_capture::{
     apply_usage_body_capture_policy_to_event, apply_usage_body_capture_policy_to_record,
     UsageBodyCaptureEngine,
 };
+pub use body_file_store_switch::configure_body_file_store_switch_disabler;
 pub use config::UsageRuntimeConfig;
 pub use event::{now_ms, UsageEvent, UsageEventData, UsageEventType, USAGE_EVENT_VERSION};
 pub use executor::shutdown_usage_background_runtime;

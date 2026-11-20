@@ -172,6 +172,11 @@ pub(super) struct PreparedUsageBodyStorage {
     /// The bytes live in the body file store; the DB columns for this side must
     /// be cleared so a stale row cannot shadow the file.
     pub file: bool,
+    /// This side carries fresh capture content: stored bytes, a policy-disabled
+    /// capture, or an explicit unavailability. A bare `File` reference (replay)
+    /// and a silent `None` do not count. Only fresh content may advance the
+    /// row's revision, because the body file lives under that revision's day.
+    pub carries_content: bool,
 }
 
 /// Everything one usage write contributes to the capture tables.

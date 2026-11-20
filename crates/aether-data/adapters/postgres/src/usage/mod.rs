@@ -8719,11 +8719,14 @@ ORDER BY "usage".user_id ASC
                         request_metadata_json = json_bind_text(request_metadata_value.as_ref())?;
                     }
                     if capture_update_allowed {
+                        let previous_metadata = previous_usage
+                            .as_ref()
+                            .and_then(|stored| stored.request_metadata.as_ref());
+                        request_metadata_value =
+                            preserve_body_capture_ledger(request_metadata_value, previous_metadata);
                         request_metadata_value = preserve_usage_routing_group_snapshot(
                             request_metadata_value,
-                            previous_usage
-                                .as_ref()
-                                .and_then(|stored| stored.request_metadata.as_ref()),
+                            previous_metadata,
                         );
                         request_metadata_json = json_bind_text(request_metadata_value.as_ref())?;
                     }
@@ -8765,6 +8768,12 @@ ORDER BY "usage".user_id ASC
                             ))
                         })?)
                         .bind(capture_update_allowed)
+                        .bind(
+                            client_request_body.carries_content
+                                || client_response_body.carries_content
+                                || provider_request_body.carries_content
+                                || provider_response_body.carries_content,
+                        )
                         .fetch_one(&mut **tx)
                         .await
                         .map_postgres_err()?;
@@ -12303,6 +12312,12 @@ fn prepared_usage_body_storage(
     body: Option<&CapturedBody>,
 ) -> http_capture::PreparedUsageBodyStorage {
     let file = matches!(body, Some(CapturedBody::File { .. }));
+    let carries_content = matches!(
+        body,
+        Some(CapturedBody::Bytes { .. })
+            | Some(CapturedBody::Disabled)
+            | Some(CapturedBody::Unavailable)
+    );
     http_capture::PreparedUsageBodyStorage {
         bytes: body.and_then(CapturedBody::bytes).map(<[u8]>::to_vec),
         // The encoding is kept even for file-backed sides: the DB columns are
@@ -12314,6 +12329,7 @@ fn prepared_usage_body_storage(
         truncated: body.is_some_and(CapturedBody::truncated),
         withdrawn: body.is_some_and(|body| !body.is_present()),
         file,
+        carries_content,
     }
 }
 
@@ -12439,6 +12455,40 @@ fn usage_capture_update_allowed(
     }
 
     !(previous_status == "streaming" && incoming_status == "pending")
+}
+
+/// Keeps the previous ledger entry for a side that this write neither captured
+/// nor withdrew.
+///
+/// `None` means "silent", not "withdrawn": a replay that omits a side must keep
+/// pointing readers at the file an earlier write stored. The metadata bind
+/// replaces the whole document, so the entry has to be carried over explicitly.
+fn preserve_body_capture_ledger(
+    incoming: Option<Value>,
+    previous: Option<&Value>,
+) -> Option<Value> {
+    let incoming = incoming?;
+    let Some(previous) = previous
+        .and_then(|value| value.get("body_capture"))
+        .and_then(Value::as_object)
+    else {
+        return Some(incoming);
+    };
+    let Value::Object(mut metadata) = incoming else {
+        return Some(incoming);
+    };
+    let capture = metadata
+        .entry("body_capture".to_string())
+        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+    let Some(capture) = capture.as_object_mut() else {
+        return Some(Value::Object(metadata));
+    };
+    for (side, entry) in previous {
+        if !capture.contains_key(side) {
+            capture.insert(side.clone(), entry.clone());
+        }
+    }
+    Some(Value::Object(metadata))
 }
 
 fn json_bind_text(value: Option<&Value>) -> Result<Option<String>, DataLayerError> {

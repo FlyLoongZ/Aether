@@ -111,11 +111,7 @@ DO UPDATE SET
   END,
   status = 'streaming',
   request_metadata = COALESCE("usage".request_metadata, EXCLUDED.request_metadata),
-  updated_at_unix_secs = GREATEST(
-    COALESCE(NULLIF("usage".updated_at_unix_secs, 0), 0),
-    COALESCE(NULLIF(EXCLUDED.updated_at_unix_secs, 0), 0),
-    CAST(EXTRACT(EPOCH FROM "usage".created_at) AS BIGINT)
-  )
+  updated_at_unix_secs = "usage".updated_at_unix_secs
 WHERE "usage".billing_status = 'pending'
   AND "usage".status IN ('pending', 'streaming')
   AND EXCLUDED.updated_at_unix_secs >= COALESCE(
