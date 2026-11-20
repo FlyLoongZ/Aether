@@ -315,8 +315,8 @@ const isLoadingHeatmap = ref(false)
 const heatmapError = ref(false)
 const intervalTimelineHours = computed(() => getIntervalTimelineHours(timeRange.value))
 const intervalTimelineTitle = computed(() => {
-  const baseTitle = isAdminPage.value ? t('overview.siteWideRecentRequestIntervals') : '我的请求间隔'
-  return `${baseTitle}（${formatIntervalTimelineWindow(intervalTimelineHours.value)}）`
+  const baseTitle = isAdminPage.value ? t('overview.siteWideRecentRequestIntervals') : t('overview.myRequestIntervals')
+  return `${baseTitle} (${formatIntervalTimelineWindow(intervalTimelineHours.value)})`
 })
 const ADMIN_ANALYTICS_REFRESH_INTERVAL = 60000
 let adminAnalyticsRefreshInFlight: Promise<void> | null = null

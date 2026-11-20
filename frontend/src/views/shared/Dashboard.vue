@@ -1016,18 +1016,18 @@ const iconMap: Record<string, Component> = {
 const emptyStatPlaceholders = computed(() => {
   if (isAdmin.value) {
     return [
-      { name: "今日请求", icon: Activity },
-      { name: "今日 Token", icon: Hash },
-      { name: "今日缓存", icon: Database },
-      { name: "今日消费", icon: DollarSign },
-      { name: "今日活跃用户", icon: Users },
+      { name: t('overview.requestsToday'), icon: Activity },
+      { name: t('overview.tokensToday'), icon: Hash },
+      { name: t('overview.cacheToday'), icon: Database },
+      { name: t('overview.spendingToday'), icon: DollarSign },
+      { name: t('overview.activeUsersToday'), icon: Users },
     ];
   }
   return [
-    { name: "今日请求", icon: Activity },
-    { name: "今日 Tokens", icon: Hash },
-    { name: "API Keys", icon: Key },
-    { name: "今日费用", icon: DollarSign },
+    { name: t('overview.requestsToday'), icon: Activity },
+    { name: t('overview.tokensToday'), icon: Hash },
+    { name: t('overview.apiKeys'), icon: Key },
+    { name: t('overview.spendingToday'), icon: DollarSign },
   ];
 });
 

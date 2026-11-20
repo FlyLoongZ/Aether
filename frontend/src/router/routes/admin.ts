@@ -226,6 +226,10 @@ export const adminRoutes: RouteRecordRaw[] = [
         component: view(() => import('@/views/admin/AsyncTasks.vue'))
       },
       {
+        path: 'video-tasks',
+        redirect: '/admin/async-tasks'
+      },
+      {
         path: 'proxy-nodes',
         name: 'ProxyNodes',
         component: view(() => import('@/views/admin/ProxyNodes.vue')),

@@ -515,7 +515,17 @@ export const dashboardApi = {
       if (signal.aborted) controller.abort()
       else signal.addEventListener('abort', abortFromCaller, { once: true })
     }
+    // A stalled transfer is caught by the idle timer, but a server that keeps
+    // dripping bytes would otherwise extend it forever. Cap the whole download
+    // and the accumulated size so a hostile or broken upstream cannot pin the
+    // tab.
+    const BODY_DOWNLOAD_ABSOLUTE_TIMEOUT_MS = 10 * 60 * 1000
+    const BODY_DOWNLOAD_MAX_BYTES = 64 * 1024 * 1024
     let timedOut = false
+    const absoluteTimer = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, BODY_DOWNLOAD_ABSOLUTE_TIMEOUT_MS)
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     const armIdleTimer = () => {
       if (idleTimer) clearTimeout(idleTimer)
@@ -538,6 +548,11 @@ export const dashboardApi = {
         timeout: 0,
         signal: controller.signal,
         onDownloadProgress: (event: AxiosProgressEvent) => {
+          if (event.loaded > BODY_DOWNLOAD_MAX_BYTES) {
+            timedOut = true
+            controller.abort()
+            return
+          }
           armIdleTimer()
           onProgress?.(event.loaded, bodyDownloadTotal(event))
         },
@@ -557,6 +572,7 @@ export const dashboardApi = {
       if (timedOut) throw new RequestBodyTimeoutError()
       throw error
     } finally {
+      clearTimeout(absoluteTimer)
       clearIdleTimer()
       signal?.removeEventListener('abort', abortFromCaller)
     }

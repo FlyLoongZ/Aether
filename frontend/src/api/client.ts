@@ -76,8 +76,7 @@ function isAuthRequest(url?: string): boolean {
 function isProtectedOperationalEndpoint(url?: string): boolean {
   const path = requestPath(url)
   return path === '/_gateway/metrics' ||
-         path.startsWith('/_gateway/audit/') ||
-         path.startsWith('/_gateway/async-tasks/')
+         path.startsWith('/_gateway/audit/')
 }
 
 /**
