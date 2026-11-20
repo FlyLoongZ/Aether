@@ -34,35 +34,6 @@ const MAX_SECRET_PLAINTEXT_BYTES: usize = 16 * 1024 * 1024;
 static ROOT_KEY_CACHE: LazyLock<RwLock<RootKeyCache>> =
     LazyLock::new(|| RwLock::new(RootKeyCache::default()));
 
-/// Process-wide previous root secret. Writes always use the configured current
-/// key; reads fall back to this one so a rotation does not strand existing
-/// envelopes. Only one previous key is kept: rotation is a two-step operation
-/// (old -> new, then drop the old key once the rewrite has drained it).
-static PREVIOUS_SECRET: LazyLock<RwLock<Option<Zeroizing<String>>>> =
-    LazyLock::new(|| RwLock::new(None));
-
-/// Registers the previous encryption secret used for read fallback.
-pub fn configure_previous_secret(secret: Option<&str>) {
-    let value = secret
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| Zeroizing::new(value.to_string()));
-    *PREVIOUS_SECRET
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = value;
-}
-
-/// Whether a previous secret is registered for read fallback.
-///
-/// Diagnostics need this to tell "the row is broken" apart from "the operator
-/// forgot to keep the previous key configured".
-pub fn previous_secret_configured() -> bool {
-    PREVIOUS_SECRET
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .is_some()
-}
-
 const APP_SALT: &[u8] = APP_SALT_SEED;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -298,23 +269,22 @@ impl SecretKey {
     }
 
     /// Opens with the current key and, when the envelope belongs to the
-    /// previous key, retries with the process-wide previous secret.
+    /// previous key, retries with the caller-supplied previous secret.
+    ///
+    /// The previous key is a read-only fallback supplied by the caller that owns
+    /// the configuration; the library keeps no process-wide copy, so two callers
+    /// with different rotation states can never observe each other's key.
     pub fn open_with_previous(
         &self,
+        previous: Option<&str>,
         context: SecretContext<'_>,
         envelope: &str,
     ) -> Result<String, SecretEnvelopeError> {
         match self.open(context, envelope) {
             Ok(plaintext) => Ok(plaintext),
             Err(SecretEnvelopeError::KeyIdMismatch) => {
-                let previous = PREVIOUS_SECRET
-                    .read()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .clone();
-                match previous {
-                    Some(previous) => {
-                        SecretKey::from_secret(previous.as_str()).open(context, envelope)
-                    }
+                match previous.map(str::trim).filter(|value| !value.is_empty()) {
+                    Some(previous) => SecretKey::from_secret(previous).open(context, envelope),
                     None => Err(SecretEnvelopeError::KeyIdMismatch),
                 }
             }

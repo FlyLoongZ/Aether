@@ -19,6 +19,7 @@ pub use aether_data_contracts::PostgresPoolConfig;
 pub use backend::PostgresBackend;
 pub use backend::{
     DataBackends, DataReadRepositories, DataTransactionBackends, DataWriteRepositories,
+    StoredSecretCiphertext, SECRET_SCAN_TARGETS,
 };
 pub use config::DataLayerConfig;
 pub use error::DataLayerError;

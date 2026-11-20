@@ -228,26 +228,31 @@ fn decrypt_bound_secret(
     field_name: &str,
 ) -> Result<String, DataLayerError> {
     let purpose = provider_catalog_credential_purpose(provider_id, key_id, field);
-    let mut candidates = Vec::with_capacity(fallback_encryption_keys.len() + 1);
-    candidates.push(encryption_key);
-    candidates.extend(fallback_encryption_keys.iter().map(String::as_str));
-    for candidate in candidates {
-        let key = SecretKey::from_secret(candidate);
-        if let Ok(protected) = key.open_with_previous(SecretContext::Custom(&purpose), ciphertext) {
-            return protected
-                .strip_prefix(&purpose)
-                .and_then(|value| value.strip_prefix('\0'))
-                .map(ToOwned::to_owned)
-                .ok_or_else(|| {
-                    DataLayerError::UnexpectedValue(format!(
-                        "{field_name} provider catalog credential authentication failed"
-                    ))
-                });
-        }
-    }
-    Err(DataLayerError::UnexpectedValue(format!(
-        "{field_name} provider catalog credential authentication failed"
-    )))
+    // One key ring, ordered current-first: which keys may open a row is the
+    // caller's decision, and the crypto crate is the only place that tries them.
+    let mut keys: Vec<SecretKey> = Vec::with_capacity(fallback_encryption_keys.len() + 1);
+    keys.push(SecretKey::from_secret(encryption_key));
+    keys.extend(
+        fallback_encryption_keys
+            .iter()
+            .map(|candidate| SecretKey::from_secret(candidate)),
+    );
+    let protected =
+        SecretKey::open_with_candidates(&keys, SecretContext::Custom(&purpose), ciphertext)
+            .map_err(|_| {
+                DataLayerError::UnexpectedValue(format!(
+                    "{field_name} provider catalog credential authentication failed"
+                ))
+            })?;
+    protected
+        .strip_prefix(&purpose)
+        .and_then(|value| value.strip_prefix('\0'))
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| {
+            DataLayerError::UnexpectedValue(format!(
+                "{field_name} provider catalog credential authentication failed"
+            ))
+        })
 }
 
 fn provider_catalog_credential_purpose(provider_id: &str, key_id: &str, field: &str) -> String {

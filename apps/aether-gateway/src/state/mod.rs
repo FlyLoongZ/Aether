@@ -15,6 +15,7 @@ mod oauth;
 mod proxy;
 mod routing_profiles;
 mod runtime;
+mod secrets_rotation;
 #[cfg(test)]
 mod testing;
 mod types;
@@ -50,3 +51,5 @@ pub(crate) use self::types::{
 #[cfg(test)]
 pub(crate) use super::data::GatewayDataState;
 use super::provider_transport::provider_transport_snapshot_looks_refreshed;
+
+pub use secrets_rotation::SecretRotationSummary;

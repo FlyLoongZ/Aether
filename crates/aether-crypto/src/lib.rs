@@ -9,7 +9,6 @@ pub use python_fernet::{
 };
 pub use rsa_pkcs1_sha256::{rsa_pkcs1_sha256_sign, rsa_pkcs1_sha256_verify, RsaPkcs1Sha256Error};
 pub use secret::{
-    configure_previous_secret, derive_root_key, derive_subkey, envelope_key_id,
-    previous_secret_configured, SecretContext, SecretEnvelopeError, SecretKey,
+    derive_root_key, derive_subkey, envelope_key_id, SecretContext, SecretEnvelopeError, SecretKey,
     SECRET_ENVELOPE_PREFIX,
 };

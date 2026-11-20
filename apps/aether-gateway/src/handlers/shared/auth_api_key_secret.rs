@@ -93,9 +93,13 @@ pub(crate) fn open_auth_api_key_secret(
                 .strip_prefix(AUTH_API_KEY_SECRET_ENVELOPE_V2)
                 .expect("checked API-key envelope prefix")
         };
-        let opened =
-            open_runtime_secret_payload_with_key_state(state.encryption_key(), &purpose, sealed)
-                .ok_or("API-key secret authentication failed")?;
+        let opened = open_runtime_secret_payload_with_key_state(
+            state.encryption_key(),
+            state.previous_encryption_key(),
+            &purpose,
+            sealed,
+        )
+        .ok_or("API-key secret authentication failed")?;
         if opened.sealed_with_current_key {
             (
                 opened.plaintext,

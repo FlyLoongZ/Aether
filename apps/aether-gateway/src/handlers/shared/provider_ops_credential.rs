@@ -226,6 +226,7 @@ pub(crate) fn open_provider_ops_credential(
     if SecretKey::matches_envelope(stored) {
         let opened = super::open_runtime_secret_payload_with_key_state(
             state.encryption_key(),
+            state.previous_encryption_key(),
             &purpose,
             stored,
         )

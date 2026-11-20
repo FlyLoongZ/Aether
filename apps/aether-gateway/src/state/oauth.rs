@@ -811,6 +811,10 @@ impl AppState {
         self.data.encryption_key()
     }
 
+    pub(crate) fn previous_encryption_key(&self) -> Option<&str> {
+        self.data.previous_encryption_key()
+    }
+
     pub(crate) fn has_auth_module_writer(&self) -> bool {
         self.data.has_auth_module_writer()
     }

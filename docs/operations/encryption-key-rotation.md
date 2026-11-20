@@ -32,24 +32,52 @@ SELECT count(*) FROM api_keys
 `bind_password_encrypted`、`encrypted_key`、`auth_config`、`proxy_password`、
 `system_configs.value`）做同样的前缀匹配。
 
-## 已知缺口
-
-**没有后台批量重写任务。** 轮换后仍然只有两条路径会把旧密文搬到新密钥：
-
-- 读时迁移（上述用途绑定密文与系统配置）；
-- 该行被正常写入一次。
-
-因此，长期不再被读取或写入的行会一直停在旧密钥下。删除
-`ENCRYPTION_KEY_PREVIOUS` 之前必须用上面的 SQL 确认计数为零，否则这些行
-会解密失败，调用点按各自的历史行为回落（多数会报错并拒绝使用该凭据）。
-未实现批量重写是有意为之：写一个覆盖六类密文、且与读路径派生规则完全一致
-的重写器风险高于收益，当前用“保留旧密钥 + 读时迁移”达成同样的可用性。
-
-## 密钥长度与格式
-
-`ENCRYPTION_KEY` 与 `ENCRYPTION_KEY_PREVIOUS` 都要求至少 32 字节的随机串
-（`validate_encryption_key`），两者格式校验一致。生成示例：
+## 体检与排空
 
 ```bash
-openssl rand -base64 48
+# 只读：报告"当前钥 / 旧钥 / 旧格式 / 明文回落 / 不可解"五类行数与样例
+aether-gateway secrets verify
+
+# 机器可读
+aether-gateway secrets verify --json
+
+# 把所有可枚举的行喂给迁移路径，随后自动复检
+aether-gateway secrets rotate
 ```
+
+两条命令都是离线维护命令，复用与 `db status` 相同的状态装配；退出码含义：
+
+| 退出码 | 含义 |
+|---|---|
+| `0` | 所有行都由当前钥封装 |
+| `1` | 仍有残留（旧钥 / 旧格式 / 明文回落 / 不可解） |
+| `2` | 得不出结论：没配 `ENCRYPTION_KEY_PREVIOUS` 但库里有旧钥行、枚举失败、或迁移行失败 |
+
+`rotate` 允许网关在线执行：每行都走 `compare_and_set`，并发写不会被覆盖，
+冲突行重试三次后跳过并计入报告。
+
+## 覆盖范围
+
+`verify` 覆盖 13 个密文位置：`api_keys`、`oauth_providers`、
+`provider_api_keys`（凭据、`auth_config`、proxy 密码）、`providers` /
+`provider_endpoints` 的 proxy 密码、`providers.config` 里的 Provider Ops
+凭据、`system_configs`（6 个已知敏感键）、`ldap_configs`、`proxy_nodes`、
+`payment_gateway_configs`，以及**未过期的 pending** `payment_orders`。
+
+两类不参与轮换：
+
+- **已终结的支付订单**保留已失效的 Stripe client secret，迁移路径明确拒绝
+  改写非活跃订单，因此扫描时排除，避免永久红灯。
+- **S3 备份对象**有独立密钥（`AETHER_BACKUP_ENCRYPTION_KEY`，缺省才回落
+  `ENCRYPTION_KEY`），对象在对象存储里且每次备份重写；轮换做法是用新钥继续
+  备份，需要恢复旧对象时给 `aether-backup-restore --key-file` 传候选钥。
+
+历史 Python-Fernet 密文没有旧钥回退，无法重写，`verify` 会把它计入
+`legacy-format`，需要人工重存。
+
+## 读路径会自动排空
+
+`secrets rotate` 只是兜底。读路径本身已经按 `key_id` 判断：任何被读到的、
+由旧钥封装的密文都会用当前钥与当前用途重新封装并写回，所以有流量的行在
+轮换期间会自动收敛。
+

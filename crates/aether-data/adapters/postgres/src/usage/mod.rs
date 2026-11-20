@@ -10536,6 +10536,10 @@ impl UsageReadRepository for SqlxUsageReadRepository {
 
 #[async_trait]
 impl UsageWriteRepository for SqlxUsageReadRepository {
+    fn supports_usage_cleanup(&self) -> bool {
+        true
+    }
+
     fn supports_first_byte_usage_fast_path(&self) -> bool {
         true
     }

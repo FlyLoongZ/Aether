@@ -115,6 +115,12 @@ async fn perform_usage_cleanup_once_with_options(
     if !data.has_usage_writer() {
         return Ok(UsageCleanupSummary::default());
     }
+    if !data.supports_usage_cleanup() {
+        // The backend has no retention semantics. Reporting an empty sweep would
+        // look like success; failing every interval would be noise. Say it once
+        // per run and leave the ledgers to their own maintenance.
+        return Ok(UsageCleanupSummary::default());
+    }
     if respect_auto_enabled
         && override_older_than.is_none()
         && !system_config_bool(data, "enable_auto_cleanup", true).await?

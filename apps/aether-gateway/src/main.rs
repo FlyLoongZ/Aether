@@ -572,11 +572,15 @@ impl GatewayDataArgs {
             None => GatewayDataConfig::disabled(),
         };
 
-        match self.effective_encryption_key() {
+        let config = match self.effective_encryption_key() {
             Some(value) => {
                 warm_python_fernet_secret(&value);
                 config.with_encryption_key(value)
             }
+            None => config,
+        };
+        match self.encryption_key_previous.as_deref() {
+            Some(previous) => config.with_previous_encryption_key(previous),
             None => config,
         }
     }
@@ -959,6 +963,30 @@ struct GatewayLoggingArgs {
 enum DataCommand {
     /// Inspect or prepare the configured database.
     Db(DatabaseCommandArgs),
+    /// Inspect or re-seal stored secrets against the configured encryption key.
+    Secrets(SecretsCommandArgs),
+}
+
+#[derive(ClapArgs, Debug, Clone)]
+struct SecretsCommandArgs {
+    #[command(subcommand)]
+    command: SecretsCommand,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum SecretsCommand {
+    /// Report how every stored secret is sealed (read-only).
+    Verify {
+        /// Emit the report as JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Re-seal every stored secret under the current key, then verify.
+    Rotate {
+        /// Emit the result as JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(ClapArgs, Debug, Clone)]
@@ -1552,6 +1580,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
     let result = runtime.block_on(run());
     aether_usage_runtime::shutdown_usage_background_runtime(std::time::Duration::from_secs(5));
+    if let Err(error) = &result {
+        if let Some(exit) = error.downcast_ref::<CliExit>() {
+            eprintln!("{exit}");
+            std::process::exit(exit.code);
+        }
+    }
     result
 }
 
@@ -1597,7 +1631,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         args.data.encryption_key_previous.as_deref(),
         args.data.encryption_key.as_deref(),
     )?;
-    aether_crypto::configure_previous_secret(args.data.encryption_key_previous.as_deref());
     let data_config = args.data.to_config();
     let usage_database_is_isolated = false;
     let usage_database_config = data_config.database();
@@ -1924,8 +1957,109 @@ async fn run_data_command(
 ) -> Result<(), Box<dyn std::error::Error>> {
     match command {
         DataCommand::Db(args) => run_database_command(args, data).await,
+        DataCommand::Secrets(args) => run_secrets_command(args, data).await,
     }
 }
+
+/// Exit code used when the command ran but found work left to do.
+const SECRETS_RESIDUE_EXIT_CODE: i32 = 1;
+/// Exit code used when the command could not reach a conclusion.
+const SECRETS_INCONCLUSIVE_EXIT_CODE: i32 = 2;
+
+async fn run_secrets_command(
+    args: &SecretsCommandArgs,
+    data: &GatewayDataArgs,
+) -> Result<(), Box<dyn std::error::Error>> {
+    data.validate_encryption_key()?;
+    validate_gateway_previous_encryption_key(
+        data.encryption_key_previous.as_deref(),
+        data.encryption_key.as_deref(),
+    )?;
+    // The migration path reads with the previous key while re-sealing with the
+    // current one, so the process-global fallback has to be installed here too.
+    let state = database_maintenance_state(data)?;
+    let previous_secret = data.encryption_key_previous.as_deref();
+
+    match args.command {
+        SecretsCommand::Verify { json } => {
+            let report = aether_gateway::verify_stored_secrets(&state, previous_secret)
+                .await
+                .map_err(inconclusive)?;
+            if json {
+                println!("{}", aether_gateway::render_verify_json(&report));
+            } else {
+                print!("{}", aether_gateway::render_verify_text(&report));
+            }
+            // The residue gauge is what an operator watches between runs.
+            if report.residue_rows() == 0 {
+                return Ok(());
+            }
+            if report.rewritable_rows() == 0 && !report.previous_key_configured {
+                return Err(inconclusive(format!(
+                    "{} rows are sealed by another key and ENCRYPTION_KEY_PREVIOUS is not configured",
+                    report.residue_rows()
+                )));
+            }
+            Err(residue_exit_error(report.residue_rows()))
+        }
+        SecretsCommand::Rotate { json } => {
+            let (summary, outcome, report) =
+                aether_gateway::rotate_stored_secrets(&state, previous_secret)
+                    .await
+                    .map_err(inconclusive)?;
+            if json {
+                println!(
+                    "{}",
+                    aether_gateway::render_rotation_json(&summary, &outcome, &report)
+                );
+            } else {
+                print!(
+                    "{}",
+                    aether_gateway::render_rotation_text(&summary, &outcome, &report)
+                );
+            }
+            if report.residue_rows() == 0 {
+                return Ok(());
+            }
+            let failed = summary.failed.values().sum::<u64>();
+            if failed > 0 {
+                return Err(inconclusive(format!(
+                    "{failed} rows failed to migrate; see the report above"
+                )));
+            }
+            Err(residue_exit_error(report.residue_rows()))
+        }
+    }
+}
+
+fn residue_exit_error(rows: u64) -> Box<dyn std::error::Error> {
+    Box::new(CliExit {
+        code: SECRETS_RESIDUE_EXIT_CODE,
+        message: format!("{rows} rows are still not sealed by the current key"),
+    })
+}
+
+fn inconclusive(message: impl Into<String>) -> Box<dyn std::error::Error> {
+    Box::new(CliExit {
+        code: SECRETS_INCONCLUSIVE_EXIT_CODE,
+        message: message.into(),
+    })
+}
+
+/// Carries an explicit exit code out of a command.
+#[derive(Debug)]
+struct CliExit {
+    code: i32,
+    message: String,
+}
+
+impl std::fmt::Display for CliExit {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for CliExit {}
 
 async fn run_database_command(
     args: &DatabaseCommandArgs,

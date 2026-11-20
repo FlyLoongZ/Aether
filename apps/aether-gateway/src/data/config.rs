@@ -6,6 +6,7 @@ use std::fmt;
 pub struct GatewayDataConfig {
     database: Option<PostgresPoolConfig>,
     encryption_key: Option<String>,
+    previous_encryption_key: Option<String>,
 }
 
 impl fmt::Debug for GatewayDataConfig {
@@ -13,6 +14,10 @@ impl fmt::Debug for GatewayDataConfig {
         f.debug_struct("GatewayDataConfig")
             .field("database", &self.database)
             .field("has_encryption_key", &self.encryption_key.is_some())
+            .field(
+                "has_previous_encryption_key",
+                &self.previous_encryption_key.is_some(),
+            )
             .finish()
     }
 }
@@ -26,6 +31,7 @@ impl GatewayDataConfig {
         Self {
             database: Some(database),
             encryption_key: None,
+            previous_encryption_key: None,
         }
     }
 
@@ -59,6 +65,26 @@ impl GatewayDataConfig {
 
     pub fn encryption_key(&self) -> Option<&str> {
         self.encryption_key.as_deref()
+    }
+
+    /// Previous root key kept readable while a rotation drains. It is a read
+    /// fallback only: sealing always uses the current key.
+    pub fn with_previous_encryption_key(
+        mut self,
+        previous_encryption_key: impl Into<String>,
+    ) -> Self {
+        let previous_encryption_key = previous_encryption_key.into();
+        let previous_encryption_key = previous_encryption_key.trim();
+        self.previous_encryption_key = if previous_encryption_key.is_empty() {
+            None
+        } else {
+            Some(previous_encryption_key.to_string())
+        };
+        self
+    }
+
+    pub fn previous_encryption_key(&self) -> Option<&str> {
+        self.previous_encryption_key.as_deref()
     }
 
     pub fn with_redis_url(

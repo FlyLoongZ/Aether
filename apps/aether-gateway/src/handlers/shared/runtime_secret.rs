@@ -33,6 +33,29 @@ pub(crate) fn seal_runtime_secret_payload_with_encryption_key(
     seal_runtime_secret_plaintext(encryption_key, purpose, &protected)
 }
 
+/// The purpose's leading segment, i.e. the record family without any binding.
+///
+/// Purposes embed record ids (`provider-id-bytes=…`, `key-id-bytes=…`), so only
+/// the family is safe to log.
+fn secret_purpose_family(purpose: &str) -> &str {
+    purpose.split('\0').next().unwrap_or(purpose)
+}
+
+/// Records a secret that could not be opened.
+///
+/// The Prometheus counters that used to carry this signal were removed (the
+/// deployment does not run Prometheus), but "a stored secret will not open" must
+/// stay observable: it silently degrades a provider credential to "not
+/// configured". The purpose family identifies the record kind without logging
+/// the ciphertext or the binding.
+pub(crate) fn warn_secret_open_failure(purpose: &str, reason: &'static str) {
+    tracing::warn!(
+        secret_domain = secret_purpose_family(purpose),
+        reason,
+        "gateway secret open failed"
+    );
+}
+
 /// A decrypted runtime secret plus the rotation state of its envelope.
 pub(crate) struct OpenedRuntimeSecret {
     pub(crate) plaintext: String,
@@ -49,58 +72,87 @@ pub(crate) fn open_runtime_secret_payload(
     purpose: &str,
     stored: &str,
 ) -> Option<String> {
-    open_runtime_secret_payload_with_key_state(state.encryption_key(), purpose, stored)
-        .map(|opened| opened.plaintext)
+    open_runtime_secret_payload_with_key_state(
+        state.encryption_key(),
+        state.previous_encryption_key(),
+        purpose,
+        stored,
+    )
+    .map(|opened| opened.plaintext)
 }
 
 pub(crate) fn open_runtime_secret_payload_with_encryption_key(
     encryption_key: Option<&str>,
+    previous_encryption_key: Option<&str>,
     purpose: &str,
     stored: &str,
 ) -> Option<String> {
-    open_runtime_secret_payload_with_key_state(encryption_key, purpose, stored)
-        .map(|opened| opened.plaintext)
+    open_runtime_secret_payload_with_key_state(
+        encryption_key,
+        previous_encryption_key,
+        purpose,
+        stored,
+    )
+    .map(|opened| opened.plaintext)
 }
 
 pub(crate) fn open_runtime_secret_payload_with_key_state(
     encryption_key: Option<&str>,
+    previous_encryption_key: Option<&str>,
     purpose: &str,
     stored: &str,
 ) -> Option<OpenedRuntimeSecret> {
     if purpose.is_empty() {
+        warn_secret_open_failure(purpose, "empty-purpose");
         return None;
     }
     let (protected, sealed_with_current_key) = if SecretKey::matches_envelope(stored) {
         let Some(encryption_key) = effective_catalog_encryption_key_from_config(encryption_key)
         else {
+            warn_secret_open_failure(purpose, "missing-root-key");
             return None;
         };
         let key = SecretKey::from_secret(encryption_key.as_ref());
         // Read the key id before opening: `open_with_previous` succeeds for both
         // keys and would otherwise hide which one produced the plaintext.
         let sealed_with_current_key = key.sealed_envelope(stored);
-        let plaintext = match key.open_with_previous(SecretContext::Custom(purpose), stored) {
+        let plaintext = match key.open_with_previous(
+            previous_encryption_key,
+            SecretContext::Custom(purpose),
+            stored,
+        ) {
             Ok(plaintext) => plaintext,
-            Err(_) => return None,
+            Err(_) => {
+                warn_secret_open_failure(purpose, "authentication-failed");
+                return None;
+            }
         };
         (plaintext, sealed_with_current_key)
     } else {
         // Legacy prefixes carry no key id, so they always need a rewrite.
         let Some(ciphertext) = stored.strip_prefix(RUNTIME_SECRET_ENVELOPE_PREFIX) else {
+            warn_secret_open_failure(purpose, "unrecognised-format");
             return None;
         };
+        // A missing key or a failed open both mean "this value is unreadable".
         match decrypt_catalog_secret_with_fallbacks(encryption_key, ciphertext) {
             Some(plaintext) => (plaintext, false),
-            None => return None,
+            None => {
+                warn_secret_open_failure(purpose, "legacy-authentication-failed");
+                return None;
+            }
         }
     };
     let Some(plaintext) = protected.strip_prefix(purpose) else {
+        warn_secret_open_failure(purpose, "purpose-mismatch");
         return None;
     };
     let Some(plaintext) = plaintext.strip_prefix('\0') else {
+        warn_secret_open_failure(purpose, "purpose-mismatch");
         return None;
     };
     if plaintext.contains('\0') {
+        warn_secret_open_failure(purpose, "reserved-framing");
         return None;
     }
     Some(OpenedRuntimeSecret {
@@ -169,7 +221,7 @@ mod tests {
 
     #[test]
     fn previous_key_payloads_are_flagged_for_rewrite() {
-        use aether_crypto::{configure_previous_secret, SecretContext, SecretKey};
+        use aether_crypto::{SecretContext, SecretKey};
 
         let state = state_with_encryption_key();
         let purpose = "identity-oauth-state";
@@ -178,14 +230,16 @@ mod tests {
             .expect("runtime secret should encrypt");
         let opened = super::open_runtime_secret_payload_with_key_state(
             state.encryption_key(),
+            None,
             purpose,
             &current,
         )
         .expect("current key should open");
         assert!(opened.sealed_with_current_key);
 
-        // A value sealed by another key still opens once that key is registered
-        // as the previous one, and must report that it needs a rewrite.
+        // A value sealed by another key opens only when the caller passes that
+        // key, and must report that it still needs a rewrite. Nothing is
+        // registered process-wide, so an unrelated caller cannot open it.
         let previous_secret = "previous-runtime-secret-for-rotation-test";
         let stale = SecretKey::from_secret(previous_secret)
             .seal(
@@ -193,14 +247,23 @@ mod tests {
                 &format!("{purpose}\0previous-key-marker"),
             )
             .expect("previous key should seal");
-        configure_previous_secret(Some(previous_secret));
+        assert!(
+            super::open_runtime_secret_payload_with_key_state(
+                state.encryption_key(),
+                None,
+                purpose,
+                &stale,
+            )
+            .is_none(),
+            "a previous-key envelope must not open without the previous key"
+        );
         let opened = super::open_runtime_secret_payload_with_key_state(
             state.encryption_key(),
+            Some(previous_secret),
             purpose,
             &stale,
         )
         .expect("previous key should open");
-        configure_previous_secret(None);
 
         assert_eq!(opened.plaintext, "previous-key-marker");
         assert!(

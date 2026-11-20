@@ -225,6 +225,24 @@ impl DataBackends {
         }
     }
 
+    /// Enumerates stored secret ciphertexts for the rotation diagnostics.
+    pub async fn scan_secret_ciphertexts(
+        &self,
+    ) -> Result<Vec<crate::backend::StoredSecretCiphertext>, DataLayerError> {
+        match self.postgres.as_ref() {
+            Some(backend) => backend.scan_secret_ciphertexts().await,
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Ids of API keys that still carry a stored ciphertext.
+    pub async fn list_secret_rotation_api_key_ids(&self) -> Result<Vec<String>, DataLayerError> {
+        match self.postgres.as_ref() {
+            Some(backend) => backend.list_secret_rotation_api_key_ids().await,
+            None => Ok(Vec::new()),
+        }
+    }
+
     pub async fn list_system_config_entries(
         &self,
     ) -> Result<Vec<StoredSystemConfigEntry>, DataLayerError> {

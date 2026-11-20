@@ -52,6 +52,7 @@ mod roles;
 mod router;
 mod routing;
 mod scheduler;
+mod secrets_cli;
 mod server_chan_push;
 mod stage_metrics;
 mod state;
@@ -86,6 +87,12 @@ pub use self::middleware::strip_cf_headers_middleware;
 pub use self::rate_limit::FrontdoorUserRpmConfig;
 pub(crate) use self::rate_limit::FrontdoorUserRpmOutcome;
 pub use self::router::{attach_static_frontend, build_router, build_router_with_state, serve_tcp};
+pub use self::secrets_cli::{
+    render_rotation_json, render_rotation_text, render_text as render_verify_text,
+    render_verify_json, rotate_stored_secrets, verify_stored_secrets, SecretRotationOutcome,
+    SecretVerifyReport,
+};
+pub use self::state::SecretRotationSummary;
 pub(crate) use self::state::{
     AdminBillingCollectorRecord, AdminBillingCollectorWriteInput, AdminBillingRuleRecord,
     AdminBillingRuleWriteInput, AdminWalletMutationOutcome, AdminWalletPaymentOrderRecord,

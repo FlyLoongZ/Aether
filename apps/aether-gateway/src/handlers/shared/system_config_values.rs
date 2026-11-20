@@ -1,7 +1,9 @@
 use super::catalog::{
     decrypt_catalog_secret_with_fallbacks, effective_catalog_encryption_key_from_config,
 };
-use super::runtime_secret::{open_runtime_secret_payload, seal_runtime_secret_payload};
+use super::runtime_secret::{
+    open_runtime_secret_payload, seal_runtime_secret_payload, warn_secret_open_failure,
+};
 use crate::{AppState, GatewayError};
 use aether_crypto::{looks_like_python_fernet_ciphertext, SecretContext, SecretKey};
 use std::future::Future;
@@ -193,14 +195,38 @@ pub(crate) fn decrypt_system_config_secret(
     stored: &str,
 ) -> Option<String> {
     if SecretKey::matches_envelope(stored) {
-        let encryption_key = effective_catalog_encryption_key_from_config(state.encryption_key())?;
+        let Some(encryption_key) =
+            effective_catalog_encryption_key_from_config(state.encryption_key())
+        else {
+            warn_secret_open_failure(&system_config_secret_purpose(key), "missing-root-key");
+            return None;
+        };
         let normalized = aether_admin::system::normalize_admin_system_config_key(key);
-        return SecretKey::from_secret(encryption_key.as_ref())
-            .open_with_previous(SecretContext::SystemConfig(&normalized), stored)
-            .ok()
-            .filter(|plaintext| !plaintext.contains('\0'));
+        let opened = SecretKey::from_secret(encryption_key.as_ref()).open_with_previous(
+            state.previous_encryption_key(),
+            SecretContext::SystemConfig(&normalized),
+            stored,
+        );
+        return match opened {
+            Ok(plaintext) if !plaintext.contains('\0') => Some(plaintext),
+            Ok(_) => {
+                warn_secret_open_failure(&system_config_secret_purpose(key), "reserved-framing");
+                None
+            }
+            Err(_) => {
+                warn_secret_open_failure(
+                    &system_config_secret_purpose(key),
+                    "authentication-failed",
+                );
+                None
+            }
+        };
     }
-    let sealed = stored.strip_prefix(SYSTEM_CONFIG_SECRET_V2_PREFIX)?;
+    let Some(sealed) = stored.strip_prefix(SYSTEM_CONFIG_SECRET_V2_PREFIX) else {
+        // Not an envelope this reader knows: the caller falls back to the legacy
+        // Fernet/plaintext readers, which report their own failures.
+        return None;
+    };
     let purpose = system_config_secret_purpose(key);
     open_runtime_secret_payload(state, &purpose, sealed)
         .filter(|plaintext| !plaintext.contains('\0'))
@@ -351,7 +377,7 @@ fn stored_envelope_uses_previous_key(state: &AppState, stored: &str) -> bool {
     super::runtime_secret_uses_previous_key(state.encryption_key(), stored)
 }
 
-fn stored_secret_uses_known_envelope_family(value: &str) -> bool {
+pub(crate) fn stored_secret_uses_known_envelope_family(value: &str) -> bool {
     SecretKey::matches_envelope(value)
         || value.starts_with(SYSTEM_CONFIG_SECRET_ENVELOPE_FAMILY_PREFIX)
         || value.starts_with(LDAP_BIND_PASSWORD_ENVELOPE_FAMILY_PREFIX)

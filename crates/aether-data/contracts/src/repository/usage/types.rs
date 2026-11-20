@@ -3240,6 +3240,15 @@ pub trait UsageWriteRepository: Send + Sync {
 
     async fn rebuild_provider_api_key_usage_stats(&self) -> Result<u64, crate::DataLayerError>;
 
+    /// Whether this backend can actually sweep usage rows.
+    ///
+    /// A backend without retention semantics must say so at startup instead of
+    /// reporting an empty sweep every interval: the scheduler skips registration
+    /// and the failure counters stay quiet.
+    fn supports_usage_cleanup(&self) -> bool {
+        false
+    }
+
     async fn cleanup_stale_pending_requests(
         &self,
         cutoff_unix_secs: u64,

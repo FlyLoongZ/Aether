@@ -141,8 +141,8 @@ pub(crate) use self::system_config_values::{
     encrypt_smtp_password, encrypt_system_config_secret, ldap_attribute_description_is_valid,
     ldap_bind_password_binding_matches, ldap_distinguished_name_is_valid,
     ldap_module_config_is_valid, ldap_search_filter_is_valid, module_available_from_env,
-    normalize_ldap_transport_server_url, smtp_password_binding, system_config_bool,
-    system_config_string,
+    normalize_ldap_transport_server_url, smtp_password_binding,
+    stored_secret_uses_known_envelope_family, system_config_bool, system_config_string,
 };
 pub(crate) use self::usage_stats::{
     admin_stats_bad_request_response, parse_bounded_u32, round_to, sample_interval_timeline,

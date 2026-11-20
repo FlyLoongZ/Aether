@@ -10,6 +10,7 @@ mod maintenance;
 mod postgres;
 mod read;
 mod referrals;
+mod secrets;
 mod stats;
 mod system;
 mod transactions;
@@ -25,6 +26,7 @@ pub use referrals::{
     ReferralRelationshipRecord, ReferralReversalSummary, ReferralRewardConfig,
     ReferralRewardDetail, ReferralRewardListQuery, ReferralRewardRecord, ReferralUserDashboard,
 };
+pub use secrets::{StoredSecretCiphertext, SECRET_SCAN_TARGETS};
 pub use transactions::DataTransactionBackends;
 pub use write::DataWriteRepositories;
 

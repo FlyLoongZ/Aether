@@ -45,6 +45,11 @@ pub(crate) async fn cleanup_stale_pending_requests_once(
     if !data.has_usage_writer() {
         return Ok(PendingCleanupSummary::default());
     }
+    if !data.supports_usage_cleanup() {
+        // No retention semantics on this backend: nothing to reclaim, and the
+        // caller still runs its referral reconciliation.
+        return Ok(PendingCleanupSummary::default());
+    }
 
     let timeout_minutes = pending_cleanup_timeout_minutes(data).await?;
     let batch_size = pending_cleanup_batch_size(data).await?;

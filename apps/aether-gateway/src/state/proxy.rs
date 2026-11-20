@@ -66,6 +66,7 @@ fn seal_proxy_node_secret_v2_with_encryption_key(
 
 fn open_proxy_node_secret_v2_with_encryption_key(
     encryption_key: Option<&str>,
+    previous_encryption_key: Option<&str>,
     scope: &str,
     field: &str,
     node_id: &str,
@@ -79,7 +80,12 @@ fn open_proxy_node_secret_v2_with_encryption_key(
     } else {
         stored.strip_prefix(PROXY_NODE_SECRET_V2_PREFIX)?
     };
-    open_runtime_secret_payload_with_encryption_key(encryption_key, &purpose, sealed)
+    open_runtime_secret_payload_with_encryption_key(
+        encryption_key,
+        previous_encryption_key,
+        &purpose,
+        sealed,
+    )
 }
 
 fn incoming_proxy_node_secret_is_ciphertext(value: &str) -> bool {
@@ -145,6 +151,7 @@ impl AppState {
                     .unwrap_or(&observed);
                 let plaintext = open_proxy_node_secret_v2_with_encryption_key(
                     self.encryption_key(),
+                    self.previous_encryption_key(),
                     PROXY_NODE_PASSWORD_SCOPE,
                     PROXY_NODE_PASSWORD_FIELD,
                     &persistent_node_id,
@@ -167,6 +174,7 @@ impl AppState {
                 if runtime_secret_payload_is_sealed(&observed) {
                     open_runtime_secret_payload_with_encryption_key(
                         self.encryption_key(),
+                        self.previous_encryption_key(),
                         PROXY_NODE_PASSWORD_LEGACY_SECRET_PURPOSE,
                         &observed,
                     )

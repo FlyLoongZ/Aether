@@ -375,6 +375,16 @@ impl GatewayDataState {
         self.usage_writer.is_some()
     }
 
+    /// Whether the configured usage backend implements retention sweeps.
+    ///
+    /// The cleanup worker is only registered when this is true; a backend
+    /// without the capability would otherwise log a failed sweep every interval.
+    pub(crate) fn supports_usage_cleanup(&self) -> bool {
+        self.usage_writer
+            .as_ref()
+            .is_some_and(|writer| writer.supports_usage_cleanup())
+    }
+
     pub(crate) fn has_usage_counter_flush_backend(&self) -> bool {
         self.has_usage_writer()
     }
@@ -404,6 +414,10 @@ impl GatewayDataState {
     #[allow(dead_code)]
     pub(crate) fn encryption_key(&self) -> Option<&str> {
         self.config.encryption_key()
+    }
+
+    pub(crate) fn previous_encryption_key(&self) -> Option<&str> {
+        self.config.previous_encryption_key()
     }
 
     pub(crate) async fn find_system_config_value(
@@ -520,6 +534,28 @@ impl GatewayDataState {
             return Ok(Vec::new());
         };
         backends.list_system_config_entries().await
+    }
+
+    /// Enumerates stored secret ciphertexts for the rotation diagnostics.
+    ///
+    /// In-memory state has no ciphertext columns to scan, so it reports an empty
+    /// inventory; the rotation CLI refuses to run without a SQL backend anyway.
+    pub(crate) async fn scan_secret_ciphertexts(
+        &self,
+    ) -> Result<Vec<aether_data::StoredSecretCiphertext>, DataLayerError> {
+        match self.backends.as_ref() {
+            Some(backends) => backends.scan_secret_ciphertexts().await,
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub(crate) async fn list_secret_rotation_api_key_ids(
+        &self,
+    ) -> Result<Vec<String>, DataLayerError> {
+        match self.backends.as_ref() {
+            Some(backends) => backends.list_secret_rotation_api_key_ids().await,
+            None => Ok(Vec::new()),
+        }
     }
 
     pub(crate) async fn upsert_system_config_entry(

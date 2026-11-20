@@ -14,8 +14,12 @@ use super::scopes::BackupScope;
 use super::store::{BackupObjectCreateResult, BackupObjectStore, BackupStoreError};
 use super::BackupRestoreScope;
 
-// V1: magic || version || nonce || ciphertext/tag.
-// V2: magic || version || fixed-length key ID || nonce || ciphertext/tag.
+// Envelope layout: magic || version || fixed-length key ID || payload.
+//
+// V2 and V3 carry the key id and are the only versions this code accepts. A V1
+// envelope (magic || version || nonce || ciphertext, no key id) is rejected by
+// the version match below: it was retired with the legacy backup format, so
+// documenting it as supported would mislead anyone reading a stored object.
 const BACKUP_ENVELOPE_MAGIC: &[u8; 8] = b"AETHERBK";
 const BACKUP_ENVELOPE_VERSION_V2: u8 = 2;
 const BACKUP_ENVELOPE_VERSION_V3: u8 = 3;
