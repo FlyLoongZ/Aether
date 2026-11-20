@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseRequest, renderRequest, renderResponse } from '../registry'
 import { groupRenderBlocksIntoTurns } from '../grouper'
 import type { MessageRenderBlock } from '../render'
+import { DEFAULT_CONVERSATION_LABELS } from '../labels'
 
 describe('OpenAI Tool Message Parsing & Rendering', () => {
   const requestBodyWithTool = {
@@ -99,7 +100,7 @@ describe('OpenAI Tool Message Parsing & Rendering', () => {
     const assistantMsg = rendered.blocks[0] as MessageRenderBlock
     expect(assistantMsg).toBeDefined()
     expect(assistantMsg.role).toBe('assistant')
-    expect(assistantMsg.badges?.some(b => b.label === '思考')).toBe(true)
+    expect(assistantMsg.badges?.some(b => b.label === DEFAULT_CONVERSATION_LABELS.badgeThinking)).toBe(true)
 
     const reasoningBlock = assistantMsg.content.find(b => b.type === 'collapsible')
     expect(reasoningBlock).toBeDefined()
@@ -142,7 +143,7 @@ describe('OpenAI Tool Message Parsing & Rendering', () => {
     const rendered = renderResponse(streamPayload, undefined, 'openai')
     const assistantMsg = rendered.blocks[0] as MessageRenderBlock
     expect(assistantMsg).toBeDefined()
-    expect(assistantMsg.badges?.some(b => b.label === '思考')).toBe(true)
+    expect(assistantMsg.badges?.some(b => b.label === DEFAULT_CONVERSATION_LABELS.badgeThinking)).toBe(true)
 
     const reasoningBlock = assistantMsg.content.find(b => b.type === 'collapsible')
     expect(reasoningBlock).toBeDefined()

@@ -59,10 +59,10 @@ async function select(root: HTMLElement, index: number, value: string) {
   await vi.advanceTimersByTimeAsync(120)
   await settle()
 }
-beforeEach(() => {
+beforeEach(async () => {
   vi.useFakeTimers()
   vi.clearAllMocks()
-  setI18nLocale('en-US')
+  await setI18nLocale('en-US')
   props = reactive({ range: { ...range }, revision: 0 })
   api.users.mockResolvedValue([{ id: 'user-1', username: 'Alice', is_active: true, groups: [{ id: 'group-1' }] }, { id: 'user-2', username: 'Bob', is_active: true, groups: [] }])
   api.groups.mockResolvedValue({ items: [{ id: 'group-1', name: 'Engineering' }, { id: 'group-2', name: 'Support' }] })

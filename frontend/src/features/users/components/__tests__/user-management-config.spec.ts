@@ -9,14 +9,14 @@ import {
 
 let previousLocale: Locale
 
-beforeEach(() => {
+beforeEach(async () => {
   previousLocale = getI18nLocale()
 })
 
 afterEach(() => setI18nLocale(previousLocale))
 
 describe('user management option translations', () => {
-  it('updates the existing option arrays after switching language', () => {
+  it('updates the existing option arrays after switching language', async () => {
     setI18nLocale('zh-CN')
     expect(USER_ROLE_FILTER_OPTIONS[0].label).toBe('全部角色')
     expect(USER_STATUS_FILTER_OPTIONS[0].label).toBe('全部状态')
@@ -24,7 +24,7 @@ describe('user management option translations', () => {
     expect(USER_BATCH_ACTION_OPTIONS[0].label).toBe('启用')
     expect(USER_BATCH_ACTION_OPTIONS[0].description).toBe('恢复用户登录与调用')
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     expect(USER_ROLE_FILTER_OPTIONS[0].label).toBe('All roles')
     expect(USER_STATUS_FILTER_OPTIONS[0].label).toBe('All statuses')
     expect(USER_SORT_OPTIONS[0].label).toBe('Default sort')

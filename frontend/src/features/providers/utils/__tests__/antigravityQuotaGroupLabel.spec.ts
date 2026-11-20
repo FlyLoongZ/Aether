@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { messages } from '@/i18n/messages'
+import { zhMessages } from '@/i18n/messages-zh'
+import { enMessages } from '@/i18n/messages-en'
 import { resolveAntigravityQuotaGroupLabel } from '@/features/providers/utils/antigravityQuota'
 
 describe('resolveAntigravityQuotaGroupLabel', () => {
@@ -15,11 +16,11 @@ describe('resolveAntigravityQuotaGroupLabel', () => {
 
     expect(resolveAntigravityQuotaGroupLabel(
       window,
-      key => messages['zh-CN'][key],
+      key => zhMessages[key],
     )).toBe('Gemini Models · 周')
     expect(resolveAntigravityQuotaGroupLabel(
       window,
-      key => messages['en-US'][key],
+      key => enMessages[key],
     )).toBe('Gemini Models · Weekly')
   })
 
@@ -33,11 +34,11 @@ describe('resolveAntigravityQuotaGroupLabel', () => {
 
     expect(resolveAntigravityQuotaGroupLabel(
       window,
-      key => messages['zh-CN'][key],
+      key => zhMessages[key],
     )).toBe('Claude and GPT models · 5小时')
     expect(resolveAntigravityQuotaGroupLabel(
       window,
-      key => messages['en-US'][key],
+      key => enMessages[key],
     )).toBe('Claude and GPT models · 5 Hours')
   })
 })

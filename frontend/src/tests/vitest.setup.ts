@@ -1,4 +1,11 @@
 import { beforeEach } from 'vitest'
+import { registerLocaleBundle } from '@/i18n/messages'
+import { enMessages } from '@/i18n/messages-en'
+
+// The app loads non-default locales on demand; tests assert both languages, so
+// the English bundle is registered up front for every test file instead of
+// making each spec deal with the async load.
+registerLocaleBundle('en-US', enMessages)
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>()
@@ -62,5 +69,5 @@ beforeEach(async () => {
   localStorage.clear()
   sessionStorage.clear()
   const { setI18nLocale } = await import('@/i18n')
-  setI18nLocale('zh-CN')
+  await setI18nLocale('zh-CN')
 })

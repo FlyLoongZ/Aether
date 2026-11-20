@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseResponse, renderResponse } from '../registry'
+import { DEFAULT_CONVERSATION_LABELS } from '../labels'
 
 describe('Gemini conversation parser', () => {
   const requestBody = { model: 'gemini-3-pro-preview' }
@@ -75,7 +76,7 @@ describe('Gemini conversation parser', () => {
     const modelMsg = rendered.blocks[0]
     if (!modelMsg || modelMsg.type !== 'message') throw new Error('expected message block')
     expect(modelMsg.role).toBe('assistant')
-    expect(modelMsg.badges?.some(b => b.label === '思考')).toBe(true)
+    expect(modelMsg.badges?.some(b => b.label === DEFAULT_CONVERSATION_LABELS.badgeThinking)).toBe(true)
 
     const thinkingBlock = modelMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()
@@ -131,7 +132,7 @@ describe('Gemini conversation parser', () => {
     const modelMsg = rendered.blocks[0]
     if (!modelMsg || modelMsg.type !== 'message') throw new Error('expected message block')
     expect(modelMsg.role).toBe('assistant')
-    expect(modelMsg.badges?.some(b => b.label === '思考')).toBe(true)
+    expect(modelMsg.badges?.some(b => b.label === DEFAULT_CONVERSATION_LABELS.badgeThinking)).toBe(true)
 
     const thinkingBlock = modelMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()

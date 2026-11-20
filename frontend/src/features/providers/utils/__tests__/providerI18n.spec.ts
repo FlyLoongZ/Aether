@@ -10,17 +10,17 @@ import { getOAuthStatusDisplayWithFallback } from '../providerKeyStatus'
 afterEach(() => setI18nLocale('zh-CN'))
 
 describe('provider locale switching', () => {
-  it('updates shared option labels and generated validation messages', () => {
+  it('updates shared option labels and generated validation messages', async () => {
     expect(CONDITION_OP_OPTIONS[0].label).toBe('等于')
     expect(formatModelMappingRequestScope(undefined)).toBe('所有请求')
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     expect(CONDITION_OP_OPTIONS[0].label).toBe('Equals')
     expect(formatModelMappingRequestScope(undefined)).toBe('All requests')
     expect(parseProviderKeyBatchImport('invalid entry').errors[0].message).toBe('Expected format: Name----Key')
   })
 
-  it('keeps server error details verbatim while translating refresh feedback', () => {
-    setI18nLocale('en-US')
+  it('keeps server error details verbatim while translating refresh feedback', async () => {
+    await setI18nLocale('en-US')
     expect(getOAuthRefreshFeedback({
       accountStateRecheckAttempted: true,
       accountStateRecheckError: '上游返回原文',
@@ -34,8 +34,8 @@ describe('provider locale switching', () => {
     })
   })
 
-  it('formats multi-day quota and token countdowns in English', () => {
-    setI18nLocale('en-US')
+  it('formats multi-day quota and token countdowns in English', async () => {
+    await setI18nLocale('en-US')
     const expiresAt = Math.floor(Date.now() / 1000) + 3 * 86400 + 2 * 3600
     expect(getOAuthExpiresCountdown(expiresAt, 0, null, null)?.text).toBe('3d 2h')
     expect(getCodexResetCountdown(expiresAt, null, null, 0, null)?.text).toMatch(/^3d 2:00:00$/)

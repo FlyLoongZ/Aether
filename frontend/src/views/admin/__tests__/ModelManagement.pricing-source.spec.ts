@@ -151,7 +151,7 @@ function mountView() {
   mountedApp.mount(mountedRoot)
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   persistedModel = {
     id: 'model-1',
     name: 'test-model',
@@ -251,7 +251,7 @@ describe('ModelManagement pricing-source workflow', () => {
   it('does not render the pricing source in the model list', async () => {
     mountView()
     await settle()
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await settle()
 
     expect(document.body.textContent).not.toContain('Online pricing source')

@@ -26,6 +26,8 @@ import type {
   ErrorRenderBlock,
 } from './render'
 
+import { conversationLabels } from './labels'
+
 // ============================================================
 // 常量配置
 // ============================================================
@@ -116,9 +118,9 @@ function generateMessageSummary(message: ParsedMessage | undefined): string | un
 
   const parts: string[] = []
   if (hasThinking) parts.push('思考过程')
-  if (hasToolUse) parts.push('工具调用')
-  if (hasToolResult) parts.push('工具结果')
-  if (hasImage) parts.push('图片')
+  if (hasToolUse) parts.push(conversationLabels().badgeToolCall)
+  if (hasToolResult) parts.push(conversationLabels().badgeToolResult)
+  if (hasImage) parts.push(conversationLabels().badgeImage)
   if (hasError) parts.push('错误')
 
   return parts.length > 0 ? `[${parts.join(', ')}]` : undefined
@@ -398,7 +400,7 @@ function renderBlockToMessage(block: MessageRenderBlock): ParsedMessage {
       case 'collapsible': {
         const collapsibleBlock = child as CollapsibleRenderBlock
         if (
-          collapsibleBlock.title?.includes('思考') ||
+          collapsibleBlock.title?.includes(conversationLabels().badgeThinking) ||
           collapsibleBlock.title?.toLowerCase().includes('thinking') ||
           collapsibleBlock.className?.includes('thinking')
         ) {

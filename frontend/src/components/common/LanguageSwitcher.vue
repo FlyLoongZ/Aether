@@ -19,7 +19,7 @@
         :key="option.value"
         class="justify-between gap-3"
         :lang="option.value"
-        @select="setLocale(option.value)"
+        @select="selectLocale(option.value)"
       >
         <span>{{ option.label }}</span>
         <Check
@@ -41,9 +41,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useI18n, useLocaleOptions, type Locale } from '@/i18n'
+import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
-const { locale, setLocale } = useLocaleOptions()
+const { locale, trySetLocale } = useLocaleOptions()
+const { error: showError } = useToast()
+
+async function selectLocale(next: Locale) {
+  if (next === locale.value) return
+  // A rejected promise here used to be swallowed: the menu closed, nothing
+  // happened, and the locale stayed unloadable for the rest of the session.
+  const switched = await trySetLocale(next)
+  if (!switched) {
+    showError(t('common.languageLoadFailed'))
+  }
+}
 
 const options = computed<Array<{ value: Locale; label: string }>>(() => [
   { value: 'zh-CN', label: t('common.chinese') },

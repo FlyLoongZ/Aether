@@ -1,4 +1,5 @@
 import type { RenderResult } from '../conversation'
+import type { ConversationLabels } from '../conversation/labels'
 import type { JsonDisplayLine, JsonPageOptions } from './json-viewer'
 
 export const MAX_BODY_BYTES = 64 * 1024 * 1024
@@ -35,6 +36,11 @@ export interface BodyConversationOptions {
   apiFormat?: string
   page?: number
   previewLimit?: number
+  /**
+   * Localized labels for the renderer. The worker has no locale of its own, so
+   * the main thread supplies them; omitting them falls back to English.
+   */
+  labels?: Partial<ConversationLabels>
 }
 
 export interface BodyConversationPage {

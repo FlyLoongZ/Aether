@@ -67,7 +67,7 @@ describe('Chart locale updates', () => {
     const initialData = chart.data
     expect(chart.options.scales?.y?.title?.text).toBe('间隔 (分钟)')
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
 
     expect(chart.options.locale).toBe('en-US')
@@ -87,7 +87,7 @@ describe('Chart locale updates', () => {
     const chart = renderedChart()
     expect(chart.data.datasets.map(dataset => dataset.label)).toEqual(['实际成本', '预测成本'])
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
 
     expect(chart.data.datasets.map(dataset => dataset.label)).toEqual(['Actual cost', 'Forecast cost'])
@@ -102,7 +102,7 @@ describe('Chart locale updates', () => {
       }),
     }))
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
 
     const chart = renderedChart()

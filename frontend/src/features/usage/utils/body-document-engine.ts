@@ -1,4 +1,5 @@
 import { parseRawSseResponse, renderRequest, renderResponse, type RenderBlock, type RenderResult } from '../conversation'
+import { conversationLabels, setConversationLabels } from '../conversation/labels'
 import { getRawTextChunk, JsonPageReader, JSON_PAGE_SIZE, JSON_TEXT_CHUNK_SIZE } from './json-viewer'
 import {
   BodyDocumentError, MAX_BODY_BYTES, MAX_ENCODED_BODY_BYTES,
@@ -101,8 +102,12 @@ export class BodyDocumentEngine {
   }
 
   private render(options: BodyConversationOptions): RenderResult {
-    const key = `${options.kind}:${options.apiFormat ?? ''}`
+    // Labels participate in the cache key: a language switch must re-render
+    // instead of serving the previous locale's badges and role names.
+    const labels = options.labels ?? null
+    const key = `${options.kind}:${options.apiFormat ?? ''}:${JSON.stringify(labels)}`
     if (this.conversation?.key !== key) {
+      setConversationLabels(labels)
       this.conversation = { key, result: options.kind === 'request'
         ? renderRequest(this.value, undefined, options.apiFormat)
         : renderResponse(this.value, undefined, options.apiFormat) }
@@ -121,7 +126,7 @@ export class BodyDocumentEngine {
       remaining -= preview.length
       if (preview.length === value.length) return value
       truncated = true
-      return `${preview}…（内容较长，复制可获取完整内容）`
+      return `${preview}${conversationLabels().truncatedMarker}`
     }
     const clipBlocks = (blocks: RenderBlock[], depth = 0): RenderBlock[] => {
       const previews: RenderBlock[] = []
@@ -135,7 +140,7 @@ export class BodyDocumentEngine {
           if (typeof value === 'string' && key !== 'type' && key !== 'role') {
             if (key === 'src' && value.length > remaining) {
               record[key] = undefined
-              record.alt = '图片较大，请复制正文查看完整内容'
+              record.alt = conversationLabels().largeImageAlt
               truncated = true
             } else {
               record[key] = clipString(value)

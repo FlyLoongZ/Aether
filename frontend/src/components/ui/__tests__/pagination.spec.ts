@@ -33,7 +33,7 @@ describe('Pagination', () => {
     expect(root.querySelector('[aria-live]')?.textContent).toContain('共 1,250 条')
     expect(root.querySelector('[aria-current="page"]')?.getAttribute('aria-label')).toBe('第 1 页')
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
 
     expect(root.querySelector('[aria-live]')?.textContent).toContain('Showing 1-20 of 1,250 items')
@@ -59,7 +59,7 @@ describe('Pagination', () => {
     mountedApps.push({ app, root })
 
     total.value = 0
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
 
     expect(root.querySelector('[aria-live]')?.textContent).toContain('Showing 0-0 of 0 items')

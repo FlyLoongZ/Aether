@@ -12,7 +12,7 @@ import {
 
 let previousLocale: Locale
 
-beforeEach(() => {
+beforeEach(async () => {
   previousLocale = getI18nLocale()
   setI18nLocale('zh-CN')
 })
@@ -32,7 +32,7 @@ function policy(replacementGroup?: string): BillingEntitlement {
 }
 
 describe('billing entitlement replacement', () => {
-  it('matches the backend replacement query for entitlement record state and expiry', () => {
+  it('matches the backend replacement query for entitlement record state and expiry', async () => {
     const now = Date.parse('2026-08-14T12:00:00Z')
 
     expect(isPlanEntitlementReplacementCandidate({
@@ -57,13 +57,13 @@ describe('billing entitlement replacement', () => {
     }, now)).toBe(false)
   })
 
-  it('keeps usage policies stackable when neither package declares a group', () => {
+  it('keeps usage policies stackable when neither package declares a group', async () => {
     expect(entitlementsWillReplaceExisting([policy()], [policy()])).toBe(false)
     expect(entitlementsWillReplaceExisting(undefined, [policy()])).toBe(false)
     expect(entitlementsWillReplaceExisting([policy()], undefined)).toBe(false)
   })
 
-  it('preserves legacy whole-package replacement for matching entitlement types', () => {
+  it('preserves legacy whole-package replacement for matching entitlement types', async () => {
     const incoming: BillingEntitlement[] = [
       { type: 'daily_quota', daily_quota_usd: 20 },
       policy('new-policy-group'),
@@ -84,18 +84,18 @@ describe('billing entitlement replacement', () => {
     )).toBe(false)
   })
 
-  it('matches explicit groups across entitlement types after trimming whitespace', () => {
+  it('matches explicit groups across entitlement types after trimming whitespace', async () => {
     expect(entitlementsWillReplaceExisting(
       [policy(' pro-tier ')],
       [{ type: 'wallet_credit', replacement_group: 'pro-tier', amount_usd: 10 }],
     )).toBe(true)
   })
 
-  it('uses exact case-sensitive group identity like the backend', () => {
+  it('uses exact case-sensitive group identity like the backend', async () => {
     expect(entitlementsWillReplaceExisting([policy('Pro-Tier')], [policy('pro-tier')])).toBe(false)
   })
 
-  it('normalizes, removes blanks, and deduplicates groups in display order', () => {
+  it('normalizes, removes blanks, and deduplicates groups in display order', async () => {
     expect(entitlementReplacementGroups([
       policy(' pro-tier '),
       policy(''),
@@ -107,7 +107,7 @@ describe('billing entitlement replacement', () => {
 })
 
 describe('usage policy entitlement labels', () => {
-  it('updates all entitlement labels when the locale changes and preserves policy names', () => {
+  it('updates all entitlement labels when the locale changes and preserves policy names', async () => {
     const items: BillingEntitlement[] = [
       { type: 'wallet_credit', amount_usd: 5 },
       { type: 'daily_quota', daily_quota_usd: 10 },
@@ -127,7 +127,7 @@ describe('usage policy entitlement labels', () => {
       '并发 4',
     ])
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     expect(billingEntitlementLabels(items)).toEqual([
       'Gift balance $5.00',
       'Daily quota $10.00',
@@ -138,8 +138,8 @@ describe('usage policy entitlement labels', () => {
     expect(usagePolicyEntitlementLabels({ type: 'usage_policy', rules: [] })).toEqual(['Usage limits'])
   })
 
-  it('localizes calendar, rolling, and subscription windows without Chinese fragments', () => {
-    setI18nLocale('en-US')
+  it('localizes calendar, rolling, and subscription windows without Chinese fragments', async () => {
+    await setI18nLocale('en-US')
     expect(usagePolicyEntitlementLabels({
       type: 'usage_policy',
       rules: [
@@ -170,7 +170,7 @@ describe('usage policy entitlement labels', () => {
     ])
   })
 
-  it('shows calendar reset timezone and week start', () => {
+  it('shows calendar reset timezone and week start', async () => {
     expect(usagePolicyEntitlementLabels({
       type: 'usage_policy',
       rules: [
@@ -197,7 +197,7 @@ describe('usage policy entitlement labels', () => {
     ])
   })
 
-  it('defaults calendar weeks to Monday and keeps rate and concurrency labels concise', () => {
+  it('defaults calendar weeks to Monday and keeps rate and concurrency labels concise', async () => {
     expect(usagePolicyEntitlementLabels({
       type: 'usage_policy',
       rules: [

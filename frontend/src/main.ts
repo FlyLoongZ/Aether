@@ -6,12 +6,24 @@ import App from './App.vue'
 import { isModuleLoadError } from './utils/importRetry'
 import { startup } from './startup/state'
 import { log } from './utils/logger'
-import { createI18n } from './i18n'
+import { createI18n, ensureLocaleMessages, getI18nLocale, setI18nLocale } from './i18n'
+import { defaultLocale } from './i18n/messages'
 import { initializeTheme } from './theme/runtime'
 
 initializeTheme()
 
 startup.begin()
+
+// A non-default locale lives in its own chunk; fetch it before mounting so the
+// first paint is already in the right language and `translate` can stay
+// synchronous everywhere else.
+const initialLocaleReady = ensureLocaleMessages(getI18nLocale()).catch(error => {
+  // The preferred locale lives in its own chunk. If it cannot be fetched, fall back
+  // to the bundled locale instead of mounting with an empty dictionary (which would
+  // render raw keys everywhere).
+  log.error('Initial locale failed to load', error)
+  return setI18nLocale(defaultLocale)
+})
 const app = createApp(App)
 const pinia = createPinia()
 const i18n = createI18n()
@@ -37,8 +49,10 @@ app.config.errorHandler = (err: unknown, _instance, info) => {
   if (startup.state.phase !== 'ready' || isModuleLoadError(err)) startup.fail()
 }
 
-app.mount('#app')
-document.documentElement.dataset.appMounted = 'true'
+void initialLocaleReady.then(() => {
+  app.mount('#app')
+  document.documentElement.dataset.appMounted = 'true'
+})
 window.dispatchEvent(new Event('aether:app-mounted'))
 void router.isReady().then(() => startup.ready()).catch(error => {
   log.error('Initial route failed', error)

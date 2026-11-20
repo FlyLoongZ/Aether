@@ -2,6 +2,8 @@ import type { App, InjectionKey, Ref } from 'vue'
 import { computed, inject, readonly, ref } from 'vue'
 import {
   defaultLocale,
+  localeBundleLoaded,
+  registerLocaleBundle,
   supportedLocales,
   translateMessage,
   type Locale,
@@ -12,7 +14,7 @@ type Params = Record<string, string | number>
 
 interface I18nContext {
   locale: Ref<Locale>
-  setLocale: (locale: Locale) => void
+  setLocale: (locale: Locale) => Promise<void>
   t: (key: MessageKey, params?: Params) => string
 }
 
@@ -50,8 +52,33 @@ export function normalizeLocale(value: string | null | undefined): Locale | unde
   return undefined
 }
 
-function setLocale(nextLocale: Locale): void {
-  if (!isLocale(nextLocale)) return
+let localeBundleRequest: Promise<void> | null = null
+
+/**
+ * Loads a locale dictionary on demand.
+ *
+ * The default locale is bundled; every other locale arrives as its own chunk.
+ * Callers must await this before relying on `translateMessage` for that locale,
+ * and the bootstrap does so before mounting the app.
+ */
+export async function ensureLocaleMessages(nextLocale: Locale): Promise<void> {
+  if (localeBundleLoaded(nextLocale)) return
+  localeBundleRequest ??= import('./messages-en')
+    .then(({ enMessages }) => {
+      registerLocaleBundle('en-US', enMessages)
+    })
+    .catch(error => {
+      // Reset the cached promise: leaving a rejected promise here made the locale
+      // permanently unloadable for the lifetime of the page, so switching to
+      // English kept failing after a single flaky chunk fetch (offline start,
+      // stale service worker, transient CDN error) until a full reload.
+      localeBundleRequest = null
+      throw error
+    })
+  await localeBundleRequest
+}
+
+function applyLocale(nextLocale: Locale): void {
   locale.value = nextLocale
   if (typeof document !== 'undefined') {
     document.documentElement.lang = nextLocale
@@ -63,6 +90,34 @@ function setLocale(nextLocale: Locale): void {
       // Persistence is optional; do not interrupt language switching.
     }
   }
+}
+
+async function setLocale(nextLocale: Locale): Promise<void> {
+  if (!isLocale(nextLocale)) return
+  // The new language must be resident before it becomes active: translating with
+  // a missing bundle would render raw keys for a frame.
+  await ensureLocaleMessages(nextLocale)
+  applyLocale(nextLocale)
+}
+
+/**
+ * Loads `nextLocale` and reports whether it became active.
+ *
+ * Callers that a user clicked (the language switcher) need to tell "switched" from
+ * "the chunk could not be loaded" so they can surface it; the silent variant above
+ * is for bootstrap, where a missing bundle merely keeps the default locale.
+ */
+export async function trySetLocale(nextLocale: Locale): Promise<boolean> {
+  if (!isLocale(nextLocale)) return false
+  try {
+    await ensureLocaleMessages(nextLocale)
+  } catch {
+    // Fall back to the bundled locale so the UI is never left half-translated.
+    applyLocale(defaultLocale)
+    return false
+  }
+  applyLocale(nextLocale)
+  return true
 }
 
 export function translate(key: MessageKey, params?: Params): string {
@@ -82,7 +137,14 @@ export function createI18n() {
     install(app: App) {
       app.provide(i18nKey, context)
       app.config.globalProperties.$t = t
-      setLocale(locale.value)
+      // The bootstrap already awaited the initial locale's dictionary, so the
+      // install stays synchronous; an unloaded locale would fall back to the
+      // async path.
+      if (localeBundleLoaded(locale.value)) {
+        applyLocale(locale.value)
+      } else {
+        void setLocale(locale.value)
+      }
     }
   }
 }
@@ -91,8 +153,15 @@ export function useI18n() {
   return inject(i18nKey, context)
 }
 
-export function setI18nLocale(locale: Locale): void {
-  setLocale(locale)
+export function setI18nLocale(locale: Locale): Promise<void> {
+  // Apply immediately when the dictionary is already resident: the default
+  // locale always is, and so is any locale loaded by an earlier switch. Only a
+  // first-time switch has to wait for its chunk.
+  if (localeBundleLoaded(locale)) {
+    applyLocale(locale)
+    return Promise.resolve()
+  }
+  return setLocale(locale)
 }
 
 export function getI18nLocale(): Locale {
@@ -110,6 +179,8 @@ export function useLocaleOptions() {
     supportedLocales,
     currentLocaleLabel,
     setLocale: applyLocale,
+    /** Switches language and reports whether the dictionary actually loaded. */
+    trySetLocale,
   }
 }
 

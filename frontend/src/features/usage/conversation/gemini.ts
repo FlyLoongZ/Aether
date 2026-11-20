@@ -1,4 +1,3 @@
-import { translate } from '@/i18n'
 /**
  * Gemini API 格式解析器
  */
@@ -32,6 +31,8 @@ import {
   createToolResultBlock as createToolResultRenderBlock,
   createEmptyRenderResult,
 } from './render'
+
+import { conversationLabels } from './labels'
 
 /** Raw JSON object from API (loosely typed) */
 type RawObject = Record<string, unknown>
@@ -82,7 +83,7 @@ export class GeminiParser implements ApiFormatParser {
    */
   parseRequest(requestBody: unknown): ParsedConversation {
     if (!requestBody) {
-      return createEmptyConversation('gemini', '无请求体')
+      return createEmptyConversation('gemini', conversationLabels().emptyRequestBody)
     }
 
     try {
@@ -124,7 +125,7 @@ export class GeminiParser implements ApiFormatParser {
    */
   parseResponse(responseBody: unknown): ParsedConversation {
     if (!responseBody) {
-      return createEmptyConversation('gemini', '无响应体')
+      return createEmptyConversation('gemini', conversationLabels().emptyResponseBody)
     }
 
     try {
@@ -162,7 +163,7 @@ export class GeminiParser implements ApiFormatParser {
    */
   parseStreamResponse(chunks: unknown[]): ParsedConversation {
     if (!chunks || chunks.length === 0) {
-      return createEmptyConversation('gemini', '无响应数据')
+      return createEmptyConversation('gemini', conversationLabels().emptyResponseData)
     }
 
     try {
@@ -331,7 +332,7 @@ export class GeminiParser implements ApiFormatParser {
    */
   renderRequest(requestBody: unknown): RenderResult {
     if (!requestBody) {
-      return createEmptyRenderResult('无请求体')
+      return createEmptyRenderResult(conversationLabels().emptyRequestBody)
     }
 
     try {
@@ -348,7 +349,7 @@ export class GeminiParser implements ApiFormatParser {
         if (systemText) {
           blocks.push(createMessageBlock('system', [
             createTextRenderBlock(systemText),
-          ], { roleLabel: 'System' }))
+          ], { roleLabel: conversationLabels().roleSystem }))
         }
       }
 
@@ -373,7 +374,7 @@ export class GeminiParser implements ApiFormatParser {
    */
   renderResponse(responseBody: unknown): RenderResult {
     if (!responseBody) {
-      return createEmptyRenderResult('无响应体')
+      return createEmptyRenderResult(conversationLabels().emptyResponseBody)
     }
 
     // 检查是否为流式响应
@@ -393,7 +394,7 @@ export class GeminiParser implements ApiFormatParser {
         if (contentBlocks.length > 0) {
           const badges = this.getBadgesForParts(parts)
           blocks.push(createMessageBlock('assistant', contentBlocks, {
-            roleLabel: 'Assistant',
+            roleLabel: conversationLabels().roleAssistant,
             badges: badges.length > 0 ? badges : undefined,
           }))
           return { blocks, isStream: false }
@@ -414,7 +415,7 @@ export class GeminiParser implements ApiFormatParser {
    */
   private renderStreamResponse(chunks: unknown[]): RenderResult {
     if (!chunks || chunks.length === 0) {
-      return createEmptyRenderResult('无响应数据')
+      return createEmptyRenderResult(conversationLabels().emptyResponseData)
     }
 
     try {
@@ -513,7 +514,7 @@ export class GeminiParser implements ApiFormatParser {
     if (part.functionCall) {
       const fc = part.functionCall as RawObject
       return createToolUseRenderBlock(
-        String(fc.name || '函数调用'),
+        String(fc.name || conversationLabels().badgeFunctionCall),
         this.formatJson(fc.args)
       )
     }
@@ -579,7 +580,7 @@ export class GeminiParser implements ApiFormatParser {
             ? `data:${block.mimeType || 'image/png'};base64,${block.data}`
             : block.url,
           mimeType: block.mimeType,
-          alt: block.alt || '图片',
+          alt: block.alt || conversationLabels().badgeImage,
         })
 
       default:
@@ -592,10 +593,10 @@ export class GeminiParser implements ApiFormatParser {
    */
   private getRoleLabel(role: MessageRole): string {
     switch (role) {
-      case 'user': return 'User'
-      case 'assistant': return 'Model'
-      case 'system': return 'System'
-      case 'tool': return 'Tool'
+      case 'user': return conversationLabels().roleUser
+      case 'assistant': return conversationLabels().roleModel
+      case 'system': return conversationLabels().roleSystem
+      case 'tool': return conversationLabels().roleTool
       default: return role
     }
   }
@@ -611,16 +612,16 @@ export class GeminiParser implements ApiFormatParser {
     const hasThinking = parts.some((p: RawObject) => p.thought === true)
 
     if (hasThinking) {
-      badges.push(createBadgeBlock('思考', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
     }
     if (hasToolCall) {
-      badges.push(createBadgeBlock('函数调用', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeFunctionCall, 'outline'))
     }
     if (hasToolResult) {
-      badges.push(createBadgeBlock('函数结果', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeFunctionResult, 'outline'))
     }
     if (hasImage) {
-      badges.push(createBadgeBlock('图片', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeImage, 'secondary'))
     }
 
     return badges
@@ -745,16 +746,16 @@ export class GeminiParser implements ApiFormatParser {
     const types = new Set(content.map(b => b.type))
 
     if (types.has('thinking')) {
-      badges.push(createBadgeBlock('思考', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
     }
     if (types.has('tool_use')) {
-      badges.push(createBadgeBlock('函数调用', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeFunctionCall, 'outline'))
     }
     if (types.has('tool_result')) {
-      badges.push(createBadgeBlock('函数结果', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeFunctionResult, 'outline'))
     }
     if (types.has('image')) {
-      badges.push(createBadgeBlock('图片', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeImage, 'secondary'))
     }
 
     return badges
@@ -782,7 +783,7 @@ export class GeminiParser implements ApiFormatParser {
     return content
       .map(block => {
         if (block.type === 'text') return block.text
-        if (block.type === 'image') return translate('ui.imagea71f445')
+        if (block.type === 'image') return conversationLabels().imageInline
         if (block.type === 'error') return `[错误: ${block.message}]`
         return ''
       })

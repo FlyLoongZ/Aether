@@ -604,7 +604,7 @@ async function settle() {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   resetQuery()
   window.sessionStorage.clear()
   routeMocks.patchQuery.mockClear()
@@ -658,7 +658,7 @@ describe('PoolManagement Codex cycle stats mode', () => {
     await settle()
     expect(root.textContent).toContain(zh)
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
     expect(root.textContent).toContain(en)
     expect(root.textContent).not.toContain(zh)

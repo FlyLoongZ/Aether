@@ -40,7 +40,7 @@ function button(root: HTMLElement, text: string) {
   return result
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.resetAllMocks()
   mocks.getMyReferral.mockResolvedValue(structuredClone(data))
   mocks.copy.mockResolvedValue(true)
@@ -96,7 +96,7 @@ describe('ReferralCenter', () => {
   })
 
   it('keeps share actions translated in English', async () => {
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     const root = await mountPage()
     expect(button(root, 'Copy invite link')).toBeTruthy()
     expect(button(root, 'Copy invite code')).toBeTruthy()
@@ -104,7 +104,7 @@ describe('ReferralCenter', () => {
   })
 
   it('translates the retry action after an error', async () => {
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     mocks.getMyReferral.mockRejectedValueOnce(new Error('unavailable'))
     const root = await mountPage()
     expect(button(root, 'Reload')).toBeTruthy()

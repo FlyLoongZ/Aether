@@ -1,4 +1,3 @@
-import { translate } from '@/i18n'
 /**
  * OpenAI API 格式解析器
  */
@@ -32,6 +31,8 @@ import {
   createToolResultBlock as createToolResultRenderBlock,
   createEmptyRenderResult,
 } from './render'
+
+import { conversationLabels } from './labels'
 
 /** Raw JSON object from API (loosely typed) */
 type RawObject = Record<string, unknown>
@@ -180,7 +181,7 @@ export class OpenAIParser implements ApiFormatParser {
    */
   parseRequest(requestBody: unknown): ParsedConversation {
     if (!requestBody) {
-      return createEmptyConversation('openai', '无请求体')
+      return createEmptyConversation('openai', conversationLabels().emptyRequestBody)
     }
 
     const body = requestBody as RawObject
@@ -342,7 +343,7 @@ export class OpenAIParser implements ApiFormatParser {
    */
   parseResponse(responseBody: unknown): ParsedConversation {
     if (!responseBody) {
-      return createEmptyConversation('openai', '无响应体')
+      return createEmptyConversation('openai', conversationLabels().emptyResponseBody)
     }
 
     const body = responseBody as RawObject
@@ -485,7 +486,7 @@ export class OpenAIParser implements ApiFormatParser {
    */
   parseStreamResponse(chunks: unknown[]): ParsedConversation {
     if (!chunks || chunks.length === 0) {
-      return createEmptyConversation('openai', '无响应数据')
+      return createEmptyConversation('openai', conversationLabels().emptyResponseData)
     }
 
     // 检测是否为 CLI 格式
@@ -951,7 +952,7 @@ export class OpenAIParser implements ApiFormatParser {
    */
   renderRequest(requestBody: unknown): RenderResult {
     if (!requestBody) {
-      return createEmptyRenderResult('无请求体')
+      return createEmptyRenderResult(conversationLabels().emptyRequestBody)
     }
 
     const body = requestBody as RawObject
@@ -983,7 +984,7 @@ export class OpenAIParser implements ApiFormatParser {
             if (systemText) {
               blocks.push(createMessageBlock('system', [
                 createTextRenderBlock(systemText),
-              ], { roleLabel: 'System' }))
+              ], { roleLabel: conversationLabels().roleSystem }))
             }
             continue
           }
@@ -1013,7 +1014,7 @@ export class OpenAIParser implements ApiFormatParser {
       if (typeof requestBody.instructions === 'string') {
         blocks.push(createMessageBlock('system', [
           createTextRenderBlock(requestBody.instructions),
-        ], { roleLabel: 'Instructions' }))
+        ], { roleLabel: conversationLabels().roleInstructions }))
       }
 
       // 渲染 input
@@ -1023,7 +1024,7 @@ export class OpenAIParser implements ApiFormatParser {
         // 简单字符串输入
         blocks.push(createMessageBlock('user', [
           createTextRenderBlock(input),
-        ], { roleLabel: 'User' }))
+        ], { roleLabel: conversationLabels().roleUser }))
       } else if (Array.isArray(input)) {
         // 消息数组
         for (const item of input) {
@@ -1086,7 +1087,7 @@ export class OpenAIParser implements ApiFormatParser {
       const args = this.formatJson(this.responsesCallInput(item))
       return createMessageBlock('assistant', [
         createToolUseRenderBlock(toolName, args, this.responsesCallId(item)),
-      ], { roleLabel: 'Assistant', badges: [createBadgeBlock('工具调用', 'outline')] })
+      ], { roleLabel: conversationLabels().roleAssistant, badges: [createBadgeBlock(conversationLabels().badgeToolCall, 'outline')] })
     }
 
     // function_call_output -> 工具结果
@@ -1096,7 +1097,7 @@ export class OpenAIParser implements ApiFormatParser {
         : JSON.stringify(item.output, null, 2)
       return createMessageBlock('tool', [
         createToolResultRenderBlock(output),
-      ], { roleLabel: 'Tool', badges: [createBadgeBlock('工具结果', 'outline')] })
+      ], { roleLabel: conversationLabels().roleTool, badges: [createBadgeBlock(conversationLabels().badgeToolResult, 'outline')] })
     }
 
     return null
@@ -1107,7 +1108,7 @@ export class OpenAIParser implements ApiFormatParser {
    */
   renderResponse(responseBody: unknown): RenderResult {
     if (!responseBody) {
-      return createEmptyRenderResult('无响应体')
+      return createEmptyRenderResult(conversationLabels().emptyResponseBody)
     }
 
     // 检查是否为流式响应
@@ -1147,7 +1148,7 @@ export class OpenAIParser implements ApiFormatParser {
         // 思考内容
         const rawReasoning = message.reasoning_content ?? message.reasoning
         if (typeof rawReasoning === 'string' && rawReasoning.trim().length > 0) {
-          badges.push(createBadgeBlock('思考', 'secondary'))
+          badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
           contentBlocks.push(createCollapsibleBlock(
             `思考过程 (${rawReasoning.trim().length} 字符)`,
             [createCodeBlock(rawReasoning.trim())],
@@ -1162,12 +1163,12 @@ export class OpenAIParser implements ApiFormatParser {
 
         // 工具调用
         if (Array.isArray(message.tool_calls)) {
-          badges.push(createBadgeBlock('工具调用', 'outline'))
+          badges.push(createBadgeBlock(conversationLabels().badgeToolCall, 'outline'))
           for (const rawCall of message.tool_calls) {
             const call = rawCall as RawObject
             const fn = call.function as RawObject | undefined
             contentBlocks.push(createToolUseRenderBlock(
-              String(fn?.name || '工具调用'),
+              String(fn?.name || conversationLabels().badgeToolCall),
               this.formatJson(fn?.arguments),
               typeof call.id === 'string' ? call.id : undefined
             ))
@@ -1176,7 +1177,7 @@ export class OpenAIParser implements ApiFormatParser {
 
         if (contentBlocks.length > 0) {
           blocks.push(createMessageBlock('assistant', contentBlocks, {
-            roleLabel: 'Assistant',
+            roleLabel: conversationLabels().roleAssistant,
             badges: badges.length > 0 ? badges : undefined,
           }))
         }
@@ -1219,8 +1220,8 @@ export class OpenAIParser implements ApiFormatParser {
                 { defaultOpen: false, className: 'thinking-block' }
               ),
             ], {
-              roleLabel: 'Assistant',
-              badges: [createBadgeBlock('思考', 'secondary')],
+              roleLabel: conversationLabels().roleAssistant,
+              badges: [createBadgeBlock(conversationLabels().badgeThinking, 'secondary')],
             }))
           }
         } else if (item?.type === 'message') {
@@ -1237,7 +1238,7 @@ export class OpenAIParser implements ApiFormatParser {
 
           if (contentBlocks.length > 0) {
             blocks.push(createMessageBlock('assistant', contentBlocks, {
-              roleLabel: 'Assistant',
+              roleLabel: conversationLabels().roleAssistant,
             }))
           }
         } else if (this.isResponsesCallItemType(item.type)) {
@@ -1248,8 +1249,8 @@ export class OpenAIParser implements ApiFormatParser {
               this.responsesCallId(item)
             ),
           ], {
-            roleLabel: 'Assistant',
-            badges: [createBadgeBlock('工具调用', 'outline')],
+            roleLabel: conversationLabels().roleAssistant,
+            badges: [createBadgeBlock(conversationLabels().badgeToolCall, 'outline')],
           }))
         }
       }
@@ -1265,7 +1266,7 @@ export class OpenAIParser implements ApiFormatParser {
    */
   private renderStreamResponse(chunks: unknown[]): RenderResult {
     if (!chunks || chunks.length === 0) {
-      return createEmptyRenderResult('无响应数据')
+      return createEmptyRenderResult(conversationLabels().emptyResponseData)
     }
 
     try {
@@ -1313,7 +1314,7 @@ export class OpenAIParser implements ApiFormatParser {
         : undefined
 
     if (msgReasoning && msgReasoning.trim().length > 0) {
-      badges.push(createBadgeBlock('思考', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
       contentBlocks.push(createCollapsibleBlock(
         `思考过程 (${msgReasoning.trim().length} 字符)`,
         [createCodeBlock(msgReasoning.trim())],
@@ -1323,7 +1324,7 @@ export class OpenAIParser implements ApiFormatParser {
 
     // 工具结果（tool 消息）
     if (role === 'tool' || msg.tool_call_id) {
-      badges.push(createBadgeBlock('工具结果', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolResult, 'outline'))
       const content = typeof msg.content === 'string'
         ? msg.content
         : JSON.stringify(msg.content, null, 2)
@@ -1338,7 +1339,7 @@ export class OpenAIParser implements ApiFormatParser {
         if (part.type === 'text') {
           contentBlocks.push(createTextRenderBlock(String(part.text || '')))
         } else if (part.type === 'image_url') {
-          badges.push(createBadgeBlock('图片', 'secondary'))
+          badges.push(createBadgeBlock(conversationLabels().badgeImage, 'secondary'))
           const imageUrl = part.image_url as RawObject | undefined
           contentBlocks.push(createImageRenderBlock({
             src: typeof imageUrl?.url === 'string' ? imageUrl.url : undefined,
@@ -1350,12 +1351,12 @@ export class OpenAIParser implements ApiFormatParser {
 
     // 工具调用（assistant 消息）
     if (Array.isArray(msg.tool_calls)) {
-      badges.push(createBadgeBlock('工具调用', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolCall, 'outline'))
       for (const rawCall of msg.tool_calls) {
         const call = rawCall as RawObject
         const fn = call.function as RawObject | undefined
         contentBlocks.push(createToolUseRenderBlock(
-          String(fn?.name || '工具调用'),
+          String(fn?.name || conversationLabels().badgeToolCall),
           this.formatJson(fn?.arguments),
           typeof call.id === 'string' ? call.id : undefined
         ))
@@ -1403,7 +1404,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       case 'tool_use':
         return createToolUseRenderBlock(
-          block.toolName || '工具调用',
+          block.toolName || conversationLabels().badgeToolCall,
           this.formatJson(block.input),
           block.toolId
         )
@@ -1421,7 +1422,7 @@ export class OpenAIParser implements ApiFormatParser {
             ? `data:${block.mimeType || 'image/png'};base64,${block.data}`
             : block.url,
           mimeType: block.mimeType,
-          alt: block.alt || '图片',
+          alt: block.alt || conversationLabels().badgeImage,
         })
 
       default:
@@ -1434,10 +1435,10 @@ export class OpenAIParser implements ApiFormatParser {
    */
   private getRoleLabel(role: MessageRole): string {
     switch (role) {
-      case 'user': return 'User'
-      case 'assistant': return 'Assistant'
-      case 'system': return 'System'
-      case 'tool': return 'Tool'
+      case 'user': return conversationLabels().roleUser
+      case 'assistant': return conversationLabels().roleAssistant
+      case 'system': return conversationLabels().roleSystem
+      case 'tool': return conversationLabels().roleTool
       default: return role
     }
   }
@@ -1450,16 +1451,16 @@ export class OpenAIParser implements ApiFormatParser {
     const types = new Set(content.map(b => b.type))
 
     if (types.has('thinking')) {
-      badges.push(createBadgeBlock('思考', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
     }
     if (types.has('tool_use')) {
-      badges.push(createBadgeBlock('工具调用', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolCall, 'outline'))
     }
     if (types.has('tool_result')) {
-      badges.push(createBadgeBlock('工具结果', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolResult, 'outline'))
     }
     if (types.has('image')) {
-      badges.push(createBadgeBlock('图片', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeImage, 'secondary'))
     }
 
     return badges
@@ -1496,7 +1497,7 @@ export class OpenAIParser implements ApiFormatParser {
     return content
       .map(block => {
         if (block.type === 'text') return block.text
-        if (block.type === 'image') return translate('ui.imagea71f445')
+        if (block.type === 'image') return conversationLabels().imageInline
         if (block.type === 'error') return `[错误: ${block.message}]`
         return ''
       })

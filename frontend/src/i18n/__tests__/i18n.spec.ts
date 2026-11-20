@@ -1,17 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick, ref } from 'vue'
 
-import { createI18n, getI18nLocale, normalizeLocale, setI18nLocale, useI18n, useLocaleOptions } from '@/i18n'
+import {
+  createI18n,
+  ensureLocaleMessages,
+  getI18nLocale,
+  normalizeLocale,
+  setI18nLocale,
+  trySetLocale,
+  useI18n,
+  useLocaleOptions
+} from '@/i18n'
+import { translateMessage } from '@/i18n/messages'
 import { formatDate, formatRelativeTime } from '@/utils/format'
 import { BUILTIN_TOOLS, BUILTIN_TOOL_BREADCRUMBS } from '@/config/builtin-tools'
 
 describe('i18n infrastructure', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear()
     document.documentElement.lang = ''
   })
 
-  it('installs a single app-level translator and updates document language', () => {
+  it('installs a single app-level translator and updates document language', async () => {
     const app = createApp(defineComponent({ setup: () => () => h('div') }))
 
     app.use(createI18n())
@@ -42,10 +52,10 @@ describe('i18n infrastructure', () => {
     const app = createApp(Probe)
     app.use(createI18n())
     const vm = app.mount(root) as InstanceType<typeof Probe> & {
-      setLocale: (locale: 'zh-CN' | 'en-US') => void
+      setLocale: (locale: 'zh-CN' | 'en-US') => Promise<void>
     }
 
-    vm.setLocale('en-US')
+    await vm.setLocale('en-US')
     await nextTick()
 
     expect(document.documentElement.lang).toBe('en-US')
@@ -76,7 +86,7 @@ describe('i18n infrastructure', () => {
     const app = createApp(Probe)
     app.use(createI18n())
     const vm = app.mount(root) as InstanceType<typeof Probe>
-    vm.setLocale('en-US')
+    await vm.setLocale('en-US')
     await nextTick()
     expect(root.querySelector('button')?.textContent).toBe('Copy')
     expect(root.querySelector('button')?.title).toBe('Cancel')
@@ -85,7 +95,7 @@ describe('i18n infrastructure', () => {
     vm.source = '删除'
     await nextTick()
     expect(root.querySelector('span')?.textContent).toBe('删除')
-    vm.setLocale('zh-CN')
+    await vm.setLocale('zh-CN')
     await nextTick()
     expect(root.querySelector('button')?.textContent).toBe('复制')
     expect(root.querySelector('span')?.textContent).toBe('删除')
@@ -93,7 +103,7 @@ describe('i18n infrastructure', () => {
     root.remove()
   })
 
-  it('normalizes saved language aliases without accepting unrelated language names', () => {
+  it('normalizes saved language aliases without accepting unrelated language names', async () => {
     expect(normalizeLocale('en')).toBe('en-US')
     expect(normalizeLocale('en_GB')).toBe('en-US')
     expect(normalizeLocale(' ZH-cn ')).toBe('zh-CN')
@@ -101,13 +111,13 @@ describe('i18n infrastructure', () => {
     expect(normalizeLocale('fr-FR')).toBeUndefined()
   })
 
-  it('updates built-in tool names and breadcrumbs after their module has loaded', () => {
+  it('updates built-in tool names and breadcrumbs after their module has loaded', async () => {
     const previousLocale = getI18nLocale()
     try {
-      setI18nLocale('en-US')
+      await setI18nLocale('en-US')
       expect(BUILTIN_TOOLS.find(tool => tool.href === '/admin/ip-security')?.name).toBe('IP security')
       expect(BUILTIN_TOOL_BREADCRUMBS['/admin/audit-logs']).toBe('Audit logs')
-      setI18nLocale('zh-CN')
+      await setI18nLocale('zh-CN')
       expect(BUILTIN_TOOLS.find(tool => tool.href === '/admin/ip-security')?.name).toBe('IP 安全')
       expect(BUILTIN_TOOL_BREADCRUMBS['/admin/audit-logs']).toBe('审计日志')
     } finally {
@@ -115,12 +125,13 @@ describe('i18n infrastructure', () => {
     }
   })
 
-  it('continues switching language when browser storage is unavailable', () => {
+  it('continues switching language when browser storage is unavailable', async () => {
     const write = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
       throw new DOMException('Storage blocked', 'SecurityError')
     })
     try {
-      expect(() => setI18nLocale('en-US')).not.toThrow()
+      // A blocked storage write must not abort the switch.
+      await expect(setI18nLocale('en-US')).resolves.toBeUndefined()
       expect(getI18nLocale()).toBe('en-US')
       expect(document.documentElement.lang).toBe('en-US')
     } finally {
@@ -128,17 +139,34 @@ describe('i18n infrastructure', () => {
     }
   })
 
-  it('updates date and relative-time formatting with the selected language', () => {
+  it('updates date and relative-time formatting with the selected language', async () => {
     const date = '2026-09-07T12:30:00'
-    setI18nLocale('zh-CN')
+    await setI18nLocale('zh-CN')
     const chineseDate = formatDate(date)
     expect(formatRelativeTime(-1, 'day')).toBe('昨天')
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     expect(formatRelativeTime(-1, 'day')).toBe('yesterday')
     expect(formatRelativeTime(-1, 'minute')).toBe('1 minute ago')
     expect(formatRelativeTime(-2, 'minute')).toBe('2 minutes ago')
     expect(formatDate(date)).not.toBe(chineseDate)
-    setI18nLocale('zh-CN')
+    await setI18nLocale('zh-CN')
     expect(formatDate(date)).toBe(chineseDate)
+  })
+})
+
+describe('locale bundle loading', () => {
+  it('falls back to the bundled locale instead of rendering raw keys', () => {
+    // A locale whose chunk never loaded used to render `common.language` verbatim.
+    const fallback = translateMessage('common.language', 'en-US')
+    expect(fallback).not.toBe('common.language')
+    expect(fallback.length).toBeGreaterThan(0)
+  })
+
+  it('retries after a failed bundle load instead of caching the rejection', async () => {
+    // Whatever the module state is, a successful load must be observable, and a
+    // repeat call must not keep failing because a promise was cached once.
+    await ensureLocaleMessages('en-US')
+    await expect(ensureLocaleMessages('en-US')).resolves.toBeUndefined()
+    expect(await trySetLocale('en-US')).toBe(true)
   })
 })

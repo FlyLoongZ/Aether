@@ -5,15 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "vite build",
-    "build:with-typecheck": "vue-tsc -b && vite build",
+    "build": "vite build && npm run check:i18n-chunks",
+    "build:with-typecheck": "vue-tsc -b && vite build && npm run check:i18n-chunks",
     "preview": "vite preview",
     "test": "node --experimental-require-module --disable-warning=ExperimentalWarning ./node_modules/vitest/vitest.mjs",
     "test:ui": "node --experimental-require-module --disable-warning=ExperimentalWarning ./node_modules/vitest/vitest.mjs --ui",
     "test:run": "node --experimental-require-module --disable-warning=ExperimentalWarning ./node_modules/vitest/vitest.mjs run",
     "lint": "eslint . --fix",
     "type-check": "vue-tsc -b --force --pretty false",
-    "version": "git describe --tags --always"
+    "version": "git describe --tags --always",
+    "check:i18n-chunks": "node scripts/check-i18n-chunks.mjs"
   },
   "dependencies": {
     "@lucide/vue": "^1.65.0",

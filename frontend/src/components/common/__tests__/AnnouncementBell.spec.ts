@@ -59,7 +59,7 @@ function button(root: HTMLElement, label: string) {
   if (!result) throw new Error(`Button not found: ${label}`)
   return result
 }
-beforeEach(() => setI18nLocale('zh-CN'))
+beforeEach(async () => { await setI18nLocale('zh-CN') })
 afterEach(() => { for (const { app, root } of mounted.splice(0)) { app.unmount(); root.remove() } })
 
 describe('AnnouncementBell presentation', () => {
@@ -81,7 +81,7 @@ describe('AnnouncementBell presentation', () => {
     expect(button(root, '全部标为已读').disabled).toBe(false)
   })
 
-  it('emits selection without changing reading state and renders plain Markdown summaries', () => {
+  it('emits selection without changing reading state and renders plain Markdown summaries', async () => {
     const unread = announcement()
     const { root, events } = mount({ items: [unread, announcement(true)], unreadCount: 1 })
     expect(root.textContent).toContain('Scheduled maintenance with details.')
@@ -132,7 +132,7 @@ describe('AnnouncementBell presentation', () => {
   it('shows an empty state without inventing an unread count and follows the active locale', async () => {
     const { root } = mount({ unreadCount: null })
     expect(root.textContent).toContain('暂无公告')
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
     expect(button(root, 'Announcements')).toBeTruthy()
     expect(root.textContent).toContain('No announcements')

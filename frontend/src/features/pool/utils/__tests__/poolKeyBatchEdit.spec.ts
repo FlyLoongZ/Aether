@@ -6,7 +6,7 @@ import {
   type PoolKeyBatchEditState,
 } from '../poolKeyBatchEdit'
 
-beforeEach(() => setI18nLocale('zh-CN'))
+beforeEach(async () => { await setI18nLocale('zh-CN') })
 afterEach(() => setI18nLocale('zh-CN'))
 
 function state(overrides: Partial<PoolKeyBatchEditState> = {}): PoolKeyBatchEditState {
@@ -40,7 +40,7 @@ function state(overrides: Partial<PoolKeyBatchEditState> = {}): PoolKeyBatchEdit
 }
 
 describe('buildPoolKeyBatchUpdatePatch', () => {
-  it('only emits fields explicitly enabled by the operator', () => {
+  it('only emits fields explicitly enabled by the operator', async () => {
     const result = buildPoolKeyBatchUpdatePatch(state({
       applyApiFormats: true,
       apiFormats: ['openai:responses', 'openai:responses', ' openai:chat '],
@@ -55,7 +55,7 @@ describe('buildPoolKeyBatchUpdatePatch', () => {
     })
   })
 
-  it('builds an explicit model access range without changing automatic discovery', () => {
+  it('builds an explicit model access range without changing automatic discovery', async () => {
     const result = buildPoolKeyBatchUpdatePatch(state({
       applyAllowedModels: true,
       unrestrictedModels: false,
@@ -69,7 +69,7 @@ describe('buildPoolKeyBatchUpdatePatch', () => {
     })
   })
 
-  it('builds automatic discovery filters independently from the model access range', () => {
+  it('builds automatic discovery filters independently from the model access range', async () => {
     const result = buildPoolKeyBatchUpdatePatch(state({
       applyAutoFetchModels: true,
       autoFetchModels: true,
@@ -84,7 +84,7 @@ describe('buildPoolKeyBatchUpdatePatch', () => {
     })
   })
 
-  it('disables automatic discovery without rewriting model filters or access limits', () => {
+  it('disables automatic discovery without rewriting model filters or access limits', async () => {
     const result = buildPoolKeyBatchUpdatePatch(state({
       applyAutoFetchModels: true,
       autoFetchModels: false,
@@ -97,7 +97,7 @@ describe('buildPoolKeyBatchUpdatePatch', () => {
     })
   })
 
-  it('locks selected models only when the operator enables locking', () => {
+  it('locks selected models only when the operator enables locking', async () => {
     const result = buildPoolKeyBatchUpdatePatch(state({
       applyAllowedModels: true,
       unrestrictedModels: false,
@@ -111,7 +111,7 @@ describe('buildPoolKeyBatchUpdatePatch', () => {
     })
   })
 
-  it('rejects empty fields and invalid ranges before the request is sent', () => {
+  it('rejects empty fields and invalid ranges before the request is sent', async () => {
     expect(buildPoolKeyBatchUpdatePatch(state()).error).toBe('请至少启用一个批量编辑字段')
     expect(buildPoolKeyBatchUpdatePatch(state({
       applyApiFormats: true,
@@ -126,8 +126,8 @@ describe('buildPoolKeyBatchUpdatePatch', () => {
     })).error).toBe('请至少选择一个可用模型')
   })
 
-  it('identifies the invalid field independently of the translated error', () => {
-    setI18nLocale('en-US')
+  it('identifies the invalid field independently of the translated error', async () => {
+    await setI18nLocale('en-US')
     const result = buildPoolKeyBatchUpdatePatch(state({ applyAllowedModels: true, unrestrictedModels: false }))
     expect(result.error).toBe('Select at least one available model')
     expect(result.errorField).toBe('allowed_models')
@@ -135,7 +135,7 @@ describe('buildPoolKeyBatchUpdatePatch', () => {
 })
 
 describe('parsePoolKeyModelPatterns', () => {
-  it('normalizes comma and line separated patterns', () => {
+  it('normalizes comma and line separated patterns', async () => {
     expect(parsePoolKeyModelPatterns(' gpt-* , claude-*\ngpt-* ')).toEqual([
       'gpt-*',
       'claude-*',

@@ -545,6 +545,7 @@
 
 <script setup lang="ts">
 import { useI18n } from '@/i18n'
+import { useConversationLabels } from '../composables/useConversationLabels'
 
 import { ref, shallowRef, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
@@ -671,6 +672,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const conversationLabels = useConversationLabels()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -1880,6 +1882,7 @@ async function copyContent(tabName: string) {
       text = await document.copy(contentViewMode.value === 'conversation' ? {
         kind: tabName === 'request-body' ? 'request' : 'response',
         apiFormat: tabName === 'request-body' ? currentRequestBodyApiFormat.value : currentResponseBodyApiFormat.value,
+        labels: conversationLabels.value,
       } : undefined)
     } else {
       const data = tabName === 'request-headers' ? (dataSource.value === 'provider' ? detail.value.provider_request_headers : detail.value.request_headers)

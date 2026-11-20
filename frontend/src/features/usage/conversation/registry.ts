@@ -10,6 +10,8 @@ import { claudeParser } from './claude'
 import { openaiParser } from './openai'
 import { geminiParser } from './gemini'
 
+import { conversationLabels } from './labels'
+
 export function parseRawSseResponse(responseBody: unknown): StreamResponseBody | null {
   if (typeof responseBody !== 'string') {
     return null
@@ -142,7 +144,7 @@ export function parseRequest(
   formatHint?: string
 ): ParsedConversation {
   if (!requestBody) {
-    return createEmptyConversation('unknown', '无请求体')
+    return createEmptyConversation('unknown', conversationLabels().emptyRequestBody)
   }
 
   const parser = parserRegistry.detectParser(
@@ -151,7 +153,7 @@ export function parseRequest(
     formatHint
   )
   if (!parser) {
-    return createEmptyConversation('unknown', '无法识别的 API 格式')
+    return createEmptyConversation('unknown', conversationLabels().unknownApiFormat)
   }
 
   return parser.parseRequest(requestBody)
@@ -166,13 +168,13 @@ export function parseResponse(
   formatHint?: string
 ): ParsedConversation {
   if (!responseBody) {
-    return createEmptyConversation('unknown', '无响应体')
+    return createEmptyConversation('unknown', conversationLabels().emptyResponseBody)
   }
 
   const normalizedResponseBody = normalizeResponseBody(responseBody)
   const parser = parserRegistry.detectParser(requestBody, normalizedResponseBody, formatHint)
   if (!parser) {
-    return createEmptyConversation('unknown', '无法识别的 API 格式')
+    return createEmptyConversation('unknown', conversationLabels().unknownApiFormat)
   }
 
   // 判断是否为流式响应
@@ -203,7 +205,7 @@ export function renderRequest(
   formatHint?: string
 ): RenderResult {
   if (!requestBody) {
-    return createEmptyRenderResult('无请求体')
+    return createEmptyRenderResult(conversationLabels().emptyRequestBody)
   }
 
   const parser = parserRegistry.detectParser(
@@ -212,7 +214,7 @@ export function renderRequest(
     formatHint
   )
   if (!parser) {
-    return createEmptyRenderResult('无法识别的 API 格式')
+    return createEmptyRenderResult(conversationLabels().unknownApiFormat)
   }
 
   return parser.renderRequest(requestBody)
@@ -227,13 +229,13 @@ export function renderResponse(
   formatHint?: string
 ): RenderResult {
   if (!responseBody) {
-    return createEmptyRenderResult('无响应体')
+    return createEmptyRenderResult(conversationLabels().emptyResponseBody)
   }
 
   const normalizedResponseBody = normalizeResponseBody(responseBody)
   const parser = parserRegistry.detectParser(requestBody, normalizedResponseBody, formatHint)
   if (!parser) {
-    return createEmptyRenderResult('无法识别的 API 格式')
+    return createEmptyRenderResult(conversationLabels().unknownApiFormat)
   }
 
   return parser.renderResponse(normalizedResponseBody)

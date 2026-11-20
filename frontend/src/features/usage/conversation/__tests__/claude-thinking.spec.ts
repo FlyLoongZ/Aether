@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseResponse, renderResponse } from '../registry'
+import { DEFAULT_CONVERSATION_LABELS } from '../labels'
 
 describe('Claude thinking & redacted_thinking parsing', () => {
   it('parses and renders extended thinking block in Claude response', () => {
@@ -24,7 +25,7 @@ describe('Claude thinking & redacted_thinking parsing', () => {
     const assistantMsg = rendered.blocks[0]
     if (!assistantMsg || assistantMsg.type !== 'message') throw new Error('expected message block')
     expect(assistantMsg.role).toBe('assistant')
-    expect(assistantMsg.badges?.some(b => b.label === '思考')).toBe(true)
+    expect(assistantMsg.badges?.some(b => b.label === DEFAULT_CONVERSATION_LABELS.badgeThinking)).toBe(true)
 
     const thinkingBlock = assistantMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()
@@ -61,7 +62,7 @@ describe('Claude thinking & redacted_thinking parsing', () => {
     const assistantMsg = rendered.blocks[0]
     if (!assistantMsg || assistantMsg.type !== 'message') throw new Error('expected message block')
     expect(assistantMsg.role).toBe('assistant')
-    expect(assistantMsg.badges?.some(b => b.label === '思考')).toBe(true)
+    expect(assistantMsg.badges?.some(b => b.label === DEFAULT_CONVERSATION_LABELS.badgeThinking)).toBe(true)
 
     const thinkingBlock = assistantMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()

@@ -137,7 +137,7 @@ function chooseEnglish(root: HTMLElement) {
   option.click()
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
   setI18nLocale('zh-CN')
   meApiMock.getProfile.mockResolvedValue({
@@ -160,7 +160,7 @@ describe('Settings language preferences', () => {
   it('initializes from the active locale and preserves it when old server preferences arrive', async () => {
     const preferences = deferred<ReturnType<typeof serverPreferences>>()
     meApiMock.getPreferences.mockReturnValueOnce(preferences.promise)
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     const root = mountSettings()
 
     expect(languageSelect(root).dataset.selectValue).toBe('en-US')
@@ -181,6 +181,8 @@ describe('Settings language preferences', () => {
 
     expect(languageSelect(root).dataset.selectValue).toBe('zh-CN')
     chooseEnglish(root)
+    // The switch loads the English bundle on demand before it applies.
+    await flushPromises()
 
     expect(getI18nLocale()).toBe('en-US')
     expect(document.documentElement.lang).toBe('en-US')
@@ -215,7 +217,7 @@ describe('Settings language preferences', () => {
     const root = mountSettings()
     await flushPromises()
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
     expect(languageSelect(root).dataset.selectValue).toBe('en-US')
     expect(languageSelect(root).querySelector('[data-option-value="en-US"]')?.getAttribute('aria-selected')).toBe('true')

@@ -43,7 +43,7 @@ function makeSizedFile(content: string, size: number): File {
 }
 
 describe('useConfigExportImport file selection', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     errorMock.mockReset()
     successMock.mockReset()
     Object.values(importMocks).forEach(mock => mock.mockReset())
@@ -87,7 +87,7 @@ describe('useConfigExportImport file selection', () => {
     onUploadProgress!({ loaded: 1024 } as AxiosProgressEvent)
     expect(state[testCase.progress].value?.message).toBe(`${testCase.labelZh}上传中：1 KB`)
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     onUploadProgress!({ loaded: 2048, total: 4096 } as AxiosProgressEvent)
     expect(state[testCase.progress].value?.message).toBe(`${testCase.labelEn} uploading: 2 KB / 4 KB`)
     onUploadProgress!({ loaded: 4096, total: 4096 } as AxiosProgressEvent)

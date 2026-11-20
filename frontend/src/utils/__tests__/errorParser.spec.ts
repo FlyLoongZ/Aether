@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setI18nLocale } from '@/i18n'
 import { parseApiError, parseUpstreamModelError } from '@/utils/errorParser'
 
-beforeEach(() => setI18nLocale('zh-CN'))
+beforeEach(async () => { await setI18nLocale('zh-CN') })
 afterEach(() => setI18nLocale('zh-CN'))
 
 describe('errorParser', () => {
-  it('normalizes reused refresh token errors from legacy string details', () => {
+  it('normalizes reused refresh token errors from legacy string details', async () => {
     const error = {
       response: {
         data: {
@@ -22,7 +22,7 @@ describe('errorParser', () => {
     )
   })
 
-  it('keeps normalized Chinese refresh failures intact', () => {
+  it('keeps normalized Chinese refresh failures intact', async () => {
     const error = {
       response: {
         data: {
@@ -36,7 +36,7 @@ describe('errorParser', () => {
     )
   })
 
-  it('normalizes expired refresh token errors', () => {
+  it('normalizes expired refresh token errors', async () => {
     const error = {
       response: {
         data: {
@@ -50,8 +50,8 @@ describe('errorParser', () => {
     )
   })
 
-  it.each(['保存', '删除', '12 分钟', '  保存\n删除  ', ' \n '])('preserves raw API message %j', (message) => {
-    setI18nLocale('en-US')
+  it.each(['保存', '删除', '12 分钟', '  保存\n删除  ', ' \n '])('preserves raw API message %j', async (message) => {
+    await setI18nLocale('en-US')
     for (const data of [
       { detail: message },
       { error: { message } },
@@ -63,29 +63,29 @@ describe('errorParser', () => {
     expect(parseApiError(new Error(message))).toBe(message)
   })
 
-  it('translates local fallback messages without rewriting caller fallbacks', () => {
-    setI18nLocale('en-US')
+  it('translates local fallback messages without rewriting caller fallbacks', async () => {
+    await setI18nLocale('en-US')
     expect(parseApiError(undefined)).toBe('Operation failed')
     expect(parseApiError(undefined, '保存')).toBe('保存')
     expect(parseApiError({})).toBe('Cannot connect to the server. Check your network connection.')
   })
 
-  it('formats known validation errors in English and preserves unknown error content', () => {
-    setI18nLocale('en-US')
+  it('formats known validation errors in English and preserves unknown error content', async () => {
+    await setI18nLocale('en-US')
     expect(parseApiError({ response: { data: { detail: [
       { loc: ['body', 'username'], type: 'string_too_short', msg: '保存', ctx: { min_length: 5 } },
       { loc: ['body', 'custom', '保存'], type: 'value_error', msg: '  删除  ' },
     ] } } })).toBe('Username: Must contain at least 5 characters\ncustom.保存:   删除  ')
   })
 
-  it('translates recognized token failures and preserves their unknown reason', () => {
-    setI18nLocale('en-US')
+  it('translates recognized token failures and preserves their unknown reason', async () => {
+    await setI18nLocale('en-US')
     expect(parseApiError(new Error('refresh_token_reused')))
       .toBe('Token refresh failed: refresh_token has already been used and rotated. Sign in again.')
     expect(parseApiError(new Error('Token refresh failed: 保存'))).toBe('Token refresh failed: 保存')
   })
 
-  it('maps Axios network-layer failures to localized copy instead of English fallbacks', () => {
+  it('maps Axios network-layer failures to localized copy instead of English fallbacks', async () => {
     setI18nLocale('zh-CN')
     expect(parseApiError(new AxiosError('Network Error', 'ERR_NETWORK')))
       .toBe('无法连接到服务器，请检查网络连接')
@@ -93,14 +93,14 @@ describe('errorParser', () => {
       .toBe('请求超时，请稍后重试')
     expect(parseApiError(new AxiosError('timeout of 30000ms exceeded', 'ETIMEDOUT')))
       .toBe('请求超时，请稍后重试')
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     expect(parseApiError(new AxiosError('Network Error', 'ERR_NETWORK')))
       .toBe('Cannot connect to the server. Check your network connection.')
     expect(parseApiError(new AxiosError('timeout of 30000ms exceeded', 'ECONNABORTED')))
       .toBe('Request timed out. Try again later.')
   })
 
-  it('falls back to the caller message when a response carries no usable body', () => {
+  it('falls back to the caller message when a response carries no usable body', async () => {
     setI18nLocale('zh-CN')
     const config = { headers: new AxiosHeaders() }
     const gatewayError = new AxiosError('Request failed with status code 502', 'ERR_BAD_RESPONSE', config, undefined, {
@@ -115,8 +115,8 @@ describe('errorParser', () => {
     expect(parseApiError({ response: { data: {} }, message: '自定义错误' }, '保存失败')).toBe('自定义错误')
   })
 
-  it('translates upstream status descriptions while preserving unknown API content', () => {
-    setI18nLocale('en-US')
+  it('translates upstream status descriptions while preserving unknown API content', async () => {
+    await setI18nLocale('en-US')
     expect(parseUpstreamModelError('HTTP 401: {"error":{"message":"保存"}}')).toBe('The key is invalid or expired: 保存')
     expect(parseUpstreamModelError('HTTP 400: {"message":"删除"}')).toBe('删除')
     expect(parseUpstreamModelError('12 分钟')).toBe('12 分钟')

@@ -832,11 +832,13 @@ function handleThemeChange(value: string) {
   setThemeMode(value as ThemeMode)
 }
 
-function handleLanguageChange(value: string) {
+async function handleLanguageChange(value: string) {
   const nextLocale = normalizeLocale(value)
   if (!nextLocale) return
   preferencesForm.value.language = nextLocale
-  setLocale(nextLocale)
+  // Switching language may have to fetch that locale's dictionary first, so the
+  // persistence call waits for the UI to actually be in the new language.
+  await setLocale(nextLocale)
   languageSelectOpen.value = false
   updatePreferences()
 }

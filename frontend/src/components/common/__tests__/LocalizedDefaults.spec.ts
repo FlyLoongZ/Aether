@@ -30,7 +30,7 @@ function mount(component: Component, props: Record<string, unknown>) {
   return root
 }
 
-beforeEach(() => setI18nLocale('en-US'))
+beforeEach(async () => { await setI18nLocale('en-US') })
 afterEach(() => {
   for (const { app, root } of mounted.splice(0)) {
     app.unmount()
@@ -64,7 +64,7 @@ describe('localized component defaults', () => {
     await nextTick()
     expect(defaults.textContent).toContain('暂无数据')
     expect(custom.textContent).toContain('保存')
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
     expect(defaults.textContent).toContain('No data')
   })

@@ -4,13 +4,13 @@ import { getI18nLocale, setI18nLocale } from '@/i18n'
 import { API_FORMAT_STATS_COLUMNS, MODEL_STATS_COLUMNS, PROVIDER_STATS_COLUMNS, apiFormatStatsRows, modelStatsRows, providerStatsRows, providerSuccessRateClass } from '../usageStatsRows'
 
 describe('usageStatsRows', () => {
-  it('updates existing column headers when the language changes', () => {
+  it('updates existing column headers when the language changes', async () => {
     const previousLocale = getI18nLocale()
     try {
       setI18nLocale('zh-CN')
       expect(MODEL_STATS_COLUMNS[0].header).toBe('效率')
       expect(PROVIDER_STATS_COLUMNS.map(column => column.header)).toEqual(['成功率', '平均响应'])
-      setI18nLocale('en-US')
+      await setI18nLocale('en-US')
       expect(MODEL_STATS_COLUMNS[0].header).toBe('Efficiency')
       expect(PROVIDER_STATS_COLUMNS.map(column => column.header)).toEqual(['success rate', 'Average response'])
       expect(API_FORMAT_STATS_COLUMNS[0].header).toBe('Average response')
@@ -19,7 +19,7 @@ describe('usageStatsRows', () => {
     }
   })
 
-  it('strips the claude prefix and keeps only cache reads for model rows', () => {
+  it('strips the claude prefix and keeps only cache reads for model rows', async () => {
     const [row] = modelStatsRows([{
       model: 'claude-sonnet', request_count: 3, total_tokens: 100, effective_input_tokens: 60, output_tokens: 30,
       cache_read_tokens: 10, cache_creation_tokens: 5, cache_hit_rate: 12.5, total_cost: 1.5, actual_cost: 2, costPerToken: '$1.00/M',
@@ -30,7 +30,7 @@ describe('usageStatsRows', () => {
     expect(row.extra.efficiency.text).toBe('$1.00/M')
   })
 
-  it('falls back to total input context and sums cache tokens for provider rows', () => {
+  it('falls back to total input context and sums cache tokens for provider rows', async () => {
     const [row] = providerStatsRows([{
       provider: 'OpenAI', providerId: 'p1', requests: 2, totalTokens: 50, totalInputContext: 40, outputTokens: 10,
       cacheReadTokens: 3, cacheCreationTokens: 4, totalCost: 0.2, successRate: 80, avgResponseTime: '1.20s',
@@ -42,7 +42,7 @@ describe('usageStatsRows', () => {
     expect(row.extra.avgResponseTime.text).toBe('1.20s')
   })
 
-  it('formats api format labels and marks healthy success rates without a class', () => {
+  it('formats api format labels and marks healthy success rates without a class', async () => {
     const [row] = apiFormatStatsRows([{
       api_format: 'openai:chat', request_count: 1, total_tokens: 10, output_tokens: 4, total_cost: 0.1, avgResponseTime: '-',
     }])

@@ -114,7 +114,7 @@ async function openModels(root: HTMLElement) {
   return root
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubGlobal('ResizeObserver', class {
     observe() {}
     unobserve() {}
@@ -138,7 +138,7 @@ describe('RoutingSchedulingPolicyEditor', () => {
       const { root } = mountEditor()
       await openModels(root)
       const button = control<HTMLButtonElement>(root, '收起调度配置 1')
-      setI18nLocale('en-US')
+      await setI18nLocale('en-US')
       await flush()
       expect(button.getAttribute('aria-label')).toBe('Collapse scheduling configuration 1')
       button.click()

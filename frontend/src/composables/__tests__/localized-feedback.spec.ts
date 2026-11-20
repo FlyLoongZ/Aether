@@ -3,7 +3,7 @@ import { setI18nLocale, translate } from '@/i18n'
 import { useToast } from '../useToast'
 import { useConfirm } from '../useConfirm'
 
-beforeEach(() => setI18nLocale('zh-CN'))
+beforeEach(async () => { await setI18nLocale('zh-CN') })
 afterEach(() => {
   useToast().clearAll()
   useConfirm().handleCancel()
@@ -11,9 +11,9 @@ afterEach(() => {
 })
 
 describe('localized feedback', () => {
-  it('preserves toast content even when it matches a translated UI phrase', () => {
+  it('preserves toast content even when it matches a translated UI phrase', async () => {
     const { showToast, toasts, removeToast } = useToast()
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     const id = showToast({ title: '保存', description: '  删除\n12 分钟  ', duration: 0 })
     expect(toasts.value[0]).toMatchObject({ id, title: '保存', message: '  删除\n12 分钟  ' })
     setI18nLocale('zh-CN')
@@ -22,8 +22,8 @@ describe('localized feedback', () => {
     expect(toasts.value).toEqual([])
   })
 
-  it('accepts text explicitly translated by the caller without recognizing it again', () => {
-    setI18nLocale('en-US')
+  it('accepts text explicitly translated by the caller without recognizing it again', async () => {
+    await setI18nLocale('en-US')
     const { success, toasts } = useToast()
     success(translate('common.copy'))
     expect(toasts.value[0].message).toBe('Copy')
@@ -33,7 +33,7 @@ describe('localized feedback', () => {
 
   it('keeps pending confirmations while their default labels change language', async () => {
     const { confirm, state, handleConfirm } = useConfirm()
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     const result = confirm({ message: '保存' })
     expect(state.value).toMatchObject({ title: 'Confirm action', message: '保存', confirmText: 'Confirm', cancelText: 'Cancel' })
     setI18nLocale('zh-CN')
@@ -45,7 +45,7 @@ describe('localized feedback', () => {
 
   it('preserves explicitly supplied confirmation text and empty strings', async () => {
     const { confirm, state, handleCancel } = useConfirm()
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     const result = confirm({ title: '', message: '  删除\n12 分钟  ', confirmText: '保存', cancelText: '' })
     expect(state.value).toMatchObject({ title: '', message: '  删除\n12 分钟  ', confirmText: '保存', cancelText: '' })
     setI18nLocale('zh-CN')
@@ -56,7 +56,7 @@ describe('localized feedback', () => {
 
   it('translates convenience confirmation defaults while preserving the message', async () => {
     const { confirmDanger, confirmWarning, confirmInfo, state, handleCancel } = useConfirm()
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     const danger = confirmDanger('删除')
     expect(state.value).toMatchObject({ title: 'Dangerous action', message: '删除', confirmText: 'Delete' })
     handleCancel()

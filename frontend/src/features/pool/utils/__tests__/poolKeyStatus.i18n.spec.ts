@@ -23,13 +23,13 @@ function poolKey(overrides: Partial<PoolKeyDetail> = {}): PoolKeyDetail {
   }
 }
 
-beforeEach(() => setI18nLocale('zh-CN'))
+beforeEach(async () => { await setI18nLocale('zh-CN') })
 afterEach(() => setI18nLocale('zh-CN'))
 
 describe('pool status localization', () => {
-  it('reads local status labels in the current locale and preserves unknown labels', () => {
+  it('reads local status labels in the current locale and preserves unknown labels', async () => {
     expect(formatCooldownReason('rate_limited_429')).toBe('429 限流')
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     expect(formatCooldownReason('rate_limited_429')).toBe('429 Rate limited')
     expect(formatCooldownReason('上游自定义错误：保存')).toBe('上游自定义错误：保存')
     expect(compactPoolStatusLabel('账号已封禁')).toBe('Account banned')
@@ -37,8 +37,8 @@ describe('pool status localization', () => {
     expect(compactPoolStatusLabel(' 保存账户原文及空格 ')).toBe(' 保存账户原文及空格 ')
   })
 
-  it('uses OAuth flags and kinds independently of the displayed text', () => {
-    setI18nLocale('en-US')
+  it('uses OAuth flags and kinds independently of the displayed text', async () => {
+    await setI18nLocale('en-US')
     const base = { text: '保存', isExpired: false, isExpiringSoon: false, isInvalid: false }
     expect(getOAuthStatusBadgeLabel({ ...base, kind: 'missing_refresh_token' })).toBe('Not added')
     expect(getOAuthStatusBadgeLabel({ ...base, kind: 'unknown_expiration' })).toBe('Unknown')
@@ -52,16 +52,16 @@ describe('pool status localization', () => {
     expect(getSchedulingStatus(unknownExpiry, 0)).toBe('available')
   })
 
-  it('refreshes cached account labels after a locale switch', () => {
+  it('refreshes cached account labels after a locale switch', async () => {
     const key = poolKey({ oauth_invalid_reason: '[ACCOUNT_BLOCK] account suspended' })
     expect(getAccountAlertLabel(key)).toBe('账号封禁')
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     expect(getAccountAlertLabel(key)).toBe('Account banned')
     expect(getAccountAlertTitle(key)).toBe('Account banned: account suspended')
   })
 
-  it('translates known snapshot codes while retaining the server reason', () => {
-    setI18nLocale('en-US')
+  it('translates known snapshot codes while retaining the server reason', async () => {
+    await setI18nLocale('en-US')
     const key = poolKey({
       status_snapshot: {
         oauth: { code: 'none' },
@@ -84,8 +84,8 @@ describe('pool status localization', () => {
     expect(getAccountAlertTitle(quotaKey)).toBe('Account banned: 上游原文：删除')
   })
 
-  it('uses known scheduling codes and leaves custom backend status labels complete', () => {
-    setI18nLocale('en-US')
+  it('uses known scheduling codes and leaves custom backend status labels complete', async () => {
+    await setI18nLocale('en-US')
     expect(getSchedulingBadgeLabel(poolKey({ scheduling_reason: 'inactive', scheduling_label: '已禁用' }), 0)).toBe('Disabled')
     expect(getSchedulingBadgeLabel(poolKey({ scheduling_reason: 'provider_custom', scheduling_label: ' 保存：用户自定义状态 ' }), 0)).toBe(' 保存：用户自定义状态 ')
   })

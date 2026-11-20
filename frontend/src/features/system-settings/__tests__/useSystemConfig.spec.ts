@@ -46,7 +46,7 @@ import { useSystemConfig } from '../composables/useSystemConfig'
 import { getI18nLocale, setI18nLocale } from '@/i18n'
 
 describe('useSystemConfig', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     getAllSystemConfigsMock.mockReset()
     updateSystemConfigMock.mockReset()
     updateReferralSettingsMock.mockReset()
@@ -212,7 +212,7 @@ describe('useSystemConfig', () => {
   it('keeps persisted configuration metadata and user values independent of the UI language', async () => {
     const previous = getI18nLocale()
     try {
-      setI18nLocale('en-US')
+      await setI18nLocale('en-US')
       getAllSystemConfigsMock.mockResolvedValue([])
       updateSystemConfigMock.mockResolvedValue(undefined)
       const state = useSystemConfig()

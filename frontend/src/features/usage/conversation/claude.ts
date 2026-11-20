@@ -1,4 +1,3 @@
-import { translate } from '@/i18n'
 /**
  * Claude API 格式解析器
  */
@@ -33,6 +32,8 @@ import {
   createToolResultBlock as createToolResultRenderBlock,
   createEmptyRenderResult,
 } from './render'
+
+import { conversationLabels } from './labels'
 
 /** Raw JSON object from API (loosely typed) */
 type RawObject = Record<string, unknown>
@@ -104,7 +105,7 @@ export class ClaudeParser implements ApiFormatParser {
    */
   parseRequest(requestBody: unknown): ParsedConversation {
     if (!requestBody) {
-      return createEmptyConversation('claude', '无请求体')
+      return createEmptyConversation('claude', conversationLabels().emptyRequestBody)
     }
 
     try {
@@ -140,7 +141,7 @@ export class ClaudeParser implements ApiFormatParser {
    */
   parseResponse(responseBody: unknown): ParsedConversation {
     if (!responseBody) {
-      return createEmptyConversation('claude', '无响应体')
+      return createEmptyConversation('claude', conversationLabels().emptyResponseBody)
     }
 
     try {
@@ -171,7 +172,7 @@ export class ClaudeParser implements ApiFormatParser {
    */
   parseStreamResponse(chunks: unknown[]): ParsedConversation {
     if (!chunks || chunks.length === 0) {
-      return createEmptyConversation('claude', '无响应数据')
+      return createEmptyConversation('claude', conversationLabels().emptyResponseData)
     }
 
     try {
@@ -442,7 +443,7 @@ export class ClaudeParser implements ApiFormatParser {
    */
   renderRequest(requestBody: unknown): RenderResult {
     if (!requestBody) {
-      return createEmptyRenderResult('无请求体')
+      return createEmptyRenderResult(conversationLabels().emptyRequestBody)
     }
 
     try {
@@ -455,7 +456,7 @@ export class ClaudeParser implements ApiFormatParser {
       if (system) {
         blocks.push(createMessageBlock('system', [
           createTextRenderBlock(system),
-        ], { roleLabel: 'System' }))
+        ], { roleLabel: conversationLabels().roleSystem }))
       }
 
       // 渲染 messages
@@ -479,7 +480,7 @@ export class ClaudeParser implements ApiFormatParser {
    */
   renderResponse(responseBody: unknown): RenderResult {
     if (!responseBody) {
-      return createEmptyRenderResult('无响应体')
+      return createEmptyRenderResult(conversationLabels().emptyResponseBody)
     }
 
     // 检查是否为流式响应
@@ -498,7 +499,7 @@ export class ClaudeParser implements ApiFormatParser {
         if (contentBlocks.length > 0) {
           const badges = this.getBadgesForContent(rawContent)
           blocks.push(createMessageBlock('assistant', contentBlocks, {
-            roleLabel: 'Assistant',
+            roleLabel: conversationLabels().roleAssistant,
             badges,
           }))
         }
@@ -515,7 +516,7 @@ export class ClaudeParser implements ApiFormatParser {
    */
   private renderStreamResponse(chunks: unknown[]): RenderResult {
     if (!chunks || chunks.length === 0) {
-      return createEmptyRenderResult('无响应数据')
+      return createEmptyRenderResult(conversationLabels().emptyResponseData)
     }
 
     try {
@@ -621,7 +622,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       case 'tool_use':
         return createToolUseRenderBlock(
-          String(block.name || '工具调用'),
+          String(block.name || conversationLabels().badgeToolCall),
           this.formatJson(block.input),
           typeof block.id === 'string' ? block.id : undefined
         )
@@ -672,7 +673,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       case 'tool_use':
         return createToolUseRenderBlock(
-          block.toolName || '工具调用',
+          block.toolName || conversationLabels().badgeToolCall,
           this.formatJson(block.input),
           block.toolId
         )
@@ -690,7 +691,7 @@ export class ClaudeParser implements ApiFormatParser {
             ? `data:${block.mimeType || 'image/png'};base64,${block.data}`
             : block.url,
           mimeType: block.mimeType,
-          alt: block.alt || '图片',
+          alt: block.alt || conversationLabels().badgeImage,
         })
 
       case 'error':
@@ -732,10 +733,10 @@ export class ClaudeParser implements ApiFormatParser {
    */
   private getRoleLabel(role: MessageRole): string {
     switch (role) {
-      case 'user': return 'User'
-      case 'assistant': return 'Assistant'
-      case 'system': return 'System'
-      case 'tool': return 'Tool'
+      case 'user': return conversationLabels().roleUser
+      case 'assistant': return conversationLabels().roleAssistant
+      case 'system': return conversationLabels().roleSystem
+      case 'tool': return conversationLabels().roleTool
       default: return role
     }
   }
@@ -750,16 +751,16 @@ export class ClaudeParser implements ApiFormatParser {
     const types = new Set(content.map((b: RawObject) => b.type))
 
     if (types.has('thinking') || types.has('redacted_thinking')) {
-      badges.push(createBadgeBlock('思考', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
     }
     if (types.has('tool_use')) {
-      badges.push(createBadgeBlock('工具调用', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolCall, 'outline'))
     }
     if (types.has('tool_result')) {
-      badges.push(createBadgeBlock('工具结果', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolResult, 'outline'))
     }
     if (types.has('image')) {
-      badges.push(createBadgeBlock('图片', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeImage, 'secondary'))
     }
 
     return badges
@@ -780,16 +781,16 @@ export class ClaudeParser implements ApiFormatParser {
     const types = new Set(content.map(b => b.type))
 
     if (types.has('thinking')) {
-      badges.push(createBadgeBlock('思考', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
     }
     if (types.has('tool_use')) {
-      badges.push(createBadgeBlock('工具调用', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolCall, 'outline'))
     }
     if (types.has('tool_result')) {
-      badges.push(createBadgeBlock('工具结果', 'outline'))
+      badges.push(createBadgeBlock(conversationLabels().badgeToolResult, 'outline'))
     }
     if (types.has('image')) {
-      badges.push(createBadgeBlock('图片', 'secondary'))
+      badges.push(createBadgeBlock(conversationLabels().badgeImage, 'secondary'))
     }
 
     return badges
@@ -822,7 +823,7 @@ export class ClaudeParser implements ApiFormatParser {
       return content
         .map((item: RawObject) => {
           if (item.type === 'text') return String(item.text || '')
-          if (item.type === 'image') return translate('ui.imagea71f445')
+          if (item.type === 'image') return conversationLabels().imageInline
           return ''
         })
         .filter(Boolean)
@@ -839,7 +840,7 @@ export class ClaudeParser implements ApiFormatParser {
     return content
       .map(block => {
         if (block.type === 'text') return block.text
-        if (block.type === 'image') return translate('ui.imagea71f445')
+        if (block.type === 'image') return conversationLabels().imageInline
         if (block.type === 'error') return `[错误: ${block.message}]`
         return ''
       })

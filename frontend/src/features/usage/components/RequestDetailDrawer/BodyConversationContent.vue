@@ -46,6 +46,7 @@ import ConversationView from './ConversationView.vue'
 import VirtualBodyContent from './VirtualBodyContent.vue'
 import type { BodyDocument } from '../../utils/body-document'
 import type { BodyConversationPage } from '../../utils/body-document-protocol'
+import { useConversationLabels } from '../../composables/useConversationLabels'
 
 const props = defineProps<{
   bodyDocument: BodyDocument | null
@@ -56,6 +57,7 @@ const props = defineProps<{
 const emit = defineEmits<{ 'load-error': [error: unknown] }>()
 
 const { t } = useI18n()
+const conversationLabels = useConversationLabels()
 const viewer = ref<{ refresh: (index: number) => void } | null>(null)
 const viewRevision = ref(0)
 const previewLimits = ref<Record<number, number>>({})
@@ -63,7 +65,13 @@ const previewLimits = ref<Record<number, number>>({})
 function loadChunk(index: number): Promise<BodyConversationPage> {
   const document = props.bodyDocument
   if (!document) return Promise.resolve({ result: { blocks: [] }, hasNext: false, truncated: false })
-  return document.conversation({ kind: props.kind, apiFormat: props.apiFormat, page: index, previewLimit: previewLimits.value[index] ?? 64_000 })
+  return document.conversation({
+    kind: props.kind,
+    apiFormat: props.apiFormat,
+    page: index,
+    previewLimit: previewLimits.value[index] ?? 64_000,
+    labels: conversationLabels.value,
+  })
 }
 
 function showMore(index: number) {
@@ -71,7 +79,7 @@ function showMore(index: number) {
   viewer.value?.refresh(index)
 }
 
-watch([() => props.bodyDocument, () => props.kind, () => props.apiFormat], () => {
+watch([() => props.bodyDocument, () => props.kind, () => props.apiFormat, conversationLabels], () => {
   viewRevision.value += 1
   previewLimits.value = {}
 })

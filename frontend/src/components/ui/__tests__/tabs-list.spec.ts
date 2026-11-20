@@ -46,7 +46,7 @@ describe('TabsList', () => {
     expect(indicator?.style.width).toBe('80px')
     expect(indicator?.style.transform).toBe('translateX(4px)')
 
-    setI18nLocale('en-US')
+    await setI18nLocale('en-US')
     await nextTick()
     await vi.runAllTimersAsync()
 

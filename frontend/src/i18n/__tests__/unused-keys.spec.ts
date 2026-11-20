@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { messages, type MessageKey } from '@/i18n/messages'
+import { messageKeys, type MessageKey } from '@/i18n/messages'
 
 // Keys that are defined but never referenced. Deleting them is safe only while
 // this list stays empty: every key is expected to appear as an exact quoted
@@ -14,8 +14,12 @@ const ALLOWED_UNUSED_KEYS: ReadonlyMap<MessageKey, string> = new Map()
 
 const root = resolve(import.meta.dirname, '../../..')
 const dictionaryFiles = new Set([
-  'messages.ts', 'ui-messages.ts', 'overview-messages.ts', 'provider-messages.ts',
-  'feedback-messages.ts', 'user-messages.ts',
+  'messages.ts', 'messages-zh.ts', 'messages-en.ts',
+  'ui-messages.ts', 'ui-messages-en.ts',
+  'overview-messages.ts', 'overview-messages-en.ts',
+  'provider-messages.ts', 'provider-messages-en.ts',
+  'feedback-messages.ts', 'feedback-messages-en.ts',
+  'user-messages.ts', 'user-messages-en.ts',
 ])
 
 function sourceFiles(directory: string): string[] {
@@ -50,7 +54,7 @@ describe('unused message keys', () => {
     const literals = quotedLiterals(
       sourceFiles(resolve(root, 'src')).map(file => readFileSync(file, 'utf8')),
     )
-    const unused = (Object.keys(messages['zh-CN']) as MessageKey[])
+    const unused = (messageKeys as MessageKey[])
       .filter(key => !literals.has(key))
       .filter(key => !ALLOWED_UNUSED_KEYS.has(key))
 

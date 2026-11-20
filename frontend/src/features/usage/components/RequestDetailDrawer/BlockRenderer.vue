@@ -164,7 +164,9 @@ defineProps<{
 const { t } = useI18n()
 
 function isThinkingBlock(block: CollapsibleRenderBlock): boolean {
-  return block.title?.includes('思考') || block.className?.includes('thinking') || false
+  // The renderer already localized the title, so the structural class name is
+  // the only language-independent signal left to look at.
+  return block.className?.includes('thinking') || block.title?.includes(t('conversation.badge.thinking')) || false
 }
 
 function extractThinkingContent(block: CollapsibleRenderBlock): string {
