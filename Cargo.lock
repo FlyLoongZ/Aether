@@ -536,7 +536,6 @@ dependencies = [
  "aether-http",
  "aether-oauth",
  "aether-runtime-state",
- "aether-video-tasks-core",
  "async-trait",
  "aws-lc-rs",
  "axum",

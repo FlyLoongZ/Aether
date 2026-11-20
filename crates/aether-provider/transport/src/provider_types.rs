@@ -314,12 +314,6 @@ const XAI_FIXED_PROVIDER_TEMPLATE: FixedProviderTemplate = FixedProviderTemplate
             custom_path: None,
             config_defaults: EMPTY_ENDPOINT_CONFIG_DEFAULTS,
         },
-        FixedProviderEndpointTemplate {
-            item_key: "openai:video",
-            api_format: "openai:video",
-            custom_path: None,
-            config_defaults: EMPTY_ENDPOINT_CONFIG_DEFAULTS,
-        },
     ],
     runtime_policy: XAI_RUNTIME_POLICY,
 };
@@ -577,8 +571,7 @@ mod tests {
             vec![
                 "openai:responses",
                 "openai:responses:compact",
-                "openai:image",
-                "openai:video"
+                "openai:image"
             ]
         );
 

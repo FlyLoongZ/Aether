@@ -27,7 +27,6 @@ pub mod snapshot;
 mod standard;
 pub mod url;
 pub mod vertex;
-mod video;
 pub mod xai;
 
 pub use aether_oauth as oauth;
@@ -160,12 +159,6 @@ pub use standard::{
 pub use vertex::{
     is_vertex_api_key_transport_context, is_vertex_service_account_transport_context,
     is_vertex_transport_context, uses_vertex_api_key_query_auth,
-};
-pub use video::{
-    build_video_create_headers, build_video_create_request_body, build_video_create_upstream_url,
-    reconstruct_local_video_task_snapshot, resolve_local_video_task_transport,
-    resolve_video_create_auth, video_create_transport_unsupported_reason,
-    ProviderVideoCreateFamily, ProviderVideoCreateHeadersInput, VideoTaskTransportSnapshotLookup,
 };
 pub use xai::{
     extract_xai_user_id_from_auth_config, extract_xai_user_id_from_value,

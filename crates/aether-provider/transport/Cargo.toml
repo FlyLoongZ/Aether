@@ -15,7 +15,6 @@ aether-data-contracts.workspace = true
 aether-http.workspace = true
 aether-oauth.workspace = true
 aether-runtime-state.workspace = true
-aether-video-tasks-core.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 chrono.workspace = true

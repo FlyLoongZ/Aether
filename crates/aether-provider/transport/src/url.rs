@@ -247,30 +247,6 @@ fn gemini_content_base_url_contains_model_path(value: &str) -> bool {
     value.contains("/v1/models/") || value.contains("/v1beta/models/")
 }
 
-pub fn build_gemini_video_predict_long_running_url(
-    upstream_base_url: &str,
-    model: &str,
-    query: Option<&str>,
-) -> Option<String> {
-    let (trimmed_base_url, base_query) = split_base_url_query(upstream_base_url);
-    let trimmed_base_url = trimmed_base_url.trim_end_matches('/');
-    let trimmed_model = model.trim();
-    if trimmed_base_url.is_empty() || trimmed_model.is_empty() {
-        return None;
-    }
-    let encoded_model = encode_url_path_segment(trimmed_model);
-
-    let mut url = if trimmed_base_url.ends_with("/v1") || trimmed_base_url.ends_with("/v1beta") {
-        format!("{trimmed_base_url}/models/{encoded_model}:predictLongRunning")
-    } else if gemini_content_base_url_contains_model_path(trimmed_base_url) {
-        format!("{trimmed_base_url}:predictLongRunning")
-    } else {
-        format!("{trimmed_base_url}/v1beta/models/{encoded_model}:predictLongRunning")
-    };
-    append_merged_query(&mut url, base_query, None, query, &["key"]);
-    Some(url)
-}
-
 pub fn build_passthrough_path_url(
     upstream_base_url: &str,
     path: &str,
@@ -557,8 +533,7 @@ fn merge_query_string(
 mod tests {
     use super::{
         build_bigmodel_coding_models_url, build_claude_count_tokens_url, build_claude_messages_url,
-        build_gemini_content_url, build_gemini_files_passthrough_url,
-        build_gemini_video_predict_long_running_url, build_openai_chat_url,
+        build_gemini_content_url, build_gemini_files_passthrough_url, build_openai_chat_url,
         build_openai_compatible_models_url, build_openai_image_url, build_openai_responses_url,
         build_openai_search_url, build_passthrough_path_url, encode_url_path_segment,
         normalize_gemini_content_action_path,
@@ -871,14 +846,12 @@ mod tests {
         assert_eq!(
             build_passthrough_path_url(
                 "https://api.openai.example/v1?tenant=demo",
-                "/videos/generations?variant=video",
+                "/responses?stream=true",
                 Some("size=1024"),
                 &[]
             )
             .as_deref(),
-            Some(
-                "https://api.openai.example/v1/videos/generations?size=1024&tenant=demo&variant=video"
-            )
+            Some("https://api.openai.example/v1/responses?size=1024&stream=true&tenant=demo")
         );
     }
 
@@ -912,21 +885,6 @@ mod tests {
     }
 
     #[test]
-    fn merges_base_url_query_for_gemini_video_urls() {
-        assert_eq!(
-            build_gemini_video_predict_long_running_url(
-                "https://generativelanguage.googleapis.com/v1beta?alt=sse",
-                "veo-3.0-generate-preview",
-                Some("foo=bar&key=secret")
-            )
-            .as_deref(),
-            Some(
-                "https://generativelanguage.googleapis.com/v1beta/models/veo-3.0-generate-preview:predictLongRunning?alt=sse&foo=bar"
-            )
-        );
-    }
-
-    #[test]
     fn gemini_model_names_cannot_inject_path_query_or_fragment_components() {
         let model = "model/../../admin?key=attacker#fragment";
         assert_eq!(
@@ -939,17 +897,6 @@ mod tests {
             .as_deref(),
             Some(
                 "https://generativelanguage.googleapis.com/v1beta/models/model%2F..%2F..%2Fadmin%3Fkey=attacker%23fragment:generateContent"
-            )
-        );
-        assert_eq!(
-            build_gemini_video_predict_long_running_url(
-                "https://generativelanguage.googleapis.com/v1beta",
-                model,
-                None,
-            )
-            .as_deref(),
-            Some(
-                "https://generativelanguage.googleapis.com/v1beta/models/model%2F..%2F..%2Fadmin%3Fkey=attacker%23fragment:predictLongRunning"
             )
         );
     }

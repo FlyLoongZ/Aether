@@ -768,12 +768,7 @@ mod tests {
             "openai:image",
             "openai:responses"
         ));
-        assert!(!request_pair_allowed_for_transport(
-            &transport,
-            "openai:video",
-            "openai:responses"
-        ));
-        for isolated in ["openai:responses:compact", "openai:image", "openai:video"] {
+        for isolated in ["openai:responses:compact", "openai:image"] {
             assert!(
                 !request_pair_allowed_for_transport(&transport, isolated, "openai:responses"),
                 "{isolated} must not convert onto xAI Responses"
@@ -805,7 +800,7 @@ mod tests {
             );
         }
 
-        for api_format in ["openai:image", "openai:video"] {
+        for api_format in ["openai:image"] {
             let transport = transport_snapshot("xai", api_format, "oauth", true, None);
             assert!(
                 request_pair_allowed_for_transport(&transport, api_format, api_format),
@@ -926,7 +921,7 @@ mod tests {
             Some("format_conversion_disabled")
         );
         assert_eq!(
-            candidate_transport_pair_skip_reason(&transport, "gemini:video"),
+            candidate_transport_pair_skip_reason(&transport, "gemini:files"),
             Some("transport_unsupported")
         );
 
