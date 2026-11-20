@@ -56,6 +56,26 @@ fn validate_gateway_data_encryption_key(value: Option<&str>) -> Result<(), &'sta
     Ok(())
 }
 
+/// The previous key only has to stay readable: it may be a weaker legacy value
+/// this deployment has used for years, so it is deliberately not held to the
+/// current key's strength rules. It must not duplicate the current key, though,
+/// because that would silently turn a rotation into a no-op.
+fn validate_gateway_previous_encryption_key(
+    previous: Option<&str>,
+    current: Option<&str>,
+) -> Result<(), &'static str> {
+    let Some(previous) = previous.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(());
+    };
+    let Some(current) = current.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(());
+    };
+    if previous == current {
+        return Err("the previous encryption key must differ from the current one");
+    }
+    Ok(())
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
 enum DatabaseModeArg {
     Auto,
@@ -397,6 +417,12 @@ struct GatewayDataArgs {
 
     #[arg(long, env = "ENCRYPTION_KEY", global = true)]
     encryption_key: Option<String>,
+
+    /// Previous encryption key. Rows written under it stay readable without
+    /// rewriting them, so it must stay configured until every row has been read
+    /// or rewritten (see docs/operations/encryption-key-rotation.md).
+    #[arg(long, env = "ENCRYPTION_KEY_PREVIOUS", global = true)]
+    encryption_key_previous: Option<String>,
 
     #[arg(long, env = "AETHER_GATEWAY_DATA_REDIS_URL", global = true)]
     redis_url: Option<String>,
@@ -1567,6 +1593,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
     args.data.validate_encryption_key()?;
+    validate_gateway_previous_encryption_key(
+        args.data.encryption_key_previous.as_deref(),
+        args.data.encryption_key.as_deref(),
+    )?;
+    aether_crypto::configure_previous_secret(args.data.encryption_key_previous.as_deref());
     let data_config = args.data.to_config();
     let usage_database_is_isolated = false;
     let usage_database_config = data_config.database();
@@ -2231,6 +2262,7 @@ mod tests {
             data: GatewayDataArgs {
                 database_url: None,
                 encryption_key: None,
+                encryption_key_previous: None,
                 redis_url: None,
                 redis_key_prefix: None,
                 postgres_min_connections: None,

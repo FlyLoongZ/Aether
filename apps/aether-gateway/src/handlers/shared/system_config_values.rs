@@ -196,7 +196,7 @@ pub(crate) fn decrypt_system_config_secret(
         let encryption_key = effective_catalog_encryption_key_from_config(state.encryption_key())?;
         let normalized = aether_admin::system::normalize_admin_system_config_key(key);
         return SecretKey::from_secret(encryption_key.as_ref())
-            .open(SecretContext::SystemConfig(&normalized), stored)
+            .open_with_previous(SecretContext::SystemConfig(&normalized), stored)
             .ok()
             .filter(|plaintext| !plaintext.contains('\0'));
     }

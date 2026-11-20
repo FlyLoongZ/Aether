@@ -233,7 +233,7 @@ fn decrypt_bound_secret(
     candidates.extend(fallback_encryption_keys.iter().map(String::as_str));
     for candidate in candidates {
         let key = SecretKey::from_secret(candidate);
-        if let Ok(protected) = key.open(SecretContext::Custom(&purpose), ciphertext) {
+        if let Ok(protected) = key.open_with_previous(SecretContext::Custom(&purpose), ciphertext) {
             return protected
                 .strip_prefix(&purpose)
                 .and_then(|value| value.strip_prefix('\0'))
