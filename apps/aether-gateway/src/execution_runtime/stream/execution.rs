@@ -153,9 +153,7 @@ use crate::stage_metrics::{
 };
 use crate::usage::submit_stream_report;
 use crate::usage::{GatewayStreamReportRequest, GatewaySyncReportRequest};
-use crate::{
-    AppState, GatewayError, GEMINI_FILES_DOWNLOAD_PLAN_KIND, OPENAI_VIDEO_CONTENT_PLAN_KIND,
-};
+use crate::{AppState, GatewayError, GEMINI_FILES_DOWNLOAD_PLAN_KIND};
 
 /// Settlement labels for a stream attempt whose future is dropped before the
 /// transport reaches a terminal state.
@@ -651,12 +649,6 @@ fn wrap_non_json_binary_stream_error_for_client(
     let body = match plan_kind {
         GEMINI_FILES_DOWNLOAD_PLAN_KIND => json!({
             "error": "File download failed",
-        }),
-        OPENAI_VIDEO_CONTENT_PLAN_KIND => json!({
-            "error": {
-                "type": "upstream_error",
-                "message": "Video not available",
-            }
         }),
         _ => json!({
             "error": {

@@ -308,7 +308,6 @@ dependencies = [
  "aether-test-support",
  "aether-testkit",
  "aether-usage-runtime",
- "aether-video-tasks-core",
  "aether-wallet",
  "async-stream",
  "async-trait",

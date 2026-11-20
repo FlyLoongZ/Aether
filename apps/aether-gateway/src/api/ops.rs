@@ -5,15 +5,11 @@ use axum::extract::{ConnectInfo, Request, State};
 use axum::http::{self, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::json;
 use tracing::warn;
 
-use crate::async_task::{
-    cancel_video_task, get_video_task_detail, get_video_task_stats, get_video_task_video,
-    list_video_tasks,
-};
 use crate::audit::{get_auth_api_key_snapshot, get_decision_trace, get_request_candidate_trace};
 use crate::router::metrics;
 use crate::state::AppState;
@@ -32,23 +28,6 @@ pub(crate) fn mount_operational_routes(
 ) -> Router<AppState> {
     let operational = Router::<AppState>::new()
         .route("/_gateway/metrics", get(metrics))
-        .route("/_gateway/async-tasks/video-tasks", get(list_video_tasks))
-        .route(
-            "/_gateway/async-tasks/video-tasks/stats",
-            get(get_video_task_stats),
-        )
-        .route(
-            "/_gateway/async-tasks/video-tasks/{task_id}/video",
-            get(get_video_task_video),
-        )
-        .route(
-            "/_gateway/async-tasks/video-tasks/{task_id}/cancel",
-            post(cancel_video_task),
-        )
-        .route(
-            "/_gateway/async-tasks/video-tasks/{task_id}",
-            get(get_video_task_detail),
-        )
         .route(
             "/_gateway/audit/auth/users/{user_id}/api-keys/{api_key_id}",
             get(get_auth_api_key_snapshot),
@@ -191,23 +170,11 @@ async fn authorize_operational_request(
     response
 }
 
-fn operational_permission(method: &http::Method, path: &str) -> Option<OperationalPermission> {
+fn operational_permission(_method: &http::Method, path: &str) -> Option<OperationalPermission> {
     if path == "/_gateway/metrics" {
         return Some(OperationalPermission {
             required_permissions: &["admin:monitoring:read"],
             write: false,
-            requires_full_admin_role: false,
-        });
-    }
-    if path.starts_with("/_gateway/async-tasks/video-tasks") {
-        let write = *method == http::Method::POST && path.ends_with("/cancel");
-        return Some(OperationalPermission {
-            required_permissions: if write {
-                &["admin:video_tasks:write"]
-            } else {
-                &["admin:video_tasks:read"]
-            },
-            write,
             requires_full_admin_role: false,
         });
     }

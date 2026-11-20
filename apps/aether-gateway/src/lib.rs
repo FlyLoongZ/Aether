@@ -4,7 +4,6 @@ mod admin_api;
 mod ai_serving;
 mod allocator_metrics;
 mod api;
-mod async_task;
 mod audit;
 mod auth;
 mod backup;
@@ -64,14 +63,11 @@ mod tls;
 mod tokio_metrics;
 mod upstream_admission;
 mod usage;
-mod video_tasks;
 mod wallet_runtime;
 pub use cli_client_profile::ClientProfileSyncGuard;
 
+pub(crate) use self::ai_serving::api::GEMINI_FILES_DOWNLOAD_PLAN_KIND;
 pub use self::ai_serving::api::{codex_client_originator, codex_client_user_agent};
-pub(crate) use self::ai_serving::api::{
-    GEMINI_FILES_DOWNLOAD_PLAN_KIND, OPENAI_VIDEO_CONTENT_PLAN_KIND,
-};
 pub(crate) use self::ai_serving::{AiExecutionDecision, AiExecutionPlanPayload};
 pub use self::backup::{
     apply_restored_backup, restore_backup_json, BackupApplyError, BackupDecryptionKey,

@@ -6,10 +6,9 @@ mod route;
 pub(crate) use auth::{
     estimate_execution_plan_cost_upper_bound_usd, execution_plan_balance_capacity_rejection,
     refresh_execution_runtime_auth_context_with_snapshot, request_model_local_rejection,
-    resolve_execution_runtime_auth_context, resolve_local_admin_session_principal,
-    should_buffer_request_for_local_auth, trusted_auth_local_rejection,
-    GatewayAdminPrincipalContext, GatewayControlAuthContext, GatewayCredentialCarrier,
-    GatewayLocalAuthRejection,
+    resolve_local_admin_session_principal, should_buffer_request_for_local_auth,
+    trusted_auth_local_rejection, GatewayAdminPrincipalContext, GatewayControlAuthContext,
+    GatewayCredentialCarrier, GatewayLocalAuthRejection,
 };
 #[cfg(test)]
 pub(crate) use management_token_permissions::{

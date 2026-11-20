@@ -101,8 +101,6 @@ impl GatewayDataState {
             user_reader: None,
             user_preferences: None,
             usage_worker_queue: None,
-            video_task_reader: None,
-            video_task_writer: None,
             wallet_reader: None,
             wallet_writer: None,
             settlement_writer: None,

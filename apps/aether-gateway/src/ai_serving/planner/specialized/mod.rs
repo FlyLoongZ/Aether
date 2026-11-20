@@ -1,8 +1,7 @@
-//! Non-matrix AI surfaces such as files and video.
+//! Non-matrix AI surfaces such as files and images.
 
 mod files;
 mod image;
-mod video;
 
 pub(crate) use self::files::{
     build_local_gemini_files_stream_attempt_source_for_kind,
@@ -16,8 +15,4 @@ pub(crate) use self::image::{
     build_local_image_sync_attempt_source_for_kind,
     maybe_build_stream_local_image_decision_payload, maybe_build_sync_local_image_decision_payload,
     set_local_openai_image_execution_exhausted_diagnostic,
-};
-
-pub(crate) use self::video::{
-    build_local_video_sync_attempt_source_for_kind, maybe_build_sync_local_video_decision_payload,
 };

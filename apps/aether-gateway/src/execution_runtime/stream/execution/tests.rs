@@ -152,14 +152,36 @@ fn provider_catalog_for_plan(
     InMemoryProviderCatalogReadRepository::seed(vec![provider], vec![endpoint], vec![key])
 }
 
+fn header_rules_test_plan(trace_id: &str) -> ExecutionPlan {
+    ExecutionPlan {
+        request_id: trace_id.to_string(),
+        candidate_id: None,
+        provider_name: Some("openai".to_string()),
+        provider_id: "test-provider".to_string(),
+        endpoint_id: "test-endpoint".to_string(),
+        key_id: "test-key".to_string(),
+        method: "POST".to_string(),
+        url: "https://internal.gateway.invalid/v1/chat/completions".to_string(),
+        headers: BTreeMap::from([(
+            "authorization".to_string(),
+            "Bearer internal-gateway".to_string(),
+        )]),
+        content_type: Some("application/json".to_string()),
+        content_encoding: None,
+        body: RequestBody::from_json(json!({})),
+        stream: false,
+        client_api_format: "openai:chat".to_string(),
+        provider_api_format: "openai:chat".to_string(),
+        model_name: Some("gpt-5".to_string()),
+        proxy: None,
+        transport_profile: None,
+        timeouts: None,
+    }
+}
+
 #[tokio::test]
 async fn stream_error_finalize_applies_client_header_rules_without_changing_provider_capture() {
-    let plan = aether_video_tasks_core::build_internal_finalize_video_plan(
-        "trace-stream-header-rules",
-        "openai:video",
-        None,
-    )
-    .expect("plan should build");
+    let plan = header_rules_test_plan("trace-stream-header-rules");
     let mut endpoint = StoredProviderCatalogEndpoint::new(
         plan.endpoint_id.clone(),
         plan.provider_id.clone(),

@@ -493,7 +493,7 @@ mod tests {
                 Some(json!({
                     "claude:messages": 2,
                     "gemini:generate_content": 3,
-                    "openai:video": 4
+                    "openai:embedding": 4
                 })),
                 "rate_multipliers",
             )
@@ -501,7 +501,7 @@ mod tests {
             Some(json!({
                 "claude:messages": 2,
                 "gemini:generate_content": 3,
-                "openai:video": 4
+                "openai:embedding": 4
             }))
         );
     }

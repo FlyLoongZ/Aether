@@ -2,8 +2,6 @@ use async_trait::async_trait;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AiSyncDecisionStep {
-    VideoTaskFollowUp,
-    LocalVideo,
     LocalImage,
     LocalOpenAiChat,
     LocalOpenAiResponses,
@@ -14,7 +12,6 @@ pub enum AiSyncDecisionStep {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiStreamDecisionStep {
-    LocalVideoContent,
     LocalImage,
     LocalOpenAiChat,
     LocalOpenAiResponses,
@@ -54,8 +51,6 @@ where
     Port: AiSyncDecisionPathPort,
 {
     for step in [
-        AiSyncDecisionStep::VideoTaskFollowUp,
-        AiSyncDecisionStep::LocalVideo,
         AiSyncDecisionStep::LocalImage,
         AiSyncDecisionStep::LocalOpenAiChat,
         AiSyncDecisionStep::LocalOpenAiResponses,
@@ -81,7 +76,6 @@ where
     Port: AiStreamDecisionPathPort,
 {
     for step in [
-        AiStreamDecisionStep::LocalVideoContent,
         AiStreamDecisionStep::LocalImage,
         AiStreamDecisionStep::LocalOpenAiChat,
         AiStreamDecisionStep::LocalOpenAiResponses,
@@ -158,8 +152,6 @@ mod tests {
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
             [
-                "VideoTaskFollowUp",
-                "LocalVideo",
                 "LocalImage",
                 "LocalOpenAiChat",
                 "LocalOpenAiResponses",
@@ -188,7 +180,7 @@ mod tests {
         assert_eq!(decision, Some("image_decision"));
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
-            ["VideoTaskFollowUp", "LocalVideo", "LocalImage"]
+            ["LocalImage", "LocalOpenAiChat", "LocalOpenAiResponses"]
         );
     }
 
@@ -209,7 +201,7 @@ mod tests {
         assert_eq!(decision, Some("chat_decision"));
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
-            ["LocalVideoContent", "LocalImage", "LocalOpenAiChat"]
+            ["LocalImage", "LocalOpenAiChat", "LocalOpenAiResponses"]
         );
     }
 }

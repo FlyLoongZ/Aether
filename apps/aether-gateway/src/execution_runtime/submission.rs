@@ -898,12 +898,37 @@ mod tests {
     }
 
     fn test_plan() -> aether_contracts::ExecutionPlan {
-        aether_video_tasks_core::build_internal_finalize_video_plan(
-            "trace-submit-finalize-tests",
-            "openai:video",
-            None,
-        )
-        .expect("test plan should build")
+        aether_contracts::ExecutionPlan {
+            request_id: "trace-submit-finalize-tests".to_string(),
+            candidate_id: None,
+            provider_name: Some("openai".to_string()),
+            provider_id: "test-provider".to_string(),
+            endpoint_id: "test-endpoint".to_string(),
+            key_id: "test-key".to_string(),
+            method: "POST".to_string(),
+            url: "https://internal.gateway.invalid/v1/chat/completions".to_string(),
+            headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "Bearer internal-gateway".to_string(),
+            )]),
+            content_type: Some("application/json".to_string()),
+            content_encoding: None,
+            body: aether_contracts::RequestBody::from_json(json!({})),
+            stream: false,
+            client_api_format: "openai:chat".to_string(),
+            provider_api_format: "openai:chat".to_string(),
+            model_name: Some("gpt-5".to_string()),
+            proxy: Some(aether_contracts::ProxySnapshot {
+                enabled: Some(false),
+                mode: Some("direct".to_string()),
+                node_id: None,
+                label: None,
+                url: None,
+                extra: None,
+            }),
+            transport_profile: None,
+            timeouts: None,
+        }
     }
 
     fn core_finalize_payload(
@@ -972,12 +997,7 @@ mod tests {
     }
 
     fn state_and_plan_with_response_header_rules() -> (AppState, aether_contracts::ExecutionPlan) {
-        let plan = aether_video_tasks_core::build_internal_finalize_video_plan(
-            "trace-error-finalize-rules",
-            "openai:video",
-            None,
-        )
-        .expect("plan should build");
+        let plan = test_plan();
         let mut endpoint = StoredProviderCatalogEndpoint::new(
             plan.endpoint_id.clone(),
             plan.provider_id.clone(),

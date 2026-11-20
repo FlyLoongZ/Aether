@@ -46,7 +46,6 @@ const XAI_FORMATS: &[&str] = &[
     "openai:responses",
     "openai:responses:compact",
     "openai:image",
-    "openai:video",
 ];
 const GEMINI_GENERATE_CONTENT: &[&str] = &["gemini:generate_content"];
 const VERTEX_FORMATS: &[&str] = &["gemini:generate_content", "gemini:embedding"];

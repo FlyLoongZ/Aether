@@ -18,7 +18,6 @@ mod runtime;
 #[cfg(test)]
 mod testing;
 mod types;
-mod video;
 
 pub(crate) use self::admin_types::{
     AdminBillingCollectorRecord, AdminBillingCollectorWriteInput, AdminBillingMutationOutcome,
@@ -48,7 +47,6 @@ pub(crate) use self::types::{
     GatewayUserSessionView, LocalExecutionRuntimeMissDiagnostic, LocalMutationOutcome,
     LocalProviderDeleteTaskState,
 };
-pub(crate) use self::video::VideoTaskRouteAccess;
 #[cfg(test)]
 pub(crate) use super::data::GatewayDataState;
 use super::provider_transport::provider_transport_snapshot_looks_refreshed;

@@ -9,4 +9,3 @@ pub mod rerank;
 pub mod responses;
 pub mod search;
 pub mod shared;
-pub mod video;

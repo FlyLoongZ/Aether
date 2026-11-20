@@ -30,7 +30,6 @@ use super::{
     AppState, FrontdoorCorsConfig, FrontdoorRuntimeGuardConfig, LocalExecutionRuntimeMissDiagnostic,
 };
 
-use super::super::async_task::{spawn_video_task_poller, VideoTaskPollerConfig, VideoTaskService};
 use super::super::cache::{
     AuthApiKeyLastUsedCache, AuthContextCache, AuthSnapshotCache, DashboardResponseCache,
     JsonValueCache, OverviewTotalCache, SchedulerAffinityCache, SchedulerAffinitySnapshotEntry,
@@ -330,8 +329,6 @@ impl AppState {
             body_file_store: None,
             request_activity: Arc::new(crate::request_activity::RequestActivity::default()),
             execution_activity: Arc::new(crate::execution_activity::ExecutionActivity::default()),
-            video_tasks: Arc::new(VideoTaskService::new()),
-            video_task_poller: None,
             frontdoor_runtime_guards: Arc::clone(&frontdoor_runtime_guards),
             request_body_buffer_budget: Arc::new(tokio::sync::Semaphore::new(
                 frontdoor_runtime_guards.request_body_buffer_budget_permits,
@@ -573,14 +570,6 @@ impl AppState {
         sqlx::migrate::MigrateError,
     > {
         self.data.pending_database_backfills().await
-    }
-
-    pub fn with_video_task_poller_config(mut self, interval: Duration, batch_size: usize) -> Self {
-        self.video_task_poller = Some(VideoTaskPollerConfig {
-            interval,
-            batch_size: batch_size.max(1),
-        });
-        self
     }
 
     pub fn with_http_connection_budget(mut self, budget: Arc<HttpConnectionBudget>) -> Self {
@@ -1861,20 +1850,6 @@ impl AppState {
         Ok(())
     }
 
-    pub fn with_video_task_store_path(
-        mut self,
-        path: impl Into<std::path::PathBuf>,
-    ) -> std::io::Result<Self> {
-        let encryption_key = self.data.encryption_key().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "AETHER_GATEWAY_VIDEO_TASK_STORE_PATH requires a configured encryption key",
-            )
-        })?;
-        self.video_tasks = Arc::new(VideoTaskService::with_file_store(path, encryption_key)?);
-        Ok(self)
-    }
-
     fn background_worker_state(&self) -> Self {
         let mut state = self.clone();
         state.data = self.data.clone();
@@ -2041,10 +2016,6 @@ impl AppState {
                 )),
             );
         }
-        supervise_worker(
-            crate::task_runtime::TASK_KEY_VIDEO_TASK_POLLER,
-            spawn_video_task_poller(background_state.clone()),
-        );
         supervise_worker(
             crate::backup::worker::S3_BACKUP_WORKER_TASK_KEY,
             crate::backup::worker::spawn_s3_backup_worker(background_state.clone()),

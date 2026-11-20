@@ -204,27 +204,6 @@ fn extract_antigravity_load_code_assist_project_id(value: &Value) -> Option<Stri
 }
 
 #[async_trait]
-impl provider_transport::VideoTaskTransportSnapshotLookup for AppState {
-    async fn read_video_task_provider_transport_snapshot(
-        &self,
-        provider_id: &str,
-        endpoint_id: &str,
-        key_id: &str,
-    ) -> Result<Option<GatewayProviderTransportSnapshot>, String> {
-        self.read_provider_transport_snapshot(provider_id, endpoint_id, key_id)
-            .await
-            .map_err(GatewayError::into_message)
-    }
-
-    async fn resolve_video_task_proxy(
-        &self,
-        transport: &GatewayProviderTransportSnapshot,
-    ) -> Option<ProxySnapshot> {
-        self.resolve_transport_proxy_snapshot(transport).await
-    }
-}
-
-#[async_trait]
 impl ModelFetchTransportRuntime for AppState {
     async fn resolve_local_oauth_request_auth(
         &self,

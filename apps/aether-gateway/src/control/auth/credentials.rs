@@ -375,20 +375,13 @@ mod tests {
     }
 
     #[test]
-    fn extract_requested_model_handles_gemini_generation_and_operation_paths() {
+    fn extract_requested_model_handles_gemini_generation_paths() {
         let generation_decision = GatewayControlDecision::synthetic(
             "/v1beta/models/gemini-2.5-pro:generateContent",
             Some("ai_public".to_string()),
             Some("gemini".to_string()),
             Some("generate_content".to_string()),
             Some("gemini:generate_content".to_string()),
-        );
-        let operation_decision = GatewayControlDecision::synthetic(
-            "/v1beta/models/veo-3/operations/task-123:cancel",
-            Some("ai_public".to_string()),
-            Some("gemini".to_string()),
-            Some("video".to_string()),
-            Some("gemini:video".to_string()),
         );
         let headers = http::HeaderMap::new();
 
@@ -401,16 +394,6 @@ mod tests {
             )
             .as_deref(),
             Some("gemini-2.5-pro")
-        );
-        assert_eq!(
-            extract_requested_model(
-                &operation_decision,
-                &uri("/v1beta/models/veo-3/operations/task-123:cancel"),
-                &headers,
-                &Bytes::new(),
-            )
-            .as_deref(),
-            Some("veo-3")
         );
     }
 

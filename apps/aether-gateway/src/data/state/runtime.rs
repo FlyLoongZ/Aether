@@ -16,31 +16,28 @@ use super::{
     DataLayerError, DatabaseMaintenanceSummary, DecisionTrace, DeleteAdminRedeemCodeBatchInput,
     DisableAdminRedeemCodeBatchInput, DisableAdminRedeemCodeInput, FailAdminWalletRefundInput,
     FailWalletRechargeCheckoutInput, GatewayDataState, GatewayProviderTransportSnapshot,
-    LocalVideoTaskReadResponse, PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigRecord,
-    PaymentGatewaySecretCasUpdate, PrepareAdminUserWalletBalanceBatchInput,
-    PrepareAdminUserWalletBalanceBatchOutcome, ProcessAdminWalletRefundInput,
-    ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome, ReclaimWalletRechargeCheckoutInput,
-    ReconcileUsagePolicyCostInput, RedeemWalletCodeInput, RedeemWalletCodeOutcome,
-    ReleaseUsagePolicyRequestAdmissionInput, RequestAuditBundle, RequestCandidateTrace,
-    ReserveUsagePolicyCostInput, ReserveUsagePolicyCostOutcome, ReserveUsagePolicyRequestInput,
-    ReserveUsagePolicyRequestOutcome, StoredAdminAuditLogPage, StoredAdminPaymentCallbackPage,
-    StoredAdminPaymentOrder, StoredAdminPaymentOrderPage, StoredAdminRedeemCodeBatch,
-    StoredAdminRedeemCodeBatchPage, StoredAdminRedeemCodePage, StoredAdminWalletLedgerPage,
-    StoredAdminWalletListPage, StoredAdminWalletRefund, StoredAdminWalletRefundPage,
-    StoredAdminWalletRefundRequestPage, StoredAdminWalletTransaction,
+    PaymentGatewayConfigCasWriteInput, PaymentGatewayConfigRecord, PaymentGatewaySecretCasUpdate,
+    PrepareAdminUserWalletBalanceBatchInput, PrepareAdminUserWalletBalanceBatchOutcome,
+    ProcessAdminWalletRefundInput, ProcessPaymentCallbackInput, ProcessPaymentCallbackOutcome,
+    ReclaimWalletRechargeCheckoutInput, ReconcileUsagePolicyCostInput, RedeemWalletCodeInput,
+    RedeemWalletCodeOutcome, ReleaseUsagePolicyRequestAdmissionInput, RequestAuditBundle,
+    RequestCandidateTrace, ReserveUsagePolicyCostInput, ReserveUsagePolicyCostOutcome,
+    ReserveUsagePolicyRequestInput, ReserveUsagePolicyRequestOutcome, StoredAdminAuditLogPage,
+    StoredAdminPaymentCallbackPage, StoredAdminPaymentOrder, StoredAdminPaymentOrderPage,
+    StoredAdminRedeemCodeBatch, StoredAdminRedeemCodeBatchPage, StoredAdminRedeemCodePage,
+    StoredAdminWalletLedgerPage, StoredAdminWalletListPage, StoredAdminWalletRefund,
+    StoredAdminWalletRefundPage, StoredAdminWalletRefundRequestPage, StoredAdminWalletTransaction,
     StoredAdminWalletTransactionPage, StoredAnnouncement, StoredAnnouncementPage,
     StoredBackgroundTaskEvent, StoredBackgroundTaskRun, StoredBackgroundTaskRunPage,
     StoredBillingModelContext, StoredProviderQuotaSnapshot, StoredProviderUsageSummary,
     StoredRequestUsageAudit, StoredSuspiciousActivity, StoredUsagePolicyCostReservation,
     StoredUsagePolicyRequestAdmission, StoredUsageSettlement, StoredUserAuditLogPage,
-    StoredUserAuthRecord, StoredUserExportRow, StoredUserSummary, StoredVideoTask,
-    StoredWalletDailyUsageLedger, StoredWalletDailyUsageLedgerPage, StoredWalletSnapshot,
-    UpdateAdminWalletRefundGatewayInput, UpdateAnnouncementRecord,
-    UpdateWalletRechargeCheckoutInput, UpsertBackgroundTaskEvent, UpsertBackgroundTaskRun,
-    UpsertUsageRecord, UpsertVideoTask, UsageSettlementInput, UserDailyQuotaAvailabilityRecord,
-    UserPlanEntitlementRecord, VideoTaskLookupKey, VideoTaskModelCount, VideoTaskQueryFilter,
-    VideoTaskStatusCount, WalletDailyUsageAggregationInput, WalletDailyUsageAggregationResult,
-    WalletLookupKey, WalletMutationOutcome,
+    StoredUserAuthRecord, StoredUserExportRow, StoredUserSummary, StoredWalletDailyUsageLedger,
+    StoredWalletDailyUsageLedgerPage, StoredWalletSnapshot, UpdateAdminWalletRefundGatewayInput,
+    UpdateAnnouncementRecord, UpdateWalletRechargeCheckoutInput, UpsertBackgroundTaskEvent,
+    UpsertBackgroundTaskRun, UpsertUsageRecord, UsageSettlementInput,
+    UserDailyQuotaAvailabilityRecord, UserPlanEntitlementRecord, WalletDailyUsageAggregationInput,
+    WalletDailyUsageAggregationResult, WalletLookupKey, WalletMutationOutcome,
 };
 use aether_data_contracts::repository::billing::{
     ProviderExpenseInput, ProviderExpensePage, ProviderExpenseQuery, ProviderExpenseRecord,
@@ -53,9 +50,6 @@ use aether_data_contracts::repository::usage::{
     UsageDailyHeatmapQuery,
 };
 use aether_runtime_state::RuntimeQueueStore;
-#[cfg(test)]
-use aether_video_tasks_core::read_data_backed_video_task_response;
-use aether_video_tasks_core::read_data_backed_video_task_response_for_user;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -494,143 +488,6 @@ impl GatewayDataState {
                     .await
             }
             None => Ok(false),
-        }
-    }
-
-    pub(crate) async fn find_video_task(
-        &self,
-        key: VideoTaskLookupKey<'_>,
-    ) -> Result<Option<StoredVideoTask>, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.find(key).await,
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn find_video_task_for_user(
-        &self,
-        key: VideoTaskLookupKey<'_>,
-        user_id: &str,
-    ) -> Result<Option<StoredVideoTask>, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.find_for_user(key, user_id).await,
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn list_video_task_page(
-        &self,
-        filter: &VideoTaskQueryFilter,
-        offset: usize,
-        limit: usize,
-    ) -> Result<Vec<StoredVideoTask>, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.list_page(filter, offset, limit).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn list_video_task_page_summary(
-        &self,
-        filter: &VideoTaskQueryFilter,
-        offset: usize,
-        limit: usize,
-    ) -> Result<Vec<StoredVideoTask>, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.list_page_summary(filter, offset, limit).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn count_video_tasks(
-        &self,
-        filter: &VideoTaskQueryFilter,
-    ) -> Result<u64, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.count(filter).await,
-            None => Ok(0),
-        }
-    }
-
-    pub(crate) async fn count_video_tasks_by_status(
-        &self,
-        filter: &VideoTaskQueryFilter,
-    ) -> Result<Vec<VideoTaskStatusCount>, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.count_by_status(filter).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn count_distinct_video_task_users(
-        &self,
-        filter: &VideoTaskQueryFilter,
-    ) -> Result<u64, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.count_distinct_users(filter).await,
-            None => Ok(0),
-        }
-    }
-
-    pub(crate) async fn top_video_task_models(
-        &self,
-        filter: &VideoTaskQueryFilter,
-        limit: usize,
-    ) -> Result<Vec<VideoTaskModelCount>, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => repository.top_models(filter, limit).await,
-            None => Ok(Vec::new()),
-        }
-    }
-
-    pub(crate) async fn count_video_tasks_created_since(
-        &self,
-        filter: &VideoTaskQueryFilter,
-        created_since_unix_secs: u64,
-    ) -> Result<u64, DataLayerError> {
-        match &self.video_task_reader {
-            Some(repository) => {
-                repository
-                    .count_created_since(filter, created_since_unix_secs)
-                    .await
-            }
-            None => Ok(0),
-        }
-    }
-
-    pub(crate) async fn upsert_video_task(
-        &self,
-        task: UpsertVideoTask,
-    ) -> Result<Option<StoredVideoTask>, DataLayerError> {
-        match &self.video_task_writer {
-            Some(repository) => repository.upsert(task).await.map(Some),
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn update_active_video_task(
-        &self,
-        task: UpsertVideoTask,
-    ) -> Result<Option<StoredVideoTask>, DataLayerError> {
-        match &self.video_task_writer {
-            Some(repository) => repository.update_if_active(task).await,
-            None => Ok(None),
-        }
-    }
-
-    pub(crate) async fn claim_due_video_tasks(
-        &self,
-        now_unix_secs: u64,
-        claim_until_unix_secs: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredVideoTask>, DataLayerError> {
-        match &self.video_task_writer {
-            Some(repository) => {
-                repository
-                    .claim_due(now_unix_secs, claim_until_unix_secs, limit)
-                    .await
-            }
-            None => Ok(Vec::new()),
         }
     }
 
@@ -2652,25 +2509,6 @@ impl GatewayDataState {
         key_id: &str,
     ) -> Result<Option<GatewayProviderTransportSnapshot>, DataLayerError> {
         read_provider_transport_snapshot(self, provider_id, endpoint_id, key_id).await
-    }
-
-    #[cfg(test)]
-    pub(crate) async fn read_video_task_response(
-        &self,
-        route_family: Option<&str>,
-        request_path: &str,
-    ) -> Result<Option<LocalVideoTaskReadResponse>, DataLayerError> {
-        read_data_backed_video_task_response(self, route_family, request_path).await
-    }
-
-    pub(crate) async fn read_video_task_response_for_user(
-        &self,
-        route_family: Option<&str>,
-        request_path: &str,
-        user_id: &str,
-    ) -> Result<Option<LocalVideoTaskReadResponse>, DataLayerError> {
-        read_data_backed_video_task_response_for_user(self, route_family, request_path, user_id)
-            .await
     }
 
     pub(crate) async fn find_background_task_run(

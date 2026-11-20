@@ -21,10 +21,9 @@ use crate::ai_serving::api::{
     build_local_openai_responses_stream_attempt_source_for_kind,
     build_local_openai_responses_sync_attempt_source_for_kind,
     build_local_same_format_stream_attempt_source, build_local_same_format_sync_attempt_source,
-    build_local_video_sync_attempt_source_for_kind, build_standard_family_stream_attempt_source,
-    build_standard_family_sync_attempt_source, parse_direct_request_body,
-    resolve_claude_stream_spec, resolve_claude_sync_spec, resolve_gemini_stream_spec,
-    resolve_gemini_sync_spec, resolve_local_same_format_stream_spec,
+    build_standard_family_stream_attempt_source, build_standard_family_sync_attempt_source,
+    parse_direct_request_body, resolve_claude_stream_spec, resolve_claude_sync_spec,
+    resolve_gemini_stream_spec, resolve_gemini_sync_spec, resolve_local_same_format_stream_spec,
     resolve_local_same_format_sync_spec, set_local_openai_chat_execution_exhausted_diagnostic,
     set_local_openai_image_execution_exhausted_diagnostic, AiStreamAttempt, AiSyncAttempt,
     LocalCoreSyncErrorKind, LocalStandardSpec,
@@ -1450,51 +1449,6 @@ pub(crate) async fn maybe_execute_stream_via_local_image_decision(
     Ok(outcome)
 }
 
-pub(crate) async fn maybe_execute_sync_via_local_video_decision(
-    state: &AppState,
-    parts: &http::request::Parts,
-    body_json: &serde_json::Value,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-    transfer_tracker: &ProviderTransferTracker,
-) -> Result<LocalExecutionRequestOutcome, GatewayError> {
-    let Some((attempt_source, _candidate_count)) = build_local_video_sync_attempt_source_for_kind(
-        state, parts, body_json, trace_id, decision, plan_kind,
-    )
-    .await?
-    else {
-        return Ok(LocalExecutionRequestOutcome::NoPath);
-    };
-
-    execute_sync_attempt_source_with_transfer_tracker::<AiSyncAttempt, _>(
-        state,
-        parts,
-        trace_id,
-        decision,
-        plan_kind,
-        attempt_source,
-        transfer_tracker,
-    )
-    .await
-}
-
-fn supports_local_video_get(
-    parts: &http::request::Parts,
-    decision: &GatewayControlDecision,
-) -> bool {
-    parts.method == http::Method::GET
-        && decision.route_kind.as_deref() == Some("video")
-        && (crate::video_tasks::resolve_video_task_read_lookup_key(
-            decision.route_family.as_deref(),
-            parts.uri.path(),
-        )
-        .is_some()
-            || (decision.route_family.as_deref() == Some("openai")
-                && crate::video_tasks::extract_openai_task_id_from_content_path(parts.uri.path())
-                    .is_some()))
-}
-
 pub(crate) fn maybe_execute_sync_request<'a>(
     state: &'a AppState,
     parts: &'a http::request::Parts,
@@ -1508,7 +1462,7 @@ pub(crate) fn maybe_execute_sync_request<'a>(
         };
         #[cfg(not(test))]
         {
-            if parts.method != http::Method::POST && !supports_local_video_get(parts, decision) {
+            if parts.method != http::Method::POST {
                 return Ok(LocalExecutionRequestOutcome::NoPath);
             }
             return maybe_execute_sync_local_path(state, parts, body_bytes, trace_id, decision)
@@ -1521,7 +1475,6 @@ pub(crate) fn maybe_execute_sync_request<'a>(
                 .unwrap_or_default()
                 .is_empty()
                 && parts.method != http::Method::POST
-                && !supports_local_video_get(parts, decision)
             {
                 return Ok(LocalExecutionRequestOutcome::NoPath);
             }
@@ -1543,7 +1496,7 @@ pub(crate) fn maybe_execute_stream_request<'a>(
         };
         #[cfg(not(test))]
         {
-            if parts.method != http::Method::POST && !supports_local_video_get(parts, decision) {
+            if parts.method != http::Method::POST {
                 return Ok(LocalExecutionRequestOutcome::NoPath);
             }
             return maybe_execute_stream_local_path(state, parts, body_bytes, trace_id, decision)
@@ -1556,7 +1509,6 @@ pub(crate) fn maybe_execute_stream_request<'a>(
                 .unwrap_or_default()
                 .is_empty()
                 && parts.method != http::Method::POST
-                && !supports_local_video_get(parts, decision)
             {
                 return Ok(LocalExecutionRequestOutcome::NoPath);
             }

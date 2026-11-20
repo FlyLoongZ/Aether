@@ -93,9 +93,9 @@ fn parse_admin_billing_rule_request(
         Err(detail) => return Err(build_admin_billing_bad_request_response(detail).into()),
     };
     let task_type = request.task_type.trim().to_ascii_lowercase();
-    if !matches!(task_type.as_str(), "chat" | "video" | "image" | "audio") {
+    if !matches!(task_type.as_str(), "chat" | "image" | "audio") {
         return Err(build_admin_billing_bad_request_response(
-            "task_type must be one of chat, video, image, audio",
+            "task_type must be one of chat, image, audio",
         )
         .into());
     }

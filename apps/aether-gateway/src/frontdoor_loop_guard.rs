@@ -7,10 +7,6 @@ const DEFAULT_APP_PORT: u16 = 8084;
 static GATEWAY_FRONTDOOR_APP_PORT: OnceLock<u16> = OnceLock::new();
 
 pub(crate) fn frontdoor_self_loop_public_ai_path(path: &str) -> bool {
-    let path = path
-        .strip_prefix("/openai")
-        .filter(|p| *p == "/v1/videos" || p.starts_with("/v1/videos/"))
-        .unwrap_or(path);
     matches!(
         path,
         "/v1/messages"
@@ -27,12 +23,8 @@ pub(crate) fn frontdoor_self_loop_public_ai_path(path: &str) -> bool {
             | "/v1/alpha/search"
             | "/v1beta/files"
             | "/upload/v1beta/files"
-            | "/v1beta/operations"
-            | "/v1/videos"
     ) || path.starts_with("/v1/live/")
-        || path.starts_with("/v1/videos/")
         || path.starts_with("/v1beta/files/")
-        || path.starts_with("/v1beta/operations/")
         || path.starts_with("/v1internal:")
         || is_gemini_generation_path(path)
 }
@@ -95,9 +87,7 @@ fn is_gemini_generation_path(path: &str) -> bool {
     path.strip_prefix("/v1/models/")
         .or_else(|| path.strip_prefix("/v1beta/models/"))
         .is_some_and(|suffix| {
-            suffix.contains(":generateContent")
-                || suffix.contains(":streamGenerateContent")
-                || suffix.contains(":predictLongRunning")
+            suffix.contains(":generateContent") || suffix.contains(":streamGenerateContent")
         })
 }
 

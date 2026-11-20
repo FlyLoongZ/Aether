@@ -1,15 +1,8 @@
 use super::{AdminAppState, AdminRequestContext};
-use crate::{AppState, GatewayError};
-use axum::body::{Body, Bytes};
-use axum::http::{HeaderMap, Response};
+use crate::AppState;
+use axum::body::Bytes;
+use axum::http::HeaderMap;
 use std::net::SocketAddr;
-
-pub(crate) enum AdminCancelVideoTaskError {
-    NotFound,
-    InvalidStatus(aether_data_contracts::repository::video_tasks::VideoTaskStatus),
-    Response(Box<Response<Body>>),
-    Gateway(GatewayError),
-}
 
 #[derive(Clone, Copy)]
 pub(crate) struct AdminRouteRequest<'a> {

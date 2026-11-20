@@ -15,10 +15,6 @@ use crate::execution_runtime::submission::{
     resolve_core_error_background_report_kind, resolve_core_success_background_report_kind,
     resolve_local_core_error_response_body_json,
 };
-use crate::execution_runtime::sync::{
-    resolve_local_sync_error_background_report_kind,
-    resolve_local_sync_success_background_report_kind,
-};
 use crate::executor::{
     should_bypass_execution_runtime_decision, should_bypass_execution_runtime_plan,
 };
@@ -127,8 +123,6 @@ fn resolve_core_error_background_report_kind_maps_all_core_finalize_kinds() {
             Some("openai_responses_compact_sync_error"),
         ),
         ("claude_cli_sync_finalize", Some("claude_cli_sync_error")),
-        ("openai_video_create_sync_finalize", None),
-        ("gemini_video_cancel_sync_finalize", None),
         ("unknown_finalize_kind", None),
     ];
 
@@ -177,8 +171,6 @@ fn resolve_core_success_background_report_kind_maps_all_core_finalize_kinds() {
             Some("openai_responses_compact_sync_success"),
         ),
         ("claude_cli_sync_finalize", Some("claude_cli_sync_success")),
-        ("openai_video_create_sync_finalize", None),
-        ("gemini_video_cancel_sync_finalize", None),
         ("unknown_finalize_kind", None),
     ];
 
@@ -493,73 +485,6 @@ fn resolve_local_core_error_response_body_json_builds_client_error_from_plain_te
 }
 
 #[test]
-fn resolve_local_sync_success_background_report_kind_maps_video_finalize_kinds() {
-    let cases = [
-        (
-            "openai_video_delete_sync_finalize",
-            Some("openai_video_delete_sync_success"),
-        ),
-        (
-            "openai_video_cancel_sync_finalize",
-            Some("openai_video_cancel_sync_success"),
-        ),
-        (
-            "gemini_video_cancel_sync_finalize",
-            Some("gemini_video_cancel_sync_success"),
-        ),
-        ("openai_video_create_sync_finalize", None),
-        ("unknown_finalize_kind", None),
-    ];
-
-    for (report_kind, expected) in cases {
-        assert_eq!(
-            resolve_local_sync_success_background_report_kind(report_kind),
-            expected,
-            "unexpected mapping for {report_kind}"
-        );
-    }
-}
-
-#[test]
-fn resolve_local_sync_error_background_report_kind_maps_video_finalize_kinds() {
-    let cases = [
-        (
-            "openai_video_create_sync_finalize",
-            Some("openai_video_create_sync_error"),
-        ),
-        (
-            "openai_video_remix_sync_finalize",
-            Some("openai_video_remix_sync_error"),
-        ),
-        (
-            "gemini_video_create_sync_finalize",
-            Some("gemini_video_create_sync_error"),
-        ),
-        (
-            "openai_video_delete_sync_finalize",
-            Some("openai_video_delete_sync_error"),
-        ),
-        (
-            "openai_video_cancel_sync_finalize",
-            Some("openai_video_cancel_sync_error"),
-        ),
-        (
-            "gemini_video_cancel_sync_finalize",
-            Some("gemini_video_cancel_sync_error"),
-        ),
-        ("unknown_finalize_kind", None),
-    ];
-
-    for (report_kind, expected) in cases {
-        assert_eq!(
-            resolve_local_sync_error_background_report_kind(report_kind),
-            expected,
-            "unexpected mapping for {report_kind}"
-        );
-    }
-}
-
-#[test]
 fn generic_decision_builders_require_exact_provider_request() {
     let parts = test_parts();
     let body_json = json!({"messages":[{"role":"user","content":"hi"}]});
@@ -623,17 +548,18 @@ fn generic_decision_builders_require_exact_provider_request() {
 fn passthrough_sync_plan_uses_provider_request_method_override() {
     let request = Request::builder()
         .method("POST")
-        .uri("/v1/videos/task-123/cancel")
+        .uri("/v1beta/files/file-123")
         .body(())
         .expect("request");
     let (parts, _) = request.into_parts();
 
-    let mut payload = missing_exact_provider_request_payload("openai_video_cancel_sync");
-    payload.provider_name = Some("openai".to_string());
-    payload.provider_api_format = Some("openai:video".to_string());
-    payload.client_api_format = Some("openai:video".to_string());
-    payload.model_name = Some("sora-2".to_string());
-    payload.upstream_url = Some("https://api.openai.example/v1/videos/ext-123".to_string());
+    let mut payload = missing_exact_provider_request_payload("gemini_files_delete");
+    payload.provider_name = Some("gemini".to_string());
+    payload.provider_api_format = Some("gemini:files".to_string());
+    payload.client_api_format = Some("gemini:files".to_string());
+    payload.model_name = Some("gemini-2.5-pro".to_string());
+    payload.upstream_url =
+        Some("https://generativelanguage.googleapis.com/v1beta/files/file-123".to_string());
     payload.provider_request_method = Some("DELETE".to_string());
     payload.provider_request_headers = [(
         "authorization".to_string(),
@@ -649,7 +575,7 @@ fn passthrough_sync_plan_uses_provider_request_method_override() {
     assert_eq!(plan_and_report.plan.method, "DELETE");
     assert_eq!(
         plan_and_report.plan.url,
-        "https://api.openai.example/v1/videos/ext-123"
+        "https://generativelanguage.googleapis.com/v1beta/files/file-123"
     );
 }
 

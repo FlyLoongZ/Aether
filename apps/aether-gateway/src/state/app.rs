@@ -14,7 +14,6 @@ use aether_runtime_state::RuntimeState;
 use dashmap::DashMap;
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock, Semaphore};
 
-use super::super::async_task::{VideoTaskPollerConfig, VideoTaskService};
 use super::super::cache::{
     AuthApiKeyFeatureCacheKey, AuthApiKeyIdentityCacheKey, AuthApiKeyLastUsedCache,
     AuthContextCache, AuthSnapshotCache, DashboardResponseCache, JsonValueCache,
@@ -385,8 +384,6 @@ pub struct AppState {
     pub(crate) body_file_store: Option<Arc<aether_body_store::BodyFileStore>>,
     pub(crate) request_activity: Arc<crate::request_activity::RequestActivity>,
     pub(crate) execution_activity: Arc<crate::execution_activity::ExecutionActivity>,
-    pub(crate) video_tasks: Arc<VideoTaskService>,
-    pub(crate) video_task_poller: Option<VideoTaskPollerConfig>,
     pub(crate) frontdoor_runtime_guards: Arc<FrontdoorRuntimeGuardConfig>,
     pub(crate) request_body_buffer_budget: Arc<Semaphore>,
     pub(crate) http_connection_budget: Option<Arc<HttpConnectionBudget>>,

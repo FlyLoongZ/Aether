@@ -70,8 +70,6 @@ const OPENAI_RESPONSES_COMPACT_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
     "当前 OpenAI Responses Compact 请求无法在本地执行：没有匹配到可用的执行路径";
 const OPENAI_SEARCH_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
     "当前 OpenAI Search 请求无法在本地执行：没有匹配到可用的执行路径";
-const OPENAI_VIDEO_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
-    "当前 OpenAI Video 请求无法在本地执行：没有匹配到可用的执行路径";
 const CLAUDE_MESSAGES_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
     "当前 Claude Messages 请求无法在本地执行：没有匹配到可用的执行路径";
 const GEMINI_PUBLIC_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL: &str =
@@ -1976,7 +1974,6 @@ fn local_execution_runtime_miss_route_label(
         "/v1/responses/compact" => "OpenAI Responses Compact",
         "/v1/alpha/search" => "OpenAI Search",
         "/v1/messages" => "Claude Messages",
-        path if path.starts_with("/v1/videos") => "OpenAI Video",
         path if path.starts_with("/upload/v1beta/files") || path.starts_with("/v1beta/files") => {
             "Gemini Files"
         }
@@ -2043,9 +2040,6 @@ fn local_execution_runtime_miss_route_detail(
         }
         "/v1/alpha/search" => Some(OPENAI_SEARCH_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL),
         "/v1/messages" => Some(CLAUDE_MESSAGES_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL),
-        path if path.starts_with("/v1/videos") => {
-            Some(OPENAI_VIDEO_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL)
-        }
         path if path.starts_with("/upload/v1beta/files") || path.starts_with("/v1beta/files") => {
             Some(GEMINI_FILES_LOCAL_EXECUTION_RUNTIME_MISS_DETAIL)
         }

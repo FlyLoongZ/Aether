@@ -645,34 +645,6 @@ async fn gateway_locally_denies_gemini_stream_after_execution_runtime_miss_witho
 }
 
 #[tokio::test]
-async fn gateway_locally_denies_openai_video_after_execution_runtime_miss_without_control_execute_opt_in(
-) {
-    assert_ai_route_locally_denied_after_execution_runtime_miss(
-        "/v1/videos",
-        "openai",
-        "video",
-        "openai:video",
-        "{\"model\":\"sora-2\"}",
-        "当前 OpenAI Video 请求无法在本地执行：没有匹配到可用的执行路径",
-    )
-    .await;
-}
-
-#[tokio::test]
-async fn gateway_locally_denies_gemini_video_after_execution_runtime_miss_without_control_execute_opt_in(
-) {
-    assert_ai_route_locally_denied_after_execution_runtime_miss(
-        "/v1beta/models/veo-3:predictLongRunning",
-        "gemini",
-        "video",
-        "gemini:video",
-        "{\"instances\":[]}",
-        "当前 Gemini Public 请求无法在本地执行：没有匹配到可用的执行路径",
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn gateway_locally_denies_gemini_files_root_after_execution_runtime_miss_without_control_execute_opt_in(
 ) {
     assert_ai_route_locally_denied_after_execution_runtime_miss_with_request(

@@ -6,10 +6,6 @@ mod planner;
 mod pure;
 pub(crate) mod transport;
 
-use axum::http::Uri;
-
-use crate::{AppState, GatewayError};
-
 pub(crate) use self::adaptation::{
     maybe_build_provider_private_stream_normalizer, ProviderPrivateStreamNormalizer,
 };
@@ -38,7 +34,6 @@ pub(crate) use self::planner::{
     build_local_openai_responses_stream_attempt_source_for_kind,
     build_local_openai_responses_sync_attempt_source_for_kind,
     build_local_same_format_stream_attempt_source, build_local_same_format_sync_attempt_source,
-    build_local_video_sync_attempt_source_for_kind,
     build_openai_responses_stream_plan_from_decision, build_provider_key_pool_score_upsert,
     build_standard_family_stream_attempt_source, build_standard_family_sync_attempt_source,
     build_standard_stream_plan_from_decision, build_standard_sync_plan_from_decision,
@@ -101,17 +96,6 @@ pub(crate) fn build_provider_transport_request_url_for_request_body(
         },
         provider_request_body,
     )
-}
-
-pub(crate) async fn resolve_execution_runtime_auth_context(
-    state: &AppState,
-    decision: &GatewayControlDecision,
-    headers: &http::HeaderMap,
-    uri: &Uri,
-    trace_id: &str,
-) -> Result<Option<crate::control::GatewayControlAuthContext>, GatewayError> {
-    crate::control::resolve_execution_runtime_auth_context(state, decision, headers, uri, trace_id)
-        .await
 }
 
 pub(crate) fn collect_control_headers(

@@ -1,17 +1,12 @@
 use aether_ai_serving::{
-    build_ai_execution_decision_from_plan, run_ai_stream_decision_path,
-    AiExecutionDecisionFromPlanParts, AiStreamDecisionPathPort, AiStreamDecisionStep,
+    run_ai_stream_decision_path, AiStreamDecisionPathPort, AiStreamDecisionStep,
 };
 use async_trait::async_trait;
 
-use crate::ai_serving::planner::common::{
-    EXECUTION_RUNTIME_STREAM_DECISION_ACTION, OPENAI_VIDEO_CONTENT_PLAN_KIND,
-};
 use crate::ai_serving::planner::route::{
     is_matching_stream_request, resolve_execution_runtime_stream_plan_kind,
 };
-use crate::ai_serving::{resolve_decision_execution_runtime_auth_context, GatewayControlDecision};
-use crate::state::VideoTaskRouteAccess;
+use crate::ai_serving::GatewayControlDecision;
 use crate::{AiExecutionDecision, AppState, GatewayError};
 
 pub(crate) async fn maybe_build_stream_decision_payload(
@@ -63,16 +58,6 @@ impl AiStreamDecisionPathPort for GatewayStreamDecisionPathPort<'_> {
         step: AiStreamDecisionStep,
     ) -> Result<Option<Self::Decision>, Self::Error> {
         match step {
-            AiStreamDecisionStep::LocalVideoContent => {
-                maybe_build_local_video_task_content_stream_decision_payload(
-                    self.state,
-                    self.parts,
-                    self.trace_id,
-                    self.decision,
-                    self.plan_kind,
-                )
-                .await
-            }
             AiStreamDecisionStep::LocalImage => {
                 super::maybe_build_stream_local_image_decision_payload(
                     self.state,
@@ -141,70 +126,4 @@ impl AiStreamDecisionPathPort for GatewayStreamDecisionPathPort<'_> {
             }
         }
     }
-}
-
-async fn maybe_build_local_video_task_content_stream_decision_payload(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-) -> Result<Option<AiExecutionDecision>, GatewayError> {
-    if plan_kind != OPENAI_VIDEO_CONTENT_PLAN_KIND
-        || decision.route_family.as_deref() != Some("openai")
-    {
-        return Ok(None);
-    }
-
-    let Some(user_id) = decision
-        .auth_context
-        .as_ref()
-        .filter(|auth_context| auth_context.access_allowed)
-        .map(|auth_context| auth_context.user_id.trim())
-        .filter(|value| !value.is_empty())
-    else {
-        return Err(crate::video_tasks::not_found_error());
-    };
-    if state
-        .hydrate_video_task_for_route_for_user(
-            decision.route_family.as_deref(),
-            parts.uri.path(),
-            user_id,
-        )
-        .await?
-        != VideoTaskRouteAccess::Allowed
-    {
-        return Err(crate::video_tasks::not_found_error());
-    }
-
-    let Some(action) = state
-        .video_tasks
-        .prepare_openai_content_stream_action_for_user(
-            parts.uri.path(),
-            parts.uri.query(),
-            trace_id,
-            user_id,
-        )
-    else {
-        return Err(crate::video_tasks::not_found_error());
-    };
-
-    let crate::video_tasks::LocalVideoTaskContentAction::StreamPlan(plan) = action else {
-        return Ok(None);
-    };
-    let plan = *plan;
-
-    Ok(Some(build_ai_execution_decision_from_plan(
-        AiExecutionDecisionFromPlanParts {
-            action: EXECUTION_RUNTIME_STREAM_DECISION_ACTION.to_string(),
-            decision_kind: Some(plan_kind.to_string()),
-            request_id: None,
-            upstream_base_url: None,
-            include_auth_pair: false,
-            plan,
-            report_kind: None,
-            report_context: None,
-            auth_context: resolve_decision_execution_runtime_auth_context(decision),
-        },
-    )))
 }

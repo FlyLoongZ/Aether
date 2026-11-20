@@ -5,25 +5,20 @@ use aether_ai_serving::{
 use async_trait::async_trait;
 use axum::body::{Body, Bytes};
 use axum::http::Response;
-use std::collections::BTreeMap;
 
 use crate::ai_serving::api::{
     is_matching_stream_request, resolve_execution_runtime_stream_plan_kind,
-    supports_stream_execution_decision_kind, AiStreamAttempt, CLAUDE_CHAT_STREAM_PLAN_KIND,
+    supports_stream_execution_decision_kind, CLAUDE_CHAT_STREAM_PLAN_KIND,
     CLAUDE_CLI_STREAM_PLAN_KIND, GEMINI_CHAT_STREAM_PLAN_KIND, GEMINI_FILES_DOWNLOAD_PLAN_KIND,
     OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_IMAGE_STREAM_PLAN_KIND,
     OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND, OPENAI_RESPONSES_STREAM_PLAN_KIND,
-    OPENAI_VIDEO_CONTENT_PLAN_KIND,
 };
-use crate::api::response::build_client_response_from_parts;
 use crate::control::GatewayControlDecision;
 use crate::stage_metrics::observe_gateway_stage_ms;
-use crate::state::VideoTaskRouteAccess;
 use crate::{AppState, GatewayError, GatewayFallbackReason};
 
 use super::{
-    execute_stream_plan_and_reports_with_transfer_tracker, maybe_execute_stream_via_local_decision,
-    maybe_execute_stream_via_local_gemini_files_decision,
+    maybe_execute_stream_via_local_decision, maybe_execute_stream_via_local_gemini_files_decision,
     maybe_execute_stream_via_local_image_decision,
     maybe_execute_stream_via_local_openai_responses_decision,
     maybe_execute_stream_via_local_same_format_provider_decision,
@@ -220,17 +215,6 @@ impl AiStreamExecutionPathPort for GatewayStreamExecutionPathPort<'_> {
     ) -> Result<AiServingExecutionOutcome<Self::Response, Self::Exhaustion>, Self::Error> {
         let step_started_at = std::time::Instant::now();
         let outcome = match step {
-            AiStreamExecutionStep::LocalVideoContent => {
-                maybe_execute_local_video_task_content_stream(
-                    self.state,
-                    self.parts,
-                    self.trace_id,
-                    self.decision,
-                    self.plan_kind,
-                    &self.transfer_tracker,
-                )
-                .await?
-            }
             AiStreamExecutionStep::LocalImage => {
                 maybe_execute_stream_via_local_image_decision(
                     self.state,
@@ -335,8 +319,6 @@ impl AiStreamExecutionPathPort for GatewayStreamExecutionPathPort<'_> {
     }
 }
 
-const STREAM_STEPS_VIDEO_CONTENT: &[AiStreamExecutionStep] =
-    &[AiStreamExecutionStep::LocalVideoContent];
 const STREAM_STEPS_OPENAI_IMAGE: &[AiStreamExecutionStep] = &[AiStreamExecutionStep::LocalImage];
 const STREAM_STEPS_OPENAI_CHAT: &[AiStreamExecutionStep] =
     &[AiStreamExecutionStep::LocalOpenAiChat];
@@ -351,7 +333,6 @@ const STREAM_STEPS_GEMINI_FILES: &[AiStreamExecutionStep] =
 
 fn stream_execution_steps_for_plan_kind(plan_kind: &str) -> &'static [AiStreamExecutionStep] {
     match plan_kind {
-        OPENAI_VIDEO_CONTENT_PLAN_KIND => STREAM_STEPS_VIDEO_CONTENT,
         OPENAI_IMAGE_STREAM_PLAN_KIND => STREAM_STEPS_OPENAI_IMAGE,
         OPENAI_CHAT_STREAM_PLAN_KIND => STREAM_STEPS_OPENAI_CHAT,
         OPENAI_RESPONSES_STREAM_PLAN_KIND | OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND => {
@@ -367,7 +348,6 @@ fn stream_execution_steps_for_plan_kind(plan_kind: &str) -> &'static [AiStreamEx
 
 fn stream_path_stage_name(step: AiStreamExecutionStep) -> &'static str {
     match step {
-        AiStreamExecutionStep::LocalVideoContent => "stream_path_step_video_content",
         AiStreamExecutionStep::LocalImage => "stream_path_step_image",
         AiStreamExecutionStep::LocalOpenAiChat => "stream_path_step_openai_chat",
         AiStreamExecutionStep::LocalOpenAiResponses => "stream_path_step_openai_responses",
@@ -419,133 +399,4 @@ fn gateway_fallback_reason(reason: AiPlanFallbackReason) -> GatewayFallbackReaso
             GatewayFallbackReason::SchedulerDecisionUnsupported
         }
     }
-}
-
-async fn maybe_execute_local_video_task_content_stream(
-    state: &AppState,
-    parts: &http::request::Parts,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-    transfer_tracker: &ProviderTransferTracker,
-) -> Result<LocalExecutionRequestOutcome, GatewayError> {
-    if plan_kind != OPENAI_VIDEO_CONTENT_PLAN_KIND
-        || decision.route_family.as_deref() != Some("openai")
-    {
-        return Ok(LocalExecutionRequestOutcome::NoPath);
-    }
-
-    let Some(user_id) = decision
-        .auth_context
-        .as_ref()
-        .filter(|auth_context| auth_context.access_allowed)
-        .map(|auth_context| auth_context.user_id.trim())
-        .filter(|value| !value.is_empty())
-    else {
-        return Ok(LocalExecutionRequestOutcome::Responded(
-            build_json_response(
-                trace_id,
-                decision,
-                404,
-                &crate::video_tasks::not_found_body(),
-            )?,
-        ));
-    };
-
-    if state
-        .hydrate_video_task_for_route_for_user(
-            decision.route_family.as_deref(),
-            parts.uri.path(),
-            user_id,
-        )
-        .await?
-        != VideoTaskRouteAccess::Allowed
-    {
-        return Ok(LocalExecutionRequestOutcome::Responded(
-            build_json_response(
-                trace_id,
-                decision,
-                404,
-                &crate::video_tasks::not_found_body(),
-            )?,
-        ));
-    }
-
-    if let Some(task_id) =
-        crate::video_tasks::extract_openai_task_id_from_content_path(parts.uri.path())
-    {
-        let refresh_path = format!("/v1/videos/{task_id}");
-        if let Some(refresh_plan) = state.video_tasks.prepare_read_refresh_sync_plan_for_user(
-            Some("openai"),
-            &refresh_path,
-            user_id,
-            trace_id,
-        ) {
-            state.execute_video_task_refresh_plan(&refresh_plan).await?;
-        }
-    }
-
-    let Some(action) = state
-        .video_tasks
-        .prepare_openai_content_stream_action_for_user(
-            parts.uri.path(),
-            parts.uri.query(),
-            trace_id,
-            user_id,
-        )
-    else {
-        return Ok(LocalExecutionRequestOutcome::Responded(
-            build_json_response(
-                trace_id,
-                decision,
-                404,
-                &crate::video_tasks::not_found_body(),
-            )?,
-        ));
-    };
-
-    match action {
-        crate::video_tasks::LocalVideoTaskContentAction::Immediate {
-            status_code,
-            body_json,
-        } => Ok(LocalExecutionRequestOutcome::Responded(
-            build_json_response(trace_id, decision, status_code, &body_json)?,
-        )),
-        crate::video_tasks::LocalVideoTaskContentAction::StreamPlan(plan) => {
-            let plan = *plan;
-            execute_stream_plan_and_reports_with_transfer_tracker(
-                state,
-                trace_id,
-                decision,
-                plan_kind,
-                vec![AiStreamAttempt {
-                    plan,
-                    report_kind: None,
-                    report_context: None,
-                }],
-                transfer_tracker,
-            )
-            .await
-        }
-    }
-}
-
-fn build_json_response(
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    status_code: u16,
-    body_json: &serde_json::Value,
-) -> Result<Response<Body>, GatewayError> {
-    let body_bytes =
-        serde_json::to_vec(body_json).map_err(|err| GatewayError::Internal(err.to_string()))?;
-    let mut headers = BTreeMap::new();
-    headers.insert("content-type".to_string(), "application/json".to_string());
-    headers.insert("content-length".to_string(), body_bytes.len().to_string());
-    build_client_response_from_parts(
-        status_code,
-        &headers,
-        Body::from(body_bytes),
-        trace_id,
-        Some(decision),
-    )
 }

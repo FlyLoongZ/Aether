@@ -191,6 +191,7 @@ fn credential_value_len(value: &str, unquoted_limit: usize) -> usize {
 
 #[derive(Debug, Clone)]
 pub(crate) enum GatewayError {
+    #[allow(dead_code)]
     UpstreamUnavailable {
         trace_id: String,
         message: String,

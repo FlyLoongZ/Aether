@@ -232,11 +232,11 @@ fn sample_system_import_payload() -> Value {
                 "auth_type": "api_key",
                 "auth_type_by_format": {
                     "openai:chat": "api_key",
-                    "openai:video": "bearer"
+                    "openai:embedding": "bearer"
                 },
                 "allow_auth_channel_mismatch_formats": [
                     "openai:chat",
-                    "openai:video"
+                    "openai:embedding"
                 ],
                 "api_key": "sk-import-123",
                 "internal_priority": 5,

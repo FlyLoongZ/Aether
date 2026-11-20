@@ -31,7 +31,6 @@ fn catalog_covers_known_admin_auth_scopes() {
         "tasks",
         "usage",
         "users",
-        "video_tasks",
         "wallets",
     ];
 

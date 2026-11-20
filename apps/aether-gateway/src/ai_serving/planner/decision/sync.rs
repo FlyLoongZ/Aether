@@ -1,22 +1,11 @@
-use aether_ai_serving::{
-    build_ai_execution_decision_from_plan, infer_ai_upstream_base_url, run_ai_sync_decision_path,
-    AiExecutionDecisionFromPlanParts, AiSyncDecisionPathPort, AiSyncDecisionStep,
-};
+use aether_ai_serving::{run_ai_sync_decision_path, AiSyncDecisionPathPort, AiSyncDecisionStep};
 use async_trait::async_trait;
-use tracing::debug;
 
 use crate::ai_serving::planner::common::{
-    EXECUTION_RUNTIME_SYNC_DECISION_ACTION, GEMINI_FILES_DELETE_PLAN_KIND,
-    GEMINI_FILES_GET_PLAN_KIND, GEMINI_FILES_LIST_PLAN_KIND, GEMINI_VIDEO_CANCEL_SYNC_PLAN_KIND,
-    OPENAI_VIDEO_CANCEL_SYNC_PLAN_KIND, OPENAI_VIDEO_DELETE_SYNC_PLAN_KIND,
-    OPENAI_VIDEO_REMIX_SYNC_PLAN_KIND,
+    GEMINI_FILES_DELETE_PLAN_KIND, GEMINI_FILES_GET_PLAN_KIND, GEMINI_FILES_LIST_PLAN_KIND,
 };
 use crate::ai_serving::planner::route::resolve_execution_runtime_sync_plan_kind;
-use crate::ai_serving::{
-    build_execution_runtime_auth_context, resolve_execution_runtime_auth_context,
-    GatewayControlDecision,
-};
-use crate::state::VideoTaskRouteAccess;
+use crate::ai_serving::GatewayControlDecision;
 use crate::{AiExecutionDecision, AppState, GatewayError};
 
 pub(crate) async fn maybe_build_sync_decision_payload(
@@ -79,28 +68,6 @@ impl AiSyncDecisionPathPort for GatewaySyncDecisionPathPort<'_> {
         step: AiSyncDecisionStep,
     ) -> Result<Option<Self::Decision>, Self::Error> {
         match step {
-            AiSyncDecisionStep::VideoTaskFollowUp => {
-                maybe_build_local_video_task_follow_up_sync_decision_payload(
-                    self.state,
-                    self.parts,
-                    self.body_json,
-                    self.trace_id,
-                    self.decision,
-                    self.plan_kind,
-                )
-                .await
-            }
-            AiSyncDecisionStep::LocalVideo => {
-                super::maybe_build_sync_local_video_decision_payload(
-                    self.state,
-                    self.parts,
-                    self.body_json,
-                    self.trace_id,
-                    self.decision,
-                    self.plan_kind,
-                )
-                .await
-            }
             AiSyncDecisionStep::LocalImage => {
                 super::maybe_build_sync_local_image_decision_payload(
                     self.state,
@@ -172,96 +139,4 @@ impl AiSyncDecisionPathPort for GatewaySyncDecisionPathPort<'_> {
             }
         }
     }
-}
-
-async fn maybe_build_local_video_task_follow_up_sync_decision_payload(
-    state: &AppState,
-    parts: &http::request::Parts,
-    body_json: &serde_json::Value,
-    trace_id: &str,
-    decision: &GatewayControlDecision,
-    plan_kind: &str,
-) -> Result<Option<AiExecutionDecision>, GatewayError> {
-    if !matches!(
-        plan_kind,
-        OPENAI_VIDEO_REMIX_SYNC_PLAN_KIND
-            | OPENAI_VIDEO_CANCEL_SYNC_PLAN_KIND
-            | OPENAI_VIDEO_DELETE_SYNC_PLAN_KIND
-            | GEMINI_VIDEO_CANCEL_SYNC_PLAN_KIND
-    ) {
-        return Ok(None);
-    }
-
-    let auth_context = resolve_execution_runtime_auth_context(
-        state,
-        decision,
-        &parts.headers,
-        &parts.uri,
-        trace_id,
-    )
-    .await?;
-    let Some(auth_context) = auth_context else {
-        return Err(crate::video_tasks::not_found_error());
-    };
-    if !auth_context.access_allowed || auth_context.user_id.trim().is_empty() {
-        return Err(crate::video_tasks::not_found_error());
-    }
-    if state
-        .hydrate_video_task_for_route_for_user(
-            decision.route_family.as_deref(),
-            parts.uri.path(),
-            &auth_context.user_id,
-        )
-        .await?
-        != VideoTaskRouteAccess::Allowed
-    {
-        return Err(crate::video_tasks::not_found_error());
-    }
-    let Some(follow_up) = state.video_tasks.prepare_follow_up_sync_plan_for_user(
-        plan_kind,
-        parts.uri.path(),
-        Some(body_json),
-        Some(&auth_context),
-        trace_id,
-    ) else {
-        return Err(crate::video_tasks::not_found_error());
-    };
-
-    let aether_video_tasks_core::LocalVideoTaskFollowUpPlan {
-        plan,
-        report_kind,
-        report_context,
-    } = follow_up;
-    let upstream_base_url = infer_ai_upstream_base_url(&plan.url);
-
-    debug!(
-        event_name = "local_video_follow_up_sync_decision_payload_built",
-        log_type = "debug",
-        trace_id = %trace_id,
-        request_id = %trace_id,
-        candidate_id = ?plan.candidate_id,
-        provider_id = %plan.provider_id,
-        endpoint_id = %plan.endpoint_id,
-        key_id = %plan.key_id,
-        plan_kind,
-        downstream_path = %parts.uri.path(),
-        provider_api_format = %plan.provider_api_format,
-        client_api_format = %plan.client_api_format,
-        upstream_origin = %crate::handlers::shared::security_log_url_origin(&plan.url),
-        "gateway built local video follow-up sync decision payload"
-    );
-
-    Ok(Some(build_ai_execution_decision_from_plan(
-        AiExecutionDecisionFromPlanParts {
-            action: EXECUTION_RUNTIME_SYNC_DECISION_ACTION.to_string(),
-            decision_kind: Some(plan_kind.to_string()),
-            request_id: Some(trace_id.to_string()),
-            upstream_base_url,
-            include_auth_pair: true,
-            plan,
-            report_kind,
-            report_context,
-            auth_context: Some(build_execution_runtime_auth_context(&auth_context)),
-        },
-    )))
 }

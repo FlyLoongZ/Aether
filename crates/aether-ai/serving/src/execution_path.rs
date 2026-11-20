@@ -16,8 +16,6 @@ pub enum AiPlanFallbackReason {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiSyncExecutionStep {
-    VideoTaskFollowUp,
-    LocalVideo,
     LocalImage,
     LocalOpenAiChat,
     LocalOpenAiResponses,
@@ -28,7 +26,6 @@ pub enum AiSyncExecutionStep {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiStreamExecutionStep {
-    LocalVideoContent,
     LocalImage,
     LocalOpenAiChat,
     LocalOpenAiResponses,
@@ -38,7 +35,6 @@ pub enum AiStreamExecutionStep {
 }
 
 pub const DEFAULT_STREAM_EXECUTION_STEPS: &[AiStreamExecutionStep] = &[
-    AiStreamExecutionStep::LocalVideoContent,
     AiStreamExecutionStep::LocalImage,
     AiStreamExecutionStep::LocalOpenAiChat,
     AiStreamExecutionStep::LocalOpenAiResponses,
@@ -98,20 +94,8 @@ where
     let mut exhausted = None;
     let mut deferred = None;
 
-    if let Some(response) = absorb_sync_step(
-        port,
-        AiSyncExecutionStep::VideoTaskFollowUp,
-        &mut deferred,
-        &mut exhausted,
-    )
-    .await?
-    {
-        return Ok(response);
-    }
-
     if port.scheduler_decision_supported() {
         for step in [
-            AiSyncExecutionStep::LocalVideo,
             AiSyncExecutionStep::LocalImage,
             AiSyncExecutionStep::LocalOpenAiChat,
             AiSyncExecutionStep::LocalOpenAiResponses,
@@ -164,8 +148,7 @@ where
     let mut deferred = None;
 
     for step in port.stream_execution_steps() {
-        if *step != AiStreamExecutionStep::LocalVideoContent && !port.scheduler_decision_supported()
-        {
+        if !port.scheduler_decision_supported() {
             continue;
         }
         if let Some(response) =
@@ -375,8 +358,6 @@ mod tests {
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
             [
-                "VideoTaskFollowUp",
-                "LocalVideo",
                 "LocalImage",
                 "LocalOpenAiChat",
                 "LocalOpenAiResponses",
@@ -394,7 +375,7 @@ mod tests {
             scheduler_supported: true,
             outcomes: Mutex::new(VecDeque::from([
                 AiServingExecutionOutcome::NoPath,
-                AiServingExecutionOutcome::Exhausted("local_video_exhausted"),
+                AiServingExecutionOutcome::Exhausted("local_image_exhausted"),
             ])),
             calls: Mutex::default(),
         };
@@ -403,13 +384,11 @@ mod tests {
 
         assert!(matches!(
             outcome,
-            AiServingExecutionOutcome::Exhausted("local_video_exhausted")
+            AiServingExecutionOutcome::Exhausted("local_image_exhausted")
         ));
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
             [
-                "VideoTaskFollowUp",
-                "LocalVideo",
                 "LocalImage",
                 "LocalOpenAiChat",
                 "LocalOpenAiResponses",
@@ -440,7 +419,7 @@ mod tests {
         ));
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
-            ["VideoTaskFollowUp", "LocalVideo", "LocalImage"]
+            ["LocalImage", "LocalOpenAiChat", "LocalOpenAiResponses"]
         );
     }
 
@@ -456,7 +435,7 @@ mod tests {
         assert!(matches!(outcome, AiServingExecutionOutcome::NoPath));
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
-            ["LocalVideoContent", "Fallback:SchedulerDecisionUnsupported",]
+            ["Fallback:SchedulerDecisionUnsupported"]
         );
     }
 
@@ -480,7 +459,7 @@ mod tests {
         ));
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
-            ["LocalVideoContent", "LocalImage"]
+            ["LocalImage", "LocalOpenAiChat"]
         );
     }
 
@@ -554,7 +533,6 @@ mod tests {
         assert_eq!(
             port.calls.lock().unwrap().as_slice(),
             [
-                "LocalVideoContent",
                 "LocalImage",
                 "LocalOpenAiChat",
                 "LocalOpenAiResponses",

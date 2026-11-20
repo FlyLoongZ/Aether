@@ -59,8 +59,6 @@ impl GatewayDataState {
                 user_reader: None,
                 user_preferences: None,
                 usage_worker_queue: None,
-                video_task_reader: None,
-                video_task_writer: None,
                 wallet_reader: None,
                 wallet_writer: None,
                 settlement_writer: None,
@@ -131,8 +129,6 @@ impl GatewayDataState {
         let usage_writer = backends.write().usage();
         let user_reader = backends.read().users();
         let usage_worker_queue = None;
-        let video_task_reader = backends.read().video_tasks();
-        let video_task_writer = backends.write().video_tasks();
         let wallet_reader = backends.read().wallets();
         let wallet_writer = backends.write().wallets();
         let settlement_writer = backends.write().settlement();
@@ -175,8 +171,6 @@ impl GatewayDataState {
             user_reader,
             user_preferences: None,
             usage_worker_queue,
-            video_task_reader,
-            video_task_writer,
             wallet_reader,
             wallet_writer,
             settlement_writer,
@@ -387,14 +381,6 @@ impl GatewayDataState {
 
     pub(crate) fn has_usage_worker_queue(&self) -> bool {
         self.usage_worker_queue.is_some()
-    }
-
-    pub(crate) fn has_video_task_reader(&self) -> bool {
-        self.video_task_reader.is_some()
-    }
-
-    pub(crate) fn has_video_task_writer(&self) -> bool {
-        self.video_task_writer.is_some()
     }
 
     pub(crate) fn has_wallet_reader(&self) -> bool {

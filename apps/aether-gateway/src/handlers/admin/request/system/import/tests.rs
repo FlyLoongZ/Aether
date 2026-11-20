@@ -404,14 +404,14 @@ fn config_import_filters_key_format_scoped_fields_to_selected_api_formats() {
     let raw_key = json!({
         "name": "test-key",
         "api_key": "sk-test",
-        "api_formats": ["openai:responses", "openai:video"],
+        "api_formats": ["openai:responses", "openai:embedding"],
         "auth_type_by_format": {
             "openai:responses": "api_key",
-            "openai:video": "bearer"
+            "openai:embedding": "bearer"
         },
         "allow_auth_channel_mismatch_formats": [
             "openai:responses",
-            "openai:video"
+            "openai:embedding"
         ]
     });
     let raw_key = raw_key.as_object().expect("key should be object");
@@ -441,7 +441,7 @@ fn config_import_preserves_explicit_empty_mismatch_scope_after_filtering() {
         "name": "test-key",
         "api_key": "sk-test",
         "api_formats": ["openai:responses"],
-        "allow_auth_channel_mismatch_formats": ["openai:video"]
+        "allow_auth_channel_mismatch_formats": ["openai:embedding"]
     });
     let raw_key = raw_key.as_object().expect("key should be object");
 

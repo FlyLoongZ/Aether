@@ -60,7 +60,7 @@ pub(crate) use self::specialized::{
     build_local_gemini_files_stream_attempt_source_for_kind,
     build_local_gemini_files_sync_attempt_source_for_kind,
     build_local_image_stream_attempt_source_for_kind,
-    build_local_image_sync_attempt_source_for_kind, build_local_video_sync_attempt_source_for_kind,
+    build_local_image_sync_attempt_source_for_kind,
     set_local_openai_image_execution_exhausted_diagnostic,
 };
 pub(crate) use self::standard::{

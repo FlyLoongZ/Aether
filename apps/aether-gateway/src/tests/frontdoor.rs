@@ -14,12 +14,6 @@ use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionRe
 use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
 use aether_data_memory::global_models::InMemoryGlobalModelReadRepository;
 use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
-use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
-
-use aether_data_contracts::repository::video_tasks::{
-    UpsertVideoTask, VideoTaskLookupKey, VideoTaskReadRepository, VideoTaskStatus,
-    VideoTaskWriteRepository,
-};
 
 fn run_frontdoor_async_test<F>(name: &'static str, future: F)
 where

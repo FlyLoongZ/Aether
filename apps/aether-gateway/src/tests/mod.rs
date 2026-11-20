@@ -37,7 +37,6 @@ macro_rules! large_stack_async_test {
 }
 
 mod ai_execute;
-mod async_task;
 mod audit;
 mod concurrency;
 mod control;
@@ -46,7 +45,6 @@ mod frontdoor;
 pub(crate) mod operational_auth;
 pub(crate) mod support;
 mod usage;
-mod video;
 
 pub(super) use super::constants::*;
 pub(super) use super::fallback_metrics::{GatewayFallbackMetricKind, GatewayFallbackReason};

@@ -25,11 +25,10 @@ use super::{
     RequestCandidateReadRepository, RequestCandidateWriteRepository, RoutingGroupReadRepository,
     RoutingGroupWriteRepository, SettlementWriteRepository, StoredSystemConfigEntry,
     StoredUserPreferenceRecord, UsageReadRepository, UsageWriteRepository, UserReadRepository,
-    VideoTaskReadRepository, VideoTaskWriteRepository, WalletReadRepository, WalletWriteRepository,
+    WalletReadRepository, WalletWriteRepository,
 };
 
 mod announcements;
-mod video_tasks;
 
 impl GatewayDataState {
     pub(crate) fn with_user_preferences_for_tests(
@@ -1089,15 +1088,6 @@ impl GatewayDataStateFixture {
     {
         self.state.gemini_file_mapping_reader = Some(repository.clone());
         self.state.gemini_file_mapping_writer = Some(repository);
-        self
-    }
-
-    pub(crate) fn with_video_task_repository<T>(mut self, repository: Arc<T>) -> Self
-    where
-        T: aether_data_contracts::repository::video_tasks::VideoTaskRepository + 'static,
-    {
-        self.state.video_task_reader = Some(repository.clone());
-        self.state.video_task_writer = Some(repository);
         self
     }
 

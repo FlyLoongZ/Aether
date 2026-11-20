@@ -22,7 +22,6 @@ pub(crate) const TASK_KEY_SYSTEM_S3_BACKUP: &str = "system.s3.backup";
 pub(crate) const TASK_KEY_SYSTEM_S3_BACKUP_WORKER: &str = "system.s3.backup.worker";
 pub(crate) const TASK_KEY_USAGE_QUEUE_WORKER: &str = "usage.queue.worker";
 pub(crate) const TASK_KEY_USAGE_COUNTER_FLUSH: &str = "usage.counter.flush.worker";
-pub(crate) const TASK_KEY_VIDEO_TASK_POLLER: &str = "video.task.poller";
 pub(crate) const TASK_KEY_MODEL_FETCH_WORKER: &str = "model.fetch.worker";
 pub(crate) const TASK_KEY_CODEX_CLIENT_PROFILE: &str = "maintenance.codex.client.profile";
 pub(crate) const TASK_KEY_CLAUDE_CODE_CLIENT_PROFILE: &str =
@@ -182,14 +181,6 @@ const TASK_DEFINITIONS: &[TaskDefinition] = &[
         TASK_KEY_USAGE_COUNTER_FLUSH,
         TaskKind::Daemon,
         "daemon",
-        true,
-        true,
-        RETRY_ONCE,
-    ),
-    TaskDefinition::new(
-        TASK_KEY_VIDEO_TASK_POLLER,
-        TaskKind::Scheduled,
-        "interval",
         true,
         true,
         RETRY_ONCE,

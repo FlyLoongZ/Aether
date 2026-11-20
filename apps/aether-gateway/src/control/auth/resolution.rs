@@ -441,6 +441,7 @@ fn local_admin_user_agent(headers: &http::HeaderMap) -> Option<String> {
         .map(|value| value.chars().take(1000).collect())
 }
 
+#[cfg(test)]
 pub(crate) async fn resolve_execution_runtime_auth_context(
     state: &AppState,
     decision: &GatewayControlDecision,

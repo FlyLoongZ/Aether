@@ -242,10 +242,6 @@ pub(crate) fn sanitize_public_model_config_for_user(
             public.insert(key.to_string(), serde_json::Value::Array(values));
         }
     }
-    if let Some(video_billing) = public_video_billing(object.get("billing")) {
-        public.insert("billing".to_string(), video_billing);
-    }
-
     (!public.is_empty()).then(|| serde_json::Value::Object(public))
 }
 
@@ -478,37 +474,6 @@ fn nonnegative_finite_number(value: &serde_json::Value) -> Option<serde_json::Va
         .filter(|value| value.is_finite() && *value >= 0.0)
         .and_then(serde_json::Number::from_f64)
         .map(serde_json::Value::Number)
-}
-
-fn public_video_billing(value: Option<&serde_json::Value>) -> Option<serde_json::Value> {
-    let prices = value?
-        .get("video")?
-        .get("price_per_second_by_resolution")?
-        .as_object()?;
-    let prices = prices
-        .iter()
-        .filter_map(|(resolution, price)| {
-            price
-                .as_f64()
-                .filter(|price| price.is_finite() && *price >= 0.0)
-                .map(|price| {
-                    (
-                        resolution.clone(),
-                        serde_json::Number::from_f64(price)
-                            .map(serde_json::Value::Number)
-                            .expect("finite price should serialize"),
-                    )
-                })
-        })
-        .collect::<serde_json::Map<_, _>>();
-    if prices.is_empty() {
-        return None;
-    }
-    Some(json!({
-        "video": {
-            "price_per_second_by_resolution": prices,
-        }
-    }))
 }
 
 pub(crate) fn admin_requested_force_stream(value: &serde_json::Value) -> bool {
@@ -2339,7 +2304,6 @@ pub(crate) fn api_format_display_name(api_format: &str) -> String {
         "responses" => "Responses",
         "responses:compact" => "Responses Compact",
         "compact" => "Compact",
-        "video" => "Video",
         "image" => "Image",
         "files" => "Files",
         other => other,
@@ -2508,15 +2472,6 @@ mod tests {
             "streaming": true,
             "api_formats": ["openai:responses", {"secret": "nested"}],
             "client_secret": "hidden",
-            "billing": {
-                "video": {
-                    "price_per_second_by_resolution": {
-                        "720p": 0.12,
-                        "internal": "hidden"
-                    },
-                    "private_key": "hidden"
-                }
-            }
         })))
         .expect("public config should remain");
         assert_eq!(config["description"], "Public model");
@@ -2525,12 +2480,8 @@ mod tests {
             config["api_formats"],
             serde_json::json!(["openai:responses"])
         );
-        assert_eq!(
-            config["billing"]["video"]["price_per_second_by_resolution"],
-            serde_json::json!({"720p": 0.12})
-        );
         assert!(config.get("client_secret").is_none());
-        assert!(config["billing"]["video"].get("private_key").is_none());
+        assert!(config.get("billing").is_none());
 
         assert_eq!(
             sanitize_public_model_capabilities(Some(serde_json::json!([

@@ -10,9 +10,9 @@ pub(crate) use crate::ai_serving::{
     build_local_openai_responses_stream_attempt_source_for_kind,
     build_local_openai_responses_sync_attempt_source_for_kind,
     build_local_same_format_stream_attempt_source, build_local_same_format_sync_attempt_source,
-    build_local_video_sync_attempt_source_for_kind, build_standard_family_stream_attempt_source,
-    build_standard_family_sync_attempt_source, maybe_build_stream_plan_payload,
-    maybe_build_sync_plan_payload, set_local_openai_chat_execution_exhausted_diagnostic,
+    build_standard_family_stream_attempt_source, build_standard_family_sync_attempt_source,
+    maybe_build_stream_plan_payload, maybe_build_sync_plan_payload,
+    set_local_openai_chat_execution_exhausted_diagnostic,
     set_local_openai_image_execution_exhausted_diagnostic,
 };
 
@@ -42,11 +42,9 @@ pub(crate) use aether_ai_formats::api::{
     sanitize_request_query_string, LocalCoreSyncErrorKind, LocalStandardSpec,
     StreamingStandardTerminalObserver, CLAUDE_CHAT_STREAM_PLAN_KIND, CLAUDE_CLI_STREAM_PLAN_KIND,
     GEMINI_CHAT_STREAM_PLAN_KIND, GEMINI_FILES_DOWNLOAD_PLAN_KIND,
-    GEMINI_INTERACTIONS_STREAM_PLAN_KIND, GEMINI_VIDEO_CANCEL_SYNC_PLAN_KIND,
-    OPENAI_CHAT_STREAM_PLAN_KIND, OPENAI_IMAGE_STREAM_PLAN_KIND,
-    OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND, OPENAI_RESPONSES_STREAM_PLAN_KIND,
-    OPENAI_VIDEO_CANCEL_SYNC_PLAN_KIND, OPENAI_VIDEO_CONTENT_PLAN_KIND,
-    OPENAI_VIDEO_DELETE_SYNC_PLAN_KIND, OPENAI_VIDEO_REMIX_SYNC_PLAN_KIND,
+    GEMINI_INTERACTIONS_STREAM_PLAN_KIND, OPENAI_CHAT_STREAM_PLAN_KIND,
+    OPENAI_IMAGE_STREAM_PLAN_KIND, OPENAI_RESPONSES_COMPACT_STREAM_PLAN_KIND,
+    OPENAI_RESPONSES_STREAM_PLAN_KIND,
 };
 /// Codex client identity accessors re-exported for out-of-crate probe binaries,
 /// which must reach the runtime profile through this seam.

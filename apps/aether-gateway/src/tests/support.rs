@@ -350,21 +350,6 @@ pub(crate) fn sample_auth_snapshot_claude(
     )
 }
 
-pub(crate) fn sample_auth_snapshot_video(
-    api_key_id: &str,
-    user_id: &str,
-) -> StoredAuthApiKeySnapshot {
-    sample_auth_snapshot_with(
-        api_key_id,
-        user_id,
-        "video-user",
-        "video@example.com",
-        json!(["openai"]),
-        json!(["openai:video"]),
-        json!(["sora-2"]),
-    )
-}
-
 pub(crate) fn sample_currently_usable_auth_snapshot(
     api_key_id: &str,
     user_id: &str,

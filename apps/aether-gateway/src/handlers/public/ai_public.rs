@@ -1,7 +1,6 @@
 use crate::ai_serving::{
     build_core_error_body_for_client_format, normalize_openai_image_quality, LocalCoreSyncErrorKind,
 };
-use crate::async_task::CancelVideoTaskError;
 use crate::control::GatewayControlDecision;
 use crate::control::GatewayPublicRequestContext;
 use crate::handlers::shared::{
@@ -10,23 +9,19 @@ use crate::handlers::shared::{
     CONVERSATION_NOT_SUPPORTED_DETAIL, STORE_TRUE_NOT_SUPPORTED_DETAIL,
 };
 use crate::image_capabilities::openai_image_gateway_max_generation_count;
-use crate::{AppState, GatewayError};
+use crate::AppState;
 use aether_data_contracts::repository::gemini_file_mappings::StoredGeminiFileMapping;
-use aether_data_contracts::repository::video_tasks::{
-    StoredVideoTask, VideoTaskQueryFilter, VideoTaskStatus,
-};
 use axum::body::{Body, Bytes};
 use axum::http::{self, Response};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde_json::{json, Value};
 
-const GEMINI_VIDEO_TASK_NOT_FOUND_DETAIL: &str = "Video task not found";
 const GEMINI_FILE_NOT_FOUND_DETAIL: &str = "File not found";
 const GEMINI_FILES_DATA_UNAVAILABLE_DETAIL: &str = "Gemini Files data is unavailable";
 const AI_PUBLIC_METHOD_NOT_ALLOWED_DETAIL: &str = "Method not allowed";
-const AI_PUBLIC_UNAUTHORIZED_DETAIL: &str = "Unauthorized";
 const AI_PUBLIC_INTERNAL_ERROR_DETAIL: &str = "Service temporarily unavailable";
+#[cfg(test)]
 const AI_PUBLIC_UPSTREAM_ERROR_DETAIL: &str = "Upstream request failed";
 const OPENAI_IMAGE_PROMPT_DETAIL: &str = "图片生成/编辑请求缺少 prompt";
 const OPENAI_IMAGE_EDIT_INPUT_DETAIL: &str = "图片编辑请求至少需要 1 张输入图片";
@@ -165,13 +160,7 @@ pub(crate) async fn maybe_build_local_ai_public_response(
         return Some(response);
     }
 
-    if let Some(response) =
-        maybe_build_local_gemini_files_response(state, request_context, decision).await
-    {
-        return Some(response);
-    }
-
-    maybe_build_local_gemini_video_operations_response(state, request_context, decision).await
+    maybe_build_local_gemini_files_response(state, request_context, decision).await
 }
 
 async fn maybe_build_local_gemini_files_response(
@@ -216,23 +205,6 @@ async fn maybe_build_local_gemini_files_response(
     }
 
     let file_name = normalize_gemini_file_request_path(request_context.request_path.as_str());
-    if let Some(short_id) = file_name
-        .as_deref()
-        .and_then(|value| value.strip_prefix("files/"))
-        .and_then(|file_id| file_id.strip_prefix("aev_"))
-        .filter(|value| !value.is_empty())
-    {
-        return Some(
-            build_local_gemini_video_file_response(
-                state,
-                request_context.request_method.clone(),
-                user_id,
-                short_id,
-            )
-            .await,
-        );
-    }
-
     if !state.has_gemini_file_mapping_data_reader() {
         return Some(build_ai_public_error_response(
             http::StatusCode::SERVICE_UNAVAILABLE,
@@ -284,63 +256,6 @@ fn allowed_ai_public_user_id(decision: &GatewayControlDecision) -> Option<&str> 
         .filter(|auth_context| auth_context.access_allowed)
         .map(|auth_context| auth_context.user_id.trim())
         .filter(|value| !value.is_empty())
-}
-
-async fn build_local_gemini_video_file_response(
-    state: &AppState,
-    method: http::Method,
-    user_id: &str,
-    short_id: &str,
-) -> Response<Body> {
-    if method != http::Method::GET {
-        return build_ai_public_error_response(
-            http::StatusCode::METHOD_NOT_ALLOWED,
-            AI_PUBLIC_METHOD_NOT_ALLOWED_DETAIL,
-        );
-    }
-
-    let task = match state
-        .find_video_task_by_short_id_for_user(short_id, user_id)
-        .await
-    {
-        Ok(Some(task)) if is_gemini_video_task(&task) => task,
-        Ok(_) => {
-            return build_ai_public_error_response(
-                http::StatusCode::NOT_FOUND,
-                GEMINI_FILE_NOT_FOUND_DETAIL,
-            );
-        }
-        Err(_) => {
-            return build_ai_public_internal_error_response(
-                "gemini_video_file_lookup",
-                "data_store_unavailable",
-            );
-        }
-    };
-
-    let source = match crate::async_task::video_task_video_source_from_task(state, &task).await {
-        Ok(Some(source)) => source,
-        Ok(None) => {
-            return build_ai_public_error_response(
-                http::StatusCode::NOT_FOUND,
-                GEMINI_FILE_NOT_FOUND_DETAIL,
-            );
-        }
-        Err(_) => {
-            return build_ai_public_internal_error_response(
-                "gemini_video_file_source",
-                "video_source_unavailable",
-            );
-        }
-    };
-
-    match crate::async_task::build_video_task_video_response(state, &task.id, source).await {
-        Ok(response) => response,
-        Err(_) => build_ai_public_internal_error_response(
-            "gemini_video_file_delivery",
-            "video_delivery_failed",
-        ),
-    }
 }
 
 async fn build_local_gemini_files_list_response(
@@ -1433,7 +1348,6 @@ fn antigravity_model_payload(id: &str, display_name: &str) -> Value {
         },
         "supportsImages": true,
         "supportsThinking": true,
-        "supportsVideo": true,
         "thinkingBudget": 4000,
         "tokenizerType": "LLAMA_WITH_SPECIAL"
     });
@@ -1465,7 +1379,6 @@ fn antigravity_model_payload(id: &str, display_name: &str) -> Value {
                 object.insert("maxOutputTokens".to_string(), json!(64000));
                 object.insert("thinkingBudget".to_string(), json!(1024));
                 object.remove("minThinkingBudget");
-                object.remove("supportsVideo");
             }
             "gpt-oss-120b-medium" => {
                 object.insert("maxTokens".to_string(), json!(131072));
@@ -1473,7 +1386,6 @@ fn antigravity_model_payload(id: &str, display_name: &str) -> Value {
                 object.insert("thinkingBudget".to_string(), json!(8192));
                 object.remove("minThinkingBudget");
                 object.remove("supportsImages");
-                object.remove("supportsVideo");
             }
             "chat_20706" => {
                 object.insert("maxTokens".to_string(), json!(16384));
@@ -1483,7 +1395,6 @@ fn antigravity_model_payload(id: &str, display_name: &str) -> Value {
                 object.remove("recommended");
                 object.remove("supportsImages");
                 object.remove("supportsThinking");
-                object.remove("supportsVideo");
                 object.remove("thinkingBudget");
                 object.remove("tokenizerType");
                 object.remove("supportedMimeTypes");
@@ -1496,7 +1407,6 @@ fn antigravity_model_payload(id: &str, display_name: &str) -> Value {
                 object.remove("recommended");
                 object.remove("supportsImages");
                 object.remove("supportsThinking");
-                object.remove("supportsVideo");
                 object.remove("thinkingBudget");
                 object.remove("tokenizerType");
                 object.remove("supportedMimeTypes");
@@ -1509,7 +1419,6 @@ fn antigravity_model_payload(id: &str, display_name: &str) -> Value {
                 object.remove("recommended");
                 object.remove("supportsImages");
                 object.remove("supportsThinking");
-                object.remove("supportsVideo");
                 object.remove("thinkingBudget");
                 object.remove("tokenizerType");
                 object.remove("supportedMimeTypes");
@@ -1518,316 +1427,6 @@ fn antigravity_model_payload(id: &str, display_name: &str) -> Value {
         }
     }
     payload
-}
-
-async fn maybe_build_local_gemini_video_operations_response(
-    state: &AppState,
-    request_context: &GatewayPublicRequestContext,
-    decision: &GatewayControlDecision,
-) -> Option<Response<Body>> {
-    if decision.route_family.as_deref() != Some("gemini")
-        || decision.route_kind.as_deref() != Some("video")
-    {
-        return None;
-    }
-
-    if request_context.request_path == "/v1beta/operations" {
-        return Some(match request_context.request_method {
-            http::Method::GET => {
-                build_local_gemini_video_operations_list_response(state, decision).await
-            }
-            _ => build_ai_public_error_response(
-                http::StatusCode::METHOD_NOT_ALLOWED,
-                AI_PUBLIC_METHOD_NOT_ALLOWED_DETAIL,
-            ),
-        });
-    }
-
-    let operation_path = request_context
-        .request_path
-        .strip_prefix("/v1beta/operations/")?;
-
-    Some(match request_context.request_method {
-        http::Method::GET => {
-            build_local_gemini_video_operation_detail_response(state, decision, operation_path)
-                .await
-        }
-        http::Method::POST if operation_path.ends_with(":cancel") => {
-            build_local_gemini_video_operation_cancel_response(state, decision, operation_path)
-                .await
-        }
-        _ => build_ai_public_error_response(
-            http::StatusCode::METHOD_NOT_ALLOWED,
-            AI_PUBLIC_METHOD_NOT_ALLOWED_DETAIL,
-        ),
-    })
-}
-
-async fn build_local_gemini_video_operations_list_response(
-    state: &AppState,
-    decision: &GatewayControlDecision,
-) -> Response<Body> {
-    let Some(user_id) = allowed_ai_public_user_id(decision) else {
-        return build_ai_public_error_response(
-            http::StatusCode::UNAUTHORIZED,
-            AI_PUBLIC_UNAUTHORIZED_DETAIL,
-        );
-    };
-
-    let filter = VideoTaskQueryFilter {
-        user_id: Some(user_id.to_string()),
-        status: None,
-        model_substring: None,
-        client_api_format: Some("gemini:video".to_string()),
-    };
-    let tasks = match state.list_video_task_page(&filter, 0, 100).await {
-        Ok(tasks) => tasks,
-        Err(_) => {
-            return build_ai_public_internal_error_response(
-                "gemini_video_operations_list",
-                "data_store_unavailable",
-            );
-        }
-    };
-    let operations = tasks
-        .into_iter()
-        .filter(is_gemini_video_task)
-        .map(|task| build_gemini_video_operation_payload(&task))
-        .collect::<Vec<_>>();
-
-    Json(json!({ "operations": operations })).into_response()
-}
-
-async fn build_local_gemini_video_operation_detail_response(
-    state: &AppState,
-    decision: &GatewayControlDecision,
-    operation_path: &str,
-) -> Response<Body> {
-    let task =
-        match find_user_gemini_video_task_for_operation(state, decision, operation_path).await {
-            Ok(Some(task)) => task,
-            Ok(None) => {
-                return build_ai_public_error_response(
-                    http::StatusCode::NOT_FOUND,
-                    GEMINI_VIDEO_TASK_NOT_FOUND_DETAIL,
-                );
-            }
-            Err(_) => {
-                return build_ai_public_internal_error_response(
-                    "gemini_video_operation_detail",
-                    "data_store_unavailable",
-                );
-            }
-        };
-
-    Json(build_gemini_video_operation_payload(&task)).into_response()
-}
-
-async fn build_local_gemini_video_operation_cancel_response(
-    state: &AppState,
-    decision: &GatewayControlDecision,
-    operation_path: &str,
-) -> Response<Body> {
-    let Some(user_id) = allowed_ai_public_user_id(decision) else {
-        return build_ai_public_error_response(
-            http::StatusCode::UNAUTHORIZED,
-            AI_PUBLIC_UNAUTHORIZED_DETAIL,
-        );
-    };
-    let task =
-        match find_user_gemini_video_task_for_operation(state, decision, operation_path).await {
-            Ok(Some(task)) => task,
-            Ok(None) => {
-                return build_ai_public_error_response(
-                    http::StatusCode::NOT_FOUND,
-                    GEMINI_VIDEO_TASK_NOT_FOUND_DETAIL,
-                );
-            }
-            Err(_) => {
-                return build_ai_public_internal_error_response(
-                    "gemini_video_operation_cancel_lookup",
-                    "data_store_unavailable",
-                );
-            }
-        };
-
-    match crate::async_task::cancel_video_task_record_for_user(state, &task.id, user_id).await {
-        Ok(_) => Json(json!({})).into_response(),
-        Err(CancelVideoTaskError::NotFound) => build_ai_public_error_response(
-            http::StatusCode::NOT_FOUND,
-            GEMINI_VIDEO_TASK_NOT_FOUND_DETAIL,
-        ),
-        Err(CancelVideoTaskError::InvalidStatus(status)) => build_ai_public_error_response(
-            http::StatusCode::BAD_REQUEST,
-            format!(
-                "Cannot cancel task with status: {}",
-                video_task_status_name(status)
-            ),
-        ),
-        Err(CancelVideoTaskError::Response(response)) => {
-            build_ai_public_upstream_error_response(*response, "gemini_video_operation_cancel")
-        }
-        Err(CancelVideoTaskError::Gateway(_)) => build_ai_public_internal_error_response(
-            "gemini_video_operation_cancel",
-            "cancel_execution_failed",
-        ),
-    }
-}
-
-async fn find_user_gemini_video_task_for_operation(
-    state: &AppState,
-    decision: &GatewayControlDecision,
-    operation_path: &str,
-) -> Result<Option<StoredVideoTask>, GatewayError> {
-    let Some(user_id) = allowed_ai_public_user_id(decision) else {
-        return Ok(None);
-    };
-    let Some(short_id) = extract_short_id_from_gemini_operation_path(operation_path) else {
-        return Ok(None);
-    };
-    let Some(task) = state
-        .find_video_task_by_short_id_for_user(short_id, user_id)
-        .await?
-    else {
-        return Ok(None);
-    };
-    if !is_gemini_video_task(&task) {
-        return Ok(None);
-    }
-    Ok(Some(task))
-}
-
-fn extract_short_id_from_gemini_operation_path(operation_path: &str) -> Option<&str> {
-    let trimmed = operation_path.trim_matches('/');
-    if trimmed.is_empty() {
-        return None;
-    }
-    let short_id = trimmed
-        .strip_suffix(":cancel")
-        .unwrap_or(trimmed)
-        .rsplit('/')
-        .next()?;
-    (!short_id.is_empty()).then_some(short_id)
-}
-
-fn is_gemini_video_task(task: &StoredVideoTask) -> bool {
-    task.effective_api_format() == Some("gemini:video")
-}
-
-fn build_gemini_video_operation_payload(task: &StoredVideoTask) -> serde_json::Value {
-    match task.status {
-        VideoTaskStatus::Completed => json!({
-            "name": gemini_video_operation_name(task),
-            "done": true,
-            "response": {
-                "generateVideoResponse": {
-                    "generatedSamples": [
-                        {
-                            "video": {
-                                "uri": format!(
-                                    "/v1beta/files/aev_{}:download?alt=media",
-                                    gemini_operation_short_id(task)
-                                ),
-                                "mimeType": "video/mp4",
-                            }
-                        }
-                    ]
-                }
-            }
-        }),
-        VideoTaskStatus::Failed | VideoTaskStatus::Expired => json!({
-            "name": gemini_video_operation_name(task),
-            "done": true,
-            "error": gemini_video_task_error_projection(task),
-        }),
-        _ => json!({
-            "name": gemini_video_operation_name(task),
-            "done": false,
-            "metadata": gemini_video_operation_metadata(task),
-        }),
-    }
-}
-
-fn gemini_video_task_error_projection(task: &StoredVideoTask) -> serde_json::Value {
-    let code = match task.error_code.as_deref().map(str::trim) {
-        Some("authentication_error") => "authentication_error",
-        Some("content_policy_violation") => "content_policy_violation",
-        Some("expired") => "expired",
-        Some("invalid_request") => "invalid_request",
-        Some("not_found") => "not_found",
-        Some("permission_denied") => "permission_denied",
-        Some("poll_permanent_error") => "poll_permanent_error",
-        Some("poll_timeout") => "poll_timeout",
-        Some("provider_error") => "provider_error",
-        Some("rate_limit_exceeded") => "rate_limit_exceeded",
-        Some("server_error") => "server_error",
-        Some("unknown") => "unknown",
-        _ => "provider_error",
-    };
-    json!({
-        "code": code,
-        "message": "Video generation failed",
-    })
-}
-
-fn gemini_video_operation_name(task: &StoredVideoTask) -> String {
-    format!(
-        "models/{}/operations/{}",
-        gemini_operation_model(task),
-        gemini_operation_short_id(task)
-    )
-}
-
-fn gemini_operation_model(task: &StoredVideoTask) -> String {
-    task.model
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .or_else(|| {
-            task.external_task_id.as_deref().and_then(|external_id| {
-                let parts = external_id.split('/').collect::<Vec<_>>();
-                if parts.len() >= 2 && parts[0] == "models" && !parts[1].trim().is_empty() {
-                    Some(parts[1].trim().to_string())
-                } else {
-                    None
-                }
-            })
-        })
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-fn gemini_operation_short_id(task: &StoredVideoTask) -> String {
-    task.short_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or(task.id.as_str())
-        .to_string()
-}
-
-fn gemini_video_operation_metadata(task: &StoredVideoTask) -> serde_json::Value {
-    task.request_metadata
-        .as_ref()
-        .and_then(|metadata| metadata.get("rust_local_snapshot"))
-        .and_then(|snapshot| snapshot.get("Gemini"))
-        .and_then(|gemini| gemini.get("metadata"))
-        .cloned()
-        .unwrap_or_else(|| json!({}))
-}
-
-fn video_task_status_name(status: VideoTaskStatus) -> &'static str {
-    match status {
-        VideoTaskStatus::Pending => "pending",
-        VideoTaskStatus::Submitted => "submitted",
-        VideoTaskStatus::Queued => "queued",
-        VideoTaskStatus::Processing => "processing",
-        VideoTaskStatus::Completed => "completed",
-        VideoTaskStatus::Failed => "failed",
-        VideoTaskStatus::Cancelled => "cancelled",
-        VideoTaskStatus::Expired => "expired",
-        VideoTaskStatus::Deleted => "deleted",
-    }
 }
 
 fn build_ai_public_error_response(
@@ -1848,22 +1447,7 @@ fn build_ai_public_error_response(
     build_ai_public_error_payload(status, public_detail)
 }
 
-fn build_ai_public_internal_error_response(
-    operation: &'static str,
-    error_category: &'static str,
-) -> Response<Body> {
-    tracing::error!(
-        event_name = "ai_public_internal_error",
-        operation,
-        error_category,
-        "internal AI public operation failed"
-    );
-    build_ai_public_error_payload(
-        http::StatusCode::INTERNAL_SERVER_ERROR,
-        AI_PUBLIC_INTERNAL_ERROR_DETAIL,
-    )
-}
-
+#[cfg(test)]
 fn build_ai_public_upstream_error_response(
     response: Response<Body>,
     operation: &'static str,
@@ -1902,16 +1486,14 @@ fn build_ai_public_error_payload(
 mod tests {
     use super::{
         build_ai_public_error_response, build_ai_public_upstream_error_response,
-        build_gemini_file_mapping_payload, gemini_video_task_error_projection,
-        maybe_build_stateless_policy_rejection, parse_openai_image_validation_input,
-        validate_claude_count_tokens_request, validate_openai_image_n, OpenAiImageOperation,
-        StoredGeminiFileMapping, AI_PUBLIC_UPSTREAM_ERROR_DETAIL,
-        CLAUDE_COUNT_TOKENS_BODY_REQUIRED_DETAIL, CLAUDE_COUNT_TOKENS_INVALID_JSON_DETAIL,
-        CLAUDE_COUNT_TOKENS_MESSAGES_REQUIRED_DETAIL, CLAUDE_COUNT_TOKENS_MODEL_REQUIRED_DETAIL,
-        OPENAI_IMAGE_INVALID_MULTIPART_DETAIL,
+        build_gemini_file_mapping_payload, maybe_build_stateless_policy_rejection,
+        parse_openai_image_validation_input, validate_claude_count_tokens_request,
+        validate_openai_image_n, OpenAiImageOperation, StoredGeminiFileMapping,
+        AI_PUBLIC_UPSTREAM_ERROR_DETAIL, CLAUDE_COUNT_TOKENS_BODY_REQUIRED_DETAIL,
+        CLAUDE_COUNT_TOKENS_INVALID_JSON_DETAIL, CLAUDE_COUNT_TOKENS_MESSAGES_REQUIRED_DETAIL,
+        CLAUDE_COUNT_TOKENS_MODEL_REQUIRED_DETAIL, OPENAI_IMAGE_INVALID_MULTIPART_DETAIL,
     };
     use crate::control::{GatewayControlDecision, GatewayPublicRequestContext};
-    use aether_data_contracts::repository::video_tasks::{StoredVideoTask, VideoTaskStatus};
     use axum::body::{to_bytes, Body, Bytes};
     use axum::http::{HeaderMap, Method, StatusCode};
 
@@ -2042,66 +1624,6 @@ mod tests {
         let body = String::from_utf8_lossy(&body);
         for secret in ["upstream-secret", "Bearer", "internal.test"] {
             assert!(!body.contains(secret));
-        }
-    }
-
-    #[test]
-    fn gemini_video_error_projection_discards_historical_sensitive_diagnostics() {
-        let mut task = StoredVideoTask::new(
-            "task-1".to_string(),
-            Some("short-1".to_string()),
-            "request-1".to_string(),
-            Some("user-1".to_string()),
-            None,
-            None,
-            None,
-            Some("operations/upstream-1".to_string()),
-            Some("provider-1".to_string()),
-            Some("endpoint-1".to_string()),
-            Some("key-1".to_string()),
-            Some("gemini:video".to_string()),
-            Some("gemini:video".to_string()),
-            false,
-            Some("veo-3".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            VideoTaskStatus::Failed,
-            100,
-            None,
-            0,
-            10,
-            None,
-            1,
-            360,
-            1,
-            Some(1),
-            Some(2),
-            2,
-            Some("provider_error".to_string()),
-            None,
-            None,
-            None,
-        )
-        .expect("task should be valid");
-        task.error_code = Some(
-            "Authorization: Bearer code-secret at https://internal.test/?key=secret".to_string(),
-        );
-        task.error_message = Some(
-            "Authorization: Bearer message-secret at https://internal.test/?token=secret"
-                .to_string(),
-        );
-
-        let payload = gemini_video_task_error_projection(&task);
-
-        assert_eq!(payload["code"], "provider_error");
-        assert_eq!(payload["message"], "Video generation failed");
-        let encoded = payload.to_string();
-        for sensitive in ["Bearer", "code-secret", "message-secret", "internal.test"] {
-            assert!(!encoded.contains(sensitive));
         }
     }
 

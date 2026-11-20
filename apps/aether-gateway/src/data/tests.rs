@@ -15,21 +15,16 @@ use aether_data_contracts::repository::provider_catalog::{
 };
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 use aether_data_contracts::repository::users::{StoredUserAuthRecord, StoredUserPreferenceRecord};
-use aether_data_contracts::repository::video_tasks::{
-    UpsertVideoTask, VideoTaskLookupKey, VideoTaskStatus, VideoTaskWriteRepository,
-};
 use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data_memory::candidate_selection::InMemoryMinimalCandidateSelectionReadRepository;
 use aether_data_memory::candidates::InMemoryRequestCandidateRepository;
 use aether_data_memory::provider_catalog::InMemoryProviderCatalogReadRepository;
 use aether_data_memory::usage::InMemoryUsageReadRepository;
 use aether_data_memory::users::InMemoryUserReadRepository;
-use aether_data_memory::video_tasks::InMemoryVideoTaskRepository;
 use aether_scheduler_core::{
     enumerate_minimal_candidate_selection, EnumerateMinimalCandidateSelectionInput,
     SchedulerAuthConstraints,
 };
-use serde_json::json;
 
 use super::{GatewayDataConfig, GatewayDataState};
 use crate::AppState;
@@ -47,7 +42,6 @@ fn disabled_gateway_data_state_has_no_backends() {
     assert!(!state.has_proxy_node_reader());
     assert!(!state.has_proxy_node_writer());
     assert!(!state.has_usage_reader());
-    assert!(!state.has_video_task_reader());
 }
 
 #[test]
@@ -150,81 +144,6 @@ fn maintenance_pool_pressure_deferral_has_timeout() {
 }
 
 #[tokio::test]
-async fn postgres_gateway_data_state_builds_video_task_reader() {
-    let state = GatewayDataState::from_config(GatewayDataConfig::from_postgres_url(
-        "postgres://localhost/aether",
-        false,
-    ))
-    .expect("postgres-backed state should build");
-
-    assert!(state.has_backends());
-    assert!(state.has_auth_api_key_reader());
-    assert!(state.has_minimal_candidate_selection_reader());
-    assert!(state.has_request_candidate_reader());
-    assert!(state.has_provider_catalog_reader());
-    assert!(state.has_proxy_node_reader());
-    assert!(state.has_proxy_node_writer());
-    assert!(state.has_usage_reader());
-    assert!(state.has_video_task_reader());
-}
-
-#[tokio::test]
-async fn data_state_find_uses_configured_read_repository() {
-    let repository = Arc::new(InMemoryVideoTaskRepository::default());
-    repository
-        .upsert(UpsertVideoTask {
-            id: "task-1".to_string(),
-            short_id: Some("short-task-1".to_string()),
-            request_id: "request-1".to_string(),
-            user_id: Some("user-1".to_string()),
-            api_key_id: Some("key-1".to_string()),
-            username: Some("user".to_string()),
-            api_key_name: Some("primary".to_string()),
-            external_task_id: Some("ext-task-1".to_string()),
-            provider_id: Some("provider-1".to_string()),
-            endpoint_id: Some("endpoint-1".to_string()),
-            key_id: Some("provider-key-1".to_string()),
-            client_api_format: Some("openai:video".to_string()),
-            provider_api_format: Some("openai:video".to_string()),
-            format_converted: false,
-            model: Some("sora-2".to_string()),
-            prompt: Some("hello".to_string()),
-            original_request_body: Some(json!({"prompt": "hello"})),
-            duration_seconds: Some(4),
-            resolution: Some("720p".to_string()),
-            aspect_ratio: Some("16:9".to_string()),
-            size: Some("1280x720".to_string()),
-            status: VideoTaskStatus::Queued,
-            progress_percent: 0,
-            progress_message: None,
-            retry_count: 0,
-            poll_interval_seconds: 10,
-            next_poll_at_unix_secs: Some(100),
-            poll_count: 0,
-            max_poll_count: 360,
-            created_at_unix_ms: 100,
-            submitted_at_unix_secs: Some(100),
-            completed_at_unix_secs: None,
-            updated_at_unix_secs: 100,
-            error_code: None,
-            error_message: None,
-            video_url: None,
-            request_metadata: None,
-        })
-        .await
-        .expect("upsert should succeed");
-
-    let state = GatewayDataState::with_video_task_reader_for_tests(repository);
-
-    let task = state
-        .find_video_task(VideoTaskLookupKey::Id("task-1"))
-        .await
-        .expect("find should succeed");
-
-    assert_eq!(task.expect("task should exist").id, "task-1");
-}
-
-#[tokio::test]
 async fn app_state_wires_gateway_data_state_from_config() {
     let state = AppState::new()
         .expect("app state should build")
@@ -242,7 +161,6 @@ async fn app_state_wires_gateway_data_state_from_config() {
     assert!(state.data.has_proxy_node_reader());
     assert!(state.data.has_proxy_node_writer());
     assert!(state.data.has_usage_reader());
-    assert!(state.data.has_video_task_reader());
 }
 
 #[tokio::test]
@@ -866,143 +784,6 @@ async fn data_state_reads_minimal_candidate_selection_with_auth_filters() {
         selection[1].mapping_matched_model,
         Some("gpt-4.1-edge".to_string())
     );
-}
-
-#[tokio::test]
-async fn maps_openai_video_task_repository_row_into_read_response() {
-    let repository = Arc::new(InMemoryVideoTaskRepository::default());
-    repository
-        .upsert(UpsertVideoTask {
-            id: "task-1".to_string(),
-            short_id: Some("short-task-1".to_string()),
-            request_id: "request-1".to_string(),
-            user_id: Some("user-1".to_string()),
-            api_key_id: Some("key-1".to_string()),
-            username: Some("user".to_string()),
-            api_key_name: Some("primary".to_string()),
-            external_task_id: Some("ext-task-1".to_string()),
-            provider_id: Some("provider-1".to_string()),
-            endpoint_id: Some("endpoint-1".to_string()),
-            key_id: Some("provider-key-1".to_string()),
-            client_api_format: Some("openai:video".to_string()),
-            provider_api_format: Some("openai:video".to_string()),
-            format_converted: false,
-            model: Some("sora-2".to_string()),
-            prompt: Some("hello".to_string()),
-            original_request_body: Some(json!({"prompt": "hello"})),
-            duration_seconds: Some(4),
-            resolution: Some("720p".to_string()),
-            aspect_ratio: Some("16:9".to_string()),
-            size: Some("1280x720".to_string()),
-            status: VideoTaskStatus::Processing,
-            progress_percent: 45,
-            progress_message: Some("working".to_string()),
-            retry_count: 0,
-            poll_interval_seconds: 10,
-            next_poll_at_unix_secs: Some(120),
-            poll_count: 1,
-            max_poll_count: 360,
-            created_at_unix_ms: 100,
-            submitted_at_unix_secs: Some(100),
-            completed_at_unix_secs: None,
-            updated_at_unix_secs: 120,
-            error_code: None,
-            error_message: None,
-            video_url: None,
-            request_metadata: None,
-        })
-        .await
-        .expect("upsert should succeed");
-
-    let state = GatewayDataState::with_video_task_reader_for_tests(repository);
-    let response = state
-        .read_video_task_response(Some("openai"), "/v1/videos/task-1")
-        .await
-        .expect("read should succeed")
-        .expect("read response should exist");
-
-    assert_eq!(response.status_code, 200);
-    assert_eq!(response.body_json["id"], "task-1");
-    assert_eq!(response.body_json["status"], "processing");
-    assert_eq!(response.body_json["created_at"], 100);
-}
-
-#[tokio::test]
-async fn maps_gemini_video_task_repository_row_into_read_response() {
-    let repository = Arc::new(InMemoryVideoTaskRepository::default());
-    repository
-        .upsert(UpsertVideoTask {
-            id: "task-1".to_string(),
-            short_id: Some("localshort123".to_string()),
-            request_id: "request-1".to_string(),
-            user_id: Some("user-1".to_string()),
-            api_key_id: Some("key-1".to_string()),
-            username: Some("user".to_string()),
-            api_key_name: Some("primary".to_string()),
-            external_task_id: Some("operations/ext-task-1".to_string()),
-            provider_id: Some("provider-1".to_string()),
-            endpoint_id: Some("endpoint-1".to_string()),
-            key_id: Some("provider-key-1".to_string()),
-            client_api_format: Some("gemini:video".to_string()),
-            provider_api_format: Some("gemini:video".to_string()),
-            format_converted: false,
-            model: Some("veo-3".to_string()),
-            prompt: Some("hello".to_string()),
-            original_request_body: Some(json!({"prompt": "hello"})),
-            duration_seconds: Some(8),
-            resolution: Some("720p".to_string()),
-            aspect_ratio: Some("16:9".to_string()),
-            size: Some("720p".to_string()),
-            status: VideoTaskStatus::Completed,
-            progress_percent: 100,
-            progress_message: None,
-            retry_count: 0,
-            poll_interval_seconds: 10,
-            next_poll_at_unix_secs: None,
-            poll_count: 4,
-            max_poll_count: 360,
-            created_at_unix_ms: 100,
-            submitted_at_unix_secs: Some(100),
-            completed_at_unix_secs: Some(120),
-            updated_at_unix_secs: 120,
-            error_code: None,
-            error_message: None,
-            video_url: None,
-            request_metadata: Some(json!({
-                "rust_local_snapshot": {
-                    "metadata": {
-                        "generateVideoResponse": {
-                            "generatedSamples": [
-                                {
-                                    "video": {
-                                        "uri": "/v1beta/files/aev_localshort123:download?alt=media"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            })),
-        })
-        .await
-        .expect("upsert should succeed");
-
-    let state = GatewayDataState::with_video_task_reader_for_tests(repository);
-    let response = state
-        .read_video_task_response(
-            Some("gemini"),
-            "/v1beta/models/veo-3/operations/localshort123",
-        )
-        .await
-        .expect("read should succeed")
-        .expect("read response should exist");
-
-    assert_eq!(response.status_code, 200);
-    assert_eq!(
-        response.body_json["name"],
-        "models/veo-3/operations/localshort123"
-    );
-    assert_eq!(response.body_json["done"], true);
 }
 
 fn sample_request_candidate(

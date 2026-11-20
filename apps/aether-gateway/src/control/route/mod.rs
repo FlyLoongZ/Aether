@@ -286,8 +286,7 @@ pub(super) fn is_gemini_models_route(path: &str) -> bool {
         && (path.contains(":generateContent")
             || path.contains(":streamGenerateContent")
             || path.contains(":embedContent")
-            || path.contains(":batchEmbedContents")
-            || path.contains(":predictLongRunning"))
+            || path.contains(":batchEmbedContents"))
 }
 
 pub(super) fn is_gemini_operation_route(path: &str) -> bool {

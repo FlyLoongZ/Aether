@@ -188,7 +188,7 @@ async fn gateway_handles_admin_billing_presets_locally_with_trusted_admin_princi
     assert_eq!(payload["items"].as_array().map(Vec::len), Some(1));
     assert_eq!(payload["items"][0]["name"], "aether-core");
     assert_eq!(payload["items"][0]["version"], "1.0");
-    assert_eq!(payload["items"][0]["collector_count"], 16);
+    assert_eq!(payload["items"][0]["collector_count"], 6);
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
 
     gateway_handle.abort();
@@ -232,7 +232,7 @@ async fn gateway_handles_admin_billing_apply_preset_locally_with_trusted_admin_p
     assert_eq!(merge_payload["ok"], json!(true));
     assert_eq!(merge_payload["preset"], json!("aether-core"));
     assert_eq!(merge_payload["mode"], json!("merge"));
-    assert_eq!(merge_payload["created"], json!(16));
+    assert_eq!(merge_payload["created"], json!(6));
     assert_eq!(merge_payload["updated"], json!(0));
     assert_eq!(merge_payload["skipped"], json!(0));
     assert_eq!(merge_payload["errors"], json!([]));
@@ -253,7 +253,7 @@ async fn gateway_handles_admin_billing_apply_preset_locally_with_trusted_admin_p
     assert_eq!(merge_again_payload["preset"], json!("aether-core"));
     assert_eq!(merge_again_payload["created"], json!(0));
     assert_eq!(merge_again_payload["updated"], json!(0));
-    assert_eq!(merge_again_payload["skipped"], json!(16));
+    assert_eq!(merge_again_payload["skipped"], json!(6));
 
     let overwrite_response = send_admin_billing_request(
         &gateway_url,
@@ -271,7 +271,7 @@ async fn gateway_handles_admin_billing_apply_preset_locally_with_trusted_admin_p
     assert_eq!(overwrite_payload["preset"], json!("aether-core"));
     assert_eq!(overwrite_payload["mode"], json!("overwrite"));
     assert_eq!(overwrite_payload["created"], json!(0));
-    assert_eq!(overwrite_payload["updated"], json!(16));
+    assert_eq!(overwrite_payload["updated"], json!(6));
     assert_eq!(overwrite_payload["skipped"], json!(0));
     assert_eq!(overwrite_payload["errors"], json!([]));
     assert_eq!(*upstream_hits.lock().expect("mutex should lock"), 0);
@@ -475,7 +475,7 @@ async fn gateway_handles_admin_billing_rule_routes_locally_with_trusted_admin_pr
         &format!("/api/admin/billing/rules/{rule_id}"),
         Some(json!({
             "name": "rule-updated",
-            "task_type": "video",
+            "task_type": "image",
             "global_model_id": "global-model-1",
             "expression": "max(output_tokens, 1)",
             "variables": { "factor": 2 },
@@ -493,7 +493,7 @@ async fn gateway_handles_admin_billing_rule_routes_locally_with_trusted_admin_pr
         .expect("json body should parse");
     assert_eq!(update_payload["id"], json!(rule_id));
     assert_eq!(update_payload["name"], json!("rule-updated"));
-    assert_eq!(update_payload["task_type"], json!("video"));
+    assert_eq!(update_payload["task_type"], json!("image"));
     assert_eq!(update_payload["global_model_id"], json!("global-model-1"));
     assert_eq!(update_payload["model_id"], serde_json::Value::Null);
     assert_eq!(update_payload["is_enabled"], json!(false));

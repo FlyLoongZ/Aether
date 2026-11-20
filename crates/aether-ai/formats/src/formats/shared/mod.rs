@@ -23,7 +23,6 @@ pub mod stream_core;
 pub mod stream_rewrite;
 pub mod sync_products;
 pub mod sync_to_stream;
-pub mod video;
 
 pub(crate) fn decode_sync_report_body_base64(
     body_base64: &str,

@@ -308,50 +308,6 @@ async fn operational_routes_reject_duplicate_authorization_headers() {
 }
 
 #[tokio::test]
-async fn monitoring_management_token_cannot_read_video_tasks() {
-    let raw_token = "ae-operational-monitoring-read";
-    let state = state_with_management_tokens(vec![(
-        raw_token,
-        management_token(
-            "operational-monitoring-read",
-            "placeholder-user",
-            &["admin:monitoring:read"],
-        ),
-    )])
-    .await;
-    let gateway = build_router_with_state(state);
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-    let client = reqwest::Client::new();
-
-    let metrics = client
-        .get(format!("{gateway_url}/_gateway/metrics"))
-        .bearer_auth(raw_token)
-        .send()
-        .await
-        .expect("metrics request should succeed");
-    assert_eq!(metrics.status(), StatusCode::OK);
-    assert_eq!(
-        metrics
-            .headers()
-            .get(http::header::CACHE_CONTROL)
-            .and_then(|value| value.to_str().ok()),
-        Some("no-store")
-    );
-
-    let video_tasks = client
-        .get(format!("{gateway_url}/_gateway/async-tasks/video-tasks"))
-        .bearer_auth(raw_token)
-        .send()
-        .await
-        .expect("video task request should succeed");
-    assert_eq!(video_tasks.status(), StatusCode::FORBIDDEN);
-    let payload: serde_json::Value = video_tasks.json().await.expect("response should parse");
-    assert_eq!(payload["required_permission"], "admin:video_tasks:read");
-
-    gateway_handle.abort();
-}
-
-#[tokio::test]
 async fn monitoring_read_management_token_cannot_read_request_candidate_traces() {
     let raw_token = "ae-operational-candidate-monitoring-read";
     let state = state_with_management_tokens(vec![(
@@ -650,63 +606,5 @@ async fn json_null_management_token_permissions_fail_closed() {
         .expect("metrics request should complete");
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    gateway_handle.abort();
-}
-
-#[tokio::test]
-async fn video_read_management_token_cannot_cancel_tasks() {
-    let raw_token = "ae-operational-video-read";
-    let state = state_with_management_tokens(vec![(
-        raw_token,
-        management_token(
-            "operational-video-read",
-            "placeholder-user",
-            &["admin:video_tasks:read"],
-        ),
-    )])
-    .await;
-    let gateway = build_router_with_state(state);
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{gateway_url}/_gateway/async-tasks/video-tasks/not-found/cancel"
-        ))
-        .bearer_auth(raw_token)
-        .send()
-        .await
-        .expect("cancel request should succeed");
-
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let payload: serde_json::Value = response.json().await.expect("response should parse");
-    assert_eq!(payload["required_permission"], "admin:video_tasks:write");
-    gateway_handle.abort();
-}
-
-#[tokio::test]
-async fn video_admin_management_token_may_reach_cancel_handler() {
-    let raw_token = "ae-operational-video-admin";
-    let state = state_with_management_tokens(vec![(
-        raw_token,
-        management_token(
-            "operational-video-admin",
-            "placeholder-user",
-            &["admin:video_tasks:admin"],
-        ),
-    )])
-    .await;
-    let gateway = build_router_with_state(state);
-    let (gateway_url, gateway_handle) = start_server(gateway).await;
-
-    let response = reqwest::Client::new()
-        .post(format!(
-            "{gateway_url}/_gateway/async-tasks/video-tasks/not-found/cancel"
-        ))
-        .bearer_auth(raw_token)
-        .send()
-        .await
-        .expect("cancel request should succeed");
-
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     gateway_handle.abort();
 }
