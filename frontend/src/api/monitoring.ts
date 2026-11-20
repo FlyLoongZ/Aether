@@ -66,7 +66,6 @@ export interface GatewayFallbackMetricSummary {
 export interface GatewayMetricsSummary {
   serviceUp: number | null
   local: GatewayGateMetrics
-  distributed: GatewayGateMetrics
   candidatePlanning: GatewayGateMetrics
   upstreamExecution: GatewayGateMetrics
   databasePool: GatewayDatabasePoolMetrics
@@ -773,7 +772,6 @@ export function buildGatewayMetricsSummary(text: string): GatewayMetricsSummary 
   return {
     serviceUp: findMetricValueNumber(samples, 'service_up', { service: 'aether-gateway' }),
     local: buildGateMetrics(samples, 'gateway_requests'),
-    distributed: buildGateMetrics(samples, 'gateway_requests_distributed'),
     candidatePlanning: buildGateMetrics(samples, 'gateway_candidate_planning'),
     upstreamExecution: buildGateMetrics(samples, 'gateway_upstream_execution'),
     databasePool: buildDatabasePoolMetrics(samples),

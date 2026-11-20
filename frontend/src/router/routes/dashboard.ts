@@ -62,11 +62,6 @@ export const dashboardRoutes: RouteRecordRaw[] = [
         path: 'models',
         name: 'ModelCatalog',
         component: view(() => import('@/views/user/ModelCatalog.vue'))
-      },
-      {
-        path: 'async-tasks',
-        name: 'UserAsyncTasks',
-        component: view(() => import('@/views/admin/AsyncTasks.vue'))
       }
     ]
   }

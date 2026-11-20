@@ -180,7 +180,7 @@ const groups = computed(() => {
   const m = metrics.value
   if (!m) return []
   const runtime = [
-    { title: t('overview.requestAdmission'), icon: Activity, items: [{ label: t('overview.nodeInFlight'), value: count(m.local.inFlight) }, { label: t('overview.nodeAvailablePermits'), value: count(m.local.availablePermits) }, { label: t('overview.globalInFlight'), value: count(m.distributed.inFlight) }, { label: t('overview.globalAvailablePermits'), value: count(m.distributed.availablePermits) }] },
+    { title: t('overview.requestAdmission'), icon: Activity, items: [{ label: t('overview.nodeInFlight'), value: count(m.local.inFlight) }, { label: t('overview.nodeAvailablePermits'), value: count(m.local.availablePermits) }, ] },
     { title: t('overview.usageWrites'), icon: ListTodo, items: [{ label: t('overview.awaitingAcknowledgement'), value: count(m.usageQueue.groupPending) }, { label: t('overview.awaitingDelivery'), value: count(m.usageQueue.groupLag) }, { label: t('overview.deadLetters'), value: count(m.usageQueue.dlqLength) }, { label: t('overview.oldestPendingMs'), value: count(m.usageQueue.oldestPendingIdleMs) }] },
   ]
   if (!props.resources) return runtime

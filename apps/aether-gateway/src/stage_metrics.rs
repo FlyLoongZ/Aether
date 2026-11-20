@@ -148,7 +148,6 @@ static STAGE_METRICS_ENABLED: LazyLock<bool> = LazyLock::new(|| {
 static STAGE_TRACE_CONFIG: LazyLock<RequestStageTraceConfig> =
     LazyLock::new(read_stage_trace_config);
 static STAGE_TRACE_SAMPLE_COUNTER: AtomicU64 = AtomicU64::new(0);
-static STREAM_PRE_FIRST_BYTE_SPAWN_TOTAL: AtomicU64 = AtomicU64::new(0);
 static OPENAI_CHAT_STREAM_RAW_TARGET_SELECT_SCANNED_TOTAL: AtomicU64 = AtomicU64::new(0);
 static OPENAI_CHAT_STREAM_PAYLOAD_BUILD_SELECTED_TOTAL: AtomicU64 = AtomicU64::new(0);
 static OPENAI_CHAT_STREAM_PAYLOAD_BUILD_PREFETCH_AVOIDED_TOTAL: AtomicU64 = AtomicU64::new(0);
@@ -265,12 +264,6 @@ fn gateway_stage_metric_samples_for_enabled(enabled: bool) -> Vec<MetricSample> 
         "Whether detailed gateway stage latency histograms are enabled.",
         MetricKind::Gauge,
         u64::from(enabled),
-    ));
-    samples.push(MetricSample::new(
-        "stream_pre_first_byte_spawn_total",
-        "Number of per-request tasks spawned before the first client-visible stream byte.",
-        MetricKind::Counter,
-        STREAM_PRE_FIRST_BYTE_SPAWN_TOTAL.load(Ordering::Relaxed),
     ));
     samples.push(MetricSample::new(
         "openai_chat_stream_target_select_raw_candidates_scanned_total",
@@ -581,7 +574,7 @@ mod tests {
         let samples = gateway_stage_metric_samples_for_enabled(false);
         let names = samples.iter().map(|sample| sample.name).collect::<Vec<_>>();
 
-        assert_eq!(samples.len(), 10);
+        assert_eq!(samples.len(), 9);
         assert!(!names
             .iter()
             .any(|name| name.starts_with("gateway_stage_latency_")));
@@ -589,7 +582,6 @@ mod tests {
             .iter()
             .any(|sample| { sample.name == "gateway_stage_metrics_enabled" && sample.value == 0 }));
         for counter in [
-            "stream_pre_first_byte_spawn_total",
             "openai_chat_stream_target_select_raw_candidates_scanned_total",
             "openai_chat_stream_payload_build_selected_total",
             "openai_chat_stream_payload_build_prefetch_avoided_total",

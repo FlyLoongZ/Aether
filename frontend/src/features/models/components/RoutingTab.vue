@@ -104,289 +104,289 @@
             <div v-if="isFormatExpanded(formatGroup.api_format)">
               <!-- ========== 提供商优先模式 ========== -->
               <div class="py-2 pl-3">
-                  <div
-                    v-for="(providerEntry, providerIndex) in formatGroup.providers"
-                    :key="`${providerEntry.provider.id}-${providerEntry.endpoint?.id || providerIndex}`"
-                  >
-                    <!-- 提供商行 -->
-                    <div class="flex py-1">
-                      <!-- 左侧：节点 + 连线 -->
-                      <div class="w-6 flex flex-col items-center shrink-0 self-stretch">
-                        <!-- 上半段连线 -->
-                        <div
-                          class="w-0.5 h-5"
-                          :class="providerIndex === 0 ? 'bg-transparent' : 'bg-border'"
-                        />
-                        <!-- 节点圆点 -->
-                        <div
-                          class="w-3 h-3 rounded-full border-2 shrink-0"
-                          :class="getFormatProviderNodeClass(providerEntry, providerIndex)"
-                        />
-                        <!-- 下半段连线（延伸到底部） -->
-                        <div
-                          class="w-0.5 flex-1"
-                          :class="providerIndex === formatGroup.providers.length - 1 ? 'bg-transparent' : 'bg-border'"
-                        />
-                      </div>
-
-                      <!-- 提供商卡片 -->
+                <div
+                  v-for="(providerEntry, providerIndex) in formatGroup.providers"
+                  :key="`${providerEntry.provider.id}-${providerEntry.endpoint?.id || providerIndex}`"
+                >
+                  <!-- 提供商行 -->
+                  <div class="flex py-1">
+                    <!-- 左侧：节点 + 连线 -->
+                    <div class="w-6 flex flex-col items-center shrink-0 self-stretch">
+                      <!-- 上半段连线 -->
                       <div
-                        class="flex-1 mr-3"
-                        :class="!providerEntry.provider.is_active || !providerEntry.provider.model_is_active ? 'opacity-50' : ''"
-                      >
-                        <div
-                          class="group rounded-lg transition-all"
-                          :class="getFormatProviderCardClass(providerEntry, providerIndex)"
-                        >
-                          <!-- 卡片头部 -->
-                          <div
-                            class="p-2.5 cursor-pointer"
-                            @click="toggleProviderInFormat(formatGroup.api_format, providerEntry.provider.id, providerEntry.endpoint?.id)"
-                          >
-                            <div class="flex items-center gap-2">
-                              <!-- 第一列：优先级标签（固定宽度，用于对齐） -->
-                              <div
-                                v-if="providerEntry.provider.is_active && providerEntry.provider.model_is_active"
-                                class="min-w-8 px-1.5 py-0.5 rounded-full text-[10px] font-medium shrink-0 text-center"
-                                :class="providerIndex === 0
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted-foreground/20 text-muted-foreground'"
-                              >
-                                <span v-if="providerIndex === 0">{{ t('ui.preferred') }}</span>
-                                <span v-else>P{{ providerEntry.provider.provider_priority }}</span>
-                              </div>
-
-                              <!-- 第二列：状态指示灯 -->
-                              <span
-                                class="w-1.5 h-1.5 rounded-full shrink-0"
-                                :class="getProviderStatusClass(providerEntry.provider)"
-                              />
-
-                              <!-- 第三列：名称(第一行) + URL(第二行) -->
-                              <div class="min-w-0 flex-1">
-                                <!-- 第一行：提供商名称 + 模型映射 -->
-                                <div class="flex items-center gap-1">
-                                  <span class="text-sm font-medium truncate">{{ providerEntry.provider.name }}</span>
-                                  <span
-                                    v-if="hasModelMapping(providerEntry.provider)"
-                                    class="text-[10px] text-muted-foreground shrink-0"
-                                  >
-                                    ({{ providerEntry.provider.provider_model_name }})
-                                  </span>
-                                </div>
-                                <!-- 第二行：Endpoint URL -->
-                                <div
-                                  v-if="providerEntry.endpoint"
-                                  class="text-[10px] text-muted-foreground truncate"
-                                >
-                                  {{ providerEntry.endpoint.base_url }}{{ providerEntry.endpoint.custom_path || '' }}
-                                </div>
-                              </div>
-
-                              <!-- 第四列：操作区域 -->
-                              <div class="flex items-center gap-1 shrink-0">
-                                <!-- 计费标签 -->
-                                <span
-                                  v-if="providerEntry.provider.billing_type"
-                                  class="text-[10px] text-muted-foreground mr-1"
-                                >
-                                  {{ getBillingLabel(providerEntry.provider) }}
-                                </span>
-                                <!-- Keys 统计 -->
-                                <span class="text-[10px] text-muted-foreground">
-                                  {{ providerEntry.active_keys }}/{{ providerEntry.keys.length }} Keys
-                                </span>
-                                <!-- 操作按钮 -->
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  class="h-6 w-6"
-                                  :title="providerEntry.provider.model_is_active ? t('ui.disableThisLink') : t('ui.enableThisLink')"
-                                  @click.stop="$emit('toggleProviderStatus', providerEntry.provider)"
-                                >
-                                  <Power class="w-3 h-3" />
-                                </Button>
-                                <!-- 展开图标 -->
-                                <ChevronDown
-                                  class="w-3.5 h-3.5 text-muted-foreground transition-transform"
-                                  :class="isProviderInFormatExpanded(formatGroup.api_format, providerEntry.provider.id, providerEntry.endpoint?.id) ? 'rotate-180' : ''"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <!-- 展开的 Keys 详情 -->
-                          <Transition name="collapse">
-                            <div
-                              v-if="isProviderInFormatExpanded(formatGroup.api_format, providerEntry.provider.id, providerEntry.endpoint?.id)"
-                              class="border-t border-border/30 p-2.5"
-                            >
-                              <!-- 模型映射显示 -->
-                              <div
-                                v-if="hasModelMapping(providerEntry.provider)"
-                                class="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-2 px-1"
-                              >
-                                <span class="text-muted-foreground/60">{{ t('ui.mapping40df04b') }}</span>
-                                <span class="text-primary/70 font-medium">{{ providerEntry.provider.provider_model_name }}</span>
-                              </div>
-                              <!-- Keys 列表 -->
-                              <div
-                                v-if="providerEntry.keys.length > 0"
-                                class="relative"
-                              >
-                                <div
-                                  v-for="(group, groupIndex) in getKeyPriorityGroups(providerEntry.keys)"
-                                  :key="groupIndex"
-                                >
-                                  <!-- 第一组且有多个 key 时显示调度行为标签 -->
-                                  <div
-                                    v-if="groupIndex === 0 && group.keys.length > 1"
-                                    class="flex items-center gap-1 text-[10px] text-muted-foreground/60 mb-0.5 ml-4"
-                                  >
-                                    <span>{{ samePriorityLabel }}</span>
-                                  </div>
-
-                                  <!-- 该优先级组内的 Keys -->
-                                  <div class="relative">
-                                    <!-- 垂直主干线 -->
-                                    <div
-                                      v-if="group.keys.length > 1"
-                                      class="absolute left-1 top-2 w-px bg-border"
-                                      :style="{ height: `calc(100% - 1rem)` }"
-                                    />
-
-                                    <div
-                                      v-for="(key, keyIndex) in group.keys"
-                                      :key="key.id"
-                                      class="relative flex items-center gap-2"
-                                    >
-                                      <!-- 第一列：节点（与优先级标签对齐，min-w-8） -->
-                                      <div class="min-w-8 flex items-center justify-center shrink-0">
-                                        <div
-                                          class="w-2 h-2 rounded-full border-2 z-10"
-                                          :class="groupIndex === 0 && keyIndex === 0
-                                            ? 'bg-primary border-primary'
-                                            : 'bg-background border-muted-foreground/40'"
-                                        />
-                                      </div>
-
-                                      <!-- 第二列：状态灯（与提供商状态灯对齐） -->
-                                      <span
-                                        class="w-1.5 h-1.5 rounded-full shrink-0"
-                                        :class="getKeyStatusClass(key)"
-                                      />
-
-                                      <!-- 第三列：Key 信息 -->
-                                      <div
-                                        class="flex-1 min-w-0 flex items-center gap-1.5 px-2 py-1 my-0.5 rounded text-xs"
-                                        :class="[
-                                          groupIndex === 0 ? 'bg-primary/5' : 'bg-muted/30',
-                                          !key.is_active ? 'opacity-50' : ''
-                                        ]"
-                                        :title="getKeyTooltip(key)"
-                                      >
-                                        <!-- 名称 + sk + 映射（垂直堆叠） -->
-                                        <div class="min-w-0 flex flex-col">
-                                          <span
-                                            class="font-medium truncate"
-                                            :class="key.circuit_breaker_open ? 'text-destructive' : ''"
-                                          >
-                                            {{ key.name }}
-                                          </span>
-                                          <div class="flex items-center gap-1">
-                                            <code class="font-mono text-[10px] text-muted-foreground/60">
-                                              {{ key.masked_key }}
-                                            </code>
-                                            <template v-if="getKeyMatchedModels(key).length > 0">
-                                              <span class="text-[10px] text-muted-foreground/40">·</span>
-                                              <span
-                                                class="text-[10px] text-primary/70"
-                                                :title="getKeyMatchedModels(key).join(', ')"
-                                              >{{ formatMatchedModels(getKeyMatchedModels(key)) }}</span>
-                                            </template>
-                                          </div>
-                                        </div>
-                                        <span class="flex-1" />
-                                        <!-- 熔断徽章（带倒计时）- 靠右 -->
-                                        <Badge
-                                          v-if="key.circuit_breaker_open"
-                                          variant="destructive"
-                                          class="text-[9px] px-1 py-0 h-4 shrink-0 tabular-nums"
-                                        >
-                                          {{ t('ui.circuitOpen') }}{{ getKeyProbeCountdown(key) }}
-                                        </Badge>
-                                        <!-- 健康度（进度条 + 百分比） -->
-                                        <div class="flex items-center gap-1 shrink-0">
-                                          <div class="w-8 h-1 bg-muted/80 rounded-full overflow-hidden">
-                                            <div
-                                              class="h-full transition-all duration-300"
-                                              :class="getHealthScoreBarColor(key.health_score)"
-                                              :style="{ width: `${(key.health_score || 0) * 100}%` }"
-                                            />
-                                          </div>
-                                          <span
-                                            class="text-[10px] font-medium tabular-nums"
-                                            :class="getHealthScoreTextColor(key.health_score)"
-                                          >
-                                            {{ ((key.health_score || 0) * 100).toFixed(0) }}%
-                                          </span>
-                                        </div>
-                                        <!-- 刷新健康按钮 -->
-                                        <button
-                                          v-if="key.circuit_breaker_open || (key.health_score ?? 1) < 0.5"
-                                          class="p-0.5 rounded hover:bg-muted/50 text-green-600 shrink-0"
-                                          :title="t('ui.refreshHealthStatus')"
-                                          @click.stop="handleRecoverKey(key.id, providerEntry.endpoint?.api_format || formatGroup.api_format)"
-                                        >
-                                          <RefreshCw class="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <!-- 优先级组之间的降级标记 -->
-                                  <div
-                                    v-if="groupIndex < getKeyPriorityGroups(providerEntry.keys).length - 1"
-                                    class="flex items-center my-0.5 text-[10px] text-muted-foreground/50"
-                                  >
-                                    <!-- 箭头居中于节点列 -->
-                                    <div class="min-w-8 flex items-center justify-center shrink-0">
-                                      <ArrowDown class="w-3 h-3" />
-                                    </div>
-                                    <span>
-                                      {{ getDemoteLabel(getKeyPriorityGroups(providerEntry.keys)[groupIndex + 1].keys.length) }}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div
-                                v-else
-                                class="text-[10px] text-muted-foreground"
-                              >
-                                {{ t('ui.noKeysAvailable') }}
-                              </div>
-                            </div>
-                          </Transition>
-                        </div>
-                      </div>
+                        class="w-0.5 h-5"
+                        :class="providerIndex === 0 ? 'bg-transparent' : 'bg-border'"
+                      />
+                      <!-- 节点圆点 -->
+                      <div
+                        class="w-3 h-3 rounded-full border-2 shrink-0"
+                        :class="getFormatProviderNodeClass(providerEntry, providerIndex)"
+                      />
+                      <!-- 下半段连线（延伸到底部） -->
+                      <div
+                        class="w-0.5 flex-1"
+                        :class="providerIndex === formatGroup.providers.length - 1 ? 'bg-transparent' : 'bg-border'"
+                      />
                     </div>
 
-                    <!-- 降级标记 -->
+                    <!-- 提供商卡片 -->
                     <div
-                      v-if="providerIndex < formatGroup.providers.length - 1"
-                      class="flex py-0.5"
+                      class="flex-1 mr-3"
+                      :class="!providerEntry.provider.is_active || !providerEntry.provider.model_is_active ? 'opacity-50' : ''"
                     >
-                      <div class="w-6 flex justify-center shrink-0">
-                        <div class="w-0.5 h-full bg-border" />
-                      </div>
-                      <div class="flex items-center gap-1 text-[10px] text-muted-foreground/50">
-                        <ArrowDown class="w-3 h-3" />
-                        <span>{{ t('ui.fallback') }}</span>
+                      <div
+                        class="group rounded-lg transition-all"
+                        :class="getFormatProviderCardClass(providerEntry, providerIndex)"
+                      >
+                        <!-- 卡片头部 -->
+                        <div
+                          class="p-2.5 cursor-pointer"
+                          @click="toggleProviderInFormat(formatGroup.api_format, providerEntry.provider.id, providerEntry.endpoint?.id)"
+                        >
+                          <div class="flex items-center gap-2">
+                            <!-- 第一列：优先级标签（固定宽度，用于对齐） -->
+                            <div
+                              v-if="providerEntry.provider.is_active && providerEntry.provider.model_is_active"
+                              class="min-w-8 px-1.5 py-0.5 rounded-full text-[10px] font-medium shrink-0 text-center"
+                              :class="providerIndex === 0
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted-foreground/20 text-muted-foreground'"
+                            >
+                              <span v-if="providerIndex === 0">{{ t('ui.preferred') }}</span>
+                              <span v-else>P{{ providerEntry.provider.provider_priority }}</span>
+                            </div>
+
+                            <!-- 第二列：状态指示灯 -->
+                            <span
+                              class="w-1.5 h-1.5 rounded-full shrink-0"
+                              :class="getProviderStatusClass(providerEntry.provider)"
+                            />
+
+                            <!-- 第三列：名称(第一行) + URL(第二行) -->
+                            <div class="min-w-0 flex-1">
+                              <!-- 第一行：提供商名称 + 模型映射 -->
+                              <div class="flex items-center gap-1">
+                                <span class="text-sm font-medium truncate">{{ providerEntry.provider.name }}</span>
+                                <span
+                                  v-if="hasModelMapping(providerEntry.provider)"
+                                  class="text-[10px] text-muted-foreground shrink-0"
+                                >
+                                  ({{ providerEntry.provider.provider_model_name }})
+                                </span>
+                              </div>
+                              <!-- 第二行：Endpoint URL -->
+                              <div
+                                v-if="providerEntry.endpoint"
+                                class="text-[10px] text-muted-foreground truncate"
+                              >
+                                {{ providerEntry.endpoint.base_url }}{{ providerEntry.endpoint.custom_path || '' }}
+                              </div>
+                            </div>
+
+                            <!-- 第四列：操作区域 -->
+                            <div class="flex items-center gap-1 shrink-0">
+                              <!-- 计费标签 -->
+                              <span
+                                v-if="providerEntry.provider.billing_type"
+                                class="text-[10px] text-muted-foreground mr-1"
+                              >
+                                {{ getBillingLabel(providerEntry.provider) }}
+                              </span>
+                              <!-- Keys 统计 -->
+                              <span class="text-[10px] text-muted-foreground">
+                                {{ providerEntry.active_keys }}/{{ providerEntry.keys.length }} Keys
+                              </span>
+                              <!-- 操作按钮 -->
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-6 w-6"
+                                :title="providerEntry.provider.model_is_active ? t('ui.disableThisLink') : t('ui.enableThisLink')"
+                                @click.stop="$emit('toggleProviderStatus', providerEntry.provider)"
+                              >
+                                <Power class="w-3 h-3" />
+                              </Button>
+                              <!-- 展开图标 -->
+                              <ChevronDown
+                                class="w-3.5 h-3.5 text-muted-foreground transition-transform"
+                                :class="isProviderInFormatExpanded(formatGroup.api_format, providerEntry.provider.id, providerEntry.endpoint?.id) ? 'rotate-180' : ''"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- 展开的 Keys 详情 -->
+                        <Transition name="collapse">
+                          <div
+                            v-if="isProviderInFormatExpanded(formatGroup.api_format, providerEntry.provider.id, providerEntry.endpoint?.id)"
+                            class="border-t border-border/30 p-2.5"
+                          >
+                            <!-- 模型映射显示 -->
+                            <div
+                              v-if="hasModelMapping(providerEntry.provider)"
+                              class="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-2 px-1"
+                            >
+                              <span class="text-muted-foreground/60">{{ t('ui.mapping40df04b') }}</span>
+                              <span class="text-primary/70 font-medium">{{ providerEntry.provider.provider_model_name }}</span>
+                            </div>
+                            <!-- Keys 列表 -->
+                            <div
+                              v-if="providerEntry.keys.length > 0"
+                              class="relative"
+                            >
+                              <div
+                                v-for="(group, groupIndex) in getKeyPriorityGroups(providerEntry.keys)"
+                                :key="groupIndex"
+                              >
+                                <!-- 第一组且有多个 key 时显示调度行为标签 -->
+                                <div
+                                  v-if="groupIndex === 0 && group.keys.length > 1"
+                                  class="flex items-center gap-1 text-[10px] text-muted-foreground/60 mb-0.5 ml-4"
+                                >
+                                  <span>{{ samePriorityLabel }}</span>
+                                </div>
+
+                                <!-- 该优先级组内的 Keys -->
+                                <div class="relative">
+                                  <!-- 垂直主干线 -->
+                                  <div
+                                    v-if="group.keys.length > 1"
+                                    class="absolute left-1 top-2 w-px bg-border"
+                                    :style="{ height: `calc(100% - 1rem)` }"
+                                  />
+
+                                  <div
+                                    v-for="(key, keyIndex) in group.keys"
+                                    :key="key.id"
+                                    class="relative flex items-center gap-2"
+                                  >
+                                    <!-- 第一列：节点（与优先级标签对齐，min-w-8） -->
+                                    <div class="min-w-8 flex items-center justify-center shrink-0">
+                                      <div
+                                        class="w-2 h-2 rounded-full border-2 z-10"
+                                        :class="groupIndex === 0 && keyIndex === 0
+                                          ? 'bg-primary border-primary'
+                                          : 'bg-background border-muted-foreground/40'"
+                                      />
+                                    </div>
+
+                                    <!-- 第二列：状态灯（与提供商状态灯对齐） -->
+                                    <span
+                                      class="w-1.5 h-1.5 rounded-full shrink-0"
+                                      :class="getKeyStatusClass(key)"
+                                    />
+
+                                    <!-- 第三列：Key 信息 -->
+                                    <div
+                                      class="flex-1 min-w-0 flex items-center gap-1.5 px-2 py-1 my-0.5 rounded text-xs"
+                                      :class="[
+                                        groupIndex === 0 ? 'bg-primary/5' : 'bg-muted/30',
+                                        !key.is_active ? 'opacity-50' : ''
+                                      ]"
+                                      :title="getKeyTooltip(key)"
+                                    >
+                                      <!-- 名称 + sk + 映射（垂直堆叠） -->
+                                      <div class="min-w-0 flex flex-col">
+                                        <span
+                                          class="font-medium truncate"
+                                          :class="key.circuit_breaker_open ? 'text-destructive' : ''"
+                                        >
+                                          {{ key.name }}
+                                        </span>
+                                        <div class="flex items-center gap-1">
+                                          <code class="font-mono text-[10px] text-muted-foreground/60">
+                                            {{ key.masked_key }}
+                                          </code>
+                                          <template v-if="getKeyMatchedModels(key).length > 0">
+                                            <span class="text-[10px] text-muted-foreground/40">·</span>
+                                            <span
+                                              class="text-[10px] text-primary/70"
+                                              :title="getKeyMatchedModels(key).join(', ')"
+                                            >{{ formatMatchedModels(getKeyMatchedModels(key)) }}</span>
+                                          </template>
+                                        </div>
+                                      </div>
+                                      <span class="flex-1" />
+                                      <!-- 熔断徽章（带倒计时）- 靠右 -->
+                                      <Badge
+                                        v-if="key.circuit_breaker_open"
+                                        variant="destructive"
+                                        class="text-[9px] px-1 py-0 h-4 shrink-0 tabular-nums"
+                                      >
+                                        {{ t('ui.circuitOpen') }}{{ getKeyProbeCountdown(key) }}
+                                      </Badge>
+                                      <!-- 健康度（进度条 + 百分比） -->
+                                      <div class="flex items-center gap-1 shrink-0">
+                                        <div class="w-8 h-1 bg-muted/80 rounded-full overflow-hidden">
+                                          <div
+                                            class="h-full transition-all duration-300"
+                                            :class="getHealthScoreBarColor(key.health_score)"
+                                            :style="{ width: `${(key.health_score || 0) * 100}%` }"
+                                          />
+                                        </div>
+                                        <span
+                                          class="text-[10px] font-medium tabular-nums"
+                                          :class="getHealthScoreTextColor(key.health_score)"
+                                        >
+                                          {{ ((key.health_score || 0) * 100).toFixed(0) }}%
+                                        </span>
+                                      </div>
+                                      <!-- 刷新健康按钮 -->
+                                      <button
+                                        v-if="key.circuit_breaker_open || (key.health_score ?? 1) < 0.5"
+                                        class="p-0.5 rounded hover:bg-muted/50 text-green-600 shrink-0"
+                                        :title="t('ui.refreshHealthStatus')"
+                                        @click.stop="handleRecoverKey(key.id, providerEntry.endpoint?.api_format || formatGroup.api_format)"
+                                      >
+                                        <RefreshCw class="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <!-- 优先级组之间的降级标记 -->
+                                <div
+                                  v-if="groupIndex < getKeyPriorityGroups(providerEntry.keys).length - 1"
+                                  class="flex items-center my-0.5 text-[10px] text-muted-foreground/50"
+                                >
+                                  <!-- 箭头居中于节点列 -->
+                                  <div class="min-w-8 flex items-center justify-center shrink-0">
+                                    <ArrowDown class="w-3 h-3" />
+                                  </div>
+                                  <span>
+                                    {{ getDemoteLabel(getKeyPriorityGroups(providerEntry.keys)[groupIndex + 1].keys.length) }}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              v-else
+                              class="text-[10px] text-muted-foreground"
+                            >
+                              {{ t('ui.noKeysAvailable') }}
+                            </div>
+                          </div>
+                        </Transition>
                       </div>
                     </div>
                   </div>
+
+                  <!-- 降级标记 -->
+                  <div
+                    v-if="providerIndex < formatGroup.providers.length - 1"
+                    class="flex py-0.5"
+                  >
+                    <div class="w-6 flex justify-center shrink-0">
+                      <div class="w-0.5 h-full bg-border" />
+                    </div>
+                    <div class="flex items-center gap-1 text-[10px] text-muted-foreground/50">
+                      <ArrowDown class="w-3 h-3" />
+                      <span>{{ t('ui.fallback') }}</span>
+                    </div>
+                  </div>
                 </div>
+              </div>
             </div>
           </Transition>
         </div>

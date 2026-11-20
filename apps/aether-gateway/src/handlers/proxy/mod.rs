@@ -873,8 +873,7 @@ async fn proxy_request_inner(
         );
     }
     let local_proxy_body = if local_proxy_route_requires_buffered_body(&request_context) {
-        let body_buffer_policy =
-            RequestBodyBufferPolicy::for_request_context(&state, &request_context);
+        let body_buffer_policy = RequestBodyBufferPolicy::from_state(&state);
         let stage_started_at = Instant::now();
         let body = buffer_and_normalize_request_body(
             &mut request_body,
@@ -1004,8 +1003,7 @@ async fn proxy_request_inner(
         || should_buffer_for_local_ai_public;
 
     let buffered_body = if should_buffer_body {
-        let body_buffer_policy =
-            RequestBodyBufferPolicy::for_request_context(&state, &request_context);
+        let body_buffer_policy = RequestBodyBufferPolicy::from_state(&state);
         let stage_started_at = Instant::now();
         let body = buffer_and_normalize_request_body(
             &mut request_body,

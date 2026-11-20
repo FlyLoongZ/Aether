@@ -23,7 +23,6 @@ import {
   SlidersHorizontal,
   Users,
   Wallet,
-  Zap,
   Megaphone,
 } from '@lucide/vue'
 import type { NavigationGroup } from '@/components/layout/SidebarNav.vue'
@@ -133,7 +132,6 @@ export function buildNavigation(options: {
         { name: t('nav.walletManagement'), href: '/admin/wallets', icon: Wallet },
         { name: t('nav.billingManagement'), href: '/admin/billing-plans', icon: Package },
         ...activeModuleItems(modules, 'management'),
-        { name: t('nav.asyncTasks'), href: '/admin/async-tasks', icon: Zap },
         { name: t('nav.usageRecords'), href: '/admin/usage', icon: BarChart3 },
       ]
     },

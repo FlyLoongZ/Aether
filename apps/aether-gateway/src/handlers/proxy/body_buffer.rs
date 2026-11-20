@@ -24,10 +24,6 @@ impl RequestBodyBufferPolicy {
         Self::from_state_with_max_bytes(state, crate::headers::max_request_body_bytes())
     }
 
-    pub(super) fn for_request_context(state: &AppState, _: &GatewayPublicRequestContext) -> Self {
-        Self::from_state(state)
-    }
-
     fn from_state_with_max_bytes(state: &AppState, max_bytes: u64) -> Self {
         Self {
             inner: FrontdoorBodyBufferPolicy::with_optional_read_timeout_and_permit_bytes(

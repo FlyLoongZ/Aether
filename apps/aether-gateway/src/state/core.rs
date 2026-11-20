@@ -915,7 +915,6 @@ impl AppState {
         // clear it together with the request-level auth caches so a key or
         // wallet mutation is visible immediately when refresh-on-hit is off.
         self.data.clear_auth_api_key_read_cache();
-        self.data.clear_auth_api_key_read_cache();
         self.auth_context_cache.invalidate_all();
         self.auth_snapshot_cache.clear();
         self.user_model_capability_settings_cache.clear();
