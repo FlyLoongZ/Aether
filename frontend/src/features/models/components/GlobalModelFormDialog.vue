@@ -369,7 +369,7 @@
               v-model="billingMode"
               @update:model-value="handleBillingModeChange"
             >
-              <TabsList class="grid w-full grid-cols-4">
+              <TabsList class="grid w-full grid-cols-3">
                 <TabsTrigger value="token">
                   Token
                 </TabsTrigger>
@@ -378,9 +378,6 @@
                 </TabsTrigger>
                 <TabsTrigger value="image">
                   {{ t('ui.image') }}
-                </TabsTrigger>
-                <TabsTrigger value="video">
-                  {{ t('ui.video') }}
                 </TabsTrigger>
               </TabsList>
 
@@ -415,110 +412,6 @@
                   <p class="text-xs text-muted-foreground">
                     {{ t('ui.chargeAFixedAmountPerApiRequestOptionallyCombinedWith') }}
                   </p>
-                </div>
-              </TabsContent>
-
-              <TabsContent
-                value="video"
-                class="pt-2"
-              >
-                <div class="space-y-3 rounded-lg border bg-muted/20 p-4">
-                  <div>
-                    <div class="text-sm font-medium">
-                      {{ t('ui.videoPricingResolutionDuration') }}
-                    </div>
-                    <p class="mt-1 text-xs text-muted-foreground">
-                      {{ t('ui.setVideoPricingPerSecondByOutputResolution') }}
-                    </p>
-                  </div>
-
-                  <div class="flex items-center gap-1.5 flex-wrap">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      class="h-7 text-xs"
-                      @click="fillVideoResolutionPricePreset('common')"
-                    >
-                      {{ t('ui.general') }}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      class="h-7 text-xs"
-                      @click="fillVideoResolutionPricePreset('sora')"
-                    >
-                      Sora
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      class="h-7 text-xs"
-                      @click="fillVideoResolutionPricePreset('veo')"
-                    >
-                      Veo
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      class="h-7 text-xs"
-                      @click="addVideoResolutionPriceRow"
-                    >
-                      <Plus class="w-3.5 h-3.5 mr-0.5" /> {{ t('ui.custom4eafa9e') }}
-                    </Button>
-                  </div>
-
-                  <div
-                    v-if="videoResolutionPrices.length > 0"
-                    class="rounded-lg border border-border overflow-hidden"
-                  >
-                    <div class="grid grid-cols-[1fr_1fr_32px] gap-0 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 border-b border-border">
-                      <span>{{ t('ui.resolution') }}</span>
-                      <span>{{ t('ui.unitPriceSecond') }}</span>
-                      <span />
-                    </div>
-                    <div class="divide-y divide-border">
-                      <div
-                        v-for="(row, idx) in videoResolutionPrices"
-                        :key="idx"
-                        class="grid grid-cols-[1fr_1fr_32px] gap-2 items-center px-3 py-1.5"
-                      >
-                        <Input
-                          v-model="row.resolution"
-                          class="h-7 text-sm"
-                          :placeholder="t('ui.eG720p')"
-                        />
-                        <Input
-                          :model-value="row.price_per_second ?? ''"
-                          type="number"
-                          step="0.0001"
-                          min="0"
-                          class="h-7 text-sm"
-                          placeholder="0"
-                          @update:model-value="(v) => row.price_per_second = parseNumberInput(v, { allowFloat: true })"
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          class="h-7 w-7"
-                          :title="t('ui.delete')"
-                          @click="removeVideoResolutionPriceRow(idx)"
-                        >
-                          <Trash2 class="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    v-else
-                    class="rounded-lg border border-dashed py-8 text-center text-xs text-muted-foreground"
-                  >
-                    {{ t('ui.selectAPricingPresetOrAddACustomResolution') }}
-                  </div>
                 </div>
               </TabsContent>
             </Tabs>
@@ -572,8 +465,6 @@ import {
   Loader2,
   Layers,
   SquarePen,
-  Plus,
-  Trash2,
   Check,
   RefreshCw,
 } from '@lucide/vue'
@@ -585,7 +476,7 @@ import {
 import { useToast } from '@/composables/useToast'
 import { useFormDialog } from '@/composables/useFormDialog'
 import { useI18n } from '@/i18n'
-import { parseNumberInput, sortResolutionEntries } from '@/utils/form'
+import { parseNumberInput } from '@/utils/form'
 import { log } from '@/utils/logger'
 import { parseApiError } from '@/utils/errorParser'
 import TieredPricingEditor from './TieredPricingEditor.vue'
@@ -619,13 +510,6 @@ import {
   useModelsDevPricingSources,
   withModelsDevPricingSource,
 } from '../composables/useModelsDevPricingSources'
-import {
-  normalizeResolutionKey,
-  VIDEO_RESOLUTION_PRICE_PRESETS,
-  type VideoResolutionPricePreset,
-  type VideoResolutionPriceRow,
-} from '@/features/models/utils/video-pricing'
-
 const props = defineProps<{
   open: boolean
   model?: GlobalModelResponse | null
@@ -721,15 +605,6 @@ function reopenPresetPanel() {
 
 // 阶梯计费配置
 const tieredPricing = ref<TieredPricingConfig | null>(null)
-
-function fillVideoResolutionPricePreset(preset: VideoResolutionPricePreset) {
-  videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(row => ({
-    resolution: row.resolution,
-    price_per_second: row.price_per_second,
-  }))
-}
-
-const videoResolutionPrices = ref<VideoResolutionPriceRow[]>([])
 
 const embeddingApiFormats = [...EMBEDDING_API_FORMATS]
 
@@ -827,115 +702,6 @@ function setImageGenerationEnabled(value: boolean | 'indeterminate') {
     if (form.value.config?.model_type === 'image') setConfigField('model_type', undefined)
   }
   form.value.supported_capabilities = [...caps]
-}
-
-function getNested(obj: unknown, path: string): unknown {
-  if (!obj || typeof obj !== 'object') return undefined
-  const parts = path.split('.').filter(Boolean)
-  let cur = obj as Record<string, unknown>
-  for (const p of parts) {
-    if (!cur || typeof cur !== 'object') return undefined
-    cur = cur[p] as Record<string, unknown>
-  }
-  return cur
-}
-
-function setNested(obj: unknown, path: string, value: unknown) {
-  if (!obj || typeof obj !== 'object') return
-  const parts = path.split('.').filter(Boolean)
-  if (parts.length === 0) return
-  let cur = obj as Record<string, unknown>
-  for (let i = 0; i < parts.length - 1; i++) {
-    const p = parts[i]
-    if (!cur[p] || typeof cur[p] !== 'object') {
-      cur[p] = {}
-    }
-    cur = cur[p] as Record<string, unknown>
-  }
-  cur[parts[parts.length - 1]] = value
-}
-
-function deleteNested(obj: unknown, path: string) {
-  if (!obj || typeof obj !== 'object') return
-  const parts = path.split('.').filter(Boolean)
-  if (parts.length === 0) return
-  let cur = obj as Record<string, unknown>
-  for (let i = 0; i < parts.length - 1; i++) {
-    const p = parts[i]
-    if (!cur[p] || typeof cur[p] !== 'object') return
-    cur = cur[p] as Record<string, unknown>
-  }
-  delete cur[parts[parts.length - 1]]
-}
-
-function pruneEmptyBillingConfig() {
-  const cfg = form.value.config
-  if (!cfg || typeof cfg !== 'object') return
-  const billing = cfg.billing as Record<string, unknown> | undefined
-  if (!billing || typeof billing !== 'object') return
-  const video = billing.video as Record<string, unknown> | undefined
-  if (video && typeof video === 'object' && Object.keys(video).length === 0) {
-    delete billing.video
-  }
-  if (Object.keys(billing).length === 0) {
-    delete cfg.billing
-  }
-}
-
-/**
- * Normalize resolution key:
- * - lowercase, remove spaces, × → x
- * - For WxH format, sort dimensions so smaller comes first (720x1080 = 1080x720)
- */
-function loadVideoPricingFromConfig() {
-  const cfg = form.value.config || {}
-  const raw = getNested(cfg, 'billing.video.price_per_second_by_resolution')
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    // 按分辨率从低到高排序
-    const sortedEntries = sortResolutionEntries(Object.entries(raw as Record<string, unknown>))
-    videoResolutionPrices.value = sortedEntries.map(([k, v]) => ({
-      resolution: String(k),
-      price_per_second: typeof v === 'number' ? v : undefined,
-    }))
-  } else {
-    videoResolutionPrices.value = []
-  }
-}
-
-function applyVideoPricingToConfig() {
-  if (!form.value.config) {
-    form.value.config = {}
-  }
-  const cfg = form.value.config
-
-  // Clean legacy keys
-  deleteNested(cfg, 'billing.video.price_per_second')
-  deleteNested(cfg, 'billing.video.resolution_multipliers')
-
-  // resolution/size prices (normalized: 1080x720 → 720x1080)
-  const map: Record<string, number> = {}
-  for (const row of videoResolutionPrices.value) {
-    const k = normalizeResolutionKey(row.resolution || '')
-    const v = row.price_per_second
-    if (!k) continue
-    if (typeof v !== 'number' || Number.isNaN(v)) continue
-    map[k] = v
-  }
-  if (Object.keys(map).length > 0) {
-    setNested(cfg, 'billing.video.price_per_second_by_resolution', map)
-  } else {
-    deleteNested(cfg, 'billing.video.price_per_second_by_resolution')
-  }
-
-  pruneEmptyBillingConfig()
-}
-
-function addVideoResolutionPriceRow() {
-  videoResolutionPrices.value.push({ resolution: '', price_per_second: undefined })
-}
-
-function removeVideoResolutionPriceRow(idx: number) {
-  videoResolutionPrices.value.splice(idx, 1)
 }
 
 async function loadExistingModels() {
@@ -1039,12 +805,9 @@ function selectModel(model: ModelsDevModelItem) {
   }
   if (model.outputModalities?.includes('image')) {
     billingMode.value = 'image'
-  } else if (model.outputModalities?.includes('video')) {
-    billingMode.value = 'video'
   } else {
     billingMode.value = 'token'
   }
-  loadVideoPricingFromConfig()
 
   tieredPricing.value = model.tieredPricing
     ? cloneTieredPricingConfig(model.tieredPricing)
@@ -1307,7 +1070,6 @@ function clearSelection() {
   selectedModel.value = null
   form.value = defaultForm()
   tieredPricing.value = null
-  videoResolutionPrices.value = []
   billingMode.value = 'token'
 }
 
@@ -1318,7 +1080,6 @@ function resetForm() {
   editingOnlinePricingSource.value = null
   form.value = defaultForm()
   tieredPricing.value = null
-  videoResolutionPrices.value = []
   searchQuery.value = ''
   selectedModel.value = null
   expandedProvider.value = null
@@ -1345,7 +1106,6 @@ function populateFormFromGlobalModel(model: GlobalModelResponse) {
     is_active: model.is_active,
   }
   tieredPricing.value = modelTieredPricing
-  loadVideoPricingFromConfig()
   billingMode.value = 'token'
 }
 
@@ -1401,9 +1161,6 @@ async function handleSubmit() {
     showError(t('ui.configureAtLeastOnePricingTier'))
     return
   }
-
-  // Apply billing (video) pricing into config before cleaning/submitting.
-  applyVideoPricingToConfig()
 
   // Auto-infer supported_capabilities from tiered pricing config
   const caps = new Set(form.value.supported_capabilities || [])

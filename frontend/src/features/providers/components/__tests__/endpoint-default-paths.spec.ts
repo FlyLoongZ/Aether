@@ -7,14 +7,12 @@ const apiFormats = [
   { value: 'gemini:generate_content', default_path: '/v1beta/models/{model}:{action}' },
   { value: 'gemini:interactions', default_path: '/v1/interactions' },
   { value: 'gemini:embedding', default_path: '/v1beta/models/{model}:embedContent' },
-  { value: 'gemini:video', default_path: '/v1beta/models/{model}:predictLongRunning' },
   { value: 'openai:responses', default_path: '/v1/responses' },
   { value: 'openai:realtime', default_path: '/v1/realtime' },
   { value: 'openai:search', default_path: '/v1/alpha/search' },
   { value: 'openai:embedding', default_path: '/v1/embeddings' },
   { value: 'openai:rerank', default_path: '/v1/rerank' },
   { value: 'openai:image', default_path: '/v1/images/generations' },
-  { value: 'openai:video', default_path: '/v1/videos' },
   { value: 'codex:live', default_path: '/v1/live' },
   { value: 'jina:embedding', default_path: '/v1/embeddings' },
   { value: 'jina:rerank', default_path: '/v1/rerank' },
@@ -41,11 +39,6 @@ describe('endpoint default paths', () => {
       apiFormats,
     })).toBe('/interactions')
 
-    expect(getDefaultEndpointPath({
-      apiFormat: 'gemini:video',
-      providerType: 'custom',
-      apiFormats,
-    })).toBe('/models/{model}:predictLongRunning')
   })
 
   it('uses Vertex AI project/location paths for Vertex provider Gemini endpoints', () => {
@@ -168,13 +161,6 @@ describe('endpoint default paths', () => {
     })).toBe('/images/generations')
 
     expect(getDefaultEndpointPath({
-      apiFormat: 'openai:video',
-      providerType: 'custom',
-      baseUrl: 'https://proxy.example.com/api',
-      apiFormats,
-    })).toBe('/videos')
-
-    expect(getDefaultEndpointPath({
       apiFormat: 'jina:embedding',
       providerType: 'custom',
       baseUrl: 'https://api.jina.ai/v1',
@@ -269,11 +255,6 @@ describe('endpoint default paths', () => {
     })).toBe('https://api.openai.com/v1')
 
     expect(getDefaultEndpointBaseUrl({
-      apiFormat: 'openai:video',
-      baseUrl: 'https://api.openai.com',
-    })).toBe('https://api.openai.com/v1')
-
-    expect(getDefaultEndpointBaseUrl({
       apiFormat: 'jina:embedding',
       baseUrl: 'https://api.jina.ai',
     })).toBe('https://api.jina.ai/v1')
@@ -292,11 +273,6 @@ describe('endpoint default paths', () => {
       apiFormat: 'gemini:interactions',
       baseUrl: 'https://generativelanguage.googleapis.com',
     })).toBe('https://generativelanguage.googleapis.com/v1')
-
-    expect(getDefaultEndpointBaseUrl({
-      apiFormat: 'gemini:video',
-      baseUrl: 'https://generativelanguage.googleapis.com',
-    })).toBe('https://generativelanguage.googleapis.com/v1beta')
 
     expect(getDefaultEndpointBaseUrl({
       apiFormat: 'openai:chat',

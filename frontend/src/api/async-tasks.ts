@@ -14,7 +14,6 @@ export type AsyncTaskStatus =
   | 'completed'
 
 export type AsyncTaskKind = 'scheduled' | 'daemon' | 'on_demand' | 'fire_and_forget'
-export type AsyncTaskType = AsyncTaskKind | 'video'
 
 export interface AsyncTaskDefinition {
   task_key: string
@@ -30,7 +29,6 @@ export interface AsyncTaskItem {
   task_key?: string
   kind?: AsyncTaskKind
   trigger?: string
-  task_type?: AsyncTaskType
   external_task_id?: string
   user_id?: string
   username?: string
@@ -49,10 +47,6 @@ export interface AsyncTaskItem {
   created_by?: string | null
   provider_id?: string
   provider_name?: string
-  duration_seconds?: number
-  resolution?: string
-  aspect_ratio?: string
-  video_url?: string | null
   error_code?: string | null
   poll_count?: number
   max_poll_count?: number
@@ -107,14 +101,6 @@ export interface AsyncTaskDetail extends AsyncTaskItem {
   format_converted?: boolean
   original_request_body?: unknown
   converted_request_body?: unknown
-  size?: string | null
-  video_urls?: string[] | null
-  thumbnail_url?: string | null
-  video_size_bytes?: number | null
-  video_duration_seconds?: number | null
-  video_expires_at?: string | null
-  stored_video_path?: string | null
-  storage_provider?: string | null
   retry_count?: number
   max_retries?: number
   poll_interval_seconds?: number
@@ -151,7 +137,6 @@ export interface AsyncTaskStatsResponse {
 export interface AsyncTaskQueryParams {
   status?: AsyncTaskStatus
   kind?: AsyncTaskKind
-  task_type?: AsyncTaskType
   task_key?: string
   trigger?: string
   user_id?: string
@@ -172,7 +157,6 @@ export const asyncTasksApi = {
     const searchParams = new URLSearchParams()
     if (params.status) searchParams.append('status', normalizeStatus(params.status))
     if (params.kind) searchParams.append('kind', params.kind)
-    if (params.task_type && params.task_type !== 'video') searchParams.append('kind', params.task_type)
     if (params.task_key) searchParams.append('task_key', params.task_key)
     if (params.trigger) searchParams.append('trigger', params.trigger)
     if (params.page) searchParams.append('page', params.page.toString())
@@ -201,14 +185,6 @@ export const asyncTasksApi = {
 
   async cancel(taskId: string): Promise<{ id: string; status: string; message: string }> {
     const response = await apiClient.post<{ id: string; status: string; message: string }>(`/api/admin/tasks/${taskId}/cancel`)
-    return response.data
-  },
-
-  async getVideoBlob(taskId: string): Promise<Blob> {
-    const response = await apiClient.get<Blob>(
-      `/api/admin/video-tasks/${encodeURIComponent(taskId)}/video`,
-      { responseType: 'blob', timeout: 0 },
-    )
     return response.data
   },
 

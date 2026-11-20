@@ -176,17 +176,9 @@
                       <span class="text-muted-foreground">{{ t('ui.perRequest5b310fa') }}</span>
                       <span class="font-mono ml-1">${{ model.default_price_per_request.toFixed(3) }}{{ t('ui.requestad9c0d7') }}</span>
                     </div>
-                    <!-- 视频费用计费 -->
-                    <div v-if="hasVideoPricing(model)">
-                      <span class="text-muted-foreground">{{ t('ui.video61a56bb') }}</span>
-                      <span
-                        class="font-mono ml-1"
-                        :title="getVideoPricingTooltip(model)"
-                      >{{ getVideoPricingDisplay(model) }}</span>
-                    </div>
                     <!-- 无计费配置 -->
                     <div
-                      v-if="!getFirstTierPrice(model, 'input') && !getFirstTierPrice(model, 'output') && !model.default_price_per_request && !hasVideoPricing(model)"
+                      v-if="!getFirstTierPrice(model, 'input') && !getFirstTierPrice(model, 'output') && !model.default_price_per_request"
                       class="text-muted-foreground"
                     >
                       -
@@ -434,10 +426,7 @@ import ModelBatchManageDialog from '@/features/models/components/ModelBatchManag
 import { useModelsDevPricingSourceMigration } from '@/features/models/composables/useModelsDevPricingSourceMigration'
 import {
   getFirstTierPrice,
-  getVideoPricingDisplay,
-  getVideoPricingTooltip,
   hasTieredPricing,
-  hasVideoPricing,
 } from '@/features/models/utils/globalModelPricing'
 import ProviderModelFormDialog from '@/features/providers/components/ProviderModelFormDialog.vue'
 import type { Model } from '@/api/endpoints'

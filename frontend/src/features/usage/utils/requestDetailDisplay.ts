@@ -243,35 +243,6 @@ export function formatCacheTtlLabel(ttlMinutes: number | null | undefined): stri
   return `缓存创建(${ttlMinutes}min)`
 }
 
-// 格式化视频/音频时长
-export function formatMediaDuration(seconds: number): string {
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}s`
-  }
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  if (mins < 60) {
-    return `${mins}m ${secs.toFixed(0)}s`
-  }
-  const hours = Math.floor(mins / 60)
-  const remainMins = mins % 60
-  return `${hours}h ${remainMins}m`
-}
-
-// 获取任务类型标签
-export function getTaskTypeLabel(taskType: string): string {
-  switch (taskType) {
-    case 'video':
-      return translate('ui.videoGeneration')
-    case 'image':
-      return translate('ui.imageGeneration')
-    case 'audio':
-      return translate('ui.audioGeneration')
-    default:
-      return taskType
-  }
-}
-
 export function parseImageSizePixels(size: string | null): number | null {
   if (!size) return null
   const normalized = size.trim().toLowerCase().replace(/\s+/g, '').replace(/×/g, 'x')

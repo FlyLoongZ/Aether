@@ -46,7 +46,7 @@ import { BookOpen } from '@lucide/vue'
             <li>{{ t('ui.modelPreferencesMarkWhetherThisModelSupportsTheseCapabilitiesUsually') }}</li>
             <li>
               {{ t('ui.pricingConfiguration') }} <ul class="list-[circle] pl-5 mt-1 space-y-1">
-                <li>{{ t('ui.billingMethodTokenPricePerRequestPriceVideoBillingFinal') }}</li>
+                <li>{{ t('ui.billingMethodTokenPricePerRequestPriceFinal') }}</li>
                 <li>{{ t('ui.priceTiersUseTheTotalTokenRangeNotTieredOverflow') }}</li>
               </ul>
             </li>

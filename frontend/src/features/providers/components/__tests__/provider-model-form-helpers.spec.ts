@@ -111,7 +111,7 @@ describe('provider model form embedding helpers', () => {
       tieredPricingModified: false,
       pricePerRequest: 0.25,
       pricePerRequestModified: false,
-      cleanConfig: { billing: { video: { price_per_second_by_resolution: { '720p': 0.1 } } } },
+      cleanConfig: { billing: { image_generation: true } },
       configTouched: false,
       isActive: true,
     })

@@ -293,7 +293,7 @@
 
       <!-- ========== 3. 按次计费 ========== -->
       <div
-        v-if="detailPricingAvailable && perRequestCost > 0 && !detail.video_billing"
+        v-if="detailPricingAvailable && perRequestCost > 0"
         class="space-y-2 mb-3"
       >
         <div class="flex items-center gap-2 text-xs">
@@ -361,63 +361,6 @@
           </div>
         </div>
       </div>
-
-      <!-- ========== 5. 视频/图像/音频计费（独立隔离，与Token计费风格一致） ========== -->
-      <div
-        v-if="detailPricingAvailable && detail.video_billing"
-        class="rounded-lg p-3 space-y-2 bg-primary/5 border border-primary/30"
-      >
-        <!-- 标题行（与阶梯标题行风格一致） -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 text-xs">
-          <div class="flex items-center gap-2">
-            <span class="font-medium text-primary">
-              {{ getTaskTypeLabel(detail.video_billing.task_type) }}
-            </span>
-            <span
-              v-if="detail.video_billing.resolution"
-              class="text-muted-foreground"
-            >
-              {{ detail.video_billing.resolution }}
-            </span>
-          </div>
-          <!-- 费用计算公式 -->
-          <div class="text-muted-foreground flex items-center gap-2 flex-wrap">
-            <span
-              v-if="detail.video_billing.duration_seconds && detail.video_billing.video_price_per_second"
-              class="font-mono"
-            >
-              {{ detail.video_billing.duration_seconds.toFixed(1) }}s × ${{ detail.video_billing.video_price_per_second.toFixed(4) }}/s = ${{ videoCostTotal.toFixed(6) }}
-            </span>
-            <span
-              v-else-if="detail.video_billing.video_price_per_second"
-              class="font-mono"
-            >
-              ${{ detail.video_billing.video_price_per_second.toFixed(4) }}{{ t('ui.second') }} </span>
-          </div>
-        </div>
-
-        <!-- 费用详情（与Token详情行风格一致） -->
-        <div class="flex items-center">
-          <div class="flex items-center flex-1">
-            <span class="text-xs text-muted-foreground w-[56px]">
-              {{ detail.video_billing.task_type === 'video' ? t('ui.duration04a95e0') : detail.video_billing.task_type === 'audio' ? t('ui.duration04a95e0') : t('ui.quantity') }}
-            </span>
-            <span class="text-sm font-semibold font-mono flex-1 text-center">
-              {{ detail.video_billing.duration_seconds ? formatMediaDuration(detail.video_billing.duration_seconds) : '1' }}
-            </span>
-            <span class="text-xs font-mono">${{ videoCostTotal.toFixed(6) }}</span>
-          </div>
-          <Separator
-            orientation="vertical"
-            class="h-4 mx-4 invisible"
-          />
-          <div class="flex items-center flex-1 invisible">
-            <span class="text-xs text-muted-foreground w-[56px]">{{ t('ui.placeholder064eb44') }}</span>
-            <span class="text-sm font-semibold font-mono flex-1 text-center">0</span>
-            <span class="text-xs font-mono">$0.000000</span>
-          </div>
-        </div>
-      </div>
     </div>
   </Card>
 </template>
@@ -459,13 +402,11 @@ import {
   getTierMatchedCachePricingEntry,
   hasTierCacheCreationSplitPricing,
   formatCacheTtlLabel,
-  getTaskTypeLabel,
   parseImageSizePixels,
   formatImagePriceBucket,
   formatPixels,
   formatPrice,
   getTierRangeText,
-  formatMediaDuration,
 } from '../utils/requestDetailDisplay'
 import type { CacheTTLPriceEntry, PricingTierLike, JsonRecord } from '../utils/requestDetailDisplay'
 
@@ -942,21 +883,10 @@ const tokenCostBaseTotal = computed(() => (
   + displayCacheReadCost.value
 ))
 
-// 按次计费费用（非视频任务时）
+// 按次计费费用
 const perRequestCost = computed(() => {
   if (!detail.value) return 0
-  // 视频任务的 request_cost 实际上是视频费用，不算按次
-  if (detail.value.video_billing) return 0
   return effectiveRequestCost.value
-})
-
-// 视频/图像/音频费用
-const videoCostTotal = computed(() => {
-  if (!detail.value?.video_billing) return 0
-  return detail.value.video_billing.video_cost
-    || detail.value.video_billing.cost
-    || detail.value.request_cost
-    || 0
 })
 
 // 是否有 Token 费用（用于决定是否显示 Token 计费区块）

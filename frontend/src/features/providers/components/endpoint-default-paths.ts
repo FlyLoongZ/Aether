@@ -95,7 +95,6 @@ function usesVersionedApiRootByDefault(apiFormat: string): boolean {
     || apiFormat === 'openai:embedding'
     || apiFormat === 'openai:rerank'
     || apiFormat === 'openai:image'
-    || apiFormat === 'openai:video'
     || apiFormat === 'codex:live'
     || apiFormat === 'jina:embedding'
     || apiFormat === 'jina:rerank'
@@ -103,7 +102,6 @@ function usesVersionedApiRootByDefault(apiFormat: string): boolean {
     || apiFormat === 'gemini:generate_content'
     || apiFormat === 'gemini:interactions'
     || apiFormat === 'gemini:embedding'
-    || apiFormat === 'gemini:video'
 }
 
 function versionedApiRootSuffix(apiFormat: string): '/v1' | '/v1beta' {
@@ -115,7 +113,6 @@ function versionedApiRootSuffix(apiFormat: string): '/v1' | '/v1beta' {
   if (
     apiFormat === 'gemini:generate_content'
     || apiFormat === 'gemini:embedding'
-    || apiFormat === 'gemini:video'
   ) {
     return '/v1beta'
   }
@@ -127,7 +124,6 @@ function skipsVersionedApiRootDefault(apiFormat: string, baseUrl: string): boole
     apiFormat === 'gemini:generate_content'
     || apiFormat === 'gemini:interactions'
     || apiFormat === 'gemini:embedding'
-    || apiFormat === 'gemini:video'
   ) {
     return false
   }

@@ -301,10 +301,7 @@ describe('isModelTestableApiFormat', () => {
   it.each([
     'openai:realtime',
     'codex:live',
-    'openai:video',
-    'gemini:video',
     'gemini:files',
-    '  OPENAI:VIDEO  ',
   ])('excludes endpoint formats without a model-test request contract: %s', (apiFormat) => {
     expect(isModelTestableApiFormat(apiFormat)).toBe(false)
   })

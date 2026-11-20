@@ -345,11 +345,6 @@ describe('GlobalModelFormDialog preset replacement', () => {
       document.body.querySelector<HTMLInputElement>('[data-testid="tier-input-price"]'),
       '99',
     )
-    findExactButton('视频').click()
-    await nextTick()
-    findExactButton('Sora').click()
-    await nextTick()
-
     findButton('返回选择模型').click()
     await settle()
     findButton('Fresh Model').click()
@@ -525,11 +520,6 @@ describe('GlobalModelFormDialog preset replacement', () => {
       supported_capabilities: ['image_generation'],
       config: {
         streaming: true,
-        billing: {
-          video: {
-            price_per_second_by_resolution: { '720p': 0.1 },
-          },
-        },
       },
     }
     globalModelMocks.listGlobalModels.mockResolvedValue({
@@ -545,7 +535,6 @@ describe('GlobalModelFormDialog preset replacement', () => {
     expect(findBillingTab('token').dataset.state).toBe('active')
     expect(findBillingTab('request').dataset.state).toBe('inactive')
     expect(findBillingTab('image').dataset.state).toBe('inactive')
-    expect(findBillingTab('video').dataset.state).toBe('inactive')
 
     findBillingTab('request').click()
     await nextTick()

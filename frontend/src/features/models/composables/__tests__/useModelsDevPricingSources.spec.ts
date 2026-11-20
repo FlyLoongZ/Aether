@@ -94,7 +94,7 @@ describe('database-backed models.dev pricing sources', () => {
   it('merges the source into model config without dropping unrelated settings', () => {
     const config = withModelsDevPricingSource({
       streaming: true,
-      billing: { video: { price_per_second: 0.1 } },
+      billing: { image_generation: true },
     }, {
       provider_id: ' google ',
       provider_name: ' Google ',
@@ -102,7 +102,7 @@ describe('database-backed models.dev pricing sources', () => {
 
     expect(config).toEqual({
       streaming: true,
-      billing: { video: { price_per_second: 0.1 } },
+      billing: { image_generation: true },
       models_dev_pricing_source: {
         provider_id: 'google',
         provider_name: 'Google',

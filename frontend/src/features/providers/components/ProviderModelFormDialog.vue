@@ -168,7 +168,7 @@
           v-model="billingMode"
           @update:model-value="handleBillingModeChange"
         >
-          <TabsList class="grid w-full grid-cols-4">
+          <TabsList class="grid w-full grid-cols-3">
             <TabsTrigger value="token">
               Token
             </TabsTrigger>
@@ -177,9 +177,6 @@
             </TabsTrigger>
             <TabsTrigger value="image">
               {{ t('ui.image') }}
-            </TabsTrigger>
-            <TabsTrigger value="video">
-              {{ t('ui.video') }}
             </TabsTrigger>
           </TabsList>
 
@@ -215,111 +212,6 @@
               </p>
             </div>
           </TabsContent>
-
-          <TabsContent
-            value="video"
-            class="pt-2"
-          >
-            <div class="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <div>
-                <div class="text-sm font-medium">
-                  {{ t('ui.videoPricingResolutionDuration') }}
-                </div>
-                <p class="mt-1 text-xs text-muted-foreground">
-                  {{ t('ui.setVideoPricingPerSecondByOutputResolutionInheritsGlobal') }}
-                </p>
-              </div>
-
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  class="h-7 text-xs"
-                  @click="() => { fillVideoResolutionPricePreset('common'); configTouched = true }"
-                >
-                  {{ t('ui.general') }}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  class="h-7 text-xs"
-                  @click="() => { fillVideoResolutionPricePreset('sora'); configTouched = true }"
-                >
-                  Sora
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  class="h-7 text-xs"
-                  @click="() => { fillVideoResolutionPricePreset('veo'); configTouched = true }"
-                >
-                  Veo
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  class="h-7 text-xs"
-                  @click="() => { addVideoResolutionPriceRow(); configTouched = true }"
-                >
-                  <Plus class="w-3.5 h-3.5 mr-0.5" /> {{ t('ui.custom4eafa9e') }}
-                </Button>
-              </div>
-
-              <div
-                v-if="videoResolutionPrices.length > 0"
-                class="rounded-lg border border-border overflow-hidden"
-              >
-                <div class="grid grid-cols-[1fr_1fr_32px] gap-0 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 border-b border-border">
-                  <span>{{ t('ui.resolution') }}</span>
-                  <span>{{ t('ui.unitPriceSecond') }}</span>
-                  <span />
-                </div>
-                <div class="divide-y divide-border">
-                  <div
-                    v-for="(row, idx) in videoResolutionPrices"
-                    :key="idx"
-                    class="grid grid-cols-[1fr_1fr_32px] gap-2 items-center px-3 py-1.5"
-                  >
-                    <Input
-                      v-model="row.resolution"
-                      class="h-7 text-sm"
-                      :placeholder="t('ui.eG720p')"
-                      @update:model-value="() => { configTouched = true }"
-                    />
-                    <Input
-                      :model-value="row.price_per_second ?? ''"
-                      type="number"
-                      step="0.0001"
-                      min="0"
-                      class="h-7 text-sm"
-                      placeholder="0"
-                      @update:model-value="(v) => { row.price_per_second = parseNumberInput(v, { allowFloat: true }); configTouched = true }"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      class="h-7 w-7"
-                      :title="t('ui.delete')"
-                      @click="() => { removeVideoResolutionPriceRow(idx); configTouched = true }"
-                    >
-                      <Trash2 class="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              <div
-                v-else
-                class="rounded-lg border border-dashed py-8 text-center text-xs text-muted-foreground"
-              >
-                {{ t('ui.selectAPricingPresetOrAddACustomResolution') }}
-              </div>
-            </div>
-          </TabsContent>
         </Tabs>
       </section>
     </form>
@@ -350,7 +242,7 @@ import { useI18n } from '@/i18n'
 
 import { ref, computed, watch } from 'vue'
 import { parseApiError } from '@/utils/errorParser'
-import { Loader2, Layers, SquarePen, Plus, Trash2 } from '@lucide/vue'
+import { Loader2, Layers, SquarePen } from '@lucide/vue'
 import {
   Dialog,
   Button,
@@ -369,7 +261,7 @@ import {
   TabsTrigger,
 } from '@/components/ui'
 import { useToast } from '@/composables/useToast'
-import { parseNumberInput, sortResolutionEntries } from '@/utils/form'
+import { parseNumberInput } from '@/utils/form'
 import { createModel, updateModel, getProviderModels } from '@/api/endpoints/models'
 import {
   createGlobalModel,
@@ -391,13 +283,6 @@ import {
   mergeProviderTieredPricingForEditing,
   modelSupportsEmbedding,
 } from './provider-model-form-helpers'
-import {
-  normalizeResolutionKey,
-  VIDEO_RESOLUTION_PRICE_PRESETS,
-  type VideoResolutionPricePreset,
-  type VideoResolutionPriceRow,
-} from '@/features/models/utils/video-pricing'
-
 interface Props {
   open: boolean
   providerId: string
@@ -470,15 +355,6 @@ const pricePerRequestModified = ref(false)
 const originalPricePerRequest = ref<number | undefined>(undefined)
 
 const configTouched = ref(false)
-function fillVideoResolutionPricePreset(preset: VideoResolutionPricePreset) {
-  videoResolutionPrices.value = VIDEO_RESOLUTION_PRICE_PRESETS[preset].map(row => ({
-    resolution: row.resolution,
-    price_per_second: row.price_per_second,
-  }))
-}
-
-const videoResolutionPrices = ref<VideoResolutionPriceRow[]>([])
-
 const DEFAULT_MANUAL_GLOBAL_MODEL_PRICING: TieredPricingConfig = {
   tiers: [{ up_to: null, input_price_per_1m: 0, output_price_per_1m: 0 }],
 }
@@ -531,8 +407,6 @@ watch(() => props.open, async (newOpen) => {
         supports_image_generation: props.editingModel.supports_image_generation ?? undefined,
         is_active: props.editingModel.is_active
       }
-      // 从有效配置中加载视频费用
-      loadVideoPricingFromConfig(effectiveConfig)
       // Provider 可以只覆盖 processing_tiers。此时后端 effective_tiered_pricing
       // 仍是原始 partial JSON，需要取 GlobalModel 默认目录合成完整编辑视图。
       const providerPricing = props.editingModel.tiered_pricing
@@ -601,7 +475,6 @@ watch(() => form.value.global_model_id, (newId) => {
     form.value.price_per_request = selectedModel?.default_price_per_request ?? undefined
     originalPricePerRequest.value = form.value.price_per_request
     pricePerRequestModified.value = false
-    loadVideoPricingFromConfig(selectedModel?.config || {})
     configTouched.value = false
     selectInitialBillingMode()
   }
@@ -633,7 +506,6 @@ function resetForm() {
     is_active: true
   }
   configTouched.value = false
-  videoResolutionPrices.value = []
   tieredPricing.value = null
   tieredPricingModified.value = false
   originalTieredPricing.value = ''
@@ -659,9 +531,7 @@ function handleBillingModeChange(mode: string) {
 }
 
 function selectInitialBillingMode() {
-  if (videoResolutionPrices.value.length > 0) {
-    billingMode.value = 'video'
-  } else if (isImageGenerationEnabled.value) {
+  if (isImageGenerationEnabled.value) {
     billingMode.value = 'image'
   } else if (form.value.price_per_request !== undefined) {
     billingMode.value = 'request'
@@ -714,107 +584,6 @@ function syncManualProviderName(value: string | number) {
   if (!form.value.manual_global_model_display_name.trim()) {
     form.value.manual_global_model_display_name = modelName
   }
-}
-
-function getNested(obj: Record<string, unknown>, path: string): unknown {
-  if (!obj || typeof obj !== 'object') return undefined
-  const parts = path.split('.').filter(Boolean)
-  let cur: unknown = obj
-  for (const p of parts) {
-    if (!cur || typeof cur !== 'object') return undefined
-    cur = (cur as Record<string, unknown>)[p]
-  }
-  return cur
-}
-
-function setNested(obj: Record<string, unknown>, path: string, value: unknown) {
-  if (!obj || typeof obj !== 'object') return
-  const parts = path.split('.').filter(Boolean)
-  if (parts.length === 0) return
-  let cur: Record<string, unknown> = obj
-  for (let i = 0; i < parts.length - 1; i++) {
-    const p = parts[i]
-    if (!cur[p] || typeof cur[p] !== 'object') {
-      cur[p] = {}
-    }
-    cur = cur[p] as Record<string, unknown>
-  }
-  cur[parts[parts.length - 1]] = value
-}
-
-function deleteNested(obj: Record<string, unknown>, path: string) {
-  if (!obj || typeof obj !== 'object') return
-  const parts = path.split('.').filter(Boolean)
-  if (parts.length === 0) return
-  let cur: Record<string, unknown> = obj
-  for (let i = 0; i < parts.length - 1; i++) {
-    const p = parts[i]
-    if (!cur[p] || typeof cur[p] !== 'object') return
-    cur = cur[p] as Record<string, unknown>
-  }
-  delete cur[parts[parts.length - 1]]
-}
-
-function pruneEmptyBillingConfig(cfg: Record<string, unknown>) {
-  const billing = cfg.billing
-  if (!billing || typeof billing !== 'object') return
-  const billingObj = billing as Record<string, unknown>
-  const video = billingObj.video
-  if (video && typeof video === 'object' && Object.keys(video).length === 0) {
-    delete billingObj.video
-  }
-  if (Object.keys(billingObj).length === 0) {
-    delete cfg.billing
-  }
-}
-
-/**
- * Normalize resolution key:
- * - lowercase, remove spaces, × → x
- * - For WxH format, sort dimensions so smaller comes first (720x1080 = 1080x720)
- */
-function loadVideoPricingFromConfig(cfg: Record<string, unknown>) {
-  const raw = getNested(cfg, 'billing.video.price_per_second_by_resolution')
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    // 按分辨率从低到高排序
-    const sortedEntries = sortResolutionEntries(Object.entries(raw))
-    videoResolutionPrices.value = sortedEntries.map(([k, v]) => ({
-      resolution: String(k),
-      price_per_second: typeof v === 'number' ? v : undefined,
-    }))
-  } else {
-    videoResolutionPrices.value = []
-  }
-}
-
-function applyVideoPricingToConfig(cfg: Record<string, unknown>) {
-  // Clean legacy keys
-  deleteNested(cfg, 'billing.video.price_per_second')
-  deleteNested(cfg, 'billing.video.resolution_multipliers')
-
-  // resolution/size prices (normalized: 1080x720 → 720x1080)
-  const map: Record<string, number> = {}
-  for (const row of videoResolutionPrices.value) {
-    const k = normalizeResolutionKey(row.resolution || '')
-    const v = row.price_per_second
-    if (!k) continue
-    if (typeof v !== 'number' || Number.isNaN(v)) continue
-    map[k] = v
-  }
-  if (Object.keys(map).length > 0) {
-    setNested(cfg, 'billing.video.price_per_second_by_resolution', map)
-  } else {
-    deleteNested(cfg, 'billing.video.price_per_second_by_resolution')
-  }
-  pruneEmptyBillingConfig(cfg)
-}
-
-function addVideoResolutionPriceRow() {
-  videoResolutionPrices.value.push({ resolution: '', price_per_second: undefined })
-}
-
-function removeVideoResolutionPriceRow(idx: number) {
-  videoResolutionPrices.value.splice(idx, 1)
 }
 
 async function createManualGlobalModel(finalTieredPricing: TieredPricingConfig | null, cleanConfig: Record<string, unknown> | undefined): Promise<GlobalModelResponse> {
@@ -899,8 +668,6 @@ async function handleSubmit() {
       : null
     const supportsImageGeneration = form.value.supports_image_generation
 
-    // Apply billing (video) pricing into config.
-    applyVideoPricingToConfig(form.value.config)
     const cleanConfig = form.value.config && Object.keys(form.value.config).length > 0
       ? form.value.config
       : undefined
