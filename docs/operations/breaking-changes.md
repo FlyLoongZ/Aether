@@ -76,6 +76,11 @@ a default.
   declare `credential_state=not_exported` while carrying credentials are
   rejected. Payloads without credentials still import a tombstone, so the
   account must reset its password.
+- Overwrite imports no longer disable existing API keys. A user export without
+  credential material carries a tombstone hash and an `is_active` flag that says
+  nothing about the key running in this deployment, so an existing key keeps its
+  current hash and active state; only newly created keys are forced inactive
+  when their credentials were not exported.
 - Per-user access policies are no longer supported. User authorization is
   derived from user groups only.
 - The `public.users` columns `allowed_providers`, `allowed_providers_mode`,

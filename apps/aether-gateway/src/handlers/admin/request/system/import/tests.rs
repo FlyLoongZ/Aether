@@ -8,7 +8,8 @@ use aether_data_postgres::PostgresPoolMemberScoreRepository;
 use serde_json::json;
 
 use super::{
-    build_imported_user_usage_total_aggregates, imported_api_key_id_for_mode,
+    build_imported_user_usage_total_aggregates, imported_api_key_active_state,
+    imported_api_key_active_state_for_existing, imported_api_key_id_for_mode,
     imported_credential_tombstone, imported_existing_user_is_protected,
     imported_oauth_auth_config_has_credentials, imported_oauth_expiry_after_import,
     imported_optional_bool, imported_optional_f64, imported_optional_i32, imported_optional_u64,
@@ -56,8 +57,6 @@ fn recovery_users_import_accepts_supported_versions_and_valid_bcrypt() {
         json!({ "password_hash": "attacker-controlled" })
             .as_object()
             .expect("fixture should be an object"),
-        (1, 5),
-        SystemImportMode::RecoveryBackup,
     )
     .is_err());
 }
@@ -834,4 +833,44 @@ fn import_rejects_legacy_string_lists() {
             .unwrap_err(),
         "allowed_api_formats 必须是字符串列表"
     );
+}
+
+#[test]
+fn overwrite_import_keeps_existing_keys_usable_when_credentials_are_not_exported() {
+    // A user export without credential material carries a tombstone hash. Applying
+    // its `is_active` flag to the key that is already running here disabled every
+    // usable key in the deployment on an overwrite import.
+    let tombstone = imported_credential_tombstone("api-key-id:key-1");
+
+    assert!(!imported_api_key_active_state(
+        SystemImportMode::InteractiveUpload,
+        &tombstone,
+        true
+    ));
+    assert!(imported_api_key_active_state_for_existing(
+        SystemImportMode::InteractiveUpload,
+        &tombstone,
+        true,
+        true
+    ));
+    // An existing key that was already disabled must stay disabled.
+    assert!(!imported_api_key_active_state_for_existing(
+        SystemImportMode::InteractiveUpload,
+        &tombstone,
+        true,
+        false
+    ));
+    // With real credential material the payload still decides.
+    assert!(!imported_api_key_active_state_for_existing(
+        SystemImportMode::InteractiveUpload,
+        "hash-of-a-real-key",
+        false,
+        true
+    ));
+    assert!(imported_api_key_active_state_for_existing(
+        SystemImportMode::InteractiveUpload,
+        "hash-of-a-real-key",
+        true,
+        false
+    ));
 }

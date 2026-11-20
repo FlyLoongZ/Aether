@@ -1139,21 +1139,21 @@ async fn gateway_prevalidates_nested_user_key_before_user_mutation_impl() {
 }
 
 #[test]
-fn gateway_rejects_credentials_in_v16_user_import_before_mutation() {
+fn gateway_user_import_accepts_backup_credentials_with_validation() {
     run_admin_system_import_test(
-        "gateway_rejects_credentials_in_v16_user_import_before_mutation",
-        gateway_rejects_credentials_in_v16_user_import_before_mutation_impl,
+        "gateway_user_import_accepts_backup_credentials_with_validation",
+        gateway_user_import_accepts_backup_credentials_with_validation_impl,
     );
 }
 
-async fn gateway_rejects_credentials_in_v16_user_import_before_mutation_impl() {
+async fn gateway_user_import_accepts_backup_credentials_with_validation_impl() {
     let auth_repository = Arc::new(InMemoryAuthApiKeySnapshotRepository::default());
     let user_repository =
         Arc::new(aether_data_memory::users::InMemoryUserReadRepository::default());
     let state = AppState::new()
         .expect("gateway should build")
         .with_data_state_for_tests(
-            GatewayDataState::with_auth_api_key_repository_for_tests(auth_repository)
+            GatewayDataState::with_auth_api_key_repository_for_tests(Arc::clone(&auth_repository))
                 .with_user_reader(user_repository)
                 .with_encryption_key_for_tests(DEV_FERNET_KEY),
         )
@@ -1163,29 +1163,102 @@ async fn gateway_rejects_credentials_in_v16_user_import_before_mutation_impl() {
     let (gateway_url, gateway_handle) = start_server(gateway).await;
     let client = reqwest::Client::new();
 
+    let password = "imported-password-123";
+    let password_hash = bcrypt::hash(password, 4).expect("password should hash");
+    let plaintext_key = "sk-imported-key-1234567890";
+    let key_hash = hash_api_key(plaintext_key);
+
+    let response = client
+        .post(format!("{gateway_url}/api/admin/system/users/import"))
+        .bearer_auth(crate::tests::test_admin_access_token())
+        .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
+        .json(&json!({
+            "version": "1.7",
+            "merge_mode": "overwrite",
+            "users": [{
+                "id": "source-credential-user",
+                "email": "credential@example.com",
+                "email_verified": true,
+                "username": "credential",
+                "password_hash": password_hash,
+                "role": "user",
+                "is_active": true,
+                "api_keys": [{
+                    "api_key_id": "source-credential-key",
+                    "key": plaintext_key,
+                    "key_hash": key_hash,
+                    "name": "Imported Key",
+                    "is_active": true
+                }]
+            }],
+            "standalone_keys": []
+        }))
+        .send()
+        .await
+        .expect("user import should complete locally");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let user = state
+        .find_user_auth_by_identifier("credential@example.com")
+        .await
+        .expect("user lookup should succeed")
+        .expect("imported user should exist");
+    assert_eq!(user.password_hash.as_deref(), Some(password_hash.as_str()));
+    assert!(bcrypt::verify(password, password_hash.as_str()).expect("hash should verify"));
+
+    let keys = state
+        .list_auth_api_key_export_records_by_user_ids(std::slice::from_ref(&user.id))
+        .await
+        .expect("keys should load");
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].key_hash, key_hash);
+    assert!(keys[0]
+        .key_encrypted
+        .as_deref()
+        .is_some_and(|value| value.starts_with("aether-secret:v1:")));
+    let decrypted = open_auth_api_key_secret(&state, &keys[0])
+        .ok()
+        .map(|projection| projection.plaintext);
+    assert_eq!(decrypted.as_deref(), Some(plaintext_key));
+
+    let invalid_bcrypt = "not-a-bcrypt-hash";
+    let mismatched_key_hash = hash_api_key("sk-some-other-key");
     let cases = [
-        ("password-null", json!({ "password_hash": null })),
-        ("plaintext-key", json!({ "key": "sk-must-not-import" })),
-        ("key-hash", json!({ "key_hash": "legacy-hash" })),
-        ("encrypted-null", json!({ "key_encrypted": null })),
+        (
+            "invalid-bcrypt",
+            json!({ "password_hash": invalid_bcrypt }),
+            json!({}),
+        ),
+        (
+            "mismatched-key",
+            json!({}),
+            json!({ "key": "sk-imported-plaintext", "key_hash": mismatched_key_hash }),
+        ),
+        (
+            "credential-state-contradiction",
+            json!({}),
+            json!({
+                "credential_state": "not_exported",
+                "key": plaintext_key,
+                "key_hash": key_hash
+            }),
+        ),
     ];
-    for (case_name, forbidden_fields) in cases {
+    for (case_name, user_extra, key_extra) in cases {
         let email = format!("{case_name}@example.com");
         let mut api_key = serde_json::Map::from_iter([
             (
                 "api_key_id".to_string(),
                 json!(format!("source-{case_name}")),
             ),
-            ("credential_state".to_string(), json!("not_exported")),
+            ("name".to_string(), json!(case_name)),
         ]);
-        if case_name != "password-null" {
-            api_key.extend(
-                forbidden_fields
-                    .as_object()
-                    .expect("forbidden API key fields should be an object")
-                    .clone(),
-            );
-        }
+        api_key.extend(
+            key_extra
+                .as_object()
+                .expect("key extra should be an object")
+                .clone(),
+        );
         let mut user = serde_json::Map::from_iter([
             ("id".to_string(), json!(format!("source-user-{case_name}"))),
             ("email".to_string(), json!(email.clone())),
@@ -1197,21 +1270,18 @@ async fn gateway_rejects_credentials_in_v16_user_import_before_mutation_impl() {
                 Value::Array(vec![Value::Object(api_key)]),
             ),
         ]);
-        if case_name == "password-null" {
-            user.extend(
-                forbidden_fields
-                    .as_object()
-                    .expect("forbidden user fields should be an object")
-                    .clone(),
-            );
-        }
-
+        user.extend(
+            user_extra
+                .as_object()
+                .expect("user extra should be an object")
+                .clone(),
+        );
         let response = client
             .post(format!("{gateway_url}/api/admin/system/users/import"))
             .bearer_auth(crate::tests::test_admin_access_token())
             .header("x-client-device-id", crate::tests::TEST_ADMIN_DEVICE_ID)
             .json(&json!({
-                "version": "1.6",
+                "version": "1.7",
                 "merge_mode": "overwrite",
                 "users": [Value::Object(user)],
                 "standalone_keys": []
@@ -1219,7 +1289,6 @@ async fn gateway_rejects_credentials_in_v16_user_import_before_mutation_impl() {
             .send()
             .await
             .expect("user import should complete locally");
-
         assert_eq!(
             response.status(),
             StatusCode::BAD_REQUEST,
@@ -2021,6 +2090,7 @@ async fn gateway_user_import_password_hash_overwrite_revokes_existing_sessions_i
     let gateway = build_router_with_state(state.clone());
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
+    let imported_password_hash = bcrypt::hash("new-password", 4).expect("password should hash");
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
         .bearer_auth(crate::tests::test_admin_access_token())
@@ -2031,7 +2101,7 @@ async fn gateway_user_import_password_hash_overwrite_revokes_existing_sessions_i
             "users": [{
                 "email": "existing@example.com",
                 "username": "existing",
-                "password_hash": "new-password-hash",
+                "password_hash": imported_password_hash,
                 "role": "user",
                 "is_active": true,
                 "api_keys": []
@@ -2050,11 +2120,14 @@ async fn gateway_user_import_password_hash_overwrite_revokes_existing_sessions_i
         .await
         .expect("user lookup should succeed")
         .expect("user should exist");
-    assert!(updated
-        .password_hash
-        .as_deref()
-        .is_some_and(|hash| hash.starts_with("$aether-import-revoked$")));
-    assert_ne!(updated.password_hash.as_deref(), Some("new-password-hash"));
+    assert_eq!(
+        updated.password_hash.as_deref(),
+        Some(imported_password_hash.as_str())
+    );
+    assert!(
+        bcrypt::verify("new-password", imported_password_hash.as_str())
+            .expect("imported hash should verify")
+    );
     let session = state
         .find_user_session("user-existing", "old-session")
         .await
@@ -2106,6 +2179,7 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
     let gateway = build_router_with_state(state.clone());
     let (gateway_url, gateway_handle) = start_server(gateway).await;
 
+    let imported_password_hash = bcrypt::hash("imported-user", 4).expect("password should hash");
     let response = reqwest::Client::new()
         .post(format!("{gateway_url}/api/admin/system/users/import"))
         .bearer_auth(crate::tests::test_admin_access_token())
@@ -2130,7 +2204,7 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
                 "email": "alice@example.com",
                 "email_verified": true,
                 "username": "alice",
-                "password_hash": "argon2:imported-user-hash",
+                "password_hash": imported_password_hash,
                 "role": "user",
                 "allowed_providers": ["openai"],
                 "allowed_api_formats": ["openai:chat"],
@@ -2220,13 +2294,9 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
         .expect("user lookup should succeed")
         .expect("imported user should exist");
     assert_eq!(imported_user.username, "alice");
-    assert!(imported_user
-        .password_hash
-        .as_deref()
-        .is_some_and(|hash| hash.starts_with("$aether-import-revoked$")));
-    assert_ne!(
+    assert_eq!(
         imported_user.password_hash.as_deref(),
-        Some("argon2:imported-user-hash")
+        Some(imported_password_hash.as_str())
     );
     assert_eq!(imported_user.role, "user");
     assert!(imported_user.is_active);
@@ -2278,12 +2348,9 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
         user_api_keys[0].allowed_api_formats,
         Some(vec!["openai:chat".to_string()])
     );
-    assert!(!user_api_keys[0].is_active);
-    assert!(user_api_keys[0].key_encrypted.is_none());
-    assert!(user_api_keys[0]
-        .key_hash
-        .starts_with("$aether-import-revoked$"));
-    assert_ne!(user_api_keys[0].key_hash, hash_api_key("sk-user-import-1"));
+    assert!(user_api_keys[0].is_active);
+    assert!(user_api_keys[0].key_encrypted.is_some());
+    assert_eq!(user_api_keys[0].key_hash, hash_api_key("sk-user-import-1"));
 
     let standalone_keys = state
         .list_auth_api_key_export_standalone_records()
@@ -2297,12 +2364,9 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
     assert_eq!(standalone_keys[0].total_requests, 3);
     assert_eq!(standalone_keys[0].total_tokens, 789);
     assert_eq!(standalone_keys[0].total_cost_usd, 0.75);
-    assert!(!standalone_keys[0].is_active);
-    assert!(standalone_keys[0].key_encrypted.is_none());
-    assert!(standalone_keys[0]
-        .key_hash
-        .starts_with("$aether-import-revoked$"));
-    assert_ne!(
+    assert!(standalone_keys[0].is_active);
+    assert!(standalone_keys[0].key_encrypted.is_some());
+    assert_eq!(
         standalone_keys[0].key_hash,
         hash_api_key("sk-standalone-import-1")
     );
@@ -2334,14 +2398,14 @@ async fn gateway_imports_admin_system_users_locally_and_persists_data_impl() {
 }
 
 #[test]
-fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash() {
+fn gateway_exported_hash_import_restores_matched_keys() {
     run_admin_system_import_test(
-        "gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash",
-        gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_impl,
+        "gateway_exported_hash_import_restores_matched_keys",
+        gateway_exported_hash_import_restores_matched_keys_impl,
     );
 }
 
-async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_impl() {
+async fn gateway_exported_hash_import_restores_matched_keys_impl() {
     let user_key_hash = hash_api_key("sk-existing-user-key");
     let standalone_key_hash = hash_api_key("sk-existing-standalone-key");
     let existing_user = StoredUserAuthRecord::new(
@@ -2477,7 +2541,8 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
             "id": "source-user-existing",
             "email": "existing@example.com",
             "username": "existing",
-            "password_hash": "existing-hash",
+            "password_hash": bcrypt::hash("existing-user", 4)
+                .expect("password should hash"),
             "role": "user",
             "is_active": true,
             "api_keys": [{
@@ -2514,8 +2579,12 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
     let payload: Value = response.json().await.expect("json body should parse");
     assert_eq!(status, StatusCode::OK, "payload={payload}");
     assert_eq!(payload["stats"]["users"]["updated"], json!(1));
-    assert_eq!(payload["stats"]["api_keys"]["created"], json!(1));
-    assert_eq!(payload["stats"]["standalone_keys"]["created"], json!(1));
+    // The exported hashes belong to live keys, so the import updates those
+    // records instead of minting tombstoned duplicates.
+    assert_eq!(payload["stats"]["api_keys"]["created"], json!(0));
+    assert_eq!(payload["stats"]["api_keys"]["updated"], json!(1));
+    assert_eq!(payload["stats"]["standalone_keys"]["created"], json!(0));
+    assert_eq!(payload["stats"]["standalone_keys"]["updated"], json!(1));
 
     let response = client
         .post(format!("{gateway_url}/api/admin/system/users/import"))
@@ -2546,53 +2615,39 @@ async fn gateway_legacy_user_import_does_not_mutate_live_keys_by_exported_hash_i
         .find(|record| record.api_key_id == "key-user-existing")
         .expect("updated user key should exist");
     assert!(user_key.is_active);
-    assert_eq!(user_key.total_requests, 1);
-    assert_eq!(user_key.total_tokens, 2);
-    assert_eq!(user_key.total_cost_usd, 0.03);
+    assert_eq!(user_key.total_requests, 222);
+    assert_eq!(user_key.total_tokens, 3333);
+    assert_eq!(user_key.total_cost_usd, 4.56);
     let standalone_key = updated_records
         .iter()
         .find(|record| record.api_key_id == "key-standalone-existing")
         .expect("updated standalone key should exist");
     assert!(standalone_key.is_active);
-    assert_eq!(standalone_key.total_requests, 4);
-    assert_eq!(standalone_key.total_tokens, 5);
-    assert_eq!(standalone_key.total_cost_usd, 0.06);
+    assert_eq!(standalone_key.total_requests, 444);
+    assert_eq!(standalone_key.total_tokens, 5555);
+    assert_eq!(standalone_key.total_cost_usd, 6.78);
 
     let user_keys = state
         .list_auth_api_key_export_records_by_user_ids(&["user-existing".to_string()])
         .await
         .expect("user key export records should load");
-    assert_eq!(user_keys.len(), 2);
-    let imported_user_key = user_keys
-        .iter()
-        .find(|record| record.api_key_id != "key-user-existing")
-        .expect("disabled imported user key should exist");
-    assert!(!imported_user_key.is_active);
-    assert!(imported_user_key.key_encrypted.is_none());
-    assert!(imported_user_key
-        .key_hash
-        .starts_with("$aether-import-revoked$"));
-    assert_eq!(imported_user_key.total_requests, 222);
-    assert_eq!(imported_user_key.total_tokens, 3333);
-    assert_eq!(imported_user_key.total_cost_usd, 4.56);
+    assert_eq!(user_keys.len(), 1);
+    assert_eq!(user_keys[0].api_key_id, "key-user-existing");
+    assert!(user_keys[0].is_active);
+    assert_eq!(user_keys[0].total_requests, 222);
+    assert_eq!(user_keys[0].total_tokens, 3333);
+    assert_eq!(user_keys[0].total_cost_usd, 4.56);
 
     let standalone_keys = state
         .list_auth_api_key_export_standalone_records()
         .await
         .expect("standalone key export records should load");
-    assert_eq!(standalone_keys.len(), 2);
-    let imported_standalone_key = standalone_keys
-        .iter()
-        .find(|record| record.api_key_id != "key-standalone-existing")
-        .expect("disabled imported standalone key should exist");
-    assert!(!imported_standalone_key.is_active);
-    assert!(imported_standalone_key.key_encrypted.is_none());
-    assert!(imported_standalone_key
-        .key_hash
-        .starts_with("$aether-import-revoked$"));
-    assert_eq!(imported_standalone_key.total_requests, 444);
-    assert_eq!(imported_standalone_key.total_tokens, 5555);
-    assert_eq!(imported_standalone_key.total_cost_usd, 6.78);
+    assert_eq!(standalone_keys.len(), 1);
+    assert_eq!(standalone_keys[0].api_key_id, "key-standalone-existing");
+    assert!(standalone_keys[0].is_active);
+    assert_eq!(standalone_keys[0].total_requests, 444);
+    assert_eq!(standalone_keys[0].total_tokens, 5555);
+    assert_eq!(standalone_keys[0].total_cost_usd, 6.78);
 
     gateway_handle.abort();
 }

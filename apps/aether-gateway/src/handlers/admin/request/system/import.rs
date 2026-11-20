@@ -1713,6 +1713,34 @@ fn validate_rollback_user_source_id(
 
 const IMPORTED_CREDENTIAL_TOMBSTONE_PREFIX: &str = "$aether-import-revoked$";
 
+/// A key imported with real credential material follows the payload's active
+/// flag; a tombstoned (credential-free) import stays inactive so an unusable
+/// key never looks live.
+fn imported_api_key_active_state(mode: SystemImportMode, key_hash: &str, is_active: bool) -> bool {
+    is_active
+        && (mode.preserves_active_state()
+            || !key_hash.starts_with(IMPORTED_CREDENTIAL_TOMBSTONE_PREFIX))
+}
+
+/// Active state to write for a key that already exists in this deployment.
+///
+/// A payload without credential material (`credential_state=not_exported`) carries
+/// a tombstone hash, and the imported `is_active` flag then says nothing about the
+/// key that is actually running here. Applying it disabled every existing usable
+/// key on an overwrite import, which is the opposite of what an operator expects
+/// from importing a *user* export.
+fn imported_api_key_active_state_for_existing(
+    mode: SystemImportMode,
+    key_hash: &str,
+    is_active: bool,
+    existing_is_active: bool,
+) -> bool {
+    if key_hash.starts_with(IMPORTED_CREDENTIAL_TOMBSTONE_PREFIX) {
+        return existing_is_active;
+    }
+    imported_api_key_active_state(mode, key_hash, is_active)
+}
+
 fn imported_credential_tombstone(identity: &str) -> String {
     let digest = hex::encode(Sha256::digest(identity.as_bytes()));
     let digest_length = 64usize.saturating_sub(IMPORTED_CREDENTIAL_TOMBSTONE_PREFIX.len());
@@ -1739,23 +1767,13 @@ fn imported_password_tombstone() -> String {
     imported_credential_tombstone(&format!("password:{}", Uuid::new_v4()))
 }
 
-fn resolve_imported_password_hash(
-    user: &Map<String, Value>,
-    users_export_version: (u32, u32),
-    mode: SystemImportMode,
-) -> Result<Option<String>, String> {
-    if users_export_version >= (1, 6) && user.contains_key("password_hash") {
-        return Err("用户数据 1.6+ 不允许包含 password_hash 凭据字段".to_string());
-    }
+fn resolve_imported_password_hash(user: &Map<String, Value>) -> Result<Option<String>, String> {
     let password_hash = imported_optional_string(user.get("password_hash"))?;
-    if !mode.restores_credentials() {
-        return Ok(password_hash.map(|_| imported_password_tombstone()));
-    }
     if password_hash
         .as_deref()
         .is_some_and(|value| !aether_data_contracts::repository::users::is_valid_bcrypt_hash(value))
     {
-        return Err("恢复备份中的 password_hash 不是有效的 bcrypt 哈希".to_string());
+        return Err("导入数据中的 password_hash 不是有效的 bcrypt 哈希".to_string());
     }
     Ok(password_hash)
 }
@@ -3417,7 +3435,7 @@ impl<'a> AdminAppState<'a> {
                 )))
             }
         };
-        let users_export_version = invalid!(validate_imported_system_users_export_version(
+        let _users_export_version = invalid!(validate_imported_system_users_export_version(
             root.get("version")
         ));
         let empty = Vec::new();
@@ -3640,11 +3658,7 @@ impl<'a> AdminAppState<'a> {
                 })
                 .unwrap_or_else(|| format!("imported-user-{index}"));
             invalid!(imported_optional_bool(user.get("email_verified")));
-            invalid!(resolve_imported_password_hash(
-                user,
-                users_export_version,
-                mode,
-            ));
+            invalid!(resolve_imported_password_hash(user));
             let group_ids = invalid!(resolve_imported_user_group_ids(
                 user,
                 &imported_group_id_map,
@@ -3880,14 +3894,10 @@ impl<'a> AdminAppState<'a> {
                     raw_key,
                     &format!("users[{index}].api_keys[{key_index}]"),
                 ));
-                invalid!(self.prevalidate_imported_auth_api_key(key, users_export_version, mode,));
+                invalid!(self.prevalidate_imported_auth_api_key(key));
                 let source_api_key_id = invalid!(imported_optional_string(key.get("api_key_id")));
-                let Some(key_material) = invalid!(self
-                    .resolve_imported_system_user_api_key_material(
-                        key,
-                        users_export_version,
-                        mode,
-                    ))
+                let Some(key_material) =
+                    invalid!(self.resolve_imported_system_user_api_key_material(key))
                 else {
                     continue;
                 };
@@ -3964,14 +3974,10 @@ impl<'a> AdminAppState<'a> {
                     raw_key,
                     &format!("standalone_keys[{index}]"),
                 ));
-                invalid!(self.prevalidate_imported_auth_api_key(key, users_export_version, mode,));
+                invalid!(self.prevalidate_imported_auth_api_key(key));
                 let source_api_key_id = invalid!(imported_optional_string(key.get("api_key_id")));
-                let Some(key_material) = invalid!(self
-                    .resolve_imported_system_user_api_key_material(
-                        key,
-                        users_export_version,
-                        mode,
-                    ))
+                let Some(key_material) =
+                    invalid!(self.resolve_imported_system_user_api_key_material(key))
                 else {
                     continue;
                 };
@@ -4080,14 +4086,9 @@ impl<'a> AdminAppState<'a> {
         Ok(Ok(()))
     }
 
-    fn prevalidate_imported_auth_api_key(
-        &self,
-        key: &Map<String, Value>,
-        users_export_version: (u32, u32),
-        mode: SystemImportMode,
-    ) -> Result<(), String> {
+    fn prevalidate_imported_auth_api_key(&self, key: &Map<String, Value>) -> Result<(), String> {
         if self
-            .resolve_imported_system_user_api_key_material(key, users_export_version, mode)?
+            .resolve_imported_system_user_api_key_material(key)?
             .is_none()
         {
             return Ok(());
@@ -6780,7 +6781,7 @@ impl<'a> AdminAppState<'a> {
             };
         }
 
-        let users_export_version = invalid_value!(validate_imported_system_users_export_version(
+        let _users_export_version = invalid_value!(validate_imported_system_users_export_version(
             root.get("version")
         ));
 
@@ -6960,11 +6961,7 @@ impl<'a> AdminAppState<'a> {
                     })
                 })
                 .unwrap_or_else(|| format!("imported-user-{index}"));
-            let password_hash = invalid_value!(resolve_imported_password_hash(
-                user,
-                users_export_version,
-                mode,
-            ));
+            let password_hash = invalid_value!(resolve_imported_password_hash(user));
             let imported_user_group_ids = invalid_value!(resolve_imported_user_group_ids(
                 user,
                 &imported_group_id_map,
@@ -7324,12 +7321,8 @@ impl<'a> AdminAppState<'a> {
                     Ok(value) => value,
                     Err(detail) => return Ok(Err(invalid_request(detail))),
                 };
-                let Some(key_material) = invalid_value!(self
-                    .resolve_imported_system_user_api_key_material(
-                        key,
-                        users_export_version,
-                        mode,
-                    ))
+                let Some(key_material) =
+                    invalid_value!(self.resolve_imported_system_user_api_key_material(key))
                 else {
                     stats.api_keys.skipped += 1;
                     stats.errors.push(format!(
@@ -7511,7 +7504,12 @@ impl<'a> AdminAppState<'a> {
                                 self.set_user_api_key_active(
                                     &user_id,
                                     &existing_key.api_key_id,
-                                    mode.preserves_active_state() && is_active,
+                                    imported_api_key_active_state_for_existing(
+                                        mode,
+                                        &key_hash,
+                                        is_active,
+                                        existing_key.is_active,
+                                    ),
                                 )
                                 .await?
                             );
@@ -7596,7 +7594,7 @@ impl<'a> AdminAppState<'a> {
                             concurrent_limit,
                             force_capabilities,
                             feature_settings: feature_settings.clone(),
-                            is_active: mode.preserves_active_state() && is_active,
+                            is_active: imported_api_key_active_state(mode, &key_hash, is_active),
                             expires_at_unix_secs,
                             auto_delete_on_expiry,
                             total_requests,
@@ -7673,12 +7671,8 @@ impl<'a> AdminAppState<'a> {
                     Ok(value) => value,
                     Err(detail) => return Ok(Err(invalid_request(detail))),
                 };
-                let Some(key_material) = invalid_value!(self
-                    .resolve_imported_system_user_api_key_material(
-                        key,
-                        users_export_version,
-                        mode,
-                    ))
+                let Some(key_material) =
+                    invalid_value!(self.resolve_imported_system_user_api_key_material(key))
                 else {
                     stats.standalone_keys.skipped += 1;
                     stats
@@ -7825,7 +7819,12 @@ impl<'a> AdminAppState<'a> {
                             let _ = require_persisted!(
                                 self.set_standalone_api_key_active(
                                     &existing_key.api_key_id,
-                                    mode.preserves_active_state() && is_active,
+                                    imported_api_key_active_state_for_existing(
+                                        mode,
+                                        &key_hash,
+                                        is_active,
+                                        existing_key.is_active,
+                                    ),
                                 )
                                 .await?
                             );
@@ -7933,7 +7932,7 @@ impl<'a> AdminAppState<'a> {
                             rate_limit: Some(rate_limit),
                             concurrent_limit,
                             force_capabilities,
-                            is_active: mode.preserves_active_state() && is_active,
+                            is_active: imported_api_key_active_state(mode, &key_hash, is_active),
                             expires_at_unix_secs,
                             auto_delete_on_expiry,
                             total_requests,
@@ -8248,66 +8247,64 @@ impl<'a> AdminAppState<'a> {
     fn resolve_imported_system_user_api_key_material(
         &self,
         key: &Map<String, Value>,
-        users_export_version: (u32, u32),
-        mode: SystemImportMode,
     ) -> Result<Option<ImportedApiKeyMaterial>, String> {
         let source_api_key_id = imported_optional_string(key.get("api_key_id"))?;
         let plaintext_key = imported_optional_string(key.get("key"))?;
         let key_hash = imported_optional_string(key.get("key_hash"))?;
         let key_encrypted = imported_optional_string(key.get("key_encrypted"))?;
-
-        if users_export_version >= (1, 6) {
-            if key.contains_key("key")
-                || key.contains_key("key_hash")
-                || key.contains_key("key_encrypted")
-            {
-                return Err(
-                    "用户数据 1.6+ 不允许包含 key、key_hash 或 key_encrypted 凭据字段".to_string(),
-                );
+        let credential_state = match key.get("credential_state") {
+            None | Some(Value::Null) => None,
+            Some(value) => {
+                let value = value
+                    .as_str()
+                    .map(str::trim)
+                    .ok_or_else(|| "credential_state 必须是字符串".to_string())?;
+                if value != ADMIN_SYSTEM_EXPORT_CREDENTIALS_NOT_EXPORTED {
+                    return Err(format!("API Key credential_state 取值无效: {value}"));
+                }
+                Some(value)
             }
-            let credential_state = imported_optional_string(key.get("credential_state"))?;
-            if credential_state.as_deref() != Some("not_exported") {
-                return Err(
-                    "用户数据 1.6+ API Key 必须标记 credential_state=not_exported".to_string(),
-                );
-            }
-            let source_api_key_id = source_api_key_id
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| "用户数据 1.6+ API Key 必须包含 api_key_id".to_string())?;
-            return Ok(Some(ImportedApiKeyMaterial {
-                key_hash: imported_credential_tombstone(&format!("api-key-id:{source_api_key_id}")),
-                key_plaintext: None,
-            }));
+        };
+        let has_credentials =
+            plaintext_key.is_some() || key_hash.is_some() || key_encrypted.is_some();
+        if credential_state.is_some() && has_credentials {
+            return Err(
+                "API Key 标记 credential_state=not_exported，但同时包含凭据字段".to_string(),
+            );
         }
 
-        if mode.restores_credentials() {
-            let key_hash = key_hash
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| "恢复备份中的 API Key 必须包含 key_hash".to_string())?;
-            if key_hash.len() != 64
-                || !key_hash
-                    .bytes()
-                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-            {
-                return Err("恢复备份中的 key_hash 必须是规范的小写 SHA-256 十六进制".to_string());
-            }
+        if has_credentials {
             if plaintext_key.is_some() && key_encrypted.is_some() {
-                return Err("恢复备份中的 API Key 不能同时包含 key 和 key_encrypted".to_string());
+                return Err("API Key 不能同时包含 key 和 key_encrypted".to_string());
             }
             let plaintext = match (plaintext_key, key_encrypted) {
                 (Some(plaintext), None) => Some(plaintext),
                 (None, Some(ciphertext)) => Some(
                     self.decrypt_catalog_secret_with_fallbacks(&ciphertext)
                         .ok_or_else(|| {
-                            "恢复备份中的 API Key 旧密文无法使用当前或历史数据密钥解密".to_string()
+                            "API Key 旧密文无法使用当前或历史数据密钥解密".to_string()
                         })?,
                 ),
                 (None, None) => None,
                 (Some(_), Some(_)) => unreachable!(),
             };
-            if let Some(plaintext) = plaintext.as_deref() {
-                if hash_admin_user_api_key(plaintext) != key_hash {
-                    return Err("恢复备份中的 API Key 明文与 key_hash 不匹配".to_string());
+            let computed_hash = plaintext.as_deref().map(hash_admin_user_api_key);
+            let key_hash = key_hash
+                .filter(|value| !value.is_empty())
+                .or_else(|| computed_hash.clone())
+                .ok_or_else(|| {
+                    "包含凭据的 API Key 必须包含 key_hash 或可解密的明文 key".to_string()
+                })?;
+            if key_hash.len() != 64
+                || !key_hash
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Err("API Key 的 key_hash 必须是规范的小写 SHA-256 十六进制".to_string());
+            }
+            if let Some(computed_hash) = computed_hash {
+                if computed_hash != key_hash {
+                    return Err("API Key 明文与 key_hash 不匹配".to_string());
                 }
             }
             return Ok(Some(ImportedApiKeyMaterial {
@@ -8316,15 +8313,12 @@ impl<'a> AdminAppState<'a> {
             }));
         }
 
-        let identity = source_api_key_id
-            .map(|value| format!("api-key-id:{value}"))
-            .or_else(|| key_hash.map(|value| format!("legacy-key-hash:{value}")))
-            .or_else(|| plaintext_key.map(|value| format!("legacy-key:{value}")))
-            .or_else(|| key_encrypted.map(|value| format!("legacy-key-encrypted:{value}")));
-        Ok(identity.map(|identity| ImportedApiKeyMaterial {
-            key_hash: imported_credential_tombstone(&identity),
-            key_plaintext: None,
-        }))
+        Ok(source_api_key_id
+            .filter(|value| !value.is_empty())
+            .map(|value| ImportedApiKeyMaterial {
+                key_hash: imported_credential_tombstone(&format!("api-key-id:{value}")),
+                key_plaintext: None,
+            }))
     }
 
     fn seal_imported_auth_api_key_secret(
