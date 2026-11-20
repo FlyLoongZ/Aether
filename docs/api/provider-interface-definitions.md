@@ -2,7 +2,7 @@
 
 生成日期：2026-06-03。
 
-本文档整理 Aether 当前接入和转换矩阵实际涉及的三类 provider 接口面：OpenAI Chat Completions / Responses / Embeddings / Images，Claude Messages，以及 Gemini GenerateContent / Embeddings / Files / PredictLongRunning 相关接口。它不是三家公司所有管理类、训练类、账单类 API 的全集。
+本文档整理 Aether 当前接入和转换矩阵实际涉及的三类 provider 接口面：OpenAI Chat Completions / Responses / Embeddings / Images，Claude Messages，以及 Gemini GenerateContent / Embeddings / Files 相关接口。它不是三家公司所有管理类、训练类、账单类 API 的全集。
 
 这是 schema inventory / audit input，不是运行时代码的字段 allowlist。Provider 官方新增字段时，同格式运行时路径仍按原始 body 透传；canonical same-format roundtrip 通过 provider extension 保留未映射字段；跨格式转换只有在存在显式语义映射时才开放，否则 fail closed。刷新本文档只用于更新审计基线和决定是否新增跨格式映射。
 
@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | OpenAI | OpenAI OpenAPI `2.3.0` / `OpenAI API` | https://platform.openai.com/docs/api-reference | `/v1/chat/completions`, `/v1/responses`, `/v1/responses/compact`, `/v1/embeddings`, `/v1/images/*` |
 | Claude / Anthropic | `anthropic-sdk-typescript` 中由 Anthropic OpenAPI 生成的 `messages.ts` | https://docs.anthropic.com/en/api/messages | `/v1/messages`, `/v1/messages/count_tokens`, Messages streaming events |
-| Gemini | Google Generative Language Discovery `v1beta` / `Gemini API` | https://ai.google.dev/api | `generateContent`, `streamGenerateContent`, `embedContent`, `batchEmbedContents`, files, count tokens, predict long-running |
+| Gemini | Google Generative Language Discovery `v1beta` / `Gemini API` | https://ai.google.dev/api | `generateContent`, `streamGenerateContent`, `embedContent`, `batchEmbedContents`, files, count tokens |
 
 结构化来源 URL：
 
@@ -6357,11 +6357,10 @@ Additional properties: `任意 JSON 值`
 | GET | `v1beta/files` | - | `ListFilesResponse` | `gemini files` |
 | GET | `v1beta/{+name}` | - | `File` | `gemini files` |
 | DELETE | `v1beta/{+name}` | - | `Empty` | `gemini files` |
-| POST | `v1beta/{+model}:predictLongRunning` | `PredictLongRunningRequest` | `Operation` | `gemini video` |
 
 ## Gemini Schema 字段表
 
-以下 schema 从 Gemini native 接口根 schema 递归引用得到，共 97 个。
+以下 schema 从 Gemini native 接口根 schema 递归引用得到，共 95 个。
 
 ### `AttributionSourceId`
 
@@ -7168,21 +7167,6 @@ Additional properties: `任意 JSON 值`
 | --- | --- | --- | --- | --- |
 | `speakerVoiceConfigs` | 否 | `array<SpeakerVoiceConfig>` | - | Required. All the enabled speaker voices. |
 
-### `Operation`
-
-| 项 | 值 |
-| --- | --- |
-| 类型 | `object` |
-| 说明 | This resource represents a long-running operation that is the result of a network API call. |
-
-| 字段 | 必填 | 类型 | 枚举/常量 | 说明 |
-| --- | --- | --- | --- | --- |
-| `done` | 否 | `boolean` | - | If the value is false, it means the operation is still in progress. If true, the operation is completed, and either error or response is available. |
-| `error` | 否 | `Status` | - | The error result of the operation in case of failure or cancellation. |
-| `metadata` | 否 | `object/map<string, any>` | - | Service-specific metadata associated with the operation. It typically contains progress information and common metadata such as create time. Some services might not provide such m… |
-| `name` | 否 | `string` | - | The server-assigned name, which is only unique within the same service that originally returns it. If you use the default HTTP mapping, the name should be a resource name ending w… |
-| `response` | 否 | `object/map<string, any>` | - | The normal, successful response of the operation. If the original method returns no data on success, such as Delete, the response is google.protobuf.Empty. If the original method … |
-
 ### `Part`
 
 | 项 | 值 |
@@ -7228,18 +7212,6 @@ Additional properties: `任意 JSON 值`
 | 字段 | 必填 | 类型 | 枚举/常量 | 说明 |
 | --- | --- | --- | --- | --- |
 | `voiceName` | 否 | `string` | - | The name of the preset voice to use. |
-
-### `PredictLongRunningRequest`
-
-| 项 | 值 |
-| --- | --- |
-| 类型 | `object` |
-| 说明 | Request message for [PredictionService.PredictLongRunning]. |
-
-| 字段 | 必填 | 类型 | 枚举/常量 | 说明 |
-| --- | --- | --- | --- | --- |
-| `instances` | 否 | `array<any>` | - | Required. The instances that are the input to the prediction call. |
-| `parameters` | 否 | `any` | - | Optional. The parameters that govern the prediction call. |
 
 ### `PromptFeedback`
 

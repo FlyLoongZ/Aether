@@ -93,11 +93,28 @@ a default.
 
 ## Video tasks
 
-- The `python-sync-report` truth-source mode and
-  `AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE` are removed. Video tasks always
-  use the Rust-authoritative path with local polling and reads.
-- The `aether-video-tasks-v1` encrypted file envelope is rejected. Only the v2
-  envelope is readable.
+- AI video generation support is removed. The `openai:video`, `gemini:video`, and
+  `xai:video` surfaces, `/v1/videos*`, `/openai/v1/videos*`, `/v1beta/operations*`,
+  and `:predictLongRunning` are no longer served; the admin video-task APIs,
+  `admin:video_tasks:*` permissions, and the async video-task poller are gone.
+- Migration `20261119030000_remove_video_support` drops `public.video_tasks` and
+  cleans video endpoints, provider models, billing rules/collectors, per-format
+  credential grants, and video pricing from global model configs. Management tokens
+  that only carried `admin:video_tasks:*` fall back to `admin:monitoring:read`.
+- The same migration removes the video formats from `user_groups.allowed_api_formats`
+  and deletes global models whose provider models all served video formats. Global
+  models that still have another format attached are untouched (a legacy provider
+  model row without an `api_format` also keeps its global model).
+- Deleting the video provider endpoints also deletes the `request_candidates` rows that
+  referenced them (`request_candidates_endpoint_id_fkey` is `ON DELETE CASCADE`), so
+  candidate traces for historical video requests are gone. This matches what the admin
+  endpoint delete does today. Usage rows keep their video `api_format` and cost history,
+  because the usage identity foreign keys were decoupled in
+  `20260522000000_decouple_usage_identity_foreign_keys`, and `usage.provider_endpoint_id`
+  is a denormalized attribution column that intentionally survives endpoint deletion.
+- `AETHER_GATEWAY_VIDEO_TASK_POLLER_INTERVAL_MS`,
+  `AETHER_GATEWAY_VIDEO_TASK_POLLER_BATCH_SIZE`, and
+  `AETHER_GATEWAY_VIDEO_TASK_STORE_PATH` are removed together with their CLI flags.
 
 ## Backups
 
