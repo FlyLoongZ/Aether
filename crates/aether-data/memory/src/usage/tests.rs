@@ -3343,3 +3343,36 @@ async fn usage_health_timeline_covers_full_window_regardless_of_sample_size() {
         "唯一提供商下的模型与提供商自身必须看到同一批请求"
     );
 }
+
+#[tokio::test]
+async fn cleanup_entry_points_report_unsupported_instead_of_pretending() {
+    use aether_data_contracts::repository::usage::{
+        UsageCleanupExecutionMode, UsageCleanupTargets, UsageCleanupWindow, UsageWriteRepository,
+    };
+
+    let repository = InMemoryUsageReadRepository::default();
+    let error = repository
+        .cleanup_usage(
+            &UsageCleanupWindow {
+                body_cutoff: chrono::Utc::now(),
+                header_cutoff: chrono::Utc::now(),
+                log_cutoff: chrono::Utc::now(),
+            },
+            100,
+            false,
+            UsageCleanupTargets::all_policy_targets(),
+            UsageCleanupExecutionMode::Policy,
+        )
+        .await
+        .expect_err("the memory backend cannot sweep usage rows");
+    assert!(
+        error.to_string().contains("PostgreSQL"),
+        "the error must name the missing backend, got: {error}"
+    );
+
+    let error = repository
+        .cleanup_stale_pending_requests(0, 0, 30, 100)
+        .await
+        .expect_err("the memory backend cannot reclaim stale pending rows");
+    assert!(error.to_string().contains("PostgreSQL"), "got: {error}");
+}

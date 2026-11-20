@@ -3248,9 +3248,18 @@ pub trait UsageWriteRepository: Send + Sync {
         batch_size: usize,
     ) -> Result<PendingUsageCleanupSummary, crate::DataLayerError> {
         let _ = (cutoff_unix_secs, now_unix_secs, timeout_minutes, batch_size);
-        Ok(PendingUsageCleanupSummary::default())
+        // A backend without this implementation must say so: reporting "nothing
+        // to clean" would silently leave stale pending rows forever.
+        Err(crate::DataLayerError::InvalidConfiguration(
+            "cleanup_stale_pending_requests requires the PostgreSQL backend".to_string(),
+        ))
     }
 
+    /// Applies queued counter deltas to their aggregates.
+    ///
+    /// The default is a no-op because a backend without a delta queue applies
+    /// counters synchronously: there is nothing to flush, so an empty summary is
+    /// the truth rather than a lie.
     async fn flush_usage_counter_deltas(
         &self,
         batch_size: usize,
@@ -3301,7 +3310,11 @@ pub trait UsageWriteRepository: Send + Sync {
         mode: UsageCleanupExecutionMode,
     ) -> Result<UsageCleanupSummary, crate::DataLayerError> {
         let _ = (window, batch_size, auto_delete_expired_keys, targets, mode);
-        Ok(UsageCleanupSummary::default())
+        // Same reason as `cleanup_stale_pending_requests`: an empty summary would
+        // claim a successful sweep that never happened.
+        Err(crate::DataLayerError::InvalidConfiguration(
+            "cleanup_usage requires the PostgreSQL backend".to_string(),
+        ))
     }
 
     async fn preview_usage_cleanup(
