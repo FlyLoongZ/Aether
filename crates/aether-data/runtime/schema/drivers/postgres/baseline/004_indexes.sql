@@ -534,38 +534,6 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_user_device ON public.user_sessions
 
 
 --
--- Name: idx_video_tasks_external_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_external_id ON public.video_tasks USING btree (external_task_id);
-
-
-
---
--- Name: idx_video_tasks_next_poll; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_next_poll ON public.video_tasks USING btree (next_poll_at);
-
-
-
---
--- Name: idx_video_tasks_request_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_request_id ON public.video_tasks USING btree (request_id);
-
-
-
---
--- Name: idx_video_tasks_user_status; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_user_status ON public.video_tasks USING btree (user_id, status);
-
-
-
---
 -- Name: idx_wallet_daily_usage_date; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1210,54 +1178,6 @@ CREATE INDEX IF NOT EXISTS ix_users_ldap_username ON public.users USING btree (l
 --
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON public.users USING btree (username);
-
-
-
---
--- Name: ix_video_tasks_api_key_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_api_key_id ON public.video_tasks USING btree (api_key_id);
-
-
-
---
--- Name: ix_video_tasks_endpoint_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_endpoint_id ON public.video_tasks USING btree (endpoint_id);
-
-
-
---
--- Name: ix_video_tasks_key_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_key_id ON public.video_tasks USING btree (key_id);
-
-
-
---
--- Name: ix_video_tasks_provider_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_provider_id ON public.video_tasks USING btree (provider_id);
-
-
-
---
--- Name: ix_video_tasks_remixed_from_task_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_remixed_from_task_id ON public.video_tasks USING btree (remixed_from_task_id);
-
-
-
---
--- Name: ix_video_tasks_short_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX IF NOT EXISTS ix_video_tasks_short_id ON public.video_tasks USING btree (short_id);
 
 
 

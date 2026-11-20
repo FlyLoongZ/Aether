@@ -47,10 +47,6 @@ CREATE INDEX IF NOT EXISTS ix_usage_counter_deltas_request_kind
 CREATE INDEX IF NOT EXISTS idx_entitlement_usage_entitlement_date
     ON public.entitlement_usage_ledgers USING btree (user_entitlement_id, usage_date);
 
-CREATE INDEX IF NOT EXISTS idx_video_tasks_due_poll
-    ON public.video_tasks USING btree (status, next_poll_at, updated_at)
-    WHERE next_poll_at IS NOT NULL;
-
 ALTER TABLE IF EXISTS public.api_keys
   ALTER COLUMN total_requests TYPE bigint USING COALESCE(total_requests, 0)::bigint;
 

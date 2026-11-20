@@ -1498,7 +1498,6 @@ mod tests {
                     "openai:responses",
                     "openai:responses:compact",
                     "openai:image",
-                    "openai:video",
                 ] {
                     assert_channel(name, &sql, "xai", auth_type, false, api_format);
                 }

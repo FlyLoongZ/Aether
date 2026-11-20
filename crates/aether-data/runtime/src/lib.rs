@@ -18,8 +18,7 @@ pub mod maintenance;
 pub use aether_data_contracts::PostgresPoolConfig;
 pub use backend::PostgresBackend;
 pub use backend::{
-    DataBackends, DataLeaseBackends, DataReadRepositories, DataTransactionBackends,
-    DataWriteRepositories,
+    DataBackends, DataReadRepositories, DataTransactionBackends, DataWriteRepositories,
 };
 pub use config::DataLayerConfig;
 pub use error::DataLayerError;

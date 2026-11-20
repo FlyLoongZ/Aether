@@ -511,22 +511,6 @@ WHERE provider_id IS NOT NULL
             .await?;
             pg_execute_if_table(
                 tx,
-                "video_tasks",
-                "video_task_provider_refs_cleared",
-                r#"
-UPDATE public.video_tasks
-SET provider_id = NULL,
-    endpoint_id = NULL,
-    key_id = NULL
-WHERE provider_id IS NOT NULL
-   OR endpoint_id IS NOT NULL
-   OR key_id IS NOT NULL
-"#,
-                summary,
-            )
-            .await?;
-            pg_execute_if_table(
-                tx,
                 "user_preferences",
                 "user_default_provider_refs_cleared",
                 "UPDATE public.user_preferences SET default_provider_id = NULL WHERE default_provider_id IS NOT NULL",
@@ -668,22 +652,6 @@ WHERE user_id IN ({non_admin_users})
         sqlx::AssertSqlSafe(format!(
             r#"
 UPDATE public.audit_logs
-SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
-    api_key_id = CASE WHEN api_key_id IN ({non_admin_keys}) THEN NULL ELSE api_key_id END
-WHERE user_id IN ({non_admin_users})
-   OR api_key_id IN ({non_admin_keys})
-"#
-        )),
-        summary,
-    )
-    .await?;
-    pg_execute_if_table(
-        tx,
-        "video_tasks",
-        "video_task_user_refs_cleared",
-        sqlx::AssertSqlSafe(format!(
-            r#"
-UPDATE public.video_tasks
 SET user_id = CASE WHEN user_id IN ({non_admin_users}) THEN NULL ELSE user_id END,
     api_key_id = CASE WHEN api_key_id IN ({non_admin_keys}) THEN NULL ELSE api_key_id END
 WHERE user_id IN ({non_admin_users})

@@ -11,7 +11,6 @@ mod candidates;
 mod error;
 mod gemini_file_mappings;
 mod global_models;
-mod lease;
 mod management_tokens;
 mod migrations;
 mod oauth_providers;
@@ -28,7 +27,6 @@ mod tx;
 mod types;
 mod usage;
 mod users;
-mod video_tasks;
 mod wallet;
 
 pub use aether_data_contracts::{DataLayerError, PostgresPoolConfig};
@@ -42,11 +40,6 @@ pub use candidate_selection::SqlxMinimalCandidateSelectionReadRepository;
 pub use candidates::SqlxRequestCandidateReadRepository;
 pub use gemini_file_mappings::SqlxGeminiFileMappingRepository;
 pub use global_models::SqlxGlobalModelReadRepository;
-pub use lease::{
-    build_postgres_lease_claim_sql, build_postgres_lease_release_sql,
-    build_postgres_lease_renew_sql, PostgresLeaseClaimOptions, PostgresLeaseClaimSpec,
-    PostgresLeaseRunner, PostgresLeaseRunnerConfig,
-};
 pub use management_tokens::SqlxManagementTokenRepository;
 pub use migrations::{
     all_up_migrations, pending_migrations, pending_migrations_from_applied,
@@ -67,5 +60,4 @@ pub use tx::{
 pub use types::DatabaseRecordId;
 pub use usage::{cleanup, SqlxUsageReadRepository};
 pub use users::SqlxUserReadRepository;
-pub use video_tasks::{SqlxVideoTaskReadRepository, SqlxVideoTaskRepository};
 pub use wallet::SqlxWalletRepository;

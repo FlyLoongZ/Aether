@@ -21,7 +21,6 @@ use aether_data_contracts::repository::quota::ProviderQuotaReadRepository;
 use aether_data_contracts::repository::routing_profiles::RoutingGroupReadRepository;
 use aether_data_contracts::repository::usage::UsageReadRepository;
 use aether_data_contracts::repository::users::UserReadRepository;
-use aether_data_contracts::repository::video_tasks::VideoTaskReadRepository;
 use aether_data_contracts::repository::wallet::WalletReadRepository;
 
 #[derive(Clone, Default)]
@@ -45,7 +44,6 @@ pub struct DataReadRepositories {
     routing_groups: Option<Arc<dyn RoutingGroupReadRepository>>,
     usage: Option<Arc<dyn UsageReadRepository>>,
     users: Option<Arc<dyn UserReadRepository>>,
-    video_tasks: Option<Arc<dyn VideoTaskReadRepository>>,
     wallets: Option<Arc<dyn WalletReadRepository>>,
 }
 
@@ -77,7 +75,6 @@ impl fmt::Debug for DataReadRepositories {
             .field("has_routing_groups", &self.routing_groups.is_some())
             .field("has_usage", &self.usage.is_some())
             .field("has_users", &self.users.is_some())
-            .field("has_video_tasks", &self.video_tasks.is_some())
             .field("has_wallets", &self.wallets.is_some())
             .finish()
     }
@@ -155,9 +152,6 @@ impl DataReadRepositories {
         }
         if self.users.is_none() {
             self.users = Some(PostgresBackend::user_read_repository(backend));
-        }
-        if self.video_tasks.is_none() {
-            self.video_tasks = Some(PostgresBackend::video_task_read_repository(backend));
         }
         if self.wallets.is_none() {
             self.wallets = Some(PostgresBackend::wallet_read_repository(backend));
@@ -247,10 +241,6 @@ impl DataReadRepositories {
         self.users.clone()
     }
 
-    pub fn video_tasks(&self) -> Option<Arc<dyn VideoTaskReadRepository>> {
-        self.video_tasks.clone()
-    }
-
     pub fn wallets(&self) -> Option<Arc<dyn WalletReadRepository>> {
         self.wallets.clone()
     }
@@ -275,7 +265,6 @@ impl DataReadRepositories {
             || self.routing_groups.is_some()
             || self.usage.is_some()
             || self.users.is_some()
-            || self.video_tasks.is_some()
             || self.wallets.is_some()
     }
 }
@@ -318,7 +307,6 @@ mod tests {
         assert!(read.provider_catalog().is_some());
         assert!(read.provider_quotas().is_some());
         assert!(read.usage().is_some());
-        assert!(read.video_tasks().is_some());
         assert!(read.wallets().is_some());
     }
 }

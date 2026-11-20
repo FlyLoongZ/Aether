@@ -913,21 +913,6 @@ END $mig$;
 
 
 --
--- Name: video_tasks uq_video_tasks_request_id; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT uq_video_tasks_request_id UNIQUE (request_id);
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
 -- Name: wallet_daily_usage_ledgers uq_wallet_daily_usage_ledgers_wallet_date_tz; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1069,21 +1054,6 @@ END $mig$;
 DO $mig$ BEGIN
   ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_pkey PRIMARY KEY (id);
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN duplicate_table THEN NULL;

@@ -1610,11 +1610,6 @@ WHERE id = $1
             .execute(&mut *tx)
             .await
             .map_postgres_err()?;
-            sqlx::query("UPDATE video_tasks SET provider_id = NULL WHERE provider_id = $1")
-                .bind(provider_id)
-                .execute(&mut *tx)
-                .await
-                .map_postgres_err()?;
             sqlx::query("DELETE FROM request_candidates WHERE provider_id = $1")
                 .bind(provider_id)
                 .execute(&mut *tx)
@@ -1623,11 +1618,6 @@ WHERE id = $1
         }
 
         for endpoint_id in endpoint_ids {
-            sqlx::query("UPDATE video_tasks SET endpoint_id = NULL WHERE endpoint_id = $1")
-                .bind(endpoint_id)
-                .execute(&mut *tx)
-                .await
-                .map_postgres_err()?;
             sqlx::query("DELETE FROM request_candidates WHERE endpoint_id = $1")
                 .bind(endpoint_id)
                 .execute(&mut *tx)
@@ -1637,11 +1627,6 @@ WHERE id = $1
 
         for key_id in key_ids {
             sqlx::query("DELETE FROM gemini_file_mappings WHERE key_id = $1")
-                .bind(key_id)
-                .execute(&mut *tx)
-                .await
-                .map_postgres_err()?;
-            sqlx::query("UPDATE video_tasks SET key_id = NULL WHERE key_id = $1")
                 .bind(key_id)
                 .execute(&mut *tx)
                 .await

@@ -1,12 +1,11 @@
 //! Backend composition layer.
 //!
 //! `DataBackends` builds the PostgreSQL pool, instantiates concrete
-//! repositories, and exposes app-facing read/write, lease, transaction, and
+//! repositories, and exposes app-facing read/write, transaction, and
 //! maintenance handles. Request-path repository SQL belongs in
 //! `aether-data-postgres`; backend-owned maintenance SQL lives in focused
 //! modules such as `stats`, `wallet`, and `system`.
 
-mod leases;
 mod maintenance;
 mod postgres;
 mod read;
@@ -18,7 +17,6 @@ mod wallet;
 mod write;
 
 use crate::maintenance::DatabasePoolSummary;
-pub use leases::DataLeaseBackends;
 pub use postgres::PostgresBackend;
 pub use read::DataReadRepositories;
 pub use referrals::{
@@ -41,7 +39,6 @@ enum SqlBackendRef<'a> {
 pub struct DataBackends {
     config: DataLayerConfig,
     postgres: Option<PostgresBackend>,
-    leases: DataLeaseBackends,
     read: DataReadRepositories,
     transactions: DataTransactionBackends,
     write: DataWriteRepositories,
@@ -74,7 +71,6 @@ impl DataBackends {
             .clone()
             .map(PostgresBackend::from_config)
             .transpose()?;
-        let leases = DataLeaseBackends::from_postgres(postgres.as_ref())?;
         let read = DataReadRepositories::from_backends(postgres.as_ref());
         let transactions = DataTransactionBackends::from_postgres(postgres.as_ref());
         let write = DataWriteRepositories::from_backends(postgres.as_ref());
@@ -82,7 +78,6 @@ impl DataBackends {
         Ok(Self {
             config,
             postgres,
-            leases,
             read,
             transactions,
             write,
@@ -101,10 +96,6 @@ impl DataBackends {
         &self.read
     }
 
-    pub fn leases(&self) -> &DataLeaseBackends {
-        &self.leases
-    }
-
     pub fn transactions(&self) -> &DataTransactionBackends {
         &self.transactions
     }
@@ -114,8 +105,7 @@ impl DataBackends {
     }
 
     pub fn has_runtime_backends(&self) -> bool {
-        self.leases.has_any()
-            || self.read.has_any()
+        self.read.has_any()
             || self.transactions.has_any()
             || self.write.has_any()
     }
@@ -134,7 +124,6 @@ mod tests {
 
         assert!(!backends.has_runtime_backends());
         assert!(backends.postgres().is_none());
-        assert!(backends.leases().postgres().is_none());
         assert!(backends.read().auth_api_keys().is_none());
         assert!(backends.read().auth_modules().is_none());
         assert!(backends.read().billing().is_none());
@@ -147,7 +136,6 @@ mod tests {
         assert!(backends.read().request_candidates().is_none());
         assert!(backends.read().provider_catalog().is_none());
         assert!(backends.read().usage().is_none());
-        assert!(backends.read().video_tasks().is_none());
         assert!(backends.transactions().postgres().is_none());
         assert!(backends.write().settlement().is_none());
         assert!(backends.write().usage().is_none());
@@ -171,7 +159,6 @@ mod tests {
 
         assert!(backends.has_runtime_backends());
         assert!(backends.postgres().is_some());
-        assert!(backends.leases().postgres().is_some());
         assert!(backends.read().auth_api_keys().is_some());
         assert!(backends.read().auth_modules().is_some());
         assert!(backends.read().billing().is_some());
@@ -186,7 +173,6 @@ mod tests {
         assert!(backends.read().provider_catalog().is_some());
         assert!(backends.read().provider_quotas().is_some());
         assert!(backends.read().usage().is_some());
-        assert!(backends.read().video_tasks().is_some());
         assert!(backends.read().wallets().is_some());
         assert!(backends.transactions().postgres().is_some());
         assert!(backends.write().auth_modules().is_some());

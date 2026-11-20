@@ -20,13 +20,11 @@ WITH endpoint_url_parts AS (
         'openai:embedding',
         'openai:rerank',
         'openai:image',
-        'openai:video',
         'jina:embedding',
         'jina:rerank',
         'claude:messages',
         'gemini:generate_content',
-        'gemini:embedding',
-        'gemini:video'
+        'gemini:embedding'
     )
 ),
 endpoint_api_root_updates AS (
@@ -34,7 +32,7 @@ endpoint_api_root_updates AS (
         id,
         base_without_query
             || CASE
-                WHEN normalized_api_format IN ('gemini:generate_content', 'gemini:embedding', 'gemini:video')
+                WHEN normalized_api_format IN ('gemini:generate_content', 'gemini:embedding')
                     THEN '/v1beta'
                 ELSE '/v1'
             END
@@ -54,11 +52,11 @@ endpoint_api_root_updates AS (
       AND normalized_base !~ '/v[0-9]+(beta[0-9]*)?(/|$)'
       AND (
           (
-              normalized_api_format IN ('gemini:generate_content', 'gemini:embedding', 'gemini:video')
+              normalized_api_format IN ('gemini:generate_content', 'gemini:embedding')
               AND normalized_custom_path LIKE '/v1beta/%'
           )
           OR (
-              normalized_api_format NOT IN ('gemini:generate_content', 'gemini:embedding', 'gemini:video')
+              normalized_api_format NOT IN ('gemini:generate_content', 'gemini:embedding')
               AND normalized_custom_path LIKE '/v1/%'
           )
           OR normalized_custom_path = ''
@@ -93,19 +91,13 @@ SET custom_path = CASE
         WHEN lower(trim(e.api_format)) = 'openai:image'
             AND lower(trim(coalesce(e.custom_path, ''))) = '/v1/images/generations'
             THEN NULL
-        WHEN lower(trim(e.api_format)) = 'openai:video'
-            AND lower(trim(coalesce(e.custom_path, ''))) = '/v1/videos'
-            THEN NULL
         WHEN lower(trim(e.api_format)) = 'gemini:generate_content'
             AND lower(trim(coalesce(e.custom_path, ''))) = '/v1beta/models/{model}:{action}'
             THEN NULL
         WHEN lower(trim(e.api_format)) = 'gemini:embedding'
             AND lower(trim(coalesce(e.custom_path, ''))) IN ('/v1beta/models/{model}:embedcontent', '/v1beta/models/{model}:{action}')
             THEN NULL
-        WHEN lower(trim(e.api_format)) = 'gemini:video'
-            AND lower(trim(coalesce(e.custom_path, ''))) = '/v1beta/models/{model}:predictlongrunning'
-            THEN NULL
-        WHEN lower(trim(e.api_format)) IN ('gemini:generate_content', 'gemini:embedding', 'gemini:video')
+        WHEN lower(trim(e.api_format)) IN ('gemini:generate_content', 'gemini:embedding')
             THEN regexp_replace(trim(e.custom_path), '^/v1beta(?=/)', '', 'i')
         ELSE regexp_replace(trim(e.custom_path), '^/v1(?=/)', '', 'i')
     END
@@ -117,13 +109,11 @@ WHERE lower(trim(e.api_format)) IN (
         'openai:embedding',
         'openai:rerank',
         'openai:image',
-        'openai:video',
         'jina:embedding',
         'jina:rerank',
         'claude:messages',
         'gemini:generate_content',
-        'gemini:embedding',
-        'gemini:video'
+        'gemini:embedding'
     )
   AND p.id = e.provider_id
   AND lower(trim(coalesce(p.provider_type, ''))) NOT IN (
@@ -139,11 +129,11 @@ WHERE lower(trim(e.api_format)) IN (
     )
   AND (
         (
-            lower(trim(e.api_format)) IN ('gemini:generate_content', 'gemini:embedding', 'gemini:video')
+            lower(trim(e.api_format)) IN ('gemini:generate_content', 'gemini:embedding')
             AND lower(trim(coalesce(e.custom_path, ''))) LIKE '/v1beta/%'
         )
         OR (
-            lower(trim(e.api_format)) NOT IN ('gemini:generate_content', 'gemini:embedding', 'gemini:video')
+            lower(trim(e.api_format)) NOT IN ('gemini:generate_content', 'gemini:embedding')
             AND lower(trim(coalesce(e.custom_path, ''))) LIKE '/v1/%'
         )
     )

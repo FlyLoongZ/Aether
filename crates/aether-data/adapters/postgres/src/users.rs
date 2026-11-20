@@ -106,7 +106,6 @@ const POSTGRES_PREPARE_USER_FACTS_FOR_DELETION_SQL: &[&str] = &[
 
 const POSTGRES_ANONYMIZE_USER_HISTORY_SQL: &[&str] = &[
     "UPDATE request_candidates SET username = NULL, api_key_name = NULL WHERE user_id = $1",
-    "UPDATE video_tasks SET username = NULL, api_key_name = NULL WHERE user_id = $1",
     "UPDATE usage SET username = NULL, api_key_name = NULL WHERE user_id = $1",
     "UPDATE stats_user_daily SET username = NULL WHERE user_id = $1",
     "UPDATE stats_user_summary SET username = NULL WHERE user_id = $1",
@@ -3965,7 +3964,6 @@ mod admin_invariant_tests {
     fn assert_history_anonymization_contract(statements: &[&str]) {
         const TABLES: &[&str] = &[
             "request_candidates",
-            "video_tasks",
             "usage",
             "stats_user_daily",
             "stats_user_summary",
@@ -3988,7 +3986,7 @@ mod admin_invariant_tests {
             assert!(statement.contains("username = NULL"));
             assert!(statement.ends_with("WHERE user_id = $1"));
         }
-        for table in ["request_candidates", "video_tasks", "usage"] {
+        for table in ["request_candidates", "usage"] {
             let statement = statements
                 .iter()
                 .find(|sql| sql.starts_with(&format!("UPDATE {table} ")))

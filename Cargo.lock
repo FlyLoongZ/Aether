@@ -683,22 +683,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aether-video-tasks-core"
-version = "0.1.0"
-dependencies = [
- "aether-contracts",
- "aether-crypto",
- "aether-data-contracts",
- "async-trait",
- "hex",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "url",
- "uuid",
-]
-
-[[package]]
 name = "aether-wallet"
 version = "0.1.0"
 dependencies = [

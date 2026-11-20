@@ -835,7 +835,6 @@ WHERE id = $1
 
 const POSTGRES_ANONYMIZE_API_KEY_HISTORY_SQL: &[&str] = &[
     "UPDATE request_candidates SET api_key_name = NULL WHERE api_key_id = $1",
-    "UPDATE video_tasks SET api_key_name = NULL WHERE api_key_id = $1",
     "UPDATE usage SET api_key_name = NULL WHERE api_key_id = $1",
     "UPDATE stats_daily_api_key SET api_key_name = NULL WHERE api_key_id = $1",
     "UPDATE audit_logs SET description = 'deleted API key event', ip_address = NULL, user_agent = NULL, event_metadata = NULL, error_message = NULL WHERE api_key_id = $1",
@@ -2103,12 +2102,7 @@ mod tests {
 
     #[test]
     fn api_key_delete_sql_preserves_ids_and_removes_private_snapshots() {
-        for table in [
-            "request_candidates",
-            "video_tasks",
-            "usage",
-            "stats_daily_api_key",
-        ] {
+        for table in ["request_candidates", "usage", "stats_daily_api_key"] {
             assert!(POSTGRES_ANONYMIZE_API_KEY_HISTORY_SQL.iter().any(|sql| {
                 sql.starts_with(&format!("UPDATE {table} "))
                     && sql.contains("SET api_key_name = NULL")

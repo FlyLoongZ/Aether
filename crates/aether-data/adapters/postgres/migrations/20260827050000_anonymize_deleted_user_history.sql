@@ -1,7 +1,5 @@
 ALTER TABLE public.request_candidates
     DROP CONSTRAINT IF EXISTS request_candidates_user_id_fkey;
-ALTER TABLE public.video_tasks
-    DROP CONSTRAINT IF EXISTS video_tasks_user_id_fkey;
 ALTER TABLE public.usage
     DROP CONSTRAINT IF EXISTS usage_user_id_fkey;
 ALTER TABLE public.stats_user_daily
@@ -66,8 +64,6 @@ ALTER TABLE public.referral_rewards
 
 ALTER TABLE public.request_candidates
     DROP CONSTRAINT IF EXISTS request_candidates_api_key_id_fkey;
-ALTER TABLE public.video_tasks
-    DROP CONSTRAINT IF EXISTS video_tasks_api_key_id_fkey;
 ALTER TABLE public.usage
     DROP CONSTRAINT IF EXISTS usage_api_key_id_fkey;
 ALTER TABLE public.stats_daily_api_key

@@ -92,9 +92,3 @@ ALTER TABLE public.user_groups
     ALTER COLUMN allowed_api_formats TYPE jsonb USING allowed_api_formats::jsonb,
     ALTER COLUMN allowed_models TYPE jsonb USING allowed_models::jsonb;
 
-ALTER TABLE public.video_tasks
-    ALTER COLUMN original_request_body TYPE jsonb USING original_request_body::jsonb,
-    ALTER COLUMN converted_request_body TYPE jsonb USING converted_request_body::jsonb,
-    ALTER COLUMN video_urls TYPE jsonb USING video_urls::jsonb,
-    ALTER COLUMN request_metadata TYPE jsonb USING request_metadata::jsonb;
-

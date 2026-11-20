@@ -50,6 +50,7 @@ mod provider_expenses;
 mod proxy_tunnel_removal;
 mod scoped_provider_creation;
 mod user_preferences;
+mod video_removal;
 
 /// Exercise the same bootstrap-then-migrate sequence used by gateway startup.
 async fn prepare_and_apply_clean_postgres_database(pool: &PgPool) {
@@ -423,7 +424,6 @@ fn empty_database_snapshot_omits_retired_http_capture_tables_and_keeps_audit_adm
         EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_provider_api_keys_provider_active_priority_id")
     );
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("pool_member_scores_scheduler_account_rank_idx"));
-    assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_video_tasks_due_poll"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_usage_created_id_desc"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_request_candidates_endpoint_status_created"));
     assert!(EMPTY_DATABASE_SNAPSHOT_SQL.contains("idx_background_task_runs_status_created"));
@@ -570,7 +570,6 @@ fn every_json_column_is_declared_jsonb_and_normalized_by_migration() {
         "header_rules jsonb,",
         "client_hints jsonb,",
         "model_capability_settings jsonb,",
-        "original_request_body jsonb,",
         "value jsonb NOT NULL,",
         "config jsonb NOT NULL,",
     ] {
@@ -591,7 +590,6 @@ fn every_json_column_is_declared_jsonb_and_normalized_by_migration() {
         "api_formats",
         "status_snapshot",
         "proxy_metadata",
-        "original_request_body",
         "value",
     ] {
         assert!(
@@ -827,7 +825,6 @@ fn deleted_user_history_schema_decoupling_does_not_rewrite_history() {
         .expect("postgres user-history schema migration should be embedded");
     for constraint in [
         "request_candidates_user_id_fkey",
-        "video_tasks_user_id_fkey",
         "usage_user_id_fkey",
         "stats_user_daily_user_id_fkey",
         "stats_user_summary_user_id_fkey",
@@ -842,7 +839,6 @@ fn deleted_user_history_schema_decoupling_does_not_rewrite_history() {
         "stats_hourly_user_model_user_id_fkey",
         "user_model_usage_counts_user_id_fkey",
         "request_candidates_api_key_id_fkey",
-        "video_tasks_api_key_id_fkey",
         "usage_api_key_id_fkey",
         "stats_daily_api_key_api_key_id_fkey",
         "audit_logs_user_id_fkey",
@@ -934,9 +930,6 @@ INSERT INTO provider_endpoints (id, provider_id, api_format, base_url, custom_pa
   ('image-root', 'provider-custom', 'openai:image', 'https://image.example.com', NULL),
   ('image-edit-custom-path', 'provider-custom', 'openai:image', 'https://image.example.com/api', '/v1/images/edits'),
   ('image-v4-edit-custom-path', 'provider-custom', 'openai:image', 'https://image.example.com/api/v4', '/v1/images/edits'),
-  ('video-root', 'provider-custom', 'openai:video', 'https://video.example.com', NULL),
-  ('video-v1beta-old-default-path', 'provider-custom', 'openai:video', 'https://video.example.com/api/v1beta', '/v1/videos'),
-  ('video-versioned-root', 'provider-custom', 'openai:video', 'https://ark.example.com/api/v3', NULL),
   ('google-versioned-segment-root', 'provider-custom', 'openai:embedding', 'https://generativelanguage.googleapis.com/v1beta/openai', NULL),
   ('gemini-root', 'provider-custom', 'gemini:generate_content', 'https://generativelanguage.googleapis.com', NULL),
   ('gemini-old-default-path', 'provider-custom', 'gemini:generate_content', 'https://generativelanguage.googleapis.com?tenant=demo', '/v1beta/models/{model}:{action}'),
@@ -944,8 +937,6 @@ INSERT INTO provider_endpoints (id, provider_id, api_format, base_url, custom_pa
   ('gemini-versioned-old-default', 'provider-custom', 'gemini:generate_content', 'https://generativelanguage.googleapis.com/v1beta', '/v1beta/models/{model}:{action}'),
   ('gemini-embedding-root', 'provider-custom', 'gemini:embedding', 'https://generativelanguage.googleapis.com', NULL),
   ('gemini-embedding-old-default', 'provider-custom', 'gemini:embedding', 'https://generativelanguage.googleapis.com', '/v1beta/models/{model}:embedContent'),
-  ('gemini-video-root', 'provider-custom', 'gemini:video', 'https://generativelanguage.googleapis.com', NULL),
-  ('gemini-video-versioned-old-default', 'provider-custom', 'gemini:video', 'https://generativelanguage.googleapis.com/v1beta', '/v1beta/models/{model}:predictLongRunning'),
   ('fixed-vertex-gemini-root', 'provider-fixed-vertex', 'gemini:embedding', 'https://aiplatform.googleapis.com', NULL),
   ('claude-path-root', 'provider-custom', 'claude:messages', 'https://proxy.example.com/anthropic', NULL),
   ('claude-old-default-path', 'provider-custom', 'claude:messages', 'https://proxy.example.com/anthropic', '/v1/messages'),
@@ -1058,18 +1049,6 @@ INSERT INTO provider_endpoints (id, provider_id, api_format, base_url, custom_pa
         ))
     );
     assert_eq!(
-        rows.get("video-root"),
-        Some(&("https://video.example.com/v1".to_string(), None))
-    );
-    assert_eq!(
-        rows.get("video-v1beta-old-default-path"),
-        Some(&("https://video.example.com/api/v1beta".to_string(), None))
-    );
-    assert_eq!(
-        rows.get("video-versioned-root"),
-        Some(&("https://ark.example.com/api/v3".to_string(), None))
-    );
-    assert_eq!(
         rows.get("google-versioned-segment-root"),
         Some(&(
             "https://generativelanguage.googleapis.com/v1beta/openai".to_string(),
@@ -1113,20 +1092,6 @@ INSERT INTO provider_endpoints (id, provider_id, api_format, base_url, custom_pa
     );
     assert_eq!(
         rows.get("gemini-embedding-old-default"),
-        Some(&(
-            "https://generativelanguage.googleapis.com/v1beta".to_string(),
-            None
-        ))
-    );
-    assert_eq!(
-        rows.get("gemini-video-root"),
-        Some(&(
-            "https://generativelanguage.googleapis.com/v1beta".to_string(),
-            None
-        ))
-    );
-    assert_eq!(
-        rows.get("gemini-video-versioned-old-default"),
         Some(&(
             "https://generativelanguage.googleapis.com/v1beta".to_string(),
             None
@@ -1718,6 +1683,8 @@ fn pending_migrations_from_applied_skips_versions_already_applied() {
             20261118000000,
             20261119010000,
             20261119020000,
+            20261119030000,
+            20261119040000,
         ]
     );
 }

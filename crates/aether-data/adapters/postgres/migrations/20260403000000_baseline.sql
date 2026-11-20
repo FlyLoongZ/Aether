@@ -1276,65 +1276,6 @@ CREATE TABLE IF NOT EXISTS public.users (
 
 
 --
--- Name: video_tasks; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE IF NOT EXISTS public.video_tasks (
-    id character varying(36) NOT NULL,
-    external_task_id character varying(200),
-    user_id character varying(36),
-    api_key_id character varying(36),
-    provider_id character varying(36),
-    endpoint_id character varying(36),
-    key_id character varying(36),
-    client_api_format character varying(50) NOT NULL,
-    provider_api_format character varying(50) NOT NULL,
-    format_converted boolean DEFAULT false,
-    model character varying(100) NOT NULL,
-    prompt text NOT NULL,
-    original_request_body jsonb,
-    converted_request_body jsonb,
-    duration_seconds integer DEFAULT 4,
-    resolution character varying(20) DEFAULT '720p'::character varying,
-    aspect_ratio character varying(10) DEFAULT '16:9'::character varying,
-    size character varying(20),
-    status character varying(20) DEFAULT 'pending'::character varying,
-    progress_percent integer DEFAULT 0,
-    progress_message character varying(500),
-    video_url character varying(2000),
-    video_urls jsonb,
-    thumbnail_url character varying(2000),
-    video_size_bytes bigint,
-    video_expires_at timestamp with time zone,
-    stored_video_path character varying(500),
-    storage_provider character varying(50),
-    error_code character varying(50),
-    error_message text,
-    retry_count integer DEFAULT 0,
-    max_retries integer DEFAULT 3,
-    poll_interval_seconds integer DEFAULT 10,
-    next_poll_at timestamp with time zone,
-    poll_count integer DEFAULT 0,
-    max_poll_count integer DEFAULT 360,
-    remixed_from_task_id character varying(36),
-    webhook_url character varying(500),
-    webhook_sent boolean DEFAULT false,
-    webhook_sent_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    submitted_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    request_metadata jsonb,
-    request_id character varying(100) NOT NULL,
-    short_id character varying(16) NOT NULL,
-    video_duration_seconds double precision,
-    username character varying(100),
-    api_key_name character varying(200)
-);
-
-
-
---
 -- Name: wallet_daily_usage_ledgers; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2342,21 +2283,6 @@ END $mig$;
 
 
 --
--- Name: video_tasks uq_video_tasks_request_id; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT uq_video_tasks_request_id UNIQUE (request_id);
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
 -- Name: wallet_daily_usage_ledgers uq_wallet_daily_usage_ledgers_wallet_date_tz; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2498,21 +2424,6 @@ END $mig$;
 DO $mig$ BEGIN
   ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_pkey PRIMARY KEY (id);
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN duplicate_table THEN NULL;
@@ -3099,38 +3010,6 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_user_active ON public.user_sessions
 --
 
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_device ON public.user_sessions USING btree (user_id, client_device_id);
-
-
-
---
--- Name: idx_video_tasks_external_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_external_id ON public.video_tasks USING btree (external_task_id);
-
-
-
---
--- Name: idx_video_tasks_next_poll; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_next_poll ON public.video_tasks USING btree (next_poll_at);
-
-
-
---
--- Name: idx_video_tasks_request_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_request_id ON public.video_tasks USING btree (request_id);
-
-
-
---
--- Name: idx_video_tasks_user_status; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS idx_video_tasks_user_status ON public.video_tasks USING btree (user_id, status);
 
 
 
@@ -3779,54 +3658,6 @@ CREATE INDEX IF NOT EXISTS ix_users_ldap_username ON public.users USING btree (l
 --
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON public.users USING btree (username);
-
-
-
---
--- Name: ix_video_tasks_api_key_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_api_key_id ON public.video_tasks USING btree (api_key_id);
-
-
-
---
--- Name: ix_video_tasks_endpoint_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_endpoint_id ON public.video_tasks USING btree (endpoint_id);
-
-
-
---
--- Name: ix_video_tasks_key_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_key_id ON public.video_tasks USING btree (key_id);
-
-
-
---
--- Name: ix_video_tasks_provider_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_provider_id ON public.video_tasks USING btree (provider_id);
-
-
-
---
--- Name: ix_video_tasks_remixed_from_task_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX IF NOT EXISTS ix_video_tasks_remixed_from_task_id ON public.video_tasks USING btree (remixed_from_task_id);
-
-
-
---
--- Name: ix_video_tasks_short_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX IF NOT EXISTS ix_video_tasks_short_id ON public.video_tasks USING btree (short_id);
 
 
 
@@ -4529,96 +4360,6 @@ END $mig$;
 DO $mig$ BEGIN
   ALTER TABLE ONLY public.user_sessions
     ADD CONSTRAINT user_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_api_key_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_api_key_id_fkey FOREIGN KEY (api_key_id) REFERENCES public.api_keys(id) ON DELETE SET NULL;
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_endpoint_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_endpoint_id_fkey FOREIGN KEY (endpoint_id) REFERENCES public.provider_endpoints(id);
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_key_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_key_id_fkey FOREIGN KEY (key_id) REFERENCES public.provider_api_keys(id) ON DELETE SET NULL;
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.providers(id);
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_remixed_from_task_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_remixed_from_task_id_fkey FOREIGN KEY (remixed_from_task_id) REFERENCES public.video_tasks(id);
-EXCEPTION
-  WHEN duplicate_object THEN NULL;
-  WHEN duplicate_table THEN NULL;
-  WHEN invalid_table_definition THEN NULL;
-END $mig$;
-
-
-
---
--- Name: video_tasks video_tasks_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-DO $mig$ BEGIN
-  ALTER TABLE ONLY public.video_tasks
-    ADD CONSTRAINT video_tasks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN duplicate_table THEN NULL;

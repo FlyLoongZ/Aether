@@ -49,9 +49,6 @@ use aether_data_contracts::repository::routing_profiles::{
 use aether_data_contracts::repository::settlement::SettlementWriteRepository;
 use aether_data_contracts::repository::usage::{UsageReadRepository, UsageWriteRepository};
 use aether_data_contracts::repository::users::UserReadRepository;
-use aether_data_contracts::repository::video_tasks::{
-    VideoTaskReadRepository, VideoTaskWriteRepository,
-};
 use aether_data_contracts::repository::wallet::{WalletReadRepository, WalletWriteRepository};
 use aether_data_postgres::PostgresAuditLogReadRepository;
 use aether_data_postgres::PostgresPoolMemberScoreRepository;
@@ -74,11 +71,9 @@ use aether_data_postgres::SqlxUsageReadRepository;
 use aether_data_postgres::SqlxUserReadRepository;
 use aether_data_postgres::SqlxWalletRepository;
 use aether_data_postgres::{
-    PostgresLeaseRunner, PostgresLeaseRunnerConfig, PostgresPool, PostgresPoolConfig,
-    PostgresPoolFactory, PostgresTransactionRunner,
+    PostgresPool, PostgresPoolConfig, PostgresPoolFactory, PostgresTransactionRunner,
 };
 use aether_data_postgres::{SqlxAuthModuleReadRepository, SqlxAuthModuleRepository};
-use aether_data_postgres::{SqlxVideoTaskReadRepository, SqlxVideoTaskRepository};
 
 #[derive(Debug, Clone)]
 pub struct PostgresBackend {
@@ -256,23 +251,8 @@ impl PostgresBackend {
         Arc::new(SqlxSettlementRepository::new(self.pool_clone()))
     }
 
-    pub fn video_task_read_repository(&self) -> Arc<dyn VideoTaskReadRepository> {
-        Arc::new(SqlxVideoTaskReadRepository::new(self.pool_clone()))
-    }
-
-    pub fn video_task_write_repository(&self) -> Arc<dyn VideoTaskWriteRepository> {
-        Arc::new(SqlxVideoTaskRepository::new(self.pool_clone()))
-    }
-
     pub fn transaction_runner(&self) -> PostgresTransactionRunner {
         PostgresTransactionRunner::new(self.pool_clone())
-    }
-
-    pub fn lease_runner(
-        &self,
-        config: PostgresLeaseRunnerConfig,
-    ) -> Result<PostgresLeaseRunner, DataLayerError> {
-        PostgresLeaseRunner::new(self.transaction_runner(), config)
     }
 
     pub fn provider_quota_write_repository(&self) -> Arc<dyn ProviderQuotaWriteRepository> {
@@ -283,7 +263,7 @@ impl PostgresBackend {
 #[cfg(test)]
 mod tests {
     use super::PostgresBackend;
-    use aether_data_postgres::{PostgresLeaseRunnerConfig, PostgresPoolConfig};
+    use aether_data_postgres::PostgresPoolConfig;
 
     #[tokio::test]
     async fn maintenance_and_aggregation_futures_are_send() {
@@ -364,12 +344,7 @@ mod tests {
         let _wallet_reader = backend.wallet_read_repository();
         let _wallet_writer = backend.wallet_write_repository();
         let _settlement_writer = backend.settlement_write_repository();
-        let _video_task_reader = backend.video_task_read_repository();
-        let _video_task_writer = backend.video_task_write_repository();
         let _transaction_runner = backend.transaction_runner();
-        let _lease_runner = backend
-            .lease_runner(PostgresLeaseRunnerConfig::default())
-            .expect("lease runner should build");
         let _provider_quota_writer = backend.provider_quota_write_repository();
     }
 }

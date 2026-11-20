@@ -515,20 +515,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn includes_xai_oauth_rows_for_image_and_video_models() {
+    async fn includes_xai_oauth_rows_for_image_models() {
         let mut image = sample_row("provider-xai", "openai:image", "grok-imagine-image", 10);
         image.provider_type = "xai".to_string();
         image.provider_name = "xai".to_string();
         image.key_auth_type = "oauth".to_string();
-        image.key_api_formats = Some(vec!["openai:image".to_string(), "openai:video".to_string()]);
+        image.key_api_formats = Some(vec!["openai:image".to_string()]);
 
-        let mut video = image.clone();
-        video.endpoint_id = "endpoint-video".to_string();
-        video.endpoint_api_format = "openai:video".to_string();
-        video.global_model_name = "grok-imagine-video".to_string();
-        video.model_provider_model_name = "grok-imagine-video".to_string();
-
-        let repository = InMemoryMinimalCandidateSelectionReadRepository::seed(vec![image, video]);
+        let repository = InMemoryMinimalCandidateSelectionReadRepository::seed(vec![image]);
 
         let image_rows = repository
             .list_for_exact_api_format("openai:image")
@@ -536,13 +530,6 @@ mod tests {
             .expect("list should succeed");
         assert_eq!(image_rows.len(), 1);
         assert_eq!(image_rows[0].global_model_name, "grok-imagine-image");
-
-        let video_rows = repository
-            .list_for_exact_api_format("openai:video")
-            .await
-            .expect("list should succeed");
-        assert_eq!(video_rows.len(), 1);
-        assert_eq!(video_rows[0].global_model_name, "grok-imagine-video");
     }
 
     #[tokio::test]

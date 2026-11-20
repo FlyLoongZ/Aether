@@ -26,7 +26,6 @@ async fn live_jsonb_migration_preserves_values_and_leaves_no_json_columns() {
         ("proxy_nodes", "proxy_metadata"),
         ("users", "allowed_models"),
         ("user_groups", "allowed_api_formats"),
-        ("video_tasks", "original_request_body"),
     ] {
         let data_type: String = sqlx::query_scalar(
             "SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2",
