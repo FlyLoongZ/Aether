@@ -983,12 +983,6 @@ const ADMIN_API_FORMAT_DEFINITIONS: &[AdminApiFormatDefinition] = &[
         aliases: &["openai_image", "images"],
     },
     AdminApiFormatDefinition {
-        value: "openai:video",
-        label: "OpenAI Video",
-        default_path: "/v1/videos",
-        aliases: &["openai_video", "sora"],
-    },
-    AdminApiFormatDefinition {
         value: "codex:live",
         label: "OpenAI Live",
         default_path: "/v1/live",
@@ -1017,12 +1011,6 @@ const ADMIN_API_FORMAT_DEFINITIONS: &[AdminApiFormatDefinition] = &[
         label: "Gemini Embedding",
         default_path: "/v1beta/models/{model}:{action}",
         aliases: &["gemini_embedding"],
-    },
-    AdminApiFormatDefinition {
-        value: "gemini:video",
-        label: "Gemini Video",
-        default_path: "/v1beta/models/{model}:predictLongRunning",
-        aliases: &["gemini_video", "veo"],
     },
     AdminApiFormatDefinition {
         value: "jina:embedding",

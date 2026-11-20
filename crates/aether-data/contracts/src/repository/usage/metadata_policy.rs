@@ -1015,10 +1015,7 @@ fn project_dimensions(value: &Value) -> Option<Value> {
 }
 
 fn sanitize_task_type(value: &str) -> Option<String> {
-    known_lowercase(
-        value,
-        &["chat", "embedding", "image", "rerank", "search", "video"],
-    )
+    known_lowercase(value, &["chat", "embedding", "image", "rerank", "search"])
 }
 
 fn sanitize_image_pricing_mode(value: &str) -> Option<String> {
@@ -1470,7 +1467,7 @@ mod tests {
     };
 
     #[test]
-    fn wallet_fallback_survives_sparse_video_completion_and_removes_plan_reservation() {
+    fn wallet_fallback_survives_sparse_metadata_and_removes_plan_reservation() {
         let token = "550e8400-e29b-41d4-a716-446655440000";
         let previous = json!({"plan_wallet_fallback": true, "plan_usage_reservation_token": token});
         let preserved = preserve_usage_routing_group_snapshot(None, Some(&previous)).unwrap();

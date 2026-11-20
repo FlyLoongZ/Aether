@@ -164,9 +164,6 @@ pub fn infer_internal_finalize_signature(payload: &GatewaySyncReportRequest) -> 
     if report_kind.starts_with("openai_cli_") {
         return Some("openai:responses".to_string());
     }
-    if report_kind.starts_with("openai_video_") {
-        return Some("openai:video".to_string());
-    }
     if report_kind.starts_with("claude_chat_") {
         return Some("claude:messages".to_string());
     }
@@ -175,9 +172,6 @@ pub fn infer_internal_finalize_signature(payload: &GatewaySyncReportRequest) -> 
     }
     if report_kind.starts_with("gemini_chat_") {
         return Some("gemini:generate_content".to_string());
-    }
-    if report_kind.starts_with("gemini_video_") {
-        return Some("gemini:video".to_string());
     }
     None
 }
@@ -209,11 +203,6 @@ pub fn resolve_internal_finalize_route(signature: &str) -> Option<InternalFinali
             route_family: "openai",
             route_kind: "image",
         }),
-        "openai:video" => Some(InternalFinalizeRoute {
-            public_path: "/v1/videos",
-            route_family: "openai",
-            route_kind: "video",
-        }),
         "claude:messages" => Some(InternalFinalizeRoute {
             public_path: "/v1/messages",
             route_family: "claude",
@@ -223,11 +212,6 @@ pub fn resolve_internal_finalize_route(signature: &str) -> Option<InternalFinali
             public_path: "/v1beta/models",
             route_family: "gemini",
             route_kind: "generate_content",
-        }),
-        "gemini:video" => Some(InternalFinalizeRoute {
-            public_path: "/v1beta/models",
-            route_family: "gemini",
-            route_kind: "video",
         }),
         _ => None,
     }
@@ -314,18 +298,6 @@ pub fn is_local_ai_sync_report_kind(report_kind: &str) -> bool {
             | "openai_cli_sync_error"
             | "openai_compact_sync_error"
             | "claude_cli_sync_error"
-            | "openai_video_create_sync_success"
-            | "openai_video_remix_sync_success"
-            | "gemini_video_create_sync_success"
-            | "openai_video_delete_sync_success"
-            | "openai_video_cancel_sync_success"
-            | "gemini_video_cancel_sync_success"
-            | "openai_video_create_sync_error"
-            | "openai_video_remix_sync_error"
-            | "gemini_video_create_sync_error"
-            | "openai_video_delete_sync_error"
-            | "openai_video_cancel_sync_error"
-            | "gemini_video_cancel_sync_error"
             | "gemini_files_store_mapping"
             | "gemini_files_delete_mapping"
     )
@@ -348,10 +320,6 @@ pub fn sync_report_represents_failure(
     payload: &GatewaySyncReportRequest,
     error_type: Option<&str>,
 ) -> bool {
-    if payload.report_kind == "openai_video_delete_sync_success" && payload.status_code == 404 {
-        return false;
-    }
-
     payload.status_code >= 400
         || payload.report_kind.contains("error")
         || error_type.is_some()
@@ -937,9 +905,6 @@ mod tests {
     #[test]
     fn classifies_local_ai_sync_report_kinds() {
         assert!(is_local_ai_sync_report_kind(
-            "openai_video_create_sync_success"
-        ));
-        assert!(is_local_ai_sync_report_kind(
             "openai_responses_compact_sync_success"
         ));
         assert!(is_local_ai_sync_report_kind(
@@ -967,12 +932,6 @@ mod tests {
             "openai_responses_compact_stream_success"
         ));
         assert!(!is_local_ai_stream_report_kind("openai_chat_stream_error"));
-    }
-
-    #[test]
-    fn treats_openai_video_delete_404_success_as_non_failure() {
-        let payload = sample_sync_report("openai_video_delete_sync_success", 404);
-        assert!(!sync_report_represents_failure(&payload, None));
     }
 
     #[test]
@@ -1130,18 +1089,11 @@ mod tests {
     fn infers_internal_finalize_signature_from_context_or_report_kind() {
         let from_context = sample_sync_report_with_context(
             "unknown_sync_finalize",
-            json!({"client_api_format": "gemini:video"}),
+            json!({"client_api_format": "openai:image"}),
         );
         assert_eq!(
             infer_internal_finalize_signature(&from_context),
-            Some("gemini:video".to_string())
-        );
-
-        let from_report_kind =
-            sample_sync_report_with_context("openai_video_create_sync_finalize", json!({}));
-        assert_eq!(
-            infer_internal_finalize_signature(&from_report_kind),
-            Some("openai:video".to_string())
+            Some("openai:image".to_string())
         );
 
         let from_image_report_kind =
@@ -1188,14 +1140,6 @@ mod tests {
             })
         );
         assert_eq!(resolve_internal_finalize_route("openai:compact"), None);
-        assert_eq!(
-            resolve_internal_finalize_route("gemini:video"),
-            Some(InternalFinalizeRoute {
-                public_path: "/v1beta/models",
-                route_family: "gemini",
-                route_kind: "video",
-            })
-        );
         assert_eq!(
             resolve_internal_finalize_route("openai:image"),
             Some(InternalFinalizeRoute {
