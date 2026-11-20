@@ -1,10 +1,5 @@
 export const userMessages = {
   'zh-CN': {
-    'routing.conditions.in': '包含于',
-    'routing.conditions.andSeparator': ' 且 ',
-    'routing.conditions.orSeparator': ' 或 ',
-    'routing.conditions.not': '非 {condition}',
-    'routing.conditions.unconditional': '无条件',
     'modelDirectives.mappingParameters': '{format} {suffix} 映射参数',
     'modelDirectives.effectiveMappingJson': '有效映射 JSON',
     'modelDirectives.customDirective': '自定义模型指令',
@@ -115,11 +110,6 @@ export const userMessages = {
     'billing.entitlements.durationSeconds': '{count} 秒',
   },
   'en-US': {
-    'routing.conditions.in': 'is one of',
-    'routing.conditions.andSeparator': ' AND ',
-    'routing.conditions.orSeparator': ' OR ',
-    'routing.conditions.not': 'NOT {condition}',
-    'routing.conditions.unconditional': 'Unconditional',
     'modelDirectives.mappingParameters': '{format} {suffix} mapping parameters',
     'modelDirectives.effectiveMappingJson': 'Effective mapping JSON',
     'modelDirectives.customDirective': 'Custom model directive',
