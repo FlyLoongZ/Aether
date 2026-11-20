@@ -134,8 +134,9 @@ a default.
 ## Configuration import
 
 - Admin config exports accept only version `2.3`.
-- User exports use `1.7`; versions `1.5` and `1.6` remain importable for
-  recovery. Versions `1.3` and `1.4` are rejected.
+- User exports use `1.7`; versions `1.5`, `1.6` and `1.7` are importable,
+  including payloads that carry validated user credentials. Versions `1.3` and
+  `1.4` are rejected.
 - Legacy OAuth provider normalization for exports `2.0`-`2.2` is removed.
 
 ## Local proxy fallback
@@ -209,3 +210,25 @@ a default.
   a `responses_websocket_previous_response_rejected` warning. Same-socket
   continuation keeps working.
 
+## Removed endpoints and inputs
+
+- The anonymous catalog and capability endpoints are gone:
+  `/api/public/providers`, `/api/public/models`, `/api/public/search/models`,
+  `/api/public/stats`, `/api/public/global-models`, `/api/capabilities*` and
+  `/v1/providers*` return `404 Route not found`.
+- `/api/users/me/health/v2/*`, `/api/admin/endpoints/health/v2/*`,
+  `/_gateway/health` and `/.well-known/aether/frontdoor.json` are removed; the
+  readiness probe only reports process status.
+- The one-click CLI install surface is removed: `/install/*`, `/i/*`,
+  `/install-tunnel` and the per-key install session API no longer exist.
+- `--database-driver` / `AETHER_DATABASE_DRIVER` are no longer accepted; the
+  only backend is PostgreSQL selected by `DATABASE_URL`.
+- `AETHER_GATEWAY_VIDEO_TASK_TRUTH_SOURCE_MODE` and the video task pollers are
+  gone with the video surface.
+- Admin monitoring responses no longer carry the `internal_gateway` object.
+- S3 backup restore accepts envelopes `v2` (`AETHER_GATEWAY_DATA_ENCRYPTION_KEY`
+  is **not** a restore key any more) and `v3`; `v1` files are rejected with a
+  generic envelope error. Pre-existing plaintext backup objects are no longer
+  listed or counted, so operators must clean them up explicitly.
+- `AETHER_GATEWAY_DIRECT_H2C_*` and `AETHER_GATEWAY_DIRECT_PASSTHROUGH_*` are no
+  longer read; the legacy direct passthrough stream path is removed.
