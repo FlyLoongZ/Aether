@@ -105,9 +105,7 @@ impl DataBackends {
     }
 
     pub fn has_runtime_backends(&self) -> bool {
-        self.read.has_any()
-            || self.transactions.has_any()
-            || self.write.has_any()
+        self.read.has_any() || self.transactions.has_any() || self.write.has_any()
     }
 }
 

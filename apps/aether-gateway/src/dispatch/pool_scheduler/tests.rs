@@ -2007,11 +2007,11 @@ async fn pool_key_cursor_reserve_minimum_quota_filters_pages_and_sticky_hits() {
                 }
                 let reserve_reached = reserve_enabled && used_percent >= 99.0;
                 assert_eq!(
-                    returned.contains(&"key-low".to_string()),
+                    returned.iter().any(|key| key == "key-low"),
                     !reserve_reached,
                     "reserve={reserve_enabled}, sticky={sticky}, used={used_percent}"
                 );
-                assert!(returned.contains(&"key-ready".to_string()));
+                assert!(returned.iter().any(|key| key == "key-ready"));
                 if reserve_reached {
                     assert_eq!(
                         cursor

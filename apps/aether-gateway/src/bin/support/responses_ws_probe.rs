@@ -416,10 +416,12 @@ mod tests {
         assert!(report.continuation_confirmed);
         assert!(report
             .observed_event_types
-            .contains(&"response.created".to_string()));
+            .iter()
+            .any(|event| event == "response.created"));
         assert!(report
             .observed_event_types
-            .contains(&"response.completed".to_string()));
+            .iter()
+            .any(|event| event == "response.completed"));
         assert!(client_messages.authorization_present);
         assert!(client_messages.profile_header_present);
         assert!(!client_messages.second_before_first_completion);

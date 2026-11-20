@@ -7267,7 +7267,6 @@ impl<'a> AdminAppState<'a> {
                         )));
                     }
                 }
-                let created = created;
                 if let Some(group_ids) = group_ids.as_ref() {
                     let persisted_groups = self
                         .replace_user_groups_for_user(&created.id, group_ids)

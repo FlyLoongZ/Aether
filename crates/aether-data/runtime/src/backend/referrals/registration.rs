@@ -61,6 +61,246 @@ async fn bind_in_transaction(
     }))
 }
 
+async fn insert_registration_obligation(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: &str,
+    inviter: &str,
+    invitee: &str,
+    config: &ReferralRewardConfig,
+) -> Result<(), DataLayerError> {
+    if !config.headcount_amount_usd.is_finite() || config.headcount_amount_usd < 0.000000005 {
+        return Ok(());
+    }
+    let key = format!("referral:{id}:headcount:{}", config.headcount_trigger);
+    // All callers hold the relationship row lock (including its initial insert).
+    // Any previous headcount trigger remains a durable one-time event.
+    sqlx::query("INSERT INTO referral_rewards(id,referral_id,inviter_user_id,invitee_user_id,reward_type,trigger_point,amount_usd,status,idempotency_key,created_at,updated_at) SELECT $1,$2,$3,$4,'headcount',$5,$6,'pending',$7,NOW(),NOW() WHERE NOT EXISTS(SELECT 1 FROM referral_rewards WHERE referral_id=$2 AND reward_type='headcount') ON CONFLICT(idempotency_key) DO NOTHING")
+        .bind(uuid::Uuid::new_v4().to_string()).bind(id).bind(inviter).bind(invitee).bind(&config.headcount_trigger).bind(config.headcount_amount_usd).bind(key).execute(&mut **tx).await.map_err(DataLayerError::postgres)?;
+    Ok(())
+}
+
+impl ReferralDataState<'_> {
+    pub async fn validate_referral_invite_code(
+        &self,
+        code: Option<&str>,
+    ) -> Result<(), DataLayerError> {
+        let Some(code) = code.filter(|v| !v.trim().is_empty()) else {
+            return Ok(());
+        };
+        let code = normalize_referral_code(code)
+            .ok_or_else(|| DataLayerError::InvalidInput("邀请码无效".into()))?;
+        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
+            let exists=sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM user_invite_codes c JOIN users u ON u.id=c.user_id WHERE c.invite_code=$1 AND c.active=TRUE AND u.is_active=TRUE AND u.is_deleted=FALSE)").bind(code).fetch_one(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
+            if !exists {
+                return Err(DataLayerError::InvalidInput("邀请码无效".into()));
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn bind_referral_invite_code_with_reward(
+        &self,
+        invitee: &str,
+        code: Option<&str>,
+        source: Option<serde_json::Value>,
+        _config: Option<ReferralRewardConfig>,
+        email_verified: bool,
+    ) -> Result<Option<ReferralRelationshipRecord>, DataLayerError> {
+        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
+            let mut tx = backend
+                .pool_clone()
+                .begin()
+                .await
+                .map_err(DataLayerError::postgres)?;
+            let (config, required) = super::settings::capture_registration_config(&mut tx).await?;
+            let record = if config.is_some() {
+                bind_in_transaction(
+                    &mut tx,
+                    invitee,
+                    code,
+                    source,
+                    config,
+                    email_verified,
+                    required,
+                )
+                .await?
+            } else {
+                None
+            };
+            tx.commit().await.map_err(DataLayerError::postgres)?;
+            return Ok(record);
+        }
+        Ok(None)
+    }
+
+    pub async fn settle_registration_referral_rewards(
+        &self,
+        invitee: &str,
+    ) -> Result<Vec<ReferralRewardRecord>, DataLayerError> {
+        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
+            let keys=sqlx::query_scalar::<_,String>("SELECT idempotency_key FROM referral_rewards WHERE invitee_user_id=$1 AND source_order_id IS NULL AND status IN ('pending','failed') AND amount_usd>0 ORDER BY created_at,id").bind(invitee).fetch_all(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
+            return self
+                .credit_pending_referral_rewards(&keys, None, None)
+                .await;
+        }
+        Ok(Vec::new())
+    }
+
+    pub async fn activate_email_verified_referral_reward(
+        &self,
+        invitee: &str,
+    ) -> Result<(), DataLayerError> {
+        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
+            let mut tx = backend
+                .pool_clone()
+                .begin()
+                .await
+                .map_err(DataLayerError::postgres)?;
+            let row=sqlx::query("SELECT r.id,r.inviter_user_id,r.source_json FROM user_referrals r JOIN users u ON u.id=r.invitee_user_id WHERE r.invitee_user_id=$1 AND u.email_verified=TRUE FOR UPDATE OF r")
+                .bind(invitee).fetch_optional(&mut *tx).await.map_err(DataLayerError::postgres)?;
+            if let Some(row) = row {
+                let source: Option<serde_json::Value> = row
+                    .try_get("source_json")
+                    .map_err(DataLayerError::postgres)?;
+                let config = source
+                    .as_ref()
+                    .and_then(|v| v.get(REFERRAL_SNAPSHOT_KEY))
+                    .and_then(|v| v.get("config"))
+                    .filter(|v| !v.is_null())
+                    .map(|v| serde_json::from_value::<ReferralRewardConfig>(v.clone()))
+                    .transpose()
+                    .map_err(DataLayerError::sql)?;
+                let required = source
+                    .as_ref()
+                    .and_then(|v| v.get(REFERRAL_SNAPSHOT_KEY))
+                    .and_then(|v| v.get("email_verification_required"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if let Some(config) = config {
+                    if required
+                        && config.headcount_enabled
+                        && config.headcount_trigger == "email_verified"
+                    {
+                        insert_registration_obligation(
+                            &mut tx,
+                            &row_string!(row, "id"),
+                            &row_string!(row, "inviter_user_id"),
+                            invitee,
+                            &config,
+                        )
+                        .await?;
+                    }
+                }
+            }
+            tx.commit().await.map_err(DataLayerError::postgres)?;
+        }
+        Ok(())
+    }
+
+    /// Account, wallet and obligations become visible in one commit. DTOs are
+    /// constructed before writing, so no post-commit read can trigger deletion.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn register_local_auth_user_with_referral(
+        &self,
+        email: Option<String>,
+        email_verified: bool,
+        username: String,
+        password_hash: String,
+        initial_gift_usd: f64,
+        unlimited: bool,
+        invite_code: Option<&str>,
+        source: Option<serde_json::Value>,
+        _config: Option<ReferralRewardConfig>,
+        privacy_version: Option<&str>,
+        default_group_id: Option<&str>,
+    ) -> Result<Option<(StoredUserAuthRecord, StoredWalletSnapshot, bool)>, DataLayerError> {
+        if !initial_gift_usd.is_finite() {
+            return Err(DataLayerError::InvalidInput(
+                "initial gift amount must be finite".into(),
+            ));
+        }
+        let now = chrono::Utc::now();
+        let user_id = uuid::Uuid::new_v4().to_string();
+        let wallet_id = uuid::Uuid::new_v4().to_string();
+        let gift = if unlimited {
+            0.0
+        } else {
+            initial_gift_usd.max(0.0)
+        };
+        let user = StoredUserAuthRecord::new(
+            user_id.clone(),
+            email.clone(),
+            email_verified,
+            username.clone(),
+            Some(password_hash.clone()),
+            "user".into(),
+            "local".into(),
+            true,
+            false,
+            Some(now),
+            None,
+        )?;
+        let wallet = StoredWalletSnapshot::new(
+            wallet_id.clone(),
+            Some(user_id.clone()),
+            None,
+            0.0,
+            gift,
+            if unlimited {
+                "unlimited".into()
+            } else {
+                "finite".into()
+            },
+            "USD".into(),
+            "active".into(),
+            0.0,
+            0.0,
+            0.0,
+            gift,
+            now.timestamp(),
+        )?;
+        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
+            let mut tx = backend
+                .pool_clone()
+                .begin()
+                .await
+                .map_err(DataLayerError::postgres)?;
+            sqlx::query("INSERT INTO users(id,email,email_verified,username,password_hash,role,auth_source,is_active,is_deleted,privacy_policy_accepted_version,privacy_policy_accepted_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,'user'::userrole,'local'::authsource,TRUE,FALSE,$6,CASE WHEN $6::TEXT IS NULL THEN NULL ELSE NOW() END,NOW(),NOW())")
+                .bind(&user_id).bind(email).bind(email_verified).bind(username).bind(password_hash).bind(privacy_version).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;
+            sqlx::query("INSERT INTO wallets(id,user_id,balance,gift_balance,limit_mode,currency,status,total_recharged,total_consumed,total_refunded,total_adjusted,created_at,updated_at) VALUES($1,$2,0,$3,$4,'USD','active',0,0,0,$3,NOW(),NOW())")
+                .bind(&wallet_id).bind(&user_id).bind(gift).bind(&wallet.limit_mode).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;
+            if gift > 0.0 {
+                sqlx::query("INSERT INTO wallet_transactions(id,wallet_id,category,reason_code,amount,balance_before,balance_after,recharge_balance_before,recharge_balance_after,gift_balance_before,gift_balance_after,link_type,link_id,description,created_at) VALUES($1,$2,'gift','gift_initial',$3,0,$3,0,0,0,$3,'system_task',$4,'用户初始赠款',NOW())")
+                .bind(uuid::Uuid::new_v4().to_string()).bind(&wallet_id).bind(gift).bind(&user_id).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;
+            }
+            if let Some(group) = default_group_id {
+                sqlx::query("INSERT INTO user_group_members(group_id,user_id) VALUES($1,$2)")
+                    .bind(group)
+                    .bind(&user_id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(DataLayerError::postgres)?;
+            }
+            let (config, required) = super::settings::capture_registration_config(&mut tx).await?;
+            if config.is_some() {
+                bind_in_transaction(
+                    &mut tx,
+                    &user_id,
+                    invite_code,
+                    source,
+                    config,
+                    email_verified,
+                    required,
+                )
+                .await?;
+            }
+            tx.commit().await.map_err(DataLayerError::postgres)?;
+            return Ok(Some((user, wallet, true)));
+        }
+        Ok(None)
+    }
+}
+
 #[cfg(test)]
 mod postgres_tests {
     use super::*;
@@ -516,245 +756,5 @@ mod postgres_tests {
             assert_eq!(count, 0, "{table}");
         }
         pool.close().await;
-    }
-}
-
-async fn insert_registration_obligation(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    id: &str,
-    inviter: &str,
-    invitee: &str,
-    config: &ReferralRewardConfig,
-) -> Result<(), DataLayerError> {
-    if !config.headcount_amount_usd.is_finite() || config.headcount_amount_usd < 0.000000005 {
-        return Ok(());
-    }
-    let key = format!("referral:{id}:headcount:{}", config.headcount_trigger);
-    // All callers hold the relationship row lock (including its initial insert).
-    // Any previous headcount trigger remains a durable one-time event.
-    sqlx::query("INSERT INTO referral_rewards(id,referral_id,inviter_user_id,invitee_user_id,reward_type,trigger_point,amount_usd,status,idempotency_key,created_at,updated_at) SELECT $1,$2,$3,$4,'headcount',$5,$6,'pending',$7,NOW(),NOW() WHERE NOT EXISTS(SELECT 1 FROM referral_rewards WHERE referral_id=$2 AND reward_type='headcount') ON CONFLICT(idempotency_key) DO NOTHING")
-        .bind(uuid::Uuid::new_v4().to_string()).bind(id).bind(inviter).bind(invitee).bind(&config.headcount_trigger).bind(config.headcount_amount_usd).bind(key).execute(&mut **tx).await.map_err(DataLayerError::postgres)?;
-    Ok(())
-}
-
-impl ReferralDataState<'_> {
-    pub async fn validate_referral_invite_code(
-        &self,
-        code: Option<&str>,
-    ) -> Result<(), DataLayerError> {
-        let Some(code) = code.filter(|v| !v.trim().is_empty()) else {
-            return Ok(());
-        };
-        let code = normalize_referral_code(code)
-            .ok_or_else(|| DataLayerError::InvalidInput("邀请码无效".into()))?;
-        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
-            let exists=sqlx::query_scalar::<_,bool>("SELECT EXISTS(SELECT 1 FROM user_invite_codes c JOIN users u ON u.id=c.user_id WHERE c.invite_code=$1 AND c.active=TRUE AND u.is_active=TRUE AND u.is_deleted=FALSE)").bind(code).fetch_one(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
-            if !exists {
-                return Err(DataLayerError::InvalidInput("邀请码无效".into()));
-            }
-        }
-        Ok(())
-    }
-
-    pub async fn bind_referral_invite_code_with_reward(
-        &self,
-        invitee: &str,
-        code: Option<&str>,
-        source: Option<serde_json::Value>,
-        _config: Option<ReferralRewardConfig>,
-        email_verified: bool,
-    ) -> Result<Option<ReferralRelationshipRecord>, DataLayerError> {
-        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
-            let mut tx = backend
-                .pool_clone()
-                .begin()
-                .await
-                .map_err(DataLayerError::postgres)?;
-            let (config, required) = super::settings::capture_registration_config(&mut tx).await?;
-            let record = if config.is_some() {
-                bind_in_transaction(
-                    &mut tx,
-                    invitee,
-                    code,
-                    source,
-                    config,
-                    email_verified,
-                    required,
-                )
-                .await?
-            } else {
-                None
-            };
-            tx.commit().await.map_err(DataLayerError::postgres)?;
-            return Ok(record);
-        }
-        Ok(None)
-    }
-
-    pub async fn settle_registration_referral_rewards(
-        &self,
-        invitee: &str,
-    ) -> Result<Vec<ReferralRewardRecord>, DataLayerError> {
-        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
-            let keys=sqlx::query_scalar::<_,String>("SELECT idempotency_key FROM referral_rewards WHERE invitee_user_id=$1 AND source_order_id IS NULL AND status IN ('pending','failed') AND amount_usd>0 ORDER BY created_at,id").bind(invitee).fetch_all(&backend.pool_clone()).await.map_err(DataLayerError::postgres)?;
-            return self
-                .credit_pending_referral_rewards(&keys, None, None)
-                .await;
-        }
-        Ok(Vec::new())
-    }
-
-    pub async fn activate_email_verified_referral_reward(
-        &self,
-        invitee: &str,
-    ) -> Result<(), DataLayerError> {
-        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
-            let mut tx = backend
-                .pool_clone()
-                .begin()
-                .await
-                .map_err(DataLayerError::postgres)?;
-            let row=sqlx::query("SELECT r.id,r.inviter_user_id,r.source_json FROM user_referrals r JOIN users u ON u.id=r.invitee_user_id WHERE r.invitee_user_id=$1 AND u.email_verified=TRUE FOR UPDATE OF r")
-                .bind(invitee).fetch_optional(&mut *tx).await.map_err(DataLayerError::postgres)?;
-            if let Some(row) = row {
-                let source: Option<serde_json::Value> = row
-                    .try_get("source_json")
-                    .map_err(DataLayerError::postgres)?;
-                let config = source
-                    .as_ref()
-                    .and_then(|v| v.get(REFERRAL_SNAPSHOT_KEY))
-                    .and_then(|v| v.get("config"))
-                    .filter(|v| !v.is_null())
-                    .map(|v| serde_json::from_value::<ReferralRewardConfig>(v.clone()))
-                    .transpose()
-                    .map_err(DataLayerError::sql)?;
-                let required = source
-                    .as_ref()
-                    .and_then(|v| v.get(REFERRAL_SNAPSHOT_KEY))
-                    .and_then(|v| v.get("email_verification_required"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                if let Some(config) = config {
-                    if required
-                        && config.headcount_enabled
-                        && config.headcount_trigger == "email_verified"
-                    {
-                        insert_registration_obligation(
-                            &mut tx,
-                            &row_string!(row, "id"),
-                            &row_string!(row, "inviter_user_id"),
-                            invitee,
-                            &config,
-                        )
-                        .await?;
-                    }
-                }
-            }
-            tx.commit().await.map_err(DataLayerError::postgres)?;
-        }
-        Ok(())
-    }
-
-    /// Account, wallet and obligations become visible in one commit. DTOs are
-    /// constructed before writing, so no post-commit read can trigger deletion.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn register_local_auth_user_with_referral(
-        &self,
-        email: Option<String>,
-        email_verified: bool,
-        username: String,
-        password_hash: String,
-        initial_gift_usd: f64,
-        unlimited: bool,
-        invite_code: Option<&str>,
-        source: Option<serde_json::Value>,
-        _config: Option<ReferralRewardConfig>,
-        privacy_version: Option<&str>,
-        default_group_id: Option<&str>,
-    ) -> Result<Option<(StoredUserAuthRecord, StoredWalletSnapshot, bool)>, DataLayerError> {
-        if !initial_gift_usd.is_finite() {
-            return Err(DataLayerError::InvalidInput(
-                "initial gift amount must be finite".into(),
-            ));
-        }
-        let now = chrono::Utc::now();
-        let user_id = uuid::Uuid::new_v4().to_string();
-        let wallet_id = uuid::Uuid::new_v4().to_string();
-        let gift = if unlimited {
-            0.0
-        } else {
-            initial_gift_usd.max(0.0)
-        };
-        let user = StoredUserAuthRecord::new(
-            user_id.clone(),
-            email.clone(),
-            email_verified,
-            username.clone(),
-            Some(password_hash.clone()),
-            "user".into(),
-            "local".into(),
-            true,
-            false,
-            Some(now),
-            None,
-        )?;
-        let wallet = StoredWalletSnapshot::new(
-            wallet_id.clone(),
-            Some(user_id.clone()),
-            None,
-            0.0,
-            gift,
-            if unlimited {
-                "unlimited".into()
-            } else {
-                "finite".into()
-            },
-            "USD".into(),
-            "active".into(),
-            0.0,
-            0.0,
-            0.0,
-            gift,
-            now.timestamp(),
-        )?;
-        if let Some(backend) = self.backends.and_then(DataBackends::postgres) {
-            let mut tx = backend
-                .pool_clone()
-                .begin()
-                .await
-                .map_err(DataLayerError::postgres)?;
-            sqlx::query("INSERT INTO users(id,email,email_verified,username,password_hash,role,auth_source,is_active,is_deleted,privacy_policy_accepted_version,privacy_policy_accepted_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,'user'::userrole,'local'::authsource,TRUE,FALSE,$6,CASE WHEN $6::TEXT IS NULL THEN NULL ELSE NOW() END,NOW(),NOW())")
-                .bind(&user_id).bind(email).bind(email_verified).bind(username).bind(password_hash).bind(privacy_version).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;
-            sqlx::query("INSERT INTO wallets(id,user_id,balance,gift_balance,limit_mode,currency,status,total_recharged,total_consumed,total_refunded,total_adjusted,created_at,updated_at) VALUES($1,$2,0,$3,$4,'USD','active',0,0,0,$3,NOW(),NOW())")
-                .bind(&wallet_id).bind(&user_id).bind(gift).bind(&wallet.limit_mode).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;
-            if gift > 0.0 {
-                sqlx::query("INSERT INTO wallet_transactions(id,wallet_id,category,reason_code,amount,balance_before,balance_after,recharge_balance_before,recharge_balance_after,gift_balance_before,gift_balance_after,link_type,link_id,description,created_at) VALUES($1,$2,'gift','gift_initial',$3,0,$3,0,0,0,$3,'system_task',$4,'用户初始赠款',NOW())")
-                .bind(uuid::Uuid::new_v4().to_string()).bind(&wallet_id).bind(gift).bind(&user_id).execute(&mut *tx).await.map_err(DataLayerError::postgres)?;
-            }
-            if let Some(group) = default_group_id {
-                sqlx::query("INSERT INTO user_group_members(group_id,user_id) VALUES($1,$2)")
-                    .bind(group)
-                    .bind(&user_id)
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(DataLayerError::postgres)?;
-            }
-            let (config, required) = super::settings::capture_registration_config(&mut tx).await?;
-            if config.is_some() {
-                bind_in_transaction(
-                    &mut tx,
-                    &user_id,
-                    invite_code,
-                    source,
-                    config,
-                    email_verified,
-                    required,
-                )
-                .await?;
-            }
-            tx.commit().await.map_err(DataLayerError::postgres)?;
-            return Ok(Some((user, wallet, true)));
-        }
-        Ok(None)
     }
 }

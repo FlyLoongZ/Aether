@@ -67,11 +67,7 @@ pub(super) async fn total_response(
     let (cached, refresh) = state.as_ref().overview_total_cache.read(Instant::now());
     if let Some(refresh) = refresh {
         let app = state.as_ref();
-        let data = if app.data.has_usage_reader() {
-            Arc::clone(&app.data)
-        } else {
-            Arc::clone(&app.data)
-        };
+        let data = Arc::clone(&app.data);
         // Lifetime boundaries do not depend on the viewer's timezone. Every
         // administrator shares one refresh, including after a page reload.
         tokio::spawn(async move {
