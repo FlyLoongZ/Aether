@@ -36,6 +36,13 @@ fn auth_api_key_secret_purpose(
     if key_hash.is_empty() {
         return Err("API-key secret hash is empty");
     }
+    // The purpose is the envelope's associated data: a NUL inside a component
+    // would let it forge the `field`/`*-bytes` framing of another binding.
+    for value in [user_id, api_key_id, key_hash] {
+        if value.contains('\0') {
+            return Err("API-key secret binding contains reserved framing");
+        }
+    }
     let scope = if is_standalone { "standalone" } else { "user" };
     Ok(format!(
         "{AUTH_API_KEY_SECRET_PURPOSE_V2}\0scope={scope}\0owner-bytes={}\0{user_id}\0api-key-id-bytes={}\0{api_key_id}\0hash-bytes={}\0{key_hash}\0field=key",

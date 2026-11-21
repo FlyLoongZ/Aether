@@ -44,6 +44,11 @@ fn provider_catalog_credential_purpose(
     if key_id.is_empty() {
         return Err("provider catalog credential key_id is empty");
     }
+    for value in [provider_id, key_id] {
+        if value.contains('\0') {
+            return Err("provider catalog credential binding contains reserved framing");
+        }
+    }
     Ok(format!(
         "{PROVIDER_CATALOG_CREDENTIAL_PURPOSE_V2}\0provider-id-bytes={}\0{provider_id}\0key-id-bytes={}\0{key_id}\0field={}",
         provider_id.len(),
@@ -164,6 +169,22 @@ mod tests {
 
     fn state_with_encryption_key() -> AppState {
         crate::tests::support::credential_fixture_state()
+    }
+
+    #[test]
+    fn purpose_rejects_reserved_framing_in_the_binding() {
+        // The purpose is used as associated data, so a NUL inside a component
+        // could forge the framing of a different binding.
+        let state = state_with_encryption_key();
+        let error = seal_provider_catalog_credential(
+            &state,
+            "provider-1\0key-id-bytes=2\0x",
+            "key-1",
+            ProviderCatalogCredentialField::ApiKey,
+            "secret-value",
+        )
+        .expect_err("reserved framing must be rejected");
+        assert!(error.contains("reserved framing"), "{error}");
     }
 
     #[test]

@@ -93,6 +93,9 @@ fn payment_gateway_secret_purpose(provider: &str) -> Result<String, &'static str
     if provider.is_empty() {
         return Err("payment gateway secret provider is empty");
     }
+    if provider.contains('\0') {
+        return Err("payment gateway secret provider contains reserved framing");
+    }
     Ok(format!(
         "{PAYMENT_GATEWAY_SECRET_PURPOSE_V2}\0provider-bytes={}\0{provider}\0field=merchant-key",
         provider.len()

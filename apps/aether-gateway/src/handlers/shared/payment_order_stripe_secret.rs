@@ -92,6 +92,19 @@ fn validate_identity_component(
 fn payment_order_stripe_secret_purpose(
     binding: &PaymentOrderStripeSecretBinding,
 ) -> Result<String, &'static str> {
+    for value in [
+        Some(binding.payment_provider.as_str()),
+        Some(binding.order_no.as_str()),
+        binding.user_id.as_deref(),
+        Some(binding.order_kind.as_str()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if value.contains('\0') {
+            return Err("payment order Stripe secret binding contains reserved framing");
+        }
+    }
     let user_binding = match binding.user_id.as_deref() {
         Some(user_id) => format!(
             "user-id-present=1\0user-id-bytes={}\0{user_id}",
