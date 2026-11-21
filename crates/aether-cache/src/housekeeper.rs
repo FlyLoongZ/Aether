@@ -151,6 +151,13 @@ async fn run(registry: Arc<Registry>) {
                 }
             };
         let at = registry.arm(next_wake(now, &pass), now);
+        if pass.more {
+            // `next_wake` returns `now`, so the sleep branch would be ready
+            // immediately and the loop would keep a worker busy draining the
+            // backlog synchronously. Yield so other tasks on this worker run
+            // between batches; the pass count is already bounded by REAP_BATCH.
+            tokio::task::yield_now().await;
+        }
 
         tokio::select! {
             _ = tokio::time::sleep_until(at.into()) => {}
