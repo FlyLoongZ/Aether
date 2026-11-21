@@ -60,7 +60,9 @@ pub use formats::openai::responses::codex::{
     CODEX_MODEL_CATALOG_METADATA_FIELD, CODEX_RESPONSES_LITE_HEADER,
 };
 pub use formats::openai::responses::request::{
-    validate_openai_responses_request_contract, OpenAiResponsesRequestContractViolation,
+    validate_openai_responses_request_contract, validate_previous_response_id,
+    OpenAiResponsesRequestContractViolation, PreviousResponseIdViolation,
+    MAX_PREVIOUS_RESPONSE_ID_BYTES,
 };
 pub use formats::openai::responses::xai::{
     apply_xai_upstream_payload_edits, apply_xai_upstream_payload_edits_with_client,

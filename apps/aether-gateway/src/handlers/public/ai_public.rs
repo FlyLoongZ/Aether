@@ -363,6 +363,22 @@ fn maybe_build_stateless_policy_rejection(
     };
     let object = body.as_object()?;
 
+    // Same `previous_response_id` shape rule as the WebSocket surface. HTTP used to
+    // forward anything (numbers, empty strings, megabyte ids) to the upstream while
+    // WebSocket rejected it, so the two surfaces disagreed on what is even a
+    // request.
+    if matches!(path, "/v1/responses" | "/v1/responses/compact") {
+        if let Err(violation) = aether_ai_formats::validate_previous_response_id(&body) {
+            return crate::api::response::build_local_http_error_response(
+                &request_context.trace_id,
+                request_context.control_decision.as_ref(),
+                http::StatusCode::BAD_REQUEST,
+                violation.reason(),
+            )
+            .ok();
+        }
+    }
+
     let detail = if object.get("store").and_then(Value::as_bool) == Some(true) {
         STORE_TRUE_NOT_SUPPORTED_DETAIL
     } else if object.get("background").and_then(Value::as_bool) == Some(true) {
@@ -1531,6 +1547,44 @@ mod tests {
             .as_str()
             .expect("error message should be a string")
             .to_string()
+    }
+
+    #[tokio::test]
+    async fn stateless_policy_rejects_a_malformed_previous_response_id() {
+        // The WebSocket surface always rejected these; HTTP forwarded them upstream.
+        for (body, expected) in [
+            (
+                r#"{"previous_response_id":""}"#,
+                "previous_response_id must not be empty",
+            ),
+            (
+                r#"{"previous_response_id":"   "}"#,
+                "previous_response_id must not be empty",
+            ),
+            (
+                r#"{"previous_response_id":123}"#,
+                "previous_response_id must be a string",
+            ),
+        ] {
+            let message = stateless_policy_error_message(body).await;
+            assert_eq!(message, expected, "body: {body}");
+        }
+
+        let oversized = format!(
+            r#"{{"previous_response_id":"{}"}}"#,
+            "x".repeat(aether_ai_formats::MAX_PREVIOUS_RESPONSE_ID_BYTES + 1)
+        );
+        let message = stateless_policy_error_message(&oversized).await;
+        assert_eq!(message, "previous_response_id is too long");
+
+        // A well-formed value still reaches the upstream untouched.
+        assert!(maybe_build_stateless_policy_rejection(
+            &stateless_policy_context("/v1/responses"),
+            Some(&Bytes::copy_from_slice(
+                br#"{"previous_response_id":"resp_123","store":false}"#
+            )),
+        )
+        .is_none());
     }
 
     #[tokio::test]

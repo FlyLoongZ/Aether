@@ -20,7 +20,10 @@ use crate::privacy::RedactionSessionSlot;
 pub(super) const MAX_RESPONSES_WEBSOCKET_MODEL_BYTES: usize = 256;
 /// Response IDs are opaque, but bounding their wire size prevents an
 /// untrusted first frame from creating unbounded registry/hash work.
-pub(super) const MAX_RESPONSES_WEBSOCKET_RESPONSE_ID_BYTES: usize = 256;
+/// Kept as a local alias of the shared contract limit so WebSocket frame parsing
+/// and request validation cannot drift apart.
+pub(super) const MAX_RESPONSES_WEBSOCKET_RESPONSE_ID_BYTES: usize =
+    aether_ai_formats::MAX_PREVIOUS_RESPONSE_ID_BYTES;
 
 /// The static Responses Lite prefix already stored in a response chain.
 ///
@@ -405,16 +408,8 @@ pub(super) fn response_create_has_previous_response_id(event: &Value) -> bool {
 pub(super) fn validate_response_create_previous_response_id(
     event: &Value,
 ) -> Result<(), &'static str> {
-    match event.get("previous_response_id") {
-        None | Some(Value::Null) => Ok(()),
-        Some(Value::String(value))
-            if !value.trim().is_empty()
-                && value.len() <= MAX_RESPONSES_WEBSOCKET_RESPONSE_ID_BYTES =>
-        {
-            Ok(())
-        }
-        Some(_) => Err("invalid_response_create_previous_response_id"),
-    }
+    aether_ai_formats::validate_previous_response_id(event)
+        .map_err(|_| "invalid_response_create_previous_response_id")
 }
 
 /// Rejects Responses-only server-side state that this gateway does not own.

@@ -62,6 +62,54 @@ const COMPACT_OMITTED_REQUEST_FIELDS: &[&str] = &[
     "tool_choice",
 ];
 
+/// Maximum accepted length of a `previous_response_id`.
+///
+/// Response ids are opaque, but they are not unbounded: the gateway forwards them
+/// upstream, stores them in affinity keys, and echoes them back. Rejecting an
+/// oversized or blank value at the edge keeps the same rule for every surface
+/// instead of only for WebSocket frames.
+pub const MAX_PREVIOUS_RESPONSE_ID_BYTES: usize = 256;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreviousResponseIdViolation {
+    /// Present but not a string.
+    NotAString,
+    /// Present but empty or whitespace only.
+    Empty,
+    /// Present but longer than [`MAX_PREVIOUS_RESPONSE_ID_BYTES`].
+    TooLong,
+}
+
+impl PreviousResponseIdViolation {
+    pub const fn reason(self) -> &'static str {
+        match self {
+            Self::NotAString => "previous_response_id must be a string",
+            Self::Empty => "previous_response_id must not be empty",
+            Self::TooLong => "previous_response_id is too long",
+        }
+    }
+}
+
+/// Validates the shape of `previous_response_id` on a wire request.
+///
+/// Shared by HTTP and WebSocket so both surfaces accept exactly the same values;
+/// HTTP used to forward anything (including numbers and megabyte strings).
+pub fn validate_previous_response_id(body: &Value) -> Result<(), PreviousResponseIdViolation> {
+    match body.get("previous_response_id") {
+        None | Some(Value::Null) => Ok(()),
+        Some(Value::String(value)) => {
+            if value.trim().is_empty() {
+                return Err(PreviousResponseIdViolation::Empty);
+            }
+            if value.len() > MAX_PREVIOUS_RESPONSE_ID_BYTES {
+                return Err(PreviousResponseIdViolation::TooLong);
+            }
+            Ok(())
+        }
+        Some(_) => Err(PreviousResponseIdViolation::NotAString),
+    }
+}
+
 /// Validates combinations that the Responses API rejects before transport.
 ///
 /// This contract intentionally operates on the wire request so conversion
