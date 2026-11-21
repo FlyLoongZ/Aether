@@ -603,31 +603,23 @@ jobs:
           AETHER_TEST_POSTGRES_URL: postgres://aether:aether@127.0.0.1:5432/aether_test
         run: cargo test -p aether-data --all-features postgres_provider_upstream_metadata_migration_preserves_json_when_url_is_set --lib -- --nocapture
 
-      - name: Run Postgres payment callback regression tests
+      - name: Run every ignored Postgres test (aether-data)
         env:
           RUSTC_WRAPPER: sccache
           SCCACHE_GHA_ENABLED: "true"
+          AETHER_TEST_POSTGRES_URL: postgres://aether:aether@127.0.0.1:5432/aether_test
           AETHER_TEST_DATABASE_URL: postgres://aether:aether@127.0.0.1:5432/aether_test
-        run: cargo test -p aether-data-postgres live_payment_callback --lib -- --ignored --nocapture
-
-      - name: Run Postgres batch wallet deduction regression
-        env:
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: "true"
-          AETHER_TEST_DATABASE_URL: postgres://aether:aether@127.0.0.1:5432/aether_test
-        run: cargo test -p aether-data-postgres live_bulk_wallet_adjustment_persists_actual_delta_and_skips_zero_ledger --lib -- --ignored --nocapture
-
-      - name: Run Postgres API key lifecycle tests
-        env:
-          RUSTC_WRAPPER: sccache
-          SCCACHE_GHA_ENABLED: "true"
           AETHER_REQUIRE_LOCAL_POSTGRES_TESTS: "true"
-        run: |
-          cargo test -p aether-data --all-features lifecycle::migrate::tests::postgres_request_candidates_preserve_deleted_api_key_identity --lib -- --exact --nocapture
-          cargo test -p aether-data --all-features lifecycle::migrate::tests::postgres_request_candidate_migration_decouples_legacy_api_key_foreign_key --lib -- --exact --nocapture
-          cargo test -p aether-data --all-features lifecycle::migrate::tests::postgres_stats_daily_api_key_migration_decouples_legacy_foreign_key --lib -- --exact --nocapture
-          cargo test -p aether-data --all-features lifecycle::migrate::tests::postgres_expired_api_key_cleanup_preserves_historical_identity --lib -- --exact --nocapture
-          cargo test -p aether-data --all-features lifecycle::migrate::tests::postgres_api_key_leaderboard_user_filter_preserves_aggregate_history --lib -- --exact --nocapture
+        run: cargo test -p aether-data --all-features --lib -- --ignored --nocapture
+
+      - name: Run every ignored Postgres test (aether-data-postgres)
+        env:
+          RUSTC_WRAPPER: sccache
+          SCCACHE_GHA_ENABLED: "true"
+          AETHER_TEST_POSTGRES_URL: postgres://aether:aether@127.0.0.1:5432/aether_test
+          AETHER_TEST_DATABASE_URL: postgres://aether:aether@127.0.0.1:5432/aether_test
+          AETHER_REQUIRE_LOCAL_POSTGRES_TESTS: "true"
+        run: cargo test -p aether-data-postgres --all-features --lib -- --ignored --nocapture
 
       - name: Run Postgres core export smoke test
         env:
