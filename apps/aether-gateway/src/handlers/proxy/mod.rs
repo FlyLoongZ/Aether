@@ -558,18 +558,22 @@ fn restore_redacted_stream_execution_response(
         return Ok(Response::from_parts(parts, body));
     };
     let headers = collect_response_headers(&parts.headers);
-    let _ = crate::privacy::StreamingResponseRestorer::new(&headers, &session)?;
+    if !crate::privacy::response_encoding_is_restorable(&headers) {
+        // An upstream that ignored `accept-encoding: identity` returns compressed
+        // bytes; running the text restorer over them would corrupt the body and used
+        // to turn the response into a 500. Forward it untouched and say so.
+        tracing::warn!(
+            event_name = "redaction_restore_skipped_encoded_response",
+            log_type = "ops",
+            "skipping redaction restore for an encoded streamed response"
+        );
+        return Ok(Response::from_parts(parts, body));
+    }
     replace_response_headers(&mut parts.headers, &headers)?;
     parts.headers.remove(http::header::CONTENT_LENGTH);
     let stream_headers = headers;
     let stream = async_stream::stream! {
-        let mut restorer = match crate::privacy::StreamingResponseRestorer::new(&stream_headers, &session) {
-            Ok(restorer) => restorer,
-            Err(err) => {
-                yield Err(std::io::Error::other(format!("{err:?}")));
-                return;
-            }
-        };
+        let mut restorer = crate::privacy::StreamingResponseRestorer::new(&stream_headers, &session);
         let mut body_stream = body.into_data_stream();
         while let Some(chunk) = body_stream.next().await {
             match chunk {
@@ -2400,25 +2404,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn proxy_pii_redaction_compressed_response_safe_error() {
+    async fn proxy_pii_redaction_passes_an_encoded_response_through() {
         let (slot, sentinel) = redaction_slot_for_email();
+        let body =
+            format!("{{\"choices\":[{{\"message\":{{\"content\":\"hello {sentinel}\"}}}}]}}");
         let response = Response::builder()
             .header(header::CONTENT_TYPE, "application/json")
             .header(header::CONTENT_ENCODING, "gzip")
-            .header(header::CONTENT_LENGTH, "999")
-            .body(Body::from(format!(
-                "{{\"choices\":[{{\"message\":{{\"content\":\"hello {sentinel}\"}}}}]}}"
-            )))
+            .header(header::CONTENT_LENGTH, body.len().to_string())
+            .body(Body::from(body.clone()))
             .expect("response should build");
 
-        let err = restore_redacted_sync_execution_response(response, &slot)
+        // A compressed upstream response used to become a 500; it must be forwarded
+        // untouched instead, with the redaction sentinel still in place.
+        let restored = restore_redacted_sync_execution_response(response, &slot)
             .await
-            .expect_err("compressed active redaction should fail safely");
-        let message = format!("{err:?}");
-
-        assert!(message.contains("encoded response bodies"));
-        assert!(!message.contains("alice@example.com"));
-        assert!(!message.contains(&sentinel));
+            .expect("encoded response must pass through");
+        assert_eq!(
+            restored
+                .headers()
+                .get(header::CONTENT_ENCODING)
+                .and_then(|value| value.to_str().ok()),
+            Some("gzip")
+        );
+        let forwarded = to_bytes(restored.into_body(), usize::MAX)
+            .await
+            .expect("body should read");
+        assert_eq!(String::from_utf8(forwarded.to_vec()).expect("utf8"), body);
     }
 
     #[tokio::test]

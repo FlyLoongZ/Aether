@@ -6,6 +6,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
+use tracing::warn;
 
 use aether_data_contracts::DataLayerError;
 use aether_runtime_state::RuntimeState;
@@ -2978,7 +2979,21 @@ fn restore_sync_response_body_with_limit(
         });
     }
 
-    ensure_identity_response_encoding(headers)?;
+    if !response_encoding_is_restorable(headers) {
+        // Degrade instead of failing the whole response: a provider that ignores
+        // `accept-encoding: identity` used to turn a perfectly good 200 into a 500.
+        // The sentinels stay in place, which is visible to the client but keeps the
+        // redacted values out of the response — the security property holds either way.
+        warn!(
+            event_name = "redaction_restore_skipped_encoded_response",
+            log_type = "ops",
+            "skipping redaction restore for an encoded upstream response"
+        );
+        return Ok(RestoredSyncResponseBody {
+            body: body.to_vec(),
+            restored: false,
+        });
+    }
 
     let restored = if response_body_is_json(headers, body) {
         restore_json_response_body(body, session, expansion_limit)?
@@ -2991,22 +3006,18 @@ fn restore_sync_response_body_with_limit(
     Ok(restored)
 }
 
-fn ensure_identity_response_encoding(
-    headers: &BTreeMap<String, String>,
-) -> Result<(), GatewayError> {
-    for encoding in headers
+/// Whether the response body is plain enough to run sentinel restoration on.
+///
+/// Restoration works on text; a gzip/br/zstd body would be rewritten as garbage, so
+/// encoded responses are passed through untouched (see the callers, which warn).
+pub(crate) fn response_encoding_is_restorable(headers: &BTreeMap<String, String>) -> bool {
+    headers
         .iter()
         .filter(|(header_name, _)| header_name.eq_ignore_ascii_case("content-encoding"))
         .map(|(_, value)| value)
-    {
-        if encoding.trim().is_empty() || encoding.trim().eq_ignore_ascii_case("identity") {
-            continue;
-        }
-        return Err(GatewayError::Internal(
-            "redaction response restoration does not support encoded response bodies".to_string(),
-        ));
-    }
-    Ok(())
+        .all(|encoding| {
+            encoding.trim().is_empty() || encoding.trim().eq_ignore_ascii_case("identity")
+        })
 }
 
 fn response_body_is_json(headers: &BTreeMap<String, String>, body: &[u8]) -> bool {
@@ -3108,19 +3119,18 @@ pub(crate) const MAX_STREAM_RESTORE_OUTPUT_BYTES: usize =
     (16usize * 1024 * 1024).saturating_add(MAX_STREAM_RESTORE_EXPANSION_BYTES);
 
 impl<'a> StreamingResponseRestorer<'a> {
-    pub(crate) fn new(
-        headers: &BTreeMap<String, String>,
-        session: &'a RedactionSession,
-    ) -> Result<Self, GatewayError> {
-        if session.mapping_count() > 0 {
-            ensure_identity_response_encoding(headers)?;
-        }
+    /// Builds a restorer for the given response headers.
+    ///
+    /// Infallible on purpose: the only thing that used to fail here was an encoded
+    /// response, and the caller decides to pass such a response through untouched
+    /// (see [`response_encoding_is_restorable`]) rather than 500 the request.
+    pub(crate) fn new(headers: &BTreeMap<String, String>, session: &'a RedactionSession) -> Self {
         let mode = if header_value(headers, "content-type").is_some_and(content_type_is_sse) {
             StreamRestoreMode::Sse
         } else {
             StreamRestoreMode::Text
         };
-        Ok(Self::with_mode(session, mode))
+        Self::with_mode(session, mode)
     }
 
     #[cfg(test)]

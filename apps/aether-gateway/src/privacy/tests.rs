@@ -1409,7 +1409,9 @@ fn pii_redaction_sync_restore_expansion_limit_is_independent_of_body_size() {
 }
 
 #[test]
-fn pii_redaction_compressed_response_safe_error() {
+fn pii_redaction_passes_an_encoded_response_through_instead_of_failing() {
+    // A provider that ignores `accept-encoding: identity` used to turn a good 200
+    // into a 500 just because PII restoration could not run on compressed bytes.
     let sentinel = "<AETHER:EMAIL:ABCDEFGHIJKLMNOPQRST>";
     let session = session_with_response_mapping("alice@example.com", sentinel);
     let body = format!("compressed bytes with {sentinel}").into_bytes();
@@ -1419,35 +1421,43 @@ fn pii_redaction_compressed_response_safe_error() {
         ("content-length".to_string(), body.len().to_string()),
     ]);
 
-    let err = restore_sync_response_body(&mut headers, &body, &session)
-        .expect_err("compressed response should fail safely");
-
-    let message = format!("{err:?}");
-    assert!(message.contains("encoded response bodies"));
-    assert!(!message.contains("alice@example.com"));
-    assert!(!message.contains(sentinel));
-    assert_eq!(
-        headers.get("Content-Encoding").map(String::as_str),
-        Some("identity")
-    );
+    assert!(!super::response_encoding_is_restorable(&headers));
+    let restored = restore_sync_response_body(&mut headers, &body, &session)
+        .expect("encoded responses must pass through, not fail");
+    assert!(!restored.restored);
+    assert_eq!(restored.body, body);
+    // Untouched headers: the client still gets a body its decoder understands.
     assert_eq!(
         headers.get("content-encoding").map(String::as_str),
         Some("gzip")
     );
-    let original_len = body.len().to_string();
     assert_eq!(
         headers.get("content-length").map(String::as_str),
-        Some(original_len.as_str())
+        Some(body.len().to_string().as_str())
     );
 
-    let stream_err = match StreamingResponseRestorer::new(&headers, &session) {
-        Ok(_) => panic!("compressed stream response should fail safely"),
-        Err(err) => err,
-    };
-    let stream_message = format!("{stream_err:?}");
-    assert!(stream_message.contains("encoded response bodies"));
-    assert!(!stream_message.contains("alice@example.com"));
-    assert!(!stream_message.contains(sentinel));
+    // The stream restorer is constructible even for such a response; the caller
+    // skips it based on the same predicate.
+    let _restorer = StreamingResponseRestorer::new(&headers, &session);
+}
+
+#[test]
+fn pii_redaction_identity_encoded_response_is_restorable() {
+    let sentinel = "<AETHER:EMAIL:ABCDEFGHIJKLMNOPQRST>";
+    let session = session_with_response_mapping("alice@example.com", sentinel);
+    let body = format!("hello {sentinel}").into_bytes();
+    let mut headers = BTreeMap::from([
+        ("content-type".to_string(), "application/json".to_string()),
+        ("content-encoding".to_string(), "identity".to_string()),
+    ]);
+    assert!(super::response_encoding_is_restorable(&headers));
+
+    let restored = restore_sync_response_body(&mut headers, &body, &session).expect("restore");
+    assert!(restored.restored);
+    assert_eq!(
+        std::str::from_utf8(&restored.body).expect("utf-8"),
+        "hello alice@example.com"
+    );
 }
 
 #[test]

@@ -160,6 +160,15 @@ a default.
   `1.4` are rejected.
 - Legacy OAuth provider normalization for exports `2.0`-`2.2` is removed.
 
+## PII redaction
+
+- Redaction restoration no longer fails a response whose upstream ignored
+  `accept-encoding: identity`. An encoded (gzip/br/zstd) body is forwarded
+  untouched with a `redaction_restore_skipped_encoded_response` warning instead of
+  becoming a `500`. The redaction sentinels stay in that response, so a client
+  with redaction enabled sees `<AETHER:...>` placeholders rather than the original
+  values.
+
 ## Local proxy fallback
 
 - The removed `local_proxy_passthrough_removed` execution path is gone. An
