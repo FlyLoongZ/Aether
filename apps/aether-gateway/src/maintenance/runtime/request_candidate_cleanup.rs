@@ -35,8 +35,13 @@ pub(crate) async fn cleanup_request_candidates_once(
     .max(1);
     let cutoff_unix_secs = now_unix_secs().saturating_sub(retention_days.saturating_mul(86_400));
 
+    // Bounded per run, and it yields between batches: a large backlog (first
+    // enable, or a long-disabled worker) used to keep deleting for hours while
+    // holding a pool connection, starving foreground requests. Whatever is left
+    // is picked up by the next run.
+    const MAX_BATCHES_PER_RUN: usize = 32;
     let mut total_deleted = 0usize;
-    loop {
+    for _ in 0..MAX_BATCHES_PER_RUN {
         let deleted = data
             .delete_request_candidates_created_before(cutoff_unix_secs, delete_limit)
             .await?;
@@ -44,6 +49,13 @@ pub(crate) async fn cleanup_request_candidates_once(
         if deleted < delete_limit {
             break;
         }
+        if data.database_pool_summary().is_some_and(|summary| {
+            GatewayDataState::database_pool_summary_under_maintenance_pressure(&summary)
+        }) {
+            info!("request candidate cleanup yielding: database pool under pressure");
+            break;
+        }
+        tokio::task::yield_now().await;
     }
 
     Ok(total_deleted)
