@@ -30,4 +30,18 @@ describe('getOAuthIcon', () => {
     expect(rendered).not.toContain('javascript:')
     expect(rendered).not.toContain('data:')
   })
+
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'])(
+    'ignores prototype members when looking up provider type %s',
+    (providerType) => {
+      // `OAUTH_ICONS[providerType]` used to return the inherited member — for
+      // `constructor` that is `Object`, rendered as `function Object() {…}` by
+      // `v-html`. Now such a lookup falls through to the default icon.
+      const rendered = getOAuthIcon(providerType)
+
+      expect(rendered).toBe(OAUTH_ICONS.github)
+      expect(rendered).not.toContain('function Object')
+      expect(rendered).not.toContain('[native code]')
+    }
+  )
 })

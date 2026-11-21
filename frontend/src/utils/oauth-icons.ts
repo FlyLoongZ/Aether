@@ -40,7 +40,11 @@ function safeOAuthIconUrl(iconUrl: string): string | null {
 }
 
 export function getOAuthIcon(providerType: string, iconUrl?: string | null): string {
-  const builtin = OAUTH_ICONS[providerType.toLowerCase()]
+  // `OAUTH_ICONS[name]` walks the prototype chain: `providerType = 'constructor'`
+  // returned `Object` — a function — which `v-html` then rendered as
+  // `function Object() { [native code] }`. Look the entry up as an own property only.
+  const key = providerType.toLowerCase()
+  const builtin = Object.hasOwn(OAUTH_ICONS, key) ? OAUTH_ICONS[key] : undefined
   if (builtin) return builtin
   const safeIconUrl = iconUrl ? safeOAuthIconUrl(iconUrl) : null
   if (safeIconUrl) {
