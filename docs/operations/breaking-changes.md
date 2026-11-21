@@ -197,6 +197,13 @@ a default.
   wallet to unlimited: the fields are ignored and an
   `admin_wallet_field_ignored` warning is logged. The request itself still
   succeeds, and local (JWT) admin sessions are unaffected.
+- `POST /api/admin/payments/redeem-codes/batches` now requires
+  `admin:payments:admin` instead of `admin:payments:write`. A redeem-code batch
+  credits `amount_usd * count` to wallets as codes are redeemed, so it is
+  treated like the other money-shaping payment routes
+  (`update_epay_gateway`, `update_payment_gateway`) rather than as a delegated
+  write. Tokens with `admin:payments:write` must be reissued with
+  `admin:payments:admin` to keep creating batches.
 - Wallet daily usage reads now use `APP_TIMEZONE` (the maintenance timezone)
   instead of the fixed `Asia/Shanghai` calendar. Historical ledger rows written
   under a different timezone are not rewritten, so those dates may no longer

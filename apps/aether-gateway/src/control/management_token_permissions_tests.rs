@@ -697,6 +697,48 @@ fn security_control_plane_mutations_require_admin_permission() {
 }
 
 #[test]
+fn redeem_code_batch_creation_requires_payments_admin_permission() {
+    // `admin:payments:write` covers gateway configuration. A redeem-code batch is
+    // money: every code credits a wallet, so it is escalated to `admin`.
+    let decision = GatewayControlDecision::synthetic(
+        "/api/admin/payments/redeem-codes/batches".to_string(),
+        Some("admin_proxy".to_string()),
+        Some("payments_manage".to_string()),
+        Some("create_redeem_code_batch".to_string()),
+        Some("admin:payments".to_string()),
+    );
+    let write_permissions = vec!["admin:payments:write".to_string()];
+    let admin_permissions = vec!["admin:payments:admin".to_string()];
+    let wallets_only = vec!["admin:wallets:write".to_string()];
+
+    // The permission model is family-scoped (`admin:<signature>:<access>`), so the
+    // escalation lands on the payments family, exactly like the sibling
+    // `update_payment_gateway` route.
+    assert_eq!(
+        management_token_required_permission(&http::Method::POST, &decision).as_deref(),
+        Some("admin:payments:admin")
+    );
+    assert!(validate_management_token_admin_route_permission(
+        &http::Method::POST,
+        &decision,
+        Some(&wallets_only),
+    )
+    .is_err());
+    assert!(validate_management_token_admin_route_permission(
+        &http::Method::POST,
+        &decision,
+        Some(&write_permissions),
+    )
+    .is_err());
+    assert!(validate_management_token_admin_route_permission(
+        &http::Method::POST,
+        &decision,
+        Some(&admin_permissions),
+    )
+    .is_ok());
+}
+
+#[test]
 fn payment_gateway_updates_require_payments_admin_permission() {
     for route_kind in ["update_epay_gateway", "update_payment_gateway"] {
         let decision = GatewayControlDecision::synthetic(
