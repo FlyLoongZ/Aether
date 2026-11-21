@@ -877,22 +877,35 @@ fn raw_usage_and_trace_reads_require_admin_permission() {
         .is_ok());
     }
 
-    for (signature, route_kind) in [
-        ("admin:usage", "records"),
-        ("admin:monitoring", "trace_provider_stats"),
-    ] {
-        let decision = GatewayControlDecision::synthetic(
-            "/api/admin/summary".to_string(),
-            Some("admin_proxy".to_string()),
-            Some("summary".to_string()),
-            Some(route_kind.to_string()),
-            Some(signature.to_string()),
-        );
-        assert_eq!(
-            management_token_required_permission(&http::Method::GET, &decision).as_deref(),
-            Some(format!("{signature}:read").as_str())
-        );
-    }
+    // `records` returns captured request/response records (provider credentials and
+    // user payloads included), so it belongs with the raw-diagnostic admin reads
+    // rather than with the ordinary usage read model.
+    assert_eq!(
+        management_token_required_permission(
+            &http::Method::GET,
+            &GatewayControlDecision::synthetic(
+                "/api/admin/usage/records".to_string(),
+                Some("admin_proxy".to_string()),
+                Some("usage_manage".to_string()),
+                Some("records".to_string()),
+                Some("admin:usage".to_string()),
+            ),
+        )
+        .as_deref(),
+        Some("admin:usage:admin")
+    );
+
+    let decision = GatewayControlDecision::synthetic(
+        "/api/admin/summary".to_string(),
+        Some("admin_proxy".to_string()),
+        Some("summary".to_string()),
+        Some("trace_provider_stats".to_string()),
+        Some("admin:monitoring".to_string()),
+    );
+    assert_eq!(
+        management_token_required_permission(&http::Method::GET, &decision).as_deref(),
+        Some("admin:monitoring:read")
+    );
 }
 
 #[test]
@@ -1225,6 +1238,215 @@ fn admin_referral_queries_and_wallet_links_require_only_read_permissions() {
             )
             .is_err(),
             "{path}"
+        );
+    }
+}
+
+/// Route kinds the escalation list claims to escalate, parsed from the source of
+/// `access_for_route`.
+///
+/// The table is a `matches!` over `(signature, route_kind)` pairs; parsing it here
+/// keeps the test honest about what the code actually does instead of duplicating
+/// a hand-maintained copy that can drift.
+fn escalated_route_kinds_from_source() -> Vec<(String, String)> {
+    let source = include_str!("management_token_permissions.rs");
+    let start = source
+        .find("let requires_admin_permission = matches!(")
+        .expect("escalation list should exist");
+    let end = source[start..]
+        .find(") || (*method == http::Method::GET")
+        .map(|offset| start + offset)
+        .expect("escalation list should end before the query-param branch");
+    let block = &source[start..end];
+
+    let mut pairs = Vec::new();
+    let mut rest: &str = block;
+    while let Some(signature_at) = rest.find("Some(\"") {
+        rest = &rest[signature_at + "Some(\"".len()..];
+        let Some(signature_end) = rest.find('"') else {
+            break;
+        };
+        let signature = &rest[..signature_end];
+        rest = &rest[signature_end + 1..];
+
+        // The route-kind group must follow immediately: `), Some(...)`.
+        let Some(kinds_at) = rest.find("Some(") else {
+            break;
+        };
+        let between = rest[..kinds_at]
+            .trim_matches(|c: char| c.is_whitespace() || c == ')' || c == ',' || c == '|');
+        if !between.is_empty() {
+            continue;
+        }
+        // Take the whole, possibly multi-line, `Some(...)` group by parenthesis
+        // depth; the closing `)` of the group is followed by `)` or `|`.
+        let group_start = kinds_at + "Some(".len();
+        let group_rest = &rest[group_start..];
+        let mut depth = 1usize;
+        let mut group_end = None;
+        for (offset, character) in group_rest.char_indices() {
+            match character {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        group_end = Some(offset);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(group_end) = group_end else {
+            break;
+        };
+        let kinds_block = &group_rest[..group_end];
+        rest = &group_rest[group_end + 1..];
+        for kind_block in kinds_block.split('|') {
+            let kind_block = kind_block.trim();
+            if let (Some(open), Some(close)) = (kind_block.find('"'), kind_block.rfind('"')) {
+                if close > open {
+                    pairs.push((
+                        signature.to_string(),
+                        kind_block[open + 1..close].to_string(),
+                    ));
+                }
+            }
+        }
+    }
+    pairs
+}
+
+/// Classifier route kinds, parsed from the `classified(...)` calls of every
+/// control-plane classifier.
+fn classified_route_kinds_from_source() -> Vec<(String, String)> {
+    let sources = [
+        include_str!("route/oauth.rs"),
+        include_str!("route/ai.rs"),
+        include_str!("route/public_support.rs"),
+        include_str!("route/admin/basic_families.rs"),
+        include_str!("route/admin/endpoints_families.rs"),
+        include_str!("route/admin/model_provider_families.rs"),
+        include_str!("route/admin/observability_families.rs"),
+        include_str!("route/admin/operations_families.rs"),
+        include_str!("route/admin/provider_ops_routes.rs"),
+        include_str!("route/admin/routing_families.rs"),
+        include_str!("route/admin/system_families.rs"),
+    ];
+    let mut pairs = Vec::new();
+    for source in sources {
+        let mut rest: &str = source;
+        while let Some(at) = rest.find("classified(") {
+            rest = &rest[at + "classified(".len()..];
+            // Whole call by parenthesis depth: route kinds are sometimes chosen by
+            // an inline `if matches!(path, ...) { "kind_a" } else { "kind_b" }`.
+            let mut depth = 1usize;
+            let mut call_end = None;
+            for (offset, character) in rest.char_indices() {
+                match character {
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            call_end = Some(offset);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let Some(call_end) = call_end else {
+                break;
+            };
+            let call = &rest[..call_end];
+            rest = &rest[call_end + 1..];
+
+            let mut literals = Vec::new();
+            let mut cursor: &str = call;
+            while let Some(open) = cursor.find('"') {
+                let Some(close) = cursor[open + 1..].find('"') else {
+                    break;
+                };
+                literals.push(cursor[open + 1..open + 1 + close].to_string());
+                cursor = &cursor[open + 1 + close + 1..];
+            }
+            let Some(signature) = literals
+                .iter()
+                .rev()
+                .find(|literal| {
+                    literal.starts_with("admin:")
+                        || literal.starts_with("user:")
+                        || literal.starts_with("public:")
+                })
+                .cloned()
+            else {
+                continue;
+            };
+            // The first two literals are the class and the family; paths and the
+            // signature itself are not route kinds.
+            let kinds: Vec<&String> = literals
+                .iter()
+                .skip(2)
+                .filter(|literal| {
+                    *literal != &signature && !literal.starts_with('/') && !literal.contains(':')
+                })
+                .collect();
+            for kind in kinds {
+                pairs.push((signature.clone(), kind.clone()));
+            }
+        }
+    }
+    pairs
+}
+
+#[test]
+fn escalated_route_kinds_are_all_produced_by_the_classifier() {
+    let escalated = escalated_route_kinds_from_source();
+    let classified = classified_route_kinds_from_source();
+
+    // A parse failure would silently hollow out the assertions below.
+    assert!(
+        escalated.len() > 60,
+        "escalation list parsing produced only {} entries",
+        escalated.len()
+    );
+    assert!(
+        classified.len() > 200,
+        "classifier parsing produced only {} entries",
+        classified.len()
+    );
+
+    let mut dead = Vec::new();
+    for pair in &escalated {
+        if !classified.contains(pair) {
+            dead.push(pair.clone());
+        }
+    }
+    assert!(
+        dead.is_empty(),
+        "escalation list references route kinds the classifier never emits: {dead:?}"
+    );
+}
+
+#[test]
+fn credential_shaped_route_kinds_are_escalated() {
+    // These hand out credentials, accept credential material, or mint money; a
+    // delegated `write` token must not reach them. Each was missing from the list
+    // at some point, so they get an explicit guard.
+    let escalated = escalated_route_kinds_from_source();
+    for (signature, route_kind) in [
+        ("admin:provider_oauth", "start_key_oauth"),
+        ("admin:provider_oauth", "start_provider_oauth"),
+        ("admin:provider_oauth", "device_authorize"),
+        ("admin:provider_oauth", "get_batch_import_task_status"),
+        ("admin:usage", "records"),
+        ("admin:payments", "create_redeem_code_batch"),
+        ("admin:users", "reveal_user_api_key"),
+    ] {
+        let pair = (signature.to_string(), route_kind.to_string());
+        assert!(
+            escalated.contains(&pair),
+            "{signature}:{route_kind} must require the admin permission"
         );
     }
 }

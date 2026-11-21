@@ -458,7 +458,16 @@ fn access_for_route(method: &http::Method, decision: &GatewayControlDecision) ->
             | (
                 Some("admin:provider_oauth"),
                 Some(
-                    "complete_key_oauth"
+                    // Starting a flow and polling its task both hand out or accept
+                    // credential material (authorization URLs, device codes) or
+                    // mint a token, so they are not delegated writes.
+                    "start_key_oauth"
+                        | "start_provider_oauth"
+                        | "device_authorize"
+                        | "get_cookie_authorize_task_status"
+                        | "get_agent_identity_import_task_status"
+                        | "get_batch_import_task_status"
+                        | "complete_key_oauth"
                         | "refresh_key_oauth"
                         | "complete_provider_oauth"
                         | "import_refresh_token"
@@ -509,7 +518,12 @@ fn access_for_route(method: &http::Method, decision: &GatewayControlDecision) ->
             // credited to wallets as codes are redeemed. `admin:payments:write`
             // covers gateway configuration, not minting, so it is not enough.
             | (Some("admin:payments"), Some("create_redeem_code_batch"))
-            | (Some("admin:usage"), Some("detail" | "curl" | "replay"))
+            // `records` returns captured request/response records, which carry
+            // provider credentials and user payloads.
+            | (
+                Some("admin:usage"),
+                Some("detail" | "curl" | "replay" | "records")
+            )
             | (Some("admin:monitoring"), Some("trace_request"))
             | (Some("admin:tasks"), Some("detail" | "events"))
             | (

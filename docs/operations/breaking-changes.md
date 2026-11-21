@@ -71,6 +71,12 @@ a default.
 
 ## Management tokens
 
+- Escalated admin route kinds now also cover OAuth flow starts, device
+  authorization, the OAuth import/poll task status reads, and
+  `GET /api/admin/usage/records`. Management tokens with
+  `admin:provider_oauth:write` / `admin:provider_oauth:read` or
+  `admin:usage:read` lose access to exactly those routes and need the matching
+  `:admin` permission.
 - Tokens whose `permissions` value is SQL `NULL` are rejected during
   authentication. Legacy tokens must be reissued with explicit permissions;
   the former frozen full-permission fallback is removed.

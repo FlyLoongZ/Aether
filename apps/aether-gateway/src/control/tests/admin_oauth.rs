@@ -72,7 +72,7 @@ fn classifies_admin_provider_oauth_batch_import_task_status_as_admin_proxy_route
     );
     assert_eq!(
         management_token_required_permission(&http::Method::GET, &decision).as_deref(),
-        Some("admin:provider_oauth:read")
+        Some("admin:provider_oauth:admin")
     );
     assert!(!decision.is_execution_runtime_candidate());
 }
@@ -128,7 +128,7 @@ fn classifies_admin_provider_oauth_maintenance_routes_as_admin_proxy_route() {
             "/api/admin/provider-oauth/providers/provider-123/cookie-authorize/tasks/claude-cookie-task-123",
             "get_cookie_authorize_task_status",
             "admin:provider_oauth",
-            "admin:provider_oauth:read",
+            "admin:provider_oauth:admin",
         ),
         (
             http::Method::POST,
@@ -142,7 +142,7 @@ fn classifies_admin_provider_oauth_maintenance_routes_as_admin_proxy_route() {
             "/api/admin/provider-oauth/providers/provider-123/agent-identity-import/tasks/agent-identity-task-123",
             "get_agent_identity_import_task_status",
             "admin:provider_oauth",
-            "admin:provider_oauth:read",
+            "admin:provider_oauth:admin",
         ),
         (
             http::Method::POST,
@@ -163,14 +163,14 @@ fn classifies_admin_provider_oauth_maintenance_routes_as_admin_proxy_route() {
             "/api/admin/provider-oauth/providers/provider-123/batch-import/tasks/task-123",
             "get_batch_import_task_status",
             "admin:provider_oauth",
-            "admin:provider_oauth:read",
+            "admin:provider_oauth:admin",
         ),
         (
             http::Method::POST,
             "/api/admin/provider-oauth/providers/provider-123/device-authorize",
             "device_authorize",
             "admin:provider_oauth",
-            "admin:provider_oauth:write",
+            "admin:provider_oauth:admin",
         ),
         (
             http::Method::POST,
