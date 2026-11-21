@@ -325,6 +325,7 @@
 </template>
 
 <script setup lang="ts">
+import { buildCsv, downloadCsv } from '@/utils/csv'
 import { useI18n } from '@/i18n'
 const { t } = useI18n()
 
@@ -515,20 +516,13 @@ async function selectRedeemBatch(batch: RedeemCodeBatch) {
 }
 
 function exportRedeemCodesCsv(batch: RedeemCodeBatch, codes: Array<{ id: string; code: string; masked_code: string }>) {
-  const header = ['id', 'batch_name', 'code', 'masked_code']
-  const rows = codes.map(code => [code.id, batch.name, code.code, code.masked_code])
-  const csv = [header, ...rows]
-    .map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(','))
-    .join('\n')
-  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `redeem-codes-${batch.name}-${batch.id}.csv`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  // Shared CSV writer: quotes every field and neutralises formula-shaped values.
+  // `batch.name` also feeds the file name, so it goes through `sanitizeDownloadFileName`.
+  const csv = buildCsv([
+    ['id', 'batch_name', 'code', 'masked_code'],
+    ...codes.map(code => [code.id, batch.name, code.code, code.masked_code])
+  ])
+  downloadCsv(`redeem-codes-${batch.name}-${batch.id}.csv`, csv)
 }
 
 async function submitRedeemCodeBatch() {

@@ -407,6 +407,7 @@
 </template>
 
 <script setup lang="ts">
+import { buildCsv, downloadCsv } from '@/utils/csv'
 import { useI18n } from '@/i18n'
 const { t } = useI18n()
 
@@ -618,26 +619,25 @@ async function exportLogs() {
       }
     }
 
-    const csvContent = [
-      ['时间', '用户邮箱', '用户名', '用户ID', '事件类型', '描述', 'IP地址', '状态码', '错误消息'].join(','),
+    // `buildCsv` quotes every field, doubles inner quotes and neutralises
+    // formula-shaped values (`=HYPERLINK(...)` in a user name used to be live when
+    // the export was opened in Excel) — see `utils/csv.ts`.
+    const csvContent = buildCsv([
+      ['时间', '用户邮箱', '用户名', '用户ID', '事件类型', '描述', 'IP地址', '状态码', '错误消息'],
       ...allLogs.map((log: AuditLog) => [
         log.created_at,
-        `"${log.user_email || ''}"`,
-        `"${log.user_username || ''}"`,
-        log.user_id || '',
+        log.user_email,
+        log.user_username,
+        log.user_id,
         log.event_type,
-        `"${log.description || ''}"`,
-        log.ip_address || '',
-        log.status_code || '',
-        `"${log.error_message || ''}"`
-      ].join(','))
-    ].join('\n')
+        log.description,
+        log.ip_address,
+        log.status_code,
+        log.error_message
+      ])
+    ])
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `audit-logs-${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
+    downloadCsv(`audit-logs-${new Date().toISOString().split('T')[0]}.csv`, csvContent)
   } catch (error) {
     log.error('导出失败:', error)
   }
