@@ -180,6 +180,57 @@ fn baseline_migration_restores_search_path_for_sqlx_bookkeeping() {
     );
 }
 
+/// Migrations after the cutoff must survive being replayed onto a database
+/// that already contains their effect.
+///
+/// The embedded snapshot is a *mixed* state: it was regenerated from a later
+/// schema while only the versions up to the cutoff are stamped, so a fresh
+/// install replays every later migration on top of it. Raising the cutoff
+/// instead would skip migrations the snapshot does not actually contain
+/// (`20261119020000` still has the `usage` mirrors in the snapshot), which is
+/// why the cutoff is conservative and this invariant exists.
+#[test]
+fn post_cutoff_migrations_stay_replay_safe() {
+    // Captures affected ids into a temporary table that it drops first, so a
+    // replay inserts nothing new. Listed explicitly to keep the check strict.
+    const ALLOWLISTED: &[i64] = &[20261119030000];
+
+    let mut offenders = Vec::new();
+    for migration in POSTGRES_MIGRATOR
+        .iter()
+        .filter(|migration| migration.version > EMPTY_DATABASE_SNAPSHOT_CUTOFF_VERSION)
+    {
+        if ALLOWLISTED.contains(&migration.version) {
+            continue;
+        }
+        let sql = migration.sql.as_str().to_ascii_lowercase();
+        for keyword in [
+            "create table",
+            "create index",
+            "create unique index",
+            "add column",
+        ] {
+            let mut from = 0;
+            while let Some(offset) = sql[from..].find(keyword) {
+                let start = from + offset;
+                let window = &sql[start..sql.len().min(start + 240)];
+                if !window.contains("if not exists") {
+                    offenders.push(format!("{}: {keyword}", migration.version));
+                }
+                from = start + keyword.len();
+            }
+        }
+        if sql.contains("truncate") {
+            offenders.push(format!("{}: truncate", migration.version));
+        }
+    }
+
+    assert!(
+        offenders.is_empty(),
+        "migrations after the snapshot cutoff must stay replay-safe: {offenders:?}"
+    );
+}
+
 #[test]
 fn empty_database_snapshot_covers_current_cutoff_versions() {
     let versions = empty_database_snapshot_migrations(&POSTGRES_MIGRATOR)
