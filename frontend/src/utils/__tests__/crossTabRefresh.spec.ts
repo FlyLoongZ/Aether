@@ -430,4 +430,40 @@ describe('CrossTabRefreshCoordinator', () => {
     expect(executor).toHaveBeenCalledTimes(1)
     coordinator.destroy()
   })
+
+  it('stops polling another tab\'s lock once the coordinator is destroyed', async () => {
+    // The wait loop used to keep scheduling `setTimeout(wait, 0)` forever: an
+    // unmounted page burned CPU until the 35s deadline.
+    const coordinator = new CrossTabRefreshCoordinator({
+      storage: localStorage,
+      channelFactory: createChannel,
+      waitTimeoutMs: 5_000,
+    })
+    const other = new CrossTabRefreshCoordinator({
+      storage: localStorage,
+      channelFactory: createChannel,
+      waitTimeoutMs: 5_000,
+    })
+
+    // Hold the lock by writing it directly (the same shape `tryAcquireLock` writes),
+    // then let the coordinator start waiting for that tab.
+    localStorage.setItem('aether_auth_refresh_lock', JSON.stringify({
+      owner: 'another-tab',
+      requestId: 'held-by-another-tab',
+      expiresAt: Date.now() + 5_000
+    }))
+    const executor = vi.fn(() => Promise.resolve('token'))
+    const pending = coordinator.run(executor).catch((error: unknown) => error)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const started = Date.now()
+    coordinator.destroy()
+    const outcome = await pending
+    expect(outcome).toBeInstanceOf(Error)
+    expect(Date.now() - started).toBeLessThan(250)
+    // The executor never ran: the lock was still held when the wait was aborted.
+    expect(executor).not.toHaveBeenCalled()
+
+    other.destroy()
+  })
 })

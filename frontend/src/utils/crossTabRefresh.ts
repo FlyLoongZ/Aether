@@ -109,6 +109,16 @@ export class CrossTabRefreshCoordinator {
   private readonly recentSuccesses = new Map<string, number>()
   private readonly successObservers = new Set<() => void>()
   private activeLock: RefreshLock | null = null
+  /**
+   * Set by `destroy()`.
+   *
+   * The lock-release wait loop below polls until the other tab finishes, which can
+   * legitimately last tens of seconds; without this flag an unmounted page kept
+   * scheduling `setTimeout` callbacks for the rest of the window.
+   */
+  private disposed = false
+  /** Timers of in-flight lock-release waits, cleared by `destroy()`. */
+  private readonly pendingWaitTimers = new Set<ReturnType<typeof setTimeout>>()
 
   // 页面被关闭或整页导航时 finally 可能不再执行；同步释放锁，避免新页面等满 TTL。
   private readonly onPageHide = (): void => {
@@ -150,6 +160,7 @@ export class CrossTabRefreshCoordinator {
   }
 
   destroy(): void {
+    this.disposed = true
     if (typeof window !== 'undefined') {
       window.removeEventListener('storage', this.onStorage)
       window.removeEventListener('pagehide', this.onPageHide)
@@ -159,7 +170,14 @@ export class CrossTabRefreshCoordinator {
     this.channel?.close?.()
     for (const waiter of this.waiters.values()) {
       clearTimeout(waiter.timeoutId)
+      // Without this, an in-flight `run()` waiting for another tab's result never
+      // settles after teardown: the caller's promise stays pending forever.
+      waiter.reject(new Error('cross-tab refresh coordinator was destroyed'))
     }
+    for (const timer of this.pendingWaitTimers) {
+      clearTimeout(timer)
+    }
+    this.pendingWaitTimers.clear()
     this.waiters.clear()
     this.earlyResults.clear()
     this.recentSuccesses.clear()
@@ -288,15 +306,31 @@ export class CrossTabRefreshCoordinator {
   }
 
   private waitForLockRelease(executor: () => Promise<string>, retryCount: number): Promise<string> {
-    return new Promise<string>((resolve) => {
+    return new Promise<string>((resolve, reject) => {
       const deadline = Date.now() + this.waitTimeoutMs
-      const wait = () => {
+      // Poll instead of spinning on `setTimeout(wait, 0)`: a zero-delay timer runs
+      // as fast as the event loop allows, so a tab waiting for another tab burned CPU
+      // for the whole timeout (up to 35s) and starved the main thread. A modest
+      // interval still notices the release quickly, and the storage/broadcast events
+      // remain the primary signal.
+      const pollInterval = Math.min(250, Math.max(100, Math.floor(this.waitTimeoutMs / 20)))
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const wait = (): void => {
+        if (timer !== null) {
+          this.pendingWaitTimers.delete(timer)
+          timer = null
+        }
+        if (this.disposed) {
+          reject(new Error('cross-tab refresh coordinator was destroyed'))
+          return
+        }
         const activeLock = this.readActiveLock()
         if (!activeLock || activeLock.owner === this.tabId || Date.now() >= deadline) {
           resolve(this.run(executor, retryCount))
           return
         }
-        setTimeout(wait, 0)
+        timer = setTimeout(wait, pollInterval)
+        this.pendingWaitTimers.add(timer)
       }
       wait()
     })
