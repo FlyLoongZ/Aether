@@ -409,6 +409,7 @@ dependencies = [
  "aether-task-runtime",
  "aether-test-support",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

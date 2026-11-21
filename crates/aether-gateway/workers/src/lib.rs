@@ -6,6 +6,7 @@ use aether_runtime_state::{RuntimeLockLease, RuntimeState};
 use aether_task_runtime::TaskSupervisorMetrics;
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
+use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,6 +14,10 @@ pub struct SingletonWorkerConfig {
     pub lease_ttl: Duration,
     pub renew_interval: Duration,
     pub retry_interval: Duration,
+    /// How long a worker may keep running after its lease was lost, while it
+    /// shuts down. Past this the future is dropped, which is what happened
+    /// immediately before this field existed.
+    pub shutdown_grace: Duration,
 }
 
 impl Default for SingletonWorkerConfig {
@@ -21,6 +26,7 @@ impl Default for SingletonWorkerConfig {
             lease_ttl: Duration::from_secs(90),
             renew_interval: Duration::from_secs(30),
             retry_interval: Duration::from_secs(10),
+            shutdown_grace: Duration::from_secs(30),
         }
     }
 }
@@ -30,6 +36,7 @@ pub struct SingletonWorkerContext {
     task_key: &'static str,
     owner: String,
     fencing_token: u64,
+    shutdown: CancellationToken,
 }
 
 impl SingletonWorkerContext {
@@ -41,8 +48,21 @@ impl SingletonWorkerContext {
         &self.owner
     }
 
+    /// The lease's fencing token, for logging and diagnostics only.
+    ///
+    /// Nothing enforces it today: exclusivity comes from the lease itself, so a
+    /// worker that lost its lease must stop on its own. Do not use this to decide
+    /// whether a write is still allowed — no data-layer call checks it.
     pub const fn fencing_token(&self) -> u64 {
         self.fencing_token
+    }
+
+    /// Cancelled when the worker must stop because it no longer holds the lease.
+    ///
+    /// Long-running workers should `select!` on this (or pass it to the code they
+    /// drive) and finish their in-flight work instead of being dropped mid-write.
+    pub fn shutdown(&self) -> CancellationToken {
+        self.shutdown.clone()
     }
 }
 
@@ -128,18 +148,20 @@ where
                 }
             };
 
+            let shutdown = CancellationToken::new();
             let worker_context = SingletonWorkerContext {
                 task_key,
                 owner: owner.clone(),
                 fencing_token: lease.fencing_token,
+                shutdown: shutdown.clone(),
             };
             let mut lease_guard = SingletonLeaseGuard {
                 runtime_state: runtime_state.clone(),
                 lease: Some(lease),
             };
+            let worker_future = worker(worker_context);
+            tokio::pin!(worker_future);
             let restart_after_release = {
-                let worker_future = worker(worker_context);
-                tokio::pin!(worker_future);
                 let mut renew_timer = tokio::time::interval(config.renew_interval);
                 renew_timer.set_missed_tick_behavior(MissedTickBehavior::Delay);
                 renew_timer.tick().await;
@@ -182,6 +204,15 @@ where
                     }
                 }
             };
+
+            if restart_after_release {
+                // Dropping the future mid-await cancels it at an arbitrary point:
+                // a half-written batch, a startup side effect that already ran.
+                // Signal first and give the worker `shutdown_grace` to wind down;
+                // only then is the future dropped.
+                shutdown.cancel();
+                let _ = tokio::time::timeout(config.shutdown_grace, &mut worker_future).await;
+            }
 
             let release_result = if let Some(lease) = lease_guard.lease.as_ref() {
                 runtime_state.lock_release(lease).await
@@ -230,6 +261,7 @@ mod tests {
             lease_ttl: Duration::from_millis(60),
             renew_interval: Duration::from_millis(15),
             retry_interval: Duration::from_millis(5),
+            shutdown_grace: Duration::from_millis(50),
         };
 
         let first = spawn_singleton_worker(
@@ -285,6 +317,7 @@ mod tests {
             lease_ttl: Duration::from_secs(5),
             renew_interval: Duration::from_secs(1),
             retry_interval: Duration::from_millis(5),
+            shutdown_grace: Duration::from_millis(50),
         };
 
         let first = spawn_singleton_worker(
@@ -351,6 +384,7 @@ mod tests {
             lease_ttl: Duration::from_secs(1),
             renew_interval: Duration::from_millis(100),
             retry_interval: Duration::from_millis(5),
+            shutdown_grace: Duration::from_millis(50),
         };
 
         let (first_tx, mut first_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -394,6 +428,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lost_lease_cancels_the_worker_before_it_is_dropped() {
+        let runtime = Arc::new(RuntimeState::memory(MemoryRuntimeStateConfig::default()));
+        let metrics = TaskSupervisorMetrics::default();
+        let config = SingletonWorkerConfig {
+            // The renew interval is longer than the TTL, so the very first renewal
+            // finds the lease expired: exactly the "another node took over" case.
+            lease_ttl: Duration::from_millis(20),
+            renew_interval: Duration::from_millis(50),
+            retry_interval: Duration::from_millis(5),
+            shutdown_grace: Duration::from_secs(2),
+        };
+        let graceful_shutdowns = Arc::new(AtomicUsize::new(0));
+        let dropped_without_shutdown = Arc::new(AtomicUsize::new(0));
+
+        let handle = spawn_singleton_worker_with_context(
+            runtime,
+            metrics.clone(),
+            "node-a".to_string(),
+            "test.restart.graceful",
+            config,
+            {
+                let graceful_shutdowns = graceful_shutdowns.clone();
+                let dropped_without_shutdown = dropped_without_shutdown.clone();
+                move |context| {
+                    let graceful_shutdowns = graceful_shutdowns.clone();
+                    let dropped_without_shutdown = dropped_without_shutdown.clone();
+                    async move {
+                        // Records whether the future was dropped mid-flight; with the
+                        // old behaviour this fires for a lease loss, because the
+                        // worker future was dropped the moment renewal failed.
+                        struct DropProbe {
+                            graceful: Arc<AtomicUsize>,
+                            dropped: Arc<AtomicUsize>,
+                            finished: bool,
+                        }
+                        impl Drop for DropProbe {
+                            fn drop(&mut self) {
+                                if !self.finished {
+                                    self.dropped.fetch_add(1, Ordering::SeqCst);
+                                }
+                            }
+                        }
+                        let mut probe = DropProbe {
+                            graceful: graceful_shutdowns,
+                            dropped: dropped_without_shutdown,
+                            finished: false,
+                        };
+                        context.shutdown().cancelled().await;
+                        probe.finished = true;
+                        probe.graceful.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+            },
+        );
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while graceful_shutdowns.load(Ordering::SeqCst) == 0 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("worker must observe the cancellation instead of being dropped");
+
+        assert_eq!(dropped_without_shutdown.load(Ordering::SeqCst), 0);
+        handle.abort();
+        let _ = handle.await;
+    }
+
+    #[tokio::test]
     async fn restarts_worker_after_lease_expires_before_renewal() {
         let runtime = Arc::new(RuntimeState::memory(MemoryRuntimeStateConfig::default()));
         let metrics = TaskSupervisorMetrics::default();
@@ -401,6 +504,7 @@ mod tests {
             lease_ttl: Duration::from_millis(20),
             renew_interval: Duration::from_millis(50),
             retry_interval: Duration::from_millis(5),
+            shutdown_grace: Duration::from_millis(50),
         };
         let (context_tx, mut context_rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -454,6 +558,7 @@ mod tests {
             lease_ttl: Duration::from_millis(500),
             renew_interval: Duration::from_millis(25),
             retry_interval: Duration::from_millis(10),
+            shutdown_grace: Duration::from_millis(50),
         };
         let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
         let handle = spawn_singleton_worker(
@@ -521,6 +626,7 @@ mod tests {
             lease_ttl: Duration::from_millis(120),
             renew_interval: Duration::from_millis(30),
             retry_interval: Duration::from_millis(5),
+            shutdown_grace: Duration::from_millis(50),
         };
 
         let first = spawn_singleton_worker(

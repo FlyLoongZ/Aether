@@ -10,6 +10,7 @@ description = "Gateway background worker coordination and lease supervision"
 aether-runtime-state.workspace = true
 aether-task-runtime.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
