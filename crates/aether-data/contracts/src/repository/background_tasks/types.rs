@@ -482,6 +482,19 @@ pub struct BackgroundTaskSummary {
     pub by_kind: BTreeMap<String, u64>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpdateBackgroundTaskRunProgress {
+    pub run_id: String,
+    pub status: BackgroundTaskStatus,
+    pub progress_percent: Option<u16>,
+    pub progress_message: Option<String>,
+    pub result_json: Option<serde_json::Value>,
+    pub error_message: Option<String>,
+    pub started_at_unix_secs: Option<u64>,
+    pub finished_at_unix_secs: Option<u64>,
+    pub updated_at_unix_secs: u64,
+}
+
 #[async_trait]
 pub trait BackgroundTaskReadRepository: Send + Sync {
     async fn find_run(
@@ -515,6 +528,16 @@ pub trait BackgroundTaskWriteRepository: Send + Sync {
         &self,
         run_id: &str,
         updated_at_unix_secs: u64,
+    ) -> Result<bool, crate::DataLayerError>;
+
+    /// Updates the worker-owned columns of a run.
+    ///
+    /// Deliberately narrow: a whole-row upsert from a worker that read its
+    /// snapshot earlier would overwrite `cancel_requested` (set by an admin in
+    /// the meantime) and could move a terminal run back to `running`.
+    async fn update_run_progress(
+        &self,
+        update: UpdateBackgroundTaskRunProgress,
     ) -> Result<bool, crate::DataLayerError>;
 
     async fn upsert_event(

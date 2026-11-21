@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use aether_data_contracts::repository::background_tasks::{
     BackgroundTaskListQuery, BackgroundTaskReadRepository, BackgroundTaskStatus,
     BackgroundTaskSummary, BackgroundTaskWriteRepository, StoredBackgroundTaskEvent,
-    StoredBackgroundTaskRun, StoredBackgroundTaskRunPage, UpsertBackgroundTaskEvent,
-    UpsertBackgroundTaskRun,
+    StoredBackgroundTaskRun, StoredBackgroundTaskRunPage, UpdateBackgroundTaskRunProgress,
+    UpsertBackgroundTaskEvent, UpsertBackgroundTaskRun,
 };
 use aether_data_contracts::DataLayerError;
 
@@ -176,6 +176,46 @@ impl BackgroundTaskWriteRepository for InMemoryBackgroundTaskRepository {
             .runs
             .insert(stored.id.clone(), stored.clone());
         Ok(stored)
+    }
+
+    async fn update_run_progress(
+        &self,
+        update: UpdateBackgroundTaskRunProgress,
+    ) -> Result<bool, DataLayerError> {
+        let mut guard = self.index.write().expect("background task repository lock");
+        let Some(run) = guard.runs.get_mut(&update.run_id) else {
+            return Ok(false);
+        };
+        if matches!(
+            run.status,
+            BackgroundTaskStatus::Succeeded
+                | BackgroundTaskStatus::Failed
+                | BackgroundTaskStatus::Cancelled
+                | BackgroundTaskStatus::Skipped
+        ) {
+            return Ok(false);
+        }
+        run.status = update.status;
+        if let Some(value) = update.progress_percent {
+            run.progress_percent = value;
+        }
+        if let Some(value) = update.progress_message {
+            run.progress_message = Some(value);
+        }
+        if let Some(value) = update.result_json {
+            run.result_json = Some(value);
+        }
+        if let Some(value) = update.error_message {
+            run.error_message = Some(value);
+        }
+        if let Some(value) = update.started_at_unix_secs {
+            run.started_at_unix_secs = Some(value);
+        }
+        if let Some(value) = update.finished_at_unix_secs {
+            run.finished_at_unix_secs = Some(value);
+        }
+        run.updated_at_unix_secs = update.updated_at_unix_secs;
+        Ok(true)
     }
 
     async fn request_cancel(

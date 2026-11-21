@@ -39,6 +39,7 @@ use super::{
     UserDailyQuotaAvailabilityRecord, UserPlanEntitlementRecord, WalletDailyUsageAggregationInput,
     WalletDailyUsageAggregationResult, WalletLookupKey, WalletMutationOutcome,
 };
+use aether_data_contracts::repository::background_tasks::UpdateBackgroundTaskRunProgress;
 use aether_data_contracts::repository::billing::{
     ProviderExpenseInput, ProviderExpensePage, ProviderExpenseQuery, ProviderExpenseRecord,
 };
@@ -2559,6 +2560,16 @@ impl GatewayDataState {
         match &self.background_task_writer {
             Some(repository) => repository.upsert_run(run).await.map(Some),
             None => Ok(None),
+        }
+    }
+
+    pub(crate) async fn update_background_task_run_progress(
+        &self,
+        update: UpdateBackgroundTaskRunProgress,
+    ) -> Result<bool, DataLayerError> {
+        match &self.background_task_writer {
+            Some(repository) => repository.update_run_progress(update).await,
+            None => Ok(false),
         }
     }
 

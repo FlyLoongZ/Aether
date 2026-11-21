@@ -2,8 +2,8 @@ use std::future::Future;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aether_data_contracts::repository::background_tasks::{
-    BackgroundTaskKind, BackgroundTaskStatus, StoredBackgroundTaskRun, UpsertBackgroundTaskEvent,
-    UpsertBackgroundTaskRun,
+    BackgroundTaskKind, BackgroundTaskStatus, StoredBackgroundTaskRun,
+    UpdateBackgroundTaskRunProgress, UpsertBackgroundTaskEvent, UpsertBackgroundTaskRun,
 };
 use aether_runtime::task::spawn_named;
 use aether_task_runtime::{RetryPolicy, TaskDefinition, TaskKind};
@@ -429,30 +429,6 @@ where
     spawn_named(task_name, future)
 }
 
-fn stored_run_to_upsert(run: StoredBackgroundTaskRun) -> UpsertBackgroundTaskRun {
-    UpsertBackgroundTaskRun {
-        id: run.id,
-        task_key: run.task_key,
-        kind: run.kind,
-        trigger: run.trigger,
-        status: run.status,
-        attempt: run.attempt,
-        max_attempts: run.max_attempts,
-        owner_instance: run.owner_instance,
-        progress_percent: run.progress_percent,
-        progress_message: run.progress_message,
-        payload_json: run.payload_json,
-        result_json: run.result_json,
-        error_message: run.error_message,
-        cancel_requested: run.cancel_requested,
-        created_by: run.created_by,
-        created_at_unix_secs: run.created_at_unix_secs,
-        started_at_unix_secs: run.started_at_unix_secs,
-        finished_at_unix_secs: run.finished_at_unix_secs,
-        updated_at_unix_secs: run.updated_at_unix_secs,
-    }
-}
-
 pub(crate) async fn upsert_run_with_logging(
     app: &AppState,
     run: UpsertBackgroundTaskRun,
@@ -480,28 +456,39 @@ pub(crate) async fn update_run_status(
     started_at_unix_secs: Option<u64>,
     finished_at_unix_secs: Option<u64>,
 ) -> Option<StoredBackgroundTaskRun> {
-    let mut existing = app.find_background_task_run(run_id).await.ok().flatten()?;
-    existing.status = status;
-    if let Some(progress_percent) = progress_percent {
-        existing.progress_percent = progress_percent.min(100);
+    // Update only the columns this worker owns. Writing the whole row back from a
+    // snapshot read earlier would restore `cancel_requested = false` after an
+    // admin cancelled the run, and could move a terminal run back to `running`.
+    let update = UpdateBackgroundTaskRunProgress {
+        run_id: run_id.to_string(),
+        status,
+        progress_percent: progress_percent.map(|value| value.min(100)),
+        progress_message,
+        result_json,
+        error_message,
+        started_at_unix_secs,
+        finished_at_unix_secs,
+        updated_at_unix_secs: now_unix_secs(),
+    };
+    match app.update_background_task_run_progress(update).await {
+        Ok(true) => {}
+        Ok(false) => {
+            // Either the run is gone or it is already terminal: re-reading is what
+            // tells the caller the authoritative state.
+            warn!(
+                run_id,
+                "background task run status update did not apply (missing or terminal)"
+            );
+        }
+        Err(_) => {
+            warn!(
+                error_category = "task_run_persistence_failed",
+                "failed to update background task run"
+            );
+            return None;
+        }
     }
-    if let Some(progress_message) = progress_message {
-        existing.progress_message = Some(progress_message);
-    }
-    if result_json.is_some() {
-        existing.result_json = result_json;
-    }
-    if error_message.is_some() {
-        existing.error_message = error_message;
-    }
-    if started_at_unix_secs.is_some() {
-        existing.started_at_unix_secs = started_at_unix_secs;
-    }
-    if finished_at_unix_secs.is_some() {
-        existing.finished_at_unix_secs = finished_at_unix_secs;
-    }
-    existing.updated_at_unix_secs = now_unix_secs();
-    upsert_run_with_logging(app, stored_run_to_upsert(existing)).await
+    app.find_background_task_run(run_id).await.ok().flatten()
 }
 
 pub(crate) async fn append_event_with_logging(

@@ -1,8 +1,8 @@
 use crate::{AppState, GatewayError};
 use aether_data_contracts::repository::background_tasks::{
     BackgroundTaskListQuery, BackgroundTaskSummary, StoredBackgroundTaskEvent,
-    StoredBackgroundTaskRun, StoredBackgroundTaskRunPage, UpsertBackgroundTaskEvent,
-    UpsertBackgroundTaskRun,
+    StoredBackgroundTaskRun, StoredBackgroundTaskRunPage, UpdateBackgroundTaskRunProgress,
+    UpsertBackgroundTaskEvent, UpsertBackgroundTaskRun,
 };
 
 impl AppState {
@@ -53,6 +53,16 @@ impl AppState {
     ) -> Result<Option<StoredBackgroundTaskRun>, GatewayError> {
         self.data
             .upsert_background_task_run(run)
+            .await
+            .map_err(|err| GatewayError::Internal(err.to_string()))
+    }
+
+    pub(crate) async fn update_background_task_run_progress(
+        &self,
+        update: UpdateBackgroundTaskRunProgress,
+    ) -> Result<bool, GatewayError> {
+        self.data
+            .update_background_task_run_progress(update)
             .await
             .map_err(|err| GatewayError::Internal(err.to_string()))
     }

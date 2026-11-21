@@ -309,10 +309,60 @@ ON CONFLICT(id) DO UPDATE SET
         updated_at_unix_secs: u64,
     ) -> Result<bool, DataLayerError> {
         let affected = sqlx::query(
-            "UPDATE background_task_runs SET cancel_requested = TRUE, updated_at_unix_secs = $2 WHERE id = $1",
+            "UPDATE background_task_runs SET cancel_requested = TRUE, updated_at_unix_secs = $2 \
+             WHERE id = $1 AND cancel_requested = FALSE \
+               AND status IN ('queued', 'running', 'retrying')",
         )
         .bind(run_id)
         .bind(u64_to_i64(updated_at_unix_secs, "updated_at_unix_secs")?)
+        .execute(&self.pool)
+        .await
+        .map_postgres_err()?
+        .rows_affected();
+        Ok(affected > 0)
+    }
+
+    async fn update_run_progress(
+        &self,
+        update: UpdateBackgroundTaskRunProgress,
+    ) -> Result<bool, DataLayerError> {
+        let affected = sqlx::query(
+            r#"
+UPDATE background_task_runs SET
+  status = $2,
+  progress_percent = COALESCE($3, progress_percent),
+  progress_message = COALESCE($4, progress_message),
+  result_json = COALESCE($5, result_json),
+  error_message = COALESCE($6, error_message),
+  started_at_unix_secs = COALESCE($7, started_at_unix_secs),
+  finished_at_unix_secs = COALESCE($8, finished_at_unix_secs),
+  updated_at_unix_secs = $9
+WHERE id = $1
+  AND status NOT IN ('succeeded', 'failed', 'cancelled', 'skipped')
+"#,
+        )
+        .bind(&update.run_id)
+        .bind(update.status.as_database())
+        .bind(update.progress_percent.map(i64::from))
+        .bind(update.progress_message)
+        .bind(update.result_json)
+        .bind(update.error_message)
+        .bind(
+            update
+                .started_at_unix_secs
+                .map(|value| u64_to_i64(value, "started_at_unix_secs"))
+                .transpose()?,
+        )
+        .bind(
+            update
+                .finished_at_unix_secs
+                .map(|value| u64_to_i64(value, "finished_at_unix_secs"))
+                .transpose()?,
+        )
+        .bind(u64_to_i64(
+            update.updated_at_unix_secs,
+            "updated_at_unix_secs",
+        )?)
         .execute(&self.pool)
         .await
         .map_postgres_err()?
