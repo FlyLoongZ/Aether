@@ -197,6 +197,10 @@ a default.
   wallet to unlimited: the fields are ignored and an
   `admin_wallet_field_ignored` warning is logged. The request itself still
   succeeds, and local (JWT) admin sessions are unaffected.
+- `POST /api/admin/api-keys` (standalone keys) requires an explicit wallet mode:
+  `initial_balance_usd` or `unlimited_balance`. Omitting both used to create an
+  unlimited key and now fails with `400`. A key created with only
+  `initial_balance_usd` is finite.
 - `POST /api/admin/payments/redeem-codes/batches` now requires
   `admin:payments:admin` instead of `admin:payments:write`. A redeem-code batch
   credits `amount_usd * count` to wallets as codes are redeemed, so it is

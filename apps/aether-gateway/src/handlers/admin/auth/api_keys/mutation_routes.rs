@@ -52,17 +52,23 @@ fn normalize_standalone_initial_balance(
     initial_balance_usd: Option<f64>,
     unlimited_balance: Option<bool>,
 ) -> Result<(f64, bool), String> {
-    let unlimited = unlimited_balance.unwrap_or(initial_balance_usd.is_none());
-    if unlimited {
-        return Ok((0.0, true));
+    // Both fields missing used to mean "unlimited". A typo in the field name, an
+    // older front-end or a script that forgot the field then silently produced a
+    // key that spends without limit, which is the opposite of the safe default.
+    match (initial_balance_usd, unlimited_balance) {
+        (None, None) => Err(
+            "必须显式指定 initial_balance_usd（有限额度）或 unlimited_balance（无限额度）"
+                .to_string(),
+        ),
+        (_, Some(true)) => Ok((0.0, true)),
+        (Some(initial_balance_usd), _) => {
+            if !initial_balance_usd.is_finite() || initial_balance_usd <= 0.0 {
+                return Err("initial_balance_usd 必须大于 0".to_string());
+            }
+            Ok((initial_balance_usd, false))
+        }
+        (None, Some(false)) => Err("initial_balance_usd 必须大于 0".to_string()),
     }
-    let Some(initial_balance_usd) = initial_balance_usd else {
-        return Err("initial_balance_usd 必须大于 0".to_string());
-    };
-    if !initial_balance_usd.is_finite() || initial_balance_usd <= 0.0 {
-        return Err("initial_balance_usd 必须大于 0".to_string());
-    }
-    Ok((initial_balance_usd, false))
 }
 
 /// Compensate the rows created by a standalone API-key request when wallet
@@ -719,6 +725,28 @@ mod tests {
             1,
         )
         .expect("wallet should build")
+    }
+
+    #[test]
+    fn standalone_key_creation_requires_an_explicit_wallet_mode() {
+        use super::normalize_standalone_initial_balance;
+
+        // The regression: both fields absent used to mean "unlimited", so a typo
+        // or an old client silently created a key without spending limits.
+        assert!(normalize_standalone_initial_balance(None, None).is_err());
+
+        assert_eq!(
+            normalize_standalone_initial_balance(Some(12.5), None).expect("funded key"),
+            (12.5, false)
+        );
+        assert_eq!(
+            normalize_standalone_initial_balance(None, Some(true)).expect("unlimited key"),
+            (0.0, true)
+        );
+        // Asking for a finite wallet without saying how much is still nonsense.
+        assert!(normalize_standalone_initial_balance(None, Some(false)).is_err());
+        assert!(normalize_standalone_initial_balance(Some(0.0), None).is_err());
+        assert!(normalize_standalone_initial_balance(Some(f64::INFINITY), None).is_err());
     }
 
     #[tokio::test]
