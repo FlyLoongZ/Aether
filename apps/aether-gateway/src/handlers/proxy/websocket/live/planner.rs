@@ -268,6 +268,11 @@ async fn plan_live_candidate_inner(
         .await;
         return Ok(None);
     }
+    // Single source of truth for the upstream credential mode: the planner writes
+    // `upstream_credential_mode` into the report context from the resolved transport
+    // key, and every consumer (this one included) reads it back. The decision struct
+    // used to carry a second copy that nothing consumed, which invited the two to
+    // drift.
     let Some(effective_auth_type) = execution
         .report_context
         .as_ref()
