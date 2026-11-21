@@ -22,10 +22,16 @@ impl PostgresSessionTimeouts {
     }
 
     fn apply(self, options: PgConnectOptions) -> PgConnectOptions {
-        options.options([
-            ("statement_timeout", self.statement_ms),
-            ("lock_timeout", self.lock_ms),
-        ])
+        // Pin the session zone: every aggregate bucket, expression index and
+        // `AT TIME ZONE`-less `date_trunc` in this crate assumes UTC. Without this
+        // the same query produces different buckets depending on which host ran
+        // it (`docker-compose.yml` sets `TZ: Asia/Shanghai`).
+        options
+            .options([
+                ("statement_timeout", self.statement_ms),
+                ("lock_timeout", self.lock_ms),
+            ])
+            .options([("TimeZone", "UTC")])
     }
 }
 
@@ -163,7 +169,11 @@ mod tests {
         .apply(sqlx::postgres::PgConnectOptions::new().options([("search_path", "audit")]));
         assert_eq!(
             options.get_options(),
-            Some("-c search_path=audit -c statement_timeout=30000 -c lock_timeout=3000")
+            // The session zone is pinned as well: every aggregate bucket in this crate
+            // assumes UTC, so it is applied to every session that gets deadlines.
+            Some(
+                "-c search_path=audit -c statement_timeout=30000 -c lock_timeout=3000 -c TimeZone=UTC"
+            )
         );
     }
 

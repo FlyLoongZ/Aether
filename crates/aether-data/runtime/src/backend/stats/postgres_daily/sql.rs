@@ -2213,7 +2213,7 @@ FROM stats_daily
 WHERE is_complete IS TRUE
 "#;
 pub(super) const SELECT_NEXT_STATS_DAILY_BUCKET_SQL: &str = r#"
-SELECT date_trunc('day', MIN(created_at)) AS next_bucket
+SELECT date_trunc('day', MIN(created_at), 'UTC') AS next_bucket
 FROM usage_billing_facts AS usage
 WHERE created_at >= $1
   AND created_at < $2
