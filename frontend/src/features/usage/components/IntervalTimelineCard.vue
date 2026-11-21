@@ -37,7 +37,7 @@
       class="h-[160px] flex items-center justify-center"
     >
       <div class="text-sm text-muted-foreground">
-        Loading...
+        {{ t('common.loading') }}
       </div>
     </div>
     <div
@@ -137,7 +137,10 @@ const truncatedHint = computed(() => {
   if (!data?.points?.length) return ''
   const total = data.total_points || data.points.length
   if (total <= data.points.length) return ''
-  return `窗口内共 ${total.toLocaleString()} 个间隔点，已均匀抽样展示 ${data.points.length.toLocaleString()} 个`
+  return t('ui.intervalTimelineSampled', {
+    total: total.toLocaleString(),
+    shown: data.points.length.toLocaleString()
+  })
 })
 
 // 判断是否有多个分组（管理员按用户分组，普通用户按模型分组）
@@ -303,7 +306,7 @@ const chartOptions = computed<ChartOptions<'scatter'>>(() => ({
           if (hasMultipleGroups.value) {
             return t('ui.valueValueMin', { value: datasetLabel, value2: realY.toFixed(1) })
           }
-          return `间隔: ${realY.toFixed(1)} 分钟`
+          return t('ui.intervalTimelineInterval', { minutes: realY.toFixed(1) })
         }
       }
     }

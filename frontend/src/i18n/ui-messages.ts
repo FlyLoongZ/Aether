@@ -4188,6 +4188,8 @@ export const uiMessages = {
     "ui.valueTierValueOutputPriceUsd1mTokens": "{value} 阶梯 {value2} 输出价格（美元/百万 Token）",
     "ui.valueTierValueSwitchCachePricingInputMode": "{value} 阶梯 {value2} 切换缓存价格输入方式",
     "ui.valueValueImageOutputPrice": "{value} {value2} 图像输出价格",
+    "ui.intervalTimelineSampled": "窗口内共 {total} 个间隔点，已均匀抽样展示 {shown} 个",
+    "ui.intervalTimelineInterval": "间隔: {minutes} 分钟",
     "ui.valueValueMin": "{value}: {value2} 分钟",
     "ui.valueValueRegex": "{value} {value2} 正则",
     "ui.valueValueSuffix": "{value} {value2} 后缀",

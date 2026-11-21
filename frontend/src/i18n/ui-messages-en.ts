@@ -4187,6 +4187,8 @@ export const uiMessagesEn = {
     "ui.valueTierValueOutputPriceUsd1mTokens": "{value} tier {value2} output price (USD / 1M tokens)",
     "ui.valueTierValueSwitchCachePricingInputMode": "{value} tier {value2}: switch cache pricing input mode",
     "ui.valueValueImageOutputPrice": "{value} {value2} image output price",
+    "ui.intervalTimelineSampled": "{total} interval points in this window; showing a uniform sample of {shown}",
+    "ui.intervalTimelineInterval": "Interval: {minutes} min",
     "ui.valueValueMin": "{value}: {value2} min",
     "ui.valueValueRegex": "{value} {value2} regex",
     "ui.valueValueSuffix": "{value} {value2} suffix",
