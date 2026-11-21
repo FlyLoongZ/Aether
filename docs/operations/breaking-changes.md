@@ -27,8 +27,17 @@ a default.
   context. `AETHER_SECRET`-style business prefixes are no longer added to new
   writes.
 - Existing `aether-*-v2/v3/v4` prefixes and legacy Python-Fernet ciphertexts
-  remain readable. They are lazy-migrated only on the existing read paths that
-  already rewrite a record; there is no destructive bulk rewrite.
+  remain readable **in this release only**. Every read of a prefixed record now
+  re-seals it as a bare `aether-secret:v1` envelope and reports the record as
+  migrated, so the prefix drains on first touch instead of surviving until the
+  compatibility layer is dropped. Run `aether-gateway secrets verify` before
+  upgrading past this release: it reports any record still carrying a prefix
+  (`legacy-format`) and exits non-zero while such records exist, and
+  `aether-gateway secrets rotate` rewrites them without waiting for traffic.
+  The next release removes the prefix readers entirely; a deployment that
+  upgrades with `legacy-format` residue left will fail to read those provider
+  credentials, payment gateway keys, OAuth client secrets and proxy node
+  passwords.
 - System configuration secrets (`system_config`, SMTP, LDAP bind, Bark device
   key) are now written as `aether-secret:v1`; plaintext legacy values continue
   to migrate on read.

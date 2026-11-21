@@ -86,12 +86,13 @@ pub(crate) fn open_auth_api_key_secret(
     let (plaintext, protected, migration_required) = if SecretKey::matches_envelope(stored)
         || stored.starts_with(AUTH_API_KEY_SECRET_ENVELOPE_V2)
     {
-        let sealed = if SecretKey::matches_envelope(stored) {
-            stored
-        } else {
+        let wrapped = !SecretKey::matches_envelope(stored);
+        let sealed = if wrapped {
             stored
                 .strip_prefix(AUTH_API_KEY_SECRET_ENVELOPE_V2)
                 .expect("checked API-key envelope prefix")
+        } else {
+            stored
         };
         let opened = open_runtime_secret_payload_with_key_state(
             state.encryption_key(),
@@ -100,7 +101,7 @@ pub(crate) fn open_auth_api_key_secret(
             sealed,
         )
         .ok_or("API-key secret authentication failed")?;
-        if opened.sealed_with_current_key {
+        if opened.sealed_with_current_key && !wrapped {
             (
                 opened.plaintext,
                 stored.to_string(),

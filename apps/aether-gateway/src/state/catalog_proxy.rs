@@ -545,26 +545,47 @@ impl AppState {
             }));
         }
 
-        if source == CatalogProxySource::Stored && catalog_proxy_secret_is_v2(value) {
+        if source == CatalogProxySource::Stored && value.starts_with(CATALOG_PROXY_SECRET_V2_PREFIX)
+        {
             let plaintext = open_catalog_proxy_secret_v2(self, scope, record_id, field, value)
                 .ok_or_else(|| catalog_proxy_storage_error(scope))?;
-            let sealed = value
-                .strip_prefix(CATALOG_PROXY_SECRET_V2_PREFIX)
-                .unwrap_or(value);
-            if !runtime_secret_uses_previous_key(self.encryption_key(), sealed) {
-                return Ok(Some(CatalogProxyCredential {
-                    plaintext,
-                    protected: value.to_string(),
-                    migration_required: false,
-                }));
-            }
-            // Sealed by the previous root key: re-seal under the current one.
+            // A v2 wrapper carries no cryptographic meaning — the record type is
+            // already bound by the purpose — so it always drains on first read,
+            // not only when the previous root key sealed it.
             let protected = seal_catalog_proxy_secret_v2(self, scope, record_id, field, &plaintext)
                 .ok_or_else(|| catalog_proxy_encryption_error(scope))?;
             return Ok(Some(CatalogProxyCredential {
                 plaintext,
                 protected,
                 migration_required: true,
+            }));
+        }
+        if source == CatalogProxySource::Stored && catalog_proxy_secret_is_v2(value) {
+            let plaintext = open_catalog_proxy_secret_v2(self, scope, record_id, field, value)
+                .ok_or_else(|| catalog_proxy_storage_error(scope))?;
+            // Bound purpose, current format: nothing to rewrite unless the
+            // previous root key sealed it.
+            let sealed = if SecretKey::matches_envelope(value) {
+                value
+            } else {
+                value
+                    .strip_prefix(CATALOG_PROXY_SECRET_V2_PREFIX)
+                    .unwrap_or(value)
+            };
+            if runtime_secret_uses_previous_key(self.encryption_key(), sealed) {
+                let protected =
+                    seal_catalog_proxy_secret_v2(self, scope, record_id, field, &plaintext)
+                        .ok_or_else(|| catalog_proxy_encryption_error(scope))?;
+                return Ok(Some(CatalogProxyCredential {
+                    plaintext,
+                    protected,
+                    migration_required: true,
+                }));
+            }
+            return Ok(Some(CatalogProxyCredential {
+                plaintext,
+                protected: value.to_string(),
+                migration_required: false,
             }));
         }
         if source == CatalogProxySource::Stored && runtime_secret_payload_is_sealed(value) {

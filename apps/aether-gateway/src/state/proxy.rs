@@ -158,10 +158,15 @@ impl AppState {
                     &observed,
                 )
                 .ok_or_else(proxy_node_password_error)?;
-                if !runtime_secret_uses_previous_key(self.encryption_key(), sealed) {
+                // Re-seal below unless this is already the bare envelope sealed
+                // by the current key: a v2 wrapper must drain on first read even
+                // when the key is current, because a later release stops reading
+                // the wrapper entirely.
+                if SecretKey::matches_envelope(&observed)
+                    && !runtime_secret_uses_previous_key(self.encryption_key(), sealed)
+                {
                     return Ok(Some(plaintext));
                 }
-                // Sealed by the previous root key: re-seal below.
                 plaintext
             } else {
                 if observed_shape.starts_with(PROXY_NODE_SECRET_ENVELOPE_FAMILY_PREFIX)

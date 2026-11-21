@@ -113,10 +113,16 @@ pub(crate) fn open_provider_catalog_credential(
         if plaintext.contains('\0') {
             return Err("provider catalog credential contains reserved framing");
         }
+        // The outer wrapper only distinguishes record types, and the record type
+        // is already expressed by the purpose binding. Re-seal under the current
+        // format so the wrapper drains on first read instead of surviving until
+        // a later release stops reading it.
+        let protected =
+            seal_provider_catalog_credential(state, provider_id, key_id, field, &plaintext)?;
         return Ok(ProviderCatalogCredentialProjection {
             plaintext,
-            protected: stored.to_string(),
-            migration_required: false,
+            protected,
+            migration_required: true,
         });
     }
     if stored.starts_with(PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_FAMILY) {
@@ -149,7 +155,7 @@ pub(crate) fn open_provider_catalog_credential(
 mod tests {
     use super::{
         open_provider_catalog_credential, seal_provider_catalog_credential,
-        ProviderCatalogCredentialField,
+        ProviderCatalogCredentialField, PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2,
     };
     use crate::handlers::shared::{
         encrypt_catalog_secret_with_fallbacks, seal_runtime_secret_payload,
@@ -158,6 +164,44 @@ mod tests {
 
     fn state_with_encryption_key() -> AppState {
         crate::tests::support::credential_fixture_state()
+    }
+
+    #[test]
+    fn wrapped_v2_shell_drains_on_first_read() {
+        let state = state_with_encryption_key();
+        let sealed = seal_provider_catalog_credential(
+            &state,
+            "provider-1",
+            "key-1",
+            ProviderCatalogCredentialField::ApiKey,
+            "secret-value",
+        )
+        .expect("credential should seal");
+        // The wrapper was written by 2026-09 builds and is still in deployed
+        // databases. A later release stops reading it, so a read must rewrite
+        // the record even when the current key already sealed it.
+        let wrapped = format!("{PROVIDER_CATALOG_CREDENTIAL_ENVELOPE_V2}{sealed}");
+        let opened = open_provider_catalog_credential(
+            &state,
+            "provider-1",
+            "key-1",
+            ProviderCatalogCredentialField::ApiKey,
+            &wrapped,
+        )
+        .expect("wrapped credential should open");
+        assert_eq!(opened.plaintext, "secret-value");
+        assert!(opened.migration_required, "the wrapper must drain on read");
+        assert!(opened.protected.starts_with("aether-secret:v1:"));
+
+        let reopened = open_provider_catalog_credential(
+            &state,
+            "provider-1",
+            "key-1",
+            ProviderCatalogCredentialField::ApiKey,
+            &opened.protected,
+        )
+        .expect("rewritten credential should open");
+        assert!(!reopened.migration_required);
     }
 
     #[test]

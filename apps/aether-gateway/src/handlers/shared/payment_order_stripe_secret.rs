@@ -170,11 +170,10 @@ pub(crate) fn open_payment_order_stripe_client_secret(
     } else if let Some(sealed) = stored.strip_prefix(PAYMENT_ORDER_STRIPE_SECRET_ENVELOPE_V2) {
         let plaintext = open_runtime_secret_payload(state, &purpose, sealed)
             .ok_or("payment order Stripe client secret authentication failed")?;
-        (
-            plaintext,
-            stored.to_string(),
-            observed.as_bytes() != stored.as_bytes(),
-        )
+        // The wrapper only distinguished record types; the binding is already
+        // carried by the purpose. Re-seal so the wrapper drains on first read.
+        let protected = seal_payment_order_stripe_client_secret(state, binding, &plaintext)?;
+        (plaintext, protected, true)
     } else {
         if stored.starts_with(PAYMENT_ORDER_STRIPE_SECRET_ENVELOPE_FAMILY) {
             return Err("unsupported payment order Stripe client secret envelope");

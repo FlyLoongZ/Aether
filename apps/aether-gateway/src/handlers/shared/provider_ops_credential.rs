@@ -255,10 +255,13 @@ pub(crate) fn open_provider_ops_credential(
         if plaintext.contains('\0') {
             return Err("Provider Ops credential 包含保留分隔符");
         }
+        // The wrapper carries no cryptographic meaning: the record type is
+        // already bound by the purpose. Re-seal so it drains on first read.
+        let protected = seal_provider_ops_credential(state, binding, field, &plaintext)?;
         return Ok(ProviderOpsCredentialProjection {
             plaintext,
-            protected: stored.to_string(),
-            migration_required: false,
+            protected,
+            migration_required: true,
         });
     }
     if stored.starts_with(PROVIDER_OPS_CREDENTIAL_ENVELOPE_FAMILY) {
