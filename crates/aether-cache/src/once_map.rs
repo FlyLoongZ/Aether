@@ -535,6 +535,33 @@ struct Stats {
     follower_waits: std::sync::atomic::AtomicU64,
 }
 
+/// Reads the store even when a writer panicked while holding it.
+///
+/// The write path already recovers from poisoning (`unwrap_or_else(into_inner)`);
+/// a read that instead gives up turns one panic into a permanently silent miss
+/// loop — every lookup goes to the database while writes keep succeeding.
+fn read_store<K, V, E>(inner: &Inner<K, V, E>) -> std::sync::RwLockReadGuard<'_, Store<K, V>>
+where
+    K: Clone + Eq + std::hash::Hash,
+    V: CacheWeight,
+{
+    match inner.store.read() {
+        Ok(store) => store,
+        Err(poisoned) => {
+            warn_once_poisoned();
+            poisoned.into_inner()
+        }
+    }
+}
+
+fn warn_once_poisoned() {
+    use std::sync::Once;
+    static WARNED: Once = Once::new();
+    WARNED.call_once(|| {
+        tracing::warn!("cache store lock was poisoned; reads continue on recovered state");
+    });
+}
+
 impl<K, V, E> OnceMap<K, V, E>
 where
     K: Clone + Eq + Hash + CacheWeight,
@@ -696,11 +723,7 @@ where
     /// on write, so a read can still see a key whose window has passed. Use
     /// [`OnceMap::for_each_fresh`] to count what is still readable.
     pub fn len(&self) -> usize {
-        self.inner
-            .store
-            .read()
-            .map(|store| store.entries.len())
-            .unwrap_or(0)
+        read_store(&self.inner).entries.len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -709,20 +732,12 @@ where
 
     /// Retained tombstones. Bounded by `tombstone_ttl` and by in-flight loads.
     pub fn tombstones(&self) -> usize {
-        self.inner
-            .store
-            .read()
-            .map(|store| store.tombstones.len())
-            .unwrap_or(0)
+        read_store(&self.inner).tombstones.len()
     }
 
     /// Accounted bytes: keys, values and tombstones.
     pub fn weight(&self) -> usize {
-        self.inner
-            .store
-            .read()
-            .map(|store| store.weight)
-            .unwrap_or(0)
+        read_store(&self.inner).weight
     }
 
     /// Visits the entries still inside their own window.
@@ -736,9 +751,7 @@ where
         F: FnMut(&K, &Arc<V>, Duration),
     {
         let now = Instant::now();
-        let Ok(store) = self.inner.store.read() else {
-            return;
-        };
+        let store = read_store(&self.inner);
         for (key, entry) in &store.entries {
             let age = now.saturating_duration_since(entry.inserted_at);
             if age <= entry.ttl {
@@ -772,7 +785,7 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        let store = self.inner.store.read().ok()?;
+        let store = read_store(&self.inner);
         let entry = store.entries.get(key)?;
         let age = Instant::now().saturating_duration_since(entry.inserted_at);
         // The narrower of the reader's window and the writer's window wins.
@@ -817,9 +830,7 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        let Ok(store) = self.inner.store.read() else {
-            return false;
-        };
+        let store = read_store(&self.inner);
         store
             .entries
             .get(key)
@@ -1112,10 +1123,7 @@ where
     }
 
     fn register(&self, key: &K, kind: LoadKind) -> Registration<K, V, E> {
-        let stamp = match self.inner.store.read() {
-            Ok(store) => store.stamp(key),
-            Err(poisoned) => poisoned.into_inner().stamp(key),
-        };
+        let stamp = read_store(&self.inner).stamp(key);
 
         let mut inflight = match self.inner.inflight.lock() {
             Ok(inflight) => inflight,
