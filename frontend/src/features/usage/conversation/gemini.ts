@@ -32,7 +32,7 @@ import {
   createEmptyRenderResult,
 } from './render'
 
-import { conversationLabels } from './labels'
+import { conversationLabels, formatLabel } from './labels'
 
 /** Raw JSON object from API (loosely typed) */
 type RawObject = Record<string, unknown>
@@ -116,7 +116,7 @@ export class GeminiParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('gemini', `解析失败: ${e}`)
+      return createEmptyConversation('gemini', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -154,7 +154,7 @@ export class GeminiParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('gemini', `解析失败: ${e}`)
+      return createEmptyConversation('gemini', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -227,7 +227,7 @@ export class GeminiParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('gemini', `解析失败: ${e}`)
+      return createEmptyConversation('gemini', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -365,7 +365,7 @@ export class GeminiParser implements ApiFormatParser {
 
       return { blocks, isStream: false }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -406,7 +406,7 @@ export class GeminiParser implements ApiFormatParser {
 
       return { blocks, isStream: false }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -441,7 +441,7 @@ export class GeminiParser implements ApiFormatParser {
 
       return { blocks, isStream: true }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -490,7 +490,7 @@ export class GeminiParser implements ApiFormatParser {
     // 思考过程 (Gemini thinking / thought)
     if (part.thought === true && typeof part.text === 'string') {
       return createCollapsibleBlock(
-        `思考过程 (${part.text.length} 字符)`,
+        formatLabel(conversationLabels().thinkingSummary, { count: part.text.length }),
         [createCodeBlock(part.text)],
         { defaultOpen: false, className: 'thinking-block' }
       )
@@ -556,14 +556,14 @@ export class GeminiParser implements ApiFormatParser {
 
       case 'thinking':
         return createCollapsibleBlock(
-          `思考过程 (${block.thinking.length} 字符)`,
+          formatLabel(conversationLabels().thinkingSummary, { count: block.thinking.length }),
           [createCodeBlock(block.thinking)],
           { defaultOpen: false, className: 'thinking-block' }
         )
 
       case 'tool_use':
         return createToolUseRenderBlock(
-          block.toolName || '函数调用',
+          block.toolName || conversationLabels().badgeFunctionCall,
           this.formatJson(block.input)
         )
 
@@ -784,7 +784,7 @@ export class GeminiParser implements ApiFormatParser {
       .map(block => {
         if (block.type === 'text') return block.text
         if (block.type === 'image') return conversationLabels().imageInline
-        if (block.type === 'error') return `[错误: ${block.message}]`
+        if (block.type === 'error') return formatLabel(conversationLabels().inlineError, { message: block.message })
         return ''
       })
       .filter(Boolean)

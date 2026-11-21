@@ -2,6 +2,7 @@
  * ContentBlock 到 RenderBlock 的转换器
  */
 
+import { conversationLabels, formatLabel } from './labels'
 import type { ContentBlock } from './types'
 import type { RenderBlock } from './render'
 import {
@@ -24,7 +25,7 @@ export function contentBlockToRenderBlock(block: ContentBlock): RenderBlock | nu
 
     case 'thinking':
       return createCollapsibleBlock(
-        `思考过程 (${block.thinking.length} 字符)`,
+        formatLabel(conversationLabels().thinkingSummary, { count: block.thinking.length }),
         [createCodeBlock(block.thinking)],
         { defaultOpen: false }
       )

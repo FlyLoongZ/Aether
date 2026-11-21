@@ -117,11 +117,11 @@ function generateMessageSummary(message: ParsedMessage | undefined): string | un
   const hasError = message.content.some(b => b.type === 'error')
 
   const parts: string[] = []
-  if (hasThinking) parts.push('思考过程')
+  if (hasThinking) parts.push(conversationLabels().badgeThinking)
   if (hasToolUse) parts.push(conversationLabels().badgeToolCall)
   if (hasToolResult) parts.push(conversationLabels().badgeToolResult)
   if (hasImage) parts.push(conversationLabels().badgeImage)
-  if (hasError) parts.push('错误')
+  if (hasError) parts.push(conversationLabels().badgeError)
 
   return parts.length > 0 ? `[${parts.join(', ')}]` : undefined
 }

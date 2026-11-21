@@ -30,7 +30,7 @@ describe('Claude thinking & redacted_thinking parsing', () => {
     const thinkingBlock = assistantMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()
     if (thinkingBlock && thinkingBlock.type === 'collapsible') {
-      expect(thinkingBlock.title).toContain('思考过程')
+      expect(thinkingBlock.title).toContain(DEFAULT_CONVERSATION_LABELS.badgeThinking)
       const firstCode = thinkingBlock.content[0]
       if (firstCode && firstCode.type === 'code') {
         expect(firstCode.code).toBe('Let me think through this step-by-step.')
@@ -67,7 +67,7 @@ describe('Claude thinking & redacted_thinking parsing', () => {
     const thinkingBlock = assistantMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()
     if (thinkingBlock && thinkingBlock.type === 'collapsible') {
-      expect(thinkingBlock.title).toContain('思考过程')
+      expect(thinkingBlock.title).toContain(DEFAULT_CONVERSATION_LABELS.badgeThinking)
     }
   })
 })

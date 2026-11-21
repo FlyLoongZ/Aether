@@ -33,5 +33,15 @@ export function useConversationLabels() {
     imageInline: t('ui.imagea71f445'),
     truncatedMarker: t('conversation.truncatedMarker'),
     largeImageAlt: t('conversation.largeImageAlt'),
+    thinkingSummary: t('conversation.thinking.summary'),
+    thinkingHidden: t('conversation.thinking.hidden'),
+    thinkingEncrypted: t('conversation.thinking.encrypted'),
+    thinkingEncryptedNote: t('conversation.thinking.encryptedNote'),
+    parseFailed: t('conversation.parseFailed'),
+    cliParseFailed: t('conversation.cliParseFailed'),
+    renderFailed: t('conversation.renderFailed'),
+    cliRenderFailed: t('conversation.cliRenderFailed'),
+    inlineError: t('conversation.inlineError'),
+    badgeError: t('conversation.badge.error'),
   }))
 }

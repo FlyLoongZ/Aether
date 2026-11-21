@@ -33,7 +33,7 @@ import {
   createEmptyRenderResult,
 } from './render'
 
-import { conversationLabels } from './labels'
+import { conversationLabels, formatLabel } from './labels'
 
 /** Raw JSON object from API (loosely typed) */
 type RawObject = Record<string, unknown>
@@ -132,7 +132,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('claude', `解析失败: ${e}`)
+      return createEmptyConversation('claude', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -163,7 +163,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('claude', `解析失败: ${e}`)
+      return createEmptyConversation('claude', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -211,7 +211,7 @@ export class ClaudeParser implements ApiFormatParser {
           } else if (block?.type === 'redacted_thinking') {
             blocks.set(index, {
               type: 'thinking',
-              parts: ['（思考内容已被 Anthropic 加密隐藏）'],
+              parts: [conversationLabels().thinkingEncrypted],
               metadata: { data: String(block.data || '') },
             })
           } else if (block?.type === 'tool_use') {
@@ -270,7 +270,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('claude', `解析失败: ${e}`)
+      return createEmptyConversation('claude', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -357,7 +357,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       case 'redacted_thinking':
         return createThinkingBlock(
-          '（思考内容已被 Anthropic 加密隐藏）',
+          conversationLabels().thinkingEncrypted,
           typeof block.data === 'string' ? block.data : undefined
         )
 
@@ -389,7 +389,7 @@ export class ClaudeParser implements ApiFormatParser {
   private parseImageBlock(block: RawObject): ContentBlock | null {
     const source = block.source as RawObject | undefined
     if (!source) {
-      return createImageBlock('base64', { alt: '[图片]' })
+      return createImageBlock('base64', { alt: conversationLabels().badgeImage })
     }
 
     if (source.type === 'base64') {
@@ -406,7 +406,7 @@ export class ClaudeParser implements ApiFormatParser {
       })
     }
 
-    return createImageBlock('base64', { alt: '[图片]' })
+    return createImageBlock('base64', { alt: conversationLabels().badgeImage })
   }
 
   /**
@@ -471,7 +471,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       return { blocks, isStream }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -507,7 +507,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       return { blocks, isStream: false }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -542,7 +542,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       return { blocks, isStream: true }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -608,15 +608,15 @@ export class ClaudeParser implements ApiFormatParser {
 
       case 'thinking':
         return createCollapsibleBlock(
-          `思考过程 (${String(block.thinking || '').length} 字符)`,
+          formatLabel(conversationLabels().thinkingSummary, { count: String(block.thinking || '').length }),
           [createCodeBlock(String(block.thinking || ''))],
           { defaultOpen: false, className: 'thinking-block' }
         )
 
       case 'redacted_thinking':
         return createCollapsibleBlock(
-          '思考过程 (已加密隐藏)',
-          [createCodeBlock('思考内容因安全策略已被 Anthropic 加密脱敏，但上下文转发时必须原样携带以保证数字签名校验有效。')],
+          conversationLabels().thinkingHidden,
+          [createCodeBlock(conversationLabels().thinkingEncryptedNote)],
           { defaultOpen: false, className: 'thinking-block' }
         )
 
@@ -666,7 +666,7 @@ export class ClaudeParser implements ApiFormatParser {
 
       case 'thinking':
         return createCollapsibleBlock(
-          `思考过程 (${block.thinking.length} 字符)`,
+          formatLabel(conversationLabels().thinkingSummary, { count: block.thinking.length }),
           [createCodeBlock(block.thinking)],
           { defaultOpen: false, className: 'thinking-block' }
         )
@@ -708,7 +708,7 @@ export class ClaudeParser implements ApiFormatParser {
   private renderImageBlock(block: RawObject): RenderBlock | null {
     const source = block.source as RawObject | undefined
     if (!source) {
-      return createImageRenderBlock({ alt: '[图片]' })
+      return createImageRenderBlock({ alt: conversationLabels().badgeImage })
     }
 
     if (source.type === 'base64') {
@@ -725,7 +725,7 @@ export class ClaudeParser implements ApiFormatParser {
       })
     }
 
-    return createImageRenderBlock({ alt: '[图片]' })
+    return createImageRenderBlock({ alt: conversationLabels().badgeImage })
   }
 
   /**
@@ -841,7 +841,7 @@ export class ClaudeParser implements ApiFormatParser {
       .map(block => {
         if (block.type === 'text') return block.text
         if (block.type === 'image') return conversationLabels().imageInline
-        if (block.type === 'error') return `[错误: ${block.message}]`
+        if (block.type === 'error') return formatLabel(conversationLabels().inlineError, { message: block.message })
         return ''
       })
       .filter(Boolean)

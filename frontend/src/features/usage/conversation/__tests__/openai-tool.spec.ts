@@ -105,7 +105,7 @@ describe('OpenAI Tool Message Parsing & Rendering', () => {
     const reasoningBlock = assistantMsg.content.find(b => b.type === 'collapsible')
     expect(reasoningBlock).toBeDefined()
     if (reasoningBlock && reasoningBlock.type === 'collapsible') {
-      expect(reasoningBlock.title).toContain('思考过程')
+      expect(reasoningBlock.title).toContain(DEFAULT_CONVERSATION_LABELS.badgeThinking)
     }
   })
 

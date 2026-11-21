@@ -32,7 +32,7 @@ import {
   createEmptyRenderResult,
 } from './render'
 
-import { conversationLabels } from './labels'
+import { conversationLabels, formatLabel } from './labels'
 
 /** Raw JSON object from API (loosely typed) */
 type RawObject = Record<string, unknown>
@@ -231,7 +231,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('openai', `解析失败: ${e}`)
+      return createEmptyConversation('openai', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -285,7 +285,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('openai', `CLI 格式解析失败: ${e}`)
+      return createEmptyConversation('openai', formatLabel(conversationLabels().cliParseFailed, { error: String(e) }))
     }
   }
 
@@ -410,7 +410,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('openai', `解析失败: ${e}`)
+      return createEmptyConversation('openai', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -477,7 +477,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('openai', `CLI 格式解析失败: ${e}`)
+      return createEmptyConversation('openai', formatLabel(conversationLabels().cliParseFailed, { error: String(e) }))
     }
   }
 
@@ -588,7 +588,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('openai', `解析失败: ${e}`)
+      return createEmptyConversation('openai', formatLabel(conversationLabels().parseFailed, { error: String(e) }))
     }
   }
 
@@ -812,7 +812,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return result
     } catch (e) {
-      return createEmptyConversation('openai', `CLI 格式解析失败: ${e}`)
+      return createEmptyConversation('openai', formatLabel(conversationLabels().cliParseFailed, { error: String(e) }))
     }
   }
 
@@ -858,7 +858,7 @@ export class OpenAIParser implements ApiFormatParser {
           const imageUrl = part.image_url as RawObject | undefined
           contentBlocks.push(createImageBlock('url', {
             url: typeof imageUrl?.url === 'string' ? imageUrl.url : undefined,
-            alt: '[图片]',
+            alt: conversationLabels().badgeImage,
           }))
         }
       }
@@ -998,7 +998,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return { blocks, isStream }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -1048,7 +1048,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return { blocks, isStream }
     } catch (e) {
-      return createEmptyRenderResult(`CLI 格式渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().cliRenderFailed, { error: String(e) }))
     }
   }
 
@@ -1150,7 +1150,7 @@ export class OpenAIParser implements ApiFormatParser {
         if (typeof rawReasoning === 'string' && rawReasoning.trim().length > 0) {
           badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
           contentBlocks.push(createCollapsibleBlock(
-            `思考过程 (${rawReasoning.trim().length} 字符)`,
+            formatLabel(conversationLabels().thinkingSummary, { count: rawReasoning.trim().length }),
             [createCodeBlock(rawReasoning.trim())],
             { defaultOpen: false, className: 'thinking-block' }
           ))
@@ -1185,7 +1185,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return { blocks, isStream: false }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -1215,7 +1215,7 @@ export class OpenAIParser implements ApiFormatParser {
           if (reasoningText.trim().length > 0) {
             blocks.push(createMessageBlock('assistant', [
               createCollapsibleBlock(
-                `思考过程 (${reasoningText.trim().length} 字符)`,
+                formatLabel(conversationLabels().thinkingSummary, { count: reasoningText.trim().length }),
                 [createCodeBlock(reasoningText.trim())],
                 { defaultOpen: false, className: 'thinking-block' }
               ),
@@ -1257,7 +1257,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return { blocks, isStream: false }
     } catch (e) {
-      return createEmptyRenderResult(`CLI 格式渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().cliRenderFailed, { error: String(e) }))
     }
   }
 
@@ -1292,7 +1292,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       return { blocks, isStream: true }
     } catch (e) {
-      return createEmptyRenderResult(`渲染失败: ${e}`)
+      return createEmptyRenderResult(formatLabel(conversationLabels().renderFailed, { error: String(e) }))
     }
   }
 
@@ -1316,7 +1316,7 @@ export class OpenAIParser implements ApiFormatParser {
     if (msgReasoning && msgReasoning.trim().length > 0) {
       badges.push(createBadgeBlock(conversationLabels().badgeThinking, 'secondary'))
       contentBlocks.push(createCollapsibleBlock(
-        `思考过程 (${msgReasoning.trim().length} 字符)`,
+        formatLabel(conversationLabels().thinkingSummary, { count: msgReasoning.trim().length }),
         [createCodeBlock(msgReasoning.trim())],
         { defaultOpen: false, className: 'thinking-block' }
       ))
@@ -1343,7 +1343,7 @@ export class OpenAIParser implements ApiFormatParser {
           const imageUrl = part.image_url as RawObject | undefined
           contentBlocks.push(createImageRenderBlock({
             src: typeof imageUrl?.url === 'string' ? imageUrl.url : undefined,
-            alt: '[图片]',
+            alt: conversationLabels().badgeImage,
           }))
         }
       }
@@ -1397,7 +1397,7 @@ export class OpenAIParser implements ApiFormatParser {
 
       case 'thinking':
         return createCollapsibleBlock(
-          `思考过程 (${block.thinking.length} 字符)`,
+          formatLabel(conversationLabels().thinkingSummary, { count: block.thinking.length }),
           [createCodeBlock(block.thinking)],
           { defaultOpen: false, className: 'thinking-block' }
         )
@@ -1498,7 +1498,7 @@ export class OpenAIParser implements ApiFormatParser {
       .map(block => {
         if (block.type === 'text') return block.text
         if (block.type === 'image') return conversationLabels().imageInline
-        if (block.type === 'error') return `[错误: ${block.message}]`
+        if (block.type === 'error') return formatLabel(conversationLabels().inlineError, { message: block.message })
         return ''
       })
       .filter(Boolean)

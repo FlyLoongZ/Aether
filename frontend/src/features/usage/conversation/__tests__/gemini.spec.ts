@@ -81,7 +81,7 @@ describe('Gemini conversation parser', () => {
     const thinkingBlock = modelMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()
     if (thinkingBlock && thinkingBlock.type === 'collapsible') {
-      expect(thinkingBlock.title).toContain('思考过程')
+      expect(thinkingBlock.title).toContain(DEFAULT_CONVERSATION_LABELS.badgeThinking)
     }
 
     const textBlock = modelMsg.content.find(b => b.type === 'text')
@@ -137,7 +137,7 @@ describe('Gemini conversation parser', () => {
     const thinkingBlock = modelMsg.content.find(b => b.type === 'collapsible')
     expect(thinkingBlock).toBeDefined()
     if (thinkingBlock && thinkingBlock.type === 'collapsible') {
-      expect(thinkingBlock.title).toContain('思考过程')
+      expect(thinkingBlock.title).toContain(DEFAULT_CONVERSATION_LABELS.badgeThinking)
       const firstCode = thinkingBlock.content[0]
       if (firstCode && firstCode.type === 'code') {
         expect(firstCode.code).toBe('Thinking chunk 1...Thinking chunk 2...')
