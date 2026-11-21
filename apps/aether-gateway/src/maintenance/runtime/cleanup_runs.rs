@@ -2,14 +2,22 @@ use std::time::Instant;
 
 use aether_data_contracts::repository::system::{AdminSystemPurgeSummary, AdminSystemPurgeTarget};
 use aether_data_contracts::DataLayerError;
+use aether_runtime_state::RuntimeLockLease;
+use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::time::Duration;
 use tracing::{info, warn};
 
 use crate::data::GatewayDataState;
 use crate::{AppState, GatewayError};
 
 use super::now_unix_secs;
+
+/// Leases cover the run; a purge may take a while but never longer than this, and
+/// an expired lease is exactly what makes a crashed run restartable.
+const CLEANUP_TASK_LOCK_TTL: Duration = Duration::from_secs(60 * 60 * 6);
+const CLEANUP_TASK_LOCK_KEY_PREFIX: &str = "task_runtime:lock:admin.cleanup:";
 
 const CLEANUP_RUN_HISTORY_KEY: &str = "admin_cleanup_run_history";
 const CLEANUP_RUN_HISTORY_LIMIT: usize = 50;
@@ -173,6 +181,10 @@ pub(crate) async fn list_admin_cleanup_run_records(
     Ok(parse_cleanup_run_records(value))
 }
 
+fn cleanup_task_lock_key(kind: AdminCleanupTaskKind) -> String {
+    format!("{CLEANUP_TASK_LOCK_KEY_PREFIX}{}", kind.record_kind())
+}
+
 pub(crate) async fn start_admin_system_purge_task(
     app: AppState,
     kind: AdminCleanupTaskKind,
@@ -181,13 +193,45 @@ pub(crate) async fn start_admin_system_purge_task(
     let records = list_admin_cleanup_run_records(&data)
         .await
         .map_err(|err| GatewayError::Internal(err.to_string()))?;
-    if let Some(existing) = records
-        .iter()
-        .find(|record| record.kind == kind.record_kind() && record.status == "processing")
-        .cloned()
+    // Only a *live* run blocks a new one. A process killed mid-run used to leave a
+    // `processing` record behind that denied every later run forever (until
+    // someone edited the database), and a genuinely dead run would keep reporting
+    // "processing" in the admin UI. The lease below tells the two apart.
+    let lock_key = cleanup_task_lock_key(kind);
+    let lock = match app
+        .runtime_state
+        .lock_try_acquire(&lock_key, app.local_instance_id(), CLEANUP_TASK_LOCK_TTL)
+        .await
     {
-        return Ok(existing);
-    }
+        Ok(Some(lock)) => lock,
+        Ok(None) => {
+            // Another node (or a previous invocation whose lease is still alive)
+            // owns the run: report it instead of starting a competing one.
+            let existing = records
+                .iter()
+                .find(|record| record.kind == kind.record_kind() && record.status == "processing")
+                .cloned();
+            return match existing {
+                Some(existing) => Ok(existing),
+                None => Err(GatewayError::Client {
+                    status: StatusCode::CONFLICT,
+                    message: "该清理任务正在其它节点执行，请稍后重试".to_string(),
+                }),
+            };
+        }
+        Err(_) => {
+            warn!(
+                error_category = "lock_acquisition_failed",
+                "cleanup task lock acquisition failed"
+            );
+            return Err(GatewayError::Client {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                message: "无法获取清理任务锁，请稍后重试".to_string(),
+            });
+        }
+    };
+
+    mark_stale_cleanup_runs(&data, kind).await;
 
     let started_at = now_unix_secs();
     let record = AdminCleanupRunRecord {
@@ -208,14 +252,14 @@ pub(crate) async fn start_admin_system_purge_task(
 
     match kind {
         AdminCleanupTaskKind::RequestBodies => {
-            tokio::spawn(run_request_body_cleanup_task(data, record.clone()));
+            tokio::spawn(run_request_body_cleanup_task(app, record.clone(), lock));
         }
         AdminCleanupTaskKind::Usage
         | AdminCleanupTaskKind::AuditLogs
         | AdminCleanupTaskKind::Config
         | AdminCleanupTaskKind::Users
         | AdminCleanupTaskKind::Stats => {
-            tokio::spawn(run_admin_system_purge_task(app, record.clone(), kind));
+            tokio::spawn(run_admin_system_purge_task(app, record.clone(), kind, lock));
         }
     }
     Ok(record)
@@ -285,9 +329,11 @@ pub(crate) async fn record_failed_cleanup_run(
 }
 
 async fn run_request_body_cleanup_task(
-    data: std::sync::Arc<GatewayDataState>,
+    app: AppState,
     initial_record: AdminCleanupRunRecord,
+    lock: RuntimeLockLease,
 ) {
+    let data = app.data.clone();
     let started_at = Instant::now();
 
     // Purge files before the table so a body written while the task runs cannot
@@ -334,12 +380,14 @@ async fn run_request_body_cleanup_task(
             warn!(error = %err, "request body cleanup task failed");
         }
     }
+    let _ = app.runtime_state.lock_release(&lock).await;
 }
 
 async fn run_admin_system_purge_task(
     app: AppState,
     initial_record: AdminCleanupRunRecord,
     kind: AdminCleanupTaskKind,
+    lock: RuntimeLockLease,
 ) {
     let started_at = Instant::now();
     let data = app.data.clone();
@@ -379,6 +427,7 @@ async fn run_admin_system_purge_task(
             warn!(error = %crate::error::redact_error_debug(&err), kind = ?kind, "admin system purge task failed");
         }
     }
+    let _ = app.runtime_state.lock_release(&lock).await;
 }
 
 async fn run_admin_system_purge_task_once(
@@ -505,6 +554,43 @@ fn request_body_cleanup_record(
     }
 }
 
+fn cleanup_run_is_stale_processing(
+    record: &AdminCleanupRunRecord,
+    kind: AdminCleanupTaskKind,
+    now_unix_secs: u64,
+    ttl_secs: u64,
+) -> bool {
+    record.kind == kind.record_kind()
+        && record.status == "processing"
+        && now_unix_secs.saturating_sub(record.started_at_unix_secs) >= ttl_secs
+}
+
+/// Rewrites leftovers of a crashed run.
+///
+/// A process killed mid-run leaves its record at `processing` forever: the admin
+/// UI shows a task that never finishes, and it is indistinguishable from one that
+/// is genuinely running. Getting the lease proves nobody holds the run any more,
+/// so any `processing` record older than the lease TTL is dead.
+async fn mark_stale_cleanup_runs(data: &GatewayDataState, kind: AdminCleanupTaskKind) {
+    let Ok(records) = list_admin_cleanup_run_records(data).await else {
+        return;
+    };
+    let now = now_unix_secs();
+    let ttl_secs = CLEANUP_TASK_LOCK_TTL.as_secs();
+    for mut record in records {
+        if !cleanup_run_is_stale_processing(&record, kind, now, ttl_secs) {
+            continue;
+        }
+        record.status = "failed".to_string();
+        record.message = "上一次清理任务未正常结束（进程退出或超时），已标记为失败".to_string();
+        record.completed_at_unix_secs = Some(now);
+        record.error = Some(CLEANUP_ERROR_TIMED_OUT.to_string());
+        if let Err(err) = record_cleanup_run(data, record).await {
+            warn!(error = %err, "failed to mark stale cleanup run as failed");
+        }
+    }
+}
+
 pub(crate) async fn record_admin_cleanup_run(
     data: &GatewayDataState,
     record: AdminCleanupRunRecord,
@@ -546,7 +632,8 @@ fn parse_cleanup_run_records(value: Value) -> Vec<AdminCleanupRunRecord> {
 #[cfg(test)]
 mod tests {
     use super::{
-        cleanup_data_layer_error_category, parse_cleanup_run_records, AdminCleanupRunRecord,
+        cleanup_data_layer_error_category, cleanup_run_is_stale_processing, cleanup_task_lock_key,
+        parse_cleanup_run_records, AdminCleanupRunRecord, AdminCleanupTaskKind,
     };
     use aether_data_contracts::DataLayerError;
     use serde_json::json;
@@ -560,6 +647,69 @@ mod tests {
 
         assert_eq!(cleanup_data_layer_error_category(&error), "postgres");
         assert!(!cleanup_data_layer_error_category(&error).contains("database-secret"));
+    }
+
+    fn processing_record(kind: &str, started_at_unix_secs: u64) -> AdminCleanupRunRecord {
+        AdminCleanupRunRecord {
+            id: "run".to_string(),
+            kind: kind.to_string(),
+            trigger: "manual".to_string(),
+            status: "processing".to_string(),
+            message: "清理中".to_string(),
+            started_at_unix_secs,
+            completed_at_unix_secs: None,
+            duration_ms: None,
+            summary: json!({}),
+            error: None,
+        }
+    }
+
+    #[test]
+    fn stale_processing_run_is_only_reaped_after_the_lease_ttl() {
+        let kind = AdminCleanupTaskKind::Usage;
+        let ttl_secs = 6 * 60 * 60;
+
+        // Still inside the lease: a genuinely running task must not be declared dead.
+        let live = processing_record(kind.record_kind(), 1_000);
+        assert!(!cleanup_run_is_stale_processing(
+            &live,
+            kind,
+            1_000 + ttl_secs - 1,
+            ttl_secs,
+        ));
+
+        assert!(cleanup_run_is_stale_processing(
+            &live,
+            kind,
+            1_000 + ttl_secs,
+            ttl_secs,
+        ));
+
+        // Different kind: reaping another task's record would corrupt its history.
+        let other = processing_record("audit_logs_cleanup", 1_000);
+        assert!(!cleanup_run_is_stale_processing(
+            &other,
+            kind,
+            1_000 + ttl_secs * 4,
+            ttl_secs,
+        ));
+
+        let mut finished = live.clone();
+        finished.status = "completed".to_string();
+        assert!(!cleanup_run_is_stale_processing(
+            &finished,
+            kind,
+            1_000 + ttl_secs * 4,
+            ttl_secs,
+        ));
+    }
+
+    #[test]
+    fn cleanup_task_lock_keys_are_per_kind() {
+        assert_ne!(
+            cleanup_task_lock_key(AdminCleanupTaskKind::Usage),
+            cleanup_task_lock_key(AdminCleanupTaskKind::AuditLogs)
+        );
     }
 
     #[test]
