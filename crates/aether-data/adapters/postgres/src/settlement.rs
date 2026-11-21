@@ -588,12 +588,23 @@ WHERE user_entitlement_id = $1
         grants_with_remaining.push((grant, remaining));
     }
 
-    let insufficient = (!allow_wallet_overage && total_remaining + 0.000_000_01 < total_cost_usd)
+    let insufficient = (!allow_wallet_overage
+        && total_remaining + SETTLEMENT_EPSILON_USD < total_cost_usd)
         || (allow_wallet_overage
             && !wallet_can_overdraft
             && wallet_available_usd.is_some_and(|available| {
                 total_remaining + available + SETTLEMENT_EPSILON_USD < total_cost_usd
             }));
+
+    // A request that is going to be rejected as `insufficient_quota` must not
+    // consume quota: the caller returns early without billing it, so ledger rows
+    // written here would burn the allowance and produce no revenue.
+    if insufficient {
+        return Ok(DailyQuotaDebitResult {
+            debited_usd: 0.0,
+            insufficient: true,
+        });
+    }
 
     let mut remaining_cost = total_cost_usd;
     let mut debited = 0.0;
@@ -603,7 +614,7 @@ WHERE user_entitlement_id = $1
         }
         let amount = remaining_cost.min(balance_before);
         let balance_after = balance_before - amount;
-        sqlx::query(
+        let written = sqlx::query(
             r#"
 INSERT INTO entitlement_usage_ledgers (
   id, user_entitlement_id, user_id, request_id, amount_usd,
@@ -623,13 +634,19 @@ ON CONFLICT (user_entitlement_id, request_id) DO NOTHING
         .bind(&grant.usage_date)
         .execute(&mut **tx)
         .await
-        .map_postgres_err()?;
+        .map_postgres_err()?
+        .rows_affected();
         remaining_cost -= amount;
-        debited += amount;
+        // A re-settlement of the same request hits the conflict clause and
+        // inserts nothing; counting it anyway would over-report the quota the
+        // request consumed and under-charge the wallet.
+        if written > 0 {
+            debited += amount;
+        }
     }
     Ok(DailyQuotaDebitResult {
         debited_usd: debited,
-        insufficient,
+        insufficient: false,
     })
 }
 
