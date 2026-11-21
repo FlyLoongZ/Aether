@@ -614,10 +614,18 @@ fn should_buffer_non_stream_response(
         return true;
     }
 
-    headers
-        .get("content-length")
-        .and_then(|value| value.trim().parse::<u64>().ok())
-        .is_some()
+    // `content-length` is stripped from the header map before the response reaches
+    // this stream (see `headers.rs`), so the old `headers.get("content-length")`
+    // check here was always false and the whole branch was dead. Decide from the
+    // parsed length carried in the report context instead, and only for bodies
+    // this path can actually convert: a fixed-length JSON/text response. Binary
+    // bodies keep streaming, because buffering them would fail the size limit.
+    upstream_content_length.is_some()
+        && headers.get("content-type").is_none_or(|value| {
+            let value = value.to_ascii_lowercase();
+            !value.contains("text/event-stream")
+                && (value.contains("json") || value.starts_with("text/"))
+        })
 }
 
 async fn buffer_non_sse_upstream_body(
@@ -882,6 +890,43 @@ mod tests {
     };
     use crate::ai_serving::api::StreamingStandardTerminalObserver;
     use crate::execution_runtime::transport::DirectSyncExecutionRuntime;
+
+    #[test]
+    fn buffers_a_fixed_length_json_body_without_the_content_length_header() {
+        // `content-length` is stripped before this point, so the old check on the
+        // header map was always false. The parsed length travels in the report
+        // context instead.
+        let headers = BTreeMap::from([("content-type".into(), "application/json".into())]);
+        assert!(should_buffer_non_stream_response(
+            &headers,
+            Some(42),
+            &serde_json::json!({})
+        ));
+
+        // Binary bodies keep streaming: buffering them would hit the internal
+        // buffer limit instead of forwarding a large download.
+        let binary = BTreeMap::from([("content-type".into(), "application/octet-stream".into())]);
+        assert!(!should_buffer_non_stream_response(
+            &binary,
+            Some(42),
+            &serde_json::json!({})
+        ));
+
+        // An SSE body never takes the buffering path even if it declares a length.
+        let sse = BTreeMap::from([("content-type".into(), "text/event-stream".into())]);
+        assert!(!should_buffer_non_stream_response(
+            &sse,
+            Some(42),
+            &serde_json::json!({})
+        ));
+
+        // Nothing declared: keep the previous behaviour.
+        assert!(!should_buffer_non_stream_response(
+            &headers,
+            None,
+            &serde_json::json!({})
+        ));
+    }
 
     #[test]
     fn treats_kiro_eventstream_envelope_as_stream_even_when_content_type_is_json() {
