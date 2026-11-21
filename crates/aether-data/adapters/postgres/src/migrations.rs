@@ -239,6 +239,7 @@ async fn repair_invalid_concurrent_index(
         20260920000000 => "idx_payment_orders_status_credited_user",
         20260921020000 => "ix_usage_attribution_owner_request",
         20260921020100 => "ix_usage_analytics_actor_metadata",
+        20261119040000 => "ix_usage_settlement_wallet_finalized",
         _ => return Ok(()),
     };
 
@@ -467,6 +468,7 @@ mod tests {
             20260921020000,
             20260921020100,
             20261011000000,
+            20261119040000,
         ] {
             let migration = POSTGRES_MIGRATOR
                 .iter()
