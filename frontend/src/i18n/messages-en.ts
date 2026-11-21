@@ -40,6 +40,8 @@ export const enMessages = {
     'common.language': 'Language',
     'common.chinese': 'Simplified Chinese',
     'common.english': 'English',
+    'common.routeNotFoundDescription': 'This page does not exist or has moved',
+    'common.backToHome': 'Back to home',
     'common.languageLoadFailed': 'Failed to load the language pack. Check your connection and try again.',
     'common.searchPlaceholder': 'Search...',
     'common.noSearchResults': 'No results found',

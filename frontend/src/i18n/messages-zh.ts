@@ -38,6 +38,8 @@ export const zhMessages = {
     'common.language': '语言',
     'common.chinese': '简体中文',
     'common.english': 'English',
+    'common.routeNotFoundDescription': '你访问的页面不存在或已被移动',
+    'common.backToHome': '返回首页',
     'common.languageLoadFailed': '语言资源加载失败，请检查网络后重试',
     'common.searchPlaceholder': '输入关键词搜索...',
     'common.noSearchResults': '未找到匹配项',
