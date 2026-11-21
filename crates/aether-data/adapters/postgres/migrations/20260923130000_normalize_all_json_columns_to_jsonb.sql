@@ -6,6 +6,14 @@
 -- which supports equality, GIN indexes and the jsonb_* operator family.
 --
 -- The conversions are idempotent: re-running them against jsonb columns is a no-op.
+--
+-- `json -> jsonb` rewrites the table, so the runner's default 10s statement
+-- timeout aborts mid-way on a large catalog and the whole transaction rolls back
+-- while holding ACCESS EXCLUSIVE locks. Bound the lock wait and give the rewrite
+-- room, the same way the other retirement migrations in this range do.
+
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30min';
 
 ALTER TABLE public.api_keys
     ALTER COLUMN allowed_providers TYPE jsonb USING allowed_providers::jsonb,
