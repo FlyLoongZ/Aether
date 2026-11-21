@@ -11,7 +11,9 @@ use super::support::{
     build_admin_user_payload_with_groups, find_admin_export_user,
 };
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
-use crate::handlers::admin::shared::attach_admin_audit_response;
+use crate::handlers::admin::shared::{
+    attach_admin_audit_response, may_adjust_wallet_balances, warn_dropped_wallet_fields,
+};
 use crate::GatewayError;
 use axum::{
     body::Body,
@@ -71,6 +73,22 @@ pub(in super::super) async fn build_admin_update_user_response(
         }
     };
     let (field_presence, payload) = patch.into_parts();
+    // `unlimited` switches the wallet to unlimited spending: it needs a wallet
+    // permission, not just `admin:users:write`. Ignore it (and say so) instead of
+    // rejecting the whole edit, so unrelated field changes still apply.
+    let mut payload = payload;
+    // Remembered before the field is cleared: requesting `unlimited` on an admin
+    // account is itself an admin-account mutation, regardless of who may apply it.
+    let requested_unlimited = payload.unlimited.is_some();
+    if payload.unlimited.is_some() && !may_adjust_wallet_balances(request_context) {
+        payload.unlimited = None;
+        warn_dropped_wallet_fields(
+            request_context,
+            "update_user",
+            Some(&user_id),
+            &["unlimited"],
+        );
+    }
     let email_present = field_presence.contains("email");
     let feature_settings = if field_presence.contains("feature_settings") {
         match normalize_admin_feature_settings(payload.feature_settings.flatten()) {
@@ -171,7 +189,7 @@ pub(in super::super) async fn build_admin_update_user_response(
             || payload.is_active.is_some()
             || field_presence.contains("group_ids")
             || field_presence.contains("feature_settings")
-            || payload.unlimited.is_some());
+            || requested_unlimited);
     if (changes_admin_role
         || resets_admin_password
         || changes_admin_active_state

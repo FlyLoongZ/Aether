@@ -2866,3 +2866,97 @@ async fn gateway_reveals_admin_user_full_key_locally_with_trusted_admin_principa
     gateway_handle.abort();
     upstream_handle.abort();
 }
+
+#[tokio::test]
+async fn gateway_ignores_wallet_fields_for_users_write_management_token() {
+    // A token that may edit users but not wallets used to be able to mint balance:
+    // `unlimited: true` skipped the balance check entirely and `initial_gift_usd`
+    // credited an arbitrary amount. Neither field may take effect now, but the
+    // request itself still succeeds so unrelated fields are not blocked.
+    let raw_token = "ae-users-write-wallet-fields";
+    let token_owner = sample_admin_user_with_role(
+        "token-owner-wallet-fields",
+        "admin",
+        "wallet-token-owner@example.com",
+        "wallet_token_owner",
+    );
+    let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![
+        token_owner.clone(),
+    ]));
+    let mut token = sample_management_token(
+        "token-users-write-wallet-fields",
+        &token_owner.id,
+        &token_owner.username,
+        true,
+    );
+    token.token.allowed_ips = None;
+    token.token.permissions = Some(json!(["admin:users:write"]));
+    let token_repository = Arc::new(InMemoryManagementTokenRepository::seed_with_hashes(
+        vec![token],
+        vec![(
+            hash_management_token(raw_token),
+            "token-users-write-wallet-fields".to_string(),
+        )],
+    ));
+    let data = GatewayDataState::with_management_token_repository_for_tests(token_repository)
+        .with_user_reader(user_repository);
+    let state = AppState::new()
+        .expect("gateway should build")
+        .with_data_state_for_tests(data)
+        .with_auth_users_for_tests([token_owner.clone()]);
+    let gateway = build_router_with_state(state.clone());
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+    let client = reqwest::Client::new();
+
+    let create_response = client
+        .post(format!("{gateway_url}/api/admin/users"))
+        .bearer_auth(raw_token)
+        .json(&json!({
+            "email": "minted@example.com",
+            "username": "minted_user",
+            "password": "MintedUser123!",
+            "role": "user",
+            "unlimited": true,
+            "initial_gift_usd": 5000.0
+        }))
+        .send()
+        .await
+        .expect("create request should succeed");
+    assert_eq!(create_response.status(), StatusCode::OK);
+
+    let created = state
+        .find_user_auth_by_identifier("minted_user")
+        .await
+        .expect("user lookup should succeed")
+        .expect("user should exist");
+    let created_wallet = state
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::UserId(&created.id),
+        )
+        .await
+        .expect("wallet lookup should succeed")
+        .expect("wallet should exist");
+    assert_eq!(created_wallet.limit_mode, "finite");
+    assert_eq!(created_wallet.balance, 0.0);
+    assert_eq!(created_wallet.gift_balance, 0.0);
+
+    let update_response = client
+        .put(format!("{gateway_url}/api/admin/users/{}", created.id))
+        .bearer_auth(raw_token)
+        .json(&json!({ "unlimited": true }))
+        .send()
+        .await
+        .expect("update request should succeed");
+    assert_eq!(update_response.status(), StatusCode::OK);
+
+    let updated_wallet = state
+        .find_wallet(
+            aether_data_contracts::repository::wallet::WalletLookupKey::UserId(&created.id),
+        )
+        .await
+        .expect("wallet lookup should succeed")
+        .expect("wallet should exist");
+    assert_eq!(updated_wallet.limit_mode, "finite");
+
+    gateway_handle.abort();
+}

@@ -7,7 +7,9 @@ use super::super::{
 };
 use super::support::{admin_user_password_policy, build_admin_user_payload_with_groups};
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
-use crate::handlers::admin::shared::attach_admin_audit_response;
+use crate::handlers::admin::shared::{
+    attach_admin_audit_response, may_adjust_wallet_balances, warn_dropped_wallet_fields,
+};
 use crate::GatewayError;
 use axum::{
     body::Body,
@@ -67,6 +69,27 @@ pub(in super::super) async fn build_admin_create_user_response(
                 .into_response())
         }
     };
+    // Wallet fields mint balance. A token that may create users but not adjust
+    // wallets must not be able to create an unlimited account or hand out a gift.
+    let wallet_authorized = may_adjust_wallet_balances(request_context);
+    let mut payload = payload;
+    let mut dropped_wallet_fields: Vec<&'static str> = Vec::new();
+    if !wallet_authorized {
+        if payload.unlimited {
+            payload.unlimited = false;
+            dropped_wallet_fields.push("unlimited");
+        }
+        if payload.initial_gift_usd.take().is_some() {
+            dropped_wallet_fields.push("initial_gift_usd");
+        }
+    }
+    warn_dropped_wallet_fields(
+        request_context,
+        "create_user",
+        Some(&payload.username),
+        &dropped_wallet_fields,
+    );
+
     let feature_settings = match normalize_admin_feature_settings(payload.feature_settings) {
         Ok(value) => value,
         Err(detail) => {
@@ -186,6 +209,10 @@ pub(in super::super) async fn build_admin_create_user_response(
         0.0
     } else if let Some(value) = payload.initial_gift_usd {
         value
+    } else if !wallet_authorized {
+        // The system default gift is still balance created by this call, so an
+        // unauthorized caller creates the account with an empty wallet.
+        0.0
     } else {
         admin_default_user_initial_gift(
             state

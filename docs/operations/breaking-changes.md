@@ -189,6 +189,14 @@ a default.
 
 ## Wallet
 
+- Wallet fields on user and API-key writes (`unlimited`, `initial_gift_usd`,
+  `limit_mode`, `unlimited_balance`) take effect only for callers that may
+  adjust wallet balances (`admin:wallets:write` or `admin:wallets:admin`).
+  A management token holding only `admin:users:write` / `admin:api_keys:write`
+  no longer creates unlimited accounts, hands out gifts, or switches a key
+  wallet to unlimited: the fields are ignored and an
+  `admin_wallet_field_ignored` warning is logged. The request itself still
+  succeeds, and local (JWT) admin sessions are unaffected.
 - Wallet daily usage reads now use `APP_TIMEZONE` (the maintenance timezone)
   instead of the fixed `Asia/Shanghai` calendar. Historical ledger rows written
   under a different timezone are not rewritten, so those dates may no longer

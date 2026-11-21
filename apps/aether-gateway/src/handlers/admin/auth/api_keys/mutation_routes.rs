@@ -7,6 +7,7 @@ use super::shared::{
 use crate::handlers::admin::request::{AdminAppState, AdminRequestContext};
 use crate::handlers::admin::shared::{
     attach_admin_audit_response, mark_sensitive_admin_response_no_store,
+    may_adjust_wallet_balances, warn_dropped_wallet_fields,
 };
 use crate::handlers::admin::users::{
     default_admin_user_api_key_name, format_optional_unix_secs_iso8601,
@@ -178,6 +179,22 @@ pub(super) async fn build_admin_create_api_key_response(
     ) {
         Ok(value) => value,
         Err(detail) => return Ok(build_admin_api_keys_bad_request_response(detail)),
+    };
+    // Both fields mint balance for the new key's wallet, so they need a wallet
+    // permission, not just `admin:api_keys:write`. A key created without one gets
+    // a finite wallet with no balance instead of failing the request.
+    let (initial_balance_usd, unlimited_balance) = if may_adjust_wallet_balances(request_context) {
+        (initial_balance_usd, unlimited_balance)
+    } else {
+        let mut dropped: Vec<&'static str> = Vec::new();
+        if payload.unlimited_balance.is_some() || unlimited_balance {
+            dropped.push("unlimited_balance");
+        }
+        if payload.initial_balance_usd.is_some() {
+            dropped.push("initial_balance_usd");
+        }
+        warn_dropped_wallet_fields(request_context, "create_api_key", None, &dropped);
+        (0.0, false)
     };
     let expires_at_unix_secs =
         match parse_standalone_api_key_expires_at(payload.expires_at.as_deref()) {
@@ -457,7 +474,17 @@ pub(super) async fn build_admin_update_api_key_response(
             aether_data_contracts::repository::wallet::WalletLookupKey::ApiKeyId(&api_key_id),
         )
         .await?;
-    if field_presence.contains("unlimited_balance") {
+    let wants_wallet_limit_change =
+        field_presence.contains("unlimited_balance") && may_adjust_wallet_balances(request_context);
+    if field_presence.contains("unlimited_balance") && !wants_wallet_limit_change {
+        warn_dropped_wallet_fields(
+            request_context,
+            "update_api_key",
+            Some(&api_key_id),
+            &["unlimited_balance"],
+        );
+    }
+    if wants_wallet_limit_change {
         if !state.has_auth_wallet_write_capability() {
             return Ok(build_admin_api_keys_data_unavailable_response());
         }

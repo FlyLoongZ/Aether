@@ -2,11 +2,15 @@ mod paths;
 mod payloads;
 mod proxy_errors;
 mod usage_counter;
+mod wallet_authorization;
 
 pub(crate) use self::paths::*;
 pub(crate) use self::payloads::*;
 pub(crate) use self::proxy_errors::build_proxy_error_response;
 pub(crate) use self::usage_counter::build_admin_usage_counter_health_payload;
+pub(crate) use self::wallet_authorization::{
+    may_adjust_wallet_balances, warn_dropped_wallet_fields,
+};
 pub(crate) use crate::handlers::shared::{
     attach_admin_audit_response, build_admin_provider_key_response,
     decrypt_catalog_secret_with_fallbacks, json_string_list,

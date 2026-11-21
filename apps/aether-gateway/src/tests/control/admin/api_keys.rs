@@ -5,13 +5,17 @@ use aether_data_contracts::repository::auth::{
 };
 use aether_data_contracts::repository::usage::StoredRequestUsageAudit;
 use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
+use aether_data_contracts::repository::wallet::WalletLookupKey;
 use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
+use aether_data_memory::management_tokens::InMemoryManagementTokenRepository;
 use aether_data_memory::usage::InMemoryUsageReadRepository;
 use aether_data_memory::wallet::InMemoryWalletRepository;
 use http::StatusCode;
 use serde_json::json;
 
-use super::super::{build_router_with_state, start_server, AppState};
+use super::super::{
+    build_router_with_state, hash_management_token, sample_management_token, start_server, AppState,
+};
 use crate::tests::DEV_FERNET_KEY;
 
 use super::super::helpers::admin_request;
@@ -645,4 +649,86 @@ async fn gateway_handles_admin_api_keys_delete_locally_with_trusted_admin_princi
 
     gateway_handle.abort();
     upstream_handle.abort();
+}
+
+#[tokio::test]
+async fn gateway_ignores_unlimited_balance_for_api_keys_write_management_token() {
+    // `unlimited_balance` switches a key's wallet to unlimited spending. A token
+    // that may edit API keys but not wallets used to be able to grant exactly that
+    // (`admin:api_keys:write` reaches `update_api_key`). The field must be ignored
+    // and the wallet left alone; the rest of the request still applies.
+    let repository = Arc::new(
+        InMemoryAuthApiKeySnapshotRepository::seed(vec![(
+            Some("hash-key-unlimited".to_string()),
+            sample_standalone_api_key_snapshot("key-unlimited", "admin-user-123", true),
+        )])
+        .with_export_records([sample_standalone_export_record(
+            "key-unlimited",
+            "admin-user-123",
+            "sk-key-unlimited-plaintext",
+            true,
+        )]),
+    );
+    let raw_token = "ae-api-keys-write-wallet-fields";
+    let owner = aether_data_contracts::repository::users::StoredUserAuthRecord::new(
+        "api-key-wallet-owner".to_string(),
+        Some("wallet-owner@example.com".to_string()),
+        true,
+        "wallet_owner".to_string(),
+        Some("hash".to_string()),
+        "admin".to_string(),
+        "local".to_string(),
+        true,
+        false,
+        Some(chrono::DateTime::from_timestamp(1_710_000_000, 0).expect("timestamp")),
+        Some(chrono::DateTime::from_timestamp(1_710_000_000, 0).expect("timestamp")),
+    )
+    .expect("owner should build");
+    let mut token = sample_management_token(
+        "token-api-keys-write-wallet-fields",
+        &owner.id,
+        &owner.username,
+        true,
+    );
+    token.token.allowed_ips = None;
+    token.token.permissions = Some(json!(["admin:api_keys:write"]));
+    let token_repository = Arc::new(InMemoryManagementTokenRepository::seed_with_hashes(
+        vec![token],
+        vec![(
+            hash_management_token(raw_token),
+            "token-api-keys-write-wallet-fields".to_string(),
+        )],
+    ));
+    let state = AppState::new()
+        .expect("gateway should build")
+        .with_auth_wallets_for_tests([sample_standalone_wallet("key-unlimited")])
+        .with_data_state_for_tests(
+            crate::data::GatewayDataState::with_management_token_repository_for_tests(
+                token_repository,
+            )
+            .attach_auth_api_key_repository_for_tests(Arc::clone(&repository))
+            .with_encryption_key_for_tests(DEV_FERNET_KEY),
+        )
+        .with_auth_users_for_tests([owner]);
+    let gateway = build_router_with_state(state.clone());
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let response = reqwest::Client::new()
+        .put(format!("{gateway_url}/api/admin/api-keys/key-unlimited"))
+        .bearer_auth(raw_token)
+        .json(&json!({ "name": "renamed-by-delegate", "unlimited_balance": false }))
+        .send()
+        .await
+        .expect("request should succeed");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let wallet = state
+        .find_wallet(WalletLookupKey::ApiKeyId("key-unlimited"))
+        .await
+        .expect("wallet lookup should succeed")
+        .expect("wallet should exist");
+    assert_eq!(wallet.limit_mode, "unlimited");
+    assert_eq!(wallet.balance, 18.5);
+
+    gateway_handle.abort();
 }
