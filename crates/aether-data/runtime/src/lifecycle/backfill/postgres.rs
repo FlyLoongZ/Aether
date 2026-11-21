@@ -56,14 +56,50 @@ pub(super) struct AppliedBackfill {
     pub(super) checksum: Vec<u8>,
 }
 
+/// How long one backfill run may take before the connection is torn down.
+///
+/// The advisory lock is held for the whole run, so an unbounded run also blocks
+/// every later gateway start that waits for the same lock.
+const BACKFILL_DEADLINE_ENV: &str = "AETHER_GATEWAY_DATA_POSTGRES_BACKFILL_DEADLINE_MS";
+const DEFAULT_BACKFILL_DEADLINE_MS: u64 = 3_600_000;
+
+fn backfill_deadline() -> std::time::Duration {
+    let millis = std::env::var(BACKFILL_DEADLINE_ENV)
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_BACKFILL_DEADLINE_MS);
+    std::time::Duration::from_millis(millis)
+}
+
 pub async fn run_backfills(pool: &PgPool) -> Result<(), MigrateError> {
     let mut conn = aether_data_postgres::acquire_postgres_migration_connection(pool).await?;
+    // Backfills are the other long-running consumer of this connection; bound the
+    // statements instead of inheriting the migrations' "no timeout" setting.
+    aether_data_postgres::configure_postgres_backfill_connection(&mut conn).await?;
 
     if BACKFILL_MIGRATOR.locking {
         conn.lock().await?;
     }
 
-    let result = run_backfills_locked(&mut conn).await;
+    let result =
+        match tokio::time::timeout(backfill_deadline(), run_backfills_locked(&mut conn)).await {
+            Ok(result) => result,
+            Err(_) => {
+                // Dropping the future leaves an open transaction behind; closing the
+                // socket is what makes PostgreSQL cancel the statement server-side.
+                warn!(
+                    deadline_ms = backfill_deadline().as_millis() as u64,
+                    "database backfill exceeded its deadline, aborting the connection"
+                );
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(1),
+                    conn.detach().close_hard(),
+                )
+                .await;
+                return Err(MigrateError::Execute(sqlx::Error::PoolTimedOut));
+            }
+        };
 
     if BACKFILL_MIGRATOR.locking {
         match conn.unlock().await {

@@ -58,6 +58,30 @@ fn read_timeout_env(name: &str, default: u32) -> Result<u32, DataLayerError> {
     }
 }
 
+const BACKFILL_STATEMENT_TIMEOUT_ENV: &str =
+    "AETHER_GATEWAY_DATA_POSTGRES_BACKFILL_STATEMENT_TIMEOUT_MS";
+
+/// Bounds the statement time on a backfill connection.
+///
+/// `acquire_postgres_migration_connection` clears both timeouts because some
+/// migrations legitimately run for a long time. Backfills do not need that: a
+/// single statement that never returns holds the advisory lock and the statement
+/// itself, so a hard cap is what keeps a bad backfill from wedging the upgrade.
+pub async fn configure_postgres_backfill_connection(
+    conn: &mut sqlx::PgConnection,
+) -> Result<(), sqlx::Error> {
+    let statement_ms = read_timeout_env(BACKFILL_STATEMENT_TIMEOUT_ENV, 1_800_000)
+        .map_err(|error| sqlx::Error::Configuration(Box::new(error)))?;
+    sqlx::query(
+        "SELECT set_config('statement_timeout', $1, false), set_config('lock_timeout', $2, false)",
+    )
+    .bind(format!("{statement_ms}ms"))
+    .bind("5s")
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
 /// Migration and historical backfill connections are discarded on every exit path,
 /// including cancellation, so their relaxed deadlines cannot escape into request work.
 pub async fn acquire_postgres_migration_connection(
