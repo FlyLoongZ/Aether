@@ -240,7 +240,12 @@ const selectionPinnedByUser = ref(false)
 const hoveredGroupIndex = ref<number | null>(null)
 const traceLoadStarted = ref(false)
 let tracePollTimer: ReturnType<typeof setTimeout> | null = null
-let traceLoadInFlight: Promise<void> | null = null
+// Keyed by request id: a single shared promise meant a slow load for request A was
+// handed to request B (the component is reused when the drawer switches requests) and
+// B's trace silently stayed empty. Also tracks a generation so a stale response can be
+// discarded instead of overwriting the newer request's data.
+const traceLoads = new Map<string, Promise<void>>()
+let traceLoadGeneration = 0
 const TRACE_POLL_INTERVAL_MS = 1000
 
 const STATUS_PRIORITY: Record<string, number> = {
@@ -792,9 +797,11 @@ const isSilentRefresh = ref(false)
 const loadTrace = async (silent = false) => {
   const requestId = props.requestId
   if (!requestId || props.traceData) return
-  if (traceLoadInFlight) return traceLoadInFlight
+  const existing = traceLoads.get(requestId)
+  if (existing) return existing
 
-  traceLoadInFlight = (async () => {
+  const generation = ++traceLoadGeneration
+  const load = (async () => {
     isSilentRefresh.value = silent
     traceLoadStarted.value = true
 
@@ -806,8 +813,14 @@ const loadTrace = async (silent = false) => {
     try {
       // 始终拉取全部候选：被跳过的候选是"为什么没用某个提供商"的关键证据，
       // 是否显示由前端开关控制，避免再发一次请求。
-      internalTrace.value = await requestTraceApi.getRequestTrace(requestId, { attemptedOnly: false })
+      const trace = await requestTraceApi.getRequestTrace(requestId, { attemptedOnly: false })
+      // The drawer can switch requests while this request is in flight; applying the
+      // answer to the component now would attach A's trace to B.
+      if (generation === traceLoadGeneration && props.requestId === requestId) {
+        internalTrace.value = trace
+      }
     } catch (err: unknown) {
+      if (generation !== traceLoadGeneration || props.requestId !== requestId) return
       if (isAxiosError(err) && err.response?.status === 404) {
         internalTrace.value = null
         error.value = null
@@ -818,14 +831,15 @@ const loadTrace = async (silent = false) => {
       }
       log.error('加载请求追踪失败:', err)
     } finally {
-      if (!silent) {
+      if (generation === traceLoadGeneration && !silent) {
         loading.value = false
       }
-      traceLoadInFlight = null
+      traceLoads.delete(requestId)
     }
   })()
 
-  return traceLoadInFlight
+  traceLoads.set(requestId, load)
+  return load
 }
 
 const propsRequestIsActive = computed(() => {

@@ -1207,4 +1207,28 @@ describe('HorizontalRequestTimeline', () => {
     expect(detailText).toContain('Streaming Key')
     expect(detailText).toContain('进行中')
   })
+
+  it('keeps in-flight trace loads per request id instead of sharing one promise', async () => {
+    // A single shared promise meant a slow load for request A was returned for
+    // request B, so B's trace was never fetched and the panel stayed empty.
+    const pending = new Map<string, (trace: RequestTrace) => void>()
+    requestTraceApiMock.getRequestTrace.mockImplementation(
+      (requestId: string) => new Promise<RequestTrace>(resolve => {
+        pending.set(requestId, resolve)
+      }),
+    )
+
+    mountTimelineFromApi('req-a')
+    await flushPendingUpdates()
+    mountTimelineFromApi('req-b')
+    await flushPendingUpdates()
+
+    expect(pending.has('req-a')).toBe(true)
+    expect(pending.has('req-b')).toBe(true)
+    pending.get('req-a')?.(buildTrace([buildCandidate({ request_id: 'req-a' })]))
+    pending.get('req-b')?.(buildTrace([buildCandidate({ request_id: 'req-b' })]))
+    await flushPendingUpdates()
+
+    expect(requestTraceApiMock.getRequestTrace).toHaveBeenCalledTimes(2)
+  })
 })
