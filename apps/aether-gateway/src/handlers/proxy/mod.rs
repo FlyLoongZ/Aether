@@ -906,9 +906,6 @@ async fn proxy_request_inner(
     } else {
         None
     };
-    let _methodd = request_context.request_method.clone();
-    let request_path_and_query = request_context.request_path_and_query();
-    let _path_and_queryy = request_path_and_query.as_str();
     let control_decision = request_context.control_decision.as_ref();
     if let Some(response) = maybe_build_local_admin_proxy_response(
         &state,

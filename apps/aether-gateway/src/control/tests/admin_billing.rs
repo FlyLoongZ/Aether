@@ -244,9 +244,15 @@ fn provider_finance_routes_require_admin_billing_and_buffer_expense_input() {
             &headers,
             Some(decision),
         );
+        // Buffering is the default for every admin mutation now; the reads stay
+        // unbuffered because they have no body.
         assert_eq!(
             local_proxy_route_requires_buffered_body(&context),
-            kind == "create_provider_expense"
+            !matches!(
+                method,
+                http::Method::GET | http::Method::HEAD | http::Method::OPTIONS
+            ),
+            "route kind {kind} should buffer exactly when it can carry a body"
         );
     }
 }
