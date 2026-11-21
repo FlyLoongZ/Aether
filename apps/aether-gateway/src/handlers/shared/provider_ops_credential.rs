@@ -271,12 +271,14 @@ pub(crate) fn open_provider_ops_credential(
         return Err("Aether secret envelope 的 Provider Ops 记录绑定错误");
     }
 
-    let plaintext = if looks_like_python_fernet_ciphertext(stored) {
-        decrypt_catalog_secret_with_fallbacks(state.encryption_key(), stored)
-            .ok_or("历史 Provider Ops credential 密文无法解密")?
-    } else {
-        stored.to_string()
-    };
+    // Only authenticated ciphertext is accepted. Treating "does not look like
+    // Fernet" as plaintext turned a truncated or edited ciphertext into a usable
+    // credential and re-sealed the damage permanently.
+    if !looks_like_python_fernet_ciphertext(stored) {
+        return Err("Provider Ops credential 不是受支持的密文格式");
+    }
+    let plaintext = decrypt_catalog_secret_with_fallbacks(state.encryption_key(), stored)
+        .ok_or("历史 Provider Ops credential 密文无法解密")?;
     if plaintext.contains('\0') {
         return Err("历史 Provider Ops credential 包含保留分隔符");
     }

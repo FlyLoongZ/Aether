@@ -140,12 +140,10 @@ pub(crate) async fn decrypt_or_migrate_smtp_password(
                     if stored_secret_uses_known_envelope_family(observed) {
                         return None;
                     }
-                    decrypt_catalog_secret_with_fallbacks(state.encryption_key(), observed).or_else(
-                        || {
-                            (!observed.is_empty() && !looks_like_python_fernet_ciphertext(observed))
-                                .then(|| observed.to_string())
-                        },
-                    )
+                    // No plaintext fallback: a value that is not recognised
+                    // ciphertext is a corrupt or half-migrated row, and silently
+                    // treating it as the password hid that.
+                    decrypt_catalog_secret_with_fallbacks(state.encryption_key(), observed)
                 })
                 .ok_or_else(|| {
                     system_config_secret_error("stored SMTP password cannot be decrypted")
@@ -870,8 +868,10 @@ mod tests {
         )
         .expect("SMTP binding should build");
         let fixture_state = state_with_stored_secret(TEST_SECRET);
+        // Plaintext is deliberately absent: the reader now rejects a stored
+        // value that is not recognised ciphertext instead of using it as the
+        // password (see `undecryptable_fernet_secret_fails_without_plaintext_fallback`).
         let legacy_values = [
-            TEST_SECRET.to_string(),
             encrypt_python_fernet_plaintext(DEV_FERNET_KEY, TEST_SECRET)
                 .expect("legacy SMTP password should encrypt"),
             encrypt_system_config_secret(&fixture_state, TEST_KEY, TEST_SECRET)

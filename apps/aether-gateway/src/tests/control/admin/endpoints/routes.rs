@@ -553,7 +553,15 @@ async fn gateway_updates_admin_http_provider_endpoint_locally_with_trusted_admin
             Some("/v1/chat/completions".to_string()),
             Some(json!({"foo":"old"})),
             None,
-            Some(json!({"url":"http://proxy.internal","password":"secret"})),
+            Some(json!({
+                "url":"http://proxy.internal",
+                // Stored the way production stores it (the plaintext fallback is gone).
+                "password": crate::state::seal_endpoint_proxy_password_for_tests(
+                    "endpoint-openai-chat",
+                    "secret",
+                )
+                .expect("endpoint proxy password should seal"),
+            })),
         )
         .expect("endpoint transport should build")],
         vec![sample_key(

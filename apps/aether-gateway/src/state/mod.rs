@@ -36,12 +36,16 @@ pub(crate) use self::app::{
 #[cfg(test)]
 pub(crate) use self::cache::PROVIDER_TRANSPORT_SNAPSHOT_CACHE_TTL;
 pub(crate) use self::cache::{ProviderTransportSnapshotCache, AUTH_API_KEY_LAST_USED_TTL};
+#[cfg(test)]
+pub(crate) use self::catalog_proxy::seal_endpoint_proxy_password_for_tests;
 pub use self::cors::FrontdoorCorsConfig;
 pub(crate) use self::instance::resolve_gateway_instance_id;
 pub(crate) use self::oauth::{
     provider_transport_context_allows_credential_rotation, AgentIdentityAuthConfigFence,
     CodexRuntimeOAuthObservation, ProviderTransportCredentialFence,
 };
+#[cfg(test)]
+pub(crate) use self::proxy::seal_proxy_node_password_for_tests;
 pub(crate) use self::proxy::unavailable_proxy_snapshot;
 pub(crate) use self::types::{
     AdminWalletMutationOutcome, GatewayAdminPaymentCallbackView, GatewayUserPreferenceView,

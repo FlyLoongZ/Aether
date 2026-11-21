@@ -841,7 +841,11 @@ async fn gateway_handles_admin_system_config_export_locally_with_trusted_admin_p
         .with_manual_proxy_fields(
             Some("http://proxy.local:8080".to_string()),
             Some("proxy-user".to_string()),
-            Some("proxy-pass".to_string()),
+            // Stored the way production stores it; the plaintext fallback is gone.
+            Some(crate::state::seal_proxy_node_password_for_tests(
+                "node-1",
+                "proxy-pass",
+            )),
         )]));
 
     let data_state = GatewayDataState::disabled()
@@ -852,7 +856,15 @@ async fn gateway_handles_admin_system_config_export_locally_with_trusted_admin_p
         .attach_proxy_node_repository_for_tests(proxy_node_repository)
         .with_encryption_key_for_tests(DEV_FERNET_KEY)
         .with_system_config_values_for_tests(vec![
-            ("smtp_password".to_string(), json!("smtp-secret")),
+            // Sealed like production: the reader no longer accepts a plaintext
+            // stored password. Fernet is still readable and migrates on read.
+            (
+                "smtp_password".to_string(),
+                json!(
+                    encrypt_python_fernet_plaintext(DEV_FERNET_KEY, "smtp-secret")
+                        .expect("SMTP password should encrypt")
+                ),
+            ),
             ("smtp_host".to_string(), json!("smtp.example.test")),
             ("turnstile_secret_key".to_string(), serde_json::Value::Null),
             ("smtp_user".to_string(), json!("smtp-user")),

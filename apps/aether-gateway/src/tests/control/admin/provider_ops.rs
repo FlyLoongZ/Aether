@@ -510,7 +510,13 @@ async fn gateway_saves_admin_provider_ops_config_locally_with_trusted_admin_prin
                                     DEV_FERNET_KEY,
                                     "refresh-secret-1234",
                                 ).expect("refresh token should encrypt"),
-                                "_cached_access_token": "cached-token",
+                                // Transient secrets are stored sealed like every
+                                // other Provider Ops credential; a plaintext value
+                                // is rejected by the reader now.
+                                "_cached_access_token": encrypt_python_fernet_plaintext(
+                                    DEV_FERNET_KEY,
+                                    "cached-token",
+                                ).expect("cached access token should encrypt"),
                             }
                         }
                     }
@@ -1345,7 +1351,9 @@ async fn gateway_verifies_admin_provider_ops_locally_for_anyrouter_proxy_mode_im
     manual_node.status = "online".to_string();
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
-    manual_node.proxy_password = Some("supersecret".to_string());
+    let sealed_password =
+        crate::state::seal_proxy_node_password_for_tests(&manual_node.id, "supersecret");
+    manual_node.proxy_password = Some(sealed_password);
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
@@ -1776,7 +1784,9 @@ async fn gateway_verifies_admin_provider_ops_locally_for_new_api_proxy_node_mode
     manual_node.status = "online".to_string();
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
-    manual_node.proxy_password = Some("supersecret".to_string());
+    let sealed_password =
+        crate::state::seal_proxy_node_password_for_tests(&manual_node.id, "supersecret");
+    manual_node.proxy_password = Some(sealed_password);
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
@@ -2863,7 +2873,9 @@ async fn gateway_handles_admin_provider_ops_balance_locally_for_generic_api_prox
     manual_node.status = "online".to_string();
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
-    manual_node.proxy_password = Some("supersecret".to_string());
+    let sealed_password =
+        crate::state::seal_proxy_node_password_for_tests(&manual_node.id, "supersecret");
+    manual_node.proxy_password = Some(sealed_password);
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;
@@ -3259,7 +3271,9 @@ async fn gateway_handles_admin_provider_ops_checkin_locally_for_generic_api_prox
     manual_node.status = "online".to_string();
     manual_node.proxy_url = Some("http://proxy.example:8080".to_string());
     manual_node.proxy_username = Some("alice".to_string());
-    manual_node.proxy_password = Some("supersecret".to_string());
+    let sealed_password =
+        crate::state::seal_proxy_node_password_for_tests(&manual_node.id, "supersecret");
+    manual_node.proxy_password = Some(sealed_password);
     let proxy_node_repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
 
     let (execution_runtime_url, execution_runtime_handle) = start_server(execution_runtime).await;

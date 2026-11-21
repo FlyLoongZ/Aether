@@ -721,7 +721,12 @@ mod tests {
 
     #[tokio::test]
     async fn legacy_provider_ops_credentials_are_lazily_migrated() {
-        let provider = provider_with_api_key(TEST_API_KEY);
+        // Legacy means "an authenticated ciphertext in an older format", not
+        // plaintext: a stored value that is not recognised ciphertext is now
+        // rejected instead of being used as the credential.
+        let legacy = encrypt_python_fernet_plaintext(DEV_FERNET_KEY, TEST_API_KEY)
+            .expect("legacy Provider Ops API key should encrypt");
+        let provider = provider_with_api_key(&legacy);
         let (state, repository) = state_with_provider(provider.clone());
         let admin_state = AdminAppState::new(&state);
 

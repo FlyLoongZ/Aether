@@ -412,7 +412,9 @@ async fn gateway_handles_admin_external_models_locally_with_trusted_admin_princi
 
     let mut manual_node = online_manual_proxy_node("manual-node", proxy_url);
     manual_node.proxy_username = Some("alice".to_string());
-    manual_node.proxy_password = Some("supersecret".to_string());
+    let sealed_password =
+        crate::state::seal_proxy_node_password_for_tests(&manual_node.id, "supersecret");
+    manual_node.proxy_password = Some(sealed_password);
     let repository = Arc::new(InMemoryProxyNodeRepository::seed(vec![manual_node]));
     let data_state = GatewayDataState::with_proxy_node_repository_for_tests(repository)
         .with_system_config_values_for_tests(Vec::<(String, serde_json::Value)>::new());

@@ -96,6 +96,25 @@ fn incoming_proxy_node_secret_is_ciphertext(value: &str) -> bool {
         || looks_like_python_fernet_ciphertext(value)
 }
 
+/// Seals a proxy node password the way the gateway stores it.
+///
+/// Test fixtures used to write the password in clear text, which the reader
+/// accepted through a plaintext fallback. That fallback is gone (a value that is
+/// not ciphertext is now rejected), so fixtures have to store what production
+/// stores: a bare `aether-secret:v1` envelope bound to the node.
+#[cfg(test)]
+pub(crate) fn seal_proxy_node_password_for_tests(node_id: &str, plaintext: &str) -> String {
+    seal_proxy_node_secret_v2_with_encryption_key(
+        // Same fallback the runtime uses when no key is configured.
+        Some(crate::tests::DEV_FERNET_KEY),
+        PROXY_NODE_PASSWORD_SCOPE,
+        PROXY_NODE_PASSWORD_FIELD,
+        node_id,
+        plaintext,
+    )
+    .expect("proxy node password should seal for tests")
+}
+
 impl AppState {
     pub(super) fn protect_proxy_node_password(
         &self,
@@ -176,17 +195,19 @@ impl AppState {
                 {
                     return Err(proxy_node_password_error());
                 }
-                if runtime_secret_payload_is_sealed(&observed) {
-                    open_runtime_secret_payload_with_encryption_key(
-                        self.encryption_key(),
-                        self.previous_encryption_key(),
-                        PROXY_NODE_PASSWORD_LEGACY_SECRET_PURPOSE,
-                        &observed,
-                    )
-                    .ok_or_else(proxy_node_password_error)?
-                } else {
-                    observed.clone()
+                // Anything that is neither the bound envelope nor a legacy
+                // sealed payload is rejected: "not ciphertext" used to mean
+                // "plaintext", which accepted damaged ciphertext as a password.
+                if !runtime_secret_payload_is_sealed(&observed) {
+                    return Err(proxy_node_password_error());
                 }
+                open_runtime_secret_payload_with_encryption_key(
+                    self.encryption_key(),
+                    self.previous_encryption_key(),
+                    PROXY_NODE_PASSWORD_LEGACY_SECRET_PURPOSE,
+                    &observed,
+                )
+                .ok_or_else(proxy_node_password_error)?
             };
             let encrypted = seal_proxy_node_secret_v2_with_encryption_key(
                 self.encryption_key(),

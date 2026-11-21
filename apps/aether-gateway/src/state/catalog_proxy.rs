@@ -165,7 +165,14 @@ impl AppState {
                 provider.proxy = projection.runtime;
                 return Ok(provider);
             }
-            self.require_catalog_proxy_migration_writer(CatalogProxyScope::Provider)?;
+            if !self.has_provider_catalog_data_writer() {
+                // The row is readable; it just cannot be rewritten from this
+                // process (read-only replica or offline reader). Serve it and
+                // leave the rewrite to `secrets rotate`, which owns a writer.
+                warn_catalog_proxy_rewrite_skipped(CatalogProxyScope::Provider);
+                provider.proxy = projection.runtime;
+                return Ok(provider);
+            }
             let update = ProviderCatalogProxyCasUpdate {
                 record_id: provider.id.clone(),
                 expected_proxy: provider.proxy.clone(),
@@ -211,7 +218,14 @@ impl AppState {
                 endpoint.proxy = projection.runtime;
                 return Ok(endpoint);
             }
-            self.require_catalog_proxy_migration_writer(CatalogProxyScope::Endpoint)?;
+            if !self.has_provider_catalog_data_writer() {
+                // The row is readable; it just cannot be rewritten from this
+                // process (read-only replica or offline reader). Serve it and
+                // leave the rewrite to `secrets rotate`, which owns a writer.
+                warn_catalog_proxy_rewrite_skipped(CatalogProxyScope::Endpoint);
+                endpoint.proxy = projection.runtime;
+                return Ok(endpoint);
+            }
             let update = ProviderCatalogProxyCasUpdate {
                 record_id: endpoint.id.clone(),
                 expected_proxy: endpoint.proxy.clone(),
@@ -278,7 +292,14 @@ impl AppState {
                 key.proxy = projection.runtime;
                 return Ok(key);
             }
-            self.require_catalog_proxy_migration_writer(CatalogProxyScope::Key)?;
+            if !self.has_provider_catalog_data_writer() {
+                // The row is readable; it just cannot be rewritten from this
+                // process (read-only replica or offline reader). Serve it and
+                // leave the rewrite to `secrets rotate`, which owns a writer.
+                warn_catalog_proxy_rewrite_skipped(CatalogProxyScope::Key);
+                key.proxy = projection.runtime;
+                return Ok(key);
+            }
             let update = ProviderCatalogProxyCasUpdate {
                 record_id: key.id.clone(),
                 expected_proxy: key.proxy.clone(),
@@ -311,20 +332,6 @@ impl AppState {
         Err(catalog_proxy_migration_unstable_error(
             CatalogProxyScope::Key,
         ))
-    }
-
-    fn require_catalog_proxy_migration_writer(
-        &self,
-        scope: CatalogProxyScope,
-    ) -> Result<(), GatewayError> {
-        if self.has_provider_catalog_data_writer() {
-            Ok(())
-        } else {
-            Err(GatewayError::Internal(format!(
-                "stored {} proxy credentials require migration but the catalog writer is unavailable",
-                scope.label()
-            )))
-        }
     }
 
     fn protect_catalog_proxy(
@@ -612,14 +619,39 @@ impl AppState {
             });
         }
 
+        // A stored value that reached this point is not any known ciphertext: it
+        // used to be accepted as plaintext, which turned a damaged row into a
+        // working credential. Only an incoming (request-supplied) plaintext is
+        // still sealed here.
+        if source == CatalogProxySource::Stored {
+            return Err(catalog_proxy_storage_error(scope));
+        }
         let protected = seal_catalog_proxy_secret_v2(self, scope, record_id, field, value)
             .ok_or_else(|| catalog_proxy_encryption_error(scope))?;
         Ok(Some(CatalogProxyCredential {
             plaintext: value.to_string(),
             protected,
-            migration_required: source == CatalogProxySource::Stored,
+            migration_required: false,
         }))
     }
+}
+
+/// Seals an endpoint proxy password the way the gateway stores it.
+///
+/// Fixtures used to seed the password in clear text and rely on the reader's
+/// plaintext fallback, which is gone: a stored value that is not recognised
+/// ciphertext is now rejected instead of being used as the password.
+#[cfg(test)]
+pub(crate) fn seal_endpoint_proxy_password_for_tests(
+    record_id: &str,
+    plaintext: &str,
+) -> Option<String> {
+    let purpose = catalog_proxy_bound_purpose(CatalogProxyScope::Endpoint, record_id, "password");
+    crate::handlers::shared::seal_runtime_secret_payload_with_encryption_key(
+        Some(crate::tests::DEV_FERNET_KEY),
+        &purpose,
+        plaintext,
+    )
 }
 
 fn catalog_proxy_secret_is_v2(value: &str) -> bool {
@@ -1082,6 +1114,14 @@ fn catalog_proxy_encryption_error(scope: CatalogProxyScope) -> GatewayError {
         "{} proxy credential encryption is unavailable",
         scope.label()
     ))
+}
+
+/// A wrapped proxy credential was read but could not be rewritten here.
+fn warn_catalog_proxy_rewrite_skipped(scope: CatalogProxyScope) {
+    tracing::warn!(
+        scope = scope.label(),
+        "stored proxy credential needs rewriting but no catalog writer is attached"
+    );
 }
 
 fn catalog_proxy_migration_changed_error(scope: CatalogProxyScope) -> GatewayError {
