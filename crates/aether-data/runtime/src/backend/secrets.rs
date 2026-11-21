@@ -32,8 +32,11 @@ pub const SECRET_SCAN_TARGETS: &[&str] = &[
     "provider_api_keys.credential",
     "provider_api_keys.auth_config",
     "provider_api_keys.proxy.password",
+    "provider_api_keys.proxy.username",
     "providers.proxy.password",
+    "providers.proxy.username",
     "provider_endpoints.proxy.password",
+    "provider_endpoints.proxy.username",
     "providers.ops_credential",
     "system_configs.value",
     "ldap_configs.bind_password_encrypted",
@@ -162,6 +165,37 @@ WHERE provider_endpoints.proxy #>> '{password}' IS NOT NULL
 "#,
     ),
     (
+        "provider_api_keys.proxy.username",
+        r#"
+SELECT provider_api_keys.id AS record_id,
+       'username'::text AS field,
+       provider_api_keys.proxy #>> '{username}' AS value
+FROM provider_api_keys
+WHERE provider_api_keys.proxy #>> '{username}' IS NOT NULL
+  AND provider_api_keys.proxy #>> '{username}' <> ''
+"#,
+    ),
+    (
+        "providers.proxy.username",
+        r#"
+SELECT providers.id AS record_id, 'username'::text AS field, providers.proxy #>> '{username}' AS value
+FROM providers
+WHERE providers.proxy #>> '{username}' IS NOT NULL
+  AND providers.proxy #>> '{username}' <> ''
+"#,
+    ),
+    (
+        "provider_endpoints.proxy.username",
+        r#"
+SELECT provider_endpoints.id AS record_id,
+       'username'::text AS field,
+       provider_endpoints.proxy #>> '{username}' AS value
+FROM provider_endpoints
+WHERE provider_endpoints.proxy #>> '{username}' IS NOT NULL
+  AND provider_endpoints.proxy #>> '{username}' <> ''
+"#,
+    ),
+    (
         "providers.ops_credential",
         r#"
 SELECT providers.id AS record_id, credential.key AS field, credential.value AS value
@@ -243,3 +277,44 @@ SELECT api_keys.id AS api_key_id
 FROM api_keys
 WHERE api_keys.key_encrypted IS NOT NULL
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::{SECRET_SCAN_QUERIES, SECRET_SCAN_TARGETS};
+
+    /// Every scanned target must also appear in the report list, and vice versa.
+    ///
+    /// The two lists are written by hand; a target that only exists in one of
+    /// them either scans rows nobody reports or reports a target that is never
+    /// read.
+    #[test]
+    fn scan_queries_and_targets_stay_in_sync() {
+        let mut queried: Vec<&str> = SECRET_SCAN_QUERIES.iter().map(|(t, _)| *t).collect();
+        let mut listed: Vec<&str> = SECRET_SCAN_TARGETS.to_vec();
+        queried.sort_unstable();
+        listed.sort_unstable();
+        assert_eq!(queried, listed);
+    }
+
+    /// The catalog proxy stores *two* sealed fields per record.
+    ///
+    /// Scanning only `password` left `username` behind on rotation: the value was
+    /// re-encrypted by nothing, so after the old key was dropped the provider's
+    /// proxy credentials became unreadable.
+    #[test]
+    fn catalog_proxy_scan_covers_username_and_password() {
+        for table in ["provider_api_keys", "providers", "provider_endpoints"] {
+            for field in ["username", "password"] {
+                let target = format!("{table}.proxy.{field}");
+                assert!(
+                    SECRET_SCAN_TARGETS.contains(&target.as_str()),
+                    "missing scan target {target}"
+                );
+                assert!(
+                    SECRET_SCAN_QUERIES.iter().any(|(name, _)| *name == target),
+                    "missing scan query for {target}"
+                );
+            }
+        }
+    }
+}
