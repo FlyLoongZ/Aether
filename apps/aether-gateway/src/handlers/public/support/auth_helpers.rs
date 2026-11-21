@@ -154,10 +154,39 @@ pub(crate) fn mark_sensitive_response_no_store(mut response: Response<Body>) -> 
     response
 }
 
+/// Machine-readable reason for account-level 403s.
+///
+/// The frontend used to decide "this is an account problem, clear the session"
+/// by matching the Chinese detail string, so any wording change silently broke
+/// sign-out on a disabled account. This code is part of the response contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AuthErrorCode {
+    AccountDisabled,
+    AccountNotFound,
+}
+
+impl AuthErrorCode {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::AccountDisabled => "account_disabled",
+            Self::AccountNotFound => "account_not_found",
+        }
+    }
+}
+
 pub(crate) fn build_auth_error_response(
     status: http::StatusCode,
     detail: impl Into<String>,
     clear_cookie: bool,
+) -> Response<Body> {
+    build_auth_error_response_with_code(status, detail, clear_cookie, None)
+}
+
+pub(crate) fn build_auth_error_response_with_code(
+    status: http::StatusCode,
+    detail: impl Into<String>,
+    clear_cookie: bool,
+    code: Option<AuthErrorCode>,
 ) -> Response<Body> {
     let detail = detail.into();
     let public_detail = if status.is_server_error() {
@@ -171,12 +200,19 @@ pub(crate) fn build_auth_error_response(
         detail
     };
     let cookie = clear_cookie.then(build_auth_refresh_cookie_clear_header);
-    build_auth_json_response(status, json!({ "detail": public_detail }), cookie)
+    let mut body = json!({ "detail": public_detail });
+    if let (Some(code), false) = (code, status.is_server_error()) {
+        body["code"] = json!(code.as_str());
+    }
+    build_auth_json_response(status, body, cookie)
 }
 
 #[cfg(test)]
 mod public_error_projection_tests {
-    use super::{build_auth_error_response, build_auth_json_response};
+    use super::{
+        build_auth_error_response, build_auth_error_response_with_code, build_auth_json_response,
+        AuthErrorCode,
+    };
     use axum::body::to_bytes;
 
     #[tokio::test]
@@ -210,6 +246,39 @@ mod public_error_projection_tests {
             response.headers().get(http::header::PRAGMA),
             Some(&http::HeaderValue::from_static("no-cache"))
         );
+    }
+
+    #[tokio::test]
+    async fn account_level_errors_carry_a_stable_code() {
+        // The frontend used to detect "disabled account" by matching the Chinese
+        // detail; the code makes that decision independent of the wording.
+        for (code, expected) in [
+            (AuthErrorCode::AccountDisabled, "account_disabled"),
+            (AuthErrorCode::AccountNotFound, "account_not_found"),
+        ] {
+            let response = build_auth_error_response_with_code(
+                http::StatusCode::FORBIDDEN,
+                "用户已禁用",
+                false,
+                Some(code),
+            );
+            let body = to_bytes(response.into_body(), 4096).await.expect("body");
+            let payload: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+            assert_eq!(payload["code"], expected);
+            assert_eq!(payload["detail"], "用户已禁用");
+        }
+
+        // Server errors keep hiding the reason and never expose a code.
+        let response = build_auth_error_response_with_code(
+            http::StatusCode::INTERNAL_SERVER_ERROR,
+            "database failed",
+            false,
+            Some(AuthErrorCode::AccountDisabled),
+        );
+        let body = to_bytes(response.into_body(), 4096).await.expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        assert!(payload.get("code").is_none());
+        assert_eq!(payload["detail"], "服务暂不可用，请稍后重试");
     }
 }
 

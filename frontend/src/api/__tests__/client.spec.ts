@@ -4,6 +4,7 @@ import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from '
 import apiClient, {
   AUTH_SESSION_SIGNAL_KEY,
   AUTH_STATE_CHANGE_EVENT,
+  isAccountLevelForbidden,
   parseAuthSessionSignal,
 } from '@/api/client'
 import { cache, cachedRequest } from '@/utils/cache'
@@ -267,5 +268,18 @@ describe('apiClient auth state change event', () => {
     } finally {
       rawClient.defaults.adapter = previousAdapter
     }
+  })
+})
+
+describe('account-level 403 detection', () => {
+  it('decides from the stable error code, not from the message text', () => {
+    // A wording change in the backend detail used to silently stop the client from
+    // signing out a disabled account, because the check matched Chinese substrings.
+    expect(isAccountLevelForbidden(403, 'account_disabled', 'whatever')).toBe(true)
+    expect(isAccountLevelForbidden(403, 'account_not_found', 'whatever')).toBe(true)
+    expect(isAccountLevelForbidden(403, 'permission_denied', '用户已禁用')).toBe(false)
+    expect(isAccountLevelForbidden(403, '', '用户已禁用')).toBe(true)
+    expect(isAccountLevelForbidden(403, '', 'insufficient permission')).toBe(false)
+    expect(isAccountLevelForbidden(500, 'account_disabled', '')).toBe(false)
   })
 })

@@ -1,9 +1,11 @@
 use super::{
     auth_access_token_expiry_hours, auth_now, auth_refresh_cookie_name, auth_user_agent,
-    build_auth_error_response, build_auth_internal_error_response, build_auth_json_response,
+    build_auth_error_response, build_auth_error_response_with_code,
+    build_auth_internal_error_response, build_auth_json_response,
     build_auth_refresh_cookie_clear_header, build_auth_refresh_cookie_header, extract_bearer_token,
     extract_client_device_id, extract_client_device_id_header, extract_cookie_value, http, json,
-    AppState, Body, GatewayPublicRequestContext, Response, AUTH_REFRESH_TOKEN_EXPIRATION_DAYS,
+    AppState, AuthErrorCode, Body, GatewayPublicRequestContext, Response,
+    AUTH_REFRESH_TOKEN_EXPIRATION_DAYS,
 };
 use crate::handlers::public::support::mark_sensitive_response_no_store;
 use crate::local_auth_token::LocalAuthTokenType;
@@ -150,10 +152,11 @@ pub(crate) async fn resolve_authenticated_local_user(
     let user = match state.find_user_auth_by_id(user_id).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            return Err(build_auth_error_response(
+            return Err(build_auth_error_response_with_code(
                 http::StatusCode::FORBIDDEN,
                 "用户不存在或已禁用",
                 false,
+                Some(AuthErrorCode::AccountNotFound),
             )
             .into())
         }
@@ -167,10 +170,11 @@ pub(crate) async fn resolve_authenticated_local_user(
         }
     };
     if !user.is_active || user.is_deleted {
-        return Err(build_auth_error_response(
+        return Err(build_auth_error_response_with_code(
             http::StatusCode::FORBIDDEN,
             "用户不存在或已禁用",
             false,
+            Some(AuthErrorCode::AccountDisabled),
         )
         .into());
     }
@@ -324,10 +328,20 @@ pub(super) async fn handle_auth_refresh(
         }
     };
     if !user.is_active {
-        return build_auth_error_response(http::StatusCode::FORBIDDEN, "用户已禁用", true);
+        return build_auth_error_response_with_code(
+            http::StatusCode::FORBIDDEN,
+            "用户已禁用",
+            true,
+            Some(AuthErrorCode::AccountDisabled),
+        );
     }
     if user.is_deleted {
-        return build_auth_error_response(http::StatusCode::FORBIDDEN, "用户不存在或已禁用", true);
+        return build_auth_error_response_with_code(
+            http::StatusCode::FORBIDDEN,
+            "用户不存在或已禁用",
+            true,
+            Some(AuthErrorCode::AccountNotFound),
+        );
     }
     if !auth_token_identity_matches_user(&claims, &user) {
         return build_auth_error_response(http::StatusCode::UNAUTHORIZED, "无效的刷新令牌", true);

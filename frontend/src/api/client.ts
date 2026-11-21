@@ -79,16 +79,28 @@ function isProtectedOperationalEndpoint(url?: string): boolean {
          path.startsWith('/_gateway/audit/')
 }
 
+/** Stable codes the backend uses for account-level 403s. */
+const ACCOUNT_LEVEL_FORBIDDEN_CODES = ['account_disabled', 'account_not_found']
+
 /**
  * 判断 403 错误是否表示用户账号级别的问题（需要清除认证并跳转）
+ *
+ * The `code` field is authoritative. The detail substrings are a fallback for a
+ * backend older than this build: matching Chinese text meant any wording change
+ * silently stopped the client from signing out a disabled account.
  */
-function isAccountLevelForbidden(status: number, errorDetail: string): boolean {
+export function isAccountLevelForbidden(
+  status: number,
+  errorCode: string,
+  errorDetail: string,
+): boolean {
   if (status !== 403) return false
-  const accountErrors = [
+  if (errorCode) return ACCOUNT_LEVEL_FORBIDDEN_CODES.includes(errorCode)
+  const legacyAccountErrors = [
     '用户不存在或已禁用',
     '用户已禁用',
   ]
-  return accountErrors.some((msg) => errorDetail.includes(msg))
+  return legacyAccountErrors.some((msg) => errorDetail.includes(msg))
 }
 
 /**
@@ -267,9 +279,12 @@ class ApiClient {
 
     // 处理 403 用户账号级别错误（被禁用/删除）
     if (status === 403) {
-      const rawDetail = (error.response?.data as Record<string, unknown>)?.detail
+      const responseBody = error.response?.data as Record<string, unknown> | undefined
+      const rawDetail = responseBody?.detail
       const errorDetail = typeof rawDetail === 'string' ? rawDetail : ''
-      if (isAccountLevelForbidden(status, errorDetail)) {
+      const rawCode = responseBody?.code
+      const errorCode = typeof rawCode === 'string' ? rawCode : ''
+      if (isAccountLevelForbidden(status, errorCode, errorDetail)) {
         log.info('User account issue detected, clearing auth', { errorDetail })
         this.clearAuth()
         window.location.href = '/'

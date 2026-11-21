@@ -71,6 +71,10 @@ a default.
 
 ## Management tokens
 
+- Account-level `403` responses from the auth endpoints now include a stable
+  `code` (`account_disabled` or `account_not_found`). Clients should branch on it
+  instead of matching the localized `detail` text, which is still sent for
+  display.
 - Admin audit events are now persisted to `audit_logs` (event type, actor,
   route/action/target, status, trace id in the metadata). Until now they were
   written to the process log only, so the admin activity view and the audit
