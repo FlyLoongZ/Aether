@@ -15,6 +15,7 @@ mod oauth;
 mod proxy;
 mod routing_profiles;
 mod runtime;
+mod scheduler_affinity_writer;
 mod secrets_rotation;
 #[cfg(test)]
 mod testing;

@@ -189,63 +189,19 @@ impl AppState {
         ttl: Duration,
         epoch: u64,
     ) {
-        let Ok(handle) = tokio::runtime::Handle::try_current() else {
-            return;
-        };
-
-        let cache_key = cache_key.to_string();
-        let runtime_state = self.runtime_state.clone();
-        let scheduler_affinity_epoch = self.scheduler_affinity_epoch.clone();
-        let provider_id = target.provider_id.clone();
-        let endpoint_id = target.endpoint_id.clone();
-        let key_id = target.key_id.clone();
-        let ttl_seconds = ttl.as_secs();
+        // One coalescing writer instead of a detached read-modify-write per request:
+        // per-request tasks lost increments to each other and put an unbounded
+        // number of KV round trips on the runtime store.
         let now_unix_secs = chrono::Utc::now().timestamp().max(0) as u64;
-        let expire_at = now_unix_secs.saturating_add(ttl_seconds);
-
-        handle.spawn(async move {
-            if scheduler_affinity_epoch.load(Ordering::Acquire) != epoch {
-                return;
-            }
-            let existing = runtime_state
-                .kv_get(&cache_key)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
-            let request_count = existing
-                .as_ref()
-                .and_then(|value| value.get("request_count"))
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or_default()
-                .saturating_add(1);
-            let created_at = existing
-                .as_ref()
-                .and_then(|value| value.get("created_at"))
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or(now_unix_secs);
-            let payload = serde_json::json!({
-                "provider_id": provider_id,
-                "endpoint_id": endpoint_id,
-                "key_id": key_id,
-                "created_at": created_at,
-                "expire_at": expire_at,
-                "request_count": request_count,
-                "scheduler_affinity_epoch": epoch,
-            });
-            if let Ok(serialized) = serde_json::to_string(&payload) {
-                if scheduler_affinity_epoch.load(Ordering::Acquire) != epoch {
-                    return;
-                }
-                let _ = runtime_state
-                    .kv_set(
-                        &cache_key,
-                        serialized,
-                        Some(Duration::from_secs(ttl_seconds)),
-                    )
-                    .await;
-            }
-        });
+        super::scheduler_affinity_writer::enqueue(
+            self.runtime_state.clone(),
+            self.scheduler_affinity_epoch.clone(),
+            cache_key,
+            target,
+            ttl,
+            epoch,
+            now_unix_secs,
+        );
     }
 
     #[cfg(any(test, feature = "testkit"))]
@@ -257,7 +213,6 @@ impl AppState {
         );
         self.replace_foreground_data_state(data);
     }
-
     fn replace_foreground_data_state(&mut self, data: Arc<GatewayDataState>) {
         self.overview_total_cache = Arc::new(OverviewTotalCache::default());
         self.clear_provider_transport_snapshot_cache();
