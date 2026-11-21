@@ -31,7 +31,7 @@ mod wallet;
 
 pub use aether_data_contracts::{DataLayerError, PostgresPoolConfig};
 pub use announcements::SqlxAnnouncementReadRepository;
-pub use audit::PostgresAuditLogReadRepository;
+pub use audit::{PostgresAuditLogReadRepository, PostgresAuditLogWriteRepository};
 pub use auth::SqlxAuthApiKeySnapshotReadRepository;
 pub use auth_modules::{SqlxAuthModuleReadRepository, SqlxAuthModuleRepository};
 pub use background_tasks::SqlxBackgroundTaskRepository;

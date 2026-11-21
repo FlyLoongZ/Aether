@@ -9,6 +9,7 @@ use aether_data_contracts::repository::users::{
     StoredUserAuthRecord, StoredUserExportRow, UpsertUserGroupRecord, UserReadRepository,
 };
 use aether_data_contracts::repository::wallet::StoredWalletSnapshot;
+use aether_data_memory::audit::InMemoryAuditLogWriteRepository;
 use aether_data_memory::auth::InMemoryAuthApiKeySnapshotRepository;
 use aether_data_memory::management_tokens::InMemoryManagementTokenRepository;
 use aether_data_memory::usage::InMemoryUsageReadRepository;
@@ -2957,6 +2958,89 @@ async fn gateway_ignores_wallet_fields_for_users_write_management_token() {
         .expect("wallet lookup should succeed")
         .expect("wallet should exist");
     assert_eq!(updated_wallet.limit_mode, "finite");
+
+    gateway_handle.abort();
+}
+
+#[tokio::test]
+async fn gateway_persists_admin_audit_events_instead_of_only_logging_them() {
+    // The admin audit trail used to be a `tracing` line only: `audit_logs` was
+    // read by the admin UI and pruned by the retention job, but nothing ever wrote
+    // to it, so the trail was empty unless logs were shipped elsewhere.
+    let raw_token = "ae-audit-persistence";
+    let token_owner = sample_admin_user_with_role(
+        "token-owner-audit",
+        "admin",
+        "audit-token-owner@example.com",
+        "audit_token_owner",
+    );
+    let target_user = sample_admin_user_with_role(
+        "target-audit",
+        "user",
+        "target-audit@example.com",
+        "target_audit",
+    );
+    let user_repository = Arc::new(InMemoryUserReadRepository::seed_auth_users(vec![
+        token_owner.clone(),
+        target_user.clone(),
+    ]));
+    let mut token = sample_management_token(
+        "token-audit-persistence",
+        &token_owner.id,
+        &token_owner.username,
+        true,
+    );
+    token.token.allowed_ips = None;
+    token.token.permissions = Some(json!(["admin:users:write"]));
+    let token_repository = Arc::new(InMemoryManagementTokenRepository::seed_with_hashes(
+        vec![token],
+        vec![(
+            hash_management_token(raw_token),
+            "token-audit-persistence".to_string(),
+        )],
+    ));
+    let audit_repository = Arc::new(InMemoryAuditLogWriteRepository::default());
+    let data = GatewayDataState::with_management_token_repository_for_tests(token_repository)
+        .with_user_reader(user_repository)
+        .with_audit_log_writer_for_tests(Arc::clone(&audit_repository));
+    let state = AppState::new()
+        .expect("gateway should build")
+        .with_data_state_for_tests(data)
+        .with_auth_users_for_tests([token_owner.clone(), target_user.clone()]);
+    let gateway = build_router_with_state(state);
+    let (gateway_url, gateway_handle) = start_server(gateway).await;
+
+    let response = reqwest::Client::new()
+        .put(format!("{gateway_url}/api/admin/users/target-audit"))
+        .bearer_auth(raw_token)
+        .json(&json!({ "is_active": false }))
+        .send()
+        .await
+        .expect("request should succeed");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let mut persisted = Vec::new();
+    for _ in 0..100 {
+        persisted = audit_repository.entries();
+        if persisted
+            .iter()
+            .any(|entry| entry.event_type == "admin_user_updated")
+        {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    let event = persisted
+        .iter()
+        .find(|entry| entry.event_type == "admin_user_updated")
+        .expect("admin audit event should be persisted");
+    assert_eq!(event.user_id.as_deref(), Some(token_owner.id.as_str()));
+    assert!(event
+        .description
+        .as_deref()
+        .expect("description")
+        .contains("target-audit"));
+    assert_eq!(event.status_code, Some(200));
 
     gateway_handle.abort();
 }

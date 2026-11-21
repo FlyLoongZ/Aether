@@ -485,6 +485,15 @@ impl GatewayDataState {
         }
     }
 
+    /// Installs an audit-log writer on a fixture state.
+    pub(crate) fn with_audit_log_writer_for_tests<T>(mut self, repository: Arc<T>) -> Self
+    where
+        T: aether_data_contracts::repository::audit::AuditLogWriteRepository + 'static,
+    {
+        self.audit_log_writer = Some(repository);
+        self
+    }
+
     pub(crate) fn with_auth_api_key_reader_for_tests(
         repository: Arc<dyn AuthApiKeyReadRepository>,
     ) -> Self {

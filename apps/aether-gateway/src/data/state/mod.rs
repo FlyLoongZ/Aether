@@ -17,6 +17,7 @@ use aether_data_contracts::repository::announcements::{
     AnnouncementListQuery, AnnouncementReadRepository, AnnouncementWriteRepository,
     CreateAnnouncementRecord, StoredAnnouncement, StoredAnnouncementPage, UpdateAnnouncementRecord,
 };
+use aether_data_contracts::repository::audit::AuditLogWriteRepository;
 use aether_data_contracts::repository::audit::{
     AuditLogListQuery, RequestAuditBundle, StoredAdminAuditLogPage, StoredSuspiciousActivity,
     StoredUserAuditLogPage,
@@ -166,6 +167,7 @@ pub(crate) struct GatewayDataState {
     auth_module_writer: Option<Arc<dyn AuthModuleWriteRepository>>,
     announcement_reader: Option<Arc<dyn AnnouncementReadRepository>>,
     announcement_writer: Option<Arc<dyn AnnouncementWriteRepository>>,
+    audit_log_writer: Option<Arc<dyn AuditLogWriteRepository>>,
     management_token_reader: Option<Arc<dyn ManagementTokenReadRepository>>,
     management_token_writer: Option<Arc<dyn ManagementTokenWriteRepository>>,
     oauth_provider_reader: Option<Arc<dyn OAuthProviderReadRepository>>,
@@ -359,6 +361,7 @@ impl fmt::Debug for GatewayDataState {
                 "has_announcement_writer",
                 &self.announcement_writer.is_some(),
             )
+            .field("has_audit_log_writer", &self.audit_log_writer.is_some())
             .field(
                 "has_management_token_reader",
                 &self.management_token_reader.is_some(),

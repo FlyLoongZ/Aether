@@ -284,3 +284,51 @@ fn event_count_from_postgres_row(row: &PgRow) -> Result<(String, u64), DataLayer
     let count = row.try_get::<i64, _>("count").map_postgres_err()?.max(0) as u64;
     Ok((event_type, count))
 }
+
+#[derive(Debug, Clone)]
+pub struct PostgresAuditLogWriteRepository {
+    pool: PostgresPool,
+}
+
+impl PostgresAuditLogWriteRepository {
+    pub fn new(pool: PostgresPool) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait]
+impl AuditLogWriteRepository for PostgresAuditLogWriteRepository {
+    async fn insert_admin_audit_log(&self, log: NewAdminAuditLog) -> Result<(), DataLayerError> {
+        sqlx::query(
+            r#"
+INSERT INTO audit_logs (
+  id,
+  event_type,
+  user_id,
+  description,
+  ip_address,
+  request_id,
+  event_metadata,
+  status_code,
+  error_message,
+  created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (id) DO NOTHING
+"#,
+        )
+        .bind(&log.id)
+        .bind(&log.event_type)
+        .bind(log.user_id.as_deref())
+        .bind(&log.description)
+        .bind(log.ip_address.as_deref())
+        .bind(log.request_id.as_deref())
+        .bind(log.metadata)
+        .bind(log.status_code)
+        .bind(log.error_message.as_deref())
+        .bind(postgres_cutoff_time(log.created_at_unix_secs))
+        .execute(&self.pool)
+        .await
+        .map_postgres_err()?;
+        Ok(())
+    }
+}

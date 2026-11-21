@@ -5,6 +5,7 @@ use aether_data_contracts::repository::announcements::{
     AnnouncementReadRepository, AnnouncementWriteRepository,
 };
 use aether_data_contracts::repository::audit::AuditLogReadRepository;
+use aether_data_contracts::repository::audit::AuditLogWriteRepository;
 use aether_data_contracts::repository::auth::{
     AuthApiKeyReadRepository, AuthApiKeyWriteRepository,
 };
@@ -50,7 +51,6 @@ use aether_data_contracts::repository::settlement::SettlementWriteRepository;
 use aether_data_contracts::repository::usage::{UsageReadRepository, UsageWriteRepository};
 use aether_data_contracts::repository::users::UserReadRepository;
 use aether_data_contracts::repository::wallet::{WalletReadRepository, WalletWriteRepository};
-use aether_data_postgres::PostgresAuditLogReadRepository;
 use aether_data_postgres::PostgresPoolMemberScoreRepository;
 use aether_data_postgres::PostgresRoutingGroupRepository;
 use aether_data_postgres::SqlxAnnouncementReadRepository;
@@ -70,6 +70,7 @@ use aether_data_postgres::SqlxSettlementRepository;
 use aether_data_postgres::SqlxUsageReadRepository;
 use aether_data_postgres::SqlxUserReadRepository;
 use aether_data_postgres::SqlxWalletRepository;
+use aether_data_postgres::{PostgresAuditLogReadRepository, PostgresAuditLogWriteRepository};
 use aether_data_postgres::{
     PostgresPool, PostgresPoolConfig, PostgresPoolFactory, PostgresTransactionRunner,
 };
@@ -115,6 +116,10 @@ impl PostgresBackend {
 
     pub fn announcement_write_repository(&self) -> Arc<dyn AnnouncementWriteRepository> {
         Arc::new(SqlxAnnouncementReadRepository::new(self.pool_clone()))
+    }
+
+    pub fn audit_log_write_repository(&self) -> Arc<dyn AuditLogWriteRepository> {
+        Arc::new(PostgresAuditLogWriteRepository::new(self.pool_clone()))
     }
 
     pub fn auth_api_key_write_repository(&self) -> Arc<dyn AuthApiKeyWriteRepository> {

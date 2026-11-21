@@ -93,6 +93,36 @@ pub struct StoredUserAuditLogPage {
     pub total: u64,
 }
 
+/// One admin audit event, ready to be persisted.
+///
+/// The admin plane used to only write these to the process log, so a deployment
+/// that did not ship logs had no trace of who changed what — while the admin UI
+/// and the retention cleanup both pretended `audit_logs` was populated.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewAdminAuditLog {
+    pub id: String,
+    pub event_type: String,
+    pub user_id: Option<String>,
+    pub description: String,
+    pub ip_address: Option<String>,
+    pub request_id: Option<String>,
+    pub status_code: Option<i32>,
+    pub error_message: Option<String>,
+    pub metadata: Option<Value>,
+    pub created_at_unix_secs: u64,
+}
+
+#[async_trait]
+pub trait AuditLogWriteRepository: Send + Sync {
+    /// Persists one admin audit event.
+    ///
+    /// Idempotent on `id`: the caller may retry after a transient failure.
+    async fn insert_admin_audit_log(
+        &self,
+        log: NewAdminAuditLog,
+    ) -> Result<(), crate::DataLayerError>;
+}
+
 #[async_trait]
 pub trait AuditLogReadRepository: Send + Sync {
     async fn list_admin_audit_logs(

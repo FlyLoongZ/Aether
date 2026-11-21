@@ -30,6 +30,7 @@ impl GatewayDataState {
                 auth_module_writer: None,
                 announcement_reader: None,
                 announcement_writer: None,
+                audit_log_writer: None,
                 management_token_reader: None,
                 management_token_writer: None,
                 oauth_provider_reader: None,
@@ -132,6 +133,7 @@ impl GatewayDataState {
         let wallet_reader = backends.read().wallets();
         let wallet_writer = backends.write().wallets();
         let settlement_writer = backends.write().settlement();
+        let audit_log_writer = backends.write().audit_logs();
 
         Ok(Self {
             config,
@@ -142,6 +144,7 @@ impl GatewayDataState {
             auth_module_writer,
             announcement_reader,
             announcement_writer,
+            audit_log_writer,
             management_token_reader,
             management_token_writer,
             oauth_provider_reader,
@@ -247,6 +250,20 @@ impl GatewayDataState {
 
     pub(crate) fn has_background_task_writer(&self) -> bool {
         self.background_task_writer.is_some()
+    }
+
+    /// The audit-log write repository, when the deployment has one.
+    ///
+    /// `None` means the process only logs audit events; the caller degrades to a
+    /// warning instead of failing the request that produced the event.
+    pub(crate) fn audit_log_writer(
+        &self,
+    ) -> Option<Arc<dyn aether_data_contracts::repository::audit::AuditLogWriteRepository>> {
+        self.audit_log_writer.clone().or_else(|| {
+            self.backends
+                .as_ref()
+                .and_then(|backends| backends.write().audit_logs())
+        })
     }
 
     pub(crate) fn has_audit_log_reader(&self) -> bool {

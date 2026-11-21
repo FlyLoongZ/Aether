@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use super::PostgresBackend;
 use aether_data_contracts::repository::announcements::AnnouncementWriteRepository;
+use aether_data_contracts::repository::audit::AuditLogWriteRepository;
 use aether_data_contracts::repository::auth::AuthApiKeyWriteRepository;
 use aether_data_contracts::repository::auth_modules::AuthModuleWriteRepository;
 use aether_data_contracts::repository::background_tasks::BackgroundTaskWriteRepository;
@@ -25,6 +26,7 @@ pub struct DataWriteRepositories {
     announcements: Option<Arc<dyn AnnouncementWriteRepository>>,
     auth_api_keys: Option<Arc<dyn AuthApiKeyWriteRepository>>,
     auth_modules: Option<Arc<dyn AuthModuleWriteRepository>>,
+    audit_logs: Option<Arc<dyn AuditLogWriteRepository>>,
     background_tasks: Option<Arc<dyn BackgroundTaskWriteRepository>>,
     request_candidates: Option<Arc<dyn RequestCandidateWriteRepository>>,
     gemini_file_mappings: Option<Arc<dyn GeminiFileMappingWriteRepository>>,
@@ -47,6 +49,7 @@ impl fmt::Debug for DataWriteRepositories {
             .field("has_announcements", &self.announcements.is_some())
             .field("has_auth_api_keys", &self.auth_api_keys.is_some())
             .field("has_auth_modules", &self.auth_modules.is_some())
+            .field("has_audit_logs", &self.audit_logs.is_some())
             .field("has_background_tasks", &self.background_tasks.is_some())
             .field("has_request_candidates", &self.request_candidates.is_some())
             .field(
@@ -86,6 +89,9 @@ impl DataWriteRepositories {
         }
         if self.auth_modules.is_none() {
             self.auth_modules = Some(PostgresBackend::auth_module_write_repository(backend));
+        }
+        if self.audit_logs.is_none() {
+            self.audit_logs = Some(PostgresBackend::audit_log_write_repository(backend));
         }
         if self.background_tasks.is_none() {
             self.background_tasks =
@@ -148,6 +154,10 @@ impl DataWriteRepositories {
 
     pub fn auth_api_keys(&self) -> Option<Arc<dyn AuthApiKeyWriteRepository>> {
         self.auth_api_keys.clone()
+    }
+
+    pub fn audit_logs(&self) -> Option<Arc<dyn AuditLogWriteRepository>> {
+        self.audit_logs.clone()
     }
 
     pub fn auth_modules(&self) -> Option<Arc<dyn AuthModuleWriteRepository>> {

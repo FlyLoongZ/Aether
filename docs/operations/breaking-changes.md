@@ -71,6 +71,12 @@ a default.
 
 ## Management tokens
 
+- Admin audit events are now persisted to `audit_logs` (event type, actor,
+  route/action/target, status, trace id in the metadata). Until now they were
+  written to the process log only, so the admin activity view and the audit
+  retention job operated on a table nothing filled. A deployment that relied on
+  external log shipping should expect the table to grow to the audit retention
+  window; a write failure is logged and does not fail the admin request.
 - Escalated admin route kinds now also cover OAuth flow starts, device
   authorization, the OAuth import/poll task status reads, and
   `GET /api/admin/usage/records`. Management tokens with

@@ -1,8 +1,30 @@
+use std::sync::{Arc, LazyLock, Mutex};
+
+use aether_data_contracts::repository::audit::{AuditLogWriteRepository, NewAdminAuditLog};
 use axum::body::Body;
 use axum::http::{self, Response, StatusCode};
 use tracing::{info, warn};
 
 use crate::control::GatewayControlDecision;
+
+/// The process-wide audit writer.
+///
+/// `emit_admin_audit` runs from the response finalizer, which has no access to the
+/// application state; configuring the writer once at startup keeps the audit path
+/// from threading `AppState` through every finalize call.
+static AUDIT_WRITER: LazyLock<Mutex<Option<Arc<dyn AuditLogWriteRepository>>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+/// Installs the audit writer. Called from the state constructors.
+pub(crate) fn configure_global_audit_writer(writer: Option<Arc<dyn AuditLogWriteRepository>>) {
+    if let Ok(mut guard) = AUDIT_WRITER.lock() {
+        *guard = writer;
+    }
+}
+
+fn global_audit_writer() -> Option<Arc<dyn AuditLogWriteRepository>> {
+    AUDIT_WRITER.lock().ok().and_then(|guard| guard.clone())
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct AdminAuditEvent {
@@ -112,6 +134,93 @@ pub(crate) fn emit_admin_audit(
             "admin audit event"
         );
     }
+
+    persist_admin_audit_event(AdminAuditRecord {
+        event_name,
+        action,
+        target_type,
+        target_id: target_id.clone(),
+        route_family,
+        route_kind,
+        audit_status,
+        status_code,
+        trace_id,
+        method: method.as_str(),
+        path: &sanitized_path_and_query,
+        admin_user_id: admin_principal.user_id.as_str(),
+        admin_user_role: admin_principal.user_role.as_str(),
+        admin_session_id: admin_principal.session_id.as_deref(),
+        management_token_id: admin_principal.management_token_id.as_deref(),
+    });
+}
+
+struct AdminAuditRecord<'a> {
+    event_name: &'a str,
+    action: &'a str,
+    target_type: &'a str,
+    target_id: String,
+    route_family: &'a str,
+    route_kind: &'a str,
+    audit_status: &'a str,
+    status_code: u16,
+    trace_id: &'a str,
+    method: &'a str,
+    path: &'a str,
+    admin_user_id: &'a str,
+    admin_user_role: &'a str,
+    admin_session_id: Option<&'a str>,
+    management_token_id: Option<&'a str>,
+}
+
+/// Writes the event to `audit_logs`.
+///
+/// Without a writer the event only reaches the process log, which is what this
+/// did for every deployment until now: the admin UI and the retention cleanup
+/// read a table nothing wrote. The write is detached so a slow database cannot
+/// delay the admin response, and a failure logs a warning instead of surfacing
+/// as an API error.
+fn persist_admin_audit_event(record: AdminAuditRecord<'_>) {
+    let Some(writer) = global_audit_writer() else {
+        return;
+    };
+    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        return;
+    };
+    let log = NewAdminAuditLog {
+        id: uuid::Uuid::new_v4().to_string(),
+        event_type: record.event_name.to_string(),
+        user_id: Some(record.admin_user_id.to_string()),
+        description: format!(
+            "{} {} {} ({})",
+            record.action, record.target_type, record.target_id, record.audit_status
+        ),
+        ip_address: None,
+        request_id: Some(record.trace_id.to_string()),
+        status_code: Some(i32::from(record.status_code)),
+        error_message: None,
+        metadata: Some(serde_json::json!({
+            "action": record.action,
+            "target_type": record.target_type,
+            "target_id": record.target_id,
+            "route_family": record.route_family,
+            "route_kind": record.route_kind,
+            "status": record.audit_status,
+            "method": record.method,
+            "path": record.path,
+            "admin_user_role": record.admin_user_role,
+            "admin_session_id": record.admin_session_id,
+            "admin_management_token_id": record.management_token_id,
+        })),
+        created_at_unix_secs: chrono::Utc::now().timestamp().max(0) as u64,
+    };
+    handle.spawn(async move {
+        if let Err(error) = writer.insert_admin_audit_log(log).await {
+            warn!(
+                error = %error,
+                "failed to persist admin audit event"
+            );
+        }
+    });
 }
 
 fn sanitize_admin_audit_path(path_and_query: &str) -> String {

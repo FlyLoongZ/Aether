@@ -72,6 +72,7 @@ impl GatewayDataState {
             auth_module_writer: None,
             announcement_reader: None,
             announcement_writer: None,
+            audit_log_writer: None,
             management_token_reader: None,
             management_token_writer: None,
             oauth_provider_reader: None,

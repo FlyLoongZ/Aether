@@ -212,6 +212,7 @@ impl AppState {
                 .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
         );
         self.replace_foreground_data_state(data);
+        crate::audit::configure_global_audit_writer(self.data.audit_log_writer());
     }
     fn replace_foreground_data_state(&mut self, data: Arc<GatewayDataState>) {
         self.overview_total_cache = Arc::new(OverviewTotalCache::default());
@@ -479,6 +480,7 @@ impl AppState {
                 .with_usage_worker_queue(Self::usage_worker_queue_for(&self.runtime_state)),
         );
         self.replace_foreground_data_state(data);
+        crate::audit::configure_global_audit_writer(self.data.audit_log_writer());
         Ok(self)
     }
 

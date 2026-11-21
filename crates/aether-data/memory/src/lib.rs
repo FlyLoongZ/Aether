@@ -6,6 +6,7 @@
 //! their dependency graph.
 
 pub mod announcements;
+pub mod audit;
 pub mod auth;
 pub mod auth_modules;
 pub mod background_tasks;
