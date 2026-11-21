@@ -290,6 +290,7 @@ export const enMessages = {
     'update.progress.prepared': 'Update package is ready',
     'update.progress.preparing': 'Preparing update',
     'update.error.downloadFailed': 'Failed to download update',
+    'update.error.downloadAborted': 'Left the update screen; the download was interrupted',
     'update.error.downloadTimeout': 'Update download timed out',
     'update.error.restartFailed': 'Failed to start restart',
     'update.error.updateFailed': 'Update failed',

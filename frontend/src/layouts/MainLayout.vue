@@ -617,6 +617,10 @@ const VERSION_STATUS_CACHE_TTL_MS = 20 * 60 * 1000
 const VERSION_STATUS_ERROR_CACHE_TTL_MS = 5 * 60 * 1000
 let versionStatusLoadPromise: Promise<CheckUpdateResponse | null> | null = null
 let updateStatusPollTimer: number | null = null
+// Generation of the update-status readers. Unmounting bumps it so a polling tick or a
+// `waitForPreparedUpdate` loop that was already awaiting stops touching component
+// state (and stops scheduling more work) after the layout is gone.
+let updateStatusGeneration = 0
 let updateCheckTimer: number | null = null
 const updateProgressPercent = computed(() => updateTaskStatus.value?.progress_percent ?? null)
 const updateProgressText = computed(() => formatUpdateProgressText(updateTaskStatus.value))
@@ -754,19 +758,29 @@ function formatFileSize(bytes: number): string {
   return `${bytes} B`
 }
 
-async function refreshUpdateTaskStatus() {
+async function refreshUpdateTaskStatus(generation = updateStatusGeneration) {
   try {
-    updateTaskStatus.value = await adminApi.getUpdateStatus()
+    const status = await adminApi.getUpdateStatus()
+    // A response that arrives after unmount (or after a newer read started) must not
+    // write into a component that is gone.
+    if (generation === updateStatusGeneration) {
+      updateTaskStatus.value = status
+    }
   } catch {
     // Keep the last progress snapshot while the request is in flight or the service restarts.
   }
 }
 
 async function waitForPreparedUpdate(): Promise<UpdateTaskStatusResponse> {
+  const generation = updateStatusGeneration
   const deadline = Date.now() + 10 * 60 * 1000
   while (Date.now() < deadline) {
     await new Promise(resolve => setTimeout(resolve, 1000))
-    await refreshUpdateTaskStatus()
+    if (generation !== updateStatusGeneration) {
+      // The user left the layout while the update was still preparing.
+      throw new Error(t('update.error.downloadAborted'))
+    }
+    await refreshUpdateTaskStatus(generation)
     const status = updateTaskStatus.value
     if (status?.phase === 'prepared') return status
     if (status?.phase === 'failed') {
@@ -778,9 +792,12 @@ async function waitForPreparedUpdate(): Promise<UpdateTaskStatusResponse> {
 
 function startUpdateStatusPolling() {
   stopUpdateStatusPolling()
-  void refreshUpdateTaskStatus()
+  // Each polling session owns a generation; a tick that resolves after the session
+  // was replaced or stopped is discarded instead of overwriting newer state.
+  const generation = ++updateStatusGeneration
+  void refreshUpdateTaskStatus(generation)
   updateStatusPollTimer = window.setInterval(() => {
-    void refreshUpdateTaskStatus()
+    void refreshUpdateTaskStatus(generation)
   }, 1000)
 }
 
@@ -789,6 +806,7 @@ function stopUpdateStatusPolling() {
     window.clearInterval(updateStatusPollTimer)
     updateStatusPollTimer = null
   }
+  updateStatusGeneration += 1
 }
 
 // 路由变化时自动关闭移动端菜单
@@ -1244,6 +1262,7 @@ onUnmounted(() => {
     window.clearTimeout(updateCheckTimer)
     updateCheckTimer = null
   }
+  // Stops the timer and invalidates any in-flight tick or `waitForPreparedUpdate` loop.
   stopUpdateStatusPolling()
   if (import.meta.env.DEV && window.__aetherShowUpdateDialog === showDebugUpdateDialog) {
     delete window.__aetherShowUpdateDialog

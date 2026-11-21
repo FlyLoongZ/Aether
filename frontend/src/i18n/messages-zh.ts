@@ -288,6 +288,7 @@ export const zhMessages = {
     'update.progress.prepared': '更新包已准备完成',
     'update.progress.preparing': '正在准备更新',
     'update.error.downloadFailed': '下载更新失败',
+    'update.error.downloadAborted': '已离开更新页面，下载已中断',
     'update.error.downloadTimeout': '下载更新超时',
     'update.error.restartFailed': '启动重启失败',
     'update.error.updateFailed': '更新失败',
