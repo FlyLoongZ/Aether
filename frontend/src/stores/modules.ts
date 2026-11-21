@@ -9,6 +9,14 @@ export const useModuleStore = defineStore('modules', () => {
   const loaded = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  /**
+   * True when a refresh failed and `modules` still holds an older snapshot.
+   *
+   * Kept explicit instead of clearing `modules`: hiding every module on a transient
+   * read error would remove admin menus the user still has access to. `userModules`
+   * clears on failure because a stale feature flag can expose a disabled feature.
+   */
+  const stale = ref(false)
   let fetchModulesPromise: Promise<Record<string, ModuleStatus>> | null = null
   const userModules = ref<Record<string, UserModuleStatus>>({})
   const userLoaded = ref(false)
@@ -45,8 +53,11 @@ export const useModuleStore = defineStore('modules', () => {
   /**
    * 获取所有模块状态
    */
-  async function fetchModules() {
-    if (fetchModulesPromise) return fetchModulesPromise
+  async function fetchModules(options: { force?: boolean } = {}) {
+    // A write must not be answered by a snapshot that was already in flight before
+    // it: `setEnabled` awaited the request that had started earlier, got the old
+    // statuses and flipped the switch back visually.
+    if (fetchModulesPromise && !options.force) return fetchModulesPromise
 
     loading.value = true
     error.value = null
@@ -56,10 +67,12 @@ export const useModuleStore = defineStore('modules', () => {
         const nextModules = await modulesApi.getAllStatus()
         modules.value = nextModules
         loaded.value = true
+        stale.value = false
         return nextModules
       } catch (err: unknown) {
         log.error('Failed to fetch modules status', err)
         error.value = parseApiError(err, '获取模块状态失败')
+        stale.value = loaded.value
         throw err
       } finally {
         loading.value = false
@@ -98,8 +111,9 @@ export const useModuleStore = defineStore('modules', () => {
   async function setEnabled(moduleName: string, enabled: boolean) {
     try {
       await modulesApi.setEnabled(moduleName, enabled)
-      // 刷新所有模块状态，确保依赖模块的 active 状态同步更新
-      await fetchModules()
+      // 刷新所有模块状态，确保依赖模块的 active 状态同步更新。`force` bypasses the
+      // in-flight request that started before this write.
+      await fetchModules({ force: true })
       return true
     } catch (err: unknown) {
       log.error(`Failed to set module ${moduleName} enabled=${enabled}`, err)
@@ -146,6 +160,7 @@ export const useModuleStore = defineStore('modules', () => {
     loaded,
     loading,
     error,
+    stale,
     fetchModules,
     isAvailable,
     isEnabled,
